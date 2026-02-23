@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Catalyst Cash — AI Financial Audit Engine</title>
+    <meta name="description"
+        content="Your weekly financial command center. AI-powered audits that analyze checking, savings, debts, and investments — delivering actionable moves every week." />
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
+        rel="stylesheet" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            background: #04060A;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #04060A;
+            color: #E4E6F0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Subtle grid */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(123, 94, 167, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(123, 94, 167, 0.03) 1px, transparent 1px);
+            background-size: 48px 48px;
+        }
+
+        /* Top accent line */
+        .accent-bar {
+            height: 3px;
+            background: linear-gradient(90deg, #7B5EA7, #2ECC71, #00E5FF);
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 60px 24px 80px;
+            text-align: center;
+        }
+
+        .logo-icon {
+            width: 100px;
+            height: 100px;
+            border-radius: 22px;
+            margin: 0 auto 24px;
+            display: block;
+        }
+
+        h1 {
+            font-size: 42px;
+            font-weight: 900;
+            letter-spacing: -0.03em;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #E4E6F0, #fff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .tagline {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            color: #7B5EA7;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            margin-bottom: 32px;
+        }
+
+        .hero-text {
+            font-size: 18px;
+            line-height: 1.7;
+            color: #8890A6;
+            max-width: 540px;
+            margin: 0 auto 40px;
+        }
+
+        .hero-text strong {
+            color: #E4E6F0;
+        }
+
+        /* Feature grid */
+        .features {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 40px;
+            text-align: left;
+        }
+
+        @media (max-width: 480px) {
+            .features {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .feature {
+            background: #090C15;
+            border: 1px solid rgba(123, 94, 167, 0.12);
+            border-radius: 14px;
+            padding: 18px 16px;
+            transition: border-color 0.2s;
+        }
+
+        .feature:hover {
+            border-color: rgba(123, 94, 167, 0.3);
+        }
+
+        .feature .icon {
+            font-size: 20px;
+            margin-bottom: 8px;
+        }
+
+        .feature h3 {
+            font-size: 13px;
+            font-weight: 700;
+            color: #E4E6F0;
+            margin-bottom: 4px;
+        }
+
+        .feature p {
+            font-size: 11px;
+            color: #6B7280;
+            line-height: 1.5;
+        }
+
+        /* CTA */
+        .cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 32px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #7B5EA7, #2ECC71);
+            color: #fff;
+            font-size: 15px;
+            font-weight: 800;
+            text-decoration: none;
+            box-shadow: 0 4px 20px rgba(123, 94, 167, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-bottom: 12px;
+        }
+
+        .cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(123, 94, 167, 0.5);
+        }
+
+        .cta-sub {
+            font-size: 12px;
+            color: #4A5068;
+            margin-bottom: 48px;
+        }
+
+        /* Privacy badges */
+        .badges {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 48px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            background: rgba(46, 204, 113, 0.06);
+            border: 1px solid rgba(46, 204, 113, 0.15);
+            border-radius: 99px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #2ECC71;
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid rgba(123, 94, 167, 0.1);
+            padding-top: 24px;
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        footer a {
+            font-size: 12px;
+            color: #4A5068;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+
+        footer a:hover {
+            color: #7B5EA7;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="accent-bar"></div>
+    <div class="container">
+        <img src="/icon-512.png" alt="Catalyst Cash" class="logo-icon" />
+
+        <h1>Catalyst Cash</h1>
+        <div class="tagline">AI Financial Audit Engine</div>
+
+        <p class="hero-text">
+            Your <strong>weekly financial command center</strong>. Enter your numbers, get a full audit —
+            health score, action items, debt payoff projections, and cash flow forecasting.
+            <strong>Powered by AI. 100% private.</strong>
+        </p>
+
+        <div class="features">
+            <div class="feature">
+                <div class="icon">📊</div>
+                <h3>Health Score & Trend</h3>
+                <p>Track your financial health week over week with an AI-generated composite score.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">⚡</div>
+                <h3>Weekly Action Items</h3>
+                <p>Concrete, checkable moves tailored to your exact financial situation.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">📅</div>
+                <h3>35-Day Cash Flow</h3>
+                <p>See every bill, paycheck, and transfer on an interactive calendar horizon.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">🎯</div>
+                <h3>Debt Payoff Simulator</h3>
+                <p>Monte Carlo projections to visualize your debt-free date with probability bands.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">💳</div>
+                <h3>Card Portfolio</h3>
+                <p>Track credit cards, annual fees, rewards, and optimize your wallet.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">🔒</div>
+                <h3>100% Private</h3>
+                <p>All data stays on your device. No accounts, no cloud, no tracking.</p>
+            </div>
+        </div>
+
+        <a href="https://apps.apple.com/app/catalyst-cash/id0000000000" class="cta">
+            Download on the App Store
+        </a>
+        <div class="cta-sub">Available for iPhone · Free to use</div>
+
+        <div class="badges">
+            <div class="badge">🔐 Zero Data Collection</div>
+            <div class="badge">🚫 No Accounts Required</div>
+            <div class="badge">✨ AI-Powered Insights</div>
+        </div>
+
+        <footer>
+            <a href="/privacy">Privacy Policy</a>
+            <a href="/terms">Terms of Service</a>
+            <a href="mailto:support@catalystcash.app">Contact</a>
+        </footer>
+    </div>
+</body>
+
+</html>

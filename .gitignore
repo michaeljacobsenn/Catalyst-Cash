@@ -1,0 +1,42 @@
+node_modules/
+dist/
+ios/App/Pods/
+ios/App/App/public/
+ios/App/App/capacitor.config.json
+*.log
+.DS_Store
+.env
+.env.local
+personal_rules_to_paste.txt
+src/modules/personalRulesSeed.txt
+.tmp_*
+parity_*.txt
+
+# Personal and Setup files
+*.pdf
+*.rtf
+Original Instructions.txt
+claude_out.txt
+gemini_out.txt
+extract_pdf.swift
+fix_prompts.cjs
+setup.bat
+setup_mac*.sh
+test*.js
+update.sh
+
+# Scrubbed Build/Temp Files
+add_m_file.rb
+build_output.txt
+changelogs.txt
+generate_pdf.js
+generate_pdf_puppeteer.cjs
+portfolio_pro_guide_temp.html
+ios/.gitignore 2
+ios/App/App/config 2.xml
+ios/App/App/config 3.xml
+ios/App/App/config 4.xml
+ios/App/App/config 5.xml
+ios/App/App/config 6.xml
+ios/App/App/config 7.xml
+ios/App/App/config 8.xml

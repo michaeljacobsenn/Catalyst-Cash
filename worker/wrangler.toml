@@ -1,0 +1,9 @@
+name = "catalyst-cash-api"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+[vars]
+ALLOWED_ORIGIN = "https://catalystcash.app"
+
+# Custom domain: Once catalystcash.app is proxied through Cloudflare,
+# add the custom domain via Dashboard → Workers → catalyst-cash-api → Triggers → Custom Domains → api.catalystcash.app

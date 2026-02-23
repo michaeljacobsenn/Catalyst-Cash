@@ -1,0 +1,176 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+
+@page {
+  margin: 0;
+  size: A4 portrait;
+}
+
+html,
+body {
+  background-color: #06080F;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+body {
+  color: #E2E8F0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: 60px 0;
+  -webkit-print-color-adjust: exact;
+}
+
+.content-wrapper {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 50px;
+}
+
+h1 {
+  color: #9D72EA;
+  text-align: center;
+  font-size: 52px;
+  font-weight: 800;
+  margin-top: 80px;
+  letter-spacing: -1.5px;
+  line-height: 1.1;
+}
+
+h2 {
+  color: #F8FAFC;
+  font-size: 26px;
+  font-weight: 700;
+  margin-top: 20px;
+  margin-bottom: 24px;
+  letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+}
+
+h2 span {
+  color: #9D72EA;
+  font-size: 20px;
+  margin-right: 16px;
+  font-weight: 800;
+  opacity: 0.8;
+  letter-spacing: 1px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #F1F5F9;
+  margin-top: 32px;
+  margin-bottom: 16px;
+}
+
+p {
+  color: #94A3B8;
+  line-height: 1.7;
+  font-size: 15px;
+  margin-bottom: 16px;
+}
+
+ul,
+ol {
+  padding-left: 24px;
+  margin-bottom: 24px;
+}
+
+li {
+  color: #94A3B8;
+  line-height: 1.8;
+  font-size: 15px;
+  margin-bottom: 12px;
+}
+
+li strong {
+  color: #E2E8F0;
+  font-weight: 600;
+}
+
+li em {
+  color: #CBD5E1;
+  font-style: normal;
+  font-weight: 500;
+}
+
+blockquote {
+  border-left: 3px solid #50E3C2;
+  border-radius: 0 12px 12px 0;
+  padding: 20px 24px;
+  margin: 32px 0;
+  background: linear-gradient(90deg, rgba(80, 227, 194, 0.1) 0%, rgba(80, 227, 194, 0.02) 100%);
+}
+
+blockquote p {
+  margin: 0;
+  color: #E2E8F0;
+}
+
+blockquote strong {
+  color: #50E3C2;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+code {
+  background: rgba(157, 114, 234, 0.15);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-size: 13px;
+  color: #D8B4FE;
+  font-weight: 500;
+}
+
+.card-container {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  padding: 40px;
+  margin-bottom: 40px;
+  background: rgba(255, 255, 255, 0.02);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  page-break-inside: avoid;
+}
+
+hr {
+  border: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  margin: 60px 0;
+}
+
+.subtitle {
+  text-align: center;
+  color: #94A3B8;
+  font-size: 18px;
+  margin-top: 16px;
+  margin-bottom: 60px;
+  font-weight: 400;
+  letter-spacing: -0.2px;
+}
+
+.label-pill {
+  border: 1px solid rgba(157, 114, 234, 0.3);
+  color: #D8B4FE;
+  background: rgba(157, 114, 234, 0.1);
+  padding: 8px 20px;
+  border-radius: 999px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  font-weight: 700;
+  display: inline-block;
+  margin: 0 auto 24px auto;
+}
+
+.header-wrapper {
+  text-align: center;
+  margin-top: 40px;
+  margin-bottom: 80px;
+}

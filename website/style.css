@@ -1,0 +1,132 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap');
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    min-height: 100vh;
+    background-color: #06080F;
+    color: #94A3B8;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.page {
+    position: relative;
+    box-sizing: border-box;
+    padding: 40px 20px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+h1, h2, h3, p, ul, li {
+    margin: 0;
+    padding: 0;
+}
+
+.header-wrapper {
+    text-align: center;
+    margin-top: 40px;
+    margin-bottom: 60px;
+}
+
+.label-pill {
+    display: inline-block;
+    border: 1px solid rgba(157, 114, 234, 0.4);
+    color: #D8B4FE;
+    background: rgba(157, 114, 234, 0.05);
+    padding: 6px 18px;
+    border-radius: 999px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-weight: 700;
+    margin-bottom: 24px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+h1 {
+    color: #9D72EA;
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    line-height: 1.1;
+}
+
+.subtitle {
+    color: #64748B;
+    font-size: 16px;
+    margin-top: 16px;
+    font-weight: 500;
+}
+
+.section-card {
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 20px;
+    padding: 30px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+    margin-bottom: 24px;
+}
+
+.section-title {
+    color: #F8FAFC;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 16px;
+}
+
+p.lead {
+    color: #CBD5E1;
+    font-size: 15px;
+    line-height: 1.6;
+    margin-bottom: 20px;
+}
+
+p {
+    color: #94A3B8;
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 16px;
+}
+
+ul {
+    padding-left: 20px;
+    margin-bottom: 16px;
+}
+
+li {
+    color: #94A3B8;
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 8px;
+}
+
+a {
+    color: #D8B4FE;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+.nav-links {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 40px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    flex-wrap: wrap;
+}
+
+.footer-meta {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.2);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding-top: 40px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.05);
+    margin-top: 40px;
+    margin-bottom: 40px;
+}

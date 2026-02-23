@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx cap sync:*)",
+      "Bash(brew install:*)",
+      "Bash(pdftoppm:*)",
+      "Bash(pdftotext:*)",
+      "Bash(md5:*)",
+      "Bash(perl:*)",
+      "Bash(npm run build)",
+      "Bash(npm run build:*)",
+      "Bash(xcrun simctl:*)",
+      "Bash(xcodebuild:*)",
+      "Bash(wc:*)",
+      "Bash(npx vite build:*)",
+      "Bash(python3:*)",
+      "Bash(open:*)",
+      "Bash(ls:*)",
+      "Bash(npm install:*)",
+      "Bash(npx cap open:*)",
+      "Bash(npx cap add ios:*)",
+      "Bash(pod install:*)",
+      "Bash(npx cap config:*)",
+      "Bash(osascript:*)",
+      "Bash(node -e:*)"
+    ]
+  }
+}

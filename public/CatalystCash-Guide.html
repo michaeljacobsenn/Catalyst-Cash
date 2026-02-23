@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap');
+
+        @page {
+            margin: 0;
+            size: A4 portrait;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #06080F;
+            color: #94A3B8;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        .page {
+            position: relative;
+            box-sizing: border-box;
+            padding: 20px 40px;
+            background-color: #06080F;
+        }
+
+        /* Typography */
+        h1,
+        h2,
+        h3,
+        p,
+        ul,
+        li {
+            margin: 0;
+            padding: 0;
+        }
+
+        .header-wrapper {
+            text-align: center;
+            margin-top: 60px;
+            margin-bottom: 70px;
+            page-break-after: always;
+            height: calc(100vh - 80px);
+            /* Fill the page */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .splash-logo {
+            width: 140px;
+            height: 140px;
+            margin-bottom: 30px;
+            object-fit: contain;
+        }
+
+        .label-pill {
+            display: inline-block;
+            border: 1px solid rgba(157, 114, 234, 0.4);
+            color: #D8B4FE;
+            background: rgba(157, 114, 234, 0.05);
+            padding: 6px 18px;
+            border-radius: 999px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        h1 {
+            color: #9D72EA;
+            font-size: 56px;
+            font-weight: 800;
+            letter-spacing: -2px;
+            line-height: 1.1;
+        }
+
+        .subtitle {
+            color: #64748B;
+            font-size: 16px;
+            margin-top: 16px;
+            font-weight: 500;
+            letter-spacing: -0.2px;
+        }
+
+        /* Section Containers */
+        .section-card {
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 20px;
+            padding: 30px;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+            margin-bottom: 24px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .section-number {
+            color: rgba(157, 114, 234, 0.4);
+            font-size: 24px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            margin-right: 16px;
+        }
+
+        .section-title {
+            color: #F8FAFC;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        /* Content Elements */
+        p.lead {
+            color: #CBD5E1;
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        p {
+            color: #94A3B8;
+            font-size: 13px;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        ul {
+            padding-left: 20px;
+            margin-bottom: 12px;
+        }
+
+        li {
+            color: #94A3B8;
+            font-size: 13px;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+
+        li strong {
+            color: #F1F5F9;
+            font-weight: 600;
+        }
+
+        code {
+            background: rgba(157, 114, 234, 0.15);
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: #D8B4FE;
+            font-weight: 600;
+        }
+
+        /* Grid Layouts for specific sections */
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .feature-box {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 16px;
+            padding: 24px;
+        }
+
+        .feature-box h3 {
+            color: #F8FAFC;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .feature-box p {
+            font-size: 13px;
+            color: #64748B;
+            margin-bottom: 0;
+        }
+
+        .insight-box {
+            margin-top: 24px;
+            border-radius: 12px;
+            border: 1px solid rgba(80, 227, 194, 0.2);
+            background: rgba(80, 227, 194, 0.05);
+            padding: 24px;
+        }
+
+        .insight-header {
+            color: #50E3C2;
+            font-size: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .insight-box p {
+            color: #E2E8F0;
+            margin: 0;
+        }
+
+        .step-list {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            list-style: none;
+            padding: 0;
+        }
+
+        .step-item {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 16px;
+            padding: 24px;
+            position: relative;
+            margin-bottom: 0;
+        }
+
+        .step-circle {
+            width: 28px;
+            height: 28px;
+            border-radius: 14px;
+            background: #9D72EA;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            position: absolute;
+            top: 24px;
+            left: 24px;
+        }
+
+        .step-content {
+            margin-top: 40px;
+        }
+
+        .step-content h3 {
+            color: #F8FAFC;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .step-content p {
+            font-size: 13px;
+            color: #64748B;
+        }
+
+        .danger-zone {
+            border-color: rgba(239, 68, 68, 0.2);
+            background: rgba(239, 68, 68, 0.02);
+            margin-top: 30px;
+        }
+
+        .danger-header {
+            color: #EF4444;
+            font-size: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+        }
+
+        .footer-meta {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.2);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            padding-top: 40px;
+            border-top: 1px dashed rgba(255, 255, 255, 0.05);
+            margin-top: 20px;
+        }
+
+        /* ── Mobile Optimization ── */
+        @media screen and (max-width: 768px) {
+            .page {
+                padding: 20px 16px;
+            }
+
+            .header-wrapper {
+                margin-top: 40px;
+                margin-bottom: 40px;
+            }
+
+            h1 {
+                font-size: 38px;
+                letter-spacing: -1px;
+            }
+
+            .subtitle {
+                font-size: 14px;
+            }
+
+            .grid-3,
+            .grid-2,
+            .step-list {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .section-card {
+                padding: 20px;
+            }
+
+            .section-title {
+                font-size: 20px;
+            }
+
+            .section-number {
+                font-size: 18px;
+            }
+
+            .feature-box,
+            .step-item {
+                padding: 20px;
+            }
+
+            .step-circle {
+                top: 24px;
+                left: 24px;
+            }
+
+            .splash-logo {
+                width: 120px;
+                height: 120px;
+                margin-bottom: 24px;
+            }
+
+            .step-content {
+                margin-top: 32px;
+            }
+        }
+    </style>
+    .setup-warning {
+    background: rgba(224, 168, 77, 0.1);
+    border: 1px solid rgba(224, 168, 77, 0.3);
+    border-left: 4px solid #E0A84D;
+    padding: 18px 20px;
+    border-radius: 8px;
+    margin: 30px 0;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    }
+
+    .setup-warning h3 {
+    margin-top: 0;
+    color: #E0A84D;
+    font-size: 16px;
+    margin-bottom: 8px;
+    }
+
+    .setup-warning p {
+    margin: 0;
+    color: #E4E6F0;
+    font-size: 14px;
+    line-height: 1.5;
+    }
+    </style>
+</head>
+
+<body>
+
+    <div class="page">
+        <div class="header-wrapper">
+            <img src="./icon-512.png" alt="Catalyst Cash Logo" class="splash-logo" />
+            <div class="label-pill">Elite Operational Protocol</div>
+            <h1 style="margin-top: 0px;">Catalyst Cash</h1>
+            <div class="subtitle">Command Manual for the Autonomous Financial Operator</div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-header">
+                <span class="section-number">01 /</span>
+                <h2 class="section-title">The Auditor's Philosophy</h2>
+            </div>
+            <p class="lead">Catalyst Cash is an elite <strong>Financial Command Center</strong> designed for individuals
+                who demand absolute control and deterministic wealth growth. It treats your personal capital as a
+                high-performance engine.</p>
+
+            <div class="grid-3">
+                <div class="feature-box">
+                    <h3>Native Edge</h3>
+                    <p>Zero data leaves your device. Biometric Lock ensures your Private Rules stay private.</p>
+                </div>
+                <div class="feature-box">
+                    <h3>Manual Freedom</h3>
+                    <p>Designed to bypass cloud limitations using <strong>Manual Clipboard Mode</strong>.</p>
+                </div>
+                <div class="feature-box">
+                    <h3>Waterfall Logic</h3>
+                    <p>Hierarchical decision tree that ensures survival before aggressive payoffs.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-header">
+                <span class="section-number">02 /</span>
+                <h2 class="section-title">The Weekly Operating Routine</h2>
+            </div>
+            <p class="lead">Follow this 4-step sequence every Sunday morning to maintain total fiscal agency.</p>
+
+            <div class="step-list">
+                <div class="step-item">
+                    <div class="step-circle">1</div>
+                    <div class="step-content">
+                        <h3>Snapshot</h3>
+                        <p>Enter current balances. Toggle <code>Privacy Mode</code> for public environments.</p>
+                    </div>
+                </div>
+                <div class="step-item">
+                    <div class="step-circle">2</div>
+                    <div class="step-content">
+                        <h3>The Bundle</h3>
+                        <p>Tap <code>Download Instructions (.txt)</code> and upload to your AI once per project.</p>
+                    </div>
+                </div>
+                <div class="step-item">
+                    <div class="step-circle">3</div>
+                    <div class="step-content">
+                        <h3>The Audit</h3>
+                        <p>Tap <code>Copy Weekly Prompt</code> and paste it into the AI chat for live logic.</p>
+                    </div>
+                </div>
+                <div class="step-item">
+                    <div class="step-circle">4</div>
+                    <div class="step-content">
+                        <h3>The Bridge</h3>
+                        <p>Paste the response back into <code>Import AI Result</code> to refresh your dashboard.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="insight-box">
+                <div class="insight-header">Auditor Insight</div>
+                <p>By using the <strong>.txt Instruction Bundle</strong>, you give the AI persistent memory of your
+                    complex rules, making updates lightning fast.</p>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-header">
+                <span class="section-number">03 /</span>
+                <h2 class="section-title">Security & Fast Access</h2>
+            </div>
+            <p class="lead">The Security Suite protects your net worth and private rules using native iOS/Mac
+                biometrics.</p>
+
+            <ul>
+                <li><strong>Passcode Setup:</strong> Go to <code>Settings</code> → <code>Require Passcode</code>. Create
+                    a 4-digit PIN. This is the fail-safe if biometrics fail.</li>
+                <li><strong>Biometric Enrollment:</strong> Toggle <code>Enable Face ID</code>. The system will trigger a
+                    native iOS prompt to link your biometrics to the application state.</li>
+                <li><strong>Relock Precision:</strong> Adjust the <code>Relock After</code> timer. Options range from
+                    <code>Immediately</code> (Max Security) to <code>1 Hour</code> (Workflow Efficiency).
+                </li>
+            </ul>
+        </div>
+
+        <div class="section-card">
+            <div class="section-header">
+                <span class="section-number">04 /</span>
+                <h2 class="section-title">AI Navigation Shortcuts</h2>
+            </div>
+            <p class="lead">Speed is the primary variable in maintaining a weekly routine. Use these integrated
+                shortcuts.</p>
+
+            <div class="grid-2">
+                <div class="feature-box">
+                    <h3>Claude Shortcut</h3>
+                    <p>Tap the <strong>Claude</strong> button in Results View to instantly launch the official Anthropic
+                        app with your payload ready.</p>
+                </div>
+                <div class="feature-box">
+                    <h3>ChatGPT Shortcut</h3>
+                    <p>Launches the <strong>OpenAI</strong> mobile app and triggers the system clipboard for immediate
+                        pasting.</p>
+                </div>
+            </div>
+
+            <div class="insight-box"
+                style="border-color: rgba(157, 114, 234, 0.3); background: rgba(157, 114, 234, 0.05);">
+                <div class="insight-header" style="color: #9D72EA;">Shortcut Tip</div>
+                <p>Turn on <code>JSON Output</code> in Settings for a perfectly structured AI response that the app can
+                    parse with 100% accuracy.</p>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-header">
+                <span class="section-number">05 /</span>
+                <h2 class="section-title">Building Your Portfolio</h2>
+            </div>
+            <p class="lead">A high-fidelity audit requires accurate card and subscription data. Initialize these first.
+            </p>
+
+            <ul style="margin-bottom: 24px;">
+                <li><strong>Card Portfolio:</strong> Add cards with their <code>Credit Limit</code> and
+                    <code>APR</code>. Toggle <code>Waived?</code> if you have a first-year-free promotion active.
+                </li>
+                <li><strong>Renewals & Bills:</strong> Group items into <code>Categories</code> (Fixed, Subs, Sinking
+                    Funds). Use the <code>Charged To</code> selector to link bills to specific cards.</li>
+                <li><strong>Vaults & Sinking Funds:</strong> Define your long-term needs in the Tracker. The AI uses
+                    this to calculate your <strong>weekly pacing requirement</strong>.</li>
+            </ul>
+
+            <div class="grid-2">
+                <div class="feature-box">
+                    <h3>Promo APR Support</h3>
+                    <p>Detected 0% APR offers are tracked with expiration dates to ensure they are cleared before the
+                        interest-clock expires.</p>
+                </div>
+                <div class="feature-box">
+                    <h3>Waived Fee Logic</h3>
+                    <p>Cards marked "Waived" are excluded from total annual fee projections until you manually toggle
+                        the status off.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-header">
+                <span class="section-number">06 /</span>
+                <h2 class="section-title">Data Governance</h2>
+            </div>
+            <p class="lead">You own your data. Catalyst Cash provides tools for backup, migration, and purging.</p>
+
+            <div class="grid-3" style="margin-bottom: 30px;">
+                <div class="feature-box">
+                    <h3>File System</h3>
+                    <p>Data automatically saves securely on your device. No cloud sync required.</p>
+                </div>
+                <div class="feature-box">
+                    <h3>JSON Export</h3>
+                    <p>Tap <code>EXPORT JSON</code> to save a human readable file of your entire system state to your
+                        device.</p>
+                </div>
+                <div class="feature-box">
+                    <h3>The Restore</h3>
+                    <p>Tap <code>RESTORE</code> and select a previous JSON backup to instantly rebuild your portfolio.
+                    </p>
+                </div>
+            </div>
+
+            <div class="feature-box danger-zone">
+                <div class="danger-header">Danger Zone — Irreversible Actions</div>
+                <div class="grid-2">
+                    <div>
+                        <h3 style="color: #F8FAFC; font-size: 14px; margin-bottom: 6px;">Clear Audit History</h3>
+                        <p style="color: #64748B; font-size: 12px;">Deletes only the snapshots. Keeps cards, settings,
+                            and renewals intact.</p>
+                    </div>
+                    <div>
+                        <h3 style="color: #F8FAFC; font-size: 14px; margin-bottom: 6px;">Factory Reset</h3>
+                        <p style="color: #64748B; font-size: 12px;">Wipes 100% of data. Returns the application to a
+                            blank state.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="setup-warning"
+            style="background: rgba(224, 168, 77, 0.1); border: 1px solid rgba(224, 168, 77, 0.3); border-left: 4px solid #E0A84D; padding: 18px 20px; border-radius: 8px; margin: 30px 0;">
+            <h3 style="margin-top: 0; color: #E0A84D; font-size: 16px; margin-bottom: 8px;">⚠️ Critical Pre-Requisite:
+                Configure Your Profile</h3>
+            <p style="margin: 0; color: #E4E6F0; font-size: 14px; line-height: 1.5;">Before running your first audit, it
+                is mandatory to fully configure your <strong>Financial Profile</strong> in the Settings tab. The AI
+                engine requires exact inputs regarding your strict weekly spending limits, savings targets, and debt
+                allocations to provide mathematical accuracy. If your profile is incomplete, the system will reject or
+                miscalculate your audit.</p>
+        </div>
+
+        <div class="footer-meta">
+            Catalyst Cash Operational Systems // v1.3.1-BETA
+        </div>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,181 @@
+{
+  "lastUpdated": "2026-02-22",
+  "popular": {
+    "Amex": [
+      "American Express Gold Credit Card",
+      "The Platinum Card from American Express",
+      "American Express Blue Cash Preferred Card"
+    ],
+    "Chase": [
+      "Chase Sapphire Preferred",
+      "Chase Freedom Unlimited",
+      "Chase Freedom Flex"
+    ],
+    "Capital One": [
+      "Venture Rewards",
+      "SavorOne Cash Rewards",
+      "Quicksilver Cash Rewards"
+    ],
+    "Citi": [
+      "Citi Custom Cash Card",
+      "Citi Strata Premier Card",
+      "Citi Double Cash Credit Card"
+    ],
+    "Discover": [
+      "Discover it Cash Back",
+      "Discover it Miles",
+      "Discover it Chrome"
+    ]
+  },
+  "issuers": {
+    "Amex": {
+      "personal": [
+        "The Platinum Card from American Express",
+        "American Express Gold Credit Card",
+        "American Express Green Card",
+        "American Express Blue Cash Everyday Card",
+        "American Express Blue Cash Preferred Card",
+        "Cash Magnet Card",
+        "Delta SkyMiles Reserve American Express Card",
+        "Delta SkyMiles Platinum American Express Card",
+        "Delta SkyMiles Gold American Express Card",
+        "Delta SkyMiles Blue American Express Card",
+        "Hilton Honors American Express Card",
+        "Hilton Honors American Express Surpass Card",
+        "Hilton Honors American Express Aspire Card",
+        "Marriott Bonvoy Brilliant American Express Card",
+        "Marriott Bonvoy Bevy American Express Card",
+        "Marriott Bonvoy American Express Card"
+      ],
+      "business": [
+        "The Business Platinum Card from American Express",
+        "American Express Business Gold Card",
+        "American Express Business Green Rewards Card",
+        "The Plum Card",
+        "American Express Blue Business Plus Card",
+        "American Express Blue Business Cash Card",
+        "Amazon Business Prime Card",
+        "Amazon Business Card",
+        "Delta SkyMiles Reserve Business American Express Card",
+        "Delta SkyMiles Platinum Business American Express Card",
+        "Delta SkyMiles Gold Business American Express Card",
+        "Hilton Honors American Express Business Card",
+        "Marriott Bonvoy Business American Express Card",
+        "Lowe's Business Rewards Card",
+        "Lowe's Business Credit Card"
+      ]
+    },
+    "Chase": {
+      "personal": [
+        "Chase Sapphire Reserve",
+        "Chase Sapphire Preferred",
+        "Chase Freedom Unlimited",
+        "Chase Freedom Flex",
+        "Chase Freedom Rise",
+        "Slate",
+        "Southwest Rapid Rewards Plus",
+        "Southwest Rapid Rewards Priority",
+        "Southwest Rapid Rewards Premier",
+        "United Explorer",
+        "United Quest",
+        "United Gateway",
+        "United Club Infinite",
+        "Marriott Bonvoy Boundless",
+        "Marriott Bonvoy Bountiful",
+        "Marriott Bonvoy Bold",
+        "IHG One Rewards Premier",
+        "IHG One Rewards Traveler",
+        "Disney Inspire Visa",
+        "Disney Premier Visa",
+        "Disney Visa",
+        "World of Hyatt",
+        "Aeroplan",
+        "British Airways Visa Signature",
+        "Aer Lingus Visa Signature",
+        "Iberia Visa Signature",
+        "Prime Visa",
+        "Amazon Visa",
+        "DoorDash Rewards Mastercard",
+        "Instacart Mastercard"
+      ],
+      "business": [
+        "Sapphire Reserve for Business",
+        "Ink Business Unlimited",
+        "Ink Business Preferred",
+        "Ink Business Cash",
+        "Ink Business Premier",
+        "Southwest Rapid Rewards Performance Business",
+        "Southwest Rapid Rewards Premier Business",
+        "United Business",
+        "United Club Business",
+        "IHG One Rewards Premier Business",
+        "World of Hyatt Business"
+      ]
+    },
+    "Discover": {
+      "personal": [
+        "Discover it Cash Back",
+        "Discover it Student Cash Back",
+        "Discover it Student Chrome",
+        "Discover it Secured",
+        "Discover it Miles",
+        "Discover it Chrome",
+        "Discover NHL Credit Card"
+      ],
+      "business": []
+    },
+    "Bank of America": { "personal": [], "business": [] },
+    "Barclays": { "personal": ["JetBlue Plus Card"], "business": [] },
+    "Capital One": {
+      "personal": [
+        "Quicksilver Cash Rewards",
+        "SavorOne Cash Rewards",
+        "Venture Rewards"
+      ],
+      "business": []
+    },
+    "Citi": {
+      "personal": [
+        "Citi Custom Cash Card",
+        "Citi / AAdvantage Platinum Select World Elite Mastercard",
+        "American Airlines AAdvantage MileUp Card",
+        "Citi / AAdvantage Executive World Elite Mastercard",
+        "Citi / AAdvantage Globe Mastercard",
+        "Citi Diamond Preferred Card",
+        "Citi Double Cash Credit Card",
+        "Costco Anywhere Visa Card by Citi",
+        "Citi Simplicity Card",
+        "Citi Strata Card",
+        "Citi Strata Premier Card",
+        "Citi Strata Elite Card",
+        "Citi Secured Mastercard",
+        "AT&T Points Plus Card From Citi",
+        "Bloomingdale's Credit Cards",
+        "Exxon Mobil Smart Card+ Credit Card",
+        "L.L.Bean Mastercard",
+        "My Best Buy Credit Cards",
+        "Macy's Credit Cards",
+        "Pro Xtra Credit Card",
+        "The Home Depot Consumer Credit Card",
+        "TSC Store Card",
+        "TSC Visa Card",
+        "Wayfair's Credit Cards"
+      ],
+      "business": [
+        "Citi / AAdvantage Business World Elite Mastercard",
+        "Costco Anywhere Visa Business Card by Citi"
+      ]
+    },
+    "FNBO": { "personal": [], "business": [] },
+    "Goldman Sachs": { "personal": [], "business": [] },
+    "HSBC": { "personal": [], "business": [] },
+    "Navy Federal": { "personal": [], "business": [] },
+    "PenFed": { "personal": [], "business": [] },
+    "Synchrony": { "personal": [], "business": [] },
+    "TD Bank": { "personal": [], "business": [] },
+    "US Bank": { "personal": [], "business": [] },
+    "USAA": { "personal": [], "business": [] },
+    "Wells Fargo": { "personal": [], "business": [] },
+    "Other": { "personal": [], "business": [] }
+  }
+}
