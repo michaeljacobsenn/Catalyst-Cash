@@ -114,50 +114,73 @@ function getWorkerUrl() {
  * Fetch live prices for an array of ticker symbols.
  * Returns { [SYMBOL]: { price, change, changePct, name } }
  */
-export async function fetchMarketPrices(symbols) {
+export async function fetchMarketPrices(symbols, forceRefresh = false) {
     if (!symbols || symbols.length === 0) return {};
 
-    // Check local cache first
-    const cachedTs = await db.get(CACHE_TS_KEY);
-    if (cachedTs && (Date.now() - cachedTs) < CACHE_TTL) {
-        const cached = await db.get(CACHE_KEY);
-        if (cached) {
-            // Return only requested symbols from cache
-            const filtered = {};
-            for (const sym of symbols) {
-                if (cached[sym]) filtered[sym] = cached[sym];
+    // Check local cache first (skip if forceRefresh)
+    if (!forceRefresh) {
+        try {
+            const cachedTs = await db.get(CACHE_TS_KEY);
+            if (cachedTs && (Date.now() - cachedTs) < CACHE_TTL) {
+                const cached = await db.get(CACHE_KEY);
+                if (cached && typeof cached === "object") {
+                    const filtered = {};
+                    for (const sym of symbols) {
+                        if (cached[sym] && cached[sym].price) filtered[sym] = cached[sym];
+                    }
+                    // Only use cache if it has ALL requested symbols with valid prices
+                    if (Object.keys(filtered).length === symbols.length) {
+                        console.warn("[MarketData] serving from cache:", Object.keys(filtered).join(", "));
+                        return filtered;
+                    }
+                }
             }
-            if (Object.keys(filtered).length === symbols.length) return filtered;
+        } catch (cacheErr) {
+            console.warn("[MarketData] cache read error:", cacheErr.message);
         }
     }
 
     const url = getWorkerUrl();
-    if (!url) return {};
+    if (!url) {
+        console.warn("[MarketData] no worker URL configured — VITE_PROXY_URL is empty");
+        return {};
+    }
+
+    console.warn(`[MarketData] fetching: ${url}?symbols=${symbols.join(",")}`);
 
     try {
-        const res = await fetch(`${url}?symbols=${symbols.join(",")}`);
+        const res = await fetch(`${url}?symbols=${symbols.join(",")}`, {
+            method: "GET",
+            headers: { "Accept": "application/json" },
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const data = json.data || {};
 
+        console.warn(`[MarketData] received ${Object.keys(data).length} prices`);
+
         // Merge into cache
-        const existing = (await db.get(CACHE_KEY)) || {};
-        const merged = { ...existing, ...data };
-        await db.set(CACHE_KEY, merged);
-        await db.set(CACHE_TS_KEY, Date.now());
+        if (Object.keys(data).length > 0) {
+            const existing = (await db.get(CACHE_KEY)) || {};
+            const merged = { ...existing, ...data };
+            await db.set(CACHE_KEY, merged);
+            await db.set(CACHE_TS_KEY, Date.now());
+        }
 
         return data;
     } catch (err) {
         console.warn("[MarketData] fetch failed:", err.message);
         // Fall back to stale cache
-        const cached = await db.get(CACHE_KEY);
-        if (cached) {
-            const filtered = {};
-            for (const sym of symbols) {
-                if (cached[sym]) filtered[sym] = cached[sym];
+        try {
+            const cached = await db.get(CACHE_KEY);
+            if (cached) {
+                const filtered = {};
+                for (const sym of symbols) {
+                    if (cached[sym]) filtered[sym] = cached[sym];
+                }
+                return filtered;
             }
-            return filtered;
-        }
+        } catch (_) { /* ignore */ }
         return {};
     }
 }

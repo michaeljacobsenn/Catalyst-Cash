@@ -189,7 +189,7 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
         }
         setRefreshingPrices(true);
         try {
-            const prices = await fetchMarketPrices(allSymbols);
+            const prices = await fetchMarketPrices(allSymbols, true);
             const count = Object.keys(prices).length;
             if (count > 0) {
                 setMarketPrices(prices);

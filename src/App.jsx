@@ -1010,7 +1010,7 @@ function CatalystCash() {
     { id: "history", icon: History, label: "History" },
     { id: "action", icon: actionGoesHome ? Plus : Home, label: actionGoesHome ? "Action" : "Home", isCenter: true },
     { id: "renewals", icon: RefreshCw, label: "Expenses" },
-    { id: "cards", icon: CreditCard, label: "Cards" },
+    { id: "cards", icon: CreditCard, label: "Accounts" },
   ];
 
   // Native iOS swipe-back is handled via WKWebView allowsBackForwardNavigationGestures
@@ -1107,7 +1107,7 @@ function CatalystCash() {
         }} aria-label={privacyMode ? "Disable Privacy Mode" : "Enable Privacy Mode"}>{privacyMode ? <EyeOff size={16} strokeWidth={1.8} /> : <Eye size={16} strokeWidth={1.8} />}</button>
       </div>
       <span style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", fontSize: 13, fontWeight: 700, color: T.text.secondary, fontFamily: T.font.mono, letterSpacing: "0.04em", textAlign: "center", whiteSpace: "nowrap" }}>
-        {tab === "dashboard" ? "HOME" : tab === "history" ? "HISTORY" : tab === "renewals" ? "EXPENSES" : tab === "cards" ? "CARDS" : tab === "input" ? "INPUT" : tab === "results" ? "RESULTS" : tab === "settings" ? "CONFIG" : ""}
+        {tab === "dashboard" ? "HOME" : tab === "history" ? "HISTORY" : tab === "renewals" ? "EXPENSES" : tab === "cards" ? "ACCOUNTS" : tab === "input" ? "INPUT" : tab === "results" ? "RESULTS" : tab === "settings" ? "CONFIG" : ""}
       </span>
       <button onClick={() => tab === "settings" ? navTo(lastCenterTab.current) : navTo("settings")} style={{
         width: 36, height: 36, borderRadius: 10, border: `1px solid ${tab === "settings" ? T.border.focus : T.border.default}`,

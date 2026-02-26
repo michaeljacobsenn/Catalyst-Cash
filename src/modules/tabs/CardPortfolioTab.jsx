@@ -120,11 +120,15 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
         </label>
     );
 
+    const totalAccounts = cards.length + bankAccounts.length;
+    const checkingCount = bankAccounts.filter(a => a.accountType === "checking").length;
+    const savingsCount = bankAccounts.filter(a => a.accountType === "savings").length;
+
     const creditCardsSection = <div>
         <div style={{ paddingTop: 16, paddingBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-                <h1 style={{ fontSize: 22, fontWeight: 800 }}>Card Portfolio</h1>
-                <p style={{ fontSize: 11, color: T.text.dim, marginTop: 4, fontFamily: T.font.mono }}>{cards.length} cards</p>
+                <h1 style={{ fontSize: 22, fontWeight: 800 }}>Accounts</h1>
+                <p style={{ fontSize: 11, color: T.text.dim, marginTop: 4, fontFamily: T.font.mono }}>{totalAccounts} accounts</p>
             </div>
             <button onClick={() => setShowAdd(!showAdd)} style={{
                 display: "flex", alignItems: "center", gap: 4, padding: "8px 14px",
@@ -136,20 +140,23 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
             </button>
         </div>
 
-        {/* Summary */}
+        {/* Unified Summary */}
         <Card animate style={{
             textAlign: "center", padding: "22px 16px",
             background: `linear-gradient(160deg,${T.bg.card},${T.status.blue}06)`, borderColor: `${T.status.blue}12`,
             boxShadow: `${T.shadow.elevated}, 0 0 24px ${T.status.blueDim}`
         }}>
-            <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.15em", color: T.text.dim, marginBottom: 6, fontFamily: T.font.mono, fontWeight: 700 }}>Total Credit Limit</p>
+            <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.15em", color: T.text.dim, marginBottom: 6, fontFamily: T.font.mono, fontWeight: 700 }}>Account Overview</p>
             <Mono size={30} weight={800} color={T.status.blue}>{fmt(totalLimit)}</Mono>
-            <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 10 }}>
-                <div><Mono size={10} color={T.text.dim}>CARDS</Mono><br /><Mono size={16} weight={700} color={T.text.primary}>{cards.length}</Mono></div>
+            <p style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, marginTop: 2, marginBottom: 10 }}>TOTAL CREDIT LIMIT</p>
+            <div style={{ display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
+                <div><Mono size={10} color={T.text.dim}>CREDIT</Mono><br /><Mono size={16} weight={700} color={T.accent.primary}>{cards.length}</Mono></div>
                 <div style={{ width: 1, background: T.border.default }} />
-                <div><Mono size={10} color={T.text.dim}>ANNUAL FEES</Mono><br /><Mono size={16} weight={700} color={totalAF > 0 ? T.status.amber : T.text.primary}>{fmt(totalAF)}</Mono></div>
+                <div><Mono size={10} color={T.text.dim}>CHECKING</Mono><br /><Mono size={16} weight={700} color={T.status.blue}>{checkingCount}</Mono></div>
                 <div style={{ width: 1, background: T.border.default }} />
-                <div><Mono size={10} color={T.text.dim}>AVG LIMIT</Mono><br /><Mono size={16} weight={700} color={T.text.primary}>{cards.length > 0 ? fmt(totalLimit / cards.length) : "—"}</Mono></div>
+                <div><Mono size={10} color={T.text.dim}>SAVINGS</Mono><br /><Mono size={16} weight={700} color={T.accent.emerald}>{savingsCount}</Mono></div>
+                <div style={{ width: 1, background: T.border.default }} />
+                <div><Mono size={10} color={T.text.dim}>ANN. FEES</Mono><br /><Mono size={16} weight={700} color={totalAF > 0 ? T.status.amber : T.text.primary}>{fmt(totalAF)}</Mono></div>
             </div>
         </Card>
 
@@ -290,6 +297,13 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
         </Card>}
 
         {/* Cards by Issuer */}
+        {/* Credit Cards Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 8 }}>
+            <CreditCard size={16} color={T.accent.primary} />
+            <span style={{ fontSize: 13, fontWeight: 800, color: T.accent.primary, textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: T.font.mono }}>Credit Cards</span>
+            <Badge variant="outline" style={{ fontSize: 10, color: T.accent.primary, borderColor: `${T.accent.primary}40` }}>{cards.length}</Badge>
+        </div>
+
         {grouped.length === 0 ?
             <EmptyState icon={CreditCard} title="Build Your Elite Portfolio" message="Add your first credit card to start tracking limits, annual fees, and active promo windows." /> :
             grouped.map(([inst, cardsInCategory]) => {
@@ -516,6 +530,22 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
         setEditingBank(null);
     };
 
+    // Split bank accounts by type for separate sections
+    const checkingAccounts = useMemo(() => bankAccounts.filter(a => a.accountType === "checking"), [bankAccounts]);
+    const savingsAccounts = useMemo(() => bankAccounts.filter(a => a.accountType === "savings"), [bankAccounts]);
+
+    const groupedChecking = useMemo(() => {
+        const g = {};
+        checkingAccounts.forEach(a => { (g[a.bank] = g[a.bank] || []).push(a); });
+        return Object.entries(g).sort((a, b) => a[0].localeCompare(b[0]));
+    }, [checkingAccounts]);
+
+    const groupedSavings = useMemo(() => {
+        const g = {};
+        savingsAccounts.forEach(a => { (g[a.bank] = g[a.bank] || []).push(a); });
+        return Object.entries(g).sort((a, b) => a[0].localeCompare(b[0]));
+    }, [savingsAccounts]);
+
     const bankSection = <div style={{ marginTop: 24 }}>
         {/* Bank Accounts Header */}
         <div style={{ paddingTop: 8, paddingBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -582,25 +612,31 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
             </div>
         </Card>}
 
-        {/* Bank Accounts List */}
-        {groupedBanks.length === 0 ?
-            <EmptyState icon={Landmark} title="Track Your Bank Accounts" message="Add checking and savings accounts to complete your financial picture." /> :
-            groupedBanks.map(([bank, accts]) => {
-                const isCollapsed = collapsedBanks[bank];
-                return <Card key={bank} animate variant="glass" style={{ marginBottom: 16, padding: 0, overflow: "hidden", borderLeft: `4px solid ${T.accent.emerald}` }}>
-                    <div onClick={() => setCollapsedBanks(p => ({ ...p, [bank]: !isCollapsed }))} style={{ padding: "16px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${T.accent.emerald}08` }}>
+        {/* Checking Accounts Section */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 8 }}>
+            <Building2 size={16} color={T.status.blue} />
+            <span style={{ fontSize: 13, fontWeight: 800, color: T.status.blue, textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: T.font.mono }}>Checking</span>
+            <Badge variant="outline" style={{ fontSize: 10, color: T.status.blue, borderColor: `${T.status.blue}40` }}>{checkingAccounts.length}</Badge>
+        </div>
+
+        {groupedChecking.length === 0 ?
+            <Card style={{ padding: "16px", textAlign: "center" }}><p style={{ fontSize: 11, color: T.text.muted }}>No checking accounts yet</p></Card> :
+            groupedChecking.map(([bank, accts]) => {
+                const isCollapsed = collapsedBanks[`checking-${bank}`];
+                return <Card key={`c-${bank}`} animate variant="glass" style={{ marginBottom: 12, padding: 0, overflow: "hidden", borderLeft: `4px solid ${T.status.blue}` }}>
+                    <div onClick={() => setCollapsedBanks(p => ({ ...p, [`checking-${bank}`]: !isCollapsed }))} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${T.status.blue}08` }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <div style={{ padding: 6, borderRadius: 8, background: T.accent.emerald, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                <Building2 size={14} color={T.bg.card} />
+                            <div style={{ padding: 5, borderRadius: 7, background: T.status.blue, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <Building2 size={12} color={T.bg.card} />
                             </div>
-                            <span style={{ fontSize: 13, fontWeight: 800, color: T.accent.emerald, textTransform: "uppercase", letterSpacing: "0.05em" }}>{bank}</span>
-                            <Badge variant="outline" style={{ fontSize: 11, color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>{accts.length}</Badge>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: T.status.blue, textTransform: "uppercase", letterSpacing: "0.05em" }}>{bank}</span>
+                            <Badge variant="outline" style={{ fontSize: 10, color: T.status.blue, borderColor: `${T.status.blue}40` }}>{accts.length}</Badge>
                         </div>
                         {isCollapsed ? <ChevronDown size={14} color={T.text.dim} /> : <ChevronUp size={14} color={T.text.dim} />}
                     </div>
-                    {!isCollapsed && <div style={{ padding: "16px 18px" }}>
-                        {accts.map((acct, i) => (
-                            <div key={acct.id} style={{ borderBottom: i === accts.length - 1 ? "none" : `1px solid ${T.border.subtle}`, padding: "14px 0" }}>
+                    {!isCollapsed && <div style={{ padding: "12px 18px" }}>
+                        {accts.sort((a, b) => a.name.localeCompare(b.name)).map((acct, i) => (
+                            <div key={acct.id} style={{ borderBottom: i === accts.length - 1 ? "none" : `1px solid ${T.border.subtle}`, padding: "12px 0" }}>
                                 {editingBank === acct.id ?
                                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                                         <input value={editBankForm.name} onChange={e => setEditBankForm(p => ({ ...p, name: e.target.value }))} placeholder="Account name"
@@ -615,43 +651,83 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
                                                 style={{ flex: 1, fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
                                         </div>
                                         <div style={{ display: "flex", gap: 8 }}>
-                                            <button onClick={() => saveEditBank(acct.id)} style={{
-                                                flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none",
-                                                background: `${T.accent.emerald}18`, color: T.accent.emerald, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6
-                                            }}>
-                                                <Check size={14} />Save</button>
-                                            <button onClick={() => setEditingBank(null)} style={{
-                                                flex: 1, padding: 12, borderRadius: T.radius.sm,
-                                                border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600
-                                            }}>Cancel</button>
+                                            <button onClick={() => saveEditBank(acct.id)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: `${T.status.blue}18`, color: T.status.blue, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Check size={14} />Save</button>
+                                            <button onClick={() => setEditingBank(null)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
                                         </div>
                                     </div> :
                                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{acct.name}</span>
                                             <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
-                                                <Badge variant={acct.accountType === "savings" ? "green" : "blue"} style={{ fontSize: 8, padding: "1px 5px" }}>
-                                                    {acct.accountType === "savings" ? "SAVINGS" : "CHECKING"}
-                                                </Badge>
-                                                {acct.apy > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>
-                                                    {acct.apy}% APY
-                                                </Badge>}
+                                                {acct.apy > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.status.blue, borderColor: `${T.status.blue}40` }}>{acct.apy}% APY</Badge>}
                                                 {acct.notes && <Mono size={10} color={T.text.dim}>{acct.notes}</Mono>}
                                             </div>
                                         </div>
                                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                                            <button onClick={() => startEditBank(acct)} style={{
-                                                width: 30, height: 30, borderRadius: T.radius.sm,
-                                                border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim,
-                                                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
-                                            }}>
-                                                <Edit3 size={11} /></button>
-                                            <button onClick={() => removeBankAccount(acct.id)} style={{
-                                                width: 30, height: 30, borderRadius: T.radius.sm,
-                                                border: "none", background: T.status.redDim, color: T.status.red,
-                                                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
-                                            }}>
-                                                <X size={11} /></button>
+                                            <button onClick={() => startEditBank(acct)} style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={11} /></button>
+                                            <button onClick={() => removeBankAccount(acct.id)} style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={11} /></button>
+                                        </div>
+                                    </div>}
+                            </div>
+                        ))}
+                    </div>}
+                </Card>;
+            })}
+
+        {/* Savings Accounts Section */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 20, marginBottom: 8 }}>
+            <DollarSign size={16} color={T.accent.emerald} />
+            <span style={{ fontSize: 13, fontWeight: 800, color: T.accent.emerald, textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: T.font.mono }}>Savings</span>
+            <Badge variant="outline" style={{ fontSize: 10, color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>{savingsAccounts.length}</Badge>
+        </div>
+
+        {groupedSavings.length === 0 ?
+            <Card style={{ padding: "16px", textAlign: "center" }}><p style={{ fontSize: 11, color: T.text.muted }}>No savings accounts yet</p></Card> :
+            groupedSavings.map(([bank, accts]) => {
+                const isCollapsed = collapsedBanks[`savings-${bank}`];
+                return <Card key={`s-${bank}`} animate variant="glass" style={{ marginBottom: 12, padding: 0, overflow: "hidden", borderLeft: `4px solid ${T.accent.emerald}` }}>
+                    <div onClick={() => setCollapsedBanks(p => ({ ...p, [`savings-${bank}`]: !isCollapsed }))} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${T.accent.emerald}08` }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <div style={{ padding: 5, borderRadius: 7, background: T.accent.emerald, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <DollarSign size={12} color={T.bg.card} />
+                            </div>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: T.accent.emerald, textTransform: "uppercase", letterSpacing: "0.05em" }}>{bank}</span>
+                            <Badge variant="outline" style={{ fontSize: 10, color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>{accts.length}</Badge>
+                        </div>
+                        {isCollapsed ? <ChevronDown size={14} color={T.text.dim} /> : <ChevronUp size={14} color={T.text.dim} />}
+                    </div>
+                    {!isCollapsed && <div style={{ padding: "12px 18px" }}>
+                        {accts.sort((a, b) => a.name.localeCompare(b.name)).map((acct, i) => (
+                            <div key={acct.id} style={{ borderBottom: i === accts.length - 1 ? "none" : `1px solid ${T.border.subtle}`, padding: "12px 0" }}>
+                                {editingBank === acct.id ?
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                        <input value={editBankForm.name} onChange={e => setEditBankForm(p => ({ ...p, name: e.target.value }))} placeholder="Account name"
+                                            style={{ width: "100%", fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
+                                        <div style={{ display: "flex", gap: 8 }}>
+                                            <div style={{ flex: 0.4, position: "relative" }}>
+                                                <input type="number" inputMode="decimal" step="0.01" value={editBankForm.apy} onChange={e => setEditBankForm(p => ({ ...p, apy: e.target.value }))} placeholder="APY"
+                                                    style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                                <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 12 }}>%</span>
+                                            </div>
+                                            <input value={editBankForm.notes} onChange={e => setEditBankForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notes"
+                                                style={{ flex: 1, fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
+                                        </div>
+                                        <div style={{ display: "flex", gap: 8 }}>
+                                            <button onClick={() => saveEditBank(acct.id)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: `${T.accent.emerald}18`, color: T.accent.emerald, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Check size={14} />Save</button>
+                                            <button onClick={() => setEditingBank(null)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
+                                        </div>
+                                    </div> :
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{acct.name}</span>
+                                            <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                                                {acct.apy > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>{acct.apy}% APY</Badge>}
+                                                {acct.notes && <Mono size={10} color={T.text.dim}>{acct.notes}</Mono>}
+                                            </div>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                                            <button onClick={() => startEditBank(acct)} style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={11} /></button>
+                                            <button onClick={() => removeBankAccount(acct.id)} style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={11} /></button>
                                         </div>
                                     </div>}
                             </div>
@@ -661,7 +737,7 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
             })}
     </div>;
 
-    return <div className="page-body" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", gap: 32 }}>
+    return <div className="page-body" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", gap: 24 }}>
         {creditCardsSection}
         {bankSection}
     </div>;
