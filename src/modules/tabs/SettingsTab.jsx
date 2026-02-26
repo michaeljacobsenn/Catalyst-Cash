@@ -655,7 +655,7 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
                                 EXPORT JSON
                             </button>
                             <div style={{ flex: 1, position: "relative" }}>
-                                <input type="file" accept=".json,.enc" onChange={handleImport} disabled={restoreStatus === "restoring"}
+                                <input type="file" accept=".json,.enc,*/*" onChange={handleImport} disabled={restoreStatus === "restoring"}
                                     style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", zIndex: 2 }} />
                                 <div style={{
                                     width: "100%", height: "100%", borderRadius: T.radius.md,
