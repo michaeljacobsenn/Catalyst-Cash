@@ -28,6 +28,23 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
     const [editBankForm, setEditBankForm] = useState({});
     const [collapsedBanks, setCollapsedBanks] = useState({});
 
+    // Bank form helpers (hoisted for Action Bar form)
+    const bankProducts = useMemo(() => getBankProducts(addBankForm.bank), [addBankForm.bank]);
+    const bankProductList = addBankForm.accountType === "checking" ? bankProducts.checking : bankProducts.savings;
+    const addBankAccount = () => {
+        const finalName = addBankForm.productName === "__other__" ? addBankForm.customName : addBankForm.productName;
+        if (!finalName || !finalName.trim()) return;
+        setBankAccounts([...bankAccounts, {
+            id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `bank_${Date.now()}`,
+            bank: addBankForm.bank, accountType: addBankForm.accountType,
+            name: finalName.trim(),
+            apy: addBankForm.apy === "" ? null : parseFloat(addBankForm.apy) || null,
+            notes: addBankForm.notes,
+        }]);
+        setAddBankForm({ bank: "", accountType: "checking", productName: "", customName: "", apy: "", notes: "" });
+        setShowAddBank(false);
+    };
+
     const grouped = useMemo(() => {
         const g = {};
         cards.forEach(c => { (g[c.institution] = g[c.institution] || []).push(c); });
@@ -609,29 +626,6 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
     </div>;
 
     // ─── Bank Accounts Section ─────────────────────────────────────
-
-    const bankProducts = useMemo(() => getBankProducts(addBankForm.bank), [addBankForm.bank]);
-    const bankProductList = addBankForm.accountType === "checking" ? bankProducts.checking : bankProducts.savings;
-
-    const groupedBanks = useMemo(() => {
-        const g = {};
-        bankAccounts.forEach(a => { (g[a.bank] = g[a.bank] || []).push(a); });
-        return Object.entries(g).sort((a, b) => a[0].localeCompare(b[0]));
-    }, [bankAccounts]);
-
-    const addBankAccount = () => {
-        const finalName = addBankForm.productName === "__other__" ? addBankForm.customName : addBankForm.productName;
-        if (!finalName || !finalName.trim()) return;
-        setBankAccounts([...bankAccounts, {
-            id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `bank_${Date.now()}`,
-            bank: addBankForm.bank, accountType: addBankForm.accountType,
-            name: finalName.trim(),
-            apy: addBankForm.apy === "" ? null : parseFloat(addBankForm.apy) || null,
-            notes: addBankForm.notes,
-        }]);
-        setAddBankForm({ bank: "", accountType: "checking", productName: "", customName: "", apy: "", notes: "" });
-        setShowAddBank(false);
-    };
 
     const removeBankAccount = (id) => {
         const acct = bankAccounts.find(a => a.id === id);
