@@ -235,7 +235,7 @@ export function PageImport({ onNext, toast }) {
 
     return (
         <div>
-            <input ref={fileRef} type="file" accept=".json" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) handleBackupFile(e.target.files[0]); e.target.value = ""; }} />
+            <input ref={fileRef} type="file" accept=".json,.enc,*/*" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) handleBackupFile(e.target.files[0]); e.target.value = ""; }} />
             <input ref={csvRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) handleSpreadsheet(e.target.files[0]); e.target.value = ""; }} />
 
             {/* Override notice */}
