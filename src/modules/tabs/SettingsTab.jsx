@@ -1701,7 +1701,11 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
                                     setNewHoldingSymbol(p => ({ ...p, [key]: "" }));
                                     setNewHoldingShares(p => ({ ...p, [key]: "" }));
                                 };
-                                const removeHolding = (key, idx) => updateHoldings(key, (holdings[key] || []).filter((_, i) => i !== idx));
+                                const removeHolding = (key, idx) => {
+                                    const h = (holdings[key] || [])[idx];
+                                    if (!window.confirm(`Remove ${h?.symbol || "this holding"}? This cannot be undone.`)) return;
+                                    updateHoldings(key, (holdings[key] || []).filter((_, i) => i !== idx));
+                                };
 
                                 const sections = [
                                     { key: "roth", label: "ROTH IRA", enabled: true },
@@ -1724,7 +1728,7 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
                                         const secColor = color || T.accent.emerald;
                                         const secTotal = (holdings[key] || []).reduce((s, h) => s + ((marketPrices[h.symbol]?.price || 0) * h.shares), 0);
                                         return (
-                                            <div key={key} style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${secColor}30`, boxShadow: `0 4px 20px ${secColor}08` }}>
+                                            <div key={key} style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${secColor}30`, boxShadow: `0 4px 20px ${secColor}08`, overflow: "hidden" }}>
                                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, paddingBottom: 10, borderBottom: `1px dashed ${T.border.subtle}` }}>
                                                     <span style={{ fontSize: 12, fontFamily: T.font.mono, fontWeight: 800, color: secColor }}>{label}</span>
                                                     <span style={{ fontSize: 12, fontFamily: T.font.mono, fontWeight: 700, color: T.text.primary }}>{fmt(secTotal)}</span>
@@ -1758,8 +1762,8 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
                                                     ))}
                                                 </div>
 
-                                                <div style={{ display: "flex", gap: 8 }}>
-                                                    <div style={{ flex: 1 }}>
+                                                <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
                                                         <SearchableSelect
                                                             value={newHoldingSymbol[key] || ""}
                                                             onChange={v => setNewHoldingSymbol(p => ({ ...p, [key]: v }))}
@@ -1771,8 +1775,8 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
                                                         />
                                                     </div>
                                                     <input type="number" inputMode="decimal" value={newHoldingShares[key] || ""} onChange={e => setNewHoldingShares(p => ({ ...p, [key]: e.target.value }))} placeholder={key === "crypto" ? "Amount" : "Shares"}
-                                                        style={{ width: 80, padding: "0 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12, fontFamily: T.font.mono, outline: "none" }} />
-                                                    <button onClick={() => addHolding(key)} disabled={!newHoldingSymbol[key] || !newHoldingShares[key]} style={{ padding: "0 16px", borderRadius: T.radius.md, border: "none", background: (!newHoldingSymbol[key] || !newHoldingShares[key]) ? T.bg.elevated : `${secColor}20`, color: (!newHoldingSymbol[key] || !newHoldingShares[key]) ? T.text.muted : secColor, fontSize: 13, fontWeight: 700, cursor: (!newHoldingSymbol[key] || !newHoldingShares[key]) ? "not-allowed" : "pointer", transition: "all .2s" }}>Add</button>
+                                                        style={{ width: 70, flexShrink: 0, padding: "0 8px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12, fontFamily: T.font.mono, outline: "none" }} />
+                                                    <button onClick={() => addHolding(key)} disabled={!newHoldingSymbol[key] || !newHoldingShares[key]} style={{ padding: "0 14px", flexShrink: 0, borderRadius: T.radius.md, border: "none", background: (!newHoldingSymbol[key] || !newHoldingShares[key]) ? T.bg.elevated : `${secColor}20`, color: (!newHoldingSymbol[key] || !newHoldingShares[key]) ? T.text.muted : secColor, fontSize: 13, fontWeight: 700, cursor: (!newHoldingSymbol[key] || !newHoldingShares[key]) ? "not-allowed" : "pointer", transition: "all .2s" }}>Add</button>
                                                 </div>
                                             </div>
                                         );
@@ -1815,7 +1819,7 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
                                                     <div style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
                                                         <input value={goal.name || ""} onChange={e => { const arr = [...(financialConfig.savingsGoals || [])]; arr[i] = { ...arr[i], name: e.target.value }; setFinancialConfig({ ...financialConfig, savingsGoals: arr }); }}
                                                             placeholder="Goal name (e.g. Vacation)" style={{ flex: 1, padding: "8px 10px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 11 }} />
-                                                        <button onClick={() => { const arr = (financialConfig.savingsGoals || []).filter((_, j) => j !== i); setFinancialConfig({ ...financialConfig, savingsGoals: arr }); }}
+                                                        <button onClick={() => { if (!window.confirm(`Delete "${goal.name || 'this goal'}"? This cannot be undone.`)) return; const arr = (financialConfig.savingsGoals || []).filter((_, j) => j !== i); setFinancialConfig({ ...financialConfig, savingsGoals: arr }); }}
                                                             style={{ width: 28, height: 28, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>×</button>
                                                     </div>
                                                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>

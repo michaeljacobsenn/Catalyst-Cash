@@ -19,7 +19,7 @@ const DEFAULTS = {
 // ─── CORS ────────────────────────────────────────────────────
 function corsHeaders(origin, env) {
     const allowed = (env.ALLOWED_ORIGIN || "https://catalystcash.app").split(",").map(s => s.trim());
-    const isAllowed = allowed.includes(origin) || origin?.startsWith("http://localhost");
+    const isAllowed = allowed.includes(origin) || origin?.startsWith("http://localhost") || origin === "capacitor://localhost";
     return {
         "Access-Control-Allow-Origin": isAllowed ? origin : allowed[0],
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -236,28 +236,70 @@ export default {
             }
 
             try {
+                // Primary: Yahoo Finance v8 spark API
                 const yfUrl = `https://query1.finance.yahoo.com/v8/finance/spark?symbols=${symbols.join(",")}&range=1d&interval=1d`;
                 const yfRes = await fetch(yfUrl, {
-                    headers: { "User-Agent": "CatalystCash/1.0", "Accept": "application/json" },
+                    headers: { "User-Agent": "Mozilla/5.0 (compatible; CatalystCash/1.0)", "Accept": "application/json" },
                 });
                 if (!yfRes.ok) throw new Error(`Yahoo Finance returned ${yfRes.status}`);
                 const yfData = await yfRes.json();
 
                 const result = {};
                 for (const sym of symbols) {
-                    const spark = yfData?.spark?.result?.find(r => r.symbol === sym);
-                    if (spark?.response?.[0]?.meta) {
-                        const meta = spark.response[0].meta;
+                    // Handle both response formats:
+                    // Format A (new): { VTI: { close: [340.89], chartPreviousClose: 341.83, symbol: "VTI" } }
+                    // Format B (old): { spark: { result: [{ symbol: "VTI", response: [{ meta: {...} }] }] } }
+                    let price = null, prevClose = null, name = sym;
+
+                    // Try Format A first (direct symbol keys)
+                    if (yfData[sym]) {
+                        const d = yfData[sym];
+                        const closes = d.close || [];
+                        price = closes[closes.length - 1] || null;
+                        prevClose = d.chartPreviousClose || d.previousClose || null;
+                        name = d.symbol || sym;
+                    }
+                    // Try Format B (spark.result)
+                    else if (yfData?.spark?.result) {
+                        const spark = yfData.spark.result.find(r => r.symbol === sym);
+                        if (spark?.response?.[0]?.meta) {
+                            const meta = spark.response[0].meta;
+                            price = meta.regularMarketPrice ?? meta.previousClose ?? null;
+                            prevClose = meta.previousClose ?? null;
+                            name = meta.shortName || meta.symbol || sym;
+                        }
+                    }
+
+                    if (price != null) {
                         result[sym] = {
-                            price: meta.regularMarketPrice ?? meta.previousClose ?? null,
-                            previousClose: meta.previousClose ?? null,
-                            change: meta.regularMarketPrice && meta.previousClose
-                                ? +(meta.regularMarketPrice - meta.previousClose).toFixed(2) : null,
-                            changePct: meta.regularMarketPrice && meta.previousClose
-                                ? +(((meta.regularMarketPrice - meta.previousClose) / meta.previousClose) * 100).toFixed(2) : null,
-                            name: meta.shortName || meta.symbol || sym,
-                            currency: meta.currency || "USD",
+                            price,
+                            previousClose: prevClose,
+                            change: price && prevClose ? +((price - prevClose).toFixed(2)) : null,
+                            changePct: price && prevClose ? +((((price - prevClose) / prevClose) * 100).toFixed(2)) : null,
+                            name,
+                            currency: "USD",
                         };
+                    }
+                }
+
+                // If primary returned nothing, try fallback v6 quote API
+                if (Object.keys(result).length === 0) {
+                    const fbUrl = `https://query2.finance.yahoo.com/v6/finance/quote?symbols=${symbols.join(",")}`;
+                    const fbRes = await fetch(fbUrl, {
+                        headers: { "User-Agent": "Mozilla/5.0 (compatible; CatalystCash/1.0)", "Accept": "application/json" },
+                    });
+                    if (fbRes.ok) {
+                        const fbData = await fbRes.json();
+                        for (const q of (fbData?.quoteResponse?.result || [])) {
+                            result[q.symbol] = {
+                                price: q.regularMarketPrice ?? null,
+                                previousClose: q.regularMarketPreviousClose ?? null,
+                                change: q.regularMarketChange != null ? +q.regularMarketChange.toFixed(2) : null,
+                                changePct: q.regularMarketChangePercent != null ? +q.regularMarketChangePercent.toFixed(2) : null,
+                                name: q.shortName || q.longName || q.symbol,
+                                currency: q.currency || "USD",
+                            };
+                        }
                     }
                 }
 
