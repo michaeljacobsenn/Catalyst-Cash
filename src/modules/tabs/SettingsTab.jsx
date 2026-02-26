@@ -434,8 +434,8 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
                     display: "flex", alignItems: "center", justifyContent: "center"
                 }}><ArrowLeft size={16} /></button>}
             </div>
-            <div style={{ textAlign: "center", flex: 1 }}>
-                <h1 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>
+            <div style={{ textAlign: "center", flex: 1, minWidth: 0, overflow: "hidden" }}>
+                <h1 style={{ fontSize: 18, fontWeight: 800, margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {activeMenu === "ai" ? "AI & Engine" :
                         activeMenu === "backup" ? "Backup & Data" :
                             activeMenu === "security" ? "Security" :
@@ -1728,7 +1728,7 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
                                         const secColor = color || T.accent.emerald;
                                         const secTotal = (holdings[key] || []).reduce((s, h) => s + ((marketPrices[h.symbol]?.price || 0) * h.shares), 0);
                                         return (
-                                            <div key={key} style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${secColor}30`, boxShadow: `0 4px 20px ${secColor}08`, overflow: "hidden" }}>
+                                            <div key={key} style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${secColor}30`, boxShadow: `0 4px 20px ${secColor}08` }}>
                                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, paddingBottom: 10, borderBottom: `1px dashed ${T.border.subtle}` }}>
                                                     <span style={{ fontSize: 12, fontFamily: T.font.mono, fontWeight: 800, color: secColor }}>{label}</span>
                                                     <span style={{ fontSize: 12, fontFamily: T.font.mono, fontWeight: 700, color: T.text.primary }}>{fmt(secTotal)}</span>

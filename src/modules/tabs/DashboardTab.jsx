@@ -82,14 +82,10 @@ export default function DashboardTab({ current, history, onRunAudit, onViewResul
 
         return <div className="page-body" style={{ paddingBottom: 20, display: "flex", flexDirection: "column", minHeight: "100%" }}>
             <div style={{ textAlign: "center", paddingTop: 14, paddingBottom: 18 }}>
-                <div style={{
-                    width: 64, height: 64, borderRadius: 18, margin: "0 auto 14px",
-                    background: `linear-gradient(135deg,${T.accent.primaryDim},${T.bg.card})`,
-                    border: `1px solid ${T.accent.primarySoft}`, display: "flex", alignItems: "center", justifyContent: "center",
-                    boxShadow: T.shadow.glow, overflow: "hidden"
-                }}>
-                    <img src="/icon-192.png" alt="Catalyst Cash" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                </div>
+                <img src="/icon-192.png" alt="Catalyst Cash" style={{
+                    width: 80, height: 80, borderRadius: 20, margin: "0 auto 14px", display: "block",
+                    filter: `drop-shadow(0 4px 20px ${T.accent.primary}30)`
+                }} />
                 <h1 style={{ fontSize: 20, fontWeight: 900, marginBottom: 6, fontFamily: T.font.sans }}>Catalyst Cash</h1>
                 <p style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600 }}>DEBT • SAVING • INVESTING • AUTOMATION</p>
             </div>
