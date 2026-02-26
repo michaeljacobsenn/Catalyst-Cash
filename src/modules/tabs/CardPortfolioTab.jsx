@@ -125,41 +125,78 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
     const checkingCount = bankAccounts.filter(a => a.accountType === "checking").length;
     const savingsCount = bankAccounts.filter(a => a.accountType === "savings").length;
 
+    const netCapital = totalLimit + (investTotalValue || 0);
+
     const creditCardsSection = <div>
-        <div style={{ paddingTop: 16, paddingBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ paddingTop: 24, paddingBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
             <div>
-                <h1 style={{ fontSize: 22, fontWeight: 800 }}>Accounts</h1>
-                <p style={{ fontSize: 11, color: T.text.dim, marginTop: 4, fontFamily: T.font.mono }}>{totalAccounts} accounts</p>
+                <h1 style={{ fontSize: 26, fontWeight: 900, letterSpacing: "-0.02em" }}>Wealth Overview</h1>
+                <p style={{ fontSize: 13, color: T.text.dim, marginTop: 4, fontFamily: T.font.mono }}>{totalAccounts} connected entries</p>
             </div>
-            <button onClick={() => setShowAdd(!showAdd)} style={{
-                display: "flex", alignItems: "center", gap: 4, padding: "8px 14px",
-                borderRadius: T.radius.md, border: `1px solid ${showAdd ? T.status.amber : T.accent.primary}30`,
-                background: showAdd ? T.status.amberDim : T.accent.primaryDim, color: showAdd ? T.status.amber : T.accent.primary,
-                fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono
-            }}>
-                {showAdd ? <><X size={12} />CANCEL</> : <><Plus size={12} />ADD CARD</>}
-            </button>
         </div>
 
-        {/* Unified Summary */}
+        {/* Ultra-Premium Wealth Dashboard */}
         <Card animate style={{
-            textAlign: "center", padding: "22px 16px",
-            background: `linear-gradient(160deg,${T.bg.card},${T.status.blue}06)`, borderColor: `${T.status.blue}12`,
-            boxShadow: `${T.shadow.elevated}, 0 0 24px ${T.status.blueDim}`
+            position: "relative",
+            padding: 0,
+            overflow: "hidden",
+            background: `linear-gradient(145deg, ${T.bg.card}, ${T.bg.card} 40%, ${T.status.blue}0A)`,
+            borderColor: `${T.status.blue}1A`,
+            boxShadow: `${T.shadow.elevated}, 0 12px 32px ${T.status.blue}0F`
         }}>
-            <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.15em", color: T.text.dim, marginBottom: 6, fontFamily: T.font.mono, fontWeight: 700 }}>Account Overview</p>
-            <Mono size={30} weight={800} color={T.status.blue}>{fmt(totalLimit)}</Mono>
-            <p style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, marginTop: 2, marginBottom: 10 }}>TOTAL CREDIT LIMIT</p>
-            <div style={{ display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
-                <div><Mono size={10} color={T.text.dim}>CREDIT</Mono><br /><Mono size={16} weight={700} color={T.accent.primary}>{cards.length}</Mono></div>
-                <div style={{ width: 1, background: T.border.default }} />
-                <div><Mono size={10} color={T.text.dim}>CHECKING</Mono><br /><Mono size={16} weight={700} color={T.status.blue}>{checkingCount}</Mono></div>
-                <div style={{ width: 1, background: T.border.default }} />
-                <div><Mono size={10} color={T.text.dim}>SAVINGS</Mono><br /><Mono size={16} weight={700} color={T.accent.emerald}>{savingsCount}</Mono></div>
-                <div style={{ width: 1, background: T.border.default }} />
-                <div><Mono size={10} color={T.text.dim}>ANN. FEES</Mono><br /><Mono size={16} weight={700} color={totalAF > 0 ? T.status.amber : T.text.primary}>{fmt(totalAF)}</Mono></div>
+            {/* Ambient Glow */}
+            <div style={{ position: "absolute", top: -50, right: -50, width: 150, height: 150, background: T.status.blue, filter: "blur(80px)", opacity: 0.15, borderRadius: "50%", pointerEvents: "none" }} />
+
+            <div style={{ padding: "28px 24px" }}>
+                <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.15em", color: T.text.dim, marginBottom: 8, fontFamily: T.font.mono, fontWeight: 700 }}>Total Access to Capital</p>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                    <Mono size={38} weight={900} color={T.status.blue}>{fmt(netCapital)}</Mono>
+                </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderTop: `1px solid ${T.border.subtle}` }}>
+                <div style={{ padding: "16px 24px", borderRight: `1px solid ${T.border.subtle}` }}>
+                    <p style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, marginBottom: 4 }}>TOTAL LIMIT</p>
+                    <Mono size={16} weight={700} color={T.accent.primary}>{fmt(totalLimit)}</Mono>
+                </div>
+                <div style={{ padding: "16px 24px" }}>
+                    <p style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, marginBottom: 4 }}>INVESTMENTS</p>
+                    <Mono size={16} weight={700} color={T.accent.emerald}>{fmt(investTotalValue || 0)}</Mono>
+                </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderTop: `1px solid ${T.border.subtle}` }}>
+                <div style={{ padding: "16px 24px", borderRight: `1px solid ${T.border.subtle}` }}>
+                    <p style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, marginBottom: 4 }}>ANNUAL FEES</p>
+                    <Mono size={16} weight={700} color={totalAF > 0 ? T.status.amber : T.text.primary}>{fmt(totalAF)}</Mono>
+                </div>
+                <div style={{ padding: "16px 24px" }}>
+                    <p style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, marginBottom: 4 }}>DEBTS</p>
+                    <Mono size={16} weight={700} color={T.status.red}>{fmt(totalDebtBalance || 0)}</Mono>
+                </div>
             </div>
         </Card>
+
+        {/* Unified Action Bar */}
+        <div style={{ display: "flex", gap: 12, marginTop: 20, marginBottom: 24 }}>
+            <button onClick={() => setShowAdd(!showAdd)} style={{
+                flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0",
+                borderRadius: T.radius.lg, border: `1px solid ${showAdd ? T.status.amber : T.border.default}`,
+                background: showAdd ? T.status.amberDim : T.bg.elevated, color: showAdd ? T.status.amber : T.text.primary,
+                fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "all .2s ease",
+                boxShadow: showAdd ? `0 0 0 2px ${T.status.amber}30` : T.shadow.subtle
+            }}>
+                {showAdd ? <><X size={16} />Cancel</> : <><CreditCard size={16} color={T.accent.primary} />Add Card</>}
+            </button>
+            <button onClick={() => setShowAddBank(!showAddBank)} style={{
+                flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0",
+                borderRadius: T.radius.lg, border: `1px solid ${showAddBank ? T.status.amber : T.border.default}`,
+                background: showAddBank ? T.status.amberDim : T.bg.elevated, color: showAddBank ? T.status.amber : T.text.primary,
+                fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "all .2s ease",
+                boxShadow: showAddBank ? `0 0 0 2px ${T.status.amber}30` : T.shadow.subtle
+            }}>
+                {showAddBank ? <><X size={16} />Cancel</> : <><Landmark size={16} color={T.status.blue} />Add Bank</>}
+            </button>
+        </div>
 
         {/* Info */}
         <Card animate delay={50} style={{ padding: "12px 16px", borderLeft: `3px solid ${T.status.green}30` }}>
@@ -297,12 +334,16 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
             </div>
         </Card>}
 
-        {/* Cards by Issuer */}
-        {/* Credit Cards Header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 8 }}>
-            <CreditCard size={16} color={T.accent.primary} />
-            <span style={{ fontSize: 13, fontWeight: 800, color: T.accent.primary, textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: T.font.mono }}>Credit Cards</span>
-            <Badge variant="outline" style={{ fontSize: 10, color: T.accent.primary, borderColor: `${T.accent.primary}40` }}>{cards.length}</Badge>
+        {/* Premium Section Header: Credit Cards */}
+        <div style={{
+            display: "flex", alignItems: "center", gap: 10, marginTop: 16, marginBottom: 16,
+            paddingBottom: 8, borderBottom: `1px solid ${T.accent.primary}20`
+        }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent.primary}1A`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 12px ${T.accent.primary}10` }}>
+                <CreditCard size={14} color={T.accent.primary} />
+            </div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Credit Cards</h2>
+            <Badge variant="outline" style={{ fontSize: 10, color: T.accent.primary, borderColor: `${T.accent.primary}40`, marginLeft: "auto" }}>{cards.length}</Badge>
         </div>
 
         {grouped.length === 0 ?
@@ -548,26 +589,19 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
     }, [savingsAccounts]);
 
     const bankSection = <div style={{ marginTop: 24 }}>
-        {/* Bank Accounts Header */}
-        <div style={{ paddingTop: 8, paddingBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <Landmark size={18} color={T.accent.emerald} />
-                    <h2 style={{ fontSize: 18, fontWeight: 800 }}>Bank Accounts</h2>
-                </div>
-                <p style={{ fontSize: 11, color: T.text.dim, marginTop: 4, fontFamily: T.font.mono }}>{bankAccounts.length} accounts</p>
+        {/* Premium Section Header: Bank Accounts */}
+        <div style={{
+            display: "flex", alignItems: "center", gap: 10, marginTop: 16, marginBottom: 16,
+            paddingBottom: 8, borderBottom: `1px solid ${T.status.blue}20`
+        }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.status.blue}1A`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 12px ${T.status.blue}10` }}>
+                <Landmark size={14} color={T.status.blue} />
             </div>
-            <button onClick={() => setShowAddBank(!showAddBank)} style={{
-                display: "flex", alignItems: "center", gap: 4, padding: "8px 14px",
-                borderRadius: T.radius.md, border: `1px solid ${showAddBank ? T.status.amber : T.accent.emerald}30`,
-                background: showAddBank ? T.status.amberDim : `${T.accent.emerald}12`, color: showAddBank ? T.status.amber : T.accent.emerald,
-                fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono
-            }}>
-                {showAddBank ? <><X size={12} />CANCEL</> : <><Plus size={12} />ADD ACCOUNT</>}
-            </button>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Bank Accounts</h2>
+            <Badge variant="outline" style={{ fontSize: 10, color: T.status.blue, borderColor: `${T.status.blue}40`, marginLeft: "auto" }}>{bankAccounts.length}</Badge>
         </div>
 
-        {/* Add Bank Account Form */}
+        {/* Add Bank Form */}
         {showAddBank && <Card animate variant="accent">
             <Label>New Bank Account</Label>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -613,11 +647,10 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
             </div>
         </Card>}
 
-        {/* Checking Accounts Section */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 8 }}>
-            <Building2 size={16} color={T.status.blue} />
-            <span style={{ fontSize: 13, fontWeight: 800, color: T.status.blue, textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: T.font.mono }}>Checking</span>
-            <Badge variant="outline" style={{ fontSize: 10, color: T.status.blue, borderColor: `${T.status.blue}40` }}>{checkingAccounts.length}</Badge>
+        {/* Premium Sub-header: Checking */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 12 }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: T.status.blue, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.font.mono }}>Checking Accounts</span>
+            <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${T.status.blue}30, transparent)` }} />
         </div>
 
         {groupedChecking.length === 0 ?
@@ -675,11 +708,10 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
                 </Card>;
             })}
 
-        {/* Savings Accounts Section */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 20, marginBottom: 8 }}>
-            <DollarSign size={16} color={T.accent.emerald} />
-            <span style={{ fontSize: 13, fontWeight: 800, color: T.accent.emerald, textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: T.font.mono }}>Savings</span>
-            <Badge variant="outline" style={{ fontSize: 10, color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>{savingsAccounts.length}</Badge>
+        {/* Premium Sub-header: Savings */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 24, marginBottom: 12 }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: T.accent.emerald, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.font.mono }}>Savings Accounts</span>
+            <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${T.accent.emerald}30, transparent)` }} />
         </div>
 
         {groupedSavings.length === 0 ?
@@ -771,9 +803,15 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
     }, [holdings, investPrices]);
 
     const investmentsSection = enabledInvestments.length > 0 ? <div style={{ marginTop: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <TrendingUp size={18} color={T.accent.primary} />
-            <h2 style={{ fontSize: 18, fontWeight: 800 }}>Investments</h2>
+        {/* Premium Section Header: Investments */}
+        <div style={{
+            display: "flex", alignItems: "center", gap: 10, marginTop: 16, marginBottom: 16,
+            paddingBottom: 8, borderBottom: `1px solid ${T.accent.emerald}20`
+        }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent.emerald}1A`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 12px ${T.accent.emerald}10` }}>
+                <TrendingUp size={14} color={T.accent.emerald} />
+            </div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Investments</h2>
         </div>
 
         {investTotalValue > 0 && <Card animate style={{
@@ -834,9 +872,15 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
     const [collapsedDebts, setCollapsedDebts] = useState(false);
 
     const debtsSection = nonCardDebts.length > 0 ? <div style={{ marginTop: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <AlertTriangle size={18} color={T.status.amber} />
-            <h2 style={{ fontSize: 18, fontWeight: 800 }}>Debts & Loans</h2>
+        {/* Premium Section Header: Debts */}
+        <div style={{
+            display: "flex", alignItems: "center", gap: 10, marginTop: 16, marginBottom: 16,
+            paddingBottom: 8, borderBottom: `1px solid ${T.status.amber}20`
+        }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.status.amber}1A`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 12px ${T.status.amber}10` }}>
+                <AlertTriangle size={14} color={T.status.amber} />
+            </div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Debts & Loans</h2>
         </div>
 
         {totalDebtBalance > 0 && <Card animate style={{
