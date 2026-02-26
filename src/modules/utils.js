@@ -199,8 +199,8 @@ export function parseJSON(raw) {
     raw,
     status: j.headerCard?.status || "UNKNOWN",
     mode: "FULL", // Implicit in the new architecture unless overridden
-    netWorth: parseCurrency(j.investments?.balance),
-    netWorthDelta: null, // Computed elsewhere if needed
+    netWorth: parseCurrency(j.investments?.netWorth) ?? parseCurrency(j.investments?.balance),
+    netWorthDelta: j.investments?.netWorthDelta || null,
     healthScore: j.healthScore || null, // { score, grade, trend, summary }
     structured: j,
     sections: {

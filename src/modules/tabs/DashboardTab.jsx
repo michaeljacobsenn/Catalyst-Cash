@@ -159,6 +159,18 @@ export default function DashboardTab({ current, history, onRunAudit, onViewResul
     ].filter(({ v }) => v != null);
 
     return <div className="page-body" style={{ paddingBottom: 0 }}>
+        <style>{`
+            @keyframes pulseRing {
+                0% { stroke-width: 8; opacity: 0.1; }
+                100% { stroke-width: 16; opacity: 0.3; }
+            }
+            @keyframes pulseBorder {
+                0% { box-shadow: 0 0 10px ${T.accent.primary}10; }
+                100% { box-shadow: 0 0 30px ${T.accent.primary}40; }
+            }
+            .hover-lift { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important; cursor: default; }
+            .hover-lift:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 12px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08) !important; }
+        `}</style>
         {runConfetti && <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, pointerEvents: "none" }}>
             <Confetti width={windowSize.width} height={windowSize.height} recycle={false} numberOfPieces={400} gravity={0.15} />
         </div>}
@@ -187,8 +199,13 @@ export default function DashboardTab({ current, history, onRunAudit, onViewResul
             </div>
         </Card>}
 
-        {/* Status Bar */}
-        <div style={{ paddingTop: 14, paddingBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        {/* Status Bar (Sticky) */}
+        <div style={{
+            padding: "14px 16px", margin: "0 -16px 14px -16px", display: "flex", justifyContent: "space-between", alignItems: "center",
+            position: "sticky", top: 0, zIndex: 10,
+            background: `${T.bg.base}cc`, backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+            borderBottom: `1px solid ${T.border.subtle}`
+        }}>
             <div>
                 <p style={{ fontSize: 10, fontFamily: T.font.mono, color: T.text.dim, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 6 }}>Last Audit</p>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -252,7 +269,7 @@ export default function DashboardTab({ current, history, onRunAudit, onViewResul
                             strokeWidth="12" strokeLinecap="round" opacity="0.15"
                             strokeDasharray={`${arcLength} ${circumference - arcLength}`}
                             transform="rotate(135,70,70)"
-                            style={{ transition: "stroke-dasharray 1.2s ease-out" }} />
+                            style={{ transition: "stroke-dasharray 1.2s ease-out", animation: "pulseRing 3s infinite alternate cubic-bezier(0.4, 0, 0.2, 1)" }} />
                     </svg>
                     <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", textAlign: "center", marginTop: -4 }}>
                         <div style={{
@@ -290,15 +307,24 @@ export default function DashboardTab({ current, history, onRunAudit, onViewResul
 
         {/* Quick Metrics */}
         {quickMetrics.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-            {quickMetrics.map(({ l, v, c }) => <Card key={l} style={{ padding: "14px 16px", marginBottom: 0 }}>
-                <Label style={{ marginBottom: 5 }}>{l}</Label>
-                <Mono size={18} weight={700} color={c}>{v != null ? fmt(v) : "—"}</Mono>
+            {quickMetrics.map(({ l, v, c }) => <Card key={l} className="hover-lift" style={{
+                padding: "16px", marginBottom: 0,
+                background: `linear-gradient(145deg, ${T.bg.elevated}, ${T.bg.base})`,
+                boxShadow: `0 4px 16px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.03)`,
+                border: `1px solid ${T.border.default}`,
+                borderRadius: T.radius.lg
+            }}>
+                <Label style={{ marginBottom: 6, letterSpacing: "0.05em", fontSize: 11 }}>{l}</Label>
+                <Mono size={19} weight={800} color={c}>{v != null ? fmt(v) : "—"}</Mono>
             </Card>)}
         </div>}
 
         {/* Next Action — Highest priority actionable item */}
         {
-            p?.sections?.nextAction && <Card animate delay={100} variant="accent">
+            p?.sections?.nextAction && <Card animate delay={100} variant="accent" style={{
+                animation: "pulseBorder 4s infinite alternate",
+                border: `1.5px solid ${T.accent.primary}50`
+            }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                     <div style={{ width: 28, height: 28, borderRadius: 8, background: T.accent.primaryDim, display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <Zap size={14} color={T.accent.primary} strokeWidth={2.5} /></div>

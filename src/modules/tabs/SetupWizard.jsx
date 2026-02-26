@@ -75,7 +75,7 @@ export default function SetupWizard({ onComplete, toast }) {
         track401k: false, k401AnnualLimit: "", k401EmployerMatchPct: "", k401EmployerMatchLimit: "",
     });
     const [ai, setAi] = useState({
-        aiProvider: "gemini", aiModel: "gemini-2.0-flash", apiKey: "",
+        aiProvider: "backend", aiModel: "gemini-2.5-flash", apiKey: "",
     });
     const [security, setSecurity] = useState({
         pinEnabled: false, pin: "", lockTimeout: 0, useFaceId: false,
@@ -192,6 +192,14 @@ export default function SetupWizard({ onComplete, toast }) {
         }}>
             {/* Scrollable content area */}
             <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "calc(env(safe-area-inset-top, 40px) + 20px) 20px 40px" }}>
+                <style>{`
+                    @keyframes slideFadeIn {
+                        from { opacity: 0; transform: translateY(20px) scale(0.98); }
+                        to { opacity: 1; transform: translateY(0) scale(1); }
+                    }
+                    .wiz-input { transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+                    .wiz-input:focus { border-color: ${T.accent.primary} !important; box-shadow: 0 0 0 3px ${T.accent.primary}30 !important; }
+                `}</style>
                 <div style={{ maxWidth: 420, margin: "0 auto" }}>
 
                     {/* Top gradient accent line */}
@@ -204,7 +212,7 @@ export default function SetupWizard({ onComplete, toast }) {
                     <StepHeader step={step} />
 
                     {/* Page content */}
-                    <div key={pageId} style={{ animation: "slideUp 0.3s ease-out" }}>
+                    <div key={pageId} style={{ animation: "slideFadeIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards" }}>
                         {pageId === "welcome" && (
                             <PageWelcome onNext={next} />
                         )}
