@@ -22,6 +22,11 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
     const [editForm, setEditForm] = useState({});
     const [showAdd, setShowAdd] = useState(false);
     const [addForm, setAddForm] = useState({ institution: "", cardChoice: "", customName: "", nickname: "", limit: "", annualFee: "", annualFeeDue: "", annualFeeWaived: false, notes: "", apr: "", hasPromoApr: false, promoAprAmount: "", promoAprExp: "", statementCloseDay: "", paymentDueDay: "", minPayment: "" });
+    const [showAddBank, setShowAddBank] = useState(false);
+    const [addBankForm, setAddBankForm] = useState({ bank: "", accountType: "checking", productName: "", customName: "", apy: "", notes: "" });
+    const [editingBank, setEditingBank] = useState(null);
+    const [editBankForm, setEditBankForm] = useState({});
+    const [collapsedBanks, setCollapsedBanks] = useState({});
 
     const grouped = useMemo(() => {
         const g = {};
@@ -558,11 +563,6 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
     </div>;
 
     // ─── Bank Accounts Section ─────────────────────────────────────
-    const [showAddBank, setShowAddBank] = useState(false);
-    const [addBankForm, setAddBankForm] = useState({ bank: "", accountType: "checking", productName: "", customName: "", apy: "", notes: "" });
-    const [editingBank, setEditingBank] = useState(null);
-    const [editBankForm, setEditBankForm] = useState({});
-    const [collapsedBanks, setCollapsedBanks] = useState({});
 
     const bankProducts = useMemo(() => getBankProducts(addBankForm.bank), [addBankForm.bank]);
     const bankProductList = addBankForm.accountType === "checking" ? bankProducts.checking : bankProducts.savings;
