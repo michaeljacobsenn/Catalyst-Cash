@@ -8,7 +8,7 @@ import { fmt } from "../utils.js";
 import { Card, Label, Badge } from "../ui.jsx";
 import { Mono, EmptyState } from "../components.jsx";
 import SearchableSelect from "../SearchableSelect.jsx";
-import { fetchMarketPrices, POPULAR_CRYPTO, POPULAR_FUNDS } from "../marketData.js";
+import { fetchMarketPrices, getTickerOptions, POPULAR_CRYPTO, POPULAR_FUNDS, POPULAR_STOCKS } from "../marketData.js";
 
 const INSTITUTIONS = [
     "Amex", "Bank of America", "Barclays", "Capital One", "Chase", "Citi",
@@ -971,7 +971,7 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
                                             onChange={v => setNewHoldingSymbol(p => ({ ...p, [key]: v }))}
                                             placeholder={key === "crypto" ? "Search crypto…" : "Search ticker…"}
                                             options={[
-                                                ...(key === "crypto" ? POPULAR_CRYPTO : POPULAR_FUNDS).map(c => ({ value: c.symbol, label: `${c.symbol.replace('-USD', '')} — ${c.name}` })),
+                                                ...getTickerOptions(key).map(c => ({ value: c.symbol, label: `${c.symbol.replace('-USD', '')} — ${c.name}` })),
                                                 { value: "__custom__", label: "Custom ticker…" }
                                             ]}
                                         />
