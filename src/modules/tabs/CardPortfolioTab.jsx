@@ -28,12 +28,12 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
     const [editBankForm, setEditBankForm] = useState({});
     const [collapsedBanks, setCollapsedBanks] = useState({});
 
-    // Master collapsible sections (collapse by default if empty)
+    // Master collapsible sections (all collapsed by default for a clean, compact view)
     const [collapsedSections, setCollapsedSections] = useState({
-        creditCards: cards.length === 0,
-        bankAccounts: bankAccounts.length === 0,
-        investments: false, // handeled internally by investTotalValue
-        debts: false // handled internally by totalDebtBalance
+        creditCards: true,
+        bankAccounts: true,
+        investments: true,
+        debts: true
     });
 
     // Bank form helpers (hoisted for Action Bar form)
