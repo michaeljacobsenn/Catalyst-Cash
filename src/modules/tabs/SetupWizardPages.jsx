@@ -302,7 +302,7 @@ export function PageIncome({ data, onChange, onNext, onBack, onSkip }) {
             <div style={{
                 display: "flex", gap: 12, alignItems: "flex-start",
                 padding: "14px 16px", marginBottom: 20,
-                background: `linear-gradient(145deg, ${T.bg.elevated}, ${T.bg.app})`,
+                background: `linear-gradient(145deg, ${T.bg.elevated}, ${T.bg.base})`,
                 border: `1px solid ${T.border.default}`,
                 borderRadius: T.radius.lg,
                 boxShadow: `0 4px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05)`

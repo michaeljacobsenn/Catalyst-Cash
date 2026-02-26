@@ -47,7 +47,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
         k401Balance: financialConfig?.k401Balance || "",
         pending: "0.00", pendingConfirmed: true,
         habitCount: 10, debts: [{ cardId: "", name: "", balance: "" }], notes: "",
-        autoPaycheckAdd: true, paycheckAddOverride: ""
+        autoPaycheckAdd: false, paycheckAddOverride: ""
     });
     const [isTestMode, setIsTestMode] = useState(false);
     const [copySuccess, setCopySuccess] = useState(false);
@@ -142,7 +142,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                 pendingConfirmed: true,
                 roth: lastAudit.form.roth !== undefined ? lastAudit.form.roth : (p.roth || ""),
                 brokerage: lastAudit.form.brokerage !== undefined ? lastAudit.form.brokerage : (p.brokerage || ""),
-                autoPaycheckAdd: lastAudit.form.autoPaycheckAdd !== undefined ? lastAudit.form.autoPaycheckAdd : true,
+                autoPaycheckAdd: lastAudit.form.autoPaycheckAdd !== undefined ? lastAudit.form.autoPaycheckAdd : false,
                 paycheckAddOverride: lastAudit.form.paycheckAddOverride !== undefined ? lastAudit.form.paycheckAddOverride : ""
             }));
         }
@@ -385,7 +385,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
     return <div className="page-body" style={{
         display: "flex", flexDirection: "column", minHeight: "100%"
     }}>
-        <div style={{ padding: "20px 0 16px", display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ padding: "12px 0 8px", display: "flex", alignItems: "center", gap: 12 }}>
             {onBack && <button onClick={onBack} style={{
                 width: 36, height: 36, borderRadius: 10, border: `1px solid ${T.border.default}`,
                 background: T.bg.elevated, color: T.text.secondary, cursor: "pointer",
@@ -393,9 +393,9 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
             }}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
             </button>}
-            <div style={{ paddingTop: 16, paddingBottom: 16 }}>
+            <div>
                 <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em" }}>Weekly Snapshot</h1>
-                <p style={{ fontSize: 11, color: T.text.dim, marginTop: 4, fontFamily: T.font.mono }}>FULL MODE</p>
+
             </div>
         </div>
 
@@ -682,6 +682,9 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
             }}>
                 <Zap size={13} strokeWidth={2.5} />{isTestMode ? "TESTING" : "TEST"}</button>
         </div>
+
+        {/* Bottom spacer — iOS Safari ignores padding-bottom on overflow:auto containers */}
+        <div style={{ flexShrink: 0, height: 32 }} aria-hidden />
 
         {/* ── Manual Clipboard Mode — HIDDEN (logic preserved, set false→true to re-enable) ── */}
         {false && (

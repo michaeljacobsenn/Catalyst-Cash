@@ -661,7 +661,7 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
             })}
     </div>;
 
-    return <div className="page-body" style={{ paddingBottom: 0 }}>
+    return <div className="page-body" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", gap: 32 }}>
         {creditCardsSection}
         {bankSection}
     </div>;

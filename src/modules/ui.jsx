@@ -44,6 +44,9 @@ export const GlobalStyles = () => (
     @keyframes confettiBurst{0%{transform:translateY(0) scale(0);opacity:0}15%{opacity:1;transform:translateY(-20px) scale(1)}100%{transform:translateY(85vh) rotate(720deg) scale(0.3);opacity:0}}
     @keyframes tabSlideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
     @keyframes tabFadeIn{from{opacity:0}to{opacity:1}}
+    @keyframes settingsSlideIn{from{opacity:0;transform:translateX(50px)}to{opacity:1;transform:translateX(0)}}
+    @keyframes settingsSlideOut{from{opacity:0;transform:translateX(-50px)}to{opacity:1;transform:translateX(0)}}
+    @keyframes slidePaneIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 
     .slide-up{animation:slideUp .35s cubic-bezier(.16,1,.3,1) both}
     .fade-in{animation:fadeIn .4s ease both}
@@ -51,6 +54,7 @@ export const GlobalStyles = () => (
     .shimmer-bg{background:linear-gradient(90deg,${T.bg.card} 30%,${T.bg.elevated} 50%,${T.bg.card} 70%);background-size:200% 100%;animation:shimmer 1.8s ease-in-out infinite}
     .pulse-alert{animation:pulseAlert 2s infinite}
     .tab-transition{animation:tabSlideIn .28s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
+    .slide-pane{animation:slidePaneIn .3s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
 
     /* Top 0.0001% Micro-Animations */
     .hover-card {

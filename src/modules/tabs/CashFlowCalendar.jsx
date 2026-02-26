@@ -174,8 +174,8 @@ export default function CashFlowCalendar({ config, cards, renewals, checkingBala
             {/* Radar Summary Alert */}
             <div style={{
                 marginBottom: 16, padding: 12, borderRadius: T.radius.md,
-                background: timeline.minBalance < 0 ? `${T.status.red}15` : (timeline.minBalance < (config.emergencyFloor || 0) ? `${T.status.yellow}15` : `${T.status.green}15`),
-                border: `1px solid ${timeline.minBalance < 0 ? `${T.status.red}40` : (timeline.minBalance < (config.emergencyFloor || 0) ? `${T.status.yellow}40` : `${T.status.green}40`)}`,
+                background: timeline.minBalance < 0 ? `${T.status.red}15` : (timeline.minBalance < (config.emergencyFloor || 0) ? `${T.status.amber}15` : `${T.status.green}15`),
+                border: `1px solid ${timeline.minBalance < 0 ? `${T.status.red}40` : (timeline.minBalance < (config.emergencyFloor || 0) ? `${T.status.amber}40` : `${T.status.green}40`)}`,
                 display: "flex", alignItems: "flex-start", gap: 10
             }}>
                 <div style={{ fontSize: 20 }}>

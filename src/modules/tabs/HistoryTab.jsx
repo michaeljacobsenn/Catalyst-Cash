@@ -98,7 +98,8 @@ export default function HistoryTab({ audits, onSelect, onExportAll, onExportSele
                                 {sel.has(i) && <CheckCircle size={11} color={T.bg.base} strokeWidth={3} />}</div>}
                             <div style={{ flex: 1 }}>
                                 <Mono size={13} weight={600}>{fmtDate(a.date)}</Mono>
-                                <div style={{ marginTop: 4 }}><Badge variant="gray">{a.parsed?.mode || "FULL"}</Badge></div></div>
+                                {a.isTest && <div style={{ marginTop: 4 }}><Badge variant="amber">TEST</Badge></div>}
+                            </div>
                             <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
                                 <StatusDot status={a.parsed?.status || "UNKNOWN"} />
                                 {a.parsed?.netWorth != null && <Mono size={12} weight={700} color={T.accent.primary}>{fmt(a.parsed.netWorth)}</Mono>}

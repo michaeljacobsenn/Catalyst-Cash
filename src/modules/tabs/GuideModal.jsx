@@ -13,7 +13,7 @@ export default function GuideModal({ onClose }) {
             {/* Premium Header */}
             <div style={{
                 padding: `calc(env(safe-area-inset-top, 20px) + 16px) 20px 16px 20px`,
-                background: `linear-gradient(180deg, ${T.bg.app}, ${T.bg.elevated})`,
+                background: `linear-gradient(180deg, ${T.bg.base}, ${T.bg.elevated})`,
                 borderBottom: `1px solid ${T.border.subtle}`,
                 boxShadow: `0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)`,
                 flexShrink: 0, display: "flex", flexDirection: "column", gap: 16

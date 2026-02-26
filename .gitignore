@@ -25,6 +25,10 @@ src/modules/personalRulesSeed.txt
 parity_*.txt
 *.pdf
 *.rtf
+*.enc
+*_decrypted.json
+decrypt_backup.mjs
+update_backup.mjs
 
 # ── Stale Scripts & Output ──
 claude_out.txt

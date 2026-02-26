@@ -197,6 +197,7 @@ function CatalystCash() {
   const [lockTimeout, setLockTimeout] = useState(0);
   const [appleLinkedId, setAppleLinkedId] = useState(null);
   const lastBackgrounded = useRef(null);
+  const swipeStart = useRef(null);
 
   useEffect(() => {
     window.toast = toast;
@@ -1117,10 +1118,24 @@ function CatalystCash() {
       }} aria-label="Open Settings"><Settings size={16} strokeWidth={1.8} /></button>
     </div>
 
-    <div ref={scrollRef} className="scroll-area safe-scroll-body" style={{
-      flex: 1, overflowY: (tab === "settings" || tab === "input") ? "hidden" : "auto", position: "relative",
-      display: tab === "input" ? "none" : undefined
-    }}>
+    <div ref={scrollRef} className="scroll-area safe-scroll-body"
+      onTouchStart={e => { swipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
+      onTouchEnd={e => {
+        if (!swipeStart.current) return;
+        const dx = e.changedTouches[0].clientX - swipeStart.current.x;
+        const dy = Math.abs(e.changedTouches[0].clientY - swipeStart.current.y);
+        if (dx > 60 && swipeStart.current.x < 80 && dy < 100) {
+          const renderTab = tab === "settings" ? lastCenterTab.current : tab;
+          if (renderTab === "results" && (viewing || resultsBackTarget === "history")) {
+            setResultsBackTarget(null); navTo("history"); haptic.light();
+          }
+        }
+        swipeStart.current = null;
+      }}
+      style={{
+        flex: 1, overflowY: (tab === "settings" || tab === "input") ? "hidden" : "auto", position: "relative",
+        display: tab === "input" ? "none" : undefined
+      }}>
       {error && <Card style={{ borderColor: `${T.status.red}20`, background: T.status.redDim, margin: "8px 20px", borderLeft: `3px solid ${T.status.red}` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
@@ -1164,15 +1179,16 @@ function CatalystCash() {
       })()}
     </div>
 
-    {/* ═══════ OVERLAY PANELS — rendered OUTSIDE scroll area to prevent bleed-through ═══════ */}
-    {inputMounted && <div className="slide-pane safe-pane-noheader safe-scroll-body" style={{
+    {/* ═══════ OVERLAY PANELS — rendered OUTSIDE main scroll but INSIDE flex flow ═══════ */}
+    {inputMounted && <div className="slide-pane" style={{
       display: tab === "input" ? "flex" : "none",
       flexDirection: "column",
       flex: 1, minHeight: 0,
       zIndex: 15, background: T.bg.base,
       width: "100%", boxSizing: "border-box",
       overflowY: "auto", overscrollBehavior: "contain",
-      WebkitOverflowScrolling: "touch"
+      WebkitOverflowScrolling: "touch",
+      paddingBottom: 24, // Clear the 14px Action button protrusion 
     }}>
       <InputForm onSubmit={handleSubmit} isLoading={loading} lastAudit={current}
         renewals={renewals} cardAnnualFees={cardAnnualFees} cards={cards}
@@ -1197,6 +1213,7 @@ function CatalystCash() {
       notifPermission={notifPermission}
       persona={persona} setPersona={setPersona}
       proEnabled={proEnabled}
+      onShowGuide={() => setShowGuide(true)}
       onBack={() => {
         if (setupReturnTab) {
           navTo(setupReturnTab);
@@ -1284,7 +1301,7 @@ function CatalystCash() {
               display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
               background: "none", border: "none", cursor: "pointer",
               color: active ? T.accent.primary : T.text.muted,
-              padding: isCenter ? "0 8px" : "4px 8px", minWidth: 52, minHeight: 48,
+              padding: "4px 8px", minWidth: 52, minHeight: 48,
               transition: "color .2s ease", position: "relative",
               userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none"
             }}>
@@ -1294,7 +1311,7 @@ function CatalystCash() {
             }} />}
             {isCenter ?
               <div style={{
-                width: 52, height: 52, borderRadius: 17, marginTop: -24,
+                width: 52, height: 52, borderRadius: 17, marginTop: -14,
                 background: active ? T.accent.gradient : T.bg.elevated,
                 border: `2px solid ${active ? "transparent" : T.border.default}`,
                 display: "flex", alignItems: "center", justifyContent: "center",

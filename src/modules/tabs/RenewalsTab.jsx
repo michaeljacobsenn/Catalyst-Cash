@@ -44,17 +44,20 @@ export default function RenewalsTab({ renewals, setRenewals, cardAnnualFees, car
     const grouped = useMemo(() => {
         const cats = {};
         const catMeta = {
-            fixed: { label: "Fixed Weekly", color: T.status.red },
-            monthly: { label: "Monthly Bills", color: T.status.amber },
-            subs: { label: "Subscriptions & Recurring", color: T.accent.primary },
-            cadence: { label: "Cadence-Based", color: T.status.blue },
-            periodic: { label: "Periodic", color: T.status.purple },
+            housing: { label: "Housing & Utilities", color: T.status.red },
+            subs: { label: "Subscriptions", color: T.accent.primary },
             insurance: { label: "Insurance", color: T.status.amber },
+            transport: { label: "Transportation", color: T.status.blue },
+            essentials: { label: "Groceries & Essentials", color: T.status.green },
             medical: { label: "Medical & Health", color: T.accent.emerald },
-            essentials: { label: "Groceries & Essentials", color: T.status.blue },
-            sinking: { label: "Sinking Funds", color: T.status.green },
+            sinking: { label: "Sinking Funds", color: T.status.purple },
             onetime: { label: "One-Time Expenses", color: T.status.amber },
-            af: { label: "Annual Fees (Cards)", color: T.status.red },
+            // Legacy aliases for backward compatibility
+            fixed: { label: "Housing & Utilities", color: T.status.red },
+            monthly: { label: "Housing & Utilities", color: T.status.red },
+            cadence: { label: "Subscriptions", color: T.accent.primary },
+            periodic: { label: "Subscriptions", color: T.accent.primary },
+            af: { label: "One-Time Expenses", color: T.status.amber },
         };
 
         if (sortBy !== "type") {
@@ -67,7 +70,9 @@ export default function RenewalsTab({ renewals, setRenewals, cardAnnualFees, car
 
         allItems.forEach(item => {
             const rawCat = item.isCardAF ? "af" : (item.category || "subs");
-            const catId = rawCat === "ss" ? "subs" : rawCat; // Legacy: merge Amazon S&S into Subscriptions
+            // Legacy category normalization
+            const legacyMap = { ss: "subs", fixed: "housing", monthly: "housing", cadence: "subs", periodic: "subs", af: "onetime" };
+            const catId = legacyMap[rawCat] || rawCat;
             if (!cats[catId]) cats[catId] = { ...catMeta[catId] || catMeta.subs, id: catId, items: [] };
             cats[catId].items.push(item);
         });
@@ -202,10 +207,9 @@ export default function RenewalsTab({ renewals, setRenewals, cardAnnualFees, car
     };
 
     const categoryOptions = [
-        { id: "fixed", label: "Fixed" }, { id: "monthly", label: "Monthly Bills" },
-        { id: "subs", label: "Subscriptions & Recurring" }, { id: "cadence", label: "Cadence-Based" },
-        { id: "periodic", label: "Periodic" }, { id: "insurance", label: "Insurance" },
-        { id: "medical", label: "Medical & Health" }, { id: "essentials", label: "Groceries & Essentials" },
+        { id: "housing", label: "Housing & Utilities" }, { id: "subs", label: "Subscriptions" },
+        { id: "insurance", label: "Insurance" }, { id: "transport", label: "Transportation" },
+        { id: "essentials", label: "Groceries & Essentials" }, { id: "medical", label: "Medical & Health" },
         { id: "sinking", label: "Sinking Funds" }, { id: "onetime", label: "One-Time Expenses" }
     ];
 

@@ -20,10 +20,6 @@ export default function ResultsView({ audit, moveChecks, onToggleMove, financial
             <div><h1 style={{ fontSize: 22, fontWeight: 800 }}>Full Results</h1>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
                     <Mono size={11} color={T.text.dim}>{fmtDate(audit.date)}</Mono>
-                    {p.mode && (p.mode === "NORMAL" || p.mode === "FULL") ?
-                        <Mono size={11} color={T.text.dim}>· {p.mode}</Mono> :
-                        <Badge variant="amber" style={{ padding: "2px 6px", fontSize: 9, letterSpacing: "0.05em" }}>{p.mode}</Badge>
-                    }
                 </div>
             </div>
             {audit.isTest && <Badge variant="amber" style={{ marginTop: 4 }}>TEST · NOT SAVED</Badge>}
@@ -38,6 +34,12 @@ export default function ResultsView({ audit, moveChecks, onToggleMove, financial
                         <AlertTriangle size={14} color={T.status.amber} strokeWidth={2.5} /></div>
                     <span style={{ fontSize: 13, fontWeight: 700, color: T.status.amber }}>Alerts</span></div>
                 <Md text={p.sections.alerts} /></Card>)}
+        {p.sections.nextAction && <Card animate delay={75} variant="accent">
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: T.accent.primaryDim, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Zap size={14} color={T.accent.primary} strokeWidth={2.5} /></div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: T.accent.primary }}>Next Action</span></div>
+            <Md text={stripPaycheckParens(p.sections.nextAction)} /></Card>}
         <Section title="Dashboard" icon={Activity} content={p.sections.dashboard} accentColor={T.accent.primary} delay={50} badge={<Badge variant="teal">CORE</Badge>} />
         {p.moveItems?.length > 0 && <Card animate delay={100}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
@@ -53,13 +55,6 @@ export default function ResultsView({ audit, moveChecks, onToggleMove, financial
         <Section title="Forward Radar" icon={TrendingUp} content={p.sections.forwardRadar} accentColor={T.status.blue} defaultOpen={false} delay={250} />
         <Section title="Investments & Roth" icon={TrendingUp} content={p.sections.investments} accentColor={T.accent.primary} delay={300} />
 
-
-        {p.sections.nextAction && <Card animate delay={350} variant="accent">
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <div style={{ width: 28, height: 28, borderRadius: 8, background: T.accent.primaryDim, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Zap size={14} color={T.accent.primary} strokeWidth={2.5} /></div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: T.accent.primary }}>Next Action</span></div>
-            <Md text={stripPaycheckParens(p.sections.nextAction)} /></Card>}
         {p.sections.qualityScore && <Section title="Quality Score" icon={CheckCircle} content={p.sections.qualityScore} accentColor={T.status.green} defaultOpen={false} delay={400} />}
         {p.sections.autoUpdates && <Section title="Auto-Updates" icon={RefreshCw} content={p.sections.autoUpdates} accentColor={T.text.dim} defaultOpen={false} delay={450} />}
         <Card style={{ background: T.bg.elevated }}>
