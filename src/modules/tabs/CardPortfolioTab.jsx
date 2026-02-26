@@ -375,6 +375,52 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
             </div>
         </Card>}
 
+        {/* Add Bank Form — placed here so it's visible below the Action Bar */}
+        {showAddBank && <Card animate variant="accent">
+            <Label>New Bank Account</Label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", gap: 8 }}>
+                    <SearchableSelect
+                        value={addBankForm.bank}
+                        onChange={v => setAddBankForm(p => ({ ...p, bank: v, productName: "" }))}
+                        placeholder="Select Bank"
+                        options={getBankNames().map(b => ({ value: b, label: b }))}
+                    />
+                    <select value={addBankForm.accountType} onChange={e => setAddBankForm(p => ({ ...p, accountType: e.target.value, productName: "" }))}
+                        style={{ flex: 0.6, fontSize: 12, padding: "12px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none" }}>
+                        <option value="checking">Checking</option>
+                        <option value="savings">Savings</option>
+                    </select>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                    <SearchableSelect
+                        value={addBankForm.productName}
+                        onChange={v => setAddBankForm(p => ({ ...p, productName: v }))}
+                        placeholder="Select Account"
+                        options={[...bankProductList.map(p => ({ value: p, label: p })), { value: "__other__", label: "Other (manual)" }]}
+                    />
+                    <input value={addBankForm.customName} onChange={e => setAddBankForm(p => ({ ...p, customName: e.target.value }))} placeholder="Account name"
+                        disabled={addBankForm.productName !== "__other__"} style={{ flex: 0.6, fontSize: 12, padding: "12px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, opacity: addBankForm.productName === "__other__" ? 1 : 0.4, outline: "none", minWidth: 0 }} />
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                    <div style={{ flex: 0.4, position: "relative" }}>
+                        <input type="number" inputMode="decimal" step="0.01" value={addBankForm.apy} onChange={e => setAddBankForm(p => ({ ...p, apy: e.target.value }))} placeholder="APY"
+                            style={{ width: "100%", padding: "12px 28px 12px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none" }} />
+                        <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 12 }}>%</span>
+                    </div>
+                    <input value={addBankForm.notes} onChange={e => setAddBankForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notes (optional)"
+                        style={{ flex: 1, fontSize: 12, padding: "12px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none" }} />
+                </div>
+                <button onClick={addBankAccount} disabled={!(addBankForm.bank && (addBankForm.productName === "__other__" ? addBankForm.customName?.trim() : addBankForm.productName))} style={{
+                    padding: 14, borderRadius: T.radius.lg, border: "none",
+                    background: (addBankForm.bank && (addBankForm.productName === "__other__" ? addBankForm.customName?.trim() : addBankForm.productName)) ? `linear-gradient(135deg,${T.accent.emerald},#34D399)` : T.text.muted,
+                    color: (addBankForm.bank && (addBankForm.productName === "__other__" ? addBankForm.customName?.trim() : addBankForm.productName)) ? "#fff" : T.text.dim, fontSize: 14, fontWeight: 800,
+                    cursor: (addBankForm.bank && (addBankForm.productName === "__other__" ? addBankForm.customName?.trim() : addBankForm.productName)) ? "pointer" : "not-allowed",
+                    boxShadow: (addBankForm.bank && (addBankForm.productName === "__other__" ? addBankForm.customName?.trim() : addBankForm.productName)) ? `0 4px 12px ${T.accent.emerald}40` : "none"
+                }}>Add Account</button>
+            </div>
+        </Card>}
+
         {/* Premium Section Header: Credit Cards */}
         <div style={{
             display: "flex", alignItems: "center", gap: 10, marginTop: 16, marginBottom: 16,
@@ -637,51 +683,6 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
             <Badge variant="outline" style={{ fontSize: 10, color: T.status.blue, borderColor: `${T.status.blue}40`, marginLeft: "auto" }}>{bankAccounts.length}</Badge>
         </div>
 
-        {/* Add Bank Form */}
-        {showAddBank && <Card animate variant="accent">
-            <Label>New Bank Account</Label>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ display: "flex", gap: 8 }}>
-                    <SearchableSelect
-                        value={addBankForm.bank}
-                        onChange={v => setAddBankForm(p => ({ ...p, bank: v, productName: "" }))}
-                        placeholder="Select Bank"
-                        options={getBankNames().map(b => ({ value: b, label: b }))}
-                    />
-                    <select value={addBankForm.accountType} onChange={e => setAddBankForm(p => ({ ...p, accountType: e.target.value, productName: "" }))}
-                        style={{ flex: 0.6, fontSize: 12, padding: "12px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none" }}>
-                        <option value="checking">Checking</option>
-                        <option value="savings">Savings</option>
-                    </select>
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                    <SearchableSelect
-                        value={addBankForm.productName}
-                        onChange={v => setAddBankForm(p => ({ ...p, productName: v }))}
-                        placeholder="Select Account"
-                        options={[...bankProductList.map(p => ({ value: p, label: p })), { value: "__other__", label: "Other (manual)" }]}
-                    />
-                    <input value={addBankForm.customName} onChange={e => setAddBankForm(p => ({ ...p, customName: e.target.value }))} placeholder="Account name"
-                        disabled={addBankForm.productName !== "__other__"} style={{ flex: 0.6, fontSize: 12, padding: "12px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, opacity: addBankForm.productName === "__other__" ? 1 : 0.4, outline: "none", minWidth: 0 }} />
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                    <div style={{ flex: 0.4, position: "relative" }}>
-                        <input type="number" inputMode="decimal" step="0.01" value={addBankForm.apy} onChange={e => setAddBankForm(p => ({ ...p, apy: e.target.value }))} placeholder="APY"
-                            style={{ width: "100%", padding: "12px 28px 12px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none" }} />
-                        <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 12 }}>%</span>
-                    </div>
-                    <input value={addBankForm.notes} onChange={e => setAddBankForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notes (optional)"
-                        style={{ flex: 1, fontSize: 12, padding: "12px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none" }} />
-                </div>
-                <button onClick={addBankAccount} disabled={!(addBankForm.bank && (addBankForm.productName === "__other__" ? addBankForm.customName?.trim() : addBankForm.productName))} style={{
-                    padding: 14, borderRadius: T.radius.lg, border: "none",
-                    background: (addBankForm.bank && (addBankForm.productName === "__other__" ? addBankForm.customName?.trim() : addBankForm.productName)) ? `linear-gradient(135deg,${T.accent.emerald},#34D399)` : T.text.muted,
-                    color: (addBankForm.bank && (addBankForm.productName === "__other__" ? addBankForm.customName?.trim() : addBankForm.productName)) ? "#fff" : T.text.dim, fontSize: 14, fontWeight: 800,
-                    cursor: (addBankForm.bank && (addBankForm.productName === "__other__" ? addBankForm.customName?.trim() : addBankForm.productName)) ? "pointer" : "not-allowed",
-                    boxShadow: (addBankForm.bank && (addBankForm.productName === "__other__" ? addBankForm.customName?.trim() : addBankForm.productName)) ? `0 4px 12px ${T.accent.emerald}40` : "none"
-                }}>Add Account</button>
-            </div>
-        </Card>}
 
         {/* Premium Sub-header: Checking */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 12 }}>

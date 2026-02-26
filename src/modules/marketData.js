@@ -106,7 +106,7 @@ export const POPULAR_CRYPTO = [
 ];
 
 function getWorkerUrl() {
-    const proxy = import.meta?.env?.VITE_PROXY_URL;
+    const proxy = import.meta.env.VITE_PROXY_URL;
     return proxy ? `${proxy.replace(/\/$/, "")}/market` : "";
 }
 
