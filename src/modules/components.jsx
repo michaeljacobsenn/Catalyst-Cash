@@ -1,8 +1,35 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChevronDown, ChevronUp, CheckCircle, Loader2 } from "lucide-react";
 import { T } from "./constants.js";
 import { fmt } from "./utils.js";
 import { Card, Badge } from "./ui.jsx";
+
+// ═══════════════════════════════════════════════════════════════
+// COUNT-UP ANIMATION
+// ═══════════════════════════════════════════════════════════════
+export const CountUp = ({ value, duration = 800, prefix = "", suffix = "", formatter, color, size = 14, weight = 800 }) => {
+    const [display, setDisplay] = useState(0);
+    const raf = useRef(null);
+    const startTs = useRef(null);
+    const numVal = typeof value === "number" ? value : parseFloat(value) || 0;
+
+    useEffect(() => {
+        startTs.current = performance.now();
+        const animate = (now) => {
+            const elapsed = now - startTs.current;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 4); // easeOutQuart
+            setDisplay(numVal * eased);
+            if (progress < 1) raf.current = requestAnimationFrame(animate);
+        };
+        raf.current = requestAnimationFrame(animate);
+        return () => { if (raf.current) cancelAnimationFrame(raf.current); };
+    }, [numVal, duration]);
+
+    const formatted = formatter ? formatter(display) : fmt(Math.round(display));
+    return <span style={{ fontFamily: T.font.mono, fontSize: size, fontWeight: weight, color: color || T.text.primary }}>{prefix}{formatted}{suffix}</span>;
+};
+
 
 // ═══════════════════════════════════════════════════════════════
 // SHARED UI PRIMITIVES
