@@ -1,42 +1,52 @@
+# ── Dependencies & Build ──
 node_modules/
 dist/
+.wrangler/
+
+# ── iOS Build Artifacts ──
 ios/App/Pods/
 ios/App/App/public/
 ios/App/App/capacitor.config.json
-*.log
-.DS_Store
+
+# ── Sensitive / Secrets ──
 .env
 .env.local
+ios/App/App/GoogleService-Info.plist
+.claude/
+
+# ── Logs ──
+*.log
+.DS_Store
+
+# ── Personal / Dev-only Files ──
 personal_rules_to_paste.txt
 src/modules/personalRulesSeed.txt
 .tmp_*
 parity_*.txt
-
-# Personal and Setup files
 *.pdf
 *.rtf
-Original Instructions.txt
+
+# ── Stale Scripts & Output ──
 claude_out.txt
 gemini_out.txt
 extract_pdf.swift
 fix_prompts.cjs
+patchStreamingView.cjs
 setup.bat
 setup_mac*.sh
 test*.js
 update.sh
+Original Instructions.txt
 
-# Scrubbed Build/Temp Files
+# ── Legacy Build Artifacts ──
 add_m_file.rb
 build_output.txt
 changelogs.txt
 generate_pdf.js
 generate_pdf_puppeteer.cjs
 portfolio_pro_guide_temp.html
+scripts/assets_gen/
+
+# ── Duplicate iOS Configs ──
 ios/.gitignore 2
-ios/App/App/config 2.xml
-ios/App/App/config 3.xml
-ios/App/App/config 4.xml
-ios/App/App/config 5.xml
-ios/App/App/config 6.xml
-ios/App/App/config 7.xml
-ios/App/App/config 8.xml
+ios/App/App/config [2-9].xml
