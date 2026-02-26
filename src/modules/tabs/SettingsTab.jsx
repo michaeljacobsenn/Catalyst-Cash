@@ -92,7 +92,7 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
     lockTimeout = 0, setLockTimeout,
     appleLinkedId, setAppleLinkedId,
     notifPermission = "prompt",
-    persona, setPersona }) {
+    persona, setPersona, proEnabled = false }) {
 
     // Auth Plugins state management
     useEffect(() => {

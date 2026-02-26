@@ -1196,6 +1196,7 @@ function CatalystCash() {
       appleLinkedId={appleLinkedId} setAppleLinkedId={setAppleLinkedId}
       notifPermission={notifPermission}
       persona={persona} setPersona={setPersona}
+      proEnabled={proEnabled}
       onBack={() => {
         if (setupReturnTab) {
           navTo(setupReturnTab);
