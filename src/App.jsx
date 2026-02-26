@@ -298,13 +298,13 @@ function CatalystCash() {
           db.get("bank-accounts")
         ]);
 
-        const resolvedProvider = provId || DEFAULT_PROVIDER_ID;
-        const resolvedModel = modId || DEFAULT_MODEL_ID;
-        setAiProvider(resolvedProvider);
-        setAiModel(resolvedModel);
+        const validProvider = getProvider(provId || DEFAULT_PROVIDER_ID);
+        const validModel = getModel(validProvider.id, modId || DEFAULT_MODEL_ID);
+        setAiProvider(validProvider.id);
+        setAiModel(validModel.id);
 
-        const provConfig = getProvider(resolvedProvider);
-        const provKey = await db.get(provConfig.keyStorageKey);
+        const provConfig = validProvider;
+        const provKey = provConfig.keyStorageKey ? await db.get(provConfig.keyStorageKey) : null;
         if (provKey) setApiKey(provKey);
         else if (legacyKey) { setApiKey(legacyKey); db.set("api-key-openai", legacyKey); }
 
@@ -1173,7 +1173,7 @@ function CatalystCash() {
               onExportAll={exportAllAudits} onExportSelected={exportSelectedAudits} onExportCSV={exportAuditCSV}
               onDelete={deleteHistoryItem} onManualImport={handleManualImport} toast={toast} /></ErrorBoundary>}
             {renderTab === "renewals" && <ErrorBoundary><RenewalsTab renewals={renewals} setRenewals={setRenewals} cardAnnualFees={cardAnnualFees} cards={cards} /></ErrorBoundary>}
-            {renderTab === "cards" && <ErrorBoundary><CardPortfolioTab cards={cards} setCards={setCards} cardCatalog={cardCatalog} bankAccounts={bankAccounts} setBankAccounts={setBankAccounts} financialConfig={financialConfig} /></ErrorBoundary>}
+            {renderTab === "cards" && <ErrorBoundary><CardPortfolioTab cards={cards} setCards={setCards} cardCatalog={cardCatalog} bankAccounts={bankAccounts} setBankAccounts={setBankAccounts} financialConfig={financialConfig} setFinancialConfig={setFinancialConfig} /></ErrorBoundary>}
           </div>
         );
       })()}

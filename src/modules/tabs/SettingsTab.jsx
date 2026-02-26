@@ -6,8 +6,7 @@ import { getLogsAsText, clearLogs } from "../logger.js";
 import { Card, Label } from "../ui.jsx";
 import { Mono } from "../components.jsx";
 import { db, FaceId, nativeExport, fmt } from "../utils.js";
-import { fetchMarketPrices, POPULAR_CRYPTO, POPULAR_FUNDS } from "../marketData.js";
-import SearchableSelect from "../SearchableSelect.jsx";
+
 import { encrypt, decrypt, isEncrypted } from "../crypto.js";
 import { isSecuritySensitiveKey } from "../securityKeys.js";
 import { haptic } from "../haptics.js";
@@ -139,10 +138,7 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
     const [ppModal, setPpModal] = useState({ open: false, mode: "export", label: "", resolve: null, value: "" });
     const [showApiSetup, setShowApiSetup] = useState(Boolean((apiKey || "").trim()));
     const [editingSection, setEditingSection] = useState(null);
-    // Holdings Auto-Track state
-    const [marketPrices, setMarketPrices] = useState({});
-    const [newHoldingSymbol, setNewHoldingSymbol] = useState({});
-    const [newHoldingShares, setNewHoldingShares] = useState({});
+
     const scrollRef = useRef(null);
     const swipeTouchStart = useRef(null);
     const navDir = useRef('forward'); // tracks animation direction: 'forward' | 'back'
@@ -177,33 +173,7 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
         }
     }, [activeMenu, activeSegment, appTab, financeTab]);
 
-    const [refreshingPrices, setRefreshingPrices] = useState(false);
-    const [lastPriceRefresh, setLastPriceRefresh] = useState(null);
 
-    const refreshPrices = async () => {
-        const holdings = financialConfig?.holdings || { roth: [], k401: [], brokerage: [], crypto: [] };
-        const allSymbols = [...new Set([...(holdings.roth || []), ...(holdings.k401 || []), ...(holdings.brokerage || []), ...(holdings.crypto || [])].map(h => h.symbol))];
-        if (allSymbols.length === 0) {
-            if (window.toast) window.toast.warning("Add holdings first before refreshing prices.");
-            return;
-        }
-        setRefreshingPrices(true);
-        try {
-            const prices = await fetchMarketPrices(allSymbols, true);
-            const count = Object.keys(prices).length;
-            if (count > 0) {
-                setMarketPrices(prices);
-                setLastPriceRefresh(Date.now());
-                if (window.toast) window.toast.success(`Updated ${count} price${count !== 1 ? "s" : ""} successfully.`);
-            } else {
-                if (window.toast) window.toast.warning("No price data returned — check your connection.");
-            }
-        } catch (e) {
-            console.warn("Price refresh failed:", e);
-            if (window.toast) window.toast.error("Price refresh failed. Try again later.");
-        }
-        setRefreshingPrices(false);
-    };
 
     const showPassphraseModal = (mode) => new Promise(resolve => {
         const label = mode === "export"
@@ -685,7 +655,7 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
                                 EXPORT JSON
                             </button>
                             <div style={{ flex: 1, position: "relative" }}>
-                                <input type="file" accept=".json" onChange={handleImport} disabled={restoreStatus === "restoring"}
+                                <input type="file" accept=".json,.enc" onChange={handleImport} disabled={restoreStatus === "restoring"}
                                     style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", zIndex: 2 }} />
                                 <div style={{
                                     width: "100%", height: "100%", borderRadius: T.radius.md,
@@ -1669,12 +1639,12 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
                             </div>
                         </div>
 
-                        {/* Holdings Auto-Track */}
+                        {/* Holdings Auto-Track — management moved to Accounts tab */}
                         <div style={{ display: financeTab === "assets" ? "block" : "none" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 6, marginBottom: 12, marginTop: 16 }}>
                                 <div style={{ flex: 1, paddingRight: 12 }}>
                                     <h3 style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 2 }}>Holdings Auto-Track</h3>
-                                    <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.4, margin: 0 }}>Add tickers + shares to auto-calculate portfolio value from live market data.</p>
+                                    <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.4, margin: 0 }}>Track tickers + shares with live market data.</p>
                                 </div>
                                 <button onClick={() => setFinancialConfig({ ...financialConfig, enableHoldings: !financialConfig?.enableHoldings })} style={{
                                     width: 56, height: 28, borderRadius: 999,
@@ -1690,110 +1660,11 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
                                     }} />
                                 </button>
                             </div>
-                            {financialConfig?.enableHoldings && (() => {
-                                const holdings = financialConfig?.holdings || { roth: [], k401: [], brokerage: [], crypto: [] };
-                                const updateHoldings = (key, value) => setFinancialConfig({ ...financialConfig, holdings: { ...holdings, [key]: value } });
-                                const addHolding = (key) => {
-                                    const symbol = (newHoldingSymbol[key] || "").toUpperCase().trim();
-                                    const shares = parseFloat(newHoldingShares[key] || 0);
-                                    if (!symbol || !shares) return;
-                                    updateHoldings(key, [...(holdings[key] || []), { symbol, shares }]);
-                                    setNewHoldingSymbol(p => ({ ...p, [key]: "" }));
-                                    setNewHoldingShares(p => ({ ...p, [key]: "" }));
-                                };
-                                const removeHolding = (key, idx) => {
-                                    const h = (holdings[key] || [])[idx];
-                                    if (!window.confirm(`Remove ${h?.symbol || "this holding"}? This cannot be undone.`)) return;
-                                    updateHoldings(key, (holdings[key] || []).filter((_, i) => i !== idx));
-                                };
-
-                                const sections = [
-                                    { key: "roth", label: "ROTH IRA", enabled: true },
-                                    { key: "k401", label: "401K", enabled: financialConfig?.track401k },
-                                    { key: "brokerage", label: "BROKERAGE", enabled: financialConfig?.trackBrokerage },
-                                    { key: "crypto", label: "CRYPTO", enabled: true, color: T.status.amber },
-                                ].filter(s => s.enabled);
-
-                                return <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-
-                                    {/* Portfolio Summary Card */}
-                                    <div style={{ background: `linear-gradient(135deg, ${T.accent.primary}15, ${T.accent.emerald}15)`, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${T.border.default}`, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                                        <span style={{ fontSize: 11, fontWeight: 800, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Tracked Portfolio Value</span>
-                                        <span style={{ fontSize: 32, fontWeight: 800, color: T.text.primary, fontFamily: T.font.mono, letterSpacing: "-1px" }}>
-                                            {fmt(sections.reduce((sum, s) => sum + (holdings[s.key] || []).reduce((s2, h) => s2 + ((marketPrices[h.symbol]?.price || 0) * h.shares), 0), 0))}
-                                        </span>
-                                    </div>
-
-                                    {sections.map(({ key, label, color }) => {
-                                        const secColor = color || T.accent.emerald;
-                                        const secTotal = (holdings[key] || []).reduce((s, h) => s + ((marketPrices[h.symbol]?.price || 0) * h.shares), 0);
-                                        return (
-                                            <div key={key} style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${secColor}30`, boxShadow: `0 4px 20px ${secColor}08` }}>
-                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, paddingBottom: 10, borderBottom: `1px dashed ${T.border.subtle}` }}>
-                                                    <span style={{ fontSize: 12, fontFamily: T.font.mono, fontWeight: 800, color: secColor }}>{label}</span>
-                                                    <span style={{ fontSize: 12, fontFamily: T.font.mono, fontWeight: 700, color: T.text.primary }}>{fmt(secTotal)}</span>
-                                                </div>
-
-                                                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
-                                                    {(holdings[key] || []).map((h, i) => (
-                                                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, background: T.bg.elevated, padding: "10px 12px", borderRadius: T.radius.md }}>
-                                                            <div style={{ width: 32, height: 32, borderRadius: 8, background: `${secColor}20`, color: secColor, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800 }}>
-                                                                {h.symbol.charAt(0)}
-                                                            </div>
-                                                            <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                                                                <span style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.5px" }}>{h.symbol.replace("-USD", "")}</span>
-                                                                <span style={{ fontSize: 11, color: T.text.muted }}>{h.shares} {key === "crypto" ? "tokens" : "shares"}</span>
-                                                            </div>
-                                                            {marketPrices[h.symbol] && (
-                                                                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                                                                    <span style={{ fontSize: 13, color: secColor, fontFamily: T.font.mono, fontWeight: 700 }}>{fmt(marketPrices[h.symbol].price * h.shares)}</span>
-                                                                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                                                        <span style={{ fontSize: 10, color: T.text.muted, fontFamily: T.font.mono }}>@{fmt(marketPrices[h.symbol].price)}</span>
-                                                                        {marketPrices[h.symbol].changePct != null && (
-                                                                            <span style={{ fontSize: 10, fontFamily: T.font.mono, fontWeight: 700, color: marketPrices[h.symbol].changePct >= 0 ? T.status.green : T.status.red }}>
-                                                                                {marketPrices[h.symbol].changePct >= 0 ? "+" : ""}{marketPrices[h.symbol].changePct.toFixed(2)}%
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                            <button onClick={() => removeHolding(key, i)} style={{ width: 28, height: 28, marginLeft: 6, border: "none", background: T.status.redDim, color: T.status.red, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><AlertTriangle size={14} /></button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-
-                                                <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
-                                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                                        <SearchableSelect
-                                                            value={newHoldingSymbol[key] || ""}
-                                                            onChange={v => setNewHoldingSymbol(p => ({ ...p, [key]: v }))}
-                                                            placeholder={key === "crypto" ? "Search crypto…" : "Search ticker…"}
-                                                            options={[
-                                                                ...(key === "crypto" ? POPULAR_CRYPTO : POPULAR_FUNDS).map(c => ({ value: c.symbol, label: `${c.symbol.replace('-USD', '')} — ${c.name}` })),
-                                                                { value: "__custom__", label: "Custom ticker…" }
-                                                            ]}
-                                                        />
-                                                    </div>
-                                                    <input type="number" inputMode="decimal" value={newHoldingShares[key] || ""} onChange={e => setNewHoldingShares(p => ({ ...p, [key]: e.target.value }))} placeholder={key === "crypto" ? "Amount" : "Shares"}
-                                                        style={{ width: 70, flexShrink: 0, padding: "0 8px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12, fontFamily: T.font.mono, outline: "none" }} />
-                                                    <button onClick={() => addHolding(key)} disabled={!newHoldingSymbol[key] || !newHoldingShares[key]} style={{ padding: "0 14px", flexShrink: 0, borderRadius: T.radius.md, border: "none", background: (!newHoldingSymbol[key] || !newHoldingShares[key]) ? T.bg.elevated : `${secColor}20`, color: (!newHoldingSymbol[key] || !newHoldingShares[key]) ? T.text.muted : secColor, fontSize: 13, fontWeight: 700, cursor: (!newHoldingSymbol[key] || !newHoldingShares[key]) ? "not-allowed" : "pointer", transition: "all .2s" }}>Add</button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                    <button onClick={refreshPrices} disabled={refreshingPrices} style={{
-                                        padding: "14px", borderRadius: T.radius.xl, border: `1px solid ${T.accent.emerald}30`,
-                                        background: `linear-gradient(135deg, ${T.bg.elevated}, ${T.accent.emerald}10)`, color: T.accent.emerald, fontFamily: T.font.mono,
-                                        fontSize: 13, fontWeight: 800, cursor: refreshingPrices ? "wait" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8
-                                    }}>
-                                        {refreshingPrices ? <Loader2 size={16} className="spin" /> : "↻"}
-                                        {refreshingPrices ? "Refreshing Market Data…" : "Refresh Live Prices"}
-                                    </button>
-                                    {lastPriceRefresh && <span style={{ fontSize: 11, color: T.text.muted, textAlign: "center", display: "block", marginTop: -6 }}>
-                                        Last sync: {new Date(lastPriceRefresh).toLocaleString()}
-                                    </span>}
-                                </div>;
-                            })()}
+                            {financialConfig?.enableHoldings && (
+                                <div style={{ padding: "12px 14px", background: `${T.accent.primary}08`, border: `1px solid ${T.accent.primary}15`, borderRadius: T.radius.md, textAlign: "center" }}>
+                                    <span style={{ fontSize: 11, color: T.text.secondary }}>📊 Manage your holdings directly in the <strong style={{ color: T.accent.primary }}>Accounts</strong> tab</span>
+                                </div>
+                            )}
                         </div>
 
                         {/* Savings Goals (Combined with Assets & Goals) */}
@@ -2150,7 +2021,7 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>{/* close animation wrapper */}
+            </div >
+        </div > {/* close animation wrapper */}
     </div >;
 }

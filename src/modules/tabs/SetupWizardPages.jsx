@@ -4,7 +4,7 @@ import { T } from "../constants.js";
 import { AI_PROVIDERS } from "../providers.js";
 import { isSecuritySensitiveKey } from "../securityKeys.js";
 import { isEncrypted, decrypt } from "../crypto.js";
-import { db, FaceId } from "../utils.js";
+import { db, FaceId, nativeExport } from "../utils.js";
 import { Capacitor } from "@capacitor/core";
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
@@ -27,13 +27,13 @@ export const WizField = ({ label, hint, children }) => (
 );
 
 export const WizInput = ({ value, onChange, placeholder, type = "text", style = {} }) => (
-    <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        style={{ width: "100%", padding: "11px 14px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1px solid ${T.border.default}`, color: T.text.primary, fontSize: 14, outline: "none", fontFamily: T.font.sans, boxSizing: "border-box", ...style }} />
+    <input className="wiz-input" type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        style={{ width: "100%", padding: "11px 14px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1px solid ${T.border.default}`, color: T.text.primary, fontSize: 14, outline: "none", fontFamily: T.font.sans, boxSizing: "border-box", transition: "all 0.2s", ...style }} />
 );
 
 export const WizSelect = ({ value, onChange, options }) => (
-    <select value={value} onChange={e => onChange(e.target.value)}
-        style={{ width: "100%", padding: "11px 14px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1px solid ${T.border.default}`, color: T.text.primary, fontSize: 14, outline: "none", fontFamily: T.font.sans, boxSizing: "border-box" }}>
+    <select className="wiz-input" value={value} onChange={e => onChange(e.target.value)}
+        style={{ width: "100%", padding: "11px 14px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1px solid ${T.border.default}`, color: T.text.primary, fontSize: 14, outline: "none", fontFamily: T.font.sans, boxSizing: "border-box", transition: "all 0.2s" }}>
         {options.map(o => <option key={o.value ?? o} value={o.value ?? o} style={{ background: T.bg.elevated }}>{o.label ?? o}</option>)}
     </select>
 );
@@ -52,7 +52,12 @@ export const WizToggle = ({ label, sub, checked, onChange }) => (
 
 // ─── NavRow: Back / Skip / Next ───────────────────────────────────────────────
 export const NavRow = ({ onBack, onNext, onSkip, nextLabel = "Next →", nextDisabled = false, showBack = true }) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 20 }}>
+    <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        marginTop: 20, paddingTop: 16, paddingBottom: 16,
+        position: "sticky", bottom: -40, zIndex: 10,
+        background: `linear-gradient(to top, ${T.bg.base} 80%, ${T.bg.base}00 100%)`,
+    }}>
         {showBack
             ? <WizBtn variant="ghost" onClick={onBack} style={{ flex: "0 0 auto", minWidth: 80 }}>← Back</WizBtn>
             : <div style={{ flex: "0 0 80px" }} />}
@@ -205,7 +210,6 @@ export function PageImport({ onNext, toast }) {
                 reader.onerror = reject;
                 reader.readAsDataURL(blob);
             });
-            const { nativeExport } = await import('../utils.js');
             await nativeExport(filename, base64data, mimeType, true);
         } catch (e) {
             // Ignore native share cancellation errors, but catch actual failures
@@ -589,8 +593,30 @@ export function PageSecurity({ data, onChange, onNext, onBack, onSkip }) {
 
     return (
         <div>
-            <div style={{ background: T.bg.elevated, borderRadius: T.radius.md, padding: "12px 14px", border: `1px solid ${T.border.subtle}`, marginBottom: 18, fontSize: 13, color: T.text.secondary, lineHeight: 1.6 }}>
-                🔐 All data is stored locally on your device. Your API keys and passcode <strong style={{ color: T.text.primary }}>never leave your phone</strong>.
+            <div style={{
+                display: "flex", gap: 12, alignItems: "flex-start",
+                padding: "14px 16px", marginBottom: 20,
+                background: `linear-gradient(145deg, ${T.bg.elevated}, ${T.bg.base})`,
+                border: `1px solid ${T.border.default}`,
+                borderRadius: T.radius.lg,
+                boxShadow: `0 4px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05)`
+            }}>
+                <div style={{
+                    width: 32, height: 32, borderRadius: 10, flexShrink: 0,
+                    background: `${T.status.green}15`, border: `1px solid ${T.status.green}30`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    boxShadow: `0 0 12px ${T.status.green}20`
+                }}>
+                    <span style={{ fontSize: 16 }}>🔐</span>
+                </div>
+                <div>
+                    <h4 style={{ margin: "0 0 4px 0", fontSize: 13, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
+                        Local-First Security
+                    </h4>
+                    <p style={{ margin: 0, fontSize: 12, color: T.text.secondary, lineHeight: 1.5 }}>
+                        All data is stored locally on your device. Your API keys and passcode <strong style={{ color: T.status.green, fontWeight: 600 }}>never leave your phone</strong>.
+                    </p>
+                </div>
             </div>
             <WizToggle label="Enable PIN lock" sub="Require a PIN to open the app" checked={data.pinEnabled} onChange={v => onChange("pinEnabled", v)} />
             {data.pinEnabled && (

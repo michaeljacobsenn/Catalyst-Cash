@@ -13,6 +13,9 @@ ios/App/App/capacitor.config.json
 .env.local
 ios/App/App/GoogleService-Info.plist
 .claude/
+.gemini/
+*.key
+*.pem
 
 # ── Logs ──
 *.log

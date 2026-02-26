@@ -8,7 +8,7 @@ import { fmt } from "../utils.js";
 import { Card, Label, Badge } from "../ui.jsx";
 import { Mono, EmptyState } from "../components.jsx";
 import SearchableSelect from "../SearchableSelect.jsx";
-import { fetchMarketPrices } from "../marketData.js";
+import { fetchMarketPrices, POPULAR_CRYPTO, POPULAR_FUNDS } from "../marketData.js";
 
 const INSTITUTIONS = [
     "Amex", "Bank of America", "Barclays", "Capital One", "Chase", "Citi",
@@ -16,7 +16,7 @@ const INSTITUTIONS = [
     "Synchrony", "TD Bank", "US Bank", "USAA", "Wells Fargo", "Other"
 ];
 
-export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAccounts = [], setBankAccounts, financialConfig = {} }) {
+export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAccounts = [], setBankAccounts, financialConfig = {}, setFinancialConfig }) {
     const [collapsedIssuers, setCollapsedIssuers] = useState({});
     const [editingCard, setEditingCard] = useState(null);
     const [editForm, setEditForm] = useState({});
@@ -26,6 +26,10 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
     const [addBankForm, setAddBankForm] = useState({ bank: "", accountType: "checking", productName: "", customName: "", apy: "", notes: "" });
     const [editingBank, setEditingBank] = useState(null);
     const [editBankForm, setEditBankForm] = useState({});
+
+    // Holdings management state
+    const [newHoldingSymbol, setNewHoldingSymbol] = useState({});
+    const [newHoldingShares, setNewHoldingShares] = useState({});
     const [collapsedBanks, setCollapsedBanks] = useState({});
 
     // Master collapsible sections (all collapsed by default for a clean, compact view)
@@ -837,8 +841,10 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
             onClick={() => setCollapsedSections(p => ({ ...p, investments: !p.investments }))}
             style={{
                 display: "flex", alignItems: "center", gap: 10, marginTop: 16, marginBottom: 16,
-                paddingBottom: 8, borderBottom: `1px solid ${T.accent.emerald}20`, cursor: "pointer",
-                userSelect: "none"
+                padding: "16px 0 8px 0", borderBottom: `1px solid ${T.accent.emerald}20`, cursor: "pointer",
+                userSelect: "none", position: "sticky", top: 0, zIndex: 10,
+                background: `linear-gradient(to bottom, ${T.bg.base} 85%, transparent)`,
+                backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)"
             }}>
             <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent.emerald}1A`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 12px ${T.accent.emerald}10` }}>
                 <TrendingUp size={14} color={T.accent.emerald} />
@@ -855,34 +861,44 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
         {!collapsedSections.investments && (
             <>
                 {investTotalValue > 0 && <Card animate style={{
-                    textAlign: "center", padding: "18px 16px", marginBottom: 12,
-                    background: `linear-gradient(160deg,${T.bg.card},${T.accent.primary}06)`, borderColor: `${T.accent.primary}12`
+                    position: "relative", overflow: "hidden",
+                    textAlign: "center", padding: "24px 16px", marginBottom: 16,
+                    background: `linear-gradient(145deg, ${T.bg.card}, ${T.bg.card} 40%, ${T.accent.primary}0D)`,
+                    borderColor: `${T.accent.primary}20`,
+                    boxShadow: `${T.shadow.elevated}, 0 8px 32px ${T.accent.primary}15`
                 }}>
-                    <Mono size={10} color={T.text.dim}>TOTAL PORTFOLIO VALUE</Mono>
-                    <br /><Mono size={26} weight={800} color={T.accent.primary}>{fmt(investTotalValue)}</Mono>
+                    <div style={{ position: "absolute", top: -60, left: "50%", transform: "translateX(-50%)", width: 140, height: 140, background: T.accent.primary, filter: "blur(60px)", opacity: 0.15, borderRadius: "50%", pointerEvents: "none", animation: "pulseRing 4s infinite alternate ease-in-out" }} />
+                    <Mono size={10} color={T.text.dim} weight={700} style={{ letterSpacing: "0.1em" }}>TOTAL PORTFOLIO VALUE</Mono>
+                    <div style={{ marginTop: 8 }}><Mono size={32} weight={900} color={T.accent.primary}>{fmt(investTotalValue)}</Mono></div>
                 </Card>}
 
                 {enabledInvestments.map(({ key, label, color }) => {
                     const items = holdings[key] || [];
                     const sectionValue = items.reduce((s, h) => s + ((investPrices[h.symbol]?.price || 0) * (h.shares || 0)), 0);
+                    const percentOfTotal = investTotalValue > 0 ? (sectionValue / investTotalValue) * 100 : 0;
                     const isCollapsed = collapsedInvest[key];
-                    return <Card key={key} animate variant="glass" style={{ marginBottom: 12, padding: 0, overflow: "hidden", borderLeft: `4px solid ${color}` }}>
-                        <div onClick={() => setCollapsedInvest(p => ({ ...p, [key]: !isCollapsed }))} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${color}08` }}>
+                    return <Card key={key} animate variant="glass" className="hover-lift" style={{ marginBottom: 16, padding: 0, overflow: "hidden", borderLeft: `4px solid ${color}`, position: "relative" }}>
+                        <div style={{ position: "absolute", top: -40, right: -40, width: 80, height: 80, background: color, filter: "blur(40px)", opacity: 0.1, borderRadius: "50%", pointerEvents: "none" }} />
+                        <div onClick={() => setCollapsedInvest(p => ({ ...p, [key]: !isCollapsed }))} style={{ padding: "16px 18px", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `linear-gradient(90deg, ${color}08, transparent)` }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                <div style={{ padding: 5, borderRadius: 7, background: color, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                    <TrendingUp size={12} color={T.bg.card} />
+                                <div style={{ padding: 6, borderRadius: 8, background: color, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 12px ${color}40` }}>
+                                    <TrendingUp size={14} color={T.bg.card} strokeWidth={2.5} />
                                 </div>
-                                <span style={{ fontSize: 12, fontWeight: 800, color, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
+                                <span style={{ fontSize: 13, fontWeight: 800, color, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
                                 <Badge variant="outline" style={{ fontSize: 10, color, borderColor: `${color}40` }}>{items.length} holding{items.length !== 1 ? "s" : ""}</Badge>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                {sectionValue > 0 && <Mono size={13} weight={700} color={color}>{fmt(sectionValue)}</Mono>}
-                                {isCollapsed ? <ChevronDown size={14} color={T.text.dim} /> : <ChevronUp size={14} color={T.text.dim} />}
+                                {sectionValue > 0 && <Mono size={15} weight={800} color={color}>{fmt(sectionValue)}</Mono>}
+                                {isCollapsed ? <ChevronDown size={16} color={T.text.dim} /> : <ChevronUp size={16} color={T.text.dim} />}
                             </div>
+                            {/* Dynamic progress bar underneath */}
+                            {sectionValue > 0 && <div style={{ width: "100%", height: 3, background: `${T.border.default}`, borderRadius: 2, marginTop: 12, overflow: "hidden", display: "flex" }}>
+                                <div style={{ width: `${percentOfTotal}%`, background: color, transition: "width 1s cubic-bezier(0.4, 0, 0.2, 1)" }} />
+                            </div>}
                         </div>
                         {!isCollapsed && <div style={{ padding: "12px 18px" }}>
                             {items.length === 0 ?
-                                <p style={{ fontSize: 11, color: T.text.muted, textAlign: "center", padding: "8px 0" }}>No holdings added yet. Manage in Settings → Assets.</p> :
+                                <p style={{ fontSize: 11, color: T.text.muted, textAlign: "center", padding: "8px 0" }}>No holdings yet — add your first below.</p> :
                                 items.sort((a, b) => (a.symbol || "").localeCompare(b.symbol || "")).map((h, i) => {
                                     const price = investPrices[h.symbol];
                                     return <div key={`${h.symbol}-${i}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: i === items.length - 1 ? "none" : `1px solid ${T.border.subtle}` }}>
@@ -890,20 +906,63 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
                                             <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>{h.symbol?.replace("-USD", "")}</span>
                                             <span style={{ fontSize: 10, color: T.text.dim, marginLeft: 6 }}>{key === "crypto" ? `${h.shares} units` : `${h.shares} shares`}</span>
                                         </div>
-                                        <div style={{ textAlign: "right" }}>
-                                            {price ? <>
-                                                <Mono size={12} weight={700} color={color}>{fmt(price.price * (h.shares || 0))}</Mono>
-                                                {price.changePct != null && <span style={{ fontSize: 9, fontFamily: T.font.mono, fontWeight: 700, marginLeft: 4, color: price.changePct >= 0 ? T.status.green : T.status.red }}>
-                                                    {price.changePct >= 0 ? "+" : ""}{price.changePct.toFixed(2)}%
-                                                </span>}
-                                            </> : <Mono size={11} color={T.text.muted}>—</Mono>}
+                                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                            <div style={{ textAlign: "right" }}>
+                                                {price ? <>
+                                                    <Mono size={12} weight={700} color={color}>{fmt(price.price * (h.shares || 0))}</Mono>
+                                                    {price.changePct != null && <span style={{ fontSize: 9, fontFamily: T.font.mono, fontWeight: 700, marginLeft: 4, color: price.changePct >= 0 ? T.status.green : T.status.red }}>
+                                                        {price.changePct >= 0 ? "+" : ""}{price.changePct.toFixed(2)}%
+                                                    </span>}
+                                                </> : <Mono size={11} color={T.text.muted}>—</Mono>}
+                                            </div>
+                                            {setFinancialConfig && <button onClick={() => {
+                                                if (!window.confirm(`Remove ${h.symbol?.replace("-USD", "")}?`)) return;
+                                                const cur = financialConfig?.holdings || {};
+                                                const updated = (cur[key] || []).filter((_, idx) => idx !== i);
+                                                setFinancialConfig({ ...financialConfig, holdings: { ...cur, [key]: updated } });
+                                            }} style={{ width: 24, height: 24, border: "none", background: `${T.status.red}15`, color: T.status.red, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                                <X size={12} />
+                                            </button>}
                                         </div>
                                     </div>;
                                 })}
+
+                            {/* Inline Add Holding */}
+                            {setFinancialConfig && <div style={{ marginTop: items.length > 0 ? 12 : 0, paddingTop: items.length > 0 ? 12 : 0, borderTop: items.length > 0 ? `1px solid ${T.border.subtle}` : "none" }}>
+                                <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <SearchableSelect
+                                            value={newHoldingSymbol[key] || ""}
+                                            onChange={v => setNewHoldingSymbol(p => ({ ...p, [key]: v }))}
+                                            placeholder={key === "crypto" ? "Search crypto…" : "Search ticker…"}
+                                            options={[
+                                                ...(key === "crypto" ? POPULAR_CRYPTO : POPULAR_FUNDS).map(c => ({ value: c.symbol, label: `${c.symbol.replace('-USD', '')} — ${c.name}` })),
+                                                { value: "__custom__", label: "Custom ticker…" }
+                                            ]}
+                                        />
+                                    </div>
+                                    <input type="number" inputMode="decimal" value={newHoldingShares[key] || ""} onChange={e => setNewHoldingShares(p => ({ ...p, [key]: e.target.value }))} placeholder={key === "crypto" ? "Amt" : "Shares"}
+                                        style={{ width: 60, flexShrink: 0, padding: "0 8px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12, fontFamily: T.font.mono, outline: "none" }} />
+                                    <button onClick={() => {
+                                        const symbol = (newHoldingSymbol[key] || "").toUpperCase().trim();
+                                        const shares = parseFloat(newHoldingShares[key] || 0);
+                                        if (!symbol || !shares) return;
+                                        const cur = financialConfig?.holdings || {};
+                                        setFinancialConfig({ ...financialConfig, holdings: { ...cur, [key]: [...(cur[key] || []), { symbol, shares }] } });
+                                        setNewHoldingSymbol(p => ({ ...p, [key]: "" }));
+                                        setNewHoldingShares(p => ({ ...p, [key]: "" }));
+                                    }} disabled={!newHoldingSymbol[key] || !newHoldingShares[key]} style={{
+                                        padding: "0 12px", flexShrink: 0, borderRadius: T.radius.md, border: "none",
+                                        background: (!newHoldingSymbol[key] || !newHoldingShares[key]) ? T.bg.elevated : `${color}20`,
+                                        color: (!newHoldingSymbol[key] || !newHoldingShares[key]) ? T.text.muted : color,
+                                        fontSize: 12, fontWeight: 700, cursor: (!newHoldingSymbol[key] || !newHoldingShares[key]) ? "not-allowed" : "pointer",
+                                        transition: "all .2s"
+                                    }}>+</button>
+                                </div>
+                            </div>}
                         </div>}
                     </Card>;
                 })}
-                <p style={{ fontSize: 10, color: T.text.muted, textAlign: "center", fontFamily: T.font.mono }}>Manage holdings in Settings → Assets & Holdings</p>
             </>
         )}
     </div> : null;
@@ -974,6 +1033,14 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
     </div> : null;
 
     return <div className="page-body" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", gap: 24 }}>
+        <style>{`
+            @keyframes pulseRing {
+                0% { opacity: 0.1; transform: translateX(-50%) scale(1); }
+                100% { opacity: 0.25; transform: translateX(-50%) scale(1.1); }
+            }
+            .hover-lift { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important; cursor: pointer; }
+            .hover-lift:hover { transform: translateY(-3px) scale(1.01); box-shadow: 0 12px 32px rgba(0,0,0,0.3) !important; z-index: 5; }
+        `}</style>
         {creditCardsSection}
         {bankSection}
         {investmentsSection}
