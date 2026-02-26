@@ -28,6 +28,14 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
     const [editBankForm, setEditBankForm] = useState({});
     const [collapsedBanks, setCollapsedBanks] = useState({});
 
+    // Master collapsible sections (collapse by default if empty)
+    const [collapsedSections, setCollapsedSections] = useState({
+        creditCards: cards.length === 0,
+        bankAccounts: bankAccounts.length === 0,
+        investments: false, // handeled internally by investTotalValue
+        debts: false // handled internally by totalDebtBalance
+    });
+
     // Bank form helpers (hoisted for Action Bar form)
     const bankProducts = useMemo(() => getBankProducts(addBankForm.bank), [addBankForm.bank]);
     const bankProductList = addBankForm.accountType === "checking" ? bankProducts.checking : bankProducts.savings;
@@ -439,18 +447,26 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
         </Card>}
 
         {/* Premium Section Header: Credit Cards */}
-        <div style={{
-            display: "flex", alignItems: "center", gap: 10, marginTop: 16, marginBottom: 16,
-            paddingBottom: 8, borderBottom: `1px solid ${T.accent.primary}20`
-        }}>
+        <div
+            onClick={() => setCollapsedSections(p => ({ ...p, creditCards: !p.creditCards }))}
+            style={{
+                display: "flex", alignItems: "center", gap: 10, marginTop: 16, marginBottom: 16,
+                paddingBottom: 8, borderBottom: `1px solid ${T.accent.primary}20`, cursor: "pointer",
+                userSelect: "none" // Prevent text selection on rapid clicks
+            }}>
             <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent.primary}1A`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 12px ${T.accent.primary}10` }}>
                 <CreditCard size={14} color={T.accent.primary} />
             </div>
             <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Credit Cards</h2>
-            <Badge variant="outline" style={{ fontSize: 10, color: T.accent.primary, borderColor: `${T.accent.primary}40`, marginLeft: "auto" }}>{cards.length}</Badge>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                <Badge variant="outline" style={{ fontSize: 10, color: cards.length > 0 ? T.accent.primary : T.text.muted, borderColor: cards.length > 0 ? `${T.accent.primary}40` : T.border.default }}>
+                    {cards.length === 0 ? "0 cards" : cards.length}
+                </Badge>
+                {collapsedSections.creditCards ? <ChevronDown size={16} color={T.text.muted} /> : <ChevronUp size={16} color={T.text.muted} />}
+            </div>
         </div>
 
-        {grouped.length === 0 ?
+        {!collapsedSections.creditCards && (grouped.length === 0 ?
             <EmptyState icon={CreditCard} title="Build Your Elite Portfolio" message="Add your first credit card to start tracking limits, annual fees, and active promo windows." /> :
             grouped.map(([inst, cardsInCategory]) => {
                 const colors = ic(inst);
@@ -622,7 +638,8 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
                         ))}
                     </div>}
                 </Card>;
-            })}
+            })
+        )}
     </div>;
 
     // ─── Bank Accounts Section ─────────────────────────────────────
@@ -666,257 +683,294 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
 
     const bankSection = <div style={{ marginTop: 24 }}>
         {/* Premium Section Header: Bank Accounts */}
-        <div style={{
-            display: "flex", alignItems: "center", gap: 10, marginTop: 16, marginBottom: 16,
-            paddingBottom: 8, borderBottom: `1px solid ${T.status.blue}20`
-        }}>
+        <div
+            onClick={() => setCollapsedSections(p => ({ ...p, bankAccounts: !p.bankAccounts }))}
+            style={{
+                display: "flex", alignItems: "center", gap: 10, marginTop: 16, marginBottom: 16,
+                paddingBottom: 8, borderBottom: `1px solid ${T.status.blue}20`, cursor: "pointer",
+                userSelect: "none"
+            }}>
             <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.status.blue}1A`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 12px ${T.status.blue}10` }}>
                 <Landmark size={14} color={T.status.blue} />
             </div>
             <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Bank Accounts</h2>
-            <Badge variant="outline" style={{ fontSize: 10, color: T.status.blue, borderColor: `${T.status.blue}40`, marginLeft: "auto" }}>{bankAccounts.length}</Badge>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                <Badge variant="outline" style={{ fontSize: 10, color: bankAccounts.length > 0 ? T.status.blue : T.text.muted, borderColor: bankAccounts.length > 0 ? `${T.status.blue}40` : T.border.default }}>
+                    {bankAccounts.length === 0 ? "0 accounts" : bankAccounts.length}
+                </Badge>
+                {collapsedSections.bankAccounts ? <ChevronDown size={16} color={T.text.muted} /> : <ChevronUp size={16} color={T.text.muted} />}
+            </div>
         </div>
 
+        {!collapsedSections.bankAccounts && (
+            <>
+                {/* Premium Sub-header: Checking */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 12 }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: T.status.blue, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.font.mono }}>Checking Accounts</span>
+                    <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${T.status.blue}30, transparent)` }} />
+                </div>
 
-        {/* Premium Sub-header: Checking */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 12, fontWeight: 800, color: T.status.blue, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.font.mono }}>Checking Accounts</span>
-            <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${T.status.blue}30, transparent)` }} />
-        </div>
+                {groupedChecking.length === 0 ?
+                    <Card style={{ padding: "16px", textAlign: "center" }}><p style={{ fontSize: 11, color: T.text.muted }}>No checking accounts yet</p></Card> :
+                    groupedChecking.map(([bank, accts]) => {
+                        const isCollapsed = collapsedBanks[`checking-${bank}`];
+                        return <Card key={`c-${bank}`} animate variant="glass" style={{ marginBottom: 12, padding: 0, overflow: "hidden", borderLeft: `4px solid ${T.status.blue}` }}>
+                            <div onClick={() => setCollapsedBanks(p => ({ ...p, [`checking-${bank}`]: !isCollapsed }))} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${T.status.blue}08` }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                    <div style={{ padding: 5, borderRadius: 7, background: T.status.blue, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                        <Building2 size={12} color={T.bg.card} />
+                                    </div>
+                                    <span style={{ fontSize: 12, fontWeight: 800, color: T.status.blue, textTransform: "uppercase", letterSpacing: "0.05em" }}>{bank}</span>
+                                    <Badge variant="outline" style={{ fontSize: 10, color: T.status.blue, borderColor: `${T.status.blue}40` }}>{accts.length}</Badge>
+                                </div>
+                                {isCollapsed ? <ChevronDown size={14} color={T.text.dim} /> : <ChevronUp size={14} color={T.text.dim} />}
+                            </div>
+                            {!isCollapsed && <div style={{ padding: "12px 18px" }}>
+                                {accts.sort((a, b) => a.name.localeCompare(b.name)).map((acct, i) => (
+                                    <div key={acct.id} style={{ borderBottom: i === accts.length - 1 ? "none" : `1px solid ${T.border.subtle}`, padding: "12px 0" }}>
+                                        {editingBank === acct.id ?
+                                            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                                <input value={editBankForm.name} onChange={e => setEditBankForm(p => ({ ...p, name: e.target.value }))} placeholder="Account name"
+                                                    style={{ width: "100%", fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
+                                                <div style={{ display: "flex", gap: 8 }}>
+                                                    <div style={{ flex: 0.4, position: "relative" }}>
+                                                        <input type="number" inputMode="decimal" step="0.01" value={editBankForm.apy} onChange={e => setEditBankForm(p => ({ ...p, apy: e.target.value }))} placeholder="APY"
+                                                            style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                                        <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 12 }}>%</span>
+                                                    </div>
+                                                    <input value={editBankForm.notes} onChange={e => setEditBankForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notes"
+                                                        style={{ flex: 1, fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
+                                                </div>
+                                                <div style={{ display: "flex", gap: 8 }}>
+                                                    <button onClick={() => saveEditBank(acct.id)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: `${T.status.blue}18`, color: T.status.blue, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Check size={14} />Save</button>
+                                                    <button onClick={() => setEditingBank(null)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
+                                                </div>
+                                            </div> :
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{acct.name}</span>
+                                                    <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                                                        {acct.apy > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.status.blue, borderColor: `${T.status.blue}40` }}>{acct.apy}% APY</Badge>}
+                                                        {acct.notes && <Mono size={10} color={T.text.dim}>{acct.notes}</Mono>}
+                                                    </div>
+                                                </div>
+                                                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                                                    <button onClick={() => startEditBank(acct)} style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={11} /></button>
+                                                    <button onClick={() => removeBankAccount(acct.id)} style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={11} /></button>
+                                                </div>
+                                            </div>}
+                                    </div>
+                                ))}
+                            </div>}
+                        </Card>;
+                    })}
 
-        {groupedChecking.length === 0 ?
-            <Card style={{ padding: "16px", textAlign: "center" }}><p style={{ fontSize: 11, color: T.text.muted }}>No checking accounts yet</p></Card> :
-            groupedChecking.map(([bank, accts]) => {
-                const isCollapsed = collapsedBanks[`checking-${bank}`];
-                return <Card key={`c-${bank}`} animate variant="glass" style={{ marginBottom: 12, padding: 0, overflow: "hidden", borderLeft: `4px solid ${T.status.blue}` }}>
-                    <div onClick={() => setCollapsedBanks(p => ({ ...p, [`checking-${bank}`]: !isCollapsed }))} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${T.status.blue}08` }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <div style={{ padding: 5, borderRadius: 7, background: T.status.blue, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                <Building2 size={12} color={T.bg.card} />
-                            </div>
-                            <span style={{ fontSize: 12, fontWeight: 800, color: T.status.blue, textTransform: "uppercase", letterSpacing: "0.05em" }}>{bank}</span>
-                            <Badge variant="outline" style={{ fontSize: 10, color: T.status.blue, borderColor: `${T.status.blue}40` }}>{accts.length}</Badge>
-                        </div>
-                        {isCollapsed ? <ChevronDown size={14} color={T.text.dim} /> : <ChevronUp size={14} color={T.text.dim} />}
-                    </div>
-                    {!isCollapsed && <div style={{ padding: "12px 18px" }}>
-                        {accts.sort((a, b) => a.name.localeCompare(b.name)).map((acct, i) => (
-                            <div key={acct.id} style={{ borderBottom: i === accts.length - 1 ? "none" : `1px solid ${T.border.subtle}`, padding: "12px 0" }}>
-                                {editingBank === acct.id ?
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                                        <input value={editBankForm.name} onChange={e => setEditBankForm(p => ({ ...p, name: e.target.value }))} placeholder="Account name"
-                                            style={{ width: "100%", fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
-                                        <div style={{ display: "flex", gap: 8 }}>
-                                            <div style={{ flex: 0.4, position: "relative" }}>
-                                                <input type="number" inputMode="decimal" step="0.01" value={editBankForm.apy} onChange={e => setEditBankForm(p => ({ ...p, apy: e.target.value }))} placeholder="APY"
-                                                    style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
-                                                <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 12 }}>%</span>
-                                            </div>
-                                            <input value={editBankForm.notes} onChange={e => setEditBankForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notes"
-                                                style={{ flex: 1, fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
-                                        </div>
-                                        <div style={{ display: "flex", gap: 8 }}>
-                                            <button onClick={() => saveEditBank(acct.id)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: `${T.status.blue}18`, color: T.status.blue, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Check size={14} />Save</button>
-                                            <button onClick={() => setEditingBank(null)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
-                                        </div>
-                                    </div> :
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{acct.name}</span>
-                                            <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
-                                                {acct.apy > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.status.blue, borderColor: `${T.status.blue}40` }}>{acct.apy}% APY</Badge>}
-                                                {acct.notes && <Mono size={10} color={T.text.dim}>{acct.notes}</Mono>}
-                                            </div>
-                                        </div>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                                            <button onClick={() => startEditBank(acct)} style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={11} /></button>
-                                            <button onClick={() => removeBankAccount(acct.id)} style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={11} /></button>
-                                        </div>
-                                    </div>}
-                            </div>
-                        ))}
-                    </div>}
-                </Card>;
-            })}
+                {/* Premium Sub-header: Savings */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 24, marginBottom: 12 }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: T.accent.emerald, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.font.mono }}>Savings Accounts</span>
+                    <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${T.accent.emerald}30, transparent)` }} />
+                </div>
 
-        {/* Premium Sub-header: Savings */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 24, marginBottom: 12 }}>
-            <span style={{ fontSize: 12, fontWeight: 800, color: T.accent.emerald, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.font.mono }}>Savings Accounts</span>
-            <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${T.accent.emerald}30, transparent)` }} />
-        </div>
-
-        {groupedSavings.length === 0 ?
-            <Card style={{ padding: "16px", textAlign: "center" }}><p style={{ fontSize: 11, color: T.text.muted }}>No savings accounts yet</p></Card> :
-            groupedSavings.map(([bank, accts]) => {
-                const isCollapsed = collapsedBanks[`savings-${bank}`];
-                return <Card key={`s-${bank}`} animate variant="glass" style={{ marginBottom: 12, padding: 0, overflow: "hidden", borderLeft: `4px solid ${T.accent.emerald}` }}>
-                    <div onClick={() => setCollapsedBanks(p => ({ ...p, [`savings-${bank}`]: !isCollapsed }))} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${T.accent.emerald}08` }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <div style={{ padding: 5, borderRadius: 7, background: T.accent.emerald, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                <DollarSign size={12} color={T.bg.card} />
+                {groupedSavings.length === 0 ?
+                    <Card style={{ padding: "16px", textAlign: "center" }}><p style={{ fontSize: 11, color: T.text.muted }}>No savings accounts yet</p></Card> :
+                    groupedSavings.map(([bank, accts]) => {
+                        const isCollapsed = collapsedBanks[`savings-${bank}`];
+                        return <Card key={`s-${bank}`} animate variant="glass" style={{ marginBottom: 12, padding: 0, overflow: "hidden", borderLeft: `4px solid ${T.accent.emerald}` }}>
+                            <div onClick={() => setCollapsedBanks(p => ({ ...p, [`savings-${bank}`]: !isCollapsed }))} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${T.accent.emerald}08` }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                    <div style={{ padding: 5, borderRadius: 7, background: T.accent.emerald, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                        <DollarSign size={12} color={T.bg.card} />
+                                    </div>
+                                    <span style={{ fontSize: 12, fontWeight: 800, color: T.accent.emerald, textTransform: "uppercase", letterSpacing: "0.05em" }}>{bank}</span>
+                                    <Badge variant="outline" style={{ fontSize: 10, color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>{accts.length}</Badge>
+                                </div>
+                                {isCollapsed ? <ChevronDown size={14} color={T.text.dim} /> : <ChevronUp size={14} color={T.text.dim} />}
                             </div>
-                            <span style={{ fontSize: 12, fontWeight: 800, color: T.accent.emerald, textTransform: "uppercase", letterSpacing: "0.05em" }}>{bank}</span>
-                            <Badge variant="outline" style={{ fontSize: 10, color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>{accts.length}</Badge>
-                        </div>
-                        {isCollapsed ? <ChevronDown size={14} color={T.text.dim} /> : <ChevronUp size={14} color={T.text.dim} />}
-                    </div>
-                    {!isCollapsed && <div style={{ padding: "12px 18px" }}>
-                        {accts.sort((a, b) => a.name.localeCompare(b.name)).map((acct, i) => (
-                            <div key={acct.id} style={{ borderBottom: i === accts.length - 1 ? "none" : `1px solid ${T.border.subtle}`, padding: "12px 0" }}>
-                                {editingBank === acct.id ?
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                                        <input value={editBankForm.name} onChange={e => setEditBankForm(p => ({ ...p, name: e.target.value }))} placeholder="Account name"
-                                            style={{ width: "100%", fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
-                                        <div style={{ display: "flex", gap: 8 }}>
-                                            <div style={{ flex: 0.4, position: "relative" }}>
-                                                <input type="number" inputMode="decimal" step="0.01" value={editBankForm.apy} onChange={e => setEditBankForm(p => ({ ...p, apy: e.target.value }))} placeholder="APY"
-                                                    style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
-                                                <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 12 }}>%</span>
-                                            </div>
-                                            <input value={editBankForm.notes} onChange={e => setEditBankForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notes"
-                                                style={{ flex: 1, fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
-                                        </div>
-                                        <div style={{ display: "flex", gap: 8 }}>
-                                            <button onClick={() => saveEditBank(acct.id)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: `${T.accent.emerald}18`, color: T.accent.emerald, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Check size={14} />Save</button>
-                                            <button onClick={() => setEditingBank(null)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
-                                        </div>
-                                    </div> :
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{acct.name}</span>
-                                            <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
-                                                {acct.apy > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>{acct.apy}% APY</Badge>}
-                                                {acct.notes && <Mono size={10} color={T.text.dim}>{acct.notes}</Mono>}
-                                            </div>
-                                        </div>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                                            <button onClick={() => startEditBank(acct)} style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={11} /></button>
-                                            <button onClick={() => removeBankAccount(acct.id)} style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={11} /></button>
-                                        </div>
-                                    </div>}
-                            </div>
-                        ))}
-                    </div>}
-                </Card>;
-            })}
+                            {!isCollapsed && <div style={{ padding: "12px 18px" }}>
+                                {accts.sort((a, b) => a.name.localeCompare(b.name)).map((acct, i) => (
+                                    <div key={acct.id} style={{ borderBottom: i === accts.length - 1 ? "none" : `1px solid ${T.border.subtle}`, padding: "12px 0" }}>
+                                        {editingBank === acct.id ?
+                                            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                                <input value={editBankForm.name} onChange={e => setEditBankForm(p => ({ ...p, name: e.target.value }))} placeholder="Account name"
+                                                    style={{ width: "100%", fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
+                                                <div style={{ display: "flex", gap: 8 }}>
+                                                    <div style={{ flex: 0.4, position: "relative" }}>
+                                                        <input type="number" inputMode="decimal" step="0.01" value={editBankForm.apy} onChange={e => setEditBankForm(p => ({ ...p, apy: e.target.value }))} placeholder="APY"
+                                                            style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                                        <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 12 }}>%</span>
+                                                    </div>
+                                                    <input value={editBankForm.notes} onChange={e => setEditBankForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notes"
+                                                        style={{ flex: 1, fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
+                                                </div>
+                                                <div style={{ display: "flex", gap: 8 }}>
+                                                    <button onClick={() => saveEditBank(acct.id)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: `${T.accent.emerald}18`, color: T.accent.emerald, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Check size={14} />Save</button>
+                                                    <button onClick={() => setEditingBank(null)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
+                                                </div>
+                                            </div> :
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{acct.name}</span>
+                                                    <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                                                        {acct.apy > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>{acct.apy}% APY</Badge>}
+                                                        {acct.notes && <Mono size={10} color={T.text.dim}>{acct.notes}</Mono>}
+                                                    </div>
+                                                </div>
+                                                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                                                    <button onClick={() => startEditBank(acct)} style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={11} /></button>
+                                                    <button onClick={() => removeBankAccount(acct.id)} style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={11} /></button>
+                                                </div>
+                                            </div>}
+                                    </div>
+                                ))}
+                            </div>}
+                        </Card>;
+                    })}
+            </>
+        )}
     </div>;
 
     // ─── Investment Accounts Section (JSX) ─────────────────────────────────
 
     const investmentsSection = enabledInvestments.length > 0 ? <div style={{ marginTop: 24 }}>
         {/* Premium Section Header: Investments */}
-        <div style={{
-            display: "flex", alignItems: "center", gap: 10, marginTop: 16, marginBottom: 16,
-            paddingBottom: 8, borderBottom: `1px solid ${T.accent.emerald}20`
-        }}>
+        <div
+            onClick={() => setCollapsedSections(p => ({ ...p, investments: !p.investments }))}
+            style={{
+                display: "flex", alignItems: "center", gap: 10, marginTop: 16, marginBottom: 16,
+                paddingBottom: 8, borderBottom: `1px solid ${T.accent.emerald}20`, cursor: "pointer",
+                userSelect: "none"
+            }}>
             <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent.emerald}1A`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 12px ${T.accent.emerald}10` }}>
                 <TrendingUp size={14} color={T.accent.emerald} />
             </div>
             <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Investments</h2>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                <Badge variant="outline" style={{ fontSize: 10, color: investTotalValue > 0 ? T.accent.emerald : T.text.muted, borderColor: investTotalValue > 0 ? `${T.accent.emerald}40` : T.border.default }}>
+                    {investTotalValue === 0 ? "0 Value" : fmt(Math.round(investTotalValue))}
+                </Badge>
+                {collapsedSections.investments ? <ChevronDown size={16} color={T.text.muted} /> : <ChevronUp size={16} color={T.text.muted} />}
+            </div>
         </div>
 
-        {investTotalValue > 0 && <Card animate style={{
-            textAlign: "center", padding: "18px 16px", marginBottom: 12,
-            background: `linear-gradient(160deg,${T.bg.card},${T.accent.primary}06)`, borderColor: `${T.accent.primary}12`
-        }}>
-            <Mono size={10} color={T.text.dim}>TOTAL PORTFOLIO VALUE</Mono>
-            <br /><Mono size={26} weight={800} color={T.accent.primary}>{fmt(investTotalValue)}</Mono>
-        </Card>}
+        {!collapsedSections.investments && (
+            <>
+                {investTotalValue > 0 && <Card animate style={{
+                    textAlign: "center", padding: "18px 16px", marginBottom: 12,
+                    background: `linear-gradient(160deg,${T.bg.card},${T.accent.primary}06)`, borderColor: `${T.accent.primary}12`
+                }}>
+                    <Mono size={10} color={T.text.dim}>TOTAL PORTFOLIO VALUE</Mono>
+                    <br /><Mono size={26} weight={800} color={T.accent.primary}>{fmt(investTotalValue)}</Mono>
+                </Card>}
 
-        {enabledInvestments.map(({ key, label, color }) => {
-            const items = holdings[key] || [];
-            const sectionValue = items.reduce((s, h) => s + ((investPrices[h.symbol]?.price || 0) * (h.shares || 0)), 0);
-            const isCollapsed = collapsedInvest[key];
-            return <Card key={key} animate variant="glass" style={{ marginBottom: 12, padding: 0, overflow: "hidden", borderLeft: `4px solid ${color}` }}>
-                <div onClick={() => setCollapsedInvest(p => ({ ...p, [key]: !isCollapsed }))} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${color}08` }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ padding: 5, borderRadius: 7, background: color, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <TrendingUp size={12} color={T.bg.card} />
+                {enabledInvestments.map(({ key, label, color }) => {
+                    const items = holdings[key] || [];
+                    const sectionValue = items.reduce((s, h) => s + ((investPrices[h.symbol]?.price || 0) * (h.shares || 0)), 0);
+                    const isCollapsed = collapsedInvest[key];
+                    return <Card key={key} animate variant="glass" style={{ marginBottom: 12, padding: 0, overflow: "hidden", borderLeft: `4px solid ${color}` }}>
+                        <div onClick={() => setCollapsedInvest(p => ({ ...p, [key]: !isCollapsed }))} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${color}08` }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <div style={{ padding: 5, borderRadius: 7, background: color, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                    <TrendingUp size={12} color={T.bg.card} />
+                                </div>
+                                <span style={{ fontSize: 12, fontWeight: 800, color, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
+                                <Badge variant="outline" style={{ fontSize: 10, color, borderColor: `${color}40` }}>{items.length} holding{items.length !== 1 ? "s" : ""}</Badge>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                {sectionValue > 0 && <Mono size={13} weight={700} color={color}>{fmt(sectionValue)}</Mono>}
+                                {isCollapsed ? <ChevronDown size={14} color={T.text.dim} /> : <ChevronUp size={14} color={T.text.dim} />}
+                            </div>
                         </div>
-                        <span style={{ fontSize: 12, fontWeight: 800, color, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
-                        <Badge variant="outline" style={{ fontSize: 10, color, borderColor: `${color}40` }}>{items.length} holding{items.length !== 1 ? "s" : ""}</Badge>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        {sectionValue > 0 && <Mono size={13} weight={700} color={color}>{fmt(sectionValue)}</Mono>}
-                        {isCollapsed ? <ChevronDown size={14} color={T.text.dim} /> : <ChevronUp size={14} color={T.text.dim} />}
-                    </div>
-                </div>
-                {!isCollapsed && <div style={{ padding: "12px 18px" }}>
-                    {items.length === 0 ?
-                        <p style={{ fontSize: 11, color: T.text.muted, textAlign: "center", padding: "8px 0" }}>No holdings added yet. Manage in Settings → Assets.</p> :
-                        items.sort((a, b) => (a.symbol || "").localeCompare(b.symbol || "")).map((h, i) => {
-                            const price = investPrices[h.symbol];
-                            return <div key={`${h.symbol}-${i}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: i === items.length - 1 ? "none" : `1px solid ${T.border.subtle}` }}>
-                                <div>
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>{h.symbol?.replace("-USD", "")}</span>
-                                    <span style={{ fontSize: 10, color: T.text.dim, marginLeft: 6 }}>{key === "crypto" ? `${h.shares} units` : `${h.shares} shares`}</span>
-                                </div>
-                                <div style={{ textAlign: "right" }}>
-                                    {price ? <>
-                                        <Mono size={12} weight={700} color={color}>{fmt(price.price * (h.shares || 0))}</Mono>
-                                        {price.changePct != null && <span style={{ fontSize: 9, fontFamily: T.font.mono, fontWeight: 700, marginLeft: 4, color: price.changePct >= 0 ? T.status.green : T.status.red }}>
-                                            {price.changePct >= 0 ? "+" : ""}{price.changePct.toFixed(2)}%
-                                        </span>}
-                                    </> : <Mono size={11} color={T.text.muted}>—</Mono>}
-                                </div>
-                            </div>;
-                        })}
-                </div>}
-            </Card>;
-        })}
-        <p style={{ fontSize: 10, color: T.text.muted, textAlign: "center", fontFamily: T.font.mono }}>Manage holdings in Settings → Assets & Holdings</p>
+                        {!isCollapsed && <div style={{ padding: "12px 18px" }}>
+                            {items.length === 0 ?
+                                <p style={{ fontSize: 11, color: T.text.muted, textAlign: "center", padding: "8px 0" }}>No holdings added yet. Manage in Settings → Assets.</p> :
+                                items.sort((a, b) => (a.symbol || "").localeCompare(b.symbol || "")).map((h, i) => {
+                                    const price = investPrices[h.symbol];
+                                    return <div key={`${h.symbol}-${i}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: i === items.length - 1 ? "none" : `1px solid ${T.border.subtle}` }}>
+                                        <div>
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>{h.symbol?.replace("-USD", "")}</span>
+                                            <span style={{ fontSize: 10, color: T.text.dim, marginLeft: 6 }}>{key === "crypto" ? `${h.shares} units` : `${h.shares} shares`}</span>
+                                        </div>
+                                        <div style={{ textAlign: "right" }}>
+                                            {price ? <>
+                                                <Mono size={12} weight={700} color={color}>{fmt(price.price * (h.shares || 0))}</Mono>
+                                                {price.changePct != null && <span style={{ fontSize: 9, fontFamily: T.font.mono, fontWeight: 700, marginLeft: 4, color: price.changePct >= 0 ? T.status.green : T.status.red }}>
+                                                    {price.changePct >= 0 ? "+" : ""}{price.changePct.toFixed(2)}%
+                                                </span>}
+                                            </> : <Mono size={11} color={T.text.muted}>—</Mono>}
+                                        </div>
+                                    </div>;
+                                })}
+                        </div>}
+                    </Card>;
+                })}
+                <p style={{ fontSize: 10, color: T.text.muted, textAlign: "center", fontFamily: T.font.mono }}>Manage holdings in Settings → Assets & Holdings</p>
+            </>
+        )}
     </div> : null;
 
     // ─── Non-Card Debts Section (JSX) ──────────────────────────────────────
 
     const debtsSection = nonCardDebts.length > 0 ? <div style={{ marginTop: 24 }}>
         {/* Premium Section Header: Debts */}
-        <div style={{
-            display: "flex", alignItems: "center", gap: 10, marginTop: 16, marginBottom: 16,
-            paddingBottom: 8, borderBottom: `1px solid ${T.status.amber}20`
-        }}>
+        <div
+            onClick={() => setCollapsedSections(p => ({ ...p, debts: !p.debts }))}
+            style={{
+                display: "flex", alignItems: "center", gap: 10, marginTop: 16, marginBottom: 16,
+                paddingBottom: 8, borderBottom: `1px solid ${T.status.amber}20`, cursor: "pointer",
+                userSelect: "none"
+            }}>
             <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.status.amber}1A`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 12px ${T.status.amber}10` }}>
                 <AlertTriangle size={14} color={T.status.amber} />
             </div>
             <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Debts & Loans</h2>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                <Badge variant="outline" style={{ fontSize: 10, color: totalDebtBalance > 0 ? T.status.amber : T.text.muted, borderColor: totalDebtBalance > 0 ? `${T.status.amber}40` : T.border.default }}>
+                    {totalDebtBalance === 0 ? "0 Balance" : fmt(Math.round(totalDebtBalance))}
+                </Badge>
+                {collapsedSections.debts ? <ChevronDown size={16} color={T.text.muted} /> : <ChevronUp size={16} color={T.text.muted} />}
+            </div>
         </div>
 
-        {totalDebtBalance > 0 && <Card animate style={{
-            textAlign: "center", padding: "18px 16px", marginBottom: 12,
-            background: `linear-gradient(160deg,${T.bg.card},${T.status.amber}06)`, borderColor: `${T.status.amber}12`
-        }}>
-            <Mono size={10} color={T.text.dim}>TOTAL OUTSTANDING</Mono>
-            <br /><Mono size={26} weight={800} color={T.status.amber}>{fmt(totalDebtBalance)}</Mono>
-        </Card>}
+        {!collapsedSections.debts && (
+            <>
+                {totalDebtBalance > 0 && <Card animate style={{
+                    textAlign: "center", padding: "18px 16px", marginBottom: 12,
+                    background: `linear-gradient(160deg,${T.bg.card},${T.status.amber}06)`, borderColor: `${T.status.amber}12`
+                }}>
+                    <Mono size={10} color={T.text.dim}>TOTAL OUTSTANDING</Mono>
+                    <br /><Mono size={26} weight={800} color={T.status.amber}>{fmt(totalDebtBalance)}</Mono>
+                </Card>}
 
-        <Card animate variant="glass" style={{ padding: 0, overflow: "hidden", borderLeft: `4px solid ${T.status.amber}` }}>
-            <div onClick={() => setCollapsedDebts(!collapsedDebts)} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${T.status.amber}08` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ padding: 5, borderRadius: 7, background: T.status.amber, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <AlertTriangle size={12} color={T.bg.card} />
-                    </div>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: T.status.amber, textTransform: "uppercase", letterSpacing: "0.05em" }}>ACTIVE DEBTS</span>
-                    <Badge variant="outline" style={{ fontSize: 10, color: T.status.amber, borderColor: `${T.status.amber}40` }}>{nonCardDebts.length}</Badge>
-                </div>
-                {collapsedDebts ? <ChevronDown size={14} color={T.text.dim} /> : <ChevronUp size={14} color={T.text.dim} />}
-            </div>
-            {!collapsedDebts && <div style={{ padding: "12px 18px" }}>
-                {nonCardDebts.sort((a, b) => (b.balance || 0) - (a.balance || 0)).map((debt, i) => (
-                    <div key={debt.id || i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: i === nonCardDebts.length - 1 ? "none" : `1px solid ${T.border.subtle}` }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{debt.name || "Unnamed Debt"}</span>
-                            <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
-                                {debt.type && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.status.amber, borderColor: `${T.status.amber}40` }}>{debt.type.toUpperCase()}</Badge>}
-                                {debt.apr > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.secondary }}>{debt.apr}% APR</Badge>}
-                                {debt.minPayment > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.dim }}>Min {fmt(debt.minPayment)}</Badge>}
+                <Card animate variant="glass" style={{ padding: 0, overflow: "hidden", borderLeft: `4px solid ${T.status.amber}` }}>
+                    <div onClick={() => setCollapsedDebts(!collapsedDebts)} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${T.status.amber}08` }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <div style={{ padding: 5, borderRadius: 7, background: T.status.amber, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <AlertTriangle size={12} color={T.bg.card} />
                             </div>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: T.status.amber, textTransform: "uppercase", letterSpacing: "0.05em" }}>ACTIVE DEBTS</span>
+                            <Badge variant="outline" style={{ fontSize: 10, color: T.status.amber, borderColor: `${T.status.amber}40` }}>{nonCardDebts.length}</Badge>
                         </div>
-                        <Mono size={13} weight={700} color={T.status.amber}>{fmt(debt.balance)}</Mono>
+                        {collapsedDebts ? <ChevronDown size={14} color={T.text.dim} /> : <ChevronUp size={14} color={T.text.dim} />}
                     </div>
-                ))}
-            </div>}
-        </Card>
-        <p style={{ fontSize: 10, color: T.text.muted, textAlign: "center", fontFamily: T.font.mono, marginTop: 8 }}>Manage debts in Settings → Debts & Liabilities</p>
+                    {!collapsedDebts && <div style={{ padding: "12px 18px" }}>
+                        {nonCardDebts.sort((a, b) => (b.balance || 0) - (a.balance || 0)).map((debt, i) => (
+                            <div key={debt.id || i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: i === nonCardDebts.length - 1 ? "none" : `1px solid ${T.border.subtle}` }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{debt.name || "Unnamed Debt"}</span>
+                                    <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                                        {debt.type && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.status.amber, borderColor: `${T.status.amber}40` }}>{debt.type.toUpperCase()}</Badge>}
+                                        {debt.apr > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.secondary }}>{debt.apr}% APR</Badge>}
+                                        {debt.minPayment > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.dim }}>Min {fmt(debt.minPayment)}</Badge>}
+                                    </div>
+                                </div>
+                                <Mono size={13} weight={700} color={T.status.amber}>{fmt(debt.balance)}</Mono>
+                            </div>
+                        ))}
+                    </div>}
+                </Card>
+                <p style={{ fontSize: 10, color: T.text.muted, textAlign: "center", fontFamily: T.font.mono, marginTop: 8 }}>Manage debts in Settings → Debts & Liabilities</p>
+            </>
+        )}
     </div> : null;
 
     return <div className="page-body" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", gap: 24 }}>
