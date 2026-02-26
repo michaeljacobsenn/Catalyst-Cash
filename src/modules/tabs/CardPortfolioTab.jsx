@@ -125,6 +125,42 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
     const checkingCount = bankAccounts.filter(a => a.accountType === "checking").length;
     const savingsCount = bankAccounts.filter(a => a.accountType === "savings").length;
 
+    // ─── Early computations for Wealth Dashboard ─────────────────────
+    const holdings = financialConfig?.holdings || { roth: [], k401: [], brokerage: [], crypto: [] };
+    const investmentSections = [
+        { key: "roth", label: "Roth IRA", enabled: !!financialConfig?.trackRothContributions, color: T.accent.primary },
+        { key: "k401", label: "401(k)", enabled: !!financialConfig?.track401k, color: T.status.blue },
+        { key: "brokerage", label: "Brokerage", enabled: !!financialConfig?.trackBrokerage, color: T.accent.emerald },
+        { key: "crypto", label: "Crypto", enabled: true, color: T.status.amber },
+    ];
+    const enabledInvestments = investmentSections.filter(s => s.enabled || (holdings[s.key] || []).length > 0);
+    const allHoldingSymbols = useMemo(() => {
+        const syms = new Set();
+        Object.values(holdings).flat().forEach(h => { if (h?.symbol) syms.add(h.symbol); });
+        return [...syms];
+    }, [holdings]);
+
+    const [investPrices, setInvestPrices] = useState({});
+    const [collapsedInvest, setCollapsedInvest] = useState({});
+    useEffect(() => {
+        if (allHoldingSymbols.length > 0) {
+            fetchMarketPrices(allHoldingSymbols).then(p => { if (p && Object.keys(p).length > 0) setInvestPrices(p); });
+        }
+    }, [allHoldingSymbols.join()]);
+
+    const investTotalValue = useMemo(() => {
+        let total = 0;
+        Object.values(holdings).flat().forEach(h => {
+            const p = investPrices[h?.symbol];
+            if (p?.price) total += p.price * (h.shares || 0);
+        });
+        return total;
+    }, [holdings, investPrices]);
+
+    const nonCardDebts = financialConfig?.nonCardDebts || [];
+    const totalDebtBalance = useMemo(() => nonCardDebts.reduce((s, d) => s + (d.balance || 0), 0), [nonCardDebts]);
+    const [collapsedDebts, setCollapsedDebts] = useState(false);
+
     const netCapital = totalLimit + (investTotalValue || 0);
 
     const creditCardsSection = <div>
@@ -770,37 +806,7 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
             })}
     </div>;
 
-    // ─── Investment Accounts Section ─────────────────────────────────
-    const holdings = financialConfig?.holdings || { roth: [], k401: [], brokerage: [], crypto: [] };
-    const investmentSections = [
-        { key: "roth", label: "Roth IRA", enabled: !!financialConfig?.trackRothContributions, color: T.accent.primary },
-        { key: "k401", label: "401(k)", enabled: !!financialConfig?.track401k, color: T.status.blue },
-        { key: "brokerage", label: "Brokerage", enabled: !!financialConfig?.trackBrokerage, color: T.accent.emerald },
-        { key: "crypto", label: "Crypto", enabled: true, color: T.status.amber },
-    ];
-    const enabledInvestments = investmentSections.filter(s => s.enabled || (holdings[s.key] || []).length > 0);
-    const allHoldingSymbols = useMemo(() => {
-        const syms = new Set();
-        Object.values(holdings).flat().forEach(h => { if (h?.symbol) syms.add(h.symbol); });
-        return [...syms];
-    }, [holdings]);
-
-    const [investPrices, setInvestPrices] = useState({});
-    const [collapsedInvest, setCollapsedInvest] = useState({});
-    useEffect(() => {
-        if (allHoldingSymbols.length > 0) {
-            fetchMarketPrices(allHoldingSymbols).then(p => { if (p && Object.keys(p).length > 0) setInvestPrices(p); });
-        }
-    }, [allHoldingSymbols.join()]);
-
-    const investTotalValue = useMemo(() => {
-        let total = 0;
-        Object.values(holdings).flat().forEach(h => {
-            const p = investPrices[h?.symbol];
-            if (p?.price) total += p.price * (h.shares || 0);
-        });
-        return total;
-    }, [holdings, investPrices]);
+    // ─── Investment Accounts Section (JSX) ─────────────────────────────────
 
     const investmentsSection = enabledInvestments.length > 0 ? <div style={{ marginTop: 24 }}>
         {/* Premium Section Header: Investments */}
@@ -866,10 +872,7 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
         <p style={{ fontSize: 10, color: T.text.muted, textAlign: "center", fontFamily: T.font.mono }}>Manage holdings in Settings → Assets & Holdings</p>
     </div> : null;
 
-    // ─── Non-Card Debts Section ──────────────────────────────────────
-    const nonCardDebts = financialConfig?.nonCardDebts || [];
-    const totalDebtBalance = useMemo(() => nonCardDebts.reduce((s, d) => s + (d.balance || 0), 0), [nonCardDebts]);
-    const [collapsedDebts, setCollapsedDebts] = useState(false);
+    // ─── Non-Card Debts Section (JSX) ──────────────────────────────────────
 
     const debtsSection = nonCardDebts.length > 0 ? <div style={{ marginTop: 24 }}>
         {/* Premium Section Header: Debts */}
