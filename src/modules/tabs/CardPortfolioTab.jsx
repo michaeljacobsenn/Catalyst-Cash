@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { Plus, X, ChevronDown, ChevronUp, CreditCard, Edit3, Check, DollarSign, Building2, Landmark } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Plus, X, ChevronDown, ChevronUp, CreditCard, Edit3, Check, DollarSign, Building2, Landmark, TrendingUp, AlertTriangle } from "lucide-react";
 import { T, ISSUER_COLORS } from "../constants.js";
 import { getIssuerCards, getPinnedForIssuer } from "../issuerCards.js";
 import { getBankNames, getBankProducts } from "../bankCatalog.js";
@@ -8,6 +8,7 @@ import { fmt } from "../utils.js";
 import { Card, Label, Badge } from "../ui.jsx";
 import { Mono, EmptyState } from "../components.jsx";
 import SearchableSelect from "../SearchableSelect.jsx";
+import { fetchMarketPrices } from "../marketData.js";
 
 const INSTITUTIONS = [
     "Amex", "Bank of America", "Barclays", "Capital One", "Chase", "Citi",
@@ -15,7 +16,7 @@ const INSTITUTIONS = [
     "Synchrony", "TD Bank", "US Bank", "USAA", "Wells Fargo", "Other"
 ];
 
-export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAccounts = [], setBankAccounts }) {
+export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAccounts = [], setBankAccounts, financialConfig = {} }) {
     const [collapsedIssuers, setCollapsedIssuers] = useState({});
     const [editingCard, setEditingCard] = useState(null);
     const [editForm, setEditForm] = useState({});
@@ -737,8 +738,149 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
             })}
     </div>;
 
+    // ─── Investment Accounts Section ─────────────────────────────────
+    const holdings = financialConfig?.holdings || { roth: [], k401: [], brokerage: [], crypto: [] };
+    const investmentSections = [
+        { key: "roth", label: "Roth IRA", enabled: !!financialConfig?.trackRothContributions, color: T.accent.primary },
+        { key: "k401", label: "401(k)", enabled: !!financialConfig?.track401k, color: T.status.blue },
+        { key: "brokerage", label: "Brokerage", enabled: !!financialConfig?.trackBrokerage, color: T.accent.emerald },
+        { key: "crypto", label: "Crypto", enabled: true, color: T.status.amber },
+    ];
+    const enabledInvestments = investmentSections.filter(s => s.enabled || (holdings[s.key] || []).length > 0);
+    const allHoldingSymbols = useMemo(() => {
+        const syms = new Set();
+        Object.values(holdings).flat().forEach(h => { if (h?.symbol) syms.add(h.symbol); });
+        return [...syms];
+    }, [holdings]);
+
+    const [investPrices, setInvestPrices] = useState({});
+    const [collapsedInvest, setCollapsedInvest] = useState({});
+    useEffect(() => {
+        if (allHoldingSymbols.length > 0) {
+            fetchMarketPrices(allHoldingSymbols).then(p => { if (p && Object.keys(p).length > 0) setInvestPrices(p); });
+        }
+    }, [allHoldingSymbols.join()]);
+
+    const investTotalValue = useMemo(() => {
+        let total = 0;
+        Object.values(holdings).flat().forEach(h => {
+            const p = investPrices[h?.symbol];
+            if (p?.price) total += p.price * (h.shares || 0);
+        });
+        return total;
+    }, [holdings, investPrices]);
+
+    const investmentsSection = enabledInvestments.length > 0 ? <div style={{ marginTop: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <TrendingUp size={18} color={T.accent.primary} />
+            <h2 style={{ fontSize: 18, fontWeight: 800 }}>Investments</h2>
+        </div>
+
+        {investTotalValue > 0 && <Card animate style={{
+            textAlign: "center", padding: "18px 16px", marginBottom: 12,
+            background: `linear-gradient(160deg,${T.bg.card},${T.accent.primary}06)`, borderColor: `${T.accent.primary}12`
+        }}>
+            <Mono size={10} color={T.text.dim}>TOTAL PORTFOLIO VALUE</Mono>
+            <br /><Mono size={26} weight={800} color={T.accent.primary}>{fmt(investTotalValue)}</Mono>
+        </Card>}
+
+        {enabledInvestments.map(({ key, label, color }) => {
+            const items = holdings[key] || [];
+            const sectionValue = items.reduce((s, h) => s + ((investPrices[h.symbol]?.price || 0) * (h.shares || 0)), 0);
+            const isCollapsed = collapsedInvest[key];
+            return <Card key={key} animate variant="glass" style={{ marginBottom: 12, padding: 0, overflow: "hidden", borderLeft: `4px solid ${color}` }}>
+                <div onClick={() => setCollapsedInvest(p => ({ ...p, [key]: !isCollapsed }))} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${color}08` }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ padding: 5, borderRadius: 7, background: color, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <TrendingUp size={12} color={T.bg.card} />
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 800, color, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
+                        <Badge variant="outline" style={{ fontSize: 10, color, borderColor: `${color}40` }}>{items.length} holding{items.length !== 1 ? "s" : ""}</Badge>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {sectionValue > 0 && <Mono size={13} weight={700} color={color}>{fmt(sectionValue)}</Mono>}
+                        {isCollapsed ? <ChevronDown size={14} color={T.text.dim} /> : <ChevronUp size={14} color={T.text.dim} />}
+                    </div>
+                </div>
+                {!isCollapsed && <div style={{ padding: "12px 18px" }}>
+                    {items.length === 0 ?
+                        <p style={{ fontSize: 11, color: T.text.muted, textAlign: "center", padding: "8px 0" }}>No holdings added yet. Manage in Settings → Assets.</p> :
+                        items.sort((a, b) => (a.symbol || "").localeCompare(b.symbol || "")).map((h, i) => {
+                            const price = investPrices[h.symbol];
+                            return <div key={`${h.symbol}-${i}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: i === items.length - 1 ? "none" : `1px solid ${T.border.subtle}` }}>
+                                <div>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>{h.symbol?.replace("-USD", "")}</span>
+                                    <span style={{ fontSize: 10, color: T.text.dim, marginLeft: 6 }}>{key === "crypto" ? `${h.shares} units` : `${h.shares} shares`}</span>
+                                </div>
+                                <div style={{ textAlign: "right" }}>
+                                    {price ? <>
+                                        <Mono size={12} weight={700} color={color}>{fmt(price.price * (h.shares || 0))}</Mono>
+                                        {price.changePct != null && <span style={{ fontSize: 9, fontFamily: T.font.mono, fontWeight: 700, marginLeft: 4, color: price.changePct >= 0 ? T.status.green : T.status.red }}>
+                                            {price.changePct >= 0 ? "+" : ""}{price.changePct.toFixed(2)}%
+                                        </span>}
+                                    </> : <Mono size={11} color={T.text.muted}>—</Mono>}
+                                </div>
+                            </div>;
+                        })}
+                </div>}
+            </Card>;
+        })}
+        <p style={{ fontSize: 10, color: T.text.muted, textAlign: "center", fontFamily: T.font.mono }}>Manage holdings in Settings → Assets & Holdings</p>
+    </div> : null;
+
+    // ─── Non-Card Debts Section ──────────────────────────────────────
+    const nonCardDebts = financialConfig?.nonCardDebts || [];
+    const totalDebtBalance = useMemo(() => nonCardDebts.reduce((s, d) => s + (d.balance || 0), 0), [nonCardDebts]);
+    const [collapsedDebts, setCollapsedDebts] = useState(false);
+
+    const debtsSection = nonCardDebts.length > 0 ? <div style={{ marginTop: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <AlertTriangle size={18} color={T.status.amber} />
+            <h2 style={{ fontSize: 18, fontWeight: 800 }}>Debts & Loans</h2>
+        </div>
+
+        {totalDebtBalance > 0 && <Card animate style={{
+            textAlign: "center", padding: "18px 16px", marginBottom: 12,
+            background: `linear-gradient(160deg,${T.bg.card},${T.status.amber}06)`, borderColor: `${T.status.amber}12`
+        }}>
+            <Mono size={10} color={T.text.dim}>TOTAL OUTSTANDING</Mono>
+            <br /><Mono size={26} weight={800} color={T.status.amber}>{fmt(totalDebtBalance)}</Mono>
+        </Card>}
+
+        <Card animate variant="glass" style={{ padding: 0, overflow: "hidden", borderLeft: `4px solid ${T.status.amber}` }}>
+            <div onClick={() => setCollapsedDebts(!collapsedDebts)} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${T.status.amber}08` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ padding: 5, borderRadius: 7, background: T.status.amber, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <AlertTriangle size={12} color={T.bg.card} />
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: T.status.amber, textTransform: "uppercase", letterSpacing: "0.05em" }}>ACTIVE DEBTS</span>
+                    <Badge variant="outline" style={{ fontSize: 10, color: T.status.amber, borderColor: `${T.status.amber}40` }}>{nonCardDebts.length}</Badge>
+                </div>
+                {collapsedDebts ? <ChevronDown size={14} color={T.text.dim} /> : <ChevronUp size={14} color={T.text.dim} />}
+            </div>
+            {!collapsedDebts && <div style={{ padding: "12px 18px" }}>
+                {nonCardDebts.sort((a, b) => (b.balance || 0) - (a.balance || 0)).map((debt, i) => (
+                    <div key={debt.id || i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: i === nonCardDebts.length - 1 ? "none" : `1px solid ${T.border.subtle}` }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{debt.name || "Unnamed Debt"}</span>
+                            <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                                {debt.type && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.status.amber, borderColor: `${T.status.amber}40` }}>{debt.type.toUpperCase()}</Badge>}
+                                {debt.apr > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.secondary }}>{debt.apr}% APR</Badge>}
+                                {debt.minPayment > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.dim }}>Min {fmt(debt.minPayment)}</Badge>}
+                            </div>
+                        </div>
+                        <Mono size={13} weight={700} color={T.status.amber}>{fmt(debt.balance)}</Mono>
+                    </div>
+                ))}
+            </div>}
+        </Card>
+        <p style={{ fontSize: 10, color: T.text.muted, textAlign: "center", fontFamily: T.font.mono, marginTop: 8 }}>Manage debts in Settings → Debts & Liabilities</p>
+    </div> : null;
+
     return <div className="page-body" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", gap: 24 }}>
         {creditCardsSection}
         {bankSection}
+        {investmentsSection}
+        {debtsSection}
     </div>;
 }

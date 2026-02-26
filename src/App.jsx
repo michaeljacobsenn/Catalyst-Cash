@@ -1173,7 +1173,7 @@ function CatalystCash() {
               onExportAll={exportAllAudits} onExportSelected={exportSelectedAudits} onExportCSV={exportAuditCSV}
               onDelete={deleteHistoryItem} onManualImport={handleManualImport} toast={toast} /></ErrorBoundary>}
             {renderTab === "renewals" && <ErrorBoundary><RenewalsTab renewals={renewals} setRenewals={setRenewals} cardAnnualFees={cardAnnualFees} cards={cards} /></ErrorBoundary>}
-            {renderTab === "cards" && <ErrorBoundary><CardPortfolioTab cards={cards} setCards={setCards} cardCatalog={cardCatalog} bankAccounts={bankAccounts} setBankAccounts={setBankAccounts} /></ErrorBoundary>}
+            {renderTab === "cards" && <ErrorBoundary><CardPortfolioTab cards={cards} setCards={setCards} cardCatalog={cardCatalog} bankAccounts={bankAccounts} setBankAccounts={setBankAccounts} financialConfig={financialConfig} /></ErrorBoundary>}
           </div>
         );
       })()}
