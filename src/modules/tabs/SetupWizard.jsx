@@ -51,7 +51,7 @@ function StepHeader({ step }) {
     );
 }
 
-export default function SetupWizard({ onComplete, toast }) {
+export default function SetupWizard({ onComplete, toast, setAppleLinkedId }) {
     const [step, setStep] = useState(0);
     const [saving, setSaving] = useState(false);
     const [isExiting, setIsExiting] = useState(false);
@@ -217,7 +217,7 @@ export default function SetupWizard({ onComplete, toast }) {
                             <PageWelcome onNext={next} />
                         )}
                         {pageId === "import" && (
-                            <PageImport onNext={next} toast={toast} />
+                            <PageImport onNext={next} toast={toast} onComplete={() => { saveAndFinish(); }} />
                         )}
                         {pageId === "income" && (
                             <PageIncome
@@ -244,6 +244,7 @@ export default function SetupWizard({ onComplete, toast }) {
                                 onBack={back}
                                 onSkip={handleSecuritySkip}
                                 saving={saving}
+                                setAppleLinkedId={setAppleLinkedId}
                             />
                         )}
                         {pageId === "done" && (

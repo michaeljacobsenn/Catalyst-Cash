@@ -137,6 +137,45 @@ export default function DashboardTab({ current, history, onRunAudit, onViewResul
                 </div>
             </Card>
 
+            {/* Live Summary — show useful data before first audit */}
+            {(cards.length > 0 || (renewals || []).length > 0 || financialConfig?.enableHoldings) && (
+                <Card style={{ marginTop: 8 }}>
+                    <Label>Live Summary</Label>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                        {cards.length > 0 && (
+                            <div style={{ padding: "10px 12px", background: T.bg.elevated, borderRadius: T.radius.md, border: `1px solid ${T.border.subtle}` }}>
+                                <div style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 700 }}>CARDS</div>
+                                <div style={{ fontSize: 18, fontWeight: 800, color: T.text.primary }}>{cards.length}</div>
+                                <div style={{ fontSize: 10, color: T.text.muted }}>{fmt(cards.reduce((s, c) => s + (c.limit || 0), 0))} total limit</div>
+                            </div>
+                        )}
+                        {(renewals || []).length > 0 && (
+                            <div style={{ padding: "10px 12px", background: T.bg.elevated, borderRadius: T.radius.md, border: `1px solid ${T.border.subtle}` }}>
+                                <div style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 700 }}>BILLS/SUBS</div>
+                                <div style={{ fontSize: 18, fontWeight: 800, color: T.text.primary }}>{renewals.length}</div>
+                                <div style={{ fontSize: 10, color: T.text.muted }}>{fmt(renewals.reduce((s, r) => {
+                                    const amt = r.amount || 0;
+                                    if (r.cadence === "monthly" || r.interval === 1 && r.intervalUnit === "month") return s + amt;
+                                    if (r.cadence === "yearly" || r.interval === 1 && r.intervalUnit === "year") return s + amt / 12;
+                                    if (r.cadence === "quarterly") return s + amt / 3;
+                                    return s + amt;
+                                }, 0))}/mo est.</div>
+                            </div>
+                        )}
+                    </div>
+                </Card>
+            )}
+
+            {/* Cash Flow Calendar (pre-audit) — show if we have checking balance from config */}
+            {financialConfig?.lastCheckingBalance != null && (
+                <CashFlowCalendar
+                    config={financialConfig}
+                    cards={cards}
+                    renewals={renewals}
+                    checkingBalance={financialConfig.lastCheckingBalance}
+                />
+            )}
+
             {/* Subtle Restore Button at bottom */}
             <div style={{ marginTop: "auto", paddingTop: 24, textAlign: "center" }}>
                 <input ref={restoreInputRef} type="file" accept=".json" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; onRestore?.(f); }}

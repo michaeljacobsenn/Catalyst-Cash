@@ -31,10 +31,10 @@ export const PdfViewer = registerPlugin('PdfViewer');
 export async function nativeExport(filename, content, mimeType = "text/plain", isBase64 = false) {
   if (Capacitor.isNativePlatform()) {
     try {
-      const opts = { path: filename, data: content, directory: Directory.Cache };
+      const opts = { path: filename, data: content, directory: Directory.Documents, recursive: true };
       if (!isBase64) opts.encoding = 'utf8';
       const res = await Filesystem.writeFile(opts);
-      await Share.share({ title: filename, url: res.uri, dialogTitle: 'Export File' });
+      await Share.share({ title: filename, url: res.uri, files: [res.uri], dialogTitle: 'Export File' });
     } catch (e) {
       console.error("Native export failed:", e);
       if (window.toast) window.toast.error("Export failed. Please check permissions.");
@@ -178,21 +178,44 @@ export function parseCurrency(value) {
 export function parseJSON(raw) {
   let j;
   try {
-    // Aggressive JSON extraction: strip markdown wrappers and extract only the {} block
-    const cleaned = raw.replace(/^```json?\n?/m, "").replace(/\n?```$/m, "").trim();
+    // Aggressive JSON extraction: strip ALL markdown wrappers and extract only the {} block
+    let cleaned = raw.replace(/```json?\s*/gi, "").replace(/```/g, "").trim();
     const startIdx = cleaned.indexOf("{");
     const endIdx = cleaned.lastIndexOf("}");
     if (startIdx >= 0 && endIdx > startIdx) {
       j = JSON.parse(cleaned.slice(startIdx, endIdx + 1));
     } else {
-      j = JSON.parse(cleaned);
+      // Try array-wrapped JSON: [{...}]
+      const arrStart = cleaned.indexOf("[");
+      const arrEnd = cleaned.lastIndexOf("]");
+      if (arrStart >= 0 && arrEnd > arrStart) {
+        const arr = JSON.parse(cleaned.slice(arrStart, arrEnd + 1));
+        j = Array.isArray(arr) && arr.length > 0 ? arr[0] : null;
+      } else {
+        j = JSON.parse(cleaned);
+      }
     }
-  } catch {
+  } catch (e) {
+    console.warn("[parseJSON] JSON.parse failed:", e.message, "— raw length:", raw?.length, "— first 200 chars:", raw?.slice(0, 200));
     return null; // Stream hasn't finished accumulating enough valid JSON
   }
 
+  // Handle snake_case keys from Gemini (header_card → headerCard)
+  if (j && !j.headerCard && j.header_card) {
+    j.headerCard = j.header_card;
+    if (j.health_score) j.healthScore = j.health_score;
+    if (j.alerts_card) j.alertsCard = j.alerts_card;
+    if (j.dashboard_card) j.dashboardCard = j.dashboard_card;
+    if (j.weekly_moves) j.weeklyMoves = j.weekly_moves;
+    if (j.long_range_radar) j.longRangeRadar = j.long_range_radar;
+    if (j.next_action) j.nextAction = j.next_action;
+  }
+
   // Schema Validation (Lightweight)
-  if (!j || !j.headerCard) return null; // Not full payload yet
+  if (!j || !j.headerCard) {
+    console.warn("[parseJSON] Missing headerCard. Keys found:", j ? Object.keys(j).join(", ") : "null");
+    return null;
+  }
 
   // Map to the internal structure expected by ResultsView/Dashboard
   return {
@@ -286,7 +309,7 @@ pre{white-space:pre-wrap;font-size:11px;line-height:1.6;color:#8B949E}</style></
 export async function exportAllAudits(audits) {
   if (!audits?.length) return;
   const payload = {
-    app: "Catalyst Cash", version: "1.3.1-BETA",
+    app: "Catalyst Cash", version: "1.5-BETA",
     exportedAt: new Date().toISOString(), count: audits.length, audits
   };
   await nativeExport(`CatalystCash_ALL_${new Date().toISOString().split("T")[0]}.json`, JSON.stringify(payload, null, 2), "application/json");
@@ -295,7 +318,7 @@ export async function exportAllAudits(audits) {
 export async function exportSelectedAudits(audits) {
   if (!audits?.length) return;
   const payload = {
-    app: "Catalyst Cash", version: "1.3.1-BETA",
+    app: "Catalyst Cash", version: "1.5-BETA",
     exportedAt: new Date().toISOString(), count: audits.length, audits
   };
   await nativeExport(`CatalystCash_Selected_${audits.length}_${new Date().toISOString().split("T")[0]}.json`, JSON.stringify(payload, null, 2), "application/json");

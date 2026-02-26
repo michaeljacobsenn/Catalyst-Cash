@@ -41,12 +41,33 @@ export default function CashFlowCalendar({ config, cards, renewals, checkingBala
         // Map renewals/bills
         const bills = [];
         (renewals || []).forEach(r => {
-            if (!r.nextDue) return;
-            const diff = daysBetween(today, r.nextDue);
+            let dueDate = r.nextDue;
+            // Estimate nextDue if missing, based on cadence
+            if (!dueDate) {
+                if (r.cadence === "monthly" || (r.interval === 1 && r.intervalUnit === "month")) {
+                    dueDate = getNextDateForDayOfMonth(today, r.dueDay || 1);
+                } else {
+                    return; // Skip non-monthly renewals without a date — can't estimate
+                }
+            }
+            const diff = daysBetween(today, dueDate);
             if (diff >= 0 && diff <= daysAhead) {
-                const isCard = (cards || []).some(c => c.name.toLowerCase() === (r.chargedTo || "").toLowerCase());
+                const isCard = (cards || []).some(c => (c.name || "").toLowerCase() === (r.chargedTo || "").toLowerCase());
                 if (!isCard) {
-                    bills.push({ date: r.nextDue, name: r.name, amount: r.amount || 0 });
+                    bills.push({ date: dueDate, name: r.name, amount: r.amount || 0 });
+                }
+            }
+        });
+
+        // Map non-card debts (car loans, student loans, etc.) — monthly payments
+        const nonCardDebtPayments = [];
+        (config.nonCardDebts || []).forEach(d => {
+            if (d.minimum > 0) {
+                // Assume monthly payment on the 1st (or dueDay if set)
+                const dueDate = getNextDateForDayOfMonth(today, d.dueDay || 1);
+                const diff = daysBetween(today, dueDate);
+                if (diff >= 0 && diff <= daysAhead) {
+                    nonCardDebtPayments.push({ date: dueDate, name: `${d.name} Payment`, amount: d.minimum });
                 }
             }
         });
@@ -119,6 +140,13 @@ export default function CashFlowCalendar({ config, cards, renewals, checkingBala
             daysCardPayments.forEach(cp => {
                 dayEvents.push({ type: 'bill', name: cp.name, amount: cp.amount });
                 netChange -= cp.amount;
+            });
+
+            // Subtract Non-Card Debt Payments (car loans, student loans, etc.)
+            const daysDebtPayments = nonCardDebtPayments.filter(dp => dp.date === dStr);
+            daysDebtPayments.forEach(dp => {
+                dayEvents.push({ type: 'bill', name: dp.name, amount: dp.amount });
+                netChange -= dp.amount;
             });
 
             // Subtract Daily Budget Burn (only on weekdays for realism, or every day)

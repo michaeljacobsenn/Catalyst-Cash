@@ -1045,7 +1045,7 @@ function CatalystCash() {
   if (!onboardingComplete) return (
     <>
       <GlobalStyles />
-      <SetupWizard toast={toast} onComplete={() => setOnboardingComplete(true)} />
+      <SetupWizard toast={toast} onComplete={() => setOnboardingComplete(true)} setAppleLinkedId={setAppleLinkedId} />
     </>
   );
 

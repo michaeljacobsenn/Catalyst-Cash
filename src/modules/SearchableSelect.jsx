@@ -1,33 +1,39 @@
 // ═══════════════════════════════════════════════════════════════
 // SEARCHABLE SELECT — Catalyst Cash
-// A type-to-search dropdown replacement used across the app.
+// Portal-based dropdown that escapes parent overflow constraints.
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useRef, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { T } from "./constants.js";
 
 /**
  * SearchableSelect — drop-in replacement for <select> with type-to-filter.
- * Props:
- *   options: [{ value, label, group? }]  — items to display
- *   value: currently selected value
- *   onChange: (value) => void
- *   placeholder: string
- *   style: optional style overrides for the trigger button
- *   maxHeight: max dropdown height (default 240)
+ * Uses a React portal so the dropdown renders above all content.
  */
 export default function SearchableSelect({ options = [], value, onChange, placeholder = "Select…", style = {}, maxHeight = 240 }) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const ref = useRef(null);
     const inputRef = useRef(null);
+    const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
 
     // Close on outside click
     useEffect(() => {
         if (!open) return;
-        const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+        const handler = (e) => {
+            if (ref.current && !ref.current.contains(e.target) && !e.target.closest('[data-ss-portal]')) setOpen(false);
+        };
         document.addEventListener("mousedown", handler);
         return () => document.removeEventListener("mousedown", handler);
+    }, [open]);
+
+    // Position the dropdown when opening
+    useEffect(() => {
+        if (open && ref.current) {
+            const rect = ref.current.getBoundingClientRect();
+            setDropPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+        }
     }, [open]);
 
     // Auto-focus input when opened
@@ -61,6 +67,79 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
 
     const selectedLabel = options.find(o => o.value === value)?.label || "";
 
+    const renderOption = (o) => (
+        <button
+            key={o.value}
+            type="button"
+            onClick={() => { onChange(o.value); setOpen(false); setQuery(""); }}
+            style={{
+                width: "100%", padding: "8px 14px", border: "none",
+                background: o.value === value ? `${T.accent.primary}12` : "transparent",
+                color: o.value === value ? T.accent.primary : T.text.primary,
+                fontSize: 12, textAlign: "left", cursor: "pointer",
+                display: "block", fontFamily: "inherit",
+                fontWeight: o.value === value ? 700 : 400,
+                borderLeft: o.value === value ? `2px solid ${T.accent.primary}` : "2px solid transparent"
+            }}
+            onMouseEnter={e => { if (o.value !== value) e.target.style.background = `${T.text.muted}08`; }}
+            onMouseLeave={e => { if (o.value !== value) e.target.style.background = "transparent"; }}
+        >
+            {o.label}
+        </button>
+    );
+
+    const dropdown = open ? createPortal(
+        <div data-ss-portal style={{
+            position: "fixed", top: dropPos.top, left: dropPos.left, width: dropPos.width,
+            zIndex: 99999, borderRadius: T.radius.md,
+            border: `1px solid ${T.border.default}`,
+            background: T.bg.card,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            overflow: "hidden"
+        }}>
+            {/* Search input */}
+            <div style={{ padding: "8px 8px 4px", borderBottom: `1px solid ${T.border.subtle}` }}>
+                <input
+                    ref={inputRef}
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    placeholder="Type to search…"
+                    style={{
+                        width: "100%", padding: "7px 10px", borderRadius: T.radius.sm,
+                        border: `1px solid ${T.border.default}`, background: T.bg.base,
+                        color: T.text.primary, fontSize: 12, outline: "none",
+                        fontFamily: "inherit", boxSizing: "border-box"
+                    }}
+                />
+            </div>
+
+            {/* Options list */}
+            <div style={{ maxHeight, overflowY: "auto", padding: "4px 0" }}>
+                {filtered.length === 0 && (
+                    <div style={{ padding: "12px 14px", fontSize: 11, color: T.text.muted, textAlign: "center" }}>
+                        No results found
+                    </div>
+                )}
+
+                {hasGroups && grouped ? (
+                    Object.entries(grouped).map(([group, items]) => (
+                        <div key={group}>
+                            <div style={{
+                                padding: "6px 12px", fontSize: 9, fontWeight: 800,
+                                color: T.text.dim, textTransform: "uppercase",
+                                letterSpacing: "0.5px", fontFamily: T.font.mono
+                            }}>{group}</div>
+                            {items.map(renderOption)}
+                        </div>
+                    ))
+                ) : (
+                    filtered.map(renderOption)
+                )}
+            </div>
+        </div>,
+        document.body
+    ) : null;
+
     return (
         <div ref={ref} style={{ position: "relative", width: "100%", ...style }}>
             {/* Trigger */}
@@ -74,7 +153,7 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
                     fontSize: 12, textAlign: "left", cursor: "pointer",
                     display: "flex", justifyContent: "space-between", alignItems: "center",
                     fontFamily: "inherit", outline: "none",
-                    transition: "border-color .15s ease"
+                    transition: "border-color .15s ease", boxSizing: "border-box"
                 }}
             >
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
@@ -85,95 +164,7 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
                 </span>
             </button>
 
-            {/* Dropdown */}
-            {open && (
-                <div style={{
-                    position: "absolute", top: "100%", left: 0, right: 0, zIndex: 999,
-                    marginTop: 4, borderRadius: T.radius.md,
-                    border: `1px solid ${T.border.default}`,
-                    background: T.bg.card,
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-                    overflow: "hidden"
-                }}>
-                    {/* Search input */}
-                    <div style={{ padding: "8px 8px 4px", borderBottom: `1px solid ${T.border.subtle}` }}>
-                        <input
-                            ref={inputRef}
-                            value={query}
-                            onChange={e => setQuery(e.target.value)}
-                            placeholder="Type to search…"
-                            style={{
-                                width: "100%", padding: "7px 10px", borderRadius: T.radius.sm,
-                                border: `1px solid ${T.border.default}`, background: T.bg.base,
-                                color: T.text.primary, fontSize: 12, outline: "none",
-                                fontFamily: "inherit"
-                            }}
-                        />
-                    </div>
-
-                    {/* Options list */}
-                    <div style={{ maxHeight, overflowY: "auto", padding: "4px 0" }}>
-                        {filtered.length === 0 && (
-                            <div style={{ padding: "12px 14px", fontSize: 11, color: T.text.muted, textAlign: "center" }}>
-                                No results found
-                            </div>
-                        )}
-
-                        {hasGroups && grouped ? (
-                            Object.entries(grouped).map(([group, items]) => (
-                                <div key={group}>
-                                    <div style={{
-                                        padding: "6px 12px", fontSize: 9, fontWeight: 800,
-                                        color: T.text.dim, textTransform: "uppercase",
-                                        letterSpacing: "0.5px", fontFamily: T.font.mono
-                                    }}>{group}</div>
-                                    {items.map(o => (
-                                        <button
-                                            key={o.value}
-                                            type="button"
-                                            onClick={() => { onChange(o.value); setOpen(false); setQuery(""); }}
-                                            style={{
-                                                width: "100%", padding: "8px 14px", border: "none",
-                                                background: o.value === value ? `${T.accent.primary}12` : "transparent",
-                                                color: o.value === value ? T.accent.primary : T.text.primary,
-                                                fontSize: 12, textAlign: "left", cursor: "pointer",
-                                                display: "block", fontFamily: "inherit",
-                                                fontWeight: o.value === value ? 700 : 400,
-                                                borderLeft: o.value === value ? `2px solid ${T.accent.primary}` : "2px solid transparent"
-                                            }}
-                                            onMouseEnter={e => { if (o.value !== value) e.target.style.background = `${T.text.muted}08`; }}
-                                            onMouseLeave={e => { if (o.value !== value) e.target.style.background = "transparent"; }}
-                                        >
-                                            {o.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            ))
-                        ) : (
-                            filtered.map(o => (
-                                <button
-                                    key={o.value}
-                                    type="button"
-                                    onClick={() => { onChange(o.value); setOpen(false); setQuery(""); }}
-                                    style={{
-                                        width: "100%", padding: "8px 14px", border: "none",
-                                        background: o.value === value ? `${T.accent.primary}12` : "transparent",
-                                        color: o.value === value ? T.accent.primary : T.text.primary,
-                                        fontSize: 12, textAlign: "left", cursor: "pointer",
-                                        display: "block", fontFamily: "inherit",
-                                        fontWeight: o.value === value ? 700 : 400,
-                                        borderLeft: o.value === value ? `2px solid ${T.accent.primary}` : "2px solid transparent"
-                                    }}
-                                    onMouseEnter={e => { if (o.value !== value) e.target.style.background = `${T.text.muted}08`; }}
-                                    onMouseLeave={e => { if (o.value !== value) e.target.style.background = "transparent"; }}
-                                >
-                                    {o.label}
-                                </button>
-                            ))
-                        )}
-                    </div>
-                </div>
-            )}
+            {dropdown}
         </div>
     );
 }

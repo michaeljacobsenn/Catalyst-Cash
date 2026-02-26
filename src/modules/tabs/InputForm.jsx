@@ -5,7 +5,7 @@ import { Card, Label, Badge } from "../ui.jsx";
 import { Mono, DI } from "../components.jsx";
 import { getSystemPrompt } from "../prompts.js";
 import { generateStrategy } from "../engine.js";
-import { resolveCardLabel } from "../cards.js";
+import { resolveCardLabel, getShortCardLabel } from "../cards.js";
 import { nativeExport, cyrb53, fmt } from "../utils.js";
 import { fetchMarketPrices, calcPortfolioValue } from "../marketData.js";
 import { parseCSVTransactions } from "../csvParser.js";
@@ -524,7 +524,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                         <option value="">Card...</option>
                         {Object.entries((cards || []).reduce((g, c) => { (g[c.institution] = g[c.institution] || []).push(c); return g; }, {}))
                             .map(([inst, instCards]) => <optgroup key={inst} label={inst}>{instCards.map(c =>
-                                <option key={c.id || c.name} value={c.id || c.name}>{resolveCardLabel(cards || [], c.id, c.name).replace(inst + " ", "")}</option>)}</optgroup>)}
+                                <option key={c.id || c.name} value={c.id || c.name}>{getShortCardLabel(cards || [], c).replace(inst + " ", "")}</option>)}</optgroup>)}
                     </select>
                     <div style={{ flex: 0.5, minWidth: 90 }}><DI value={d.balance} onChange={e => sD(i, "balance", sanitizeDollar(e.target.value))} /></div>
                     {form.debts.length > 1 && <button onClick={() => rmD(i)} style={{

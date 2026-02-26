@@ -6,6 +6,7 @@ import { isSecuritySensitiveKey } from "../securityKeys.js";
 import { isEncrypted, decrypt } from "../crypto.js";
 import { db, FaceId, nativeExport } from "../utils.js";
 import { Capacitor } from "@capacitor/core";
+import { SignInWithApple } from "@capacitor-community/apple-sign-in";
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
 export const WizBtn = ({ children, onClick, variant = "primary", disabled = false, style = {} }) => {
@@ -118,7 +119,7 @@ export function PageWelcome({ onNext }) {
 }
 
 // ─── PAGE 1: Import ───────────────────────────────────────────────────────────
-export function PageImport({ onNext, toast }) {
+export function PageImport({ onNext, toast, onComplete }) {
     const [importing, setImporting] = useState(false);
     const [passphrase, setPassphrase] = useState("");
     const [needsPass, setNeedsPass] = useState(false);
@@ -293,7 +294,17 @@ export function PageImport({ onNext, toast }) {
                 </div>
             )}
 
-            <NavRow showBack={false} onNext={onNext} onSkip={onNext} nextLabel={imported ? "Continue →" : "Skip for Now →"} />
+            {imported && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "16px 0 8px", padding: 14, background: `${T.status.green}10`, border: `1px solid ${T.status.green}30`, borderRadius: T.radius.md }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: T.status.green, margin: 0, textAlign: "center" }}>✅ Backup imported successfully!</p>
+                    <p style={{ fontSize: 11, color: T.text.secondary, margin: 0, textAlign: "center", lineHeight: 1.5 }}>Would you like to continue editing your setup, or go straight to your dashboard?</p>
+                    <div style={{ display: "flex", gap: 8 }}>
+                        <WizBtn variant="ghost" onClick={onNext} style={{ flex: 1, fontSize: 12 }}>Continue Setup</WizBtn>
+                        <WizBtn onClick={() => onComplete && onComplete()} style={{ flex: 1, fontSize: 12 }}>Go to Dashboard →</WizBtn>
+                    </div>
+                </div>
+            )}
+            {!imported && <NavRow showBack={false} onNext={onNext} onSkip={onNext} nextLabel="Skip for Now →" />}
         </div>
     );
 }
@@ -567,7 +578,7 @@ export function PageNotifications({ data, onChange, onNext, onBack, onSkip }) {
 }
 
 // ─── PAGE 5: Security ─────────────────────────────────────────────────────────
-export function PageSecurity({ data, onChange, onNext, onBack, onSkip }) {
+export function PageSecurity({ data, onChange, onNext, onBack, onSkip, setAppleLinkedId }) {
     const [confirm, setConfirm] = useState("");
     const isNative = Capacitor.getPlatform() !== 'web';
 
@@ -645,6 +656,36 @@ export function PageSecurity({ data, onChange, onNext, onBack, onSkip }) {
                     { value: -1, label: "🔓 Never" },
                 ]} />
             </WizField>
+
+            {/* Apple Sign-In for iCloud Backup */}
+            {Capacitor.getPlatform() !== 'web' && (
+                <div style={{ marginTop: 8, marginBottom: 16, padding: "14px 16px", background: T.bg.elevated, borderRadius: T.radius.md, border: `1px solid ${T.border.default}` }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: T.text.primary, marginBottom: 4 }}>☁️ iCloud Auto-Backup</div>
+                    <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 10px 0" }}>Link your Apple ID to enable automatic iCloud backups. Your data continuously syncs to your private iCloud Drive.</p>
+                    <button onClick={async () => {
+                        try {
+                            const result = await SignInWithApple.authorize({
+                                clientId: 'com.jacobsen.catalystcash',
+                                redirectURI: 'https://com.jacobsen.catalystcash/login',
+                                scopes: 'email name'
+                            });
+                            const userId = result.response.user;
+                            if (setAppleLinkedId) setAppleLinkedId(userId);
+                            await db.set("apple-linked-id", userId);
+                            if (window.toast) window.toast.success("Apple ID linked for iCloud backup.");
+                        } catch {
+                            if (window.toast) window.toast.error("Apple Sign-In cancelled or failed.");
+                        }
+                    }} style={{
+                        width: "100%", padding: "11px 16px", borderRadius: T.radius.md, border: "none",
+                        background: "#000", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 8
+                    }}>
+                        Sign in with Apple
+                    </button>
+                </div>
+            )}
+
             <NavRow onBack={onBack} onNext={onNext} onSkip={onSkip} nextLabel="Save & Finish →" nextDisabled={!canProceed} />
         </div>
     );
