@@ -15,6 +15,7 @@ import { StreamingView } from "./modules/components.jsx";
 import { streamAudit, callAudit } from "./modules/api.js";
 import { getSystemPrompt } from "./modules/prompts.js";
 import { generateStrategy } from "./modules/engine.js";
+import { fetchMarketPrices } from "./modules/marketData.js";
 import { buildScrubber } from "./modules/scrubber.js";
 import { haptic } from "./modules/haptics.js";
 import { schedulePaydayReminder, cancelPaydayReminder, requestNotificationPermission, scheduleWeeklyAuditNudge, scheduleBillReminders } from "./modules/notifications.js";
@@ -442,6 +443,18 @@ function CatalystCash() {
   useEffect(() => { if (ready && onboardingComplete) db.set("ai-model", aiModel) }, [aiModel, ready, onboardingComplete]);
   useEffect(() => { if (ready && onboardingComplete) db.set("financial-config", financialConfig) }, [financialConfig, ready, onboardingComplete]);
   useEffect(() => { if (ready && onboardingComplete) db.set("personal-rules", personalRules) }, [personalRules, ready, onboardingComplete]);
+
+  // ═══════════════════════════════════════════════════════════════
+  // AUTO-FETCH MARKET PRICES ON LAUNCH
+  // ═══════════════════════════════════════════════════════════════
+  const [marketPrices, setMarketPrices] = useState({});
+  useEffect(() => {
+    if (!ready) return;
+    const h = financialConfig?.holdings || {};
+    const syms = [...new Set(Object.values(h).flat().filter(x => x?.symbol).map(x => x.symbol))];
+    if (syms.length === 0) return;
+    fetchMarketPrices(syms).then(p => { if (p && Object.keys(p).length > 0) setMarketPrices(p); }).catch(() => { });
+  }, [ready, financialConfig?.holdings]);
 
   // ═══════════════════════════════════════════════════════════════
 
@@ -1173,7 +1186,7 @@ function CatalystCash() {
               onExportAll={exportAllAudits} onExportSelected={exportSelectedAudits} onExportCSV={exportAuditCSV}
               onDelete={deleteHistoryItem} onManualImport={handleManualImport} toast={toast} /></ErrorBoundary>}
             {renderTab === "renewals" && <ErrorBoundary><RenewalsTab renewals={renewals} setRenewals={setRenewals} cardAnnualFees={cardAnnualFees} cards={cards} /></ErrorBoundary>}
-            {renderTab === "cards" && <ErrorBoundary><CardPortfolioTab cards={cards} setCards={setCards} cardCatalog={cardCatalog} bankAccounts={bankAccounts} setBankAccounts={setBankAccounts} financialConfig={financialConfig} setFinancialConfig={setFinancialConfig} /></ErrorBoundary>}
+            {renderTab === "cards" && <ErrorBoundary><CardPortfolioTab cards={cards} setCards={setCards} cardCatalog={cardCatalog} bankAccounts={bankAccounts} setBankAccounts={setBankAccounts} financialConfig={financialConfig} setFinancialConfig={setFinancialConfig} marketPrices={marketPrices} setMarketPrices={setMarketPrices} /></ErrorBoundary>}
           </div>
         );
       })()}

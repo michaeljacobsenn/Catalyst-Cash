@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
-import { Plus, X, ChevronDown, ChevronUp, CreditCard, Edit3, Check, DollarSign, Building2, Landmark, TrendingUp, AlertTriangle } from "lucide-react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { Plus, X, ChevronDown, ChevronUp, CreditCard, Edit3, Check, DollarSign, Building2, Landmark, TrendingUp, AlertTriangle, RefreshCw } from "lucide-react";
 import { T, ISSUER_COLORS } from "../constants.js";
 import { getIssuerCards, getPinnedForIssuer } from "../issuerCards.js";
 import { getBankNames, getBankProducts } from "../bankCatalog.js";
@@ -16,7 +16,7 @@ const INSTITUTIONS = [
     "Synchrony", "TD Bank", "US Bank", "USAA", "Wells Fargo", "Other"
 ];
 
-export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAccounts = [], setBankAccounts, financialConfig = {}, setFinancialConfig }) {
+export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAccounts = [], setBankAccounts, financialConfig = {}, setFinancialConfig, marketPrices = {}, setMarketPrices }) {
     const [collapsedIssuers, setCollapsedIssuers] = useState({});
     const [editingCard, setEditingCard] = useState(null);
     const [editForm, setEditForm] = useState({});
@@ -174,13 +174,45 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
         return [...syms];
     }, [holdings]);
 
-    const [investPrices, setInvestPrices] = useState({});
+    const [investPrices, setInvestPrices] = useState(marketPrices || {});
     const [collapsedInvest, setCollapsedInvest] = useState({});
+    const [refreshingPrices, setRefreshingPrices] = useState(false);
+    const [lastRefresh, setLastRefresh] = useState(null);
+
+    // Merge in app-level prices when they arrive
+    useEffect(() => {
+        if (marketPrices && Object.keys(marketPrices).length > 0) {
+            setInvestPrices(prev => ({ ...prev, ...marketPrices }));
+        }
+    }, [marketPrices]);
+
+    // Fetch fresh prices on mount or when symbols change
     useEffect(() => {
         if (allHoldingSymbols.length > 0) {
-            fetchMarketPrices(allHoldingSymbols).then(p => { if (p && Object.keys(p).length > 0) setInvestPrices(p); });
+            fetchMarketPrices(allHoldingSymbols).then(p => {
+                if (p && Object.keys(p).length > 0) {
+                    setInvestPrices(prev => ({ ...prev, ...p }));
+                    if (setMarketPrices) setMarketPrices(prev => ({ ...prev, ...p }));
+                    setLastRefresh(Date.now());
+                }
+            });
         }
     }, [allHoldingSymbols.join()]);
+
+    // Manual refresh handler
+    const handleRefreshPrices = useCallback(async () => {
+        if (refreshingPrices || allHoldingSymbols.length === 0) return;
+        setRefreshingPrices(true);
+        try {
+            const p = await fetchMarketPrices(allHoldingSymbols, true);
+            if (p && Object.keys(p).length > 0) {
+                setInvestPrices(prev => ({ ...prev, ...p }));
+                if (setMarketPrices) setMarketPrices(prev => ({ ...prev, ...p }));
+                setLastRefresh(Date.now());
+            }
+        } catch { /* network error, silently fail */ }
+        setRefreshingPrices(false);
+    }, [refreshingPrices, allHoldingSymbols, setMarketPrices]);
 
     const investTotalValue = useMemo(() => {
         let total = 0;
@@ -851,6 +883,9 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
             </div>
             <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Investments</h2>
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                <button onClick={handleRefreshPrices} disabled={refreshingPrices} title="Refresh prices" style={{ width: 28, height: 28, borderRadius: 8, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: refreshingPrices ? T.text.muted : T.accent.emerald, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", opacity: refreshingPrices ? 0.6 : 1 }}>
+                    <RefreshCw size={13} className={refreshingPrices ? "spin" : ""} />
+                </button>
                 <Badge variant="outline" style={{ fontSize: 10, color: investTotalValue > 0 ? T.accent.emerald : T.text.muted, borderColor: investTotalValue > 0 ? `${T.accent.emerald}40` : T.border.default }}>
                     {investTotalValue === 0 ? "0 Value" : fmt(Math.round(investTotalValue))}
                 </Badge>
