@@ -4,8 +4,7 @@ import { T } from "../constants.js";
 import { fmtDate, stripPaycheckParens } from "../utils.js";
 import { Card, Badge } from "../ui.jsx";
 import { Mono, Section, MoveRow, Md } from "../components.jsx";
-import MonteCarloSimulator from "./MonteCarloSimulator.jsx";
-import ShareCard from "./ShareCard.jsx";
+
 
 export default function ResultsView({ audit, moveChecks, onToggleMove, financialConfig, streak = 0 }) {
     const [showRaw, setShowRaw] = useState(false);
@@ -30,8 +29,7 @@ export default function ResultsView({ audit, moveChecks, onToggleMove, financial
             {audit.isTest && <Badge variant="amber" style={{ marginTop: 4 }}>TEST · NOT SAVED</Badge>}
         </div>
 
-        {/* Share Score Card */}
-        {!audit.isTest && <ShareCard current={audit} streak={streak} />}
+
 
         {p.sections.alerts && !/^\s*(no\s*alerts|omit|none|\[\])\s*$/i.test(p.sections.alerts) && p.sections.alerts.length > 5 && (
             <Card animate style={{ borderColor: `${T.status.amber}18`, background: T.status.amberDim, borderLeft: `3px solid ${T.status.amber}` }}>
@@ -55,8 +53,7 @@ export default function ResultsView({ audit, moveChecks, onToggleMove, financial
         <Section title="Forward Radar" icon={TrendingUp} content={p.sections.forwardRadar} accentColor={T.status.blue} defaultOpen={false} delay={250} />
         <Section title="Investments & Roth" icon={TrendingUp} content={p.sections.investments} accentColor={T.accent.primary} delay={300} />
 
-        {/* Interactive Monte Carlo Simulator for compounding interest */}
-        <MonteCarloSimulator audit={audit} config={financialConfig || {}} />
+
         {p.sections.nextAction && <Card animate delay={350} variant="accent">
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                 <div style={{ width: 28, height: 28, borderRadius: 8, background: T.accent.primaryDim, display: "flex", alignItems: "center", justifyContent: "center" }}>
