@@ -1,22 +1,43 @@
 // ═══════════════════════════════════════════════════════════════
 // SEARCHABLE SELECT — Catalyst Cash
 // Portal-based dropdown that escapes parent overflow constraints.
+// Includes scroll-tracking, viewport-flip, and auto-close on scroll.
 // ═══════════════════════════════════════════════════════════════
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { T } from "./constants.js";
 
 /**
  * SearchableSelect — drop-in replacement for <select> with type-to-filter.
  * Uses a React portal so the dropdown renders above all content.
+ * Features:
+ *  - Portal at zIndex 99999 (always on top)
+ *  - Auto-flips upward when near viewport bottom
+ *  - Repositions on scroll / resize
+ *  - Closes on outside tap, scroll away, or resize
  */
 export default function SearchableSelect({ options = [], value, onChange, placeholder = "Select…", style = {}, maxHeight = 240 }) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const ref = useRef(null);
     const inputRef = useRef(null);
-    const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
+    const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0, flip: false });
+
+    // Calculate dropdown position from trigger rect
+    const calcPosition = useCallback(() => {
+        if (!ref.current) return;
+        const rect = ref.current.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        const flip = spaceBelow < maxHeight + 8 && spaceAbove > spaceBelow;
+        setDropPos({
+            top: flip ? rect.top - 4 : rect.bottom + 4,
+            left: rect.left,
+            width: rect.width,
+            flip
+        });
+    }, [maxHeight]);
 
     // Close on outside click
     useEffect(() => {
@@ -28,13 +49,30 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
         return () => document.removeEventListener("mousedown", handler);
     }, [open]);
 
-    // Position the dropdown when opening
+    // Position, scroll-track, and resize-track
     useEffect(() => {
-        if (open && ref.current) {
-            const rect = ref.current.getBoundingClientRect();
-            setDropPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-        }
-    }, [open]);
+        if (!open) return;
+        calcPosition();
+
+        // Close on any scroll deeper than 8px from when we opened
+        let scrollCount = 0;
+        const onScroll = () => {
+            scrollCount++;
+            if (scrollCount > 3) {
+                setOpen(false);
+            } else {
+                calcPosition();
+            }
+        };
+        const onResize = () => { setOpen(false); };
+
+        window.addEventListener("scroll", onScroll, true); // capture phase to catch all scrollable ancestors
+        window.addEventListener("resize", onResize);
+        return () => {
+            window.removeEventListener("scroll", onScroll, true);
+            window.removeEventListener("resize", onResize);
+        };
+    }, [open, calcPosition]);
 
     // Auto-focus input when opened
     useEffect(() => {
@@ -90,15 +128,26 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
 
     const dropdown = open ? createPortal(
         <div data-ss-portal style={{
-            position: "fixed", top: dropPos.top, left: dropPos.left, width: dropPos.width,
+            position: "fixed",
+            ...(dropPos.flip
+                ? { bottom: window.innerHeight - dropPos.top, left: dropPos.left }
+                : { top: dropPos.top, left: dropPos.left }),
+            width: dropPos.width,
             zIndex: 99999, borderRadius: T.radius.md,
             border: `1px solid ${T.border.default}`,
             background: T.bg.card,
             boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-            overflow: "hidden"
+            overflow: "hidden",
+            maxHeight: maxHeight + 50, // account for search input
+            display: "flex", flexDirection: dropPos.flip ? "column-reverse" : "column"
         }}>
             {/* Search input */}
-            <div style={{ padding: "8px 8px 4px", borderBottom: `1px solid ${T.border.subtle}` }}>
+            <div style={{
+                padding: "8px 8px 4px",
+                borderBottom: dropPos.flip ? "none" : `1px solid ${T.border.subtle}`,
+                borderTop: dropPos.flip ? `1px solid ${T.border.subtle}` : "none",
+                order: dropPos.flip ? 2 : 0
+            }}>
                 <input
                     ref={inputRef}
                     value={query}
@@ -114,7 +163,7 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
             </div>
 
             {/* Options list */}
-            <div style={{ maxHeight, overflowY: "auto", padding: "4px 0" }}>
+            <div style={{ maxHeight, overflowY: "auto", padding: "4px 0", order: dropPos.flip ? 1 : 1 }}>
                 {filtered.length === 0 && (
                     <div style={{ padding: "12px 14px", fontSize: 11, color: T.text.muted, textAlign: "center" }}>
                         No results found
