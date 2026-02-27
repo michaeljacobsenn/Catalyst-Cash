@@ -45,6 +45,10 @@ export default defineConfig({
           if (id.includes('/modules/marketData.js')) {
             return 'market-data';
           }
+          // Charting library (recharts + d3 deps)
+          if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-')) {
+            return 'vendor-charts';
+          }
         },
       },
     },
