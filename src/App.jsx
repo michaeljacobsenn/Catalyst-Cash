@@ -3,7 +3,7 @@ import { App as CapApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import {
   History, Plus, RefreshCw, X, Eye, EyeOff,
-  AlertTriangle, Loader2, CreditCard, Settings, Info, Home, Zap, Trash2, ClipboardPaste, LayoutDashboard
+  AlertTriangle, Loader2, CreditCard, Settings, Info, Home, Zap, Trash2, ClipboardPaste, LayoutDashboard, ReceiptText, Clock
 } from "lucide-react";
 import { T, DEFAULT_CARD_PORTFOLIO, RENEWAL_CATEGORIES } from "./modules/constants.js";
 import { DEFAULT_PROVIDER_ID, DEFAULT_MODEL_ID, getProvider, getModel } from "./modules/providers.js";
@@ -15,7 +15,7 @@ import { StreamingView } from "./modules/components.jsx";
 import { streamAudit, callAudit } from "./modules/api.js";
 import { getSystemPrompt } from "./modules/prompts.js";
 import { generateStrategy } from "./modules/engine.js";
-import { fetchMarketPrices } from "./modules/marketData.js";
+import { POPULAR_STOCKS } from "./modules/marketData.js";
 import { buildScrubber } from "./modules/scrubber.js";
 import { haptic } from "./modules/haptics.js";
 import { schedulePaydayReminder, cancelPaydayReminder, requestNotificationPermission, scheduleWeeklyAuditNudge, scheduleBillReminders } from "./modules/notifications.js";
@@ -30,6 +30,11 @@ import RenewalsTab from "./modules/tabs/RenewalsTab.jsx";
 import GuideModal from "./modules/tabs/GuideModal.jsx";
 import LockScreen from "./modules/LockScreen.jsx";
 import SetupWizard from "./modules/tabs/SetupWizard.jsx";
+import { SecurityProvider, useSecurity } from "./modules/contexts/SecurityContext.jsx";
+import { SettingsProvider, useSettings } from "./modules/contexts/SettingsContext.jsx";
+import { PortfolioProvider, usePortfolio } from "./modules/contexts/PortfolioContext.jsx";
+import { NavigationProvider, useNavigation } from "./modules/contexts/NavigationContext.jsx";
+import { AuditProvider, useAudit } from "./modules/contexts/AuditContext.jsx";
 import { uploadToICloud } from "./modules/cloudSync.js";
 import { isSecuritySensitiveKey } from "./modules/securityKeys.js";
 import { evaluateBadges, unlockBadge, BADGE_DEFINITIONS } from "./modules/badges.js";
@@ -76,385 +81,44 @@ function migrateHistory(hist) {
 // APP ROOT — wraps with ToastProvider
 // ═══════════════════════════════════════════════════════════════
 export default function AppRoot() {
-  return <ToastProvider><CatalystCash /></ToastProvider>;
+  return (
+    <ToastProvider>
+      <SettingsProvider>
+        <SecurityProvider>
+          <PortfolioProvider>
+            <NavigationProvider>
+              <AuditProvider>
+                <CatalystCash />
+              </AuditProvider>
+            </NavigationProvider>
+          </PortfolioProvider>
+        </SecurityProvider>
+      </SettingsProvider>
+    </ToastProvider>
+  );
 }
 
 function CatalystCash() {
   const toast = useToast();
-  const [tab, setTab] = useState("dashboard");
+  const online = useOnline();
 
-  // ═══════════════════════════════════════════════════════════════
-  // PLUGIN INITIALIZATION
-  // ═══════════════════════════════════════════════════════════════
-  useEffect(() => {
-    // Initialization now handled natively or at a lower level
-  }, []);
-  const [apiKey, setApiKey] = useState("");
-  const [aiProvider, setAiProvider] = useState(DEFAULT_PROVIDER_ID);
-  const [aiModel, setAiModel] = useState(DEFAULT_MODEL_ID);
-  const [financialConfig, setFinancialConfig] = useState({
-    payday: "Friday",
-    paycheckTime: "06:00",
-    paycheckStandard: 0.00,
-    paycheckFirstOfMonth: 0.00,
-    payFrequency: "bi-weekly",
-    weeklySpendAllowance: 0.00,
-    emergencyFloor: 0.00,
-    checkingBuffer: 0.00,
-    heavyHorizonStart: 15,
-    heavyHorizonEnd: 45,
-    heavyHorizonThreshold: 0.00,
-    greenStatusTarget: 0.00,
-    emergencyReserveTarget: 0.00,
-    habitName: "Coffee Pods",
-    habitRestockCost: 25,
-    habitCheckThreshold: 6,
-    habitCriticalThreshold: 3,
-    trackHabits: false,
-    defaultAPR: 24.99,
-    arbitrageTargetAPR: 6.00,
-    investmentBrokerage: 0.00,
-    investmentRoth: 0.00,
-    investmentsAsOfDate: "",
-    trackRothContributions: false,
-    rothContributedYTD: 0.00,
-    rothAnnualLimit: 0.00,
-    autoTrackRothYTD: true,
-    track401k: false,
-    k401Balance: 0.00,
-    k401ContributedYTD: 0.00,
-    k401AnnualLimit: 0.00,
-    autoTrack401kYTD: true,
-    k401EmployerMatchPct: 0,      // employer matches X% of your contributions
-    k401EmployerMatchLimit: 0,    // up to X% of your salary (match ceiling)
-    k401VestingPct: 100,           // how much of matched funds are yours today
-    k401StockPct: 90,              // equity allocation %
-    paydayReminderEnabled: true,    // weekly push 12h before payday
-    trackBrokerage: false,
-    trackRoth: false,
-    brokerageStockPct: 90,
-    rothStockPct: 90,
-    // Budget categories
-    budgetCategories: [],
-    // Savings goals
-    savingsGoals: [],
-    // Non-card debts
-    nonCardDebts: [],
-    // Income sources
-    incomeSources: [],
-    // Credit tracking
-    creditScore: null,
-    creditScoreDate: "",
-    creditUtilization: null,
-    // Tax
-    taxWithholdingRate: 0,
-    quarterlyTaxEstimate: 0,
-    isContractor: false,
-    // Asset classes
-    homeEquity: 0,
-    vehicleValue: 0,
-    otherAssets: 0,
-    otherAssetsLabel: "",
-    // Insurance deductibles
-    insuranceDeductibles: [],
-    // Big-ticket items
-    bigTicketItems: []
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [current, setCurrent] = useState(null);
-  const [history, setHistory] = useState([]);
-  const [moveChecks, setMoveChecks] = useState({});
-  const [viewing, setViewing] = useState(null);
-  const [ready, setReady] = useState(false);
-  const [useStreaming, setUseStreaming] = useState(true);
-  const [renewals, setRenewals] = useState([]);
-  const [streamText, setStreamText] = useState("");
-  const [elapsed, setElapsed] = useState(0);
-  const [cards, setCards] = useState([]);
-  const [bankAccounts, setBankAccounts] = useState([]);
-  const [cardCatalog, setCardCatalog] = useState(null);
-  const [cardCatalogUpdatedAt, setCardCatalogUpdatedAt] = useState(null);
-  const [showGuide, setShowGuide] = useState(false);
-  const [isResetting, setIsResetting] = useState(false);
-  const [instructionHash, setInstructionHash] = useState(null);
-  const [personalRules, setPersonalRules] = useState("");
-  const [aiConsent, setAiConsent] = useState(false);
-  const [showAiConsent, setShowAiConsent] = useState(false);
-  const [proEnabled, setProEnabled] = useState(import.meta?.env?.VITE_PRO_ENABLED === "true");
-  const [resultsBackTarget, setResultsBackTarget] = useState(null);
-  const [setupReturnTab, setSetupReturnTab] = useState(null);
-  const inputBackTarget = useRef("dashboard");
-  const [onboardingComplete, setOnboardingComplete] = useState(true); // true until proven otherwise
-  const [persona, setPersona] = useState(null); // "coach" | "friend" | "nerd" | null
-  const [trendContext, setTrendContext] = useState([]);
-  const [badges, setBadges] = useState({});
+  const { requireAuth, setRequireAuth, appPasscode, setAppPasscode, useFaceId, setUseFaceId, isLocked, setIsLocked, privacyMode, setPrivacyMode, lockTimeout, setLockTimeout, appleLinkedId, setAppleLinkedId, isSecurityReady } = useSecurity();
+  const { apiKey, setApiKey, aiProvider, setAiProvider, aiModel, setAiModel, persona, setPersona, personalRules, setPersonalRules, autoBackupInterval, setAutoBackupInterval, notifPermission, aiConsent, setAiConsent, showAiConsent, setShowAiConsent, financialConfig, setFinancialConfig, isSettingsReady } = useSettings();
+  const { cards, setCards, bankAccounts, setBankAccounts, renewals, setRenewals, cardCatalog, badges, cardAnnualFees, isPortfolioReady } = usePortfolio();
+  const { current, setCurrent, history, setHistory, moveChecks, setMoveChecks, loading, error, setError, useStreaming, setUseStreaming, streamText, elapsed, viewing, setViewing, trendContext, instructionHash, setInstructionHash, handleSubmit, handleCancelAudit, clearAll, deleteHistoryItem, isAuditReady } = useAudit();
+  const { tab, setTab, navTo, resultsBackTarget, setResultsBackTarget, setupReturnTab, setSetupReturnTab, onboardingComplete, setOnboardingComplete, showGuide, setShowGuide, inputMounted, lastCenterTab, inputBackTarget } = useNavigation();
 
-  const [requireAuth, setRequireAuth] = useState(false);
-  const [appPasscode, setAppPasscode] = useState("");
-  const [useFaceId, setUseFaceId] = useState(false);
-  const [isLocked, setIsLocked] = useState(true); // start locked; corrected to false in init if auth not required
-  const [privacyMode, setPrivacyMode] = useState(false);
-  const [lockTimeout, setLockTimeout] = useState(0);
-  const [appleLinkedId, setAppleLinkedId] = useState(null);
-  const lastBackgrounded = useRef(null);
-  const swipeStart = useRef(null);
-
-  useEffect(() => {
-    window.toast = toast;
-  }, []);
-
-  useEffect(() => {
-    // We use visibilitychange instead of Capacitor's appStateChange 
-    // because appStateChange (isActive: false) fires when any native dialog 
-    // (like Face ID or a Share sheet) opens over the app. 
-    // visibilitychange only fires when the user truly backgrounds the app.
-    const handleVisibilityChange = async () => {
-      if (document.hidden) {
-        lastBackgrounded.current = Date.now();
-      } else {
-        const ra = await db.get("require-auth");
-        if (ra && lastBackgrounded.current) {
-          const timeoutRaw = await db.get("lock-timeout");
-          const timeout = Number.isFinite(Number(timeoutRaw)) ? Number(timeoutRaw) : 0;
-          const elapsed = (Date.now() - lastBackgrounded.current) / 1000;
-
-          // -1 means "never relock" (supported by Setup Wizard)
-          if (timeout >= 0 && elapsed >= timeout) {
-            setIsLocked(true);
-          }
-        }
-        lastBackgrounded.current = null;
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => { document.removeEventListener("visibilitychange", handleVisibilityChange); };
-  }, []);
-  const scrollRef = useRef(null); const timerRef = useRef(null); const online = useOnline();
-  const [inputMounted, setInputMounted] = useState(false);
-  const lastCenterTab = useRef("dashboard");
-  const [showQuickMenu, setShowQuickMenu] = useState(false);
-  const longPressTimer = useRef(null);
+  const scrollRef = useRef(null);
   const bottomNavRef = useRef(null);
   const topBarRef = useRef(null);
-  const [notifPermission, setNotifPermission] = useState("prompt"); // "granted" | "denied" | "prompt"
+  const swipeStart = useRef(null);
+  const longPressTimer = useRef(null);
+  const touchStartTime = useRef(0);
 
-  // ═══════════════════════════════════════════════════════════════
-  // NATIVE SWIPE-TO-GO-BACK (History API Integration)
-  // ═══════════════════════════════════════════════════════════════
-  const navTo = (newTab, viewState = null) => {
-    setTab(newTab);
-    setViewing(viewState);
-    if (newTab !== "results") setResultsBackTarget(null);
-    if (newTab === "input") setInputMounted(true);
-    if (newTab === "dashboard" || newTab === "input") lastCenterTab.current = newTab;
-    if (newTab === "input") inputBackTarget.current = "dashboard";
-    window.history.pushState({ tab: newTab, viewingTs: viewState?.ts }, "", "");
-    haptic.light();
-  };
+  const ready = isSecurityReady && isSettingsReady && isPortfolioReady && isAuditReady;
+  const proEnabled = true;
 
-  useEffect(() => {
-    // Initial history state
-    window.history.replaceState({ tab: "dashboard", viewingTs: null }, "", "");
-
-    const onPopState = (e) => {
-      const st = e.state;
-      if (st) {
-        if (st.tab) setTab(st.tab);
-        if (st.viewingTs === null) setViewing(null);
-        else {
-          // If returning to a viewing state, find it in history
-          setHistory(prev => {
-            const audit = prev.find(a => a.ts === st.viewingTs);
-            if (audit) setViewing(audit);
-            return prev;
-          });
-        }
-      }
-    };
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      // Request notification permission on first launch (iOS prompt)
-      const notifGranted = await requestNotificationPermission().catch(() => false);
-      setNotifPermission(notifGranted ? "granted" : "denied");
-      try {
-        // Phase 1: Load critical data for UI rendering
-        const [legacyKey, cur, sm, rn, cp, provId, modId, prefAi, finConf, instHash, ra, pin, uf, lt, renewalsSeedVersion, pr, consent, appLinked, obComplete, savedPersona, savedTrend, ba] = await Promise.all([
-          db.get("api-key"),
-          db.get("current-audit"), db.get("use-streaming"),
-          db.get("renewals"), db.get("card-portfolio"),
-          db.get("ai-provider"), db.get("ai-model"), db.get("preferred-ai-app"),
-          db.get("financial-config"), db.get("instruction-hash"),
-          db.get("require-auth"), db.get("app-passcode"), db.get("use-face-id"),
-          db.get("lock-timeout"), db.get("renewals-seed-version"),
-          db.get("personal-rules"), db.get("ai-consent-accepted"),
-          db.get("apple-linked-id"),
-          db.get("onboarding-complete"),
-          db.get("ai-persona"), db.get("trend-context"),
-          db.get("bank-accounts")
-        ]);
-
-        const validProvider = getProvider(provId || DEFAULT_PROVIDER_ID);
-        const validModel = getModel(validProvider.id, modId || DEFAULT_MODEL_ID);
-        setAiProvider(validProvider.id);
-        setAiModel(validModel.id);
-
-        const provConfig = validProvider;
-        const provKey = provConfig.keyStorageKey ? await db.get(provConfig.keyStorageKey) : null;
-        if (provKey) setApiKey(provKey);
-        else if (legacyKey) { setApiKey(legacyKey); db.set("api-key-openai", legacyKey); }
-
-        if (cur) setCurrent(cur);
-        if (sm !== null) setUseStreaming(sm);
-
-        const seedVersion = renewalsSeedVersion || null;
-        let activeRenewals = rn ?? null;
-        if (activeRenewals === null) {
-          // Fresh install: start empty (matches factory reset)
-          activeRenewals = [];
-          db.set("renewals-seed-version", "public-v1");
-        } else if (activeRenewals.length === 0) {
-          // Explicitly empty list (e.g., factory reset) — don't reseed
-          db.set("renewals-seed-version", "public-v1");
-        } else if (seedVersion !== "public-v1") {
-          // Public v1 does not auto-seed personal renewals
-          db.set("renewals-seed-version", "public-v1");
-        }
-
-        if (ra) { setRequireAuth(true); setIsLocked(true); }
-        else { setIsLocked(false); } // unlock for users without auth enabled
-        if (pin) setAppPasscode(pin);
-        if (uf) setUseFaceId(true);
-        if (lt !== null) setLockTimeout(lt);
-        if (pr) setPersonalRules(pr);
-        if (consent) setAiConsent(true);
-        if (appLinked) setAppleLinkedId(appLinked);
-        if (savedPersona) setPersona(savedPersona);
-        if (savedTrend) setTrendContext(savedTrend);
-        const loadedBadges = await db.get("unlocked-badges");
-        if (loadedBadges) setBadges(loadedBadges);
-
-        // Onboarding gate: existing users (who already have config data AND are not from a partial Setup Wizard run) skip the wizard
-        // We ensure that users creating a profile for the first time must complete the wizard.
-        if (obComplete || (finConf && !finConf._fromSetupWizard && Object.keys(finConf).length > 5)) {
-          setOnboardingComplete(true);
-          if (!obComplete) db.set("onboarding-complete", true); // backfill for legacy users
-        } else {
-          setOnboardingComplete(false);
-        }
-
-        // Auto-advance expired renewal dates
-        let renewalsChanged = false;
-        activeRenewals = activeRenewals.map(r => {
-          if (!r.nextDue || r.intervalUnit === "one-time") return r;
-          const newDate = advanceExpiredDate(r.nextDue, r.interval || 1, r.intervalUnit || "months");
-          if (newDate !== r.nextDue) { renewalsChanged = true; return { ...r, nextDue: newDate }; }
-          return r;
-        });
-        if (renewalsChanged) db.set("renewals", activeRenewals);
-        setRenewals(activeRenewals);
-        scheduleBillReminders(activeRenewals).catch(() => { });
-
-        let activeCards = cp || [];
-        let cardsChanged = false;
-        activeCards = activeCards.map(c => {
-          if (!c.annualFeeDue) return c;
-          const newDate = advanceExpiredDate(c.annualFeeDue, 1, "years");
-          if (newDate !== c.annualFeeDue) { cardsChanged = true; return { ...c, annualFeeDue: newDate }; }
-          return c;
-        });
-        const { cards: normalizedCards, changed: idChanged } = ensureCardIds(activeCards);
-        if (idChanged) { cardsChanged = true; activeCards = normalizedCards; }
-        if (cardsChanged) db.set("card-portfolio", activeCards);
-        setCards(activeCards);
-        if (ba) setBankAccounts(ba);
-        if (finConf) {
-          let merged = { ...financialConfig, ...finConf };
-          // YTD auto-reset: if the calendar year has changed, reset Roth/401k YTD counters
-          const currentYear = new Date().getFullYear();
-          const lastResetYear = await db.get("ytd-reset-year");
-          if (lastResetYear && lastResetYear < currentYear) {
-            merged.rothContributedYTD = 0;
-            merged.k401ContributedYTD = 0;
-            db.set("ytd-reset-year", currentYear);
-            db.set("financial-config", merged);
-          } else if (!lastResetYear) {
-            db.set("ytd-reset-year", currentYear);
-          }
-          // Auto-configure payday reminder based on permission result
-          if (merged.paydayReminderEnabled === undefined || merged.paydayReminderEnabled === null) {
-            // First install: enable if permission was granted
-            merged.paydayReminderEnabled = notifGranted;
-          } else if (!notifGranted) {
-            // Permission denied: always force off
-            merged.paydayReminderEnabled = false;
-          }
-          setFinancialConfig(merged);
-        }
-
-        const catalog = await loadCardCatalog();
-        if (catalog?.catalog) setCardCatalog(catalog.catalog);
-        if (catalog?.updatedAt) setCardCatalogUpdatedAt(catalog.updatedAt);
-      } catch (e) {
-        console.error('Init error:', e);
-        setRenewals([]);
-        setCards([]);
-      }
-
-      // Generate stable device ID for backend rate limiting (once per install)
-      if (!await db.get("device-id")) {
-        await db.set("device-id", crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`);
-      }
-
-      // Show UI before loading heavy history data
-      setTimeout(() => setReady(true), 150);
-
-      // Schedule payday reminder if enabled
-      if (finConf?.paydayReminderEnabled) {
-        schedulePaydayReminder(finConf.payday, finConf.paycheckTime).catch(() => { });
-      }
-
-      // Schedule weekly audit nudge and bill reminders
-      scheduleWeeklyAuditNudge().catch(() => { });
-
-      // Phase 2: Lazy-load audit history in background (can be large)
-      try {
-        const [hist, moves] = await Promise.all([
-          db.get("audit-history"), db.get("move-states")
-        ]);
-        if (hist) setHistory(migrateHistory(hist));
-        if (moves) setMoveChecks(moves);
-      } catch (e) {
-        console.error('History load error:', e);
-      }
-    })();
-  }, []);
-
-  useEffect(() => { if (ready && onboardingComplete) db.set("use-streaming", useStreaming) }, [useStreaming, ready, onboardingComplete]);
-  useEffect(() => { if (ready && onboardingComplete) db.set("renewals", renewals) }, [renewals, ready, onboardingComplete]);
-  useEffect(() => { if (ready && onboardingComplete) db.set("card-portfolio", cards) }, [cards, ready, onboardingComplete]);
-  useEffect(() => { if (ready && onboardingComplete) db.set("bank-accounts", bankAccounts) }, [bankAccounts, ready, onboardingComplete]);
-  useEffect(() => { if (ready && onboardingComplete) db.set("ai-provider", aiProvider) }, [aiProvider, ready, onboardingComplete]);
-  useEffect(() => { if (ready && onboardingComplete) db.set("ai-model", aiModel) }, [aiModel, ready, onboardingComplete]);
-  useEffect(() => { if (ready && onboardingComplete) db.set("financial-config", financialConfig) }, [financialConfig, ready, onboardingComplete]);
-  useEffect(() => { if (ready && onboardingComplete) db.set("personal-rules", personalRules) }, [personalRules, ready, onboardingComplete]);
-
-  // ═══════════════════════════════════════════════════════════════
-  // AUTO-FETCH MARKET PRICES ON LAUNCH
-  // ═══════════════════════════════════════════════════════════════
-  const [marketPrices, setMarketPrices] = useState({});
-  useEffect(() => {
-    if (!ready) return;
-    const h = financialConfig?.holdings || {};
-    const syms = [...new Set(Object.values(h).flat().filter(x => x?.symbol).map(x => x.symbol))];
-    if (syms.length === 0) return;
-    fetchMarketPrices(syms).then(p => { if (p && Object.keys(p).length > 0) setMarketPrices(p); }).catch(() => { });
-  }, [ready, financialConfig?.holdings]);
+  const [showQuickMenu, setShowQuickMenu] = useState(false);
 
   // ═══════════════════════════════════════════════════════════════
 
@@ -482,7 +146,7 @@ function CatalystCash() {
 
     iCloudSyncTimer.current = setTimeout(async () => {
       try {
-        const backup = { app: "Catalyst Cash", version: "1.3.1-BETA", exportedAt: new Date().toISOString(), data: {} };
+        const backup = { app: "Catalyst Cash", version: "1.5.1-BETA", exportedAt: new Date().toISOString(), data: {} };
         const keys = await db.keys();
         for (const key of keys) {
           if (isSecuritySensitiveKey(key)) continue; // Never sync security credentials
@@ -573,242 +237,6 @@ function CatalystCash() {
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [history]);
-
-  const cardAnnualFees = useMemo(() => {
-    return cards
-      .filter(c => c.annualFee && c.annualFee > 0)
-      .map(c => {
-        const isWaived = !!c.annualFeeWaived;
-        // For waived cards: push the next due date +1 year so user sees when the fee will hit
-        let nextDue = c.annualFeeDue || "";
-        if (isWaived && nextDue) {
-          const d = new Date(nextDue + "T00:00:00");
-          d.setFullYear(d.getFullYear() + 1);
-          nextDue = d.toISOString().split("T")[0];
-        }
-        return {
-          name: `${getCardLabel(cards, c)} Annual Fee`,
-          amount: isWaived ? 0 : c.annualFee,
-          interval: 1, intervalUnit: "years",
-          cadence: "annual",
-          nextDue,
-          cardName: c.name,
-          cardLabel: getCardLabel(cards, c),
-          linkedCardId: c.id,
-          isCardAF: true,
-          isWaived,
-          category: "af",
-          section: "L"
-        };
-      });
-  }, [cards]);
-
-  const [isTest, setIsTest] = useState(false);
-  const applyContributionAutoUpdate = (parsed, rawText) => {
-    if (!parsed) return;
-    let rothDelta = 0;
-    let k401Delta = 0;
-
-    const extractAmount = (txt) => {
-      const m = txt.match(/\$([\d,]+(?:\.\d{2})?)/);
-      return m ? parseFloat(m[1].replace(/,/g, "")) : 0;
-    };
-
-    const scanMoves = (moves = []) => {
-      moves.forEach(m => {
-        const text = (m.text || m.description || m).toString();
-        if (/roth/i.test(text)) rothDelta = Math.max(rothDelta, extractAmount(text));
-        if (/401k|401 k/i.test(text)) k401Delta = Math.max(k401Delta, extractAmount(text));
-      });
-    };
-
-    if (parsed.structured?.moves?.length) {
-      scanMoves(parsed.structured.moves);
-    } else if (parsed.moveItems?.length) {
-      scanMoves(parsed.moveItems);
-    } else if (parsed.sections?.moves) {
-      scanMoves(parsed.sections.moves.split("\n"));
-    } else if (rawText) {
-      scanMoves(rawText.split("\n"));
-    }
-
-    if (!financialConfig?.trackRothContributions && !financialConfig?.track401k) return;
-
-    setFinancialConfig(prev => {
-      const next = { ...prev };
-      if (prev.trackRothContributions && prev.autoTrackRothYTD !== false && rothDelta > 0) {
-        next.rothContributedYTD = Math.max(0, (prev.rothContributedYTD || 0) + rothDelta);
-        if (prev.rothAnnualLimit) next.rothContributedYTD = Math.min(next.rothContributedYTD, prev.rothAnnualLimit);
-      }
-      if (prev.track401k && prev.autoTrack401kYTD !== false && k401Delta > 0) {
-        next.k401ContributedYTD = Math.max(0, (prev.k401ContributedYTD || 0) + k401Delta);
-        if (prev.k401AnnualLimit) next.k401ContributedYTD = Math.min(next.k401ContributedYTD, prev.k401AnnualLimit);
-      }
-      return next;
-    });
-  };
-
-  const handleSubmit = async (msg, formData, testMode = false, manualResultText = null) => {
-    const trimmedApiKey = typeof apiKey === "string" ? apiKey.trim() : "";
-    const prov = getProvider(aiProvider);
-    const isBackendMode = prov.isBackend;
-    if (!manualResultText && !isBackendMode && !trimmedApiKey) { toast.error("Set your API key in Settings first."); navTo("settings"); return; }
-    if (!manualResultText && !aiConsent) { setShowAiConsent(true); return; }
-    if (!manualResultText && !online) { toast.error("You're offline."); return; }
-    setIsTest(testMode);
-    setLoading(true); setError(null); navTo("results"); setStreamText(""); setElapsed(0);
-    timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
-    try {
-      let raw = "";
-      if (manualResultText) {
-        raw = manualResultText;
-        setStreamText(raw);
-      } else {
-        const useStream = useStreaming && prov.supportsStreaming;
-        const promptRenewals = [...(renewals || []), ...(cardAnnualFees || [])];
-
-        // Native Engine Run: Calculate floors, targets, and debt override natively before prompt generation
-        const computedStrategy = generateStrategy(financialConfig, {
-          checkingBalance: parseFloat(formData.checking || 0),
-          allyVaultTotal: parseFloat(formData.ally || 0),
-          cards: cards || [],
-          renewals: promptRenewals,
-          snapshotDate: formData.date
-        });
-
-        // Initialize PII Scrubber
-        const scrubber = buildScrubber(cards, promptRenewals, financialConfig, formData);
-
-        // Scrub the system prompt
-        const rawLivePrompt = getSystemPrompt(aiProvider || "gemini", financialConfig, cards, promptRenewals, personalRules || "", trendContext, persona, computedStrategy);
-        const livePrompt = scrubber.scrub(rawLivePrompt);
-        const liveHash = cyrb53(livePrompt).toString();
-        const histKey = `api-history-${aiProvider || "gemini"}`;
-        const hashKey = `api-history-hash-${aiProvider || "gemini"}`;
-        const lastHash = await db.get(hashKey);
-        let history = (await db.get(histKey)) || [];
-        if (lastHash !== liveHash) {
-          history = [];
-          await db.set(hashKey, liveHash);
-          setInstructionHash(liveHash);
-          db.set("instruction-hash", liveHash);
-        }
-
-        // Trim history to last 6 messages to control token growth
-        if (history.length > 6) history = history.slice(-6);
-
-        // Scrub history
-        const historyForProvider = (aiProvider === "gemini")
-          ? history.map(m => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: scrubber.scrub(m.content) }] }))
-          : history.map(m => ({ ...m, content: scrubber.scrub(m.content) })); // openai & claude
-
-        // Scrub user message
-        const scrubbedMsg = scrubber.scrub(msg);
-
-        // Execute API Call — deviceId for backend rate limiting
-        const deviceId = (await db.get("device-id")) || "unknown";
-        if (useStream) {
-          for await (const chunk of streamAudit(trimmedApiKey, scrubbedMsg, aiProvider, aiModel, livePrompt, historyForProvider, deviceId)) {
-            raw += chunk;
-            setStreamText(scrubber.unscrub(raw)); // Unscrub on the fly for viewing
-          }
-        } else {
-          raw = await callAudit(trimmedApiKey, scrubbedMsg, aiProvider, aiModel, livePrompt, historyForProvider, deviceId);
-        }
-
-        // Unscrub the final raw text before parsing and saving
-        raw = scrubber.unscrub(raw);
-
-        // Save real names to local device history
-        const newHistory = [...history, { role: "user", content: msg }, { role: "assistant", content: raw }];
-        await db.set(histKey, newHistory.slice(-8));
-      }
-      const parsed = parseAudit(raw);
-      if (!parsed) throw new Error("Model output was not valid audit JSON. Please retry.");
-      const audit = { date: formData.date, ts: new Date().toISOString(), form: formData, parsed, isTest: testMode, moveChecks: {} };
-
-      if (testMode) {
-        // Save test audits to history (flagged as isTest) but don't set as current
-        setViewing(audit);
-        const nh = [audit, ...history].slice(0, 52); setHistory(nh);
-        await db.set("audit-history", nh);
-      } else {
-        applyContributionAutoUpdate(parsed, raw);
-        setCurrent(audit); setMoveChecks({}); setViewing(null);
-        const nh = [audit, ...history].slice(0, 52); setHistory(nh);
-
-        // Extract compact trend metrics for AI context injection
-        const getISOWeekNum = (d) => { const dt = new Date(d); dt.setHours(0, 0, 0, 0); dt.setDate(dt.getDate() + 3 - (dt.getDay() + 6) % 7); const w1 = new Date(dt.getFullYear(), 0, 4); return 1 + Math.round(((dt - w1) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7); };
-        const trendEntry = {
-          week: getISOWeekNum(formData.date),
-          date: formData.date,
-          checking: formData.checking || "0",
-          vault: formData.ally || "0",
-          totalDebt: formData.debts?.reduce((s, d) => s + (parseFloat(d.balance) || 0), 0).toFixed(0) || "0",
-          score: parsed.healthScore?.score || null,
-          status: parsed.status || "UNKNOWN"
-        };
-        const updatedTrend = [...trendContext, trendEntry].slice(-8);
-        setTrendContext(updatedTrend);
-        db.set("trend-context", updatedTrend);
-        await Promise.all([db.set("current-audit", audit), db.set("move-states", {}), db.set("audit-history", nh)]);
-      }
-      haptic.success();
-      toast.success(testMode ? "Test audit complete — saved to history" : "Audit imported successfully");
-
-      // Evaluate badges after audit
-      if (!testMode) {
-        try {
-          // Compute actual streak from audit history
-          const getISOWeek = (ds) => { const dt = new Date(ds); dt.setDate(dt.getDate() + 3 - (dt.getDay() + 6) % 7); const w1 = new Date(dt.getFullYear(), 0, 4); return `${dt.getFullYear()}-W${String(1 + Math.round(((dt - w1) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7)).padStart(2, '0')}`; };
-          const realForStreak = nh.filter(a => !a.isTest && a.date);
-          const weeks = [...new Set(realForStreak.map(a => getISOWeek(a.date)))].sort().reverse();
-          let computedStreak = 0;
-          if (weeks.length) {
-            const curWeek = getISOWeek(new Date().toISOString().split("T")[0]);
-            let checkW = weeks[0] === curWeek ? curWeek : weeks[0];
-            for (const w of weeks) { if (w === checkW) { computedStreak++; const d = new Date(checkW.slice(0, 4), 0, 1); d.setDate(d.getDate() + (parseInt(checkW.slice(6)) - 2) * 7); checkW = getISOWeek(d.toISOString().split("T")[0]); } else break; }
-          }
-          const { unlocked, newlyUnlocked } = await evaluateBadges({ history: nh, streak: computedStreak, financialConfig, persona, current: audit });
-          setBadges(unlocked);
-          if (newlyUnlocked.length > 0) {
-            const names = newlyUnlocked.map(id => BADGE_DEFINITIONS.find(b => b.id === id)?.name).filter(Boolean);
-            if (names.length) toast.success(`🏆 Badge unlocked: ${names.join(", ")}!`);
-          }
-        } catch (e) { console.error("Badge eval failed:", e); }
-
-        // Update iOS Home Screen widget data
-        try {
-          const { updateWidgetData } = await import("./modules/widgetBridge.js");
-          await updateWidgetData({
-            healthScore: parsed?.healthScore?.score ?? null,
-            healthLabel: parsed?.status || "",
-            netWorth: null, // computed from dashboard
-            weeklyMoves: Object.values(moveChecks).filter(Boolean).length,
-            weeklyMovesTotal: parsed?.moveItems?.length || 0,
-            streak: computedStreak,
-            lastAuditDate: audit.date,
-          });
-        } catch { /* widget bridge not critical */ }
-      }
-
-      // Confetti is handled by DashboardTab's react-confetti (score >= 95)
-    } catch (e) {
-      const msg = e.message || "Unknown error";
-      // Distinguish background suspension from real API failures
-      const isBackgroundAbort = msg.includes("aborted") || msg.includes("Failed to fetch") || msg.includes("network") || msg.includes("Load failed");
-      if (isBackgroundAbort && document.hidden) {
-        // App was backgrounded — don't show error, wait for resume
-        setError("The audit was interrupted because the app went to the background. Please return to the Input tab and try again.");
-        toast.error("Audit interrupted — app was backgrounded. Tap to retry.");
-      } else {
-        setError(msg);
-        toast.error(msg || "Audit failed");
-      }
-      navTo("input"); haptic.error();
-    }
-    finally { setLoading(false); setStreamText(""); clearInterval(timerRef.current); }
-  };
 
   const toggleMove = async i => {
     haptic.light();
@@ -907,12 +335,9 @@ function CatalystCash() {
     haptic.medium();
   };
 
-  const clearAll = async () => {
-    setHistory([]); setCurrent(null); setMoveChecks({});
-    await Promise.all([db.set("audit-history", []), db.del("current-audit"), db.del("move-states")]);
-    haptic.warning();
-  };
 
+
+  const [isResetting, setIsResetting] = useState(false);
   const factoryReset = async () => {
     haptic.warning();
     toast.success("App securely erased. Restarting...");
@@ -933,26 +358,6 @@ function CatalystCash() {
     }, 800);
   };
 
-  const deleteHistoryItem = async (auditToDelete) => {
-    const isMatch = (a, b) => (a.ts && b.ts) ? a.ts === b.ts : (a.date === b.date && a.parsed?.netWorth === b.parsed?.netWorth);
-    const nh = history.filter(a => !isMatch(a, auditToDelete));
-    setHistory(nh);
-    await db.set("audit-history", nh);
-    if (current && isMatch(current, auditToDelete)) {
-      const newCurrent = nh.length > 0 ? nh[0] : null;
-      setCurrent(newCurrent);
-      if (newCurrent) {
-        setMoveChecks(newCurrent.moveChecks || {});
-        await Promise.all([db.set("current-audit", newCurrent), db.set("move-states", newCurrent.moveChecks || {})]);
-      } else {
-        setMoveChecks({});
-        await Promise.all([db.del("current-audit"), db.del("move-states")]);
-      }
-    }
-    if (viewing && isMatch(viewing, auditToDelete)) setViewing(null);
-    haptic.success();
-    toast.success("Audit deleted");
-  };
 
   const handleManualImport = async (resultText) => {
     if (!resultText) return;
@@ -1015,15 +420,12 @@ function CatalystCash() {
   const display = viewing || current;
   const displayMoveChecks = viewing ? (viewing.moveChecks || {}) : moveChecks;
 
-  const centerActive = tab === "dashboard" || tab === "input";
-  const actionGoesHome = tab === "input" || (!centerActive && lastCenterTab.current === "input");
-
   const navItems = [
-    { id: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { id: "history", icon: History, label: "History" },
-    { id: "action", icon: actionGoesHome ? Plus : Home, label: actionGoesHome ? "Action" : "Home", isCenter: true },
-    { id: "renewals", icon: RefreshCw, label: "Expenses" },
-    { id: "cards", icon: CreditCard, label: "Accounts" },
+    { id: "input", label: "Audit", icon: Plus, isCenter: false },
+    { id: "history", label: "History", icon: Clock, isCenter: false },
+    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, isCenter: true },
+    { id: "renewals", label: "Expenses", icon: ReceiptText, isCenter: false },
+    { id: "cards", label: "Accounts", icon: CreditCard, isCenter: false }
   ];
 
   // Native iOS swipe-back is handled via WKWebView allowsBackForwardNavigationGestures
@@ -1045,7 +447,7 @@ function CatalystCash() {
   if (!onboardingComplete) return (
     <>
       <GlobalStyles />
-      <SetupWizard toast={toast} onComplete={() => setOnboardingComplete(true)} setAppleLinkedId={setAppleLinkedId} />
+      <SetupWizard />
     </>
   );
 
@@ -1093,7 +495,7 @@ function CatalystCash() {
     )}
 
     {showGuide && <GuideModal onClose={() => setShowGuide(false)} />}
-    {isLocked && <LockScreen onUnlock={() => setIsLocked(false)} appPasscode={appPasscode} useFaceId={useFaceId} appleLinkedId={appleLinkedId} />}
+    {isLocked && <LockScreen />}
     {/* ═══════ HEADER BAR ═══════ */}
     <div ref={topBarRef} style={{
       position: "relative",
@@ -1163,15 +565,10 @@ function CatalystCash() {
         const renderTab = tab === "settings" ? lastCenterTab.current : tab;
         return (
           <div key={`${renderTab}-${privacyMode}`} className="tab-transition">
-            {renderTab === "dashboard" && <ErrorBoundary><DashboardTab current={current} history={history}
-              onRunAudit={() => navTo("input")} onViewResult={() => navTo("results", current)}
-              onManualImport={handleManualImport} financialConfig={financialConfig}
-              onGoSettings={() => { setSetupReturnTab("dashboard"); navTo("settings"); }}
-              onGoCards={() => { setSetupReturnTab("dashboard"); navTo("cards"); }}
-              onGoRenewals={() => { setSetupReturnTab("dashboard"); navTo("renewals"); }}
+            {renderTab === "dashboard" && <ErrorBoundary><DashboardTab
               onRestore={handleRestoreFromHome} proEnabled={proEnabled}
               onRefreshDashboard={handleRefreshDashboard}
-              persona={persona} badges={badges} onDemoAudit={handleDemoAudit} cards={cards} renewals={renewals} /></ErrorBoundary>}
+              onDemoAudit={handleDemoAudit} /></ErrorBoundary>}
             {renderTab === "results" && (loading ? <StreamingView streamText={streamText} elapsed={elapsed} isTest={isTest} modelName={getModel(aiProvider, aiModel).name} /> :
               !display ? (() => { setTimeout(() => navTo("dashboard"), 0); return null; })() :
                 <>
@@ -1181,12 +578,10 @@ function CatalystCash() {
                       background: T.bg.card, border: `1px solid ${T.border.default}`, borderRadius: T.radius.md,
                       padding: "8px 14px", color: T.text.secondary, fontSize: 11, fontWeight: 600, cursor: "pointer"
                     }}>← Back</button></div>}
-                  <ErrorBoundary><ResultsView audit={display} moveChecks={displayMoveChecks} onToggleMove={toggleMove} financialConfig={financialConfig} streak={trendContext?.length || 0} /></ErrorBoundary></>)}
-            {renderTab === "history" && <ErrorBoundary><HistoryTab audits={[...history].reverse()} onSelect={a => navTo("results", a)}
-              onExportAll={exportAllAudits} onExportSelected={exportSelectedAudits} onExportCSV={exportAuditCSV}
-              onDelete={deleteHistoryItem} onManualImport={handleManualImport} toast={toast} /></ErrorBoundary>}
-            {renderTab === "renewals" && <ErrorBoundary><RenewalsTab renewals={renewals} setRenewals={setRenewals} cardAnnualFees={cardAnnualFees} cards={cards} /></ErrorBoundary>}
-            {renderTab === "cards" && <ErrorBoundary><CardPortfolioTab cards={cards} setCards={setCards} cardCatalog={cardCatalog} bankAccounts={bankAccounts} setBankAccounts={setBankAccounts} financialConfig={financialConfig} setFinancialConfig={setFinancialConfig} marketPrices={marketPrices} setMarketPrices={setMarketPrices} /></ErrorBoundary>}
+                  <ErrorBoundary><ResultsView audit={display} moveChecks={displayMoveChecks} onToggleMove={toggleMove} streak={trendContext?.length || 0} /></ErrorBoundary></>)}
+            {renderTab === "history" && <ErrorBoundary><HistoryTab toast={toast} /></ErrorBoundary>}
+            {renderTab === "renewals" && <ErrorBoundary><RenewalsTab /></ErrorBoundary>}
+            {renderTab === "cards" && <ErrorBoundary><CardPortfolioTab /></ErrorBoundary>}
           </div>
         );
       })()}
@@ -1281,7 +676,7 @@ function CatalystCash() {
       }}>
         {navItems.map((n) => {
           const Icon = n.icon; const isCenter = n.isCenter;
-          const active = isCenter ? centerActive : tab === n.id;
+          const active = tab === n.id;
 
           const handlePressStart = (e) => {
             if (e.type === "mousedown" && e.button !== 0) return;
@@ -1297,9 +692,7 @@ function CatalystCash() {
             if (longPressTimer.current) {
               clearTimeout(longPressTimer.current);
               longPressTimer.current = null;
-              if (tab === "dashboard") navTo("input");
-              else if (tab === "input") navTo("dashboard");
-              else navTo(lastCenterTab.current);
+              if (tab !== n.id) navTo(n.id);
             }
           };
 
@@ -1314,7 +707,7 @@ function CatalystCash() {
               display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
               background: "none", border: "none", cursor: "pointer",
               color: active ? T.accent.primary : T.text.muted,
-              padding: "4px 8px", minWidth: 52, minHeight: 48,
+              padding: "4px 2px", minWidth: 44, minHeight: 48,
               transition: "color .2s ease", position: "relative",
               userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none"
             }}>
@@ -1324,7 +717,7 @@ function CatalystCash() {
             }} />}
             {isCenter ?
               <div style={{
-                width: 52, height: 52, borderRadius: 17, marginTop: -14,
+                width: 48, height: 48, borderRadius: 16, marginTop: -12,
                 background: active ? T.accent.gradient : T.bg.elevated,
                 border: `2px solid ${active ? "transparent" : T.border.default}`,
                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -1332,11 +725,11 @@ function CatalystCash() {
                 transition: "all .25s ease",
                 animation: active ? "glowPulse 2.5s ease-in-out infinite" : "none"
               }}>
-                <Icon size={24} strokeWidth={active ? 2.5 : 1.5} color={active ? "#fff" : T.text.muted} />
+                <Icon size={22} strokeWidth={active ? 2.5 : 1.5} color={active ? "#fff" : T.text.muted} />
               </div> :
               <Icon size={20} strokeWidth={active ? 2.5 : 1.5} />}
             <span style={{
-              fontSize: 11, fontWeight: active ? 700 : 500, fontFamily: T.font.mono,
+              fontSize: 10, fontWeight: active ? 700 : 500, fontFamily: T.font.mono,
               marginTop: isCenter ? 2 : 0, letterSpacing: "0.02em"
             }}>{n.label}</span>
           </button>;

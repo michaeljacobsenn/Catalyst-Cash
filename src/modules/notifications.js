@@ -89,6 +89,13 @@ export function computeNextReminderDate(payday, paycheckTime) {
  */
 export async function schedulePaydayReminder(payday, paycheckTime) {
     try {
+        // Guard: verify notification permission before scheduling
+        const { display } = await LocalNotifications.checkPermissions();
+        if (display !== "granted") {
+            console.warn("[notifications] schedulePaydayReminder skipped — permission not granted:", display);
+            return false;
+        }
+
         await LocalNotifications.cancel({ notifications: [{ id: PAYDAY_REMINDER_ID }] });
 
         const fireAt = computeNextReminderDate(payday, paycheckTime);

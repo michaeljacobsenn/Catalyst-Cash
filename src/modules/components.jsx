@@ -65,7 +65,14 @@ export const PaceBar = ({ name, saved, target, deadline, onPace, weeklyPace, cat
             </div>
             {deadline && !compact && <Mono size={10} color={T.text.dim}>{deadline}</Mono>}
         </div>
-        <div style={{ height: compact ? 6 : 8, background: T.bg.elevated, borderRadius: 6, overflow: "hidden" }}>
+        <div
+            role="progressbar"
+            aria-valuenow={Math.round(pct)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`${name}: ${Math.round(pct)}% of goal`}
+            style={{ height: compact ? 6 : 8, background: T.bg.elevated, borderRadius: 6, overflow: "hidden" }}
+        >
             <div style={{
                 height: "100%", width: `${pct}%`, background: `linear-gradient(90deg,${c}BB,${c})`,
                 borderRadius: 6, transition: "width .8s cubic-bezier(.16,1,.3,1)", animation: "progressFill 1s ease-out"
@@ -108,11 +115,15 @@ export const Md = ({ text }) => {
 export const Section = ({ title, icon: Icon, content, accentColor, defaultOpen = true, badge, delay = 0 }) => {
     const [open, setOpen] = useState(defaultOpen);
     if (!content?.trim()) return null;
+    const toggle = () => setOpen(!open);
     return <Card animate delay={delay}>
-        <div onClick={() => setOpen(!open)} style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            cursor: "pointer", minHeight: 28, marginBottom: open ? 12 : 0, transition: "margin .2s"
-        }}>
+        <div onClick={toggle}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}
+            role="button" tabIndex={0} aria-expanded={open} aria-label={`${title} section`}
+            style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                cursor: "pointer", minHeight: 28, marginBottom: open ? 12 : 0, transition: "margin .2s"
+            }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
                 {Icon && <div style={{
                     width: 28, height: 28, borderRadius: 8, background: `${accentColor || T.text.dim}10`,
@@ -128,11 +139,15 @@ export const Section = ({ title, icon: Icon, content, accentColor, defaultOpen =
 
 export const MoveRow = ({ item, checked, onToggle, index }) => {
     const tm = { REQUIRED: "red", DEADLINE: "amber", PROMO: "blue", OPTIONAL: "gray" };
-    return <div className="slide-up" onClick={onToggle} style={{
-        display: "flex", alignItems: "flex-start", gap: 10,
-        padding: "12px 0", borderBottom: `1px solid ${T.border.subtle}`, cursor: "pointer",
-        opacity: checked ? .3 : 1, animationDelay: `${index * 35}ms`, transition: "opacity .2s"
-    }}>
+    return <div className="slide-up" onClick={onToggle}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
+        role="checkbox" aria-checked={!!checked} tabIndex={0}
+        aria-label={item.text}
+        style={{
+            display: "flex", alignItems: "flex-start", gap: 10,
+            padding: "12px 0", borderBottom: `1px solid ${T.border.subtle}`, cursor: "pointer",
+            opacity: checked ? .3 : 1, animationDelay: `${index * 35}ms`, transition: "opacity .2s"
+        }}>
         <div style={{
             width: 22, height: 22, borderRadius: 7, flexShrink: 0, marginTop: 1,
             border: checked ? "none" : `2px solid ${T.text.dim}`, background: checked ? T.accent.primary : "transparent",
@@ -151,19 +166,24 @@ export const MoveRow = ({ item, checked, onToggle, index }) => {
 // ═══════════════════════════════════════════════════════════════
 // DOLLAR INPUT
 // ═══════════════════════════════════════════════════════════════
-export const DI = ({ value, onChange, placeholder = "0.00" }) => (
-    <div style={{ position: "relative" }}>
-        <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600 }}>$</span>
-        <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={value} placeholder={placeholder} onChange={onChange} style={{ paddingLeft: 28, fontFamily: T.font.mono, fontWeight: 600 }} />
-    </div>
-);
+let diIdCounter = 0;
+export const DI = ({ value, onChange, placeholder = "0.00", label = "Amount" }) => {
+    const [id] = useState(() => `di-${++diIdCounter}`);
+    return (
+        <div style={{ position: "relative" }}>
+            <label htmlFor={id} style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap" }}>{label}</label>
+            <span aria-hidden="true" style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600 }}>$</span>
+            <input id={id} type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={value} placeholder={placeholder} onChange={onChange} aria-label={label} style={{ paddingLeft: 28, fontFamily: T.font.mono, fontWeight: 600 }} />
+        </div>
+    );
+};
 
 // ═══════════════════════════════════════════════════════════════
 // STREAMING VIEW
 // ═══════════════════════════════════════════════════════════════
-export const StreamingView = ({ streamText, elapsed, isTest, modelName }) => {
+export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel }) => {
     const isReceiving = !!streamText && streamText.length > 5;
-    const maxTime = 6;
+    const maxTime = 30; // 30s window — some providers take 20-30s before first token
     const baseProgress = Math.min(((elapsed + 1) / maxTime) * 100, 95);
     const progress = isReceiving ? 100 : baseProgress;
 
@@ -172,6 +192,8 @@ export const StreamingView = ({ streamText, elapsed, isTest, modelName }) => {
     else if (elapsed > 4) currentMsg = "Generating tactical recommendations...";
     else if (elapsed > 2) currentMsg = "Analyzing weekly transactions...";
     else if (elapsed > 0) currentMsg = "Opening secure AI session...";
+
+    const showCancelProminent = elapsed >= 8 && !isReceiving;
 
     return (
         <div style={{ padding: "24px 16px", animation: "fadeIn .4s ease-out forwards" }}>
@@ -212,6 +234,25 @@ export const StreamingView = ({ streamText, elapsed, isTest, modelName }) => {
                         }} />
                     </div>
                 </div>
+
+                {/* Cancel button — subtle until 8s, then more prominent */}
+                {onCancel && !isReceiving && (
+                    <div style={{ marginTop: 20 }}>
+                        <button
+                            onClick={onCancel}
+                            style={{
+                                padding: "10px 24px", borderRadius: 12,
+                                border: `1px solid ${showCancelProminent ? T.status.amber : T.border.default}`,
+                                background: showCancelProminent ? `${T.status.amber}15` : "transparent",
+                                color: showCancelProminent ? T.status.amber : T.text.muted,
+                                fontSize: 12, fontWeight: 700, cursor: "pointer",
+                                transition: "all 0.4s ease"
+                            }}
+                        >
+                            {showCancelProminent ? "Taking too long? Cancel" : "Cancel"}
+                        </button>
+                    </div>
+                )}
             </div>
 
             {streamText ? (
@@ -256,5 +297,22 @@ export const EmptyState = ({ icon: Icon, title, message, action, delay = 0 }) =>
         <h3 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, marginBottom: 8 }}>{title}</h3>
         <p style={{ fontSize: 13, color: T.text.dim, lineHeight: 1.6, maxWidth: 280, margin: "0 auto" }}>{message}</p>
         {action}
+    </div>
+);
+
+export const TabSkeleton = ({ rows = 4 }) => (
+    <div className="fade-in page-body" style={{ paddingTop: 20 }}>
+        {/* Title shimmer */}
+        <div className="shimmer-bg" style={{ height: 22, width: 140, borderRadius: 8, marginBottom: 20 }} />
+        {/* Card shimmers */}
+        {Array.from({ length: rows }, (_, i) => (
+            <div key={i} className="shimmer-bg" style={{
+                height: i === 0 ? 100 : 70 + (i % 3) * 20,
+                borderRadius: T.radius.lg,
+                marginBottom: 12,
+                animationDelay: `${i * 0.1}s`,
+                opacity: 0.8 - i * 0.08
+            }} />
+        ))}
     </div>
 );

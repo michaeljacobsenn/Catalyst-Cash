@@ -31,7 +31,7 @@ function extractSSEText(parsed) {
   return "";
 }
 
-async function* streamBackend(snapshot, model, sysText, history, deviceId, backendProvider) {
+async function* streamBackend(snapshot, model, sysText, history, deviceId, backendProvider, signal) {
   const res = await fetch(`${BACKEND_URL}/audit`, {
     method: "POST",
     headers: {
@@ -46,13 +46,18 @@ async function* streamBackend(snapshot, model, sysText, history, deviceId, backe
       stream: true,
       provider: backendProvider || "gemini",
     }),
+    signal,
   });
 
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
     if (res.status === 429) {
       log.warn("audit", "Rate limit reached", { status: 429 });
-      throw new Error("Daily audit limit reached (10/day). Try again tomorrow!");
+      const retryAfter = res.headers.get("Retry-After");
+      const msg = retryAfter
+        ? `Audit limit reached. Try again in ${retryAfter} seconds.`
+        : (e.error || "Daily audit limit reached. Try again later!");
+      throw new Error(msg);
     }
     log.error("audit", "Backend error", { status: res.status });
     throw new Error(e.error || `Backend error: HTTP ${res.status}`);
@@ -76,7 +81,7 @@ async function* streamBackend(snapshot, model, sysText, history, deviceId, backe
         const parsed = JSON.parse(d);
         const text = extractSSEText(parsed);
         if (text) yield text;
-      } catch { }
+      } catch (e) { console.warn("[SSE] Backend parse error:", e.message, "chunk:", d.slice(0, 80)); }
     }
   }
 }
@@ -101,7 +106,11 @@ async function callBackend(snapshot, model, sysText, history, deviceId, backendP
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
     if (res.status === 429) {
-      throw new Error("Daily audit limit reached (10/day). Try again tomorrow!");
+      const retryAfter = res.headers.get("Retry-After");
+      const msg = retryAfter
+        ? `Audit limit reached. Try again in ${retryAfter} seconds.`
+        : (e.error || "Daily audit limit reached. Try again later!");
+      throw new Error(msg);
     }
     throw new Error(e.error || `Backend error: HTTP ${res.status}`);
   }
@@ -138,11 +147,12 @@ function buildBodyOpenAI(snapshot, stream, model, sysText, history = []) {
   return JSON.stringify(body);
 }
 
-async function* streamOpenAI(apiKey, snapshot, model, sysText, history, baseUrl = "https://api.openai.com/v1/chat/completions") {
+async function* streamOpenAI(apiKey, snapshot, model, sysText, history, baseUrl = "https://api.openai.com/v1/chat/completions", signal) {
   const res = await fetch(baseUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-    body: buildBodyOpenAI(snapshot, true, model, sysText, history)
+    body: buildBodyOpenAI(snapshot, true, model, sysText, history),
+    signal,
   });
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
   const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
@@ -155,7 +165,7 @@ async function* streamOpenAI(apiKey, snapshot, model, sysText, history, baseUrl 
         const e = JSON.parse(d);
         const text = e.choices?.[0]?.delta?.content;
         if (text) yield text;
-      } catch { }
+      } catch (e) { console.warn("[SSE] OpenAI parse error:", e.message); }
     }
   }
 }
@@ -190,12 +200,13 @@ function buildBodyGemini(snapshot, sysText, history = []) {
   });
 }
 
-async function* streamGemini(apiKey, snapshot, model, sysText, history) {
+async function* streamGemini(apiKey, snapshot, model, sysText, history, signal) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model || "gemini-2.5-flash"}:streamGenerateContent?alt=sse&key=${apiKey}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: buildBodyGemini(snapshot, sysText, history)
+    body: buildBodyGemini(snapshot, sysText, history),
+    signal,
   });
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
@@ -221,7 +232,7 @@ async function* streamGemini(apiKey, snapshot, model, sysText, history) {
         const parsed = JSON.parse(d);
         const text = parsed.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") || "";
         if (text) yield text;
-      } catch { }
+      } catch (e) { console.warn("[SSE] Gemini parse error:", e.message); }
     }
   }
 }
@@ -274,11 +285,12 @@ function buildBodyClaude(snapshot, stream, model, sysText, history = []) {
   });
 }
 
-async function* streamClaude(apiKey, snapshot, model, sysText, history) {
+async function* streamClaude(apiKey, snapshot, model, sysText, history, signal) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: buildHeadersClaude(apiKey),
-    body: buildBodyClaude(snapshot, true, model, sysText, history)
+    body: buildBodyClaude(snapshot, true, model, sysText, history),
+    signal,
   });
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
   const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
@@ -295,7 +307,7 @@ async function* streamClaude(apiKey, snapshot, model, sysText, history) {
         if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
           if (parsed.delta.text) yield parsed.delta.text;
         }
-      } catch { }
+      } catch (e) { console.warn("[SSE] Claude parse error:", e.message); }
     }
   }
 }
@@ -315,14 +327,14 @@ async function callClaude(apiKey, snapshot, model, sysText, history) {
 // PUBLIC API — provider-aware router
 // Supports "backend" mode (no API key needed) + BYOK fallback
 // ═══════════════════════════════════════════════════════════════
-export async function* streamAudit(apiKey, snapshot, providerId = "backend", model, sysText, history = [], deviceId) {
+export async function* streamAudit(apiKey, snapshot, providerId = "backend", model, sysText, history = [], deviceId, signal) {
   log.info("audit", "Audit started", { provider: providerId, model, streaming: true });
   switch (providerId) {
-    case "backend": yield* streamBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model)); break;
-    case "openai": yield* streamOpenAI(apiKey, snapshot, model, sysText, history); break;
-    case "gemini": yield* streamGemini(apiKey, snapshot, model, sysText, history); break;
-    case "claude": yield* streamClaude(apiKey, snapshot, model, sysText, history); break;
-    default: yield* streamBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model)); break;
+    case "backend": yield* streamBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), signal); break;
+    case "openai": yield* streamOpenAI(apiKey, snapshot, model, sysText, history, undefined, signal); break;
+    case "gemini": yield* streamGemini(apiKey, snapshot, model, sysText, history, signal); break;
+    case "claude": yield* streamClaude(apiKey, snapshot, model, sysText, history, signal); break;
+    default: yield* streamBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), signal); break;
   }
 }
 

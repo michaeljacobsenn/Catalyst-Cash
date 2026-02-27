@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import { ChevronUp, ChevronDown, Activity, AlertTriangle, CheckSquare, Target, Clock, TrendingUp, Zap, CheckCircle, RefreshCw } from "lucide-react";
 import { T } from "../constants.js";
 import { fmtDate, stripPaycheckParens } from "../utils.js";
 import { Card, Badge } from "../ui.jsx";
 import { Mono, Section, MoveRow, Md } from "../components.jsx";
 
+import { useSettings } from '../contexts/SettingsContext.jsx';
 
-export default function ResultsView({ audit, moveChecks, onToggleMove, financialConfig, streak = 0 }) {
+export default memo(function ResultsView({ audit, moveChecks, onToggleMove, streak = 0 }) {
+    const { financialConfig } = useSettings();
     const [showRaw, setShowRaw] = useState(false);
     if (!audit) return <div style={{
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
@@ -58,7 +60,10 @@ export default function ResultsView({ audit, moveChecks, onToggleMove, financial
         {p.sections.qualityScore && <Section title="Quality Score" icon={CheckCircle} content={p.sections.qualityScore} accentColor={T.status.green} defaultOpen={false} delay={400} />}
         {p.sections.autoUpdates && <Section title="Auto-Updates" icon={RefreshCw} content={p.sections.autoUpdates} accentColor={T.text.dim} defaultOpen={false} delay={450} />}
         <Card style={{ background: T.bg.elevated }}>
-            <div onClick={() => setShowRaw(!showRaw)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", minHeight: 36 }}>
+            <div onClick={() => setShowRaw(!showRaw)}
+                onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setShowRaw(!showRaw); } }}
+                role="button" tabIndex={0} aria-expanded={showRaw} aria-label="Toggle raw output"
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", minHeight: 36 }}>
                 <span style={{ fontSize: 11, color: T.text.dim, fontWeight: 600 }}>Raw Output</span>
                 {showRaw ? <ChevronUp size={13} color={T.text.dim} /> : <ChevronDown size={13} color={T.text.dim} />}</div>
             {showRaw && <pre style={{
@@ -81,4 +86,4 @@ export default function ResultsView({ audit, moveChecks, onToggleMove, financial
             </p>
         </div>
     </div>;
-}
+})

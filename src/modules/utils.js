@@ -139,26 +139,43 @@ export function advanceExpiredDate(dateString, intervalAmt, intervalUnit, todayS
 
   if (isNaN(d.getTime())) return dateString;
 
-  // Protect against infinite loops by hardcapping iterations
-  let loops = 0;
-  while (d < today && loops < 1000) {
-    loops++;
-    let originalDay = d.getUTCDate();
+  const amt = Number(intervalAmt) || 1;
 
-    if (intervalUnit === "days") {
-      d.setUTCDate(d.getUTCDate() + intervalAmt);
-    } else if (intervalUnit === "weeks") {
-      d.setUTCDate(d.getUTCDate() + (intervalAmt * 7));
-    } else if (intervalUnit === "years" || intervalUnit === "yearly" || intervalUnit === "annual") {
-      d.setUTCFullYear(d.getUTCFullYear() + intervalAmt);
-    } else {
-      // Default to months
-      d.setUTCMonth(d.getUTCMonth() + intervalAmt);
-      // JS Date quirk: Jan 31 + 1 month = Mar 2 or 3. 
-      // Rollback to end of target month if day overflowed (e.g., set to Feb 28).
-      if (d.getUTCDate() < originalDay) {
-        d.setUTCDate(0);
-      }
+  if (intervalUnit === "days") {
+    // Math: how many full day-intervals until d >= today?
+    const daysDiff = Math.ceil((today - d) / (1000 * 60 * 60 * 24));
+    const intervals = Math.ceil(daysDiff / amt);
+    d.setUTCDate(d.getUTCDate() + intervals * amt);
+  } else if (intervalUnit === "weeks") {
+    const daysDiff = Math.ceil((today - d) / (1000 * 60 * 60 * 24));
+    const intervals = Math.ceil(daysDiff / (amt * 7));
+    d.setUTCDate(d.getUTCDate() + intervals * amt * 7);
+  } else if (intervalUnit === "years" || intervalUnit === "yearly" || intervalUnit === "annual") {
+    // O(1): calculate how many year-intervals are needed
+    const yearDiff = today.getUTCFullYear() - d.getUTCFullYear();
+    const intervals = Math.max(1, Math.ceil(yearDiff / amt));
+    d.setUTCFullYear(d.getUTCFullYear() + intervals * amt);
+    // If still behind (edge case: same year but earlier month/day), advance one more
+    if (d < today) {
+      d.setUTCFullYear(d.getUTCFullYear() + amt);
+    }
+  } else {
+    // Default to months — tricky because months have variable lengths
+    // Count how many month-intervals are needed
+    const yearDiff = today.getUTCFullYear() - d.getUTCFullYear();
+    const monthDiff = yearDiff * 12 + (today.getUTCMonth() - d.getUTCMonth());
+    const intervals = Math.max(1, Math.ceil(monthDiff / amt));
+    const originalDay = d.getUTCDate();
+    d.setUTCMonth(d.getUTCMonth() + intervals * amt);
+    // JS Date quirk: Jan 31 + 1 month = Mar 2 or 3 — rollback to end of target month.
+    if (d.getUTCDate() < originalDay) {
+      d.setUTCDate(0);
+    }
+    // If still behind today (edge case: monthDiff is 0 but date < today), advance one more
+    if (d < today) {
+      const origDay2 = d.getUTCDate();
+      d.setUTCMonth(d.getUTCMonth() + amt);
+      if (d.getUTCDate() < origDay2) d.setUTCDate(0);
     }
   }
 
@@ -244,7 +261,7 @@ export function parseJSON(raw) {
     paceData: [], // Replaced by native dashboardCard logic going forward, kept for backwards compat
     dashboardData: {
       checkingBalance: null, // Extracted from dashboardCard dynamically on demand
-      allyVaultTotal: null
+      savingsVaultTotal: null
     }
   };
 }
@@ -258,7 +275,7 @@ export function extractDashboardMetrics(parsed) {
   const structured = parsed?.structured || {};
   const legacy = structured.dashboard || parsed?.dashboardData || {};
   const legacyChecking = parseCurrency(legacy.checkingBalance);
-  const legacyVault = parseCurrency(legacy.allyVaultTotal);
+  const legacyVault = parseCurrency(legacy.savingsVaultTotal || legacy.allyVaultTotal);
   const legacyPending = parseCurrency(legacy.next7DaysNeed);
   const legacyAvailable = parseCurrency(legacy.checkingProjEnd);
 
@@ -291,25 +308,119 @@ export function extractDashboardMetrics(parsed) {
 
 export async function exportAudit(audit) {
   const p = audit.parsed;
-  const h = `<!DOCTYPE html><html><head><meta charset=utf-8><title>Catalyst Cash ${audit.date}</title>
-<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,sans-serif;background:#060910;color:#E6EDF3;padding:20px;max-width:600px;margin:0 auto}
-.c{background:#0D1117;border:1px solid rgba(240,246,252,.06);border-radius:14px;padding:18px;margin-bottom:12px}
-.m{font-family:monospace;font-weight:600}h2{font-size:14px;color:#8B949E;margin:12px 0 6px}
-pre{white-space:pre-wrap;font-size:11px;line-height:1.6;color:#8B949E}</style></head><body>
-<div class=c><span class=m style="color:${p.status === "GREEN" ? "#3FB950" : p.status === "YELLOW" ? "#D29922" : "#F85149"}">${p.status}</span>
-<span class=m style="color:#484F58;margin-left:8px">v1 · ${audit.date}</span>
-<h1 style="font-size:20px;margin-top:8px">${p.mode} Mode Audit</h1></div>
-<div class=c style="text-align:center"><div class=m style="font-size:32px;color:#00D4AA">${p.netWorth != null ? fmt(p.netWorth) : "—"}</div>
-<div style="font-size:11px;color:#484F58;margin-top:4px">NET WORTH</div></div>
-<div class=c><h2>Full Output</h2><pre>${p.raw.replace(/</g, "&lt;")}</pre></div>
-<div style="text-align:center;color:#30363D;font-size:11px;padding:20px">Catalyst Cash · ${new Date().toISOString().split("T")[0]}</div></body></html>`;
-  await nativeExport(`CatalystCash_Audit_${audit.date}.html`, h, "text/html");
+  const dateStr = audit.date || new Date().toISOString().split("T")[0];
+
+  // Create an off-screen container for the tear-sheet
+  const container = document.createElement("div");
+  container.style.width = "800px";
+  container.style.padding = "40px";
+  container.style.backgroundColor = "#FFFFFF";
+  container.style.color = "#111827";
+  container.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+  container.style.position = "absolute";
+  container.style.left = "-9999px";
+  container.style.top = "0";
+
+  // Brand Header
+  const header = `
+    <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #E5E7EB; padding-bottom: 20px; margin-bottom: 30px;">
+      <div>
+        <h1 style="font-size: 28px; font-weight: 800; color: #111827; margin: 0 0 4px 0;">Catalyst Cash — Financial Audit</h1>
+        <p style="font-size: 14px; color: #6B7280; font-weight: 500; margin: 0;">PREPARED FOR CPA / ADVISORY REVIEW</p>
+      </div>
+      <div style="text-align: right;">
+        <div style="font-size: 14px; color: #374151; font-weight: 600;">DATE EXECUTED</div>
+        <div style="font-size: 14px; color: #6B7280;">${dateStr}</div>
+      </div>
+    </div>
+  `;
+
+  // Hero Metrics & Health
+  const statusColor = p.status === "GREEN" ? "#059669" : p.status === "YELLOW" ? "#D97706" : "#DC2626";
+  const bgStatus = p.status === "GREEN" ? "#ECFDF5" : p.status === "YELLOW" ? "#FFFBEB" : "#FEF2F2";
+
+  const hero = `
+    <div style="display: flex; gap: 20px; margin-bottom: 30px;">
+      <div style="flex: 1; padding: 20px; background-color: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px;">
+        <div style="font-size: 12px; font-weight: 700; color: #6B7280; text-transform: uppercase; margin-bottom: 8px;">Net Worth Estimate</div>
+        <div style="font-size: 32px; font-weight: 800; color: #111827;">${p.netWorth != null ? fmt(p.netWorth) : "—"}</div>
+      </div>
+      <div style="flex: 1; padding: 20px; background-color: ${bgStatus}; border: 1px solid ${statusColor}30; border-radius: 8px;">
+        <div style="font-size: 12px; font-weight: 700; color: ${statusColor}; text-transform: uppercase; margin-bottom: 8px;">Audit Status</div>
+        <div style="font-size: 24px; font-weight: 800; color: ${statusColor};">${p.status}</div>
+      </div>
+      <div style="flex: 1; padding: 20px; background-color: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px;">
+        <div style="font-size: 12px; font-weight: 700; color: #6B7280; text-transform: uppercase; margin-bottom: 8px;">Audit Engine</div>
+        <div style="font-size: 20px; font-weight: 800; color: #111827;">${p.mode || "Standard"} Mode</div>
+      </div>
+    </div>
+  `;
+
+  // Raw / structured content
+  const content = `
+    <h2 style="font-size: 18px; font-weight: 700; color: #111827; border-bottom: 1px solid #E5E7EB; padding-bottom: 8px; margin-bottom: 16px;">Executive AI Summary</h2>
+    <div style="background-color: #F9FAFB; padding: 20px; border-radius: 8px; border: 1px solid #E5E7EB; margin-bottom: 30px;">
+      <p style="white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: #374151; margin: 0;">${p.raw.replace(/</g, "&lt;")}</p>
+    </div>
+  `;
+
+  const footer = `
+    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #E5E7EB; text-align: center; font-size: 12px; color: #9CA3AF;">
+      Generated securely on-device by Catalyst Cash CatalystCash.app
+    </div>
+  `;
+
+  container.innerHTML = header + hero + content + footer;
+  document.body.appendChild(container);
+
+  try {
+    // Dynamically import to keep bundle size small if users don't export often
+    const [{ jsPDF }, html2canvas] = await Promise.all([
+      import("jspdf"),
+      import("html2canvas").then((m) => m.default)
+    ]);
+
+    // We want the highest quality render
+    const canvas = await html2canvas(container, {
+      scale: window.devicePixelRatio || 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: "#FFFFFF"
+    });
+
+    const imgData = canvas.toDataURL("image/png");
+
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "pt",
+      format: "letter"
+    });
+
+    // Letter dimensions in pt: 612 x 792
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+    pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+
+    const pdfBase64 = pdf.output('datauristring').split(',')[1];
+    await nativeExport(`CatalystCash_CPA_TearSheet_${dateStr}.pdf`, pdfBase64, "application/pdf", true);
+
+  } catch (err) {
+    if (!err.message?.toLowerCase().includes("cancel")) {
+      console.error("PDF generation failed:", err);
+      // Fallback
+      const h = `<!DOCTYPE html><html><body>${container.innerHTML}</body></html>`;
+      await nativeExport(`CatalystCash_Audit_${dateStr}.html`, h, "text/html");
+    }
+  } finally {
+    document.body.removeChild(container);
+  }
 }
 
 export async function exportAllAudits(audits) {
   if (!audits?.length) return;
   const payload = {
-    app: "Catalyst Cash", version: "1.5-BETA",
+    app: "Catalyst Cash", version: "1.5.1-BETA",
     exportedAt: new Date().toISOString(), count: audits.length, audits
   };
   await nativeExport(`CatalystCash_ALL_${new Date().toISOString().split("T")[0]}.json`, JSON.stringify(payload, null, 2), "application/json");
@@ -318,7 +429,7 @@ export async function exportAllAudits(audits) {
 export async function exportSelectedAudits(audits) {
   if (!audits?.length) return;
   const payload = {
-    app: "Catalyst Cash", version: "1.5-BETA",
+    app: "Catalyst Cash", version: "1.5.1-BETA",
     exportedAt: new Date().toISOString(), count: audits.length, audits
   };
   await nativeExport(`CatalystCash_Selected_${audits.length}_${new Date().toISOString().split("T")[0]}.json`, JSON.stringify(payload, null, 2), "application/json");

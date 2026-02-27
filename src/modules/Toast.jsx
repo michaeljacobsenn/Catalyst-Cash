@@ -16,9 +16,14 @@ export function useToast() {
 export function ToastProvider({ children }) {
     const [toasts, setToasts] = useState([]);
 
+    const MAX_TOASTS = 5;
+
     const addToast = useCallback((message, { type = "info", duration = 3000, action = null } = {}) => {
         const id = Date.now() + Math.random();
-        setToasts(prev => [...prev, { id, message, type, action }]);
+        setToasts(prev => {
+            const next = [...prev, { id, message, type, action }];
+            return next.length > MAX_TOASTS ? next.slice(next.length - MAX_TOASTS) : next;
+        });
         if (duration > 0) setTimeout(() => removeToast(id), duration);
         return id;
     }, []);
@@ -51,12 +56,17 @@ const ICONS = {
 
 function ToastContainer({ toasts, onRemove }) {
     if (!toasts.length) return null;
-    return <div style={{
-        position: "fixed", top: `calc(env(safe-area-inset-top, 12px) + 8px)`,
-        left: 16, right: 16, zIndex: 200,
-        display: "flex", flexDirection: "column", gap: 8,
-        pointerEvents: "none"
-    }}>
+    return <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="false"
+        aria-label="Notifications"
+        style={{
+            position: "fixed", top: `calc(env(safe-area-inset-top, 12px) + 8px)`,
+            left: 16, right: 16, zIndex: 200,
+            display: "flex", flexDirection: "column", gap: 8,
+            pointerEvents: "none"
+        }}>
         {toasts.map(t => <Toast key={t.id} toast={t} onRemove={() => onRemove(t.id)} />)}
     </div>;
 }

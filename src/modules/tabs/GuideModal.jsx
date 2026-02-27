@@ -1,7 +1,11 @@
 import { X } from "lucide-react";
 import { T } from "../constants.js";
 
-export default function GuideModal({ onClose }) {
+import { useNavigation } from '../contexts/NavigationContext.jsx';
+
+export default function GuideModal() {
+    const { setShowGuide } = useNavigation();
+    const onClose = () => setShowGuide(false);
     return (
         <div style={{
             position: "fixed", inset: 0, zIndex: 100,

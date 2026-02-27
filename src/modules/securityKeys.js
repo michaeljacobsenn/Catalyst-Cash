@@ -11,7 +11,8 @@ const EXACT_SECURITY_KEYS = new Set([
 const SAFE_IMPORT_KEY_RE = /^[a-z0-9-]+$/;
 
 export function isSecuritySensitiveKey(key = "") {
-  return EXACT_SECURITY_KEYS.has(key) || key.startsWith("api-key");
+  const lower = key.toLowerCase();
+  return EXACT_SECURITY_KEYS.has(key) || lower.startsWith("api-key") || lower.startsWith("api_key");
 }
 
 export function isSafeImportKey(key = "") {

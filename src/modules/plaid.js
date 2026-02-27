@@ -290,14 +290,14 @@ export function autoMatchAccounts(connection, cards = [], bankAccounts = []) {
             // Try to match to existing card
             const matchByMask = acct.mask
                 ? cards.find(c =>
-                    c.institution === normalizedInst &&
+                    c.institution?.toLowerCase() === normalizedInst?.toLowerCase() &&
                     c.name?.toLowerCase().includes(acct.mask)
                 )
                 : null;
 
             const matchByName = !matchByMask
                 ? cards.find(c =>
-                    c.institution === normalizedInst &&
+                    c.institution?.toLowerCase() === normalizedInst?.toLowerCase() &&
                     (
                         c.name?.toLowerCase().includes(acct.name?.toLowerCase()) ||
                         acct.officialName?.toLowerCase().includes(c.name?.toLowerCase())
@@ -336,7 +336,7 @@ export function autoMatchAccounts(connection, cards = [], bankAccounts = []) {
         } else if (acct.type === "depository") {
             // Try to match to existing bank account
             const matchByName = bankAccounts.find(b =>
-                b.bank === normalizedInst &&
+                b.bank?.toLowerCase() === normalizedInst?.toLowerCase() &&
                 (
                     b.name?.toLowerCase().includes(acct.name?.toLowerCase()) ||
                     acct.officialName?.toLowerCase().includes(b.name?.toLowerCase()) ||

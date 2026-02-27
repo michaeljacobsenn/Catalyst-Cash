@@ -51,7 +51,16 @@ function StepHeader({ step }) {
     );
 }
 
-export default function SetupWizard({ onComplete, toast, setAppleLinkedId }) {
+import { useSecurity } from '../contexts/SecurityContext.jsx';
+import { useNavigation } from '../contexts/NavigationContext.jsx';
+import { useToast } from '../Toast.jsx';
+
+export default function SetupWizard() {
+    const { setAppleLinkedId, appleLinkedId } = useSecurity();
+    const { setOnboardingComplete } = useNavigation();
+    const toast = useToast();
+    const onComplete = () => setOnboardingComplete(true);
+
     const [step, setStep] = useState(0);
     const [saving, setSaving] = useState(false);
     const [isExiting, setIsExiting] = useState(false);
@@ -147,6 +156,9 @@ export default function SetupWizard({ onComplete, toast, setAppleLinkedId }) {
             }
             if (security.lockTimeout !== undefined) {
                 await db.set("lock-timeout", security.lockTimeout);
+            }
+            if (security.autoBackupInterval) {
+                await db.set("auto-backup-interval", security.autoBackupInterval);
             }
 
             // Mark onboarding complete so wizard never shows again
@@ -245,6 +257,7 @@ export default function SetupWizard({ onComplete, toast, setAppleLinkedId }) {
                                 onSkip={handleSecuritySkip}
                                 saving={saving}
                                 setAppleLinkedId={setAppleLinkedId}
+                                appleLinkedId={appleLinkedId}
                             />
                         )}
                         {pageId === "done" && (

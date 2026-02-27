@@ -599,7 +599,7 @@ export async function fetchMarketPrices(symbols, forceRefresh = false) {
                                     if (json?.data) {
                                         const merged = { ...cached, ...json.data };
                                         db.set(CACHE_KEY, merged);
-                                        db.set(CACHE_TS_KEY, Date.now());
+                                        db.set(CACHE_TS_KEY, Date.now()); // ← update timestamp so merged result is treated as fresh
                                     }
                                 }).catch(() => { });
                         }

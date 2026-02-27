@@ -12,7 +12,10 @@ const WEEK_OPTIONS = Array.from({ length: 52 }, (_, i) => i + 1);
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
 const YEAR_OPTIONS = [1, 2, 3];
 
-export default function RenewalsTab({ renewals, setRenewals, cardAnnualFees, cards }) {
+import { usePortfolio } from '../contexts/PortfolioContext.jsx';
+
+export default function RenewalsTab() {
+    const { renewals, setRenewals, cardAnnualFees, cards } = usePortfolio();
     const [editing, setEditing] = useState(null); // index within user renewals
     const [editVal, setEditVal] = useState({});
     const [showAdd, setShowAdd] = useState(false);

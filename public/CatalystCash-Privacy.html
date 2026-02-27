@@ -137,8 +137,52 @@
       <li>Opt in or out of API Mode.</li>
     </ul>
 
+    <h2>Plaid Integration & Bank Data</h2>
+    <p>We use Plaid Inc. ("Plaid") to connect your Catalyst Cash app with your bank accounts (if you opt in). When you
+      connect a bank account, Plaid securely fetches read-only balances and transaction data to assist with budget
+      tracking and net worth calculation. We do not use Plaid to move money, initiate transfers, or make payments.
+      Plaid's connection is read-only.</p>
+    <ul>
+      <li><strong>Data Minimization:</strong> Catalyst Cash only fetches the minimum data required (account names,
+        balances, recent transactions).</li>
+      <li><strong>No Server Caching:</strong> We do not store your bank data on any centralized servers. Balances are
+        fetched on-device and kept strictly within your local App local storage.</li>
+      <li><strong>Plaid Privacy Policy:</strong> By using the Plaid integration, you also agree to the <a
+          href="https://plaid.com/legal/#end-user-privacy-policy" target="_blank">Plaid End User Privacy Policy</a>.
+      </li>
+    </ul>
+
+    <h2>Information Security Policy</h2>
+    <p>Catalyst Cash implements an operational Information Security Program (ISP) to protect your data:</p>
+    <ul>
+      <li><strong>Encryption at Rest:</strong> All application data, including API keys and cached financial snapshots,
+        are encrypted at rest using iOS/Android device-level secure encryption (AES-256).</li>
+      <li><strong>Encryption in Transit:</strong> All communications between the app and third-party APIs (including
+        Plaid and AI Providers) utilize TLS 1.2+ encryption.</li>
+      <li><strong>Access Control:</strong> Roles and access limitations are enforced via Role-Based Access Control
+        (RBAC). Only the verified device owner (via FaceID/Passcode) can access or decrypt the local storage
+        constraints.</li>
+      <li><strong>Vulnerability Management:</strong> We actively scan for vulnerabilities during development, patch
+        identified security flaws within a reasonable timeframe, and monitor dependencies for End-of-Life (EOL)
+        statuses.</li>
+    </ul>
+
+    <h2>Data Retention and Deletion Policy</h2>
+    <p>Because Catalyst Cash is a "local-first" application without centralized database storage, you have total control
+      over the retention and deletion of your data.</p>
+    <ul>
+      <li><strong>Data Retention:</strong> Data is retained locally on your device indefinitely until you choose to
+        delete it or uninstall the app.</li>
+      <li><strong>Right to Deletion:</strong> You may instantly permanently delete all local application data,
+        connections, and histories via the <strong>"Delete All Data"</strong> button located in the App Settings >
+        Backup & Data tab.</li>
+      <li><strong>Plaid Disconnection:</strong> Disconnecting an institution via the App Settings immediately revokes
+        our access token with Plaid, halting any further data flow from that institution.</li>
+    </ul>
+
     <h2>Contact</h2>
-    <p>For privacy questions, contact: <strong>support@catalystcash.app</strong></p>
+    <p>For privacy questions, data deletion requests, or security disclosures, contact:
+      <strong>support@catalystcash.app</strong></p>
   </div>
 </body>
 

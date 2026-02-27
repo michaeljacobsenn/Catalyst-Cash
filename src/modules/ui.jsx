@@ -90,7 +90,7 @@ export const GlobalStyles = () => (
     /* Safe-area + bottom-nav aware padding for scroll bodies */
     :root{--bottom-nav-h:72px;--top-bar-h:48px}
     .safe-scroll-body{
-      padding-bottom:calc(var(--bottom-nav-h,0px) + env(safe-area-inset-bottom,0px) + 16px);
+      padding-bottom:calc(var(--bottom-nav-h,0px) + 16px);
     }
     .safe-pane{
       padding-top:calc(var(--top-bar-h,0px) + env(safe-area-inset-top,0px));
@@ -116,10 +116,19 @@ export const GlobalStyles = () => (
       *,*::before,*::after{animation-duration:0.001ms!important;animation-iteration-count:1!important;transition-duration:0.001ms!important;scroll-behavior:auto!important}
     }
 
-    /* ── Pinch-to-zoom & double-tap-zoom prevention ── */
-    html{touch-action:pan-x pan-y;-ms-touch-action:pan-x pan-y}
+    /* ── Double-tap-zoom prevention (pinch-to-zoom PRESERVED per WCAG 1.4.4) ── */
+    html{touch-action:pan-x pan-y pinch-zoom;-ms-touch-action:pan-x pan-y pinch-zoom}
     *{-webkit-user-select:none;user-select:none}
-    input,textarea{-webkit-user-select:text;user-select:text}
+    input,textarea,select,[contenteditable]{-webkit-user-select:text;user-select:text}
+
+    /* ── WCAG 2.4.7: Focus Visible — high-contrast keyboard focus ring ── */
+    :focus-visible{
+      outline:3px solid ${T.accent.primary};
+      outline-offset:2px;
+      border-radius:4px;
+    }
+    /* Remove focus ring for mouse/touch (only :focus-visible above applies for keyboard) */
+    :focus:not(:focus-visible){outline:none;}
 
     /* ── Landscape mode: constrain to a centered 520px pillar ── */
     @media (orientation:landscape) and (max-height:600px){
@@ -135,7 +144,7 @@ export const GlobalStyles = () => (
     /* ── Keyboard-aware scrolling: let the environment variable shift content ── */
     @supports (padding-bottom: env(keyboard-inset-height, 0px)){
       .safe-scroll-body{
-        padding-bottom:calc(var(--bottom-nav-h,72px) + env(safe-area-inset-bottom,0px) + env(keyboard-inset-height,0px) + 16px);
+        padding-bottom:calc(var(--bottom-nav-h,72px) + env(keyboard-inset-height,0px) + 16px);
       }
     }
   `}</style>
@@ -171,6 +180,9 @@ export const Card = ({ children, style, animate, delay = 0, onClick, variant = "
   return (
     <div
       onClick={onClick}
+      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(e); } } : undefined}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
       className={`${animate ? "slide-up " : ""}${onClick ? "hover-card " : ""}`}
       style={{
         ...v,
@@ -209,15 +221,20 @@ export const Label = ({ children, style }) => (
 export class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { error: null };
+    this.state = { error: null, errorInfo: null };
   }
   static getDerivedStateFromError(error) {
     return { error };
+  }
+  componentDidCatch(error, errorInfo) {
+    this.setState({ errorInfo });
+    console.error("[ErrorBoundary]", error, errorInfo?.componentStack);
   }
   render() {
     if (this.state.error)
       return (
         <div
+          role="alert"
           style={{
             background: T.status.redDim,
             border: `1px solid ${T.status.red}20`,
@@ -232,21 +249,38 @@ export class ErrorBoundary extends React.Component {
           <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5, marginBottom: 10 }}>
             {this.state.error.message || "Failed to render."}
           </p>
-          <button
-            onClick={() => this.setState({ error: null })}
-            style={{
-              padding: "8px 16px",
-              borderRadius: T.radius.md,
-              border: "none",
-              background: T.status.red,
-              color: "#fff",
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            Dismiss
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => this.setState({ error: null, errorInfo: null })}
+              style={{
+                padding: "8px 16px",
+                borderRadius: T.radius.md,
+                border: "none",
+                background: T.status.red,
+                color: "#fff",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Retry
+            </button>
+            <button
+              onClick={() => { this.setState({ error: null, errorInfo: null }); window.location.reload(); }}
+              style={{
+                padding: "8px 16px",
+                borderRadius: T.radius.md,
+                border: `1px solid ${T.border.default}`,
+                background: "transparent",
+                color: T.text.secondary,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Reload App
+            </button>
+          </div>
         </div>
       );
     return this.props.children;
@@ -288,3 +322,17 @@ export const Badge = ({ variant = "gray", children, style }) => {
     </span>
   );
 };
+
+export const ProgressBar = ({ progress = 0, color = T.accent.primary, style }) => (
+  <div style={{ height: 6, background: T.bg.surface, borderRadius: 3, overflow: "hidden", ...style }}>
+    <div
+      style={{
+        height: "100%",
+        width: `${Math.min(Math.max(progress, 0), 100)}%`,
+        background: color,
+        borderRadius: 3,
+        transition: "width 1s cubic-bezier(0.16, 1, 0.3, 1), background 0.5s ease"
+      }}
+    />
+  </div>
+);
