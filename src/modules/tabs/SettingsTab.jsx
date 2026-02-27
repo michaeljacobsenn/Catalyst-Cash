@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Eye, EyeOff, ArrowLeft, Cloud, Download, Upload, CheckCircle, AlertTriangle, ChevronDown, Loader2, ExternalLink, Pencil, Check, ChevronRight, Shield, Cpu, Target, Briefcase, Landmark, Database, Lock, Settings, Info } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, Cloud, Download, Upload, CheckCircle, AlertTriangle, ChevronDown, Loader2, ExternalLink, Pencil, Check, ChevronRight, Shield, Cpu, Target, Briefcase, Landmark, Database, Lock, Settings, Info, Building2, Plus, Unplug } from "lucide-react";
 import { T, APP_VERSION } from "../constants.js";
 import { AI_PROVIDERS, getProvider } from "../providers.js";
 import { getLogsAsText, clearLogs } from "../logger.js";
@@ -13,8 +13,11 @@ import { SignInWithApple } from "@capacitor-community/apple-sign-in";
 import { Capacitor } from "@capacitor/core";
 import { uploadToICloud } from "../cloudSync.js";
 import { isSecuritySensitiveKey } from "../securityKeys.js";
-import * as XLSX from "xlsx";
+// xlsx is loaded dynamically in importBackup() to reduce initial bundle size
 import { generateBackupSpreadsheet } from "../spreadsheet.js";
+import { getConnections, removeConnection, connectBank } from "../plaid.js";
+
+const ENABLE_PLAID = false; // Toggle to false to hide, true to show Plaid integration
 
 // Legacy key migration: if old "api-key" exists, treat as openai key
 async function migrateApiKey() {
@@ -70,6 +73,7 @@ async function importBackup(file, getPassphrase) {
                 }
 
                 if (backup && backup.type === "spreadsheet-backup") {
+                    const XLSX = await import("xlsx");
                     const binary_string = window.atob(backup.base64);
                     const len = binary_string.length;
                     const bytes = new Uint8Array(len);
@@ -122,10 +126,15 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
 
     // Auth Plugins state management
     const [lastBackupTS, setLastBackupTS] = useState(null);
+    const [plaidConnections, setPlaidConnections] = useState([]);
+    const [isPlaidConnecting, setIsPlaidConnecting] = useState(false);
 
     useEffect(() => {
         // Initialization now handled at root level in App.jsx
         db.get("last-backup-ts").then(ts => setLastBackupTS(ts)).catch(() => { });
+        if (ENABLE_PLAID) {
+            getConnections().then(conns => setPlaidConnections(conns || [])).catch(() => { });
+        }
     }, []);
 
     const handleAppleSignIn = async () => {
@@ -536,6 +545,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                     { id: "ai", label: "AI & Engine", icon: Cpu, color: T.status.blue },
                                     { id: "backup", label: "Backup & Data", icon: Database, color: T.status.green },
                                     { id: "security", label: "Security", icon: Lock, color: T.status.red },
+                                    ...(ENABLE_PLAID ? [{ id: "plaid", label: "Bank Connections", icon: Building2, color: T.status.purple || "#8a2be2" }] : []),
                                     { id: "guide", label: "Help & Guide", icon: Info, color: T.accent.primary }
                                 ].map((item, i, arr) => (
                                     <button key={item.id} onClick={() => {
@@ -1053,6 +1063,89 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                         </div>
 
                     </Card>
+
+                    {/* ── Bank Connections (Plaid) ───────────────────────────────────────── */}
+                    {ENABLE_PLAID && (
+                        <Card style={{ borderLeft: `3px solid ${T.status.purple || "#8a2be2"}40`, display: appTab === "plaid" ? "block" : "none" }}>
+                            <Label>Bank Connections</Label>
+                            <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.6, marginBottom: 16 }}>
+                                Securely link your bank and credit card accounts to automatically fetch balances.
+                                Credentials are never stored on our servers.
+                            </p>
+
+                            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
+                                {plaidConnections.length === 0 ? (
+                                    <div style={{
+                                        padding: 16, borderRadius: T.radius.md, border: `1px dashed ${T.border.default}`,
+                                        textAlign: "center", color: T.text.muted, fontSize: 13, fontWeight: 600
+                                    }}>
+                                        No linked accounts yet.
+                                    </div>
+                                ) : (
+                                    plaidConnections.map(conn => (
+                                        <div key={conn.id} style={{
+                                            padding: "14px 16px", borderRadius: T.radius.md,
+                                            background: T.bg.elevated, border: `1px solid ${T.border.default}`,
+                                            display: "flex", justifyContent: "space-between", alignItems: "center"
+                                        }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                                <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                                                    {conn.institution_logo ? <img src={`data:image/png;base64,${conn.institution_logo}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Building2 size={16} color="#000" />}
+                                                </div>
+                                                <div>
+                                                    <span style={{ fontSize: 14, fontWeight: 700, color: T.text.primary, display: "block" }}>{conn.institution_name}</span>
+                                                    <span style={{ fontSize: 11, color: T.text.muted, marginTop: 2, display: "block" }}>{conn.accounts?.length || 0} Accounts Linked</span>
+                                                </div>
+                                            </div>
+                                            <button onClick={async () => {
+                                                if (!window.confirm(`Disconnect ${conn.institution_name}?`)) return;
+                                                await removeConnection(conn.id);
+                                                setPlaidConnections(await getConnections());
+                                                if (window.toast) window.toast.success("Connection removed");
+                                            }} style={{
+                                                width: 36, height: 36, borderRadius: T.radius.sm, border: "none",
+                                                background: T.status.redDim, color: T.status.red, cursor: "pointer",
+                                                display: "flex", alignItems: "center", justifyContent: "center"
+                                            }}>
+                                                <Unplug size={16} />
+                                            </button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            <button onClick={async () => {
+                                if (isPlaidConnecting) return;
+                                setIsPlaidConnecting(true);
+                                try {
+                                    await connectBank(
+                                        async () => {
+                                            setPlaidConnections(await getConnections());
+                                            if (window.toast) window.toast.success("Bank linked successfully!");
+                                        },
+                                        (err) => {
+                                            console.error(err);
+                                            if (window.toast) window.toast.error("Failed to link bank");
+                                        }
+                                    );
+                                } catch (err) {
+                                    console.error(err);
+                                    if (window.toast) window.toast.error(err.message || "Failed to initialize Plaid");
+                                } finally {
+                                    setIsPlaidConnecting(false);
+                                }
+                            }} disabled={isPlaidConnecting} style={{
+                                width: "100%", padding: 14, borderRadius: T.radius.md,
+                                border: "none", background: T.accent.primary, color: "white",
+                                fontSize: 14, fontWeight: 700, cursor: isPlaidConnecting ? "not-allowed" : "pointer",
+                                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                                opacity: isPlaidConnecting ? 0.7 : 1, transition: "opacity .2s"
+                            }}>
+                                {isPlaidConnecting ? <Loader2 size={18} className="spin" /> : <Plus size={18} />}
+                                {isPlaidConnecting ? "Connecting..." : "Link New Bank"}
+                            </button>
+                        </Card>
+                    )}
                 </div>
 
                 {/* ── Financial Constants ────────────────────────────────────── */}
@@ -1560,23 +1653,49 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                         {/* Investments (Combined with Assets & Goals) */}
                         <div style={{ display: financeTab === "assets" ? "flex" : "none", flexDirection: "column", gap: 16 }}>
                             <div style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${T.border.subtle}`, boxShadow: `0 4px 20px #00000010` }}>
-                                <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 16, color: T.text.primary, borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 10 }}>Investments (Defaults)</h3>
+                                <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 16, color: T.text.primary, borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 10 }}>Investment Values</h3>
                                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                                    {/* BROKERAGE */}
                                     <div>
                                         <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>BROKERAGE</span>
-                                        <div style={{ position: "relative" }}>
-                                            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                            <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.investmentBrokerage || ""} onChange={e => setFinancialConfig({ ...financialConfig, investmentBrokerage: parseFloat(e.target.value) || 0 })}
-                                                style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                        </div>
+                                        {financialConfig?.enableHoldings && (financialConfig?.holdings?.brokerage || []).length > 0 && !financialConfig?.overrideBrokerageValue ? (
+                                            <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.accent.emerald}08`, border: `1px solid ${T.accent.emerald}20` }}>
+                                                <div style={{ fontSize: 14, fontWeight: 800, color: T.accent.emerald, fontFamily: T.font.mono }}>📈 Live</div>
+                                                <p style={{ fontSize: 10, color: T.text.muted, margin: "4px 0 0" }}>Auto-tracked from holdings</p>
+                                            </div>
+                                        ) : (
+                                            <div style={{ position: "relative" }}>
+                                                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
+                                                <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.investmentBrokerage || ""} onChange={e => setFinancialConfig({ ...financialConfig, investmentBrokerage: parseFloat(e.target.value) || 0 })}
+                                                    style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
+                                            </div>
+                                        )}
+                                        {financialConfig?.enableHoldings && (financialConfig?.holdings?.brokerage || []).length > 0 && (
+                                            <button onClick={() => setFinancialConfig({ ...financialConfig, overrideBrokerageValue: !financialConfig?.overrideBrokerageValue })} style={{
+                                                fontSize: 10, color: financialConfig?.overrideBrokerageValue ? T.accent.primary : T.text.muted, background: "none", border: "none", cursor: "pointer", padding: "6px 0 0", fontWeight: 600, fontFamily: T.font.mono
+                                            }}>⚙️ {financialConfig?.overrideBrokerageValue ? "Use Live Value" : "Manual Override"}</button>
+                                        )}
                                     </div>
+                                    {/* ROTH IRA */}
                                     <div>
                                         <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>ROTH IRA</span>
-                                        <div style={{ position: "relative" }}>
-                                            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                            <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.investmentRoth || ""} onChange={e => setFinancialConfig({ ...financialConfig, investmentRoth: parseFloat(e.target.value) || 0 })}
-                                                style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                        </div>
+                                        {financialConfig?.enableHoldings && (financialConfig?.holdings?.roth || []).length > 0 && !financialConfig?.overrideRothValue ? (
+                                            <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.accent.emerald}08`, border: `1px solid ${T.accent.emerald}20` }}>
+                                                <div style={{ fontSize: 14, fontWeight: 800, color: T.accent.emerald, fontFamily: T.font.mono }}>📈 Live</div>
+                                                <p style={{ fontSize: 10, color: T.text.muted, margin: "4px 0 0" }}>Auto-tracked from holdings</p>
+                                            </div>
+                                        ) : (
+                                            <div style={{ position: "relative" }}>
+                                                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
+                                                <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.investmentRoth || ""} onChange={e => setFinancialConfig({ ...financialConfig, investmentRoth: parseFloat(e.target.value) || 0 })}
+                                                    style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
+                                            </div>
+                                        )}
+                                        {financialConfig?.enableHoldings && (financialConfig?.holdings?.roth || []).length > 0 && (
+                                            <button onClick={() => setFinancialConfig({ ...financialConfig, overrideRothValue: !financialConfig?.overrideRothValue })} style={{
+                                                fontSize: 10, color: financialConfig?.overrideRothValue ? T.accent.primary : T.text.muted, background: "none", border: "none", cursor: "pointer", padding: "6px 0 0", fontWeight: 600, fontFamily: T.font.mono
+                                            }}>⚙️ {financialConfig?.overrideRothValue ? "Use Live Value" : "Manual Override"}</button>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -1709,11 +1828,23 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                                             <div>
                                                 <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>401K BALANCE</span>
-                                                <div style={{ position: "relative" }}>
-                                                    <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.k401Balance || ""} onChange={e => setFinancialConfig({ ...financialConfig, k401Balance: parseFloat(e.target.value) || 0 })}
-                                                        style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                                </div>
+                                                {financialConfig?.enableHoldings && (financialConfig?.holdings?.k401 || []).length > 0 && !financialConfig?.override401kValue ? (
+                                                    <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.accent.emerald}08`, border: `1px solid ${T.accent.emerald}20` }}>
+                                                        <div style={{ fontSize: 14, fontWeight: 800, color: T.accent.emerald, fontFamily: T.font.mono }}>📈 Live</div>
+                                                        <p style={{ fontSize: 10, color: T.text.muted, margin: "4px 0 0" }}>Auto-tracked from holdings</p>
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ position: "relative" }}>
+                                                        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
+                                                        <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.k401Balance || ""} onChange={e => setFinancialConfig({ ...financialConfig, k401Balance: parseFloat(e.target.value) || 0 })}
+                                                            style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
+                                                    </div>
+                                                )}
+                                                {financialConfig?.enableHoldings && (financialConfig?.holdings?.k401 || []).length > 0 && (
+                                                    <button onClick={() => setFinancialConfig({ ...financialConfig, override401kValue: !financialConfig?.override401kValue })} style={{
+                                                        fontSize: 10, color: financialConfig?.override401kValue ? T.accent.primary : T.text.muted, background: "none", border: "none", cursor: "pointer", padding: "6px 0 0", fontWeight: 600, fontFamily: T.font.mono
+                                                    }}>⚙️ {financialConfig?.override401kValue ? "Use Live Value" : "Manual Override"}</button>
+                                                )}
                                             </div>
                                             <div>
                                                 <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>401K YTD CONTRIBUTED</span>
@@ -1800,6 +1931,71 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                             </div>
                         </div>
 
+                        {/* HSA Section */}
+                        <div style={{ display: financeTab === "assets" ? "block" : "none" }}>
+                            <div style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${T.border.subtle}`, boxShadow: `0 4px 20px #00000010`, marginBottom: 24 }}>
+                                <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: T.text.primary }}>Track HSA</h3>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: financialConfig?.trackHSA ? `1px dashed ${T.border.subtle}` : "none", paddingBottom: financialConfig?.trackHSA ? 16 : 0, marginBottom: financialConfig?.trackHSA ? 16 : 0 }}>
+                                    <span style={{ fontSize: 10, color: T.text.muted }}>Triple-tax-advantaged. Track balance, contributions, and limits.</span>
+                                    <button onClick={() => setFinancialConfig({ ...financialConfig, trackHSA: !financialConfig?.trackHSA })} style={{
+                                        width: 56, height: 28, borderRadius: 999,
+                                        border: `1px solid ${financialConfig?.trackHSA ? "#06B6D4" : T.border.default}`,
+                                        background: financialConfig?.trackHSA ? "rgba(6,182,212,0.12)" : T.bg.elevated,
+                                        position: "relative", cursor: "pointer", flexShrink: 0
+                                    }}>
+                                        <div style={{
+                                            width: 22, height: 22, borderRadius: 999,
+                                            background: financialConfig?.trackHSA ? "#06B6D4" : T.bg.card,
+                                            position: "absolute", top: 2, left: financialConfig?.trackHSA ? 30 : 4,
+                                            transition: "all .2s"
+                                        }} />
+                                    </button>
+                                </div>
+                                {
+                                    financialConfig?.trackHSA && (
+                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                                            <div>
+                                                <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>HSA BALANCE</span>
+                                                {financialConfig?.enableHoldings && (financialConfig?.holdings?.hsa || []).length > 0 && !financialConfig?.overrideHSAValue ? (
+                                                    <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.accent.emerald}08`, border: `1px solid ${T.accent.emerald}20` }}>
+                                                        <div style={{ fontSize: 14, fontWeight: 800, color: T.accent.emerald, fontFamily: T.font.mono }}>📈 Live</div>
+                                                        <p style={{ fontSize: 10, color: T.text.muted, margin: "4px 0 0" }}>Auto-tracked from holdings</p>
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ position: "relative" }}>
+                                                        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
+                                                        <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.hsaBalance || ""} onChange={e => setFinancialConfig({ ...financialConfig, hsaBalance: parseFloat(e.target.value) || 0 })}
+                                                            style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
+                                                    </div>
+                                                )}
+                                                {financialConfig?.enableHoldings && (financialConfig?.holdings?.hsa || []).length > 0 && (
+                                                    <button onClick={() => setFinancialConfig({ ...financialConfig, overrideHSAValue: !financialConfig?.overrideHSAValue })} style={{
+                                                        fontSize: 10, color: financialConfig?.overrideHSAValue ? T.accent.primary : T.text.muted, background: "none", border: "none", cursor: "pointer", padding: "6px 0 0", fontWeight: 600, fontFamily: T.font.mono
+                                                    }}>⚙️ {financialConfig?.overrideHSAValue ? "Use Live Value" : "Manual Override"}</button>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>HSA YTD CONTRIBUTED</span>
+                                                <div style={{ position: "relative" }}>
+                                                    <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
+                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.hsaContributedYTD || ""} onChange={e => setFinancialConfig({ ...financialConfig, hsaContributedYTD: parseFloat(e.target.value) || 0 })}
+                                                        style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>HSA ANNUAL LIMIT</span>
+                                                <div style={{ position: "relative" }}>
+                                                    <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
+                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" step="1" value={financialConfig?.hsaAnnualLimit ?? 4300} onChange={e => setFinancialConfig({ ...financialConfig, hsaAnnualLimit: parseFloat(e.target.value) || 0 })}
+                                                        style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
+                                                </div>
+                                                <p style={{ fontSize: 10, color: T.text.muted, marginTop: 4 }}>$4,300 individual / $8,550 family (2025)</p>
+                                            </div>
+                                        </div>
+                                    )
+                                }
+                            </div>
+                        </div>
                         {/* Holdings Auto-Track — management moved to Accounts tab */}
                         <div style={{ display: financeTab === "assets" ? "block" : "none" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 6, marginBottom: 12, marginTop: 16 }}>

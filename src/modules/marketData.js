@@ -5,10 +5,23 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { db } from "./utils.js";
+import { getMarketRefreshTTL } from "./subscription.js";
 
 const CACHE_KEY = "market-data-cache";
 const CACHE_TS_KEY = "market-data-ts";
-const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+const DEFAULT_CACHE_TTL = 15 * 60 * 1000; // 15 min fallback (sync contexts)
+
+/**
+ * Get the effective cache TTL based on subscription tier.
+ * Falls back to DEFAULT_CACHE_TTL if the async call fails.
+ */
+async function getCacheTTL() {
+    try {
+        return await getMarketRefreshTTL();
+    } catch {
+        return DEFAULT_CACHE_TTL;
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════
 // TICKER CATALOGS — curated quick-add lists by asset class
@@ -573,7 +586,8 @@ export async function fetchMarketPrices(symbols, forceRefresh = false) {
     if (!forceRefresh) {
         try {
             const cachedTs = await db.get(CACHE_TS_KEY);
-            if (cachedTs && (Date.now() - cachedTs) < CACHE_TTL) {
+            const ttl = await getCacheTTL();
+            if (cachedTs && (Date.now() - cachedTs) < ttl) {
                 const cached = await db.get(CACHE_KEY);
                 if (cached && typeof cached === "object") {
                     const filtered = {};

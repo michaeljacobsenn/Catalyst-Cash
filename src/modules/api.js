@@ -275,7 +275,7 @@ function buildBodyClaude(snapshot, stream, model, sysText, history = []) {
   return JSON.stringify({
     model: model || "claude-4-5-sonnet-20250929",
     max_tokens: 12000,
-    temperature: 1,
+    temperature: 0.1,
     stream: stream || false,
     system: sysText,
     messages: [

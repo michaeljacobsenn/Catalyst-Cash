@@ -79,7 +79,7 @@ export default function DebtSimulator({ cards = [], financialConfig }) {
     // Get debts from card portfolio + non-card debts
     const debts = useMemo(() => {
         const cardDebts = cards.filter(c => parseFloat(c.balance) > 0).map(c => ({
-            name: c.nickname || c.cardName || "Card",
+            name: c.nickname || c.name || c.institution || "Card",
             balance: c.balance, apr: c.apr, minPayment: c.minPayment, limit: c.limit
         }));
         const nonCardDebts = (financialConfig?.nonCardDebts || []).filter(d => parseFloat(d.balance) > 0).map(d => ({

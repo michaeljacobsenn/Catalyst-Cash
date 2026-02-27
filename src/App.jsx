@@ -37,7 +37,7 @@ import { NavigationProvider, useNavigation } from "./modules/contexts/Navigation
 import { AuditProvider, useAudit } from "./modules/contexts/AuditContext.jsx";
 import { uploadToICloud } from "./modules/cloudSync.js";
 import { isSecuritySensitiveKey } from "./modules/securityKeys.js";
-import { isPro } from "./modules/subscription.js";
+import { isPro, getGatingMode } from "./modules/subscription.js";
 import { evaluateBadges, unlockBadge, BADGE_DEFINITIONS } from "./modules/badges.js";
 
 function flattenSeedRenewals() {
@@ -99,7 +99,10 @@ function CatalystCash() {
 
   // Pro subscription state — resolved async on mount
   const [proEnabled, setProEnabled] = useState(true);
-  useEffect(() => { isPro().then(setProEnabled).catch(() => setProEnabled(true)); }, []);
+  useEffect(() => {
+    if (getGatingMode() === "off") { setProEnabled(true); return; }
+    isPro().then(setProEnabled).catch(() => setProEnabled(false));
+  }, []);
 
   const [showQuickMenu, setShowQuickMenu] = useState(false);
 
@@ -143,7 +146,7 @@ function CatalystCash() {
       } catch (e) {
         console.error("iCloud auto-sync error:", e);
       }
-    }, 5000); // 5 second debounce
+    }, 15000); // 15 second debounce — avoid writing on every keystroke
 
     return () => clearTimeout(iCloudSyncTimer.current);
   }, [ready, history, renewals, cards, financialConfig, personalRules, appleLinkedId]);
@@ -321,13 +324,14 @@ function CatalystCash() {
 
 
   const [isResetting, setIsResetting] = useState(false);
+  const resetTimerRef = useRef(null);
   const factoryReset = async () => {
     haptic.warning();
     toast.success("App securely erased. Restarting...");
     setIsResetting(true); // Unmounts SettingsTab immediately
 
     // Wait for any trailing debounces to flush from React to the DB before wiping
-    setTimeout(async () => {
+    resetTimerRef.current = setTimeout(async () => {
       await db.clear();
       await db.set("renewals", []);
       await db.set("renewals-seed-version", "v2");
@@ -340,6 +344,8 @@ function CatalystCash() {
       window.location.reload();
     }, 800);
   };
+  // Cleanup factory reset timer on unmount
+  useEffect(() => () => { if (resetTimerRef.current) clearTimeout(resetTimerRef.current); }, []);
 
 
   const importBackupFile = async (file) => {
@@ -493,7 +499,20 @@ function CatalystCash() {
       }} aria-label="Open Settings"><Settings size={16} strokeWidth={1.8} /></button>
     </div>
 
+    {/* ═══════ OFFLINE BANNER ═══════ */}
+    {!online && (
+      <div style={{
+        background: `${T.status.amber}15`, borderBottom: `1px solid ${T.status.amber}30`,
+        padding: "6px 16px", textAlign: "center",
+        fontSize: 11, color: T.status.amber, fontWeight: 600, fontFamily: T.font.mono,
+        flexShrink: 0
+      }}>
+        ⚡ NO INTERNET — Audits unavailable
+      </div>
+    )}
+
     <div ref={scrollRef} className="scroll-area safe-scroll-body"
+      onTouchMove={() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); }}
       onTouchStart={e => {
         swipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
       }}
@@ -540,7 +559,20 @@ function CatalystCash() {
             <span style={{ fontSize: 12, fontWeight: 700, color: T.status.red }}>Error</span></div>
           <button onClick={() => setError(null)} style={{ background: "none", border: "none", color: T.text.dim, cursor: "pointer", padding: 4 }}>
             <X size={14} /></button></div>
-        <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5 }}>{error}</p></Card>}
+        <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5 }}>{error}</p>
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <button onClick={() => { setError(null); navTo("input"); }} style={{
+            flex: 1, padding: "10px 14px", borderRadius: T.radius.md,
+            border: `1px solid ${T.accent.primary}40`, background: T.accent.primaryDim,
+            color: T.accent.primary, fontSize: 12, fontWeight: 700, cursor: "pointer",
+            fontFamily: T.font.mono
+          }}>GO TO INPUT</button>
+          <button onClick={() => setError(null)} style={{
+            padding: "10px 14px", borderRadius: T.radius.md,
+            border: `1px solid ${T.border.default}`, background: "transparent",
+            color: T.text.secondary, fontSize: 12, fontWeight: 600, cursor: "pointer"
+          }}>DISMISS</button>
+        </div></Card>}
 
       {/* ═══════ LAZY TAB RENDERING — only mount active tab ═══════ */}
       {(() => {
@@ -570,16 +602,18 @@ function CatalystCash() {
     </div>
 
     {/* ═══════ OVERLAY PANELS — rendered OUTSIDE main scroll but INSIDE flex flow ═══════ */}
-    {inputMounted && <div className="slide-pane" style={{
-      display: tab === "input" ? "flex" : "none",
-      flexDirection: "column",
-      flex: 1, minHeight: 0,
-      zIndex: 15, background: T.bg.base,
-      width: "100%", boxSizing: "border-box",
-      overflowY: "auto", overscrollBehavior: "contain",
-      WebkitOverflowScrolling: "touch",
-      paddingBottom: 24, // Clear the 14px Action button protrusion 
-    }}>
+    {inputMounted && <div className="slide-pane"
+      onTouchMove={() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); }}
+      style={{
+        display: tab === "input" ? "flex" : "none",
+        flexDirection: "column",
+        flex: 1, minHeight: 0,
+        zIndex: 15, background: T.bg.base,
+        width: "100%", boxSizing: "border-box",
+        overflowY: "auto", overscrollBehavior: "contain",
+        WebkitOverflowScrolling: "touch",
+        paddingBottom: 24, // Clear the 14px Action button protrusion 
+      }}>
       <InputForm onSubmit={handleSubmit} isLoading={loading} lastAudit={current}
         renewals={renewals} cardAnnualFees={cardAnnualFees} cards={cards}
         onManualImport={handleManualImport} toast={toast} financialConfig={financialConfig} aiProvider={aiProvider} personalRules={personalRules}
@@ -636,9 +670,7 @@ function CatalystCash() {
             <button onClick={() => { setShowQuickMenu(false); navTo("input"); }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: 'transparent', border: 'none', color: T.text.primary, fontSize: 14, fontWeight: 600, cursor: 'pointer', borderRadius: T.radius.sm }}>
               <Plus size={18} color={T.accent.emerald} /> Start New Audit
             </button>
-            <button onClick={async () => { setShowQuickMenu(false); try { const txt = await navigator.clipboard.readText(); handleManualImport(txt); } catch (e) { toast.error("Could not read clipboard"); } }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: 'transparent', border: 'none', color: T.text.primary, fontSize: 14, fontWeight: 600, cursor: 'pointer', borderRadius: T.radius.sm }}>
-              <ClipboardPaste size={18} color={T.status.blue} /> Paste Payload
-            </button>
+
             <div style={{ height: 1, background: T.border.default, margin: '4px 0' }} />
             <button onClick={() => { setShowQuickMenu(false); navTo("settings"); }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: 'transparent', border: 'none', color: T.text.primary, fontSize: 14, fontWeight: 600, cursor: 'pointer', borderRadius: T.radius.sm }}>
               <Settings size={18} color={T.text.dim} /> App Configuration
@@ -684,7 +716,8 @@ function CatalystCash() {
             onMouseLeave={isCenter ? () => { if (longPressTimer.current) clearTimeout(longPressTimer.current); } : undefined}
             onTouchStart={isCenter ? handlePressStart : undefined}
             onTouchEnd={isCenter ? handlePressEnd : undefined}
-            onClick={!isCenter ? () => { if (tab !== n.id) navTo(n.id); } : undefined}
+            aria-label={n.label}
+            onClick={!isCenter ? () => { if (tab !== n.id) { haptic.light(); navTo(n.id); } } : undefined}
             style={{
               flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
               justifyContent: "flex-end", gap: 2,

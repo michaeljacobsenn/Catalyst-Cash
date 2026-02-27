@@ -55,20 +55,20 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
     const [csvText, setCsvText] = useState("");
     const [parsedTransactions, setParsedTransactions] = useState([]);
     const [budgetActuals, setBudgetActuals] = useState({});
-    const [holdingValues, setHoldingValues] = useState({ roth: 0, k401: 0, brokerage: 0, crypto: 0 });
+    const [holdingValues, setHoldingValues] = useState({ roth: 0, k401: 0, brokerage: 0, crypto: 0, hsa: 0 });
 
     // Auto-calculate portfolio values from cached market prices
     useEffect(() => {
         if (!financialConfig?.enableHoldings) return;
         const holdings = financialConfig?.holdings || {};
-        const allSymbols = [...new Set([...(holdings.roth || []), ...(holdings.k401 || []), ...(holdings.brokerage || []), ...(holdings.crypto || [])].map(h => h.symbol))];
+        const allSymbols = [...new Set([...(holdings.roth || []), ...(holdings.k401 || []), ...(holdings.brokerage || []), ...(holdings.crypto || []), ...(holdings.hsa || [])].map(h => h.symbol))];
         if (allSymbols.length === 0) return;
         fetchMarketPrices(allSymbols).then(prices => {
             const calc = (key) => {
                 const { total } = calcPortfolioValue(holdings[key] || [], prices);
                 return total;
             };
-            setHoldingValues({ roth: calc("roth"), k401: calc("k401"), brokerage: calc("brokerage"), crypto: calc("crypto") });
+            setHoldingValues({ roth: calc("roth"), k401: calc("k401"), brokerage: calc("brokerage"), crypto: calc("crypto"), hsa: calc("hsa") });
         }).catch(() => { });
     }, [financialConfig?.enableHoldings, financialConfig?.holdings]);
 
@@ -270,16 +270,26 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
         headerLines.push(`Pending: ${pendingStr}`);
         if (autoPaycheckApplied) headerLines.push(`Paycheck Auto-Add: $${fmt(autoPaycheckAddAmt)}`);
         if (activeConfig.trackHabits !== false) headerLines.push(`${activeConfig.habitName || 'Habit'} Count: ${form.habitCount}`);
-        if (form.roth) headerLines.push(`Vanguard Roth IRA: $${form.roth}`);
-        if (activeConfig.trackBrokerage && form.brokerage) headerLines.push(`Vanguard Personal Brokerage: $${form.brokerage}`);
+        // Investment values: use live holdingValues when auto-tracking and override is OFF
+        const effectiveRoth = (activeConfig.enableHoldings && (activeConfig.holdings?.roth || []).length > 0 && !activeConfig.overrideRothValue && holdingValues.roth > 0) ? holdingValues.roth.toFixed(2) : form.roth;
+        const effectiveBrokerage = (activeConfig.enableHoldings && (activeConfig.holdings?.brokerage || []).length > 0 && !activeConfig.overrideBrokerageValue && holdingValues.brokerage > 0) ? holdingValues.brokerage.toFixed(2) : form.brokerage;
+        const effectiveK401 = (activeConfig.enableHoldings && (activeConfig.holdings?.k401 || []).length > 0 && !activeConfig.override401kValue && holdingValues.k401 > 0) ? holdingValues.k401.toFixed(2) : (form.k401Balance || activeConfig.k401Balance || 0);
+        if (effectiveRoth) headerLines.push(`Roth IRA: $${effectiveRoth}${(activeConfig.enableHoldings && !activeConfig.overrideRothValue && holdingValues.roth > 0) ? ' (live)' : ''}`);
+        if (activeConfig.trackBrokerage && effectiveBrokerage) headerLines.push(`Brokerage: $${effectiveBrokerage}${(activeConfig.enableHoldings && !activeConfig.overrideBrokerageValue && holdingValues.brokerage > 0) ? ' (live)' : ''}`);
         if (activeConfig.trackRothContributions) {
             headerLines.push(`Roth YTD Contributed: $${activeConfig.rothContributedYTD || 0}`);
             headerLines.push(`Roth Annual Limit: $${activeConfig.rothAnnualLimit || 0}`);
         }
         if (activeConfig.track401k) {
-            headerLines.push(`401k Balance: $${form.k401Balance || activeConfig.k401Balance || 0}`);
+            headerLines.push(`401k Balance: $${effectiveK401}${(activeConfig.enableHoldings && !activeConfig.override401kValue && holdingValues.k401 > 0) ? ' (live)' : ''}`);
             headerLines.push(`401k YTD Contributed: $${activeConfig.k401ContributedYTD || 0}`);
             headerLines.push(`401k Annual Limit: $${activeConfig.k401AnnualLimit || 0}`);
+        }
+        if (activeConfig.trackHSA) {
+            const effectiveHSA = (activeConfig.enableHoldings && (activeConfig.holdings?.hsa || []).length > 0 && !activeConfig.overrideHSAValue && holdingValues.hsa > 0) ? holdingValues.hsa.toFixed(2) : (activeConfig.hsaBalance || 0);
+            headerLines.push(`HSA Balance: $${effectiveHSA}${(activeConfig.enableHoldings && !activeConfig.overrideHSAValue && holdingValues.hsa > 0) ? ' (live)' : ''}`);
+            headerLines.push(`HSA YTD Contributed: $${activeConfig.hsaContributedYTD || 0}`);
+            headerLines.push(`HSA Annual Limit: $${activeConfig.hsaAnnualLimit || 0}`);
         }
         // Budget actuals (weekly spending per category)
         if (activeConfig.budgetCategories?.length > 0) {
@@ -407,7 +417,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
         </Card>
         {(activeConfig.trackChecking !== false || activeConfig.trackSavings !== false) && <div style={{ display: "grid", gridTemplateColumns: (activeConfig.trackChecking !== false && activeConfig.trackSavings !== false) ? "1fr 1fr" : "1fr", gap: 10 }}>
             {activeConfig.trackChecking !== false && <Card style={{ marginBottom: 10 }}><Label>Checking Balance</Label><DI value={form.checking} onChange={e => s("checking", sanitizeDollar(e.target.value))} /></Card>}
-            {activeConfig.trackSavings !== false && <Card style={{ marginBottom: 10 }}><Label>Savings (HYSA)</Label><DI value={form.savings} onChange={e => s("ally", sanitizeDollar(e.target.value))} /></Card>}
+            {activeConfig.trackSavings !== false && <Card style={{ marginBottom: 10 }}><Label>Savings (HYSA)</Label><DI value={form.savings} onChange={e => s("savings", sanitizeDollar(e.target.value))} /></Card>}
         </div>}
         {activeConfig.trackPaycheck !== false && <Card>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

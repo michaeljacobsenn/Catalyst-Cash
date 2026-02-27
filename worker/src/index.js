@@ -8,6 +8,7 @@ const ANTHROPIC_VERSION = "2023-06-01";
 const MAX_AUDITS_PER_DAY = 10;
 const MAX_BODY_SIZE = 100_000; // 100KB max request body
 const VALID_PROVIDERS = ["gemini", "openai", "claude"];
+const PLAID_ENV = "production"; // "sandbox", "development", or "production"
 
 // Model defaults per provider
 const DEFAULTS = {
@@ -209,10 +210,89 @@ export default {
                 providers: ["gemini", "openai", "claude"],
                 defaultProvider: "gemini",
                 defaultModel: DEFAULTS.gemini,
+                plaid: Boolean(env.PLAID_CLIENT_ID && env.PLAID_SECRET)
             }), {
                 status: 200,
                 headers: { ...cors, "Content-Type": "application/json" },
             });
+        }
+
+        // ─── Plaid Endpoints ─────────────────────────────────────
+        if (url.pathname.startsWith("/plaid/")) {
+            if (request.method !== "POST") {
+                return new Response(JSON.stringify({ error: "Method not allowed" }), {
+                    status: 405, headers: { ...cors, "Content-Type": "application/json" }
+                });
+            }
+
+            if (!env.PLAID_CLIENT_ID || !env.PLAID_SECRET) {
+                return new Response(JSON.stringify({ error: "Plaid credentials not configured on backend" }), {
+                    status: 503, headers: { ...cors, "Content-Type": "application/json" }
+                });
+            }
+
+            const plaidDomain = `https://${PLAID_ENV}.plaid.com`;
+            let plaidEndpoint = "";
+            let plaidBody = {};
+
+            try {
+                const reqBody = await request.json();
+
+                if (url.pathname === "/plaid/link-token") {
+                    plaidEndpoint = "/link/token/create";
+                    plaidBody = {
+                        client_id: env.PLAID_CLIENT_ID,
+                        secret: env.PLAID_SECRET,
+                        client_name: "Catalyst Cash",
+                        country_codes: ["US"],
+                        language: "en",
+                        user: { client_user_id: reqBody.userId || "catalyst-user" },
+                        products: ["transactions"] // or whatever products we need
+                    };
+                } else if (url.pathname === "/plaid/exchange") {
+                    plaidEndpoint = "/item/public_token/exchange";
+                    plaidBody = {
+                        client_id: env.PLAID_CLIENT_ID,
+                        secret: env.PLAID_SECRET,
+                        public_token: reqBody.publicToken
+                    };
+                } else if (url.pathname === "/plaid/balances") {
+                    plaidEndpoint = "/accounts/balance/get";
+                    plaidBody = {
+                        client_id: env.PLAID_CLIENT_ID,
+                        secret: env.PLAID_SECRET,
+                        access_token: reqBody.accessToken
+                    };
+                } else if (url.pathname === "/plaid/disconnect") {
+                    plaidEndpoint = "/item/remove";
+                    plaidBody = {
+                        client_id: env.PLAID_CLIENT_ID,
+                        secret: env.PLAID_SECRET,
+                        access_token: reqBody.accessToken
+                    };
+                } else {
+                    return new Response(JSON.stringify({ error: "Unknown Plaid endpoint" }), {
+                        status: 404, headers: { ...cors, "Content-Type": "application/json" }
+                    });
+                }
+
+                const plaidRes = await fetch(`${plaidDomain}${plaidEndpoint}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(plaidBody)
+                });
+
+                const plaidData = await plaidRes.json();
+                return new Response(JSON.stringify(plaidData), {
+                    status: plaidRes.status,
+                    headers: { ...cors, "Content-Type": "application/json" }
+                });
+
+            } catch (err) {
+                return new Response(JSON.stringify({ error: "Plaid proxy error", details: err.message }), {
+                    status: 500, headers: { ...cors, "Content-Type": "application/json" }
+                });
+            }
         }
 
         // ─── Market Data Proxy (GET /market?symbols=VTI,VOO) ─────
