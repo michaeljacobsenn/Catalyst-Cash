@@ -16,7 +16,8 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
     }}>
         <Activity size={28} color={T.text.muted} style={{ marginBottom: 14, opacity: .4 }} />
         <p style={{ fontSize: 14, fontWeight: 600, color: T.text.dim }}>No results yet</p></div>;
-    const p = audit.parsed;
+    const p = audit.parsed || {};
+    const sections = p.sections || {};
     return <div className="page-body" style={{ paddingBottom: 0 }}>
         <div style={{ padding: "14px 0 12px", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
             <div><h1 style={{ fontSize: 22, fontWeight: 800 }}>Full Results</h1>
@@ -29,20 +30,20 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
 
 
 
-        {p.sections.alerts && !/^\s*(no\s*alerts|omit|none|\[\])\s*$/i.test(p.sections.alerts) && p.sections.alerts.length > 5 && (
+        {sections.alerts && !/^\s*(no\s*alerts|omit|none|\[\])\s*$/i.test(sections.alerts) && sections.alerts.length > 5 && (
             <Card animate style={{ borderColor: `${T.status.amber}18`, background: T.status.amberDim, borderLeft: `3px solid ${T.status.amber}` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                     <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.status.amber}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <AlertTriangle size={14} color={T.status.amber} strokeWidth={2.5} /></div>
                     <span style={{ fontSize: 13, fontWeight: 700, color: T.status.amber }}>Alerts</span></div>
-                <Md text={p.sections.alerts} /></Card>)}
-        {p.sections.nextAction && <Card animate delay={75} variant="accent">
+                <Md text={sections.alerts} /></Card>)}
+        {sections.nextAction && <Card animate delay={75} variant="accent">
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                 <div style={{ width: 28, height: 28, borderRadius: 8, background: T.accent.primaryDim, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <Zap size={14} color={T.accent.primary} strokeWidth={2.5} /></div>
                 <span style={{ fontSize: 12, fontWeight: 700, color: T.accent.primary }}>Next Action</span></div>
-            <Md text={stripPaycheckParens(p.sections.nextAction)} /></Card>}
-        <Section title="Dashboard" icon={Activity} content={p.sections.dashboard} accentColor={T.accent.primary} delay={50} badge={<Badge variant="teal">CORE</Badge>} />
+            <Md text={stripPaycheckParens(sections.nextAction)} /></Card>}
+        <Section title="Dashboard" icon={Activity} content={sections.dashboard} accentColor={T.accent.primary} delay={50} badge={<Badge variant="teal">CORE</Badge>} />
         {p.moveItems?.length > 0 && <Card animate delay={100}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -52,13 +53,13 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
                 <Mono size={10} color={T.text.dim}>{Object.values(moveChecks).filter(Boolean).length}/{p.moveItems.length}</Mono></div>
             {p.moveItems.map((m, i) => <MoveRow key={i} item={m} index={i} checked={moveChecks[i] || false} onToggle={() => onToggleMove(i)} />)}
         </Card>}
-        <Section title="Radar — 90 Days" icon={Target} content={p.sections.radar} accentColor={T.status.amber} delay={150} />
-        <Section title="Long-Range Radar" icon={Clock} content={p.sections.longRange} accentColor={T.text.secondary} defaultOpen={false} delay={200} />
-        <Section title="Forward Radar" icon={TrendingUp} content={p.sections.forwardRadar} accentColor={T.status.blue} defaultOpen={false} delay={250} />
-        <Section title="Investments & Roth" icon={TrendingUp} content={p.sections.investments} accentColor={T.accent.primary} delay={300} />
+        <Section title="Radar — 90 Days" icon={Target} content={sections.radar} accentColor={T.status.amber} delay={150} />
+        <Section title="Long-Range Radar" icon={Clock} content={sections.longRange} accentColor={T.text.secondary} defaultOpen={false} delay={200} />
+        <Section title="Forward Radar" icon={TrendingUp} content={sections.forwardRadar} accentColor={T.status.blue} defaultOpen={false} delay={250} />
+        <Section title="Investments & Roth" icon={TrendingUp} content={sections.investments} accentColor={T.accent.primary} delay={300} />
 
-        {p.sections.qualityScore && <Section title="Quality Score" icon={CheckCircle} content={p.sections.qualityScore} accentColor={T.status.green} defaultOpen={false} delay={400} />}
-        {p.sections.autoUpdates && <Section title="Auto-Updates" icon={RefreshCw} content={p.sections.autoUpdates} accentColor={T.text.dim} defaultOpen={false} delay={450} />}
+        {sections.qualityScore && <Section title="Quality Score" icon={CheckCircle} content={sections.qualityScore} accentColor={T.status.green} defaultOpen={false} delay={400} />}
+        {sections.autoUpdates && <Section title="Auto-Updates" icon={RefreshCw} content={sections.autoUpdates} accentColor={T.text.dim} defaultOpen={false} delay={450} />}
         <Card style={{ background: T.bg.elevated }}>
             <div onClick={() => setShowRaw(!showRaw)}
                 onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setShowRaw(!showRaw); } }}

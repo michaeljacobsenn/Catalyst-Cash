@@ -256,9 +256,12 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                                         <div style={{ fontSize: 18, fontWeight: 800, color: T.text.primary }}>{renewals.length}</div>
                                         <div style={{ fontSize: 10, color: T.text.muted }}>{fmt(renewals.reduce((s, r) => {
                                             const amt = r.amount || 0;
-                                            if (r.cadence === "monthly" || r.interval === 1 && r.intervalUnit === "month") return s + amt;
-                                            if (r.cadence === "yearly" || r.interval === 1 && r.intervalUnit === "year") return s + amt / 12;
-                                            if (r.cadence === "quarterly") return s + amt / 3;
+                                            const int = r.interval || 1;
+                                            const unit = r.intervalUnit || "months";
+                                            if (unit === "weeks") return s + (amt / int) * 4.33;
+                                            if (unit === "months") return s + amt / int;
+                                            if (unit === "years") return s + amt / (int * 12);
+                                            if (unit === "one-time") return s;
                                             return s + amt;
                                         }, 0))}/mo est.</div>
                                     </div>
