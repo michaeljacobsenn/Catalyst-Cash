@@ -126,14 +126,19 @@ export function PortfolioProvider({ children }) {
             .filter(c => c.annualFee && c.annualFeeDue)
             .map(c => ({
                 id: c.id,
+                linkedCardId: c.id,
+                cardName: c.name,
                 name: `${getCardLabel(cards, c)} Annual Fee`,
-                amount: String(c.annualFee),
+                amount: typeof c.annualFee === "number" ? c.annualFee : (parseFloat(c.annualFee) || 0),
                 nextDue: c.annualFeeDue,
                 interval: 1,
                 intervalUnit: "years",
                 chargedToId: c.id,
                 chargedTo: getCardLabel(cards, c),
-                isAnnualFee: true
+                category: "af",
+                isCardAF: true,
+                isAnnualFee: true, // legacy alias
+                isWaived: !!c.annualFeeWaived,
             }));
     }, [cards]);
 

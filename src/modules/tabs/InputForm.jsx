@@ -201,7 +201,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
         const catMap = { fixed: "G-Fixed", monthly: "G-Monthly", subs: "H-Subs", ss: "I-S&S", cadence: "G-Cadence", periodic: "G-Periodic", sinking: "J-Sinking", onetime: "J-OneTime", af: "L-AF" };
         const renewalLines = allRenewals.map(r => {
             const cat = catMap[r.isCardAF ? "af" : (r.category || "subs")] || "";
-            const parts = [`  [${cat}] ${r.name}: $${r.amount.toFixed(2)} (${r.cadence || formatInterval(r.interval, r.intervalUnit)})`];
+            const parts = [`  [${cat}] ${r.name}: $${(parseFloat(r.amount) || 0).toFixed(2)} (${r.cadence || formatInterval(r.interval, r.intervalUnit)})`];
             if (r.chargedTo) parts.push(` charged to ${r.chargedTo}`);
             if (r.nextDue) parts.push(` next: ${r.nextDue}`);
             if (r.source && !r.chargedTo) parts.push(` via ${r.source}`);

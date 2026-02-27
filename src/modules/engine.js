@@ -88,8 +88,9 @@ export function generateStrategy(config, snapshot) {
                 // Only count if it's explicitly charged to checking, or if 'chargedTo' isn't a known card
                 const isCardCharge = cards.some(c => c.name.toLowerCase() === (r.chargedTo || "").toLowerCase());
                 if (!isCardCharge) {
-                    timeCriticalAmount += (r.amount || 0);
-                    timeCriticalItems.push({ name: r.name, amount: r.amount, due: r.nextDue });
+                    const amt = parseFloat(r.amount) || 0;
+                    timeCriticalAmount += amt;
+                    timeCriticalItems.push({ name: r.name, amount: amt, due: r.nextDue });
                 }
             }
         });
