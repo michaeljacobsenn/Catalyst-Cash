@@ -1,6 +1,6 @@
 export function buildScrubber(cards = [], renewals = [], config = {}, form = {}) {
     const map = new Map();
-    let cIdx = 1, rIdx = 1, dIdx = 1, bIdx = 1, iIdx = 1;
+    let cIdx = 1, rIdx = 1, dIdx = 1, bIdx = 1, iIdx = 1, catIdx = 1;
 
     // Helper to safely add mappings (longer names first when sorting later)
     const addMap = (realName, prefix, getIdx) => {
@@ -38,7 +38,7 @@ export function buildScrubber(cards = [], renewals = [], config = {}, form = {})
 
     // Budget Categories
     (config.budgetCategories || []).forEach(cat => {
-        addMap(cat.name, "Category", () => iIdx++);
+        addMap(cat.name, "Category", () => catIdx++);
     });
 
     // Form Debts (ones not in config)

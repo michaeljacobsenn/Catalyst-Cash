@@ -6,6 +6,7 @@ import { Preferences } from '@capacitor/preferences';
 import { Share } from '@capacitor/share';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
+import { APP_VERSION } from './constants.js';
 
 import { registerPlugin } from '@capacitor/core';
 
@@ -420,7 +421,7 @@ export async function exportAudit(audit) {
 export async function exportAllAudits(audits) {
   if (!audits?.length) return;
   const payload = {
-    app: "Catalyst Cash", version: "1.5.1-BETA",
+    app: "Catalyst Cash", version: APP_VERSION,
     exportedAt: new Date().toISOString(), count: audits.length, audits
   };
   await nativeExport(`CatalystCash_ALL_${new Date().toISOString().split("T")[0]}.json`, JSON.stringify(payload, null, 2), "application/json");
@@ -429,7 +430,7 @@ export async function exportAllAudits(audits) {
 export async function exportSelectedAudits(audits) {
   if (!audits?.length) return;
   const payload = {
-    app: "Catalyst Cash", version: "1.5.1-BETA",
+    app: "Catalyst Cash", version: APP_VERSION,
     exportedAt: new Date().toISOString(), count: audits.length, audits
   };
   await nativeExport(`CatalystCash_Selected_${audits.length}_${new Date().toISOString().split("T")[0]}.json`, JSON.stringify(payload, null, 2), "application/json");

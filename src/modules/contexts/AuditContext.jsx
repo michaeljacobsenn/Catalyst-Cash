@@ -4,6 +4,7 @@ import { streamAudit, callAudit } from '../api.js';
 import { generateStrategy } from '../engine.js';
 import { buildScrubber } from '../scrubber.js';
 import { evaluateBadges, BADGE_DEFINITIONS } from '../badges.js';
+import { haptic } from '../haptics.js';
 import { useToast } from '../Toast.jsx';
 import { getProvider, getModel } from '../providers.js';
 import { getSystemPrompt } from '../prompts.js';
@@ -173,7 +174,7 @@ export function AuditProvider({ children }) {
     const isBackendMode = prov.isBackend;
     if (!manualResultText && !isBackendMode && !trimmedApiKey) { toast.error("Set your API key in Settings first."); navTo("settings"); return; }
     if (!manualResultText && !aiConsent) { setShowAiConsent(true); return; }
-    if (!manualResultText && !online) { toast.error("You're offline."); return; }
+    if (!manualResultText && !navigator.onLine) { toast.error("You're offline."); return; }
     setIsTest(testMode);
     setLoading(true); setError(null); navTo("results"); setStreamText(""); setElapsed(0);
     timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
@@ -268,8 +269,11 @@ export function AuditProvider({ children }) {
           status: parsed.status || "UNKNOWN"
         };
         const updatedTrend = [...trendContext, trendEntry].slice(-8);
-        setTrendContext(updatedTrend);
-        db.set("trend-context", updatedTrend);
+        setTrendContext(prev => {
+          const next = [...prev, trendEntry].slice(-8);
+          db.set("trend-context", next);
+          return next;
+        });
         await Promise.all([db.set("current-audit", audit), db.set("move-states", {}), db.set("audit-history", nh)]);
       }
       haptic.success();
@@ -424,7 +428,8 @@ export function AuditProvider({ children }) {
     factoryReset,
     deleteHistoryItem,
     isAuditReady,
-    handleManualImport
+    handleManualImport,
+    isTest
   };
 
   return (

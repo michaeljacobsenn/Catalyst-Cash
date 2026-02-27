@@ -635,33 +635,44 @@ export async function fetchMarketPrices(symbols, forceRefresh = false) {
         const missing = symbols.filter(s => !data[s] || !data[s].price);
         if (missing.length > 0) {
             console.warn(`[MarketData] worker missing ${missing.length} symbols, trying Yahoo fallback: ${missing.join(", ")}`);
-            const fallbackResults = await Promise.allSettled(
-                missing.map(async (sym) => {
-                    try {
-                        const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=1d`;
-                        const yRes = await fetch(yUrl, { headers: { "User-Agent": "CatalystCash/1.5" } });
-                        if (!yRes.ok) return null;
-                        const yJson = await yRes.json();
-                        const meta = yJson?.chart?.result?.[0]?.meta;
-                        if (meta?.regularMarketPrice) {
-                            return {
-                                symbol: sym,
-                                price: meta.regularMarketPrice,
-                                previousClose: meta.chartPreviousClose || meta.previousClose || 0,
-                                change: +(meta.regularMarketPrice - (meta.chartPreviousClose || meta.previousClose || 0)).toFixed(2),
-                                changePct: meta.chartPreviousClose ? +(((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose) * 100).toFixed(2) : 0,
-                                name: meta.shortName || meta.symbol || sym,
-                                currency: meta.currency || "USD"
-                            };
-                        }
-                        return null;
-                    } catch { return null; }
-                })
-            );
-            for (const result of fallbackResults) {
-                if (result.status === "fulfilled" && result.value) {
-                    data[result.value.symbol] = result.value;
-                    console.warn(`[MarketData] Yahoo fallback got ${result.value.symbol}: $${result.value.price}`);
+            // Rate-limited sequential fetch — 300ms delay between requests to avoid Yahoo 429s
+            const YAHOO_DELAY_MS = 300;
+            const YAHOO_BATCH_SIZE = 5;
+            for (let i = 0; i < missing.length; i += YAHOO_BATCH_SIZE) {
+                const batch = missing.slice(i, i + YAHOO_BATCH_SIZE);
+                const batchResults = await Promise.allSettled(
+                    batch.map(async (sym) => {
+                        try {
+                            const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=1d`;
+                            const yRes = await fetch(yUrl, { headers: { "User-Agent": "CatalystCash/1.5" } });
+                            if (yRes.status === 429) { console.warn(`[MarketData] Yahoo rate limited on ${sym}`); return null; }
+                            if (!yRes.ok) return null;
+                            const yJson = await yRes.json();
+                            const meta = yJson?.chart?.result?.[0]?.meta;
+                            if (meta?.regularMarketPrice) {
+                                return {
+                                    symbol: sym,
+                                    price: meta.regularMarketPrice,
+                                    previousClose: meta.chartPreviousClose || meta.previousClose || 0,
+                                    change: +(meta.regularMarketPrice - (meta.chartPreviousClose || meta.previousClose || 0)).toFixed(2),
+                                    changePct: meta.chartPreviousClose ? +(((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose) * 100).toFixed(2) : 0,
+                                    name: meta.shortName || meta.symbol || sym,
+                                    currency: meta.currency || "USD"
+                                };
+                            }
+                            return null;
+                        } catch { return null; }
+                    })
+                );
+                for (const result of batchResults) {
+                    if (result.status === "fulfilled" && result.value) {
+                        data[result.value.symbol] = result.value;
+                        console.warn(`[MarketData] Yahoo fallback got ${result.value.symbol}: $${result.value.price}`);
+                    }
+                }
+                // Delay between batches to respect rate limits
+                if (i + YAHOO_BATCH_SIZE < missing.length) {
+                    await new Promise(r => setTimeout(r, YAHOO_DELAY_MS));
                 }
             }
         }

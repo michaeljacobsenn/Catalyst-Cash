@@ -1,9 +1,87 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useReducer, useCallback } from 'react';
 import { db } from '../utils.js';
 import { DEFAULT_PROVIDER_ID, DEFAULT_MODEL_ID, getProvider, getModel } from "../providers.js";
 import { schedulePaydayReminder, cancelPaydayReminder, requestNotificationPermission } from "../notifications.js";
 
 const SettingsContext = createContext(null);
+
+// ═══════════════════════════════════════════════════════════════
+// FINANCIAL CONFIG REDUCER — typed actions for 50+ field state
+// ═══════════════════════════════════════════════════════════════
+export const DEFAULT_FINANCIAL_CONFIG = {
+    payday: "Friday",
+    paycheckTime: "06:00",
+    paycheckStandard: 0.00,
+    paycheckFirstOfMonth: 0.00,
+    payFrequency: "bi-weekly",
+    weeklySpendAllowance: 0.00,
+    emergencyFloor: 0.00,
+    checkingBuffer: 0.00,
+    heavyHorizonStart: 15,
+    heavyHorizonEnd: 45,
+    heavyHorizonThreshold: 0.00,
+    greenStatusTarget: 0.00,
+    emergencyReserveTarget: 0.00,
+    habitName: "Coffee Pods",
+    habitRestockCost: 25,
+    habitCheckThreshold: 6,
+    habitCriticalThreshold: 3,
+    trackHabits: false,
+    defaultAPR: 24.99,
+    arbitrageTargetAPR: 6.00,
+    investmentBrokerage: 0.00,
+    investmentRoth: 0.00,
+    investmentsAsOfDate: "",
+    trackRothContributions: false,
+    rothContributedYTD: 0.00,
+    rothAnnualLimit: 0.00,
+    autoTrackRothYTD: true,
+    track401k: false,
+    k401Balance: 0.00,
+    k401ContributedYTD: 0.00,
+    k401AnnualLimit: 0.00,
+    autoTrack401kYTD: true,
+    k401EmployerMatchPct: 0,
+    k401EmployerMatchLimit: 0,
+    k401VestingPct: 100,
+    k401StockPct: 90,
+    paydayReminderEnabled: true,
+    trackBrokerage: false,
+    trackRoth: false,
+    brokerageStockPct: 90,
+    rothStockPct: 90,
+    budgetCategories: [],
+    savingsGoals: [],
+    nonCardDebts: [],
+    incomeSources: [],
+    creditScore: null,
+    creditScoreDate: "",
+    creditUtilization: null,
+    taxWithholdingRate: 0,
+    quarterlyTaxEstimate: 0,
+    isContractor: false,
+    homeEquity: 0,
+    vehicleValue: 0,
+    otherAssets: 0,
+    otherAssetsLabel: "",
+    insuranceDeductibles: [],
+    bigTicketItems: []
+};
+
+function financialConfigReducer(state, action) {
+    switch (action.type) {
+        case 'SET_FIELD':
+            return { ...state, [action.field]: action.value };
+        case 'MERGE':
+            return { ...state, ...action.payload };
+        case 'REPLACE':
+            return { ...action.payload };
+        case 'RESET_YTD':
+            return { ...state, rothContributedYTD: 0, k401ContributedYTD: 0 };
+        default:
+            return state;
+    }
+}
 
 export function SettingsProvider({ children }) {
     const [apiKey, setApiKey] = useState("");
@@ -15,65 +93,22 @@ export function SettingsProvider({ children }) {
     const [notifPermission, setNotifPermission] = useState("prompt");
     const [aiConsent, setAiConsent] = useState(false);
     const [showAiConsent, setShowAiConsent] = useState(false);
-    const [financialConfig, setFinancialConfig] = useState({
-        payday: "Friday",
-        paycheckTime: "06:00",
-        paycheckStandard: 0.00,
-        paycheckFirstOfMonth: 0.00,
-        payFrequency: "bi-weekly",
-        weeklySpendAllowance: 0.00,
-        emergencyFloor: 0.00,
-        checkingBuffer: 0.00,
-        heavyHorizonStart: 15,
-        heavyHorizonEnd: 45,
-        heavyHorizonThreshold: 0.00,
-        greenStatusTarget: 0.00,
-        emergencyReserveTarget: 0.00,
-        habitName: "Coffee Pods",
-        habitRestockCost: 25,
-        habitCheckThreshold: 6,
-        habitCriticalThreshold: 3,
-        trackHabits: false,
-        defaultAPR: 24.99,
-        arbitrageTargetAPR: 6.00,
-        investmentBrokerage: 0.00,
-        investmentRoth: 0.00,
-        investmentsAsOfDate: "",
-        trackRothContributions: false,
-        rothContributedYTD: 0.00,
-        rothAnnualLimit: 0.00,
-        autoTrackRothYTD: true,
-        track401k: false,
-        k401Balance: 0.00,
-        k401ContributedYTD: 0.00,
-        k401AnnualLimit: 0.00,
-        autoTrack401kYTD: true,
-        k401EmployerMatchPct: 0,
-        k401EmployerMatchLimit: 0,
-        k401VestingPct: 100,
-        k401StockPct: 90,
-        paydayReminderEnabled: true,
-        trackBrokerage: false,
-        trackRoth: false,
-        brokerageStockPct: 90,
-        rothStockPct: 90,
-        budgetCategories: [],
-        savingsGoals: [],
-        nonCardDebts: [],
-        incomeSources: [],
-        creditScore: null,
-        creditScoreDate: "",
-        creditUtilization: null,
-        taxWithholdingRate: 0,
-        quarterlyTaxEstimate: 0,
-        isContractor: false,
-        homeEquity: 0,
-        vehicleValue: 0,
-        otherAssets: 0,
-        otherAssetsLabel: "",
-        insuranceDeductibles: [],
-        bigTicketItems: []
-    });
+    const [financialConfig, dispatchFinConfig] = useReducer(financialConfigReducer, DEFAULT_FINANCIAL_CONFIG);
+
+    // Backward-compatible wrapper: accepts either a new state object, a function updater, or dispatch action
+    const setFinancialConfig = useCallback((valueOrFn) => {
+        if (typeof valueOrFn === 'function') {
+            // Functional updater pattern: setFinancialConfig(prev => ({ ...prev, field: val }))
+            // We bridge this by reading current state via a MERGE dispatch
+            dispatchFinConfig({ type: 'REPLACE', payload: valueOrFn(financialConfig) });
+        } else if (valueOrFn?.type) {
+            // Direct dispatch: setFinancialConfig({ type: 'SET_FIELD', field: 'payday', value: 'Monday' })
+            dispatchFinConfig(valueOrFn);
+        } else {
+            // Object merge: setFinancialConfig({ payday: 'Monday' })
+            dispatchFinConfig({ type: 'MERGE', payload: valueOrFn });
+        }
+    }, [financialConfig]);
 
     const [isSettingsReady, setIsSettingsReady] = useState(false);
 
@@ -115,7 +150,7 @@ export function SettingsProvider({ children }) {
             if (backupInterval) setAutoBackupInterval(backupInterval);
 
             if (finConf) {
-                const merged = { ...financialConfig, ...finConf };
+                const merged = { ...DEFAULT_FINANCIAL_CONFIG, ...finConf };
                 const currentYear = new Date().getFullYear();
                 const lastResetYear = await db.get("ytd-reset-year");
 
@@ -134,7 +169,7 @@ export function SettingsProvider({ children }) {
                     merged.paydayReminderEnabled = false;
                 }
 
-                setFinancialConfig(merged);
+                dispatchFinConfig({ type: 'REPLACE', payload: merged });
             }
 
             setIsSettingsReady(true);

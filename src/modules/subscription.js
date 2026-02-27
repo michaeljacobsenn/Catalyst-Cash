@@ -6,7 +6,7 @@
 // integrated, this module becomes the bridge to the native IAP API.
 // ═══════════════════════════════════════════════════════════════
 
-import { db } from "../App.jsx";
+import { db } from "./utils.js";
 
 // ── Tier Definitions ──────────────────────────────────────────
 export const TIERS = {

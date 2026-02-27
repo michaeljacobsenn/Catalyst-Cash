@@ -4,7 +4,6 @@ const EXACT_SECURITY_KEYS = new Set([
   "require-auth",
   "use-face-id",
   "lock-timeout",
-  "google-linked-id",
   "apple-linked-id",
 ]);
 
