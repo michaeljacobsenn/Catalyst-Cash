@@ -8,9 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "sync": "npm run build && npx cap sync ios && node scripts/inject-local-plugins.cjs",
+    "sync": "npm run build && npx cap copy ios && cd ios/App && pod install && cd ../.. && node scripts/inject-local-plugins.cjs",
     "ios": "npm run sync && npx cap open ios",
-    "deploy": "npm run build && npx cap sync"
+    "deploy": "npm run build && npx cap copy"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
