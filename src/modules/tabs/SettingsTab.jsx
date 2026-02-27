@@ -8,10 +8,13 @@ import { Mono } from "../components.jsx";
 import { db, FaceId, nativeExport, fmt } from "../utils.js";
 
 import { encrypt, decrypt, isEncrypted } from "../crypto.js";
-import { isSecuritySensitiveKey } from "../securityKeys.js";
 import { haptic } from "../haptics.js";
 import { SignInWithApple } from "@capacitor-community/apple-sign-in";
 import { Capacitor } from "@capacitor/core";
+import { uploadToICloud } from "../cloudSync.js";
+import { isSecuritySensitiveKey } from "../securityKeys.js";
+import * as XLSX from "xlsx";
+import { generateBackupSpreadsheet } from "../spreadsheet.js";
 
 // Legacy key migration: if old "api-key" exists, treat as openai key
 async function migrateApiKey() {
@@ -66,6 +69,32 @@ async function importBackup(file, getPassphrase) {
                     backup = parsed;
                 }
 
+                if (backup && backup.type === "spreadsheet-backup") {
+                    const binary_string = window.atob(backup.base64);
+                    const len = binary_string.length;
+                    const bytes = new Uint8Array(len);
+                    for (let i = 0; i < len; i++) {
+                        bytes[i] = binary_string.charCodeAt(i);
+                    }
+                    const wb = XLSX.read(bytes.buffer, { type: "array" });
+                    const sheetName = wb.SheetNames.find(n => n.includes("Setup Data")) || wb.SheetNames[0];
+                    const ws = wb.Sheets[sheetName];
+                    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+                    const config = {};
+                    for (const row of rows) {
+                        // In our format, key is col A (index 0) and val is col C (index 2)
+                        const key = String(row[0] || "").trim();
+                        const rawVal = String(row[2] ?? "").trim();
+                        if (!key || !rawVal || key === "field_key" || key === "Config Key") continue;
+                        const num = parseFloat(rawVal);
+                        config[key] = isNaN(num) ? (rawVal === "true" ? true : rawVal === "false" ? false : rawVal) : num;
+                    }
+                    const existing = (await db.get("financial-config")) || {};
+                    await db.set("financial-config", { ...existing, ...config, _fromSetupWizard: true });
+                    resolve({ count: Object.keys(config).length, exportedAt: new Date().toISOString() });
+                    return;
+                }
+
                 if (!backup.data || (backup.app !== "Catalyst Cash" && backup.app !== "FinAudit Pro")) {
                     reject(new Error("Invalid Catalyst Cash backup file")); return;
                 }
@@ -82,20 +111,21 @@ async function importBackup(file, getPassphrase) {
     });
 }
 
-export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset,
-    useStreaming, setUseStreaming, onBack, onRestoreComplete, onShowGuide,
-    aiProvider, setAiProvider, aiModel, setAiModel,
-    financialConfig, setFinancialConfig,
-    personalRules, setPersonalRules,
-    requireAuth, setRequireAuth, appPasscode, setAppPasscode, useFaceId, setUseFaceId,
-    lockTimeout = 0, setLockTimeout,
-    appleLinkedId, setAppleLinkedId,
-    notifPermission = "prompt",
-    persona, setPersona, proEnabled = false }) {
+import { useAudit } from '../contexts/AuditContext.jsx';
+import { useSettings } from '../contexts/SettingsContext.jsx';
+import { useSecurity } from '../contexts/SecurityContext.jsx';
+
+export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestoreComplete, onShowGuide, proEnabled = false }) {
+    const { useStreaming, setUseStreaming } = useAudit();
+    const { apiKey, setApiKey, aiProvider, setAiProvider, aiModel, setAiModel, financialConfig, setFinancialConfig, personalRules, setPersonalRules, autoBackupInterval, setAutoBackupInterval, notifPermission, persona, setPersona } = useSettings();
+    const { requireAuth, setRequireAuth, appPasscode, setAppPasscode, useFaceId, setUseFaceId, lockTimeout, setLockTimeout, appleLinkedId, setAppleLinkedId } = useSecurity();
 
     // Auth Plugins state management
+    const [lastBackupTS, setLastBackupTS] = useState(null);
+
     useEffect(() => {
         // Initialization now handled at root level in App.jsx
+        db.get("last-backup-ts").then(ts => setLastBackupTS(ts)).catch(() => { });
     }, []);
 
     const handleAppleSignIn = async () => {
@@ -119,7 +149,13 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
 
     const unlinkApple = () => {
         db.del("apple-linked-id");
+        db.del("last-backup-ts");
+        if (setAutoBackupInterval) {
+            setAutoBackupInterval("off");
+            db.set("auto-backup-interval", "off");
+        }
         setAppleLinkedId(null);
+        setLastBackupTS(null);
         if (window.toast) window.toast.success("Apple ID unlinked");
     };
 
@@ -142,6 +178,42 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
     const scrollRef = useRef(null);
     const swipeTouchStart = useRef(null);
     const navDir = useRef('forward'); // tracks animation direction: 'forward' | 'back'
+
+    const [isForceSyncing, setIsForceSyncing] = useState(false);
+
+    const forceICloudSync = async () => {
+        if (Capacitor.getPlatform() !== 'ios') {
+            if (window.toast) window.toast.error("iCloud sync is only available on iOS.");
+            return;
+        }
+        setIsForceSyncing(true);
+        try {
+            const backup = { app: "Catalyst Cash", version: "1.3.1-BETA", exportedAt: new Date().toISOString(), data: {} };
+            const keys = await db.keys();
+            for (const key of keys) {
+                if (isSecuritySensitiveKey(key)) continue;
+                const val = await db.get(key);
+                if (val !== null) backup.data[key] = val;
+            }
+            if (!("personal-rules" in backup.data)) {
+                backup.data["personal-rules"] = personalRules ?? "";
+            }
+            const success = await uploadToICloud(backup, appPasscode || null);
+            if (success) {
+                const now = Date.now();
+                await db.set("last-backup-ts", now);
+                setLastBackupTS(now);
+                if (window.toast) window.toast.success("iCloud backup successful");
+            } else {
+                if (window.toast) window.toast.error("Failed to backup to iCloud");
+            }
+        } catch (e) {
+            console.error(e);
+            if (window.toast) window.toast.error("iCloud sync failed");
+        } finally {
+            setIsForceSyncing(false);
+        }
+    };
 
     const handleSwipeTouchStart = useCallback((e) => {
         const touch = e.touches[0];
@@ -284,6 +356,18 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
             const count = await exportBackup(passphrase);
             setBackupStatus("done");
             setStatusMsg(`Backed up ${count} data keys to your device`);
+        } catch (e) { setBackupStatus("error"); setStatusMsg(e.message || "Export failed"); }
+    };
+
+    const handleExportSheet = async () => {
+        setRestoreStatus(null); setStatusMsg("");
+        try {
+            const passphrase = await showPassphraseModal("export");
+            if (!passphrase) { setBackupStatus(null); return; }
+            setBackupStatus("exporting");
+            await generateBackupSpreadsheet(passphrase);
+            setBackupStatus("done");
+            setStatusMsg("Exported encrypted spreadsheet backup.");
         } catch (e) { setBackupStatus("error"); setStatusMsg(e.message || "Export failed"); }
     };
 
@@ -643,29 +727,39 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
                             <span style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5 }}>{statusMsg}</span>
                         </div>}
 
-                        <div style={{ display: "flex", gap: 8 }}>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                             <button onClick={handleExport} disabled={backupStatus === "exporting"} style={{
-                                flex: 1, padding: "13px 0", borderRadius: T.radius.md,
+                                flex: 1, minWidth: "48%", padding: "13px 0", borderRadius: T.radius.md,
                                 border: `1px solid ${T.accent.emerald}30`, background: T.accent.emeraldDim,
                                 color: T.accent.emerald, fontSize: 12, fontWeight: 700,
                                 cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                                 fontFamily: T.font.mono, transition: "all .2s", opacity: backupStatus === "exporting" ? 0.7 : 1
                             }}>
                                 {backupStatus === "exporting" ? <Loader2 size={14} className="spin" /> : <Download size={14} />}
-                                EXPORT JSON
+                                JSON
                             </button>
-                            <div style={{ flex: 1, position: "relative" }}>
+                            <button onClick={handleExportSheet} disabled={backupStatus === "exporting"} style={{
+                                flex: 1, minWidth: "48%", padding: "13px 0", borderRadius: T.radius.md,
+                                border: `1px solid ${T.accent.primary}30`, background: T.accent.primaryDim,
+                                color: T.accent.primary, fontSize: 12, fontWeight: 700,
+                                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                                fontFamily: T.font.mono, transition: "all .2s", opacity: backupStatus === "exporting" ? 0.7 : 1
+                            }}>
+                                {backupStatus === "exporting" ? <Loader2 size={14} className="spin" /> : <Download size={14} />}
+                                SPREADSHEET
+                            </button>
+                            <div style={{ flex: 1, minWidth: "100%", position: "relative", marginTop: 4 }}>
                                 <input type="file" accept=".json,.enc,*/*" onChange={handleImport} disabled={restoreStatus === "restoring"}
                                     style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", zIndex: 2 }} />
                                 <div style={{
-                                    width: "100%", height: "100%", borderRadius: T.radius.md,
+                                    width: "100%", padding: "13px 0", borderRadius: T.radius.md,
                                     border: `1px solid ${T.border.default}`, background: T.bg.elevated,
                                     color: T.text.primary, fontSize: 12, fontWeight: 700,
                                     display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                                     fontFamily: T.font.mono, transition: "all .2s", opacity: restoreStatus === "restoring" ? 0.7 : 1
                                 }}>
                                     {restoreStatus === "restoring" ? <Loader2 size={14} className="spin" /> : <Upload size={14} />}
-                                    RESTORE
+                                    RESTORE (.json / .enc)
                                 </div>
                             </div>
                         </div>
@@ -706,12 +800,48 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
                                     padding: "10px 14px", borderRadius: T.radius.md,
                                     border: `1px solid ${T.border.default}`, background: "transparent",
                                     color: T.text.dim, fontSize: 12, fontWeight: 700,
+                                    display: "flex", alignItems: "center", justifyContent: "center",
                                     fontFamily: T.font.mono, cursor: "pointer", transition: "all .2s"
                                 }}>
                                     CLEAR
                                 </button>
+                                <button onClick={() => setConfirmFactoryReset(true)} style={{
+                                    padding: "10px 14px", borderRadius: T.radius.md,
+                                    border: `1px solid ${T.status.red}30`, background: `${T.status.red}15`,
+                                    color: T.status.red, fontSize: 12, fontWeight: 700,
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    fontFamily: T.font.mono, cursor: "pointer", transition: "all .2s"
+                                }}>
+                                    DELETE ALL DATA
+                                </button>
                             </div>
                         </div>
+
+                        {/* Confirmation dialog for Data Deletion */}
+                        {confirmFactoryReset && (
+                            <div style={{
+                                marginTop: 16, padding: 16, borderRadius: T.radius.md,
+                                background: T.status.redDim, border: `1px solid ${T.status.red}40`,
+                                animation: "fadeIn .3s ease-out"
+                            }}>
+                                <p style={{ fontSize: 12, color: T.status.red, fontWeight: 600, margin: "0 0 12px", lineHeight: 1.5 }}>
+                                    This will permanently delete all financial data, API keys, rules, and history from your device. Are you sure?
+                                </p>
+                                <div style={{ display: "flex", gap: 8 }}>
+                                    <button onClick={() => setConfirmFactoryReset(false)} style={{
+                                        flex: 1, padding: "10px 0", borderRadius: T.radius.md, border: "none",
+                                        background: "transparent", color: T.status.red, opacity: 0.8, fontSize: 12, fontWeight: 700, cursor: "pointer"
+                                    }}>Cancel</button>
+                                    <button onClick={() => {
+                                        setConfirmFactoryReset(false); haptic.medium();
+                                        if (onFactoryReset) onFactoryReset();
+                                    }} style={{
+                                        flex: 2, padding: "10px 0", borderRadius: T.radius.md, border: "none",
+                                        background: T.status.red, color: "white", fontSize: 12, fontWeight: 800, cursor: "pointer"
+                                    }}>Yes, Delete All Data</button>
+                                </div>
+                            </div>
+                        )}
 
                         {/* ── Auto-Backup ────────────────────────────────────── */}
                         <div style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid ${T.border.subtle}` }}>
@@ -723,17 +853,48 @@ export default function SettingsTab({ apiKey, setApiKey, onClear, onFactoryReset
                             {/* Apple / iCloud */}
                             <div style={{ marginBottom: 10 }}>
                                 {appleLinkedId ? (
-                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderRadius: 12, background: "#00000088", border: "1px solid rgba(255,255,255,0.1)" }}>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                            <svg viewBox="0 0 814 1000" width="16" height="16" fill="white">
-                                                <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-37.3-165.9-40.8l-1.6-.6c-67.8-2.3-113.2-63-156.5-123.1C38.5 660.9 17 570 17 479.4 17 260.9 139.3 151.1 261.7 151.1c71 0 130.5 43.3 175 43.3 42.8 0 110-45.7 192.5-45.7 31 0 108.5 4.5 168.2 55.4zm-234-181.4C505.7 101.8 557 34 557 0c0-6.4-.6-12.9-1.3-18.1-1-.3-2.1-.3-3.5-.3-44.5 0-95.8 30.2-127 71.6-27.5 34.9-49.5 83.2-49.5 131.6 0 6.4 1 12.9 1.6 15.1 2.9.6 7.1 1 11 1 40 0 87.5-27.2 115.9-60.4z" />
-                                            </svg>
-                                            <div>
-                                                <div style={{ fontSize: 13, fontWeight: 600, color: T.text.primary }}>iCloud Backup Active</div>
-                                                <div style={{ fontSize: 10, color: T.status.green, fontFamily: T.font.mono }}>✓ Auto-syncing to iCloud Drive</div>
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "12px 16px", borderRadius: 12, background: "#00000088", border: "1px solid rgba(255,255,255,0.1)" }}>
+                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                                <svg viewBox="0 0 814 1000" width="16" height="16" fill="white">
+                                                    <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-37.3-165.9-40.8l-1.6-.6c-67.8-2.3-113.2-63-156.5-123.1C38.5 660.9 17 570 17 479.4 17 260.9 139.3 151.1 261.7 151.1c71 0 130.5 43.3 175 43.3 42.8 0 110-45.7 192.5-45.7 31 0 108.5 4.5 168.2 55.4zm-234-181.4C505.7 101.8 557 34 557 0c0-6.4-.6-12.9-1.3-18.1-1-.3-2.1-.3-3.5-.3-44.5 0-95.8 30.2-127 71.6-27.5 34.9-49.5 83.2-49.5 131.6 0 6.4 1 12.9 1.6 15.1 2.9.6 7.1 1 11 1 40 0 87.5-27.2 115.9-60.4z" />
+                                                </svg>
+                                                <div>
+                                                    <div style={{ fontSize: 13, fontWeight: 600, color: T.text.primary }}>iCloud Backup Active</div>
+                                                    <div style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, marginTop: 2 }}>
+                                                        {lastBackupTS ? `Last sync: ${new Date(lastBackupTS).toLocaleString()}` : "Pending first sync..."}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <button onClick={unlinkApple} style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.muted, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>UNLINK</button>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 12 }}>
+                                            <span style={{ fontSize: 11, color: T.text.secondary }}>Auto-Backup Schedule</span>
+                                            <select value={autoBackupInterval} onChange={e => { const v = e.target.value; setAutoBackupInterval(v); db.set("auto-backup-interval", v); }}
+                                                style={{ fontSize: 11, padding: "6px 10px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.glass, color: T.text.primary, fontFamily: T.font.mono, fontWeight: 600 }}>
+                                                <option value="daily">Daily</option>
+                                                <option value="weekly">Weekly</option>
+                                                <option value="monthly">Monthly</option>
+                                                <option value="off">Off</option>
+                                            </select>
+                                        </div>
+                                        <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 12, paddingBottom: 4 }}>
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                                                <p style={{ fontSize: 10, color: T.text.dim, lineHeight: 1.5, flex: 1, paddingRight: 16 }}>
+                                                    Backups are securely saved to your private iCloud Drive.<br />
+                                                    <span style={{ color: T.text.muted, fontWeight: 600 }}>Files App → iCloud Drive → Catalyst Cash → CatalystCash_CloudSync.json</span>
+                                                </p>
+                                                <button onClick={forceICloudSync} disabled={isForceSyncing} style={{
+                                                    padding: "8px 12px", borderRadius: 8, background: T.accent.primary, color: "white",
+                                                    fontSize: 11, fontWeight: 700, cursor: isForceSyncing ? "not-allowed" : "pointer",
+                                                    border: "none", opacity: isForceSyncing ? 0.7 : 1, display: "flex", alignItems: "center", gap: 6,
+                                                    whiteSpace: "nowrap"
+                                                }}>
+                                                    {isForceSyncing ? <Loader2 size={12} className="spin" /> : <Cloud size={12} />}
+                                                    {isForceSyncing ? "Syncing..." : "Sync Now"}
+                                                </button>
                                             </div>
                                         </div>
-                                        <button onClick={unlinkApple} style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.muted, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>UNLINK</button>
                                     </div>
                                 ) : (
                                     <button onClick={handleAppleSignIn} style={{

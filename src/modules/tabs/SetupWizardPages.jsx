@@ -129,6 +129,32 @@ export function PageImport({ onNext, toast, onComplete }) {
     const csvRef = useRef(null);
 
     const applyBackup = async (backup) => {
+        if (backup && backup.type === "spreadsheet-backup") {
+            const binary_string = window.atob(backup.base64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary_string.charCodeAt(i);
+            }
+            const wb = XLSX.read(bytes.buffer, { type: "array" });
+            const sheetName = wb.SheetNames.find(n => n.includes("Setup Data")) || wb.SheetNames[0];
+            const ws = wb.Sheets[sheetName];
+            const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+            const config = {};
+            for (const row of rows) {
+                const key = String(row[0] || "").trim();
+                const rawVal = String(row[2] ?? "").trim();
+                if (!key || !rawVal || key === "field_key" || key === "Config Key") continue;
+                const num = parseFloat(rawVal);
+                config[key] = isNaN(num) ? (rawVal === "true" ? true : rawVal === "false" ? false : rawVal) : num;
+            }
+            const existing = (await db.get("financial-config")) || {};
+            await db.set("financial-config", { ...existing, ...config, _fromSetupWizard: true });
+            toast?.success(`✅ Imported ${Object.keys(config).length} fields from spreadsheet backup`);
+            setImported(true);
+            return true;
+        }
+
         if (!backup.data || (backup.app !== "Catalyst Cash" && backup.app !== "FinAudit Pro")) {
             toast?.error("Not a valid Catalyst Cash backup"); return false;
         }
@@ -578,7 +604,7 @@ export function PageNotifications({ data, onChange, onNext, onBack, onSkip }) {
 }
 
 // ─── PAGE 5: Security ─────────────────────────────────────────────────────────
-export function PageSecurity({ data, onChange, onNext, onBack, onSkip, setAppleLinkedId }) {
+export function PageSecurity({ data, onChange, onNext, onBack, onSkip, appleLinkedId, setAppleLinkedId }) {
     const [confirm, setConfirm] = useState("");
     const isNative = Capacitor.getPlatform() !== 'web';
 
@@ -658,7 +684,7 @@ export function PageSecurity({ data, onChange, onNext, onBack, onSkip, setAppleL
             </WizField>
 
             {/* Apple Sign-In for iCloud Backup */}
-            {Capacitor.getPlatform() !== 'web' && (
+            {Capacitor.getPlatform() !== 'web' && !appleLinkedId && (
                 <div style={{ marginTop: 8, marginBottom: 16, padding: "14px 16px", background: T.bg.elevated, borderRadius: T.radius.md, border: `1px solid ${T.border.default}` }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: T.text.primary, marginBottom: 4 }}>☁️ iCloud Auto-Backup</div>
                     <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 10px 0" }}>Link your Apple ID to enable automatic iCloud backups. Your data continuously syncs to your private iCloud Drive.</p>
@@ -683,6 +709,19 @@ export function PageSecurity({ data, onChange, onNext, onBack, onSkip, setAppleL
                     }}>
                         Sign in with Apple
                     </button>
+                </div>
+            )}
+
+            {Capacitor.getPlatform() !== 'web' && appleLinkedId && (
+                <div style={{ marginTop: 8, marginBottom: 16 }}>
+                    <WizField label="iCloud Backup Interval" hint={<>How often your data syncs securely to iCloud Drive.<br /><span style={{ opacity: 0.8 }}>Files App → iCloud Drive → Catalyst Cash</span></>}>
+                        <WizSelect value={data.autoBackupInterval || "weekly"} onChange={v => onChange("autoBackupInterval", v)} options={[
+                            { value: "daily", label: "🗓 Daily" },
+                            { value: "weekly", label: "📅 Weekly" },
+                            { value: "monthly", label: "🗓️ Monthly" },
+                            { value: "off", label: "🚫 Off" },
+                        ]} />
+                    </WizField>
                 </div>
             )}
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ShieldCheck, AlertCircle, Fingerprint } from "lucide-react";
 import { T } from "./constants.js";
 import { haptic } from "./haptics.js";
@@ -55,8 +55,12 @@ function AppleSignInButton({ onPress, label = "Sign in with Apple", disabled }) 
 
 const PIN_MAX_ATTEMPTS = 5;
 const PIN_LOCKOUT_SECS = 30;
+import { useSecurity } from './contexts/SecurityContext.jsx';
 
-export default function LockScreen({ onUnlock, appPasscode, useFaceId, appleLinkedId = null }) {
+export default function LockScreen() {
+    const { appPasscode, useFaceId, appleLinkedId, setIsLocked } = useSecurity();
+    const onUnlock = () => setIsLocked(false);
+
     const [failed, setFailed] = useState(false);
     const [status, setStatus] = useState("locked"); // locked | authenticating | bypassing | unlocked | error
     const [errorMsg, setErrorMsg] = useState("");
@@ -77,13 +81,15 @@ export default function LockScreen({ onUnlock, appPasscode, useFaceId, appleLink
     }, [lockoutUntil]);
 
     const isLockedOut = lockoutUntil > Date.now();
+    const errorTimerRef = useRef(null);
 
     const showError = (msg) => {
         setStatus("error");
         setErrorMsg(msg);
         setFailed(true);
         haptic.error();
-        setTimeout(() => { setStatus("locked"); setFailed(false); setErrorMsg(""); }, 1500);
+        if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+        errorTimerRef.current = setTimeout(() => { setStatus("locked"); setFailed(false); setErrorMsg(""); }, 1500);
     };
 
     const tryDeviceAuth = async () => {
@@ -94,6 +100,10 @@ export default function LockScreen({ onUnlock, appPasscode, useFaceId, appleLink
             if (!availability?.isAvailable) {
                 setShowPinPad(true);
                 setStatus("locked");
+                setErrorMsg("Face ID unavailable — use PIN");
+                setFailed(true);
+                if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+                errorTimerRef.current = setTimeout(() => { setFailed(false); setErrorMsg(""); }, 2000);
                 return;
             }
             window.__biometricActive = true;
@@ -149,7 +159,7 @@ export default function LockScreen({ onUnlock, appPasscode, useFaceId, appleLink
         try {
             const result = await SignInWithApple.authorize({
                 clientId: 'com.jacobsen.catalystcash',
-                redirectURI: 'https://com.jacobsen.catalystcash/login',
+                redirectURI: 'https://api.catalystcash.app/auth/apple/callback',
                 scopes: 'email name'
             });
             if (result.response.user === appleLinkedId) {
@@ -176,6 +186,20 @@ export default function LockScreen({ onUnlock, appPasscode, useFaceId, appleLink
     }, [useFaceId]);
 
     const busy = status === "authenticating" || status === "bypassing" || status === "unlocked";
+
+    // Keyboard support: allow PIN entry via physical keyboard
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (!showPinPad || isLockedOut || busy) return;
+            if (e.key >= '0' && e.key <= '9') {
+                handleNumPress(parseInt(e.key, 10));
+            } else if (e.key === 'Backspace' || e.key === 'Delete') {
+                handleNumPress("delete");
+            }
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [showPinPad, isLockedOut, pinEntry, pinAttempts, status]);
 
     return (
         <div style={{

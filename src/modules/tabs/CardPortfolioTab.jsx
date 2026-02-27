@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, memo } from "react";
 import { Plus, X, ChevronDown, ChevronUp, CreditCard, Edit3, Check, DollarSign, Building2, Landmark, TrendingUp, AlertTriangle, RefreshCw } from "lucide-react";
 import { T, ISSUER_COLORS } from "../constants.js";
 import { getIssuerCards, getPinnedForIssuer } from "../issuerCards.js";
@@ -16,7 +16,12 @@ const INSTITUTIONS = [
     "Synchrony", "TD Bank", "US Bank", "USAA", "Wells Fargo", "Other"
 ];
 
-export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAccounts = [], setBankAccounts, financialConfig = {}, setFinancialConfig, marketPrices = {}, setMarketPrices }) {
+import { usePortfolio } from '../contexts/PortfolioContext.jsx';
+import { useSettings } from '../contexts/SettingsContext.jsx';
+
+export default memo(function CardPortfolioTab() {
+    const { cards, setCards, bankAccounts, setBankAccounts, cardCatalog, marketPrices, setMarketPrices } = usePortfolio();
+    const { financialConfig = {}, setFinancialConfig } = useSettings();
     const [collapsedIssuers, setCollapsedIssuers] = useState({});
     const [editingCard, setEditingCard] = useState(null);
     const [editForm, setEditForm] = useState({});
@@ -883,7 +888,7 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
             </div>
             <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Investments</h2>
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-                <button onClick={handleRefreshPrices} disabled={refreshingPrices} title="Refresh prices" style={{ width: 28, height: 28, borderRadius: 8, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: refreshingPrices ? T.text.muted : T.accent.emerald, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", opacity: refreshingPrices ? 0.6 : 1 }}>
+                <button onClick={(e) => { e.stopPropagation(); handleRefreshPrices(); }} disabled={refreshingPrices} title="Refresh prices" style={{ width: 28, height: 28, borderRadius: 8, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: refreshingPrices ? T.text.muted : T.accent.emerald, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", opacity: refreshingPrices ? 0.6 : 1 }}>
                     <RefreshCw size={13} className={refreshingPrices ? "spin" : ""} />
                 </button>
                 <Badge variant="outline" style={{ fontSize: 10, color: investTotalValue > 0 ? T.accent.emerald : T.text.muted, borderColor: investTotalValue > 0 ? `${T.accent.emerald}40` : T.border.default }}>
@@ -1081,4 +1086,4 @@ export default function CardPortfolioTab({ cards, setCards, cardCatalog, bankAcc
         {investmentsSection}
         {debtsSection}
     </div>;
-}
+})

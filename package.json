@@ -1,12 +1,13 @@
 {
   "name": "catalyst-cash",
-  "version": "1.5-BETA",
+  "version": "1.5.1-BETA",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "vitest run",
     "sync": "npm run build && npx cap sync ios && node scripts/inject-local-plugins.cjs",
     "ios": "npm run sync && npx cap open ios",
     "deploy": "npm run build && npx cap sync"
@@ -26,6 +27,9 @@
     "@capacitor/splash-screen": "^7.0.5",
     "@capacitor/status-bar": "^7.0.5",
     "dotenv": "^17.3.1",
+    "html2canvas": "^1.4.1",
+    "jimp": "^0.16.13",
+    "jspdf": "^4.2.0",
     "lucide-react": "^0.460.0",
     "react": "^18.3.1",
     "react-confetti": "^6.4.0",
@@ -38,6 +42,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "exceljs": "^4.4.0",
     "typescript": "^5.9.3",
-    "vite": "^6.0.5"
+    "vite": "^6.0.5",
+    "vitest": "^4.0.18"
   }
 }

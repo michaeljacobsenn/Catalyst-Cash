@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import { Calendar, Download, CheckCircle, Trash2, Edit3, Plus } from "lucide-react";
 import { T } from "../constants.js";
 import { fmt, fmtDate, exportAudit, exportAllAudits, exportSelectedAudits, exportAuditCSV } from "../utils.js";
@@ -6,7 +6,15 @@ import { Card, Badge } from "../ui.jsx";
 import { Mono, StatusDot, EmptyState } from "../components.jsx";
 import { haptic } from "../haptics.js";
 
-export default function HistoryTab({ audits, onSelect, onExportAll, onExportSelected, onExportCSV, onDelete, onManualImport, toast }) {
+import { useAudit } from '../contexts/AuditContext.jsx';
+import { useNavigation } from '../contexts/NavigationContext.jsx';
+
+export default memo(function HistoryTab({ toast }) {
+    const { history: audits, deleteHistoryItem: onDelete, handleManualImport } = useAudit();
+    const { navTo } = useNavigation();
+
+    const onSelect = (a) => navTo("results", a);
+
     const [sel, setSel] = useState(new Set());
     const [selMode, setSelMode] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(null); // index of audit to confirm delete
@@ -16,7 +24,7 @@ export default function HistoryTab({ audits, onSelect, onExportAll, onExportSele
     const toggle = i => { const s = new Set(sel); s.has(i) ? s.delete(i) : s.add(i); setSel(s); };
     const toggleAll = () => setSel(allSel ? new Set() : new Set(audits.map((_, i) => i)));
     const exitSel = () => { setSelMode(false); setSel(new Set()); };
-    const doExportSel = () => { onExportSelected(audits.filter((_, i) => sel.has(i))); exitSel(); };
+    const doExportSel = () => { exportSelectedAudits(audits.filter((_, i) => sel.has(i))); exitSel(); };
 
     return <div className="page-body" style={{ paddingBottom: 0 }}>
         <div style={{ paddingTop: 6, paddingBottom: 8, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
@@ -115,4 +123,4 @@ export default function HistoryTab({ audits, onSelect, onExportAll, onExportSele
                 </Card>;
             })}
     </div>;
-}
+})

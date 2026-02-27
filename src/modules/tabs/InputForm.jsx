@@ -41,7 +41,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
     const today = new Date();
     const [form, setForm] = useState({
         date: today.toISOString().split("T")[0], time: today.toTimeString().split(" ")[0].slice(0, 5),
-        checking: "", ally: "",
+        checking: "", savings: "",
         roth: financialConfig?.investmentRoth || "",
         brokerage: financialConfig?.investmentBrokerage || "",
         k401Balance: financialConfig?.k401Balance || "",
@@ -75,11 +75,11 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
     // Easy Win 5: Input Validation Nudges — detect outlier values
     const validationWarnings = [];
     const checkingNum = parseFloat(form.checking);
-    const allyNum = parseFloat(form.ally);
+    const savingsNum = parseFloat(form.savings);
     const pendingNum = parseFloat(form.pending);
     if (checkingNum > 100000) validationWarnings.push(`Checking balance $${checkingNum.toLocaleString()} seems unusually high — double-check?`);
     if (checkingNum < 0) validationWarnings.push("Checking balance is negative — is this correct?");
-    if (allyNum > 500000) validationWarnings.push(`Savings $${allyNum.toLocaleString()} seems unusually high — verify this is correct.`);
+    if (savingsNum > 500000) validationWarnings.push(`Savings $${savingsNum.toLocaleString()} seems unusually high — verify this is correct.`);
     if (pendingNum > 5000) validationWarnings.push(`$${pendingNum.toLocaleString()} in pending charges is quite high — confirm this is right.`);
     const totalDebtBal = form.debts.reduce((sum, d) => sum + (parseFloat(d.balance) || 0), 0);
     if (totalDebtBal > 200000) validationWarnings.push(`Total card debt $${totalDebtBal.toLocaleString()} is very high — double-check balances.`);
@@ -110,7 +110,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
     // Compute exact strategy using current form inputs
     const computedStrategy = generateStrategy(activeConfig, {
         checkingBalance: parseFloat(form.checking || 0),
-        allyVaultTotal: parseFloat(form.ally || 0),
+        savingsTotal: parseFloat(form.savings || 0),
         cards: cards || [],
         renewals: promptRenewals,
         snapshotDate: form.date
@@ -137,7 +137,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                 date: today.toISOString().split("T")[0],
                 time: today.toTimeString().split(" ")[0].slice(0, 5),
                 checking: lastAudit?.form?.checking || "",
-                ally: lastAudit?.form?.ally || "",
+                savings: lastAudit?.form?.savings || lastAudit?.form?.ally || "",
                 pending: "0.00",
                 pendingConfirmed: true,
                 roth: lastAudit.form.roth !== undefined ? lastAudit.form.roth : (p.roth || ""),
@@ -163,7 +163,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
     // Count how many balance fields are filled to determine if we have enough data
     const filledFields = [
         (activeConfig.trackChecking !== false) && form.checking,
-        (activeConfig.trackSavings !== false) && form.ally,
+        (activeConfig.trackSavings !== false) && form.savings,
         activeConfig.trackRoth && form.roth,
         activeConfig.trackBrokerage && form.brokerage,
         activeConfig.track401k && (form.k401Balance || activeConfig.k401Balance),
@@ -264,8 +264,8 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
         if (activeConfig.trackChecking !== false && (effectiveChecking || form.checking)) {
             headerLines.push(`Checking: $${fmt(effectiveChecking)}${autoPaycheckApplied ? ` (auto +$${fmt(autoPaycheckAddAmt)})` : ""}`);
         }
-        if (activeConfig.trackSavings !== false && form.ally) {
-            headerLines.push(`Savings: $${form.ally}`);
+        if (activeConfig.trackSavings !== false && form.savings) {
+            headerLines.push(`Savings: $${form.savings}`);
         }
         headerLines.push(`Pending: ${pendingStr}`);
         if (autoPaycheckApplied) headerLines.push(`Paycheck Auto-Add: $${fmt(autoPaycheckAddAmt)}`);
@@ -407,7 +407,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
         </Card>
         {(activeConfig.trackChecking !== false || activeConfig.trackSavings !== false) && <div style={{ display: "grid", gridTemplateColumns: (activeConfig.trackChecking !== false && activeConfig.trackSavings !== false) ? "1fr 1fr" : "1fr", gap: 10 }}>
             {activeConfig.trackChecking !== false && <Card style={{ marginBottom: 10 }}><Label>Checking Balance</Label><DI value={form.checking} onChange={e => s("checking", sanitizeDollar(e.target.value))} /></Card>}
-            {activeConfig.trackSavings !== false && <Card style={{ marginBottom: 10 }}><Label>Savings (HYSA)</Label><DI value={form.ally} onChange={e => s("ally", sanitizeDollar(e.target.value))} /></Card>}
+            {activeConfig.trackSavings !== false && <Card style={{ marginBottom: 10 }}><Label>Savings (HYSA)</Label><DI value={form.savings} onChange={e => s("ally", sanitizeDollar(e.target.value))} /></Card>}
         </div>}
         {activeConfig.trackPaycheck !== false && <Card>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -661,7 +661,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
         )}
 
         <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={() => canSubmit && onSubmit(buildMsg(), form, isTestMode)} disabled={!canSubmit} style={{
+            <button onClick={() => canSubmit && onSubmit(buildMsg(), { ...form, budgetActuals }, isTestMode)} disabled={!canSubmit} style={{
                 flex: 1, padding: "16px 20px", borderRadius: T.radius.lg, border: "none",
                 background: canSubmit ? (isTestMode ? `linear-gradient(135deg,${T.status.amber},#d97706)` : `linear-gradient(135deg,${T.accent.primary},#6C60FF)`) : T.text.muted,
                 color: canSubmit ? T.bg.base : T.text.dim, fontSize: 15, fontWeight: 800, cursor: canSubmit ? "pointer" : "not-allowed",

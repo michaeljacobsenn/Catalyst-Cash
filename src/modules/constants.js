@@ -21,7 +21,7 @@ export const T = {
   text: {
     primary: "#E4E6F0",
     secondary: "#8890A6",
-    dim: "#4A5068",
+    dim: "#6B7280",
     muted: "#2E3248",
   },
   accent: {

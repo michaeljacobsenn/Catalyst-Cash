@@ -62,7 +62,7 @@ export function getNextPayday(anchorDate, paydayDayOfWeek) {
 export function generateStrategy(config, snapshot) {
     const {
         checkingBalance = 0,
-        allyVaultTotal = 0,
+        savingsTotal = 0,
         cards = [],
         renewals = [],
         snapshotDate = new Date().toISOString().split('T')[0]
@@ -117,9 +117,10 @@ export function generateStrategy(config, snapshot) {
 
     // 4. Required Transfer Engine
     const cashAvailableAboveFloor = checkingBalance - totalCheckingFloor;
+    const isNegativeCashFlow = cashAvailableAboveFloor < 0;
     let requiredTransfer = 0;
     if (cashAvailableAboveFloor < timeCriticalAmount) {
-        requiredTransfer = Math.min((timeCriticalAmount - cashAvailableAboveFloor), allyVaultTotal);
+        requiredTransfer = Math.min((timeCriticalAmount - cashAvailableAboveFloor), savingsTotal);
     }
 
     // 5. Debt Kill vs Arbitrage (CFI logic)
@@ -147,12 +148,17 @@ export function generateStrategy(config, snapshot) {
             let nearestPromoDays = Infinity;
 
             activeDebts.forEach(debt => {
+                // Guard: skip CFI calc if minPayment is 0 or missing (avoids division by zero)
                 if (debt.minPayment > 0) {
                     const cfi = debt.balance / debt.minPayment;
                     if (cfi < lowestCFI) {
                         lowestCFI = cfi;
                         targetByCFI = debt;
                     }
+                } else if (debt.balance > 0 && (!targetByCFI || debt.balance < targetByCFI.balance)) {
+                    // No minPayment but has balance — treat as ultra-low CFI (quick kill candidate)
+                    lowestCFI = 0;
+                    targetByCFI = debt;
                 }
                 if (debt.apr > highestAPR) {
                     highestAPR = debt.apr;
@@ -160,22 +166,33 @@ export function generateStrategy(config, snapshot) {
                 }
                 if (debt.hasPromoApr && debt.promoAprExp) {
                     const daysToExp = daysBetween(snapshotDate, debt.promoAprExp);
-                    if (daysToExp > 0 && daysToExp < nearestPromoDays && daysToExp <= 90) {
-                        // High alert: 0% promo expiring within 90 days
-                        nearestPromoDays = daysToExp;
-                        targetByPromoExp = debt;
+                    if (daysToExp > 0 && daysToExp <= 90) {
+                        // Weight by urgency: balance * post-promo APR impact / days remaining
+                        const postApr = debt.apr || 25; // assume 25% if APR unknown
+                        const urgencyScore = (debt.balance * postApr) / (daysToExp * 100);
+                        const prevScore = targetByPromoExp
+                            ? (targetByPromoExp.balance * (targetByPromoExp.apr || 25)) / (nearestPromoDays * 100)
+                            : 0;
+                        if (!targetByPromoExp || urgencyScore > prevScore) {
+                            nearestPromoDays = daysToExp;
+                            targetByPromoExp = debt;
+                        }
                     }
                 }
             });
 
+            // Dynamic CFI threshold: scales with paycheck frequency
+            // Standard: 50 for weekly pay, ~35 for biweekly, ~25 for monthly
+            const cfiThreshold = Math.max(25, Math.min(50, daysToNextPaycheck * 7));
+
             // Override Hierarchy:
             // 1. Promo Expirations (< 90 days) prevent retro-active interest bombs
-            // 2. CFI Drag (< 50) frees up massive cash flow rapidly
+            // 2. CFI Drag (< threshold) frees up massive cash flow rapidly
             // 3. Highest APR Avalanche (standard mathematically optimal path)
             if (targetByPromoExp) {
-                recommendedDebtTarget = targetByPromoExp.name + " (Avoid Promo Expiration)";
+                recommendedDebtTarget = targetByPromoExp.name + ` (Promo expires in ${nearestPromoDays}d)`;
                 recommendedDebtPayment = Math.min(operationalSurplus, targetByPromoExp.balance);
-            } else if (lowestCFI < 50 && targetByCFI) {
+            } else if (lowestCFI < cfiThreshold && targetByCFI) {
                 recommendedDebtTarget = targetByCFI.name;
                 recommendedDebtPayment = Math.min(operationalSurplus, targetByCFI.balance);
             } else if (targetByAPR) {
@@ -192,6 +209,7 @@ export function generateStrategy(config, snapshot) {
         timeCriticalAmount,
         timeCriticalItems,
         requiredTransfer,
+        isNegativeCashFlow,
         operationalSurplus: Math.max(0, operationalSurplus),
         debtStrategy: {
             target: recommendedDebtTarget,

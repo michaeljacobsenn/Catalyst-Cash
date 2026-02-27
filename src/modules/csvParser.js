@@ -31,8 +31,37 @@ function parseCurrency(val) {
 
 function parseDateStr(val) {
     if (!val) return null;
-    const d = new Date(val);
-    return isNaN(d.getTime()) ? null : d;
+    const str = String(val).trim();
+
+    // ISO format: YYYY-MM-DD (unambiguous, parse directly)
+    const iso = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) {
+        const d = new Date(Date.UTC(+iso[1], +iso[2] - 1, +iso[3]));
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+    // US format: MM/DD/YYYY (most common in US bank CSVs, e.g. Apple Card, Chase, Mint)
+    const us = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (us) {
+        const d = new Date(Date.UTC(+us[3], +us[1] - 1, +us[2]));
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+    // US format with dashes: MM-DD-YYYY
+    const usDash = str.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if (usDash) {
+        const d = new Date(Date.UTC(+usDash[3], +usDash[1] - 1, +usDash[2]));
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+    // Fallback: string representations like "January 2, 2024" (locale-neutral text)
+    // Only allow if the string contains letters (not ambiguous numeric formats)
+    if (/[a-zA-Z]/.test(str)) {
+        const d = new Date(str);
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+    return null;
 }
 
 export function parseCSVTransactions(csvString) {

@@ -1,0 +1,189 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { db } from '../utils.js';
+import { DEFAULT_PROVIDER_ID, DEFAULT_MODEL_ID, getProvider, getModel } from "../providers.js";
+import { schedulePaydayReminder, cancelPaydayReminder, requestNotificationPermission } from "../notifications.js";
+
+const SettingsContext = createContext(null);
+
+export function SettingsProvider({ children }) {
+    const [apiKey, setApiKey] = useState("");
+    const [aiProvider, setAiProvider] = useState(DEFAULT_PROVIDER_ID);
+    const [aiModel, setAiModel] = useState(DEFAULT_MODEL_ID);
+    const [persona, setPersona] = useState(null);
+    const [personalRules, setPersonalRules] = useState("");
+    const [autoBackupInterval, setAutoBackupInterval] = useState("weekly");
+    const [notifPermission, setNotifPermission] = useState("prompt");
+    const [aiConsent, setAiConsent] = useState(false);
+    const [showAiConsent, setShowAiConsent] = useState(false);
+    const [financialConfig, setFinancialConfig] = useState({
+        payday: "Friday",
+        paycheckTime: "06:00",
+        paycheckStandard: 0.00,
+        paycheckFirstOfMonth: 0.00,
+        payFrequency: "bi-weekly",
+        weeklySpendAllowance: 0.00,
+        emergencyFloor: 0.00,
+        checkingBuffer: 0.00,
+        heavyHorizonStart: 15,
+        heavyHorizonEnd: 45,
+        heavyHorizonThreshold: 0.00,
+        greenStatusTarget: 0.00,
+        emergencyReserveTarget: 0.00,
+        habitName: "Coffee Pods",
+        habitRestockCost: 25,
+        habitCheckThreshold: 6,
+        habitCriticalThreshold: 3,
+        trackHabits: false,
+        defaultAPR: 24.99,
+        arbitrageTargetAPR: 6.00,
+        investmentBrokerage: 0.00,
+        investmentRoth: 0.00,
+        investmentsAsOfDate: "",
+        trackRothContributions: false,
+        rothContributedYTD: 0.00,
+        rothAnnualLimit: 0.00,
+        autoTrackRothYTD: true,
+        track401k: false,
+        k401Balance: 0.00,
+        k401ContributedYTD: 0.00,
+        k401AnnualLimit: 0.00,
+        autoTrack401kYTD: true,
+        k401EmployerMatchPct: 0,
+        k401EmployerMatchLimit: 0,
+        k401VestingPct: 100,
+        k401StockPct: 90,
+        paydayReminderEnabled: true,
+        trackBrokerage: false,
+        trackRoth: false,
+        brokerageStockPct: 90,
+        rothStockPct: 90,
+        budgetCategories: [],
+        savingsGoals: [],
+        nonCardDebts: [],
+        incomeSources: [],
+        creditScore: null,
+        creditScoreDate: "",
+        creditUtilization: null,
+        taxWithholdingRate: 0,
+        quarterlyTaxEstimate: 0,
+        isContractor: false,
+        homeEquity: 0,
+        vehicleValue: 0,
+        otherAssets: 0,
+        otherAssetsLabel: "",
+        insuranceDeductibles: [],
+        bigTicketItems: []
+    });
+
+    const [isSettingsReady, setIsSettingsReady] = useState(false);
+
+    useEffect(() => {
+        const initSettings = async () => {
+            // Notification permissions natively on launch
+            const notifGranted = await requestNotificationPermission().catch(() => false);
+            setNotifPermission(notifGranted ? "granted" : "denied");
+
+            const [legacyKey, provId, modId, finConf, pr, consent, savedPersona, backupInterval] = await Promise.all([
+                db.get("api-key"),
+                db.get("ai-provider"),
+                db.get("ai-model"),
+                db.get("financial-config"),
+                db.get("personal-rules"),
+                db.get("ai-consent-accepted"),
+                db.get("ai-persona"),
+                db.get("auto-backup-interval")
+            ]);
+
+            const validProvider = getProvider(provId || DEFAULT_PROVIDER_ID);
+            const validModel = getModel(validProvider.id, modId || DEFAULT_MODEL_ID);
+            setAiProvider(validProvider.id);
+            setAiModel(validModel.id);
+
+            const provConfig = validProvider;
+            const provKey = provConfig.keyStorageKey ? await db.get(provConfig.keyStorageKey) : null;
+
+            if (provKey) {
+                setApiKey(provKey);
+            } else if (legacyKey) {
+                setApiKey(legacyKey);
+                db.set("api-key-openai", legacyKey);
+            }
+
+            if (pr) setPersonalRules(pr);
+            if (consent) setAiConsent(true);
+            if (savedPersona) setPersona(savedPersona);
+            if (backupInterval) setAutoBackupInterval(backupInterval);
+
+            if (finConf) {
+                const merged = { ...financialConfig, ...finConf };
+                const currentYear = new Date().getFullYear();
+                const lastResetYear = await db.get("ytd-reset-year");
+
+                if (lastResetYear && lastResetYear < currentYear) {
+                    merged.rothContributedYTD = 0;
+                    merged.k401ContributedYTD = 0;
+                    db.set("ytd-reset-year", currentYear);
+                    db.set("financial-config", merged);
+                } else if (!lastResetYear) {
+                    db.set("ytd-reset-year", currentYear);
+                }
+
+                if (merged.paydayReminderEnabled === undefined || merged.paydayReminderEnabled === null) {
+                    merged.paydayReminderEnabled = notifGranted;
+                } else if (!notifGranted) {
+                    merged.paydayReminderEnabled = false;
+                }
+
+                setFinancialConfig(merged);
+            }
+
+            setIsSettingsReady(true);
+        };
+
+        initSettings();
+    }, []);
+
+    // Sync state to DB on change
+    useEffect(() => { if (isSettingsReady) db.set("ai-provider", aiProvider); }, [aiProvider, isSettingsReady]);
+    useEffect(() => { if (isSettingsReady) db.set("ai-model", aiModel); }, [aiModel, isSettingsReady]);
+    useEffect(() => { if (isSettingsReady) db.set("financial-config", financialConfig); }, [financialConfig, isSettingsReady]);
+    useEffect(() => { if (isSettingsReady) db.set("personal-rules", personalRules); }, [personalRules, isSettingsReady]);
+    useEffect(() => { if (isSettingsReady) db.set("ai-consent-accepted", aiConsent); }, [aiConsent, isSettingsReady]);
+    useEffect(() => { if (isSettingsReady) db.set("ai-persona", persona); }, [persona, isSettingsReady]);
+
+    // Payday Reminder hook mapping
+    useEffect(() => {
+        if (!isSettingsReady || !financialConfig.payday) return;
+        if (financialConfig.paydayReminderEnabled !== false) {
+            schedulePaydayReminder(financialConfig.payday, financialConfig.paycheckTime).catch(() => { });
+        } else {
+            cancelPaydayReminder().catch(() => { });
+        }
+    }, [isSettingsReady, financialConfig.paydayReminderEnabled, financialConfig.payday, financialConfig.paycheckTime]);
+
+    const value = {
+        apiKey, setApiKey,
+        aiProvider, setAiProvider,
+        aiModel, setAiModel,
+        persona, setPersona,
+        personalRules, setPersonalRules,
+        autoBackupInterval, setAutoBackupInterval,
+        notifPermission, setNotifPermission,
+        aiConsent, setAiConsent,
+        showAiConsent, setShowAiConsent,
+        financialConfig, setFinancialConfig,
+        isSettingsReady
+    };
+
+    return (
+        <SettingsContext.Provider value={value}>
+            {children}
+        </SettingsContext.Provider>
+    );
+}
+
+export const useSettings = () => {
+    const context = useContext(SettingsContext);
+    if (!context) throw new Error("useSettings must be used within a SettingsProvider");
+    return context;
+};
