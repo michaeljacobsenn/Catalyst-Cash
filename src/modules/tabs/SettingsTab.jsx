@@ -509,10 +509,9 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                             activeMenu === "security" ? "Security" :
                                 activeMenu === "income" ? "Income & Cash Flow" :
                                     activeMenu === "debts" ? "Debts & Liabilities" :
-                                        activeMenu === "assets" ? "Assets & Holdings" :
-                                            activeMenu === "targets" ? "Savings Targets" :
-                                                activeMenu === "rules" ? "Custom Rules" :
-                                                    "Settings"}
+                                        activeMenu === "targets" ? "Savings Targets" :
+                                            activeMenu === "rules" ? "Custom Rules" :
+                                                "Settings"}
                 </h1>
                 {!activeMenu && <p style={{ fontSize: 10, color: T.text.dim, marginTop: 2, fontFamily: T.font.mono, margin: 0 }}>VERSION {APP_VERSION}</p>}
             </div>
@@ -620,6 +619,43 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                             </div>;
                         })()}
 
+                        {/* Setup Progress — deferred onboarding items */}
+                        {(() => {
+                            const fc = financialConfig || {};
+                            const steps = [
+                                { label: "Income configured", done: !!(fc.paycheckStandard || fc.hourlyRateNet || fc.averagePaycheck), nav: "income" },
+                                { label: "Spend allowance set", done: !!fc.weeklySpendAllowance, nav: "income" },
+                                { label: "Checking floor set", done: !!fc.emergencyFloor, nav: "income" },
+                                { label: "Credit cards added", done: (cards || []).length > 0, nav: null },
+                                { label: "Bills & renewals added", done: (renewals || []).length > 0, nav: null },
+                            ];
+                            const done = steps.filter(s => s.done).length;
+                            const total = steps.length;
+                            const pct = Math.round((done / total) * 100);
+                            return <div style={{ marginBottom: 4 }}>
+                                <span style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginLeft: 16, marginBottom: 8, display: "block", letterSpacing: "0.03em", textTransform: "uppercase" }}>Setup Progress</span>
+                                <div style={{ background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, padding: "14px 16px" }}>
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                                        <span style={{ fontSize: 13, fontWeight: 700, color: pct === 100 ? T.status.green : T.text.primary }}>{pct === 100 ? "✅ All set!" : `${done}/${total} complete`}</span>
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: pct === 100 ? T.status.green : T.accent.primary, fontFamily: T.font.mono }}>{pct}%</span>
+                                    </div>
+                                    <div style={{ height: 4, borderRadius: 2, background: T.bg.surface, marginBottom: 12 }}>
+                                        <div style={{ height: 4, borderRadius: 2, background: pct === 100 ? T.status.green : T.accent.primary, width: `${pct}%`, transition: "width 0.4s ease" }} />
+                                    </div>
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                        {steps.map((s, i) => <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                <span style={{ fontSize: 12, opacity: s.done ? 1 : 0.4 }}>{s.done ? "✅" : "⬜"}</span>
+                                                <span style={{ fontSize: 12, fontWeight: 600, color: s.done ? T.text.dim : T.text.primary }}>{s.label}</span>
+                                            </div>
+                                            {!s.done && s.nav && <button onClick={() => { setActiveSegment("finance"); setFinanceTab(s.nav); navDir.current = 'forward'; setActiveMenu(s.nav); haptic.light(); }}
+                                                style={{ fontSize: 10, fontWeight: 700, color: T.accent.primary, background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}>Set up →</button>}
+                                        </div>)}
+                                    </div>
+                                </div>
+                            </div>;
+                        })()}
+
                         {/* Financial Profile */}
                         <div>
                             <span style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginLeft: 16, marginBottom: 8, display: "block", letterSpacing: "0.03em", textTransform: "uppercase" }}>Financial Profile</span>
@@ -627,7 +663,6 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                 {[
                                     { id: "income", label: "Income & Cash Flow", icon: Briefcase, color: T.accent.emerald },
                                     { id: "debts", label: "Debts & Liabilities", icon: Landmark, color: T.status.red },
-                                    { id: "assets", label: "Assets & Holdings", icon: Database, color: T.accent.primary },
                                     { id: "targets", label: "Savings Targets", icon: Target, color: T.status.blue },
                                     { id: "rules", label: "Custom Rules", icon: Settings, color: T.status.amber }
                                 ].map((item, i, arr) => (
@@ -1697,451 +1732,6 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                 }
                             </div>
                         </div>
-
-                        {/* Investments (Combined with Assets & Goals) */}
-                        <div style={{ display: financeTab === "assets" ? "flex" : "none", flexDirection: "column", gap: 16 }}>
-                            <div style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${T.border.subtle}`, boxShadow: `0 4px 20px #00000010` }}>
-                                <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 16, color: T.text.primary, borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 10 }}>Investment Values</h3>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                                    {/* BROKERAGE */}
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>BROKERAGE</span>
-                                        {financialConfig?.enableHoldings && (financialConfig?.holdings?.brokerage || []).length > 0 && !financialConfig?.overrideBrokerageValue ? (
-                                            <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.accent.emerald}08`, border: `1px solid ${T.accent.emerald}20` }}>
-                                                <div style={{ fontSize: 14, fontWeight: 800, color: T.accent.emerald, fontFamily: T.font.mono }}>📈 Live</div>
-                                                <p style={{ fontSize: 10, color: T.text.muted, margin: "4px 0 0" }}>Auto-tracked from holdings</p>
-                                            </div>
-                                        ) : (
-                                            <div style={{ position: "relative" }}>
-                                                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.investmentBrokerage || ""} onChange={e => setFinancialConfig({ ...financialConfig, investmentBrokerage: parseFloat(e.target.value) || 0 })}
-                                                    style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                            </div>
-                                        )}
-                                        {financialConfig?.enableHoldings && (financialConfig?.holdings?.brokerage || []).length > 0 && (
-                                            <button onClick={() => setFinancialConfig({ ...financialConfig, overrideBrokerageValue: !financialConfig?.overrideBrokerageValue })} style={{
-                                                fontSize: 10, color: financialConfig?.overrideBrokerageValue ? T.accent.primary : T.text.muted, background: "none", border: "none", cursor: "pointer", padding: "6px 0 0", fontWeight: 600, fontFamily: T.font.mono
-                                            }}>⚙️ {financialConfig?.overrideBrokerageValue ? "Use Live Value" : "Manual Override"}</button>
-                                        )}
-                                    </div>
-                                    {/* ROTH IRA */}
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>ROTH IRA</span>
-                                        {financialConfig?.enableHoldings && (financialConfig?.holdings?.roth || []).length > 0 && !financialConfig?.overrideRothValue ? (
-                                            <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.accent.emerald}08`, border: `1px solid ${T.accent.emerald}20` }}>
-                                                <div style={{ fontSize: 14, fontWeight: 800, color: T.accent.emerald, fontFamily: T.font.mono }}>📈 Live</div>
-                                                <p style={{ fontSize: 10, color: T.text.muted, margin: "4px 0 0" }}>Auto-tracked from holdings</p>
-                                            </div>
-                                        ) : (
-                                            <div style={{ position: "relative" }}>
-                                                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.investmentRoth || ""} onChange={e => setFinancialConfig({ ...financialConfig, investmentRoth: parseFloat(e.target.value) || 0 })}
-                                                    style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                            </div>
-                                        )}
-                                        {financialConfig?.enableHoldings && (financialConfig?.holdings?.roth || []).length > 0 && (
-                                            <button onClick={() => setFinancialConfig({ ...financialConfig, overrideRothValue: !financialConfig?.overrideRothValue })} style={{
-                                                fontSize: 10, color: financialConfig?.overrideRothValue ? T.accent.primary : T.text.muted, background: "none", border: "none", cursor: "pointer", padding: "6px 0 0", fontWeight: 600, fontFamily: T.font.mono
-                                            }}>⚙️ {financialConfig?.overrideRothValue ? "Use Live Value" : "Manual Override"}</button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Asset Classes for Net Worth */}
-                            <div style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${T.border.subtle}`, boxShadow: `0 4px 20px #00000010` }}>
-                                <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: T.text.primary }}>Other Assets (Net Worth)</h3>
-                                <p style={{ fontSize: 10, color: T.text.muted, marginBottom: 16, lineHeight: 1.4, borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 10 }}>Include non-liquid assets in net worth calculations.</p>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>HOME EQUITY</span>
-                                        <div style={{ position: "relative" }}>
-                                            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                            <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.homeEquity || ""} onChange={e => setFinancialConfig({ ...financialConfig, homeEquity: parseFloat(e.target.value) || 0 })}
-                                                style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>VEHICLE VALUE</span>
-                                        <div style={{ position: "relative" }}>
-                                            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                            <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.vehicleValue || ""} onChange={e => setFinancialConfig({ ...financialConfig, vehicleValue: parseFloat(e.target.value) || 0 })}
-                                                style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                        </div>
-                                    </div>
-                                </div>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>OTHER ASSETS</span>
-                                        <div style={{ position: "relative" }}>
-                                            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                            <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.otherAssets || ""} onChange={e => setFinancialConfig({ ...financialConfig, otherAssets: parseFloat(e.target.value) || 0 })}
-                                                style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>LABEL</span>
-                                        <input value={financialConfig?.otherAssetsLabel || ""} onChange={e => setFinancialConfig({ ...financialConfig, otherAssetsLabel: e.target.value })}
-                                            placeholder="e.g. Crypto, Jewelry" style={{ width: "100%", padding: "12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                    </div>
-                                </div>
-                                <div>
-                                    <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>INVESTMENTS AS-OF DATE</span>
-                                    <input type="date" value={financialConfig?.investmentsAsOfDate || ""} onChange={e => setFinancialConfig({ ...financialConfig, investmentsAsOfDate: e.target.value })}
-                                        style={{ width: "100%", padding: "12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                </div>
-                            </div>
-                            <div style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${T.border.subtle}`, boxShadow: `0 4px 20px #00000010` }}>
-                                <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: T.text.primary }}>Track Roth Contributions</h3>
-                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: financialConfig?.trackRothContributions ? `1px dashed ${T.border.subtle}` : "none", paddingBottom: financialConfig?.trackRothContributions ? 16 : 0, marginBottom: financialConfig?.trackRothContributions ? 16 : 0 }}>
-                                    <span style={{ fontSize: 10, color: T.text.muted }}>Include YTD limits & balances in your financial snapshots.</span>
-                                    <button onClick={() => setFinancialConfig({ ...financialConfig, trackRothContributions: !financialConfig?.trackRothContributions })} style={{
-                                        width: 56, height: 28, borderRadius: 999,
-                                        border: `1px solid ${financialConfig?.trackRothContributions ? T.accent.primary : T.border.default}`,
-                                        background: financialConfig?.trackRothContributions ? T.accent.primaryDim : T.bg.elevated,
-                                        position: "relative", cursor: "pointer", flexShrink: 0
-                                    }}>
-                                        <div style={{
-                                            width: 22, height: 22, borderRadius: 999,
-                                            background: financialConfig?.trackRothContributions ? T.accent.primary : T.bg.card,
-                                            position: "absolute", top: 2, left: financialConfig?.trackRothContributions ? 30 : 4,
-                                            transition: "all .2s"
-                                        }} />
-                                    </button>
-                                </div>
-                                {
-                                    financialConfig?.trackRothContributions && (
-                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                                            <div>
-                                                <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>ROTH YTD CONTRIBUTED</span>
-                                                <div style={{ position: "relative" }}>
-                                                    <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.rothContributedYTD || ""} onChange={e => setFinancialConfig({ ...financialConfig, rothContributedYTD: parseFloat(e.target.value) || 0 })}
-                                                        style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                                </div>
-                                                <div style={{ fontSize: 10, color: T.text.muted, marginTop: 4 }}>Manual override allowed</div>
-                                            </div>
-                                            <div>
-                                                <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>ROTH ANNUAL LIMIT</span>
-                                                <div style={{ position: "relative" }}>
-                                                    <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.rothAnnualLimit || ""} onChange={e => setFinancialConfig({ ...financialConfig, rothAnnualLimit: parseFloat(e.target.value) || 0 })}
-                                                        placeholder="7000" style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                                </div>
-                                            </div>
-                                            <div style={{ gridColumn: "1 / span 2", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: T.bg.elevated, borderRadius: T.radius.md, padding: "12px 16px", border: `1px solid ${T.border.default}`, marginTop: 4 }}>
-                                                <div>
-                                                    <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 700, display: "block" }}>AUTO-TRACK YTD (AUDITS)</span>
-                                                    <span style={{ fontSize: 10, color: T.text.muted, marginTop: 4, display: "block" }}>Disable to fully control YTD manually</span>
-                                                </div>
-                                                <button onClick={() => setFinancialConfig({ ...financialConfig, autoTrackRothYTD: !(financialConfig?.autoTrackRothYTD !== false) })} style={{
-                                                    width: 44, height: 24, borderRadius: 999,
-                                                    border: `1px solid ${(financialConfig?.autoTrackRothYTD !== false) ? T.accent.primary : T.border.default}`,
-                                                    background: (financialConfig?.autoTrackRothYTD !== false) ? T.accent.primaryDim : T.bg.elevated,
-                                                    position: "relative", cursor: "pointer", flexShrink: 0
-                                                }}>
-                                                    <div style={{
-                                                        width: 18, height: 18, borderRadius: 999,
-                                                        background: (financialConfig?.autoTrackRothYTD !== false) ? T.accent.primary : T.bg.card,
-                                                        position: "absolute", top: 2, left: (financialConfig?.autoTrackRothYTD !== false) ? 22 : 4,
-                                                        transition: "all .2s"
-                                                    }} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )
-                                }
-                            </div>
-
-                            <div style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${T.border.subtle}`, boxShadow: `0 4px 20px #00000010`, marginBottom: 24 }}>
-                                <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: T.text.primary }}>Track 401K</h3>
-                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: financialConfig?.track401k ? `1px dashed ${T.border.subtle}` : "none", paddingBottom: financialConfig?.track401k ? 16 : 0, marginBottom: financialConfig?.track401k ? 16 : 0 }}>
-                                    <span style={{ fontSize: 10, color: T.text.muted }}>Include balance + YTD + limit in your financial snapshots.</span>
-                                    <button onClick={() => setFinancialConfig({ ...financialConfig, track401k: !financialConfig?.track401k })} style={{
-                                        width: 56, height: 28, borderRadius: 999,
-                                        border: `1px solid ${financialConfig?.track401k ? T.accent.primary : T.border.default}`,
-                                        background: financialConfig?.track401k ? T.accent.primaryDim : T.bg.elevated,
-                                        position: "relative", cursor: "pointer", flexShrink: 0
-                                    }}>
-                                        <div style={{
-                                            width: 22, height: 22, borderRadius: 999,
-                                            background: financialConfig?.track401k ? T.accent.primary : T.bg.card,
-                                            position: "absolute", top: 2, left: financialConfig?.track401k ? 30 : 4,
-                                            transition: "all .2s"
-                                        }} />
-                                    </button>
-                                </div>
-                                {
-                                    financialConfig?.track401k && (
-                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                                            <div>
-                                                <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>401K BALANCE</span>
-                                                {financialConfig?.enableHoldings && (financialConfig?.holdings?.k401 || []).length > 0 && !financialConfig?.override401kValue ? (
-                                                    <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.accent.emerald}08`, border: `1px solid ${T.accent.emerald}20` }}>
-                                                        <div style={{ fontSize: 14, fontWeight: 800, color: T.accent.emerald, fontFamily: T.font.mono }}>📈 Live</div>
-                                                        <p style={{ fontSize: 10, color: T.text.muted, margin: "4px 0 0" }}>Auto-tracked from holdings</p>
-                                                    </div>
-                                                ) : (
-                                                    <div style={{ position: "relative" }}>
-                                                        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                        <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.k401Balance || ""} onChange={e => setFinancialConfig({ ...financialConfig, k401Balance: parseFloat(e.target.value) || 0 })}
-                                                            style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                                    </div>
-                                                )}
-                                                {financialConfig?.enableHoldings && (financialConfig?.holdings?.k401 || []).length > 0 && (
-                                                    <button onClick={() => setFinancialConfig({ ...financialConfig, override401kValue: !financialConfig?.override401kValue })} style={{
-                                                        fontSize: 10, color: financialConfig?.override401kValue ? T.accent.primary : T.text.muted, background: "none", border: "none", cursor: "pointer", padding: "6px 0 0", fontWeight: 600, fontFamily: T.font.mono
-                                                    }}>⚙️ {financialConfig?.override401kValue ? "Use Live Value" : "Manual Override"}</button>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>401K YTD CONTRIBUTED</span>
-                                                <div style={{ position: "relative" }}>
-                                                    <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.k401ContributedYTD || ""} onChange={e => setFinancialConfig({ ...financialConfig, k401ContributedYTD: parseFloat(e.target.value) || 0 })}
-                                                        style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                                </div>
-                                                <div style={{ fontSize: 10, color: T.text.muted, marginTop: 4 }}>Manual override allowed</div>
-                                            </div>
-                                            <div style={{ gridColumn: "1 / span 2" }}>
-                                                <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>401K ANNUAL LIMIT</span>
-                                                <div style={{ position: "relative" }}>
-                                                    <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.k401AnnualLimit || ""} onChange={e => setFinancialConfig({ ...financialConfig, k401AnnualLimit: parseFloat(e.target.value) || 0 })}
-                                                        style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                                </div>
-                                            </div>
-                                            <div style={{ gridColumn: "1 / span 2", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: T.bg.elevated, borderRadius: T.radius.md, padding: "12px 16px", border: `1px solid ${T.border.default}`, marginTop: 4 }}>
-                                                <div>
-                                                    <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 700, display: "block" }}>AUTO-TRACK YTD (AUDITS)</span>
-                                                    <span style={{ fontSize: 10, color: T.text.muted, marginTop: 4, display: "block" }}>Disable to fully control YTD manually</span>
-                                                </div>
-                                                <button onClick={() => setFinancialConfig({ ...financialConfig, autoTrack401kYTD: !(financialConfig?.autoTrack401kYTD !== false) })} style={{
-                                                    width: 44, height: 24, borderRadius: 999,
-                                                    border: `1px solid ${(financialConfig?.autoTrack401kYTD !== false) ? T.accent.primary : T.border.default}`,
-                                                    background: (financialConfig?.autoTrack401kYTD !== false) ? T.accent.primaryDim : T.bg.elevated,
-                                                    position: "relative", cursor: "pointer", flexShrink: 0
-                                                }}>
-                                                    <div style={{
-                                                        width: 18, height: 18, borderRadius: 999,
-                                                        background: (financialConfig?.autoTrack401kYTD !== false) ? T.accent.primary : T.bg.card,
-                                                        position: "absolute", top: 2, left: (financialConfig?.autoTrack401kYTD !== false) ? 22 : 4,
-                                                        transition: "all .2s"
-                                                    }} />
-                                                </button>
-                                            </div>
-
-                                            {/* ── Employer Match ───────────────────────────── */}
-                                            <div style={{ gridColumn: "1 / span 2", paddingTop: 16, borderTop: `1px dashed ${T.border.subtle}`, marginTop: 8 }}>
-                                                <span style={{ fontSize: 11, color: T.accent.emerald, fontFamily: T.font.mono, fontWeight: 700, display: "block", marginBottom: 12 }}>EMPLOYER MATCH & ALLOCATION</span>
-                                            </div>
-                                            <div style={{ gridColumn: "1 / span 2", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                                                <div>
-                                                    <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>MATCH RATE</span>
-                                                    <div style={{ position: "relative" }}>
-                                                        <input type="number" inputMode="decimal" pattern="[0-9]*" step="1" min="0" max="500" value={financialConfig?.k401EmployerMatchPct ?? ""} onChange={e => setFinancialConfig({ ...financialConfig, k401EmployerMatchPct: parseFloat(e.target.value) || 0 })}
-                                                            placeholder="e.g. 100" style={{ width: "100%", padding: "12px 24px 12px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                                        <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>%</span>
-                                                    </div>
-                                                    <p style={{ fontSize: 10, color: T.text.muted, marginTop: 4 }}>Employer matches X% of contributions</p>
-                                                </div>
-                                                <div>
-                                                    <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>MATCH CEILING</span>
-                                                    <div style={{ position: "relative" }}>
-                                                        <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.5" min="0" max="100" value={financialConfig?.k401EmployerMatchLimit ?? ""} onChange={e => setFinancialConfig({ ...financialConfig, k401EmployerMatchLimit: parseFloat(e.target.value) || 0 })}
-                                                            placeholder="e.g. 6" style={{ width: "100%", padding: "12px 24px 12px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                                        <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>%</span>
-                                                    </div>
-                                                    <p style={{ fontSize: 10, color: T.text.muted, marginTop: 4 }}>Up to X% of your salary</p>
-                                                </div>
-                                                <div>
-                                                    <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>VESTING</span>
-                                                    <div style={{ position: "relative" }}>
-                                                        <input type="number" inputMode="decimal" pattern="[0-9]*" step="1" min="0" max="100" value={financialConfig?.k401VestingPct ?? 100} onChange={e => setFinancialConfig({ ...financialConfig, k401VestingPct: parseFloat(e.target.value) || 0 })}
-                                                            placeholder="e.g. 100" style={{ width: "100%", padding: "12px 24px 12px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                                        <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>%</span>
-                                                    </div>
-                                                    <p style={{ fontSize: 10, color: T.text.muted, marginTop: 4 }}>% of matched funds you own now</p>
-                                                </div>
-                                                <div>
-                                                    <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>STOCK ALLOCATION</span>
-                                                    <div style={{ position: "relative" }}>
-                                                        <input type="number" inputMode="decimal" pattern="[0-9]*" step="5" min="0" max="100" value={financialConfig?.k401StockPct ?? 90} onChange={e => setFinancialConfig({ ...financialConfig, k401StockPct: parseFloat(e.target.value) || 0 })}
-                                                            placeholder="e.g. 90" style={{ width: "100%", padding: "12px 24px 12px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                                        <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>%</span>
-                                                    </div>
-                                                    <p style={{ fontSize: 10, color: T.text.muted, marginTop: 4 }}>Equity % in your 401k</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )
-                                }
-                            </div>
-                        </div>
-
-                        {/* HSA Section */}
-                        <div style={{ display: financeTab === "assets" ? "block" : "none" }}>
-                            <div style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${T.border.subtle}`, boxShadow: `0 4px 20px #00000010`, marginBottom: 24 }}>
-                                <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: T.text.primary }}>Track HSA</h3>
-                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: financialConfig?.trackHSA ? `1px dashed ${T.border.subtle}` : "none", paddingBottom: financialConfig?.trackHSA ? 16 : 0, marginBottom: financialConfig?.trackHSA ? 16 : 0 }}>
-                                    <span style={{ fontSize: 10, color: T.text.muted }}>Triple-tax-advantaged. Track balance, contributions, and limits.</span>
-                                    <button onClick={() => setFinancialConfig({ ...financialConfig, trackHSA: !financialConfig?.trackHSA })} style={{
-                                        width: 56, height: 28, borderRadius: 999,
-                                        border: `1px solid ${financialConfig?.trackHSA ? "#06B6D4" : T.border.default}`,
-                                        background: financialConfig?.trackHSA ? "rgba(6,182,212,0.12)" : T.bg.elevated,
-                                        position: "relative", cursor: "pointer", flexShrink: 0
-                                    }}>
-                                        <div style={{
-                                            width: 22, height: 22, borderRadius: 999,
-                                            background: financialConfig?.trackHSA ? "#06B6D4" : T.bg.card,
-                                            position: "absolute", top: 2, left: financialConfig?.trackHSA ? 30 : 4,
-                                            transition: "all .2s"
-                                        }} />
-                                    </button>
-                                </div>
-                                {
-                                    financialConfig?.trackHSA && (
-                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                                            <div>
-                                                <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>HSA BALANCE</span>
-                                                {financialConfig?.enableHoldings && (financialConfig?.holdings?.hsa || []).length > 0 && !financialConfig?.overrideHSAValue ? (
-                                                    <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.accent.emerald}08`, border: `1px solid ${T.accent.emerald}20` }}>
-                                                        <div style={{ fontSize: 14, fontWeight: 800, color: T.accent.emerald, fontFamily: T.font.mono }}>📈 Live</div>
-                                                        <p style={{ fontSize: 10, color: T.text.muted, margin: "4px 0 0" }}>Auto-tracked from holdings</p>
-                                                    </div>
-                                                ) : (
-                                                    <div style={{ position: "relative" }}>
-                                                        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                        <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.hsaBalance || ""} onChange={e => setFinancialConfig({ ...financialConfig, hsaBalance: parseFloat(e.target.value) || 0 })}
-                                                            style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                                    </div>
-                                                )}
-                                                {financialConfig?.enableHoldings && (financialConfig?.holdings?.hsa || []).length > 0 && (
-                                                    <button onClick={() => setFinancialConfig({ ...financialConfig, overrideHSAValue: !financialConfig?.overrideHSAValue })} style={{
-                                                        fontSize: 10, color: financialConfig?.overrideHSAValue ? T.accent.primary : T.text.muted, background: "none", border: "none", cursor: "pointer", padding: "6px 0 0", fontWeight: 600, fontFamily: T.font.mono
-                                                    }}>⚙️ {financialConfig?.overrideHSAValue ? "Use Live Value" : "Manual Override"}</button>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>HSA YTD CONTRIBUTED</span>
-                                                <div style={{ position: "relative" }}>
-                                                    <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.hsaContributedYTD || ""} onChange={e => setFinancialConfig({ ...financialConfig, hsaContributedYTD: parseFloat(e.target.value) || 0 })}
-                                                        style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>HSA ANNUAL LIMIT</span>
-                                                <div style={{ position: "relative" }}>
-                                                    <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" step="1" value={financialConfig?.hsaAnnualLimit ?? 4300} onChange={e => setFinancialConfig({ ...financialConfig, hsaAnnualLimit: parseFloat(e.target.value) || 0 })}
-                                                        style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                                </div>
-                                                <p style={{ fontSize: 10, color: T.text.muted, marginTop: 4 }}>$4,300 individual / $8,550 family (2025)</p>
-                                            </div>
-                                        </div>
-                                    )
-                                }
-                            </div>
-                        </div>
-                        {/* Holdings Auto-Track — management moved to Accounts tab */}
-                        <div style={{ display: financeTab === "assets" ? "block" : "none" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 6, marginBottom: 12, marginTop: 16 }}>
-                                <div style={{ flex: 1, paddingRight: 12 }}>
-                                    <h3 style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 2 }}>Holdings Auto-Track</h3>
-                                    <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.4, margin: 0 }}>Track tickers + shares with live market data.</p>
-                                </div>
-                                <button onClick={() => setFinancialConfig({ ...financialConfig, enableHoldings: !financialConfig?.enableHoldings })} style={{
-                                    width: 56, height: 28, borderRadius: 999,
-                                    border: `1px solid ${financialConfig?.enableHoldings ? T.accent.emerald : T.border.default}`,
-                                    background: financialConfig?.enableHoldings ? `${T.accent.emerald}18` : T.bg.elevated,
-                                    position: "relative", cursor: "pointer"
-                                }}>
-                                    <div style={{
-                                        width: 22, height: 22, borderRadius: 999,
-                                        background: financialConfig?.enableHoldings ? T.accent.emerald : T.bg.card,
-                                        position: "absolute", top: 2, left: financialConfig?.enableHoldings ? 30 : 4,
-                                        transition: "all .2s"
-                                    }} />
-                                </button>
-                            </div>
-                            {financialConfig?.enableHoldings && (
-                                <div style={{ padding: "12px 14px", background: `${T.accent.primary}08`, border: `1px solid ${T.accent.primary}15`, borderRadius: T.radius.md, textAlign: "center" }}>
-                                    <span style={{ fontSize: 11, color: T.text.secondary }}>📊 Manage your holdings directly in the <strong style={{ color: T.accent.primary }}>Accounts</strong> tab</span>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Savings Goals (Combined with Assets & Goals) */}
-                        <div style={{ display: financeTab === "assets" ? "block" : "none" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 6, marginBottom: financialConfig?.enableSavingsGoals !== false ? 12 : 0, marginTop: 16 }}>
-                                <div style={{ flex: 1, paddingRight: 12 }}>
-                                    <h3 style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 2 }}>Savings Goals</h3>
-                                    <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.4, margin: 0 }}>Track progress toward specific goals. The AI will pace your funding.</p>
-                                </div>
-                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                    {financialConfig?.enableSavingsGoals !== false && (financialConfig?.savingsGoals || []).length > 0 && <button onClick={() => setEditingSection(editingSection === "savings" ? null : "savings")} style={{ padding: "5px 10px", borderRadius: T.radius.sm, border: `1px solid ${editingSection === "savings" ? T.accent.primary : T.border.default}`, background: editingSection === "savings" ? T.accent.primaryDim : "transparent", color: editingSection === "savings" ? T.accent.primary : T.text.dim, fontSize: 10, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                                        {editingSection === "savings" ? <><Check size={10} /> Done</> : <><Pencil size={10} /> Edit</>}
-                                    </button>}
-                                    <Toggle value={financialConfig?.enableSavingsGoals} onChange={v => setFinancialConfig({ ...financialConfig, enableSavingsGoals: v })} />
-                                </div>
-                            </div>
-                            {
-                                financialConfig?.enableSavingsGoals !== false && (
-                                    <div style={{ marginTop: 12 }}>
-                                        {editingSection === "savings" || (financialConfig?.savingsGoals || []).length === 0 ? <>
-                                            {(financialConfig?.savingsGoals || []).map((goal, i) => (
-                                                <div key={i} style={{ background: T.bg.elevated, borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, padding: 10, marginBottom: 8 }}>
-                                                    <div style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
-                                                        <input value={goal.name || ""} onChange={e => { const arr = [...(financialConfig.savingsGoals || [])]; arr[i] = { ...arr[i], name: e.target.value }; setFinancialConfig({ ...financialConfig, savingsGoals: arr }); }}
-                                                            placeholder="Goal name (e.g. Vacation)" style={{ flex: 1, padding: "8px 10px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 11 }} />
-                                                        <button onClick={() => { if (!window.confirm(`Delete "${goal.name || 'this goal'}"? This cannot be undone.`)) return; const arr = (financialConfig.savingsGoals || []).filter((_, j) => j !== i); setFinancialConfig({ ...financialConfig, savingsGoals: arr }); }}
-                                                            style={{ width: 28, height: 28, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>×</button>
-                                                    </div>
-                                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-                                                        <div style={{ position: "relative" }}>
-                                                            <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 10, fontWeight: 600 }}>$</span>
-                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" value={goal.targetAmount || ""} onChange={e => { const arr = [...(financialConfig.savingsGoals || [])]; arr[i] = { ...arr[i], targetAmount: parseFloat(e.target.value) || 0 }; setFinancialConfig({ ...financialConfig, savingsGoals: arr }); }}
-                                                                placeholder="Target" style={{ width: "100%", padding: "6px 6px 6px 16px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 10 }} />
-                                                        </div>
-                                                        <div style={{ position: "relative" }}>
-                                                            <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 10, fontWeight: 600 }}>$</span>
-                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" value={goal.currentAmount || ""} onChange={e => { const arr = [...(financialConfig.savingsGoals || [])]; arr[i] = { ...arr[i], currentAmount: parseFloat(e.target.value) || 0 }; setFinancialConfig({ ...financialConfig, savingsGoals: arr }); }}
-                                                                placeholder="Current" style={{ width: "100%", padding: "6px 6px 6px 16px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 10 }} />
-                                                        </div>
-                                                        <input type="date" value={goal.targetDate || ""} onChange={e => { const arr = [...(financialConfig.savingsGoals || [])]; arr[i] = { ...arr[i], targetDate: e.target.value }; setFinancialConfig({ ...financialConfig, savingsGoals: arr }); }}
-                                                            style={{ width: "100%", padding: "6px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 10 }} />
-                                                    </div>
-                                                    <div style={{ fontSize: 8, color: T.text.muted, marginTop: 4, display: "flex", gap: 16 }}>
-                                                        <span>Target $</span><span>Current $</span><span>Target Date</span>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            <button onClick={() => { setEditingSection("savings"); setFinancialConfig({ ...financialConfig, savingsGoals: [...(financialConfig.savingsGoals || []), { name: "", targetAmount: 0, currentAmount: 0, targetDate: "" }] }); }}
-                                                style={{ padding: "8px 14px", borderRadius: T.radius.md, border: `1px dashed ${T.border.default}`, background: "transparent", color: T.accent.primary, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono, width: "100%" }}>+ ADD GOAL</button>
-                                        </> : <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                            {(financialConfig?.savingsGoals || []).map((goal, i) => {
-                                                const pct = goal.targetAmount > 0 ? Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100)) : 0;
-                                                return <div key={i} style={{ padding: "10px 12px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1px solid ${T.border.default}` }}>
-                                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                                        <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{goal.name || "Unnamed"}</span>
-                                                        <span style={{ fontSize: 11, fontWeight: 700, color: T.accent.primary, fontFamily: T.font.mono }}>${(goal.currentAmount || 0).toLocaleString()} / ${(goal.targetAmount || 0).toLocaleString()}</span>
-                                                    </div>
-                                                    {goal.targetAmount > 0 && <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                        <div style={{ flex: 1, height: 4, borderRadius: 2, background: T.bg.card, overflow: "hidden" }}>
-                                                            <div style={{ height: "100%", borderRadius: 2, background: pct >= 100 ? T.status.green : T.accent.primary, width: `${pct}%`, transition: "width .3s" }} />
-                                                        </div>
-                                                        <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 700, minWidth: 32, textAlign: "right" }}>{pct}%</span>
-                                                    </div>}
-                                                    {goal.targetDate && <span style={{ fontSize: 9, color: T.text.muted, fontFamily: T.font.mono, marginTop: 4, display: "block" }}>Target: {goal.targetDate}</span>}
-                                                </div>;
-                                            })}
-                                        </div>}
-                                    </div>
-                                )
-                            }
-                        </div>
-
                         {/* Personal Rules (Combined with Rules & Advanced) */}
                         <div style={{ display: financeTab === "rules" ? "block" : "none" }}>
                             <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, color: T.status.blue, borderBottom: `1px solid ${T.status.blue}30`, paddingBottom: 6 }}>Personal Rules (Private)</h3>

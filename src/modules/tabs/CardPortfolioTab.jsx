@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, memo } from "react";
-import { Plus, X, ChevronDown, ChevronUp, CreditCard, Edit3, Check, DollarSign, Building2, Landmark, TrendingUp, AlertTriangle, RefreshCw } from "lucide-react";
+import { Plus, X, ChevronDown, ChevronUp, CreditCard, Edit3, Check, DollarSign, Building2, Landmark, TrendingUp, AlertTriangle, RefreshCw, Target, Wallet } from "lucide-react";
 import { T, ISSUER_COLORS } from "../constants.js";
 import { getIssuerCards, getPinnedForIssuer } from "../issuerCards.js";
 import { getBankNames, getBankProducts } from "../bankCatalog.js";
@@ -42,6 +42,8 @@ export default memo(function CardPortfolioTab() {
         creditCards: true,
         bankAccounts: true,
         investments: true,
+        savingsGoals: true,
+        otherAssets: true,
         debts: true
     });
 
@@ -233,7 +235,22 @@ export default memo(function CardPortfolioTab() {
     const totalDebtBalance = useMemo(() => nonCardDebts.reduce((s, d) => s + (d.balance || 0), 0), [nonCardDebts]);
     const [collapsedDebts, setCollapsedDebts] = useState(false);
 
-    const netCapital = totalLimit + (investTotalValue || 0);
+    const netCapital = totalLimit + (investTotalValue || 0) + ((financialConfig?.otherAssets || []).reduce((s, a) => s + (a.value || 0), 0));
+
+    // ── SAVINGS GOALS ──
+    const savingsGoals = financialConfig?.savingsGoals || [];
+    const [editingGoals, setEditingGoals] = useState(false);
+    const addGoal = () => setFinancialConfig({ ...financialConfig, savingsGoals: [...savingsGoals, { name: "", targetAmount: 0, currentAmount: 0, targetDate: "" }] });
+    const updateGoal = (i, k, v) => { const arr = [...savingsGoals]; arr[i] = { ...arr[i], [k]: v }; setFinancialConfig({ ...financialConfig, savingsGoals: arr }); };
+    const removeGoal = (i) => { if (!window.confirm(`Delete "${savingsGoals[i]?.name || 'this goal'}"?`)) return; setFinancialConfig({ ...financialConfig, savingsGoals: savingsGoals.filter((_, j) => j !== i) }); };
+
+    // ── OTHER ASSETS ──
+    const otherAssets = financialConfig?.otherAssets || [];
+    const totalOtherAssets = otherAssets.reduce((s, a) => s + (a.value || 0), 0);
+    const [editingAssets, setEditingAssets] = useState(false);
+    const addAsset = () => setFinancialConfig({ ...financialConfig, otherAssets: [...otherAssets, { name: "", value: 0, liquid: false }] });
+    const updateAsset = (i, k, v) => { const arr = [...otherAssets]; arr[i] = { ...arr[i], [k]: v }; setFinancialConfig({ ...financialConfig, otherAssets: arr }); };
+    const removeAsset = (i) => { if (!window.confirm(`Delete "${otherAssets[i]?.name || 'this asset'}"?`)) return; setFinancialConfig({ ...financialConfig, otherAssets: otherAssets.filter((_, j) => j !== i) }); };
 
     const creditCardsSection = <div>
         <div style={{ paddingTop: 24, paddingBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -1073,6 +1090,168 @@ export default memo(function CardPortfolioTab() {
         )}
     </div> : null;
 
+    // ═══ SAVINGS GOALS SECTION ═══
+    const savingsGoalsSection = <div>
+        <div onClick={() => setCollapsedSections(s => ({ ...s, savingsGoals: !s.savingsGoals }))} style={{
+            paddingTop: 24, paddingBottom: 16, display: "flex", alignItems: "center", gap: 12, cursor: "pointer",
+            userSelect: "none"
+        }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent.primary}1A`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 12px ${T.accent.primary}10` }}>
+                <Target size={14} color={T.accent.primary} />
+            </div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Savings Goals</h2>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                <Badge variant="outline" style={{ fontSize: 10, color: T.accent.primary, borderColor: `${T.accent.primary}40` }}>
+                    {savingsGoals.length} goal{savingsGoals.length !== 1 ? "s" : ""}
+                </Badge>
+                {collapsedSections.savingsGoals ? <ChevronDown size={16} color={T.text.muted} /> : <ChevronUp size={16} color={T.text.muted} />}
+            </div>
+        </div>
+
+        {!collapsedSections.savingsGoals && (
+            <>
+                {savingsGoals.length > 0 && <Card animate style={{ padding: 0, overflow: "hidden" }}>
+                    {savingsGoals.map((goal, i) => {
+                        const pct = goal.targetAmount > 0 ? Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100)) : 0;
+                        const color = pct >= 100 ? T.status.green : pct >= 50 ? T.accent.primary : T.status.amber;
+                        return <div key={i} style={{ padding: "14px 16px", borderBottom: i < savingsGoals.length - 1 ? `1px solid ${T.border.subtle}` : "none" }}>
+                            {editingGoals ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                        <input value={goal.name || ""} onChange={e => updateGoal(i, "name", e.target.value)}
+                                            placeholder="Goal name" style={{ flex: 1, padding: "8px 10px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
+                                        <button onClick={() => removeGoal(i)} style={{ width: 28, height: 28, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>×</button>
+                                    </div>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                                        <div style={{ position: "relative" }}>
+                                            <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 10, fontWeight: 600 }}>$</span>
+                                            <input type="number" inputMode="decimal" value={goal.targetAmount || ""} onChange={e => updateGoal(i, "targetAmount", parseFloat(e.target.value) || 0)}
+                                                placeholder="Target" style={{ width: "100%", padding: "6px 6px 6px 16px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 10 }} />
+                                        </div>
+                                        <div style={{ position: "relative" }}>
+                                            <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 10, fontWeight: 600 }}>$</span>
+                                            <input type="number" inputMode="decimal" value={goal.currentAmount || ""} onChange={e => updateGoal(i, "currentAmount", parseFloat(e.target.value) || 0)}
+                                                placeholder="Current" style={{ width: "100%", padding: "6px 6px 6px 16px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 10 }} />
+                                        </div>
+                                        <input type="date" value={goal.targetDate || ""} onChange={e => updateGoal(i, "targetDate", e.target.value)}
+                                            style={{ width: "100%", padding: "6px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 10 }} />
+                                    </div>
+                                    <div style={{ fontSize: 8, color: T.text.muted, display: "flex", gap: 16 }}>
+                                        <span>Target $</span><span>Current $</span><span>Target Date</span>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                        <span style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>{goal.name || "Unnamed"}</span>
+                                        <Mono size={11} weight={700} color={color}>${(goal.currentAmount || 0).toLocaleString()} / ${(goal.targetAmount || 0).toLocaleString()}</Mono>
+                                    </div>
+                                    {goal.targetAmount > 0 && <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                        <div style={{ flex: 1, height: 4, borderRadius: 2, background: T.bg.surface, overflow: "hidden" }}>
+                                            <div style={{ height: "100%", borderRadius: 2, background: color, width: `${pct}%`, transition: "width .3s" }} />
+                                        </div>
+                                        <Mono size={10} weight={700} color={color}>{pct}%</Mono>
+                                    </div>}
+                                    {goal.targetDate && <span style={{ fontSize: 9, color: T.text.muted, fontFamily: T.font.mono, marginTop: 4, display: "block" }}>Target: {goal.targetDate}</span>}
+                                </>
+                            )}
+                        </div>;
+                    })}
+                </Card>}
+
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <button onClick={() => { setEditingGoals(!editingGoals); }} style={{
+                        flex: 1, padding: "10px", borderRadius: T.radius.md,
+                        border: `1px solid ${editingGoals ? T.accent.primary : T.border.default}`,
+                        background: editingGoals ? T.accent.primaryDim : "transparent",
+                        color: editingGoals ? T.accent.primary : T.text.dim,
+                        fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono
+                    }}>{editingGoals ? "✓ Done" : "✏️ Edit Goals"}</button>
+                    <button onClick={() => { setEditingGoals(true); addGoal(); }} style={{
+                        flex: 1, padding: "10px", borderRadius: T.radius.md,
+                        border: `1px dashed ${T.accent.primary}40`,
+                        background: "transparent", color: T.accent.primary,
+                        fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono
+                    }}>+ Add Goal</button>
+                </div>
+            </>
+        )}
+    </div>;
+
+    // ═══ OTHER ASSETS SECTION ═══
+    const otherAssetsSection = <div>
+        <div onClick={() => setCollapsedSections(s => ({ ...s, otherAssets: !s.otherAssets }))} style={{
+            paddingTop: 24, paddingBottom: 16, display: "flex", alignItems: "center", gap: 12, cursor: "pointer",
+            userSelect: "none"
+        }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent.copper}1A`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 12px ${T.accent.copper}10` }}>
+                <Wallet size={14} color={T.accent.copper} />
+            </div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Other Assets</h2>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                <Badge variant="outline" style={{ fontSize: 10, color: T.accent.copper, borderColor: `${T.accent.copper}40` }}>
+                    {totalOtherAssets > 0 ? fmt(totalOtherAssets) : "None"}
+                </Badge>
+                {collapsedSections.otherAssets ? <ChevronDown size={16} color={T.text.muted} /> : <ChevronUp size={16} color={T.text.muted} />}
+            </div>
+        </div>
+
+        {!collapsedSections.otherAssets && (
+            <>
+                {otherAssets.length > 0 && <Card animate style={{ padding: 0, overflow: "hidden" }}>
+                    {otherAssets.map((asset, i) => (
+                        <div key={i} style={{ padding: "14px 16px", borderBottom: i < otherAssets.length - 1 ? `1px solid ${T.border.subtle}` : "none" }}>
+                            {editingAssets ? (
+                                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                    <input value={asset.name || ""} onChange={e => updateAsset(i, "name", e.target.value)}
+                                        placeholder="e.g. Vehicle, Property" style={{ flex: 1, padding: "8px 10px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
+                                    <div style={{ position: "relative", width: 100, flexShrink: 0 }}>
+                                        <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 11, fontWeight: 600 }}>$</span>
+                                        <input type="number" inputMode="decimal" value={asset.value || ""} onChange={e => updateAsset(i, "value", parseFloat(e.target.value) || 0)}
+                                            placeholder="Value" style={{ width: "100%", padding: "8px 8px 8px 20px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 11 }} />
+                                    </div>
+                                    <button onClick={() => updateAsset(i, "liquid", !asset.liquid)} title={asset.liquid ? "Liquid" : "Illiquid"} style={{
+                                        width: 32, height: 32, borderRadius: T.radius.sm, border: `1px solid ${asset.liquid ? T.accent.emerald : T.border.default}`,
+                                        background: asset.liquid ? `${T.accent.emerald}15` : T.bg.elevated,
+                                        color: asset.liquid ? T.accent.emerald : T.text.muted, cursor: "pointer",
+                                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, flexShrink: 0
+                                    }}>{asset.liquid ? "💧" : "🔒"}</button>
+                                    <button onClick={() => removeAsset(i)} style={{ width: 28, height: 28, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>×</button>
+                                </div>
+                            ) : (
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                        <span style={{ fontSize: 13, fontWeight: 600, color: T.text.primary }}>{asset.name || "Unnamed"}</span>
+                                        <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: asset.liquid ? T.accent.emerald : T.text.dim, borderColor: asset.liquid ? `${T.accent.emerald}40` : T.border.default }}>
+                                            {asset.liquid ? "LIQUID" : "ILLIQUID"}
+                                        </Badge>
+                                    </div>
+                                    <Mono size={13} weight={700} color={T.accent.copper}>{fmt(asset.value || 0)}</Mono>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </Card>}
+
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <button onClick={() => { setEditingAssets(!editingAssets); }} style={{
+                        flex: 1, padding: "10px", borderRadius: T.radius.md,
+                        border: `1px solid ${editingAssets ? T.accent.primary : T.border.default}`,
+                        background: editingAssets ? T.accent.primaryDim : "transparent",
+                        color: editingAssets ? T.accent.primary : T.text.dim,
+                        fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono
+                    }}>{editingAssets ? "✓ Done" : "✏️ Edit Assets"}</button>
+                    <button onClick={() => { setEditingAssets(true); addAsset(); }} style={{
+                        flex: 1, padding: "10px", borderRadius: T.radius.md,
+                        border: `1px dashed ${T.accent.copper}40`,
+                        background: "transparent", color: T.accent.copper,
+                        fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono
+                    }}>+ Add Asset</button>
+                </div>
+            </>
+        )}
+    </div>;
+
     return <div className="page-body" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", gap: 24 }}>
         <style>{`
             @keyframes pulseRing {
@@ -1085,6 +1264,8 @@ export default memo(function CardPortfolioTab() {
         {creditCardsSection}
         {bankSection}
         {investmentsSection}
+        {savingsGoalsSection}
+        {otherAssetsSection}
         {debtsSection}
     </div>;
 })
