@@ -623,33 +623,43 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                         {(() => {
                             const fc = financialConfig || {};
                             const steps = [
-                                { label: "Income configured", done: !!(fc.paycheckStandard || fc.hourlyRateNet || fc.averagePaycheck), nav: "income" },
-                                { label: "Spend allowance set", done: !!fc.weeklySpendAllowance, nav: "income" },
-                                { label: "Checking floor set", done: !!fc.emergencyFloor, nav: "income" },
-                                { label: "Credit cards added", done: (cards || []).length > 0, nav: null },
-                                { label: "Bills & renewals added", done: (renewals || []).length > 0, nav: null },
+                                { label: "Connect your income", done: !!(fc.paycheckStandard || fc.hourlyRateNet || fc.averagePaycheck), nav: "income" },
+                                { label: "Set weekly spending limit", done: !!fc.weeklySpendAllowance, nav: "income" },
+                                { label: "Set a minimum cash floor", done: !!fc.emergencyFloor, nav: "income" },
+                                { label: "Track your credit cards", done: (cards || []).length > 0, nav: null },
+                                { label: "Add recurring bills", done: (renewals || []).length > 0, nav: null },
                             ];
                             const done = steps.filter(s => s.done).length;
                             const total = steps.length;
                             const pct = Math.round((done / total) * 100);
                             return <div style={{ marginBottom: 4 }}>
                                 <span style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginLeft: 16, marginBottom: 8, display: "block", letterSpacing: "0.03em", textTransform: "uppercase" }}>Setup Progress</span>
-                                <div style={{ background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, padding: "14px 16px" }}>
-                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                                        <span style={{ fontSize: 13, fontWeight: 700, color: pct === 100 ? T.status.green : T.text.primary }}>{pct === 100 ? "✅ All set!" : `${done}/${total} complete`}</span>
-                                        <span style={{ fontSize: 11, fontWeight: 700, color: pct === 100 ? T.status.green : T.accent.primary, fontFamily: T.font.mono }}>{pct}%</span>
+                                <div style={{ background: `linear-gradient(145deg, ${T.bg.card}, ${T.bg.surface})`, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, padding: "16px 20px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", backdropFilter: "blur(12px)" }}>
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                            <div style={{ width: 32, height: 32, borderRadius: "50%", background: pct === 100 ? `${T.status.green}1A` : `${T.accent.primary}1A`, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${pct === 100 ? T.status.green : T.accent.primary}40` }}>
+                                                {pct === 100 ? <span style={{ fontSize: 14 }}>🚀</span> : <span style={{ fontSize: 14 }}>🎯</span>}
+                                            </div>
+                                            <div style={{ display: "flex", flexDirection: "column" }}>
+                                                <span style={{ fontSize: 14, fontWeight: 800, color: pct === 100 ? T.status.green : T.text.primary, letterSpacing: "-0.02em" }}>{pct === 100 ? "You're all set!" : "Let's finish up"}</span>
+                                                <span style={{ fontSize: 11, color: T.text.muted, fontWeight: 500 }}>{done} of {total} steps completed</span>
+                                            </div>
+                                        </div>
+                                        <span style={{ fontSize: 14, fontWeight: 800, color: pct === 100 ? T.status.green : T.accent.primary, fontFamily: T.font.mono, letterSpacing: "-0.02em" }}>{pct}%</span>
                                     </div>
-                                    <div style={{ height: 4, borderRadius: 2, background: T.bg.surface, marginBottom: 12 }}>
-                                        <div style={{ height: 4, borderRadius: 2, background: pct === 100 ? T.status.green : T.accent.primary, width: `${pct}%`, transition: "width 0.4s ease" }} />
+                                    <div style={{ height: 6, borderRadius: 3, background: T.bg.elevated, marginBottom: 16, overflow: "hidden", boxShadow: "inset 0 1px 3px rgba(0,0,0,0.2)" }}>
+                                        <div style={{ height: "100%", borderRadius: 3, background: pct === 100 ? T.status.green : `linear-gradient(90deg, ${T.accent.primary}, ${T.accent.emerald})`, width: `${pct}%`, transition: "width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)" }} />
                                     </div>
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                        {steps.map((s, i) => <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                <span style={{ fontSize: 12, opacity: s.done ? 1 : 0.4 }}>{s.done ? "✅" : "⬜"}</span>
-                                                <span style={{ fontSize: 12, fontWeight: 600, color: s.done ? T.text.dim : T.text.primary }}>{s.label}</span>
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                        {steps.map((s, i) => <div key={i} className="hover-lift" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: s.done ? `${T.bg.surface}80` : T.bg.elevated, borderRadius: T.radius.md, border: `1px solid ${s.done ? T.border.subtle : T.border.default}`, transition: "all 0.2s" }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                                <div style={{ width: 18, height: 18, borderRadius: "50%", background: s.done ? T.status.green : T.bg.surface, border: `1px solid ${s.done ? T.status.green : T.border.subtle}`, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.3s" }}>
+                                                    {s.done && <span style={{ color: "#fff", fontSize: 10, fontWeight: 800 }}>✓</span>}
+                                                </div>
+                                                <span style={{ fontSize: 13, fontWeight: s.done ? 500 : 700, color: s.done ? T.text.dim : T.text.primary, textDecoration: s.done ? "line-through" : "none" }}>{s.label}</span>
                                             </div>
                                             {!s.done && s.nav && <button onClick={() => { setActiveSegment("finance"); setFinanceTab(s.nav); navDir.current = 'forward'; setActiveMenu(s.nav); haptic.light(); }}
-                                                style={{ fontSize: 10, fontWeight: 700, color: T.accent.primary, background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}>Set up →</button>}
+                                                style={{ fontSize: 11, fontWeight: 800, color: T.accent.primary, background: `${T.accent.primary}1A`, border: "none", cursor: "pointer", padding: "6px 12px", borderRadius: 999, transition: "background 0.2s" }}>Set up →</button>}
                                         </div>)}
                                     </div>
                                 </div>

@@ -1092,12 +1092,12 @@ export default memo(function CardPortfolioTab() {
 
     // ═══ SAVINGS GOALS SECTION ═══
     const savingsGoalsSection = <div>
-        <div onClick={() => setCollapsedSections(s => ({ ...s, savingsGoals: !s.savingsGoals }))} style={{
+        <div onClick={() => setCollapsedSections(s => ({ ...s, savingsGoals: !s.savingsGoals }))} className="hover-lift" style={{
             paddingTop: 24, paddingBottom: 16, display: "flex", alignItems: "center", gap: 12, cursor: "pointer",
-            userSelect: "none"
+            userSelect: "none", transition: "all 0.2s"
         }}>
-            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent.primary}1A`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 12px ${T.accent.primary}10` }}>
-                <Target size={14} color={T.accent.primary} />
+            <div style={{ width: 32, height: 32, borderRadius: 10, background: `linear-gradient(135deg, ${T.accent.primary}20, ${T.accent.emerald}10)`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 12px ${T.accent.primary}15`, border: `1px solid ${T.accent.primary}30` }}>
+                <Target size={16} color={T.accent.primary} />
             </div>
             <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Savings Goals</h2>
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
@@ -1146,9 +1146,9 @@ export default memo(function CardPortfolioTab() {
                                         <span style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>{goal.name || "Unnamed"}</span>
                                         <Mono size={11} weight={700} color={color}>${(goal.currentAmount || 0).toLocaleString()} / ${(goal.targetAmount || 0).toLocaleString()}</Mono>
                                     </div>
-                                    {goal.targetAmount > 0 && <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                        <div style={{ flex: 1, height: 4, borderRadius: 2, background: T.bg.surface, overflow: "hidden" }}>
-                                            <div style={{ height: "100%", borderRadius: 2, background: color, width: `${pct}%`, transition: "width .3s" }} />
+                                    {goal.targetAmount > 0 && <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                        <div style={{ flex: 1, height: 6, borderRadius: 3, background: T.bg.surface, overflow: "hidden", boxShadow: "inset 0 1px 3px rgba(0,0,0,0.15)" }}>
+                                            <div style={{ height: "100%", borderRadius: 3, background: pct === 100 ? T.status.green : `linear-gradient(90deg, ${color}, ${T.accent.primary})`, width: `${pct}%`, transition: "width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)" }} />
                                         </div>
                                         <Mono size={10} weight={700} color={color}>{pct}%</Mono>
                                     </div>}
@@ -1159,20 +1159,20 @@ export default memo(function CardPortfolioTab() {
                     })}
                 </Card>}
 
-                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                    <button onClick={() => { setEditingGoals(!editingGoals); }} style={{
-                        flex: 1, padding: "10px", borderRadius: T.radius.md,
+                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                    <button onClick={() => { setEditingGoals(!editingGoals); }} className="hover-lift" style={{
+                        flex: 1, padding: "12px", borderRadius: T.radius.lg,
                         border: `1px solid ${editingGoals ? T.accent.primary : T.border.default}`,
-                        background: editingGoals ? T.accent.primaryDim : "transparent",
-                        color: editingGoals ? T.accent.primary : T.text.dim,
-                        fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono
-                    }}>{editingGoals ? "✓ Done" : "✏️ Edit Goals"}</button>
-                    <button onClick={() => { setEditingGoals(true); addGoal(); }} style={{
-                        flex: 1, padding: "10px", borderRadius: T.radius.md,
-                        border: `1px dashed ${T.accent.primary}40`,
-                        background: "transparent", color: T.accent.primary,
-                        fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono
-                    }}>+ Add Goal</button>
+                        background: editingGoals ? `${T.accent.primary}1A` : T.bg.surface,
+                        color: editingGoals ? T.accent.primary : T.text.secondary,
+                        fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: T.font.sans, transition: "all 0.2s"
+                    }}>{editingGoals ? "✓ Save Changes" : "✏️ Edit Goals"}</button>
+                    <button onClick={() => { setEditingGoals(true); addGoal(); }} className="hover-lift" style={{
+                        flex: 1, padding: "12px", borderRadius: T.radius.lg,
+                        border: `1px dashed ${T.accent.primary}60`,
+                        background: `${T.accent.primary}05`, color: T.accent.primary,
+                        fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: T.font.sans, transition: "all 0.2s"
+                    }}>+ Create New Goal</button>
                 </div>
             </>
         )}
@@ -1180,12 +1180,12 @@ export default memo(function CardPortfolioTab() {
 
     // ═══ OTHER ASSETS SECTION ═══
     const otherAssetsSection = <div>
-        <div onClick={() => setCollapsedSections(s => ({ ...s, otherAssets: !s.otherAssets }))} style={{
+        <div onClick={() => setCollapsedSections(s => ({ ...s, otherAssets: !s.otherAssets }))} className="hover-lift" style={{
             paddingTop: 24, paddingBottom: 16, display: "flex", alignItems: "center", gap: 12, cursor: "pointer",
-            userSelect: "none"
+            userSelect: "none", transition: "all 0.2s"
         }}>
-            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent.copper}1A`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 12px ${T.accent.copper}10` }}>
-                <Wallet size={14} color={T.accent.copper} />
+            <div style={{ width: 32, height: 32, borderRadius: 10, background: `linear-gradient(135deg, ${T.accent.copper}20, #FFE5B410)`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 12px ${T.accent.copper}15`, border: `1px solid ${T.accent.copper}30` }}>
+                <Wallet size={16} color={T.accent.copper} />
             </div>
             <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Other Assets</h2>
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
@@ -1233,20 +1233,20 @@ export default memo(function CardPortfolioTab() {
                     ))}
                 </Card>}
 
-                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                    <button onClick={() => { setEditingAssets(!editingAssets); }} style={{
-                        flex: 1, padding: "10px", borderRadius: T.radius.md,
-                        border: `1px solid ${editingAssets ? T.accent.primary : T.border.default}`,
-                        background: editingAssets ? T.accent.primaryDim : "transparent",
-                        color: editingAssets ? T.accent.primary : T.text.dim,
-                        fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono
-                    }}>{editingAssets ? "✓ Done" : "✏️ Edit Assets"}</button>
-                    <button onClick={() => { setEditingAssets(true); addAsset(); }} style={{
-                        flex: 1, padding: "10px", borderRadius: T.radius.md,
-                        border: `1px dashed ${T.accent.copper}40`,
-                        background: "transparent", color: T.accent.copper,
-                        fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono
-                    }}>+ Add Asset</button>
+                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                    <button onClick={() => { setEditingAssets(!editingAssets); }} className="hover-lift" style={{
+                        flex: 1, padding: "12px", borderRadius: T.radius.lg,
+                        border: `1px solid ${editingAssets ? T.accent.copper : T.border.default}`,
+                        background: editingAssets ? `${T.accent.copper}1A` : T.bg.surface,
+                        color: editingAssets ? T.accent.copper : T.text.secondary,
+                        fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: T.font.sans, transition: "all 0.2s"
+                    }}>{editingAssets ? "✓ Save Changes" : "✏️ Edit Assets"}</button>
+                    <button onClick={() => { setEditingAssets(true); addAsset(); }} className="hover-lift" style={{
+                        flex: 1, padding: "12px", borderRadius: T.radius.lg,
+                        border: `1px dashed ${T.accent.copper}60`,
+                        background: `${T.accent.copper}05`, color: T.accent.copper,
+                        fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: T.font.sans, transition: "all 0.2s"
+                    }}>+ Track New Asset</button>
                 </div>
             </>
         )}
