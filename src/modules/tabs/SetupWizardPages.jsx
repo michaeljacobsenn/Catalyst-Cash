@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import * as XLSX from "xlsx";
+// xlsx is loaded dynamically to reduce initial bundle size
 import { T } from "../constants.js";
 import { AI_PROVIDERS } from "../providers.js";
 import { isSecuritySensitiveKey } from "../securityKeys.js";
@@ -130,6 +130,7 @@ export function PageImport({ onNext, toast, onComplete }) {
 
     const applyBackup = async (backup) => {
         if (backup && backup.type === "spreadsheet-backup") {
+            const XLSX = await import("xlsx");
             const binary_string = window.atob(backup.base64);
             const len = binary_string.length;
             const bytes = new Uint8Array(len);
@@ -192,6 +193,7 @@ export function PageImport({ onNext, toast, onComplete }) {
     };
 
     const parseSpreadsheet = async (file) => {
+        const XLSX = await import("xlsx");
         const buf = await file.arrayBuffer();
         const wb = XLSX.read(buf, { type: "array" });
         // Prefer "📝 Setup Data" sheet, fall back to first

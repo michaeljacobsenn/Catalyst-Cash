@@ -126,7 +126,7 @@ export function PortfolioProvider({ children }) {
             .filter(c => c.annualFee && c.annualFeeDue)
             .map(c => ({
                 id: c.id,
-                name: `${c.issuer} ${c.name} Annual Fee`,
+                name: `${getCardLabel(cards, c)} Annual Fee`,
                 amount: String(c.annualFee),
                 nextDue: c.annualFeeDue,
                 interval: 1,

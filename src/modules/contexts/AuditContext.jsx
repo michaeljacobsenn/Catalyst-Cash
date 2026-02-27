@@ -9,6 +9,7 @@ import { useToast } from '../Toast.jsx';
 import { getProvider, getModel } from '../providers.js';
 import { getSystemPrompt } from '../prompts.js';
 import { log } from '../logger.js';
+import { getHistoryLimit } from '../subscription.js';
 import { useSettings } from './SettingsContext.jsx';
 import { usePortfolio } from './PortfolioContext.jsx';
 import { useNavigation } from './NavigationContext.jsx';
@@ -43,6 +44,7 @@ export function AuditProvider({ children }) {
   const [useStreaming, setUseStreaming] = useState(true);
   const [streamText, setStreamText] = useState("");
   const [elapsed, setElapsed] = useState(0);
+  const [historyLimit, setHistoryLimit] = useState(Infinity);
   const [viewing, setViewing] = useState(null);
   const [trendContext, setTrendContext] = useState([]);
   const [instructionHash, setInstructionHash] = useState(null);
@@ -53,6 +55,9 @@ export function AuditProvider({ children }) {
 
   const timerRef = useRef(null);
   const abortRef = useRef(null);
+
+  // Resolve subscription history limit
+  useEffect(() => { getHistoryLimit().then(setHistoryLimit).catch(() => setHistoryLimit(Infinity)); }, []);
 
   // Initialize History
   useEffect(() => {
@@ -429,7 +434,8 @@ export function AuditProvider({ children }) {
     deleteHistoryItem,
     isAuditReady,
     handleManualImport,
-    isTest
+    isTest,
+    historyLimit
   };
 
   return (

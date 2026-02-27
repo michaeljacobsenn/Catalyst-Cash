@@ -49,24 +49,20 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
         return () => document.removeEventListener("mousedown", handler);
     }, [open]);
 
-    // Position, scroll-track, and resize-track
+    const portalRef = useRef(null);
+
+    // Reposition on scroll/resize — never close on scroll.
+    // Closing only happens via the outside-tap (mousedown/touchstart) handler below.
+    // This prevents the keyboard-covers-dropdown issue where the user scrolls to
+    // reveal options and the dropdown closes before they can select.
     useEffect(() => {
         if (!open) return;
         calcPosition();
 
-        // Close on any scroll deeper than 8px from when we opened
-        let scrollCount = 0;
-        const onScroll = () => {
-            scrollCount++;
-            if (scrollCount > 3) {
-                setOpen(false);
-            } else {
-                calcPosition();
-            }
-        };
-        const onResize = () => { setOpen(false); };
+        const onScroll = () => calcPosition();
+        const onResize = () => calcPosition();
 
-        window.addEventListener("scroll", onScroll, true); // capture phase to catch all scrollable ancestors
+        window.addEventListener("scroll", onScroll, true);
         window.addEventListener("resize", onResize);
         return () => {
             window.removeEventListener("scroll", onScroll, true);
@@ -127,7 +123,7 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
     );
 
     const dropdown = open ? createPortal(
-        <div data-ss-portal style={{
+        <div ref={portalRef} data-ss-portal style={{
             position: "fixed",
             ...(dropPos.flip
                 ? { bottom: window.innerHeight - dropPos.top, left: dropPos.left }

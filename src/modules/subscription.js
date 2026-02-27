@@ -8,12 +8,45 @@
 
 import { db } from "./utils.js";
 
+// ── Gating Mode ───────────────────────────────────────────────
+// Controls whether subscription limits are enforced.
+//   "off"  → Everyone gets Pro-level access (development / beta)
+//   "soft" → Show limits in UI (banners, counters) but don't block
+//   "live" → Full enforcement (activate for App Store release)
+// ──────────────────────────────────────────────────────────────
+const GATING_MODE = "off";
+
+/**
+ * Get the current gating mode.
+ * Consumers can check this to decide whether to show/enforce limits.
+ */
+export function getGatingMode() {
+    return GATING_MODE;
+}
+
+/**
+ * Returns true if gating is actively enforcing limits.
+ * "off" = no enforcement, "soft" = show but don't block, "live" = enforce.
+ */
+export function isGatingEnforced() {
+    return GATING_MODE === "live";
+}
+
+/**
+ * Returns true if gating UI should be shown (soft or live mode).
+ */
+export function shouldShowGating() {
+    return GATING_MODE === "soft" || GATING_MODE === "live";
+}
+
 // ── Tier Definitions ──────────────────────────────────────────
 export const TIERS = {
     free: {
         id: "free",
         name: "Free",
-        auditsPerWeek: 4,
+        auditsPerWeek: 3,
+        marketRefreshMs: 60 * 60 * 1000,    // 60 minutes
+        historyLimit: 4,                     // Last 4 audits visible
         models: ["gemini-2.5-flash"],
         features: ["basic_audit", "health_score", "weekly_moves", "history", "demo"],
         badge: null,
@@ -22,7 +55,9 @@ export const TIERS = {
         id: "pro",
         name: "Pro",
         auditsPerWeek: Infinity,
-        models: ["gemini-2.5-flash", "gemini-2.5-pro", "o3-mini"],
+        marketRefreshMs: 15 * 60 * 1000,    // 15 minutes
+        historyLimit: Infinity,              // Unlimited history
+        models: ["gemini-2.5-flash", "gemini-2.5-pro", "o3-mini", "claude-sonnet-4-20250514"],
         features: [
             "basic_audit", "health_score", "weekly_moves", "history", "demo",
             "premium_models", "unlimited_audits", "share_card", "monte_carlo",
@@ -37,6 +72,12 @@ export const TIERS = {
 export const IAP_PRODUCTS = {
     monthly: "com.catalystcash.pro.monthly",   // $4.99/mo
     yearly: "com.catalystcash.pro.yearly",     // $39.99/yr ($3.33/mo)
+};
+
+// ── IAP Display Pricing (for UI — no StoreKit dependency) ─────
+export const IAP_PRICING = {
+    monthly: { price: "$4.99", period: "month", note: "Billed monthly" },
+    yearly: { price: "$39.99", period: "year", perMonth: "$3.33", savings: "Save 33%" },
 };
 
 // ── State Management ──────────────────────────────────────────
@@ -58,7 +99,8 @@ function getCurrentWeekMonday() {
     const d = new Date();
     const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    const monday = new Date(d.setDate(diff));
+    const monday = new Date(d);
+    monday.setDate(diff);
     return monday.toISOString().split("T")[0];
 }
 
@@ -93,9 +135,20 @@ export async function getSubscriptionState() {
 }
 
 /**
- * Get the current tier config.
+ * Get the effective tier config.
+ * When GATING_MODE is "off", always returns Pro tier.
  */
 export async function getCurrentTier() {
+    if (GATING_MODE === "off") return TIERS.pro;
+    const state = await getSubscriptionState();
+    return TIERS[state.tier] || TIERS.free;
+}
+
+/**
+ * Get the raw tier (ignoring gating mode) for display purposes.
+ * Use this when you need to show the user's actual subscription status.
+ */
+export async function getRawTier() {
     const state = await getSubscriptionState();
     return TIERS[state.tier] || TIERS.free;
 }
@@ -110,37 +163,74 @@ export async function hasFeature(featureId) {
 
 /**
  * Check if a model is available on the current tier.
+ * NOTE: Model gating always uses the RAW tier (respects actual sub status),
+ * NOT the effective tier. This keeps pro models locked even when GATING_MODE is "off".
  */
 export async function isModelAvailable(modelId) {
-    const tier = await getCurrentTier();
+    const tier = await getRawTier();
     return tier.models.includes(modelId);
 }
 
 /**
  * Check if the user can run another audit this week.
- * Returns { allowed, remaining, limit }.
+ * Returns { allowed, remaining, limit, used }.
+ * When GATING_MODE is "off", always returns unlimited.
  */
 export async function checkAuditQuota() {
+    if (GATING_MODE === "off") {
+        return { allowed: true, remaining: Infinity, limit: Infinity, used: 0 };
+    }
+
     const state = await getSubscriptionState();
     const tier = TIERS[state.tier] || TIERS.free;
     const limit = tier.auditsPerWeek;
     const remaining = Math.max(0, limit - state.auditsThisWeek);
-    return {
+
+    const result = {
         allowed: remaining > 0 || limit === Infinity,
         remaining: limit === Infinity ? Infinity : remaining,
         limit,
         used: state.auditsThisWeek,
     };
+
+    // In "soft" mode, show limits but don't block
+    if (GATING_MODE === "soft") {
+        result.allowed = true;
+        result.softBlocked = remaining <= 0 && limit !== Infinity;
+    }
+
+    return result;
 }
 
 /**
  * Increment the weekly audit counter.
  * Call this AFTER a successful audit completes.
+ * Always records usage regardless of gating mode (for analytics).
  */
 export async function recordAuditUsage() {
     const state = await getSubscriptionState();
     state.auditsThisWeek = (state.auditsThisWeek || 0) + 1;
     await db.set(STATE_KEY, state);
+}
+
+/**
+ * Get the market data cache TTL based on current tier.
+ * Returns milliseconds.
+ * When GATING_MODE is "off", returns Pro-level refresh rate.
+ */
+export async function getMarketRefreshTTL() {
+    const tier = await getCurrentTier();
+    return tier.marketRefreshMs;
+}
+
+/**
+ * Get the history display limit based on current tier.
+ * Returns number of audits to show (Infinity = all).
+ * When GATING_MODE is "off", returns Infinity.
+ */
+export async function getHistoryLimit() {
+    const tier = await getCurrentTier();
+    return tier.historyLimit;
 }
 
 /**
@@ -171,6 +261,8 @@ export async function deactivatePro() {
 
 /**
  * Check if the user is currently Pro.
+ * NOTE: This checks the RAW subscription status, not the gating mode.
+ * Use this for IAP status checks and model gating.
  */
 export async function isPro() {
     const state = await getSubscriptionState();

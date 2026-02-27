@@ -165,11 +165,12 @@ export default memo(function CardPortfolioTab() {
     const savingsCount = bankAccounts.filter(a => a.accountType === "savings").length;
 
     // ─── Early computations for Wealth Dashboard ─────────────────────
-    const holdings = financialConfig?.holdings || { roth: [], k401: [], brokerage: [], crypto: [] };
+    const holdings = financialConfig?.holdings || { roth: [], k401: [], brokerage: [], crypto: [], hsa: [] };
     const investmentSections = [
         { key: "roth", label: "Roth IRA", enabled: !!financialConfig?.trackRothContributions, color: T.accent.primary },
         { key: "k401", label: "401(k)", enabled: !!financialConfig?.track401k, color: T.status.blue },
         { key: "brokerage", label: "Brokerage", enabled: !!financialConfig?.trackBrokerage, color: T.accent.emerald },
+        { key: "hsa", label: "HSA", enabled: !!financialConfig?.trackHSA, color: "#06B6D4" },
         { key: "crypto", label: "Crypto", enabled: true, color: T.status.amber },
     ];
     const enabledInvestments = investmentSections.filter(s => s.enabled || (holdings[s.key] || []).length > 0);

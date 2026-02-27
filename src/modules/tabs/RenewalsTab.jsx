@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, memo, useCallback } from "react";
 import { ChevronDown, ChevronUp, AlertTriangle, X, Plus, Check } from "lucide-react";
 import { T, RENEWAL_CATEGORIES, formatInterval } from "../constants.js";
 import { fmt } from "../utils.js";
@@ -11,10 +11,11 @@ import SearchableSelect from "../SearchableSelect.jsx";
 const WEEK_OPTIONS = Array.from({ length: 52 }, (_, i) => i + 1);
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
 const YEAR_OPTIONS = [1, 2, 3];
+const DAY_OPTIONS = Array.from({ length: 90 }, (_, i) => i + 1);
 
 import { usePortfolio } from '../contexts/PortfolioContext.jsx';
 
-export default function RenewalsTab() {
+export default memo(function RenewalsTab() {
     const { renewals, setRenewals, cardAnnualFees, cards } = usePortfolio();
     const [editing, setEditing] = useState(null); // index within user renewals
     const [editVal, setEditVal] = useState({});
@@ -84,6 +85,7 @@ export default function RenewalsTab() {
         const unitWeight = { weeks: 1, months: 2, years: 3 };
         const toMonths = (interval, unit) => {
             const i = interval || 1;
+            if (unit === "days") return i / 30.44;
             if (unit === "weeks") return i / 4.33;
             if (unit === "years") return i * 12;
             if (unit === "one-time") return 999;
@@ -104,7 +106,7 @@ export default function RenewalsTab() {
             });
         });
 
-        const order = ["fixed", "monthly", "subs", "ss", "cadence", "periodic", "sinking", "onetime", "af"];
+        const order = ["housing", "fixed", "monthly", "medical", "essentials", "insurance", "transport", "subs", "ss", "cadence", "periodic", "sinking", "onetime", "af"];
         return order.filter(id => cats[id]).map(id => cats[id]);
     }, [allItems, sortBy]);
 
@@ -113,14 +115,15 @@ export default function RenewalsTab() {
         allItems.forEach(i => {
             const int = i.interval || 1;
             const unit = i.intervalUnit || "months";
-            if (unit === "weeks") t += i.amount / int * 4.33;
+            if (unit === "days") t += i.amount / int * 30.44;
+            else if (unit === "weeks") t += i.amount / int * 4.33;
             else if (unit === "months") t += i.amount / int;
             else if (unit === "years") t += i.amount / (int * 12);
         });
         return t;
     }, [allItems]);
 
-    const startEdit = (item, renewalIndex) => {
+    const startEdit = useCallback((item, renewalIndex) => {
         if (renewalIndex == null || renewalIndex < 0) return;
         setEditing(renewalIndex);
         // If chargedTo is missing but source contains a card reference, try to pre-populate
@@ -140,8 +143,8 @@ export default function RenewalsTab() {
             }
         }
         setEditVal({ name: item.name, amount: String(item.amount), interval: item.interval || 1, intervalUnit: item.intervalUnit || "months", source: item.source || "", chargedTo, chargedToId, nextDue: item.nextDue || "", category: item.category || "subs" });
-    };
-    const saveEdit = (renewalIndex, fallbackName) => {
+    }, [cards]);
+    const saveEdit = useCallback((renewalIndex, fallbackName) => {
         if (renewalIndex == null || renewalIndex < 0) return;
         const label = editVal.chargedToId ? resolveCardLabel(cards || [], editVal.chargedToId, editVal.chargedTo) : editVal.chargedTo;
         const newName = (editVal.name || "").trim() || fallbackName;
@@ -152,12 +155,12 @@ export default function RenewalsTab() {
             category: editVal.category || r.category
         } : r));
         setEditing(null);
-    };
-    const removeItem = (renewalIndex, itemName) => {
+    }, [editVal, cards, renewals, setRenewals]);
+    const removeItem = useCallback((renewalIndex, itemName) => {
         if (renewalIndex == null || renewalIndex < 0) return;
         if (!window.confirm(`Delete "${itemName}"? This cannot be undone.`)) return;
         setRenewals((renewals || []).filter((_, idx) => idx !== renewalIndex));
-    };
+    }, [renewals, setRenewals]);
 
     const addItem = () => {
         if (!addForm.name.trim() || !addForm.amount) return;
@@ -178,11 +181,12 @@ export default function RenewalsTab() {
         <div style={{ display: "flex", gap: 6, flex: 1 }}>
             <select value={interval} onChange={e => onChange({ interval: parseInt(e.target.value), unit })}
                 style={{ flex: 0.4, padding: "10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, textOverflow: "ellipsis", whiteSpace: "nowrap", overflow: "hidden" }}>
-                {(unit === "weeks" ? WEEK_OPTIONS : unit === "months" ? MONTH_OPTIONS : YEAR_OPTIONS).map(n =>
+                {(unit === "days" ? DAY_OPTIONS : unit === "weeks" ? WEEK_OPTIONS : unit === "months" ? MONTH_OPTIONS : YEAR_OPTIONS).map(n =>
                     <option key={n} value={n}>{n}</option>)}
             </select>
             <select value={unit} onChange={e => onChange({ interval, unit: e.target.value })}
                 style={{ flex: 0.6, padding: "10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, textOverflow: "ellipsis", whiteSpace: "nowrap", overflow: "hidden" }}>
+                <option value="days">{interval === 1 ? "day" : "days"}</option>
                 <option value="weeks">{interval === 1 ? "week" : "weeks"}</option>
                 <option value="months">{interval === 1 ? "month" : "months"}</option>
                 <option value="years">{interval === 1 ? "year" : "years"}</option>
@@ -413,4 +417,4 @@ export default function RenewalsTab() {
                 </Card>
             ))}
     </div>;
-}
+})
