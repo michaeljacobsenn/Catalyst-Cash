@@ -3,7 +3,7 @@ import { T } from "../constants.js";
 import { AI_PROVIDERS } from "../providers.js";
 import { db } from "../utils.js";
 import {
-    PageWelcome, PageImport, PageIncome, PageSpending,
+    PageWelcome, PageImport, PageIncome,
     PageAI, PageSecurity, PageDone
 } from "./SetupWizardPages.jsx";
 
@@ -11,7 +11,6 @@ const PAGES = [
     { id: "welcome", emoji: "👋", title: "Welcome", subtitle: "Your AI-powered financial co-pilot." },
     { id: "import", emoji: "📥", title: "Import Data", subtitle: "Already have a backup? Skip manual entry." },
     { id: "income", emoji: "💰", title: "Income", subtitle: "How and when do you get paid?" },
-    { id: "spending", emoji: "💳", title: "Spending", subtitle: "Set your weekly guardrails." },
     { id: "ai", emoji: "🤖", title: "AI Provider", subtitle: "Pick your AI. Gemini is free." },
     { id: "security", emoji: "🔒", title: "Security", subtitle: "Keep your data safe." },
     { id: "done", emoji: "🎉", title: "All Set!", subtitle: "" },
@@ -82,7 +81,7 @@ export default function SetupWizard() {
         greenStatusTarget: "", emergencyReserveTarget: "", defaultAPR: "24.99",
         trackRothContributions: false, rothAnnualLimit: "",
         track401k: false, k401AnnualLimit: "", k401EmployerMatchPct: "", k401EmployerMatchLimit: "",
-    });
+    }); // Spending state preserved for saveAndFinish defaults
     const [ai, setAi] = useState({
         aiProvider: "backend", aiModel: "gemini-2.5-flash", apiKey: "",
     });
@@ -234,12 +233,6 @@ export default function SetupWizard() {
                         {pageId === "income" && (
                             <PageIncome
                                 data={income} onChange={updateIncome}
-                                onNext={next} onBack={back} onSkip={skip}
-                            />
-                        )}
-                        {pageId === "spending" && (
-                            <PageSpending
-                                data={spending} onChange={updateSpending}
                                 onNext={next} onBack={back} onSkip={skip}
                             />
                         )}
