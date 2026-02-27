@@ -20,10 +20,34 @@ export default defineConfig({
   base: '/',
   build: {
     outDir: 'dist',
-    // Increase chunk warning limit for the large system prompt
-    chunkSizeWarningLimit: 2000,
     // Disable module preload polyfill — not needed in Capacitor WebView
     modulePreload: { polyfill: false },
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // React core
+          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
+            return 'vendor-react';
+          }
+          // Capacitor plugins (many small packages)
+          if (id.includes('node_modules/@capacitor') || id.includes('node_modules/@capacitor-community')) {
+            return 'vendor-capacitor';
+          }
+          // AI prompts — large text blob (~85 KB source)
+          if (id.includes('/modules/prompts.js')) {
+            return 'prompts';
+          }
+          // Issuer card catalog — large static data
+          if (id.includes('/modules/issuerCards.js')) {
+            return 'card-catalog';
+          }
+          // Market data worker + ticker universe
+          if (id.includes('/modules/marketData.js')) {
+            return 'market-data';
+          }
+        },
+      },
+    },
   },
   server: {
     // Allow LAN access for testing on iPhone over WiFi before native build

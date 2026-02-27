@@ -5,6 +5,8 @@ import { fmt, fmtDate, exportAudit, exportAllAudits, exportSelectedAudits, expor
 import { Card, Badge } from "../ui.jsx";
 import { Mono, StatusDot, EmptyState } from "../components.jsx";
 import { haptic } from "../haptics.js";
+import { shouldShowGating, getHistoryLimit } from "../subscription.js";
+import { ProBanner } from "./ProPaywall.jsx";
 
 import { useAudit } from '../contexts/AuditContext.jsx';
 import { useNavigation } from '../contexts/NavigationContext.jsx';
@@ -27,6 +29,7 @@ export default memo(function HistoryTab({ toast }) {
     const doExportSel = () => { exportSelectedAudits(audits.filter((_, i) => sel.has(i))); exitSel(); };
 
     return <div className="page-body" style={{ paddingBottom: 0 }}>
+        {shouldShowGating() && <ProBanner label="Showing last 4 audits" sublabel="Upgrade to Pro for full history" />}
         <div style={{ paddingTop: 6, paddingBottom: 8, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
             <div><h1 style={{ fontSize: 22, fontWeight: 800 }}>History</h1>
                 <Mono size={11} color={T.text.dim}>{audits.length} audits stored</Mono></div>

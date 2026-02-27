@@ -12,6 +12,8 @@ import WeeklyChallenges from "./WeeklyChallenges.jsx";
 import CashFlowCalendar from "./CashFlowCalendar.jsx";
 import BudgetTab from "./BudgetTab.jsx";
 import { haptic } from "../haptics.js";
+import { shouldShowGating } from "../subscription.js";
+import { ProBanner } from "./ProPaywall.jsx";
 
 import { useAudit } from '../contexts/AuditContext.jsx';
 import { useSettings } from '../contexts/SettingsContext.jsx';
@@ -383,6 +385,9 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                         }}><RefreshCw size={11} strokeWidth={2.5} />Reset</button>
                     </div>
                 </Card>}
+
+                {/* Pro Upgrade Banner (only when gating is active) */}
+                {shouldShowGating() && <ProBanner label="Upgrade to Pro" sublabel="Unlimited audits · All AI models · 15m market data" />}
 
                 {/* ═══ COMMAND HEADER — Consolidated Hero ═══ */}
                 <Card animate style={{

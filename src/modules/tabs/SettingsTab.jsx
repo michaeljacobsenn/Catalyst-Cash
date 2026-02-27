@@ -16,6 +16,8 @@ import { isSecuritySensitiveKey } from "../securityKeys.js";
 // xlsx is loaded dynamically in importBackup() to reduce initial bundle size
 import { generateBackupSpreadsheet } from "../spreadsheet.js";
 import { getConnections, removeConnection, connectBank } from "../plaid.js";
+import { shouldShowGating, checkAuditQuota, getRawTier } from "../subscription.js";
+import ProPaywall, { ProBanner } from "./ProPaywall.jsx";
 
 const ENABLE_PLAID = false; // Toggle to false to hide, true to show Plaid integration
 
@@ -118,11 +120,13 @@ async function importBackup(file, getPassphrase) {
 import { useAudit } from '../contexts/AuditContext.jsx';
 import { useSettings } from '../contexts/SettingsContext.jsx';
 import { useSecurity } from '../contexts/SecurityContext.jsx';
+import { usePortfolio } from '../contexts/PortfolioContext.jsx';
 
 export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestoreComplete, onShowGuide, proEnabled = false }) {
     const { useStreaming, setUseStreaming } = useAudit();
     const { apiKey, setApiKey, aiProvider, setAiProvider, aiModel, setAiModel, financialConfig, setFinancialConfig, personalRules, setPersonalRules, autoBackupInterval, setAutoBackupInterval, notifPermission, persona, setPersona } = useSettings();
     const { requireAuth, setRequireAuth, appPasscode, setAppPasscode, useFaceId, setUseFaceId, lockTimeout, setLockTimeout, appleLinkedId, setAppleLinkedId } = useSecurity();
+    const { cards, renewals } = usePortfolio();
 
     // Auth Plugins state management
     const [lastBackupTS, setLastBackupTS] = useState(null);
@@ -183,6 +187,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
     const [ppModal, setPpModal] = useState({ open: false, mode: "export", label: "", resolve: null, value: "" });
     const [showApiSetup, setShowApiSetup] = useState(Boolean((apiKey || "").trim()));
     const [editingSection, setEditingSection] = useState(null);
+    const [showPaywall, setShowPaywall] = useState(false);
 
     const scrollRef = useRef(null);
     const swipeTouchStart = useRef(null);
@@ -571,6 +576,49 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                 ))}
                             </div>
                         </div>
+
+                        {/* Subscription (visible when gating is on) */}
+                        {shouldShowGating() && <div>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginLeft: 16, marginBottom: 8, display: "block", letterSpacing: "0.03em", textTransform: "uppercase" }}>Subscription</span>
+                            <ProBanner onUpgrade={() => setShowPaywall(true)} label="Upgrade to Pro" sublabel="Unlimited audits, all models, 15m market data" />
+                        </div>}
+
+                        {/* Setup Progress — deferred onboarding items */}
+                        {(() => {
+                            const fc = financialConfig || {};
+                            const steps = [
+                                { label: "Income configured", done: !!(fc.paycheckStandard || fc.hourlyRateNet || fc.averagePaycheck), nav: "income" },
+                                { label: "Spend allowance set", done: !!fc.weeklySpendAllowance, nav: "income" },
+                                { label: "Checking floor set", done: !!fc.emergencyFloor, nav: "income" },
+                                { label: "Credit cards added", done: (cards || []).length > 0, nav: null },
+                                { label: "Bills & renewals added", done: (renewals || []).length > 0, nav: null },
+                            ];
+                            const done = steps.filter(s => s.done).length;
+                            const total = steps.length;
+                            const pct = Math.round((done / total) * 100);
+                            return <div style={{ marginBottom: 4 }}>
+                                <span style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginLeft: 16, marginBottom: 8, display: "block", letterSpacing: "0.03em", textTransform: "uppercase" }}>Setup Progress</span>
+                                <div style={{ background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, padding: "14px 16px" }}>
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                                        <span style={{ fontSize: 13, fontWeight: 700, color: pct === 100 ? T.status.green : T.text.primary }}>{pct === 100 ? "✅ All set!" : `${done}/${total} complete`}</span>
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: pct === 100 ? T.status.green : T.accent.primary, fontFamily: T.font.mono }}>{pct}%</span>
+                                    </div>
+                                    <div style={{ height: 4, borderRadius: 2, background: T.bg.surface, marginBottom: 12 }}>
+                                        <div style={{ height: 4, borderRadius: 2, background: pct === 100 ? T.status.green : T.accent.primary, width: `${pct}%`, transition: "width 0.4s ease" }} />
+                                    </div>
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                        {steps.map((s, i) => <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                <span style={{ fontSize: 12, opacity: s.done ? 1 : 0.4 }}>{s.done ? "✅" : "⬜"}</span>
+                                                <span style={{ fontSize: 12, fontWeight: 600, color: s.done ? T.text.dim : T.text.primary }}>{s.label}</span>
+                                            </div>
+                                            {!s.done && s.nav && <button onClick={() => { setActiveSegment("finance"); setFinanceTab(s.nav); navDir.current = 'forward'; setActiveMenu(s.nav); haptic.light(); }}
+                                                style={{ fontSize: 10, fontWeight: 700, color: T.accent.primary, background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}>Set up →</button>}
+                                        </div>)}
+                                    </div>
+                                </div>
+                            </div>;
+                        })()}
 
                         {/* Financial Profile */}
                         <div>
