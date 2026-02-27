@@ -280,6 +280,18 @@ export function AuditProvider({ children }) {
           return next;
         });
         await Promise.all([db.set("current-audit", audit), db.set("move-states", {}), db.set("audit-history", nh)]);
+
+        // Persist debt snapshot for cross-component access (DebtSimulator fallback)
+        if (formData.debts?.length) {
+          db.set("current-debts", {
+            ts: Date.now(),
+            debts: formData.debts.filter(d => parseFloat(d.balance) > 0).map(d => ({
+              name: d.name || "Debt", balance: parseFloat(d.balance) || 0,
+              apr: parseFloat(d.apr) || 0, minPayment: parseFloat(d.minPayment) || 0,
+              limit: parseFloat(d.limit) || 0
+            }))
+          });
+        }
       }
       haptic.success();
       toast.success(testMode ? "Test audit complete — saved to history" : "Audit imported successfully");

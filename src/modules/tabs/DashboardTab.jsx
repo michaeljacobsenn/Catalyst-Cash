@@ -156,6 +156,53 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                 const taxSaved = financialConfig.k401ContributedYTD * (financialConfig.taxBracketPercent / 100);
                 result.push({ icon: "🛡️", color: T.accent.primary, title: "Tax Shield", text: `${fmt(taxSaved)} saved at ${financialConfig.taxBracketPercent}%` });
             }
+
+            // Net-worth momentum over last 4 audits
+            const nwAudits = realAudits.filter(a => a.parsed?.netWorth != null).slice(0, 4);
+            if (nwAudits.length >= 2) {
+                const latestNW = nwAudits[0].parsed.netWorth;
+                const oldestNW = nwAudits[nwAudits.length - 1].parsed.netWorth;
+                const delta = latestNW - oldestNW;
+                if (Math.abs(delta) > 50) {
+                    const up = delta > 0;
+                    result.push({
+                        icon: up ? "💰" : "📉", color: up ? T.status.green : T.status.amber,
+                        title: "Net Worth", text: `${up ? "+" : ""}${fmt(delta)} over last ${nwAudits.length} audits`
+                    });
+                }
+            }
+
+            // Health score factor analysis — what moved the score most
+            if (realAudits.length >= 2) {
+                const latest = realAudits[0];
+                const prev = realAudits[1];
+                const lScore = latest.parsed?.healthScore?.score;
+                const pScore = prev.parsed?.healthScore?.score;
+                if (lScore != null && pScore != null && Math.abs(lScore - pScore) >= 3) {
+                    const lForm = latest.form || {};
+                    const pForm = prev.form || {};
+                    const factors = [];
+                    const lChecking = parseFloat(lForm.checking) || 0;
+                    const pChecking = parseFloat(pForm.checking) || 0;
+                    if (Math.abs(lChecking - pChecking) > 100) factors.push({ name: "checking", delta: lChecking - pChecking });
+                    const lDebt = (lForm.debts || []).reduce((s, d) => s + (parseFloat(d.balance) || 0), 0);
+                    const pDebt = (pForm.debts || []).reduce((s, d) => s + (parseFloat(d.balance) || 0), 0);
+                    if (Math.abs(lDebt - pDebt) > 50) factors.push({ name: "debt", delta: pDebt - lDebt }); // positive = debt reduced
+                    const lSave = parseFloat(lForm.ally || lForm.savings) || 0;
+                    const pSave = parseFloat(pForm.ally || pForm.savings) || 0;
+                    if (Math.abs(lSave - pSave) > 50) factors.push({ name: "savings", delta: lSave - pSave });
+
+                    if (factors.length > 0) {
+                        const biggest = factors.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0];
+                        const labels = { checking: "Cash flow", debt: "Debt paydown", savings: "Savings growth" };
+                        const up = lScore > pScore;
+                        result.push({
+                            icon: up ? "⚡" : "🔍", color: up ? T.accent.emerald : T.status.amber,
+                            title: `Score ${up ? "+" : ""}${lScore - pScore}`, text: `Driven by ${labels[biggest.name] || biggest.name}`
+                        });
+                    }
+                }
+            }
         }
         return result;
     }, [history, floor, financialConfig]);
