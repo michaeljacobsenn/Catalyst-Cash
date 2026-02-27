@@ -1,8 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../utils.js';
 import { haptic } from '../haptics.js';
 
 const NavigationContext = createContext(null);
+
+// ── Swipeable tab order (Input/Results/Settings are overlays, not in swipe chain) ──
+const SWIPE_TAB_ORDER = ["history", "dashboard", "renewals", "cards"];
 
 export function NavigationProvider({ children }) {
     const [tab, setTab] = useState("dashboard");
@@ -11,6 +14,9 @@ export function NavigationProvider({ children }) {
     const [onboardingComplete, setOnboardingComplete] = useState(true); // true until proven otherwise
     const [showGuide, setShowGuide] = useState(false);
     const [inputMounted, setInputMounted] = useState(false);
+
+    // ── Swipe animation direction: "left" | "right" | null ──
+    const [swipeAnimClass, setSwipeAnimClass] = useState("tab-transition");
 
     const lastCenterTab = useRef("dashboard");
     const inputBackTarget = useRef("dashboard");
@@ -31,7 +37,7 @@ export function NavigationProvider({ children }) {
         initOnboarding();
     }, []);
 
-    const navTo = (newTab, viewState = null) => {
+    const navTo = useCallback((newTab, viewState = null) => {
         setTab(newTab);
 
         // Emit a custom event so AuditContext can pick up the viewState if needed
@@ -46,7 +52,49 @@ export function NavigationProvider({ children }) {
 
         window.history.pushState({ tab: newTab, viewingTs: viewState?.ts }, "", "");
         haptic.light();
-    };
+    }, []);
+
+    // ── Swipe navigation: move to adjacent tab in SWIPE_TAB_ORDER ──
+    const swipeToTab = useCallback((direction) => {
+        // direction: "left" = finger moved left → go RIGHT in tab order
+        //            "right" = finger moved right → go LEFT in tab order
+        setTab(prev => {
+            const effectiveTab = prev === "settings" ? lastCenterTab.current : prev;
+            const idx = SWIPE_TAB_ORDER.indexOf(effectiveTab);
+            if (idx === -1) return prev; // current tab not swipeable (input, results, settings)
+
+            let nextIdx;
+            if (direction === "left") {
+                nextIdx = idx + 1;
+                if (nextIdx >= SWIPE_TAB_ORDER.length) return prev; // already at rightmost
+            } else {
+                nextIdx = idx - 1;
+                if (nextIdx < 0) return prev; // already at leftmost
+            }
+
+            const nextTab = SWIPE_TAB_ORDER[nextIdx];
+
+            // Set directional animation class BEFORE the tab changes
+            setSwipeAnimClass(direction === "left" ? "tab-slide-right" : "tab-slide-left");
+
+            // Update refs
+            if (nextTab === "dashboard" || nextTab === "input") lastCenterTab.current = nextTab;
+
+            // Push browser history
+            window.history.pushState({ tab: nextTab, viewingTs: null }, "", "");
+            haptic.light();
+
+            return nextTab;
+        });
+    }, []);
+
+    // Reset animation class after animation completes so next non-swipe navigation uses default
+    useEffect(() => {
+        if (swipeAnimClass !== "tab-transition") {
+            const timer = setTimeout(() => setSwipeAnimClass("tab-transition"), 350);
+            return () => clearTimeout(timer);
+        }
+    }, [swipeAnimClass]);
 
     useEffect(() => {
         window.history.replaceState({ tab: "dashboard", viewingTs: null }, "", "");
@@ -64,12 +112,15 @@ export function NavigationProvider({ children }) {
     const value = {
         tab, setTab,
         navTo,
+        swipeToTab,
+        swipeAnimClass, setSwipeAnimClass,
         resultsBackTarget, setResultsBackTarget,
         setupReturnTab, setSetupReturnTab,
         onboardingComplete, setOnboardingComplete,
         showGuide, setShowGuide,
         inputMounted, setInputMounted,
-        lastCenterTab, inputBackTarget
+        lastCenterTab, inputBackTarget,
+        SWIPE_TAB_ORDER
     };
 
     return (

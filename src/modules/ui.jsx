@@ -48,12 +48,18 @@ export const GlobalStyles = () => (
     @keyframes settingsSlideOut{from{opacity:0;transform:translateX(-50px)}to{opacity:1;transform:translateX(0)}}
     @keyframes slidePaneIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 
+    /* ── Native iOS-style horizontal swipe transitions ── */
+    @keyframes tabSlideFromRight{from{opacity:0;transform:translateX(80px)}to{opacity:1;transform:translateX(0)}}
+    @keyframes tabSlideFromLeft{from{opacity:0;transform:translateX(-80px)}to{opacity:1;transform:translateX(0)}}
+
     .slide-up{animation:slideUp .35s cubic-bezier(.16,1,.3,1) both}
     .fade-in{animation:fadeIn .4s ease both}
     .scale-in{animation:scaleIn .3s cubic-bezier(.16,1,.3,1) both}
     .shimmer-bg{background:linear-gradient(90deg,${T.bg.card} 30%,${T.bg.elevated} 50%,${T.bg.card} 70%);background-size:200% 100%;animation:shimmer 1.8s ease-in-out infinite}
     .pulse-alert{animation:pulseAlert 2s infinite}
     .tab-transition{animation:tabSlideIn .28s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
+    .tab-slide-right{animation:tabSlideFromRight .32s cubic-bezier(.25,.46,.45,.94) both;will-change:transform,opacity}
+    .tab-slide-left{animation:tabSlideFromLeft .32s cubic-bezier(.25,.46,.45,.94) both;will-change:transform,opacity}
     .slide-pane{animation:slidePaneIn .3s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
 
     /* Top 0.0001% Micro-Animations */

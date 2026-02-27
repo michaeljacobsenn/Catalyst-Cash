@@ -5,7 +5,7 @@ import {
   History, Plus, RefreshCw, X, Eye, EyeOff,
   AlertTriangle, Loader2, CreditCard, Settings, Info, Home, Zap, Trash2, ClipboardPaste, LayoutDashboard, ReceiptText, Clock
 } from "lucide-react";
-import { T, DEFAULT_CARD_PORTFOLIO, RENEWAL_CATEGORIES } from "./modules/constants.js";
+import { T, DEFAULT_CARD_PORTFOLIO, RENEWAL_CATEGORIES, APP_VERSION } from "./modules/constants.js";
 import { DEFAULT_PROVIDER_ID, DEFAULT_MODEL_ID, getProvider, getModel } from "./modules/providers.js";
 import { db, parseAudit, exportAllAudits, exportSelectedAudits, exportAuditCSV, advanceExpiredDate, cyrb53 } from "./modules/utils.js";
 import { ensureCardIds, getCardLabel } from "./modules/cards.js";
@@ -37,14 +37,8 @@ import { NavigationProvider, useNavigation } from "./modules/contexts/Navigation
 import { AuditProvider, useAudit } from "./modules/contexts/AuditContext.jsx";
 import { uploadToICloud } from "./modules/cloudSync.js";
 import { isSecuritySensitiveKey } from "./modules/securityKeys.js";
+import { isPro } from "./modules/subscription.js";
 import { evaluateBadges, unlockBadge, BADGE_DEFINITIONS } from "./modules/badges.js";
-
-// Security-sensitive keys that must NEVER leave the device
-const SECURITY_KEYS = new Set([
-  "app-passcode", "require-auth", "use-face-id", "lock-timeout",
-  "api-key", "api-key-openai", "api-key-gemini", "api-key-claude",   // API keys never leave the device
-  "apple-linked-id"             // OAuth tokens never leave the device
-]);
 
 function flattenSeedRenewals() {
   const items = [];
@@ -61,20 +55,6 @@ function useOnline() {
     window.addEventListener("online", on); window.addEventListener("offline", off);
     return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off) };
   }, []); return o;
-}
-
-// ═══════════════════════════════════════════════════════════════
-// DATA MIGRATION — ensure historical audits have moveChecks
-// ═══════════════════════════════════════════════════════════════
-function migrateHistory(hist) {
-  if (!hist?.length) return hist;
-  let migrated = false;
-  const result = hist.map(a => {
-    if (!a.moveChecks) { migrated = true; return { ...a, moveChecks: {} }; }
-    return a;
-  });
-  if (migrated) db.set("audit-history", result);
-  return result;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -105,8 +85,8 @@ function CatalystCash() {
   const { requireAuth, setRequireAuth, appPasscode, setAppPasscode, useFaceId, setUseFaceId, isLocked, setIsLocked, privacyMode, setPrivacyMode, lockTimeout, setLockTimeout, appleLinkedId, setAppleLinkedId, isSecurityReady } = useSecurity();
   const { apiKey, setApiKey, aiProvider, setAiProvider, aiModel, setAiModel, persona, setPersona, personalRules, setPersonalRules, autoBackupInterval, setAutoBackupInterval, notifPermission, aiConsent, setAiConsent, showAiConsent, setShowAiConsent, financialConfig, setFinancialConfig, isSettingsReady } = useSettings();
   const { cards, setCards, bankAccounts, setBankAccounts, renewals, setRenewals, cardCatalog, badges, cardAnnualFees, isPortfolioReady } = usePortfolio();
-  const { current, setCurrent, history, setHistory, moveChecks, setMoveChecks, loading, error, setError, useStreaming, setUseStreaming, streamText, elapsed, viewing, setViewing, trendContext, instructionHash, setInstructionHash, handleSubmit, handleCancelAudit, clearAll, deleteHistoryItem, isAuditReady } = useAudit();
-  const { tab, setTab, navTo, resultsBackTarget, setResultsBackTarget, setupReturnTab, setSetupReturnTab, onboardingComplete, setOnboardingComplete, showGuide, setShowGuide, inputMounted, lastCenterTab, inputBackTarget } = useNavigation();
+  const { current, setCurrent, history, setHistory, moveChecks, setMoveChecks, loading, error, setError, useStreaming, setUseStreaming, streamText, elapsed, viewing, setViewing, trendContext, instructionHash, setInstructionHash, handleSubmit, handleCancelAudit, clearAll, deleteHistoryItem, isAuditReady, handleManualImport, isTest } = useAudit();
+  const { tab, setTab, navTo, swipeToTab, swipeAnimClass, resultsBackTarget, setResultsBackTarget, setupReturnTab, setSetupReturnTab, onboardingComplete, setOnboardingComplete, showGuide, setShowGuide, inputMounted, lastCenterTab, inputBackTarget, SWIPE_TAB_ORDER } = useNavigation();
 
   const scrollRef = useRef(null);
   const bottomNavRef = useRef(null);
@@ -116,7 +96,10 @@ function CatalystCash() {
   const touchStartTime = useRef(0);
 
   const ready = isSecurityReady && isSettingsReady && isPortfolioReady && isAuditReady;
-  const proEnabled = true;
+
+  // Pro subscription state — resolved async on mount
+  const [proEnabled, setProEnabled] = useState(true);
+  useEffect(() => { isPro().then(setProEnabled).catch(() => setProEnabled(true)); }, []);
 
   const [showQuickMenu, setShowQuickMenu] = useState(false);
 
@@ -146,7 +129,7 @@ function CatalystCash() {
 
     iCloudSyncTimer.current = setTimeout(async () => {
       try {
-        const backup = { app: "Catalyst Cash", version: "1.5.1-BETA", exportedAt: new Date().toISOString(), data: {} };
+        const backup = { app: "Catalyst Cash", version: APP_VERSION, exportedAt: new Date().toISOString(), data: {} };
         const keys = await db.keys();
         for (const key of keys) {
           if (isSecuritySensitiveKey(key)) continue; // Never sync security credentials
@@ -359,29 +342,6 @@ function CatalystCash() {
   };
 
 
-  const handleManualImport = async (resultText) => {
-    if (!resultText) return;
-    setResultsBackTarget("history");
-    setLoading(true); setError(null); navTo("results"); setStreamText(resultText);
-    try {
-      const parsed = parseAudit(resultText);
-      if (!parsed) throw new Error("Imported text is not valid Catalyst Cash audit JSON.");
-      applyContributionAutoUpdate(parsed, resultText);
-      const today = new Date().toISOString().split("T")[0];
-      const audit = { date: today, ts: new Date().toISOString(), form: { date: today }, parsed, isTest: false, moveChecks: {} };
-      setCurrent(audit); setMoveChecks({}); setViewing(null);
-      const nh = [audit, ...history].slice(0, 52); setHistory(nh);
-      await Promise.all([db.set("current-audit", audit), db.set("move-states", {}), db.set("audit-history", nh)]);
-      haptic.success();
-      toast.success("Audit imported successfully");
-    } catch (e) {
-      setError(e.message || "Failed to parse response");
-      haptic.error();
-      toast.error(e.message || "Failed to parse audit response");
-    }
-    finally { setLoading(false); setStreamText(""); }
-  };
-
   const importBackupFile = async (file) => {
     const reader = new FileReader();
     return new Promise((resolve, reject) => {
@@ -534,15 +494,37 @@ function CatalystCash() {
     </div>
 
     <div ref={scrollRef} className="scroll-area safe-scroll-body"
-      onTouchStart={e => { swipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
+      onTouchStart={e => {
+        swipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+      }}
       onTouchEnd={e => {
         if (!swipeStart.current) return;
-        const dx = e.changedTouches[0].clientX - swipeStart.current.x;
-        const dy = Math.abs(e.changedTouches[0].clientY - swipeStart.current.y);
-        if (dx > 60 && swipeStart.current.x < 80 && dy < 100) {
+        const endX = e.changedTouches[0].clientX;
+        const endY = e.changedTouches[0].clientY;
+        const dx = endX - swipeStart.current.x;
+        const dy = endY - swipeStart.current.y;
+        const absDx = Math.abs(dx);
+        const absDy = Math.abs(dy);
+        const elapsed = Date.now() - swipeStart.current.t;
+        const velocity = elapsed > 0 ? absDx / elapsed : 0; // px/ms
+
+        // ── Native iOS swipe navigation ──
+        // Must be primarily horizontal (2:1 ratio), exceed minimum distance, and reasonable speed
+        const isHorizontal = absDx > absDy * 1.5;
+        const meetsDistance = absDx > 50;
+        const meetsVelocity = velocity > 0.3; // iOS-like flick sensitivity (0.3 px/ms)
+
+        if (isHorizontal && meetsDistance && meetsVelocity) {
           const renderTab = tab === "settings" ? lastCenterTab.current : tab;
-          if (renderTab === "results" && (viewing || resultsBackTarget === "history")) {
+
+          // Special case: edge-swipe-back for Results → History
+          if (renderTab === "results" && dx > 0 && (viewing || resultsBackTarget === "history")) {
             setResultsBackTarget(null); navTo("history"); haptic.light();
+          }
+          // Full-width swipe between tabs in SWIPE_TAB_ORDER
+          else if (SWIPE_TAB_ORDER.includes(renderTab)) {
+            if (dx < 0) swipeToTab("left");  // finger went left → next tab
+            else swipeToTab("right");          // finger went right → prev tab
           }
         }
         swipeStart.current = null;
@@ -564,7 +546,7 @@ function CatalystCash() {
       {(() => {
         const renderTab = tab === "settings" ? lastCenterTab.current : tab;
         return (
-          <div key={`${renderTab}-${privacyMode}`} className="tab-transition">
+          <div key={`${renderTab}-${privacyMode}`} className={swipeAnimClass}>
             {renderTab === "dashboard" && <ErrorBoundary><DashboardTab
               onRestore={handleRestoreFromHome} proEnabled={proEnabled}
               onRefreshDashboard={handleRefreshDashboard}
@@ -671,7 +653,7 @@ function CatalystCash() {
       }} />
 
       <div style={{
-        display: "flex", justifyContent: "space-around", alignItems: "flex-end",
+        display: "flex", justifyContent: "space-evenly", alignItems: "flex-end",
         paddingTop: 6, paddingBottom: "calc(env(safe-area-inset-bottom, 10px) + 4px)"
       }}>
         {navItems.map((n) => {
@@ -704,10 +686,11 @@ function CatalystCash() {
             onTouchEnd={isCenter ? handlePressEnd : undefined}
             onClick={!isCenter ? () => { if (tab !== n.id) navTo(n.id); } : undefined}
             style={{
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+              flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+              justifyContent: "flex-end", gap: 2,
               background: "none", border: "none", cursor: "pointer",
               color: active ? T.accent.primary : T.text.muted,
-              padding: "4px 2px", minWidth: 44, minHeight: 48,
+              padding: "4px 0", minHeight: 48,
               transition: "color .2s ease", position: "relative",
               userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none"
             }}>

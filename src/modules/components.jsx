@@ -11,7 +11,8 @@ export const CountUp = ({ value, duration = 800, prefix = "", suffix = "", forma
     const [display, setDisplay] = useState(0);
     const raf = useRef(null);
     const startTs = useRef(null);
-    const numVal = typeof value === "number" ? value : parseFloat(value) || 0;
+    const raw = typeof value === "number" ? value : parseFloat(value) || 0;
+    const numVal = Number.isFinite(raw) ? raw : 0;
 
     useEffect(() => {
         startTs.current = performance.now();
@@ -150,7 +151,7 @@ export const MoveRow = ({ item, checked, onToggle, index }) => {
         }}>
         <div style={{
             width: 22, height: 22, borderRadius: 7, flexShrink: 0, marginTop: 1,
-            border: checked ? "none" : `2px solid ${T.text.dim}`, background: checked ? T.accent.primary : "transparent",
+            border: `2px solid ${checked ? "transparent" : T.text.dim}`, background: checked ? T.accent.primary : "transparent",
             display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s"
         }}>
             {checked && <CheckCircle size={13} color={T.bg.base} strokeWidth={3} />}</div>

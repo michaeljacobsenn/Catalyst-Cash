@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { T } from "../constants.js";
+import { T, APP_VERSION } from "../constants.js";
 
 import { useNavigation } from '../contexts/NavigationContext.jsx';
 
@@ -26,7 +26,7 @@ export default function GuideModal() {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div>
                         <h1 style={{ fontSize: 22, fontWeight: 800, color: T.text.primary, margin: 0, letterSpacing: "-0.01em" }}>System Guide</h1>
-                        <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, letterSpacing: "1px" }}>CATALYST CASH v1.3.1-BETA</span>
+                        <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, letterSpacing: "1px" }}>CATALYST CASH v{APP_VERSION}</span>
                     </div>
                     <button onClick={onClose} style={{
                         width: 32, height: 32, borderRadius: 10, border: `1px solid ${T.border.default}`,

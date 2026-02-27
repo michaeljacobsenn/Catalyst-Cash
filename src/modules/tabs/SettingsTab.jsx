@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Eye, EyeOff, ArrowLeft, Cloud, Download, Upload, CheckCircle, AlertTriangle, ChevronDown, Loader2, ExternalLink, Pencil, Check, ChevronRight, Shield, Cpu, Target, Briefcase, Landmark, Database, Lock, Settings, Info } from "lucide-react";
-import { T } from "../constants.js";
+import { T, APP_VERSION } from "../constants.js";
 import { AI_PROVIDERS, getProvider } from "../providers.js";
 import { getLogsAsText, clearLogs } from "../logger.js";
 import { Card, Label } from "../ui.jsx";
@@ -27,7 +27,7 @@ async function migrateApiKey() {
 
 async function exportBackup(passphrase) {
     await migrateApiKey();
-    const backup = { app: "Catalyst Cash", version: "1.3.1-BETA", exportedAt: new Date().toISOString(), data: {} };
+    const backup = { app: "Catalyst Cash", version: APP_VERSION, exportedAt: new Date().toISOString(), data: {} };
 
     const keys = await db.keys();
     for (const key of keys) {
@@ -188,7 +188,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
         }
         setIsForceSyncing(true);
         try {
-            const backup = { app: "Catalyst Cash", version: "1.3.1-BETA", exportedAt: new Date().toISOString(), data: {} };
+            const backup = { app: "Catalyst Cash", version: APP_VERSION, exportedAt: new Date().toISOString(), data: {} };
             const keys = await db.keys();
             for (const key of keys) {
                 if (isSecuritySensitiveKey(key)) continue;
@@ -500,7 +500,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                                 activeMenu === "rules" ? "Custom Rules" :
                                                     "Settings"}
                 </h1>
-                {!activeMenu && <p style={{ fontSize: 10, color: T.text.dim, marginTop: 2, fontFamily: T.font.mono, margin: 0 }}>VERSION 1.3.1-BETA</p>}
+                {!activeMenu && <p style={{ fontSize: 10, color: T.text.dim, marginTop: 2, fontFamily: T.font.mono, margin: 0 }}>VERSION {APP_VERSION}</p>}
             </div>
             <div style={{ width: 36 }}></div> {/* Spacer to preserve center alignment */}
         </div>
