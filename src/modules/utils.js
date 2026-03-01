@@ -197,7 +197,15 @@ export function advanceExpiredDate(dateString, intervalAmt, intervalUnit, todayS
 export function parseCurrency(value) {
   if (value == null || value === "") return null;
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  const n = parseFloat(String(value).replace(/[^0-9.-]+/g, ""));
+  let str = String(value).trim();
+  // Handle Banker's / Accounting negative notation: ($1,234.56) -> -1234.56
+  const isNegative = str.startsWith("-") || (str.startsWith("(") && str.endsWith(")"));
+  const cleanStr = str.replace(/[^0-9.]+/g, "");
+  if (!cleanStr) return null;
+  let n = parseFloat(cleanStr);
+  if (isNegative) n = -n;
+  // Banker's Rounding (Round half to even for financial precision) is not strictly needed here 
+  // since it's just parsing input, but we enforce strict float handling.
   return Number.isFinite(n) ? n : null;
 }
 

@@ -15,8 +15,9 @@ export function addDays(dateStr, days) {
 export function daysBetween(date1, date2) {
     const d1 = new Date(date1);
     const d2 = new Date(date2);
-    // Use floor to handle partial day differences effectively
-    return Math.floor((d2 - d1) / (1000 * 60 * 60 * 24));
+    // Use Math.round instead of floor to safely handle Daylight Savings Time (DST) 
+    // fractional day differences (e.g. 23 hours rounding to 1 day)
+    return Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
 }
 
 // Helper: Get next occurrence of a specific day of the month
