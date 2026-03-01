@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useReducer, useCallback } from 'react';
 import { db } from '../utils.js';
+import { applyTheme } from '../constants.js';
 import { DEFAULT_PROVIDER_ID, DEFAULT_MODEL_ID, getProvider, getModel } from "../providers.js";
 import { schedulePaydayReminder, cancelPaydayReminder, requestNotificationPermission } from "../notifications.js";
 
@@ -101,6 +102,8 @@ export function SettingsProvider({ children }) {
     const [notifPermission, setNotifPermission] = useState("prompt");
     const [aiConsent, setAiConsent] = useState(false);
     const [showAiConsent, setShowAiConsent] = useState(false);
+    const [themeMode, setThemeModeRaw] = useState("dark"); // "system" | "light" | "dark"
+    const [, forceRender] = useState(0);
     const [financialConfig, dispatchFinConfig] = useReducer(financialConfigReducer, DEFAULT_FINANCIAL_CONFIG);
 
     // Backward-compatible wrapper: accepts either a new state object, a function updater, or dispatch action
@@ -126,7 +129,7 @@ export function SettingsProvider({ children }) {
             const notifGranted = await requestNotificationPermission().catch(() => false);
             setNotifPermission(notifGranted ? "granted" : "denied");
 
-            const [legacyKey, provId, modId, finConf, pr, consent, savedPersona, backupInterval] = await Promise.all([
+            const [legacyKey, provId, modId, finConf, pr, consent, savedPersona, backupInterval, savedTheme] = await Promise.all([
                 db.get("api-key"),
                 db.get("ai-provider"),
                 db.get("ai-model"),
@@ -134,7 +137,8 @@ export function SettingsProvider({ children }) {
                 db.get("personal-rules"),
                 db.get("ai-consent-accepted"),
                 db.get("ai-persona"),
-                db.get("auto-backup-interval")
+                db.get("auto-backup-interval"),
+                db.get("theme-mode")
             ]);
 
             const validProvider = getProvider(provId || DEFAULT_PROVIDER_ID);
@@ -156,6 +160,14 @@ export function SettingsProvider({ children }) {
             if (consent) setAiConsent(true);
             if (savedPersona) setPersona(savedPersona);
             if (backupInterval) setAutoBackupInterval(backupInterval);
+
+            // Apply saved theme
+            const resolvedTheme = savedTheme || "dark";
+            setThemeModeRaw(resolvedTheme);
+            const effectiveMode = resolvedTheme === "system"
+                ? (window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark")
+                : resolvedTheme;
+            applyTheme(effectiveMode);
 
             if (finConf) {
                 const merged = { ...DEFAULT_FINANCIAL_CONFIG, ...finConf };
@@ -194,6 +206,30 @@ export function SettingsProvider({ children }) {
     useEffect(() => { if (isSettingsReady) db.set("ai-consent-accepted", aiConsent); }, [aiConsent, isSettingsReady]);
     useEffect(() => { if (isSettingsReady) db.set("ai-persona", persona); }, [persona, isSettingsReady]);
 
+    // Theme mode setter: apply tokens + persist + force re-render
+    const setThemeMode = useCallback((mode) => {
+        setThemeModeRaw(mode);
+        const effective = mode === "system"
+            ? (window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark")
+            : mode;
+        applyTheme(effective);
+        forceRender(n => n + 1);
+        db.set("theme-mode", mode);
+    }, []);
+
+    // Listen for system color-scheme changes when in "system" mode
+    useEffect(() => {
+        if (themeMode !== "system") return;
+        const mq = window.matchMedia?.("(prefers-color-scheme: light)");
+        if (!mq) return;
+        const handler = (e) => {
+            applyTheme(e.matches ? "light" : "dark");
+            forceRender(n => n + 1);
+        };
+        mq.addEventListener("change", handler);
+        return () => mq.removeEventListener("change", handler);
+    }, [themeMode]);
+
     // Payday Reminder hook mapping
     useEffect(() => {
         if (!isSettingsReady || !financialConfig.payday) return;
@@ -214,6 +250,7 @@ export function SettingsProvider({ children }) {
         notifPermission, setNotifPermission,
         aiConsent, setAiConsent,
         showAiConsent, setShowAiConsent,
+        themeMode, setThemeMode,
         financialConfig, setFinancialConfig,
         isSettingsReady
     };

@@ -32,10 +32,10 @@ beforeEach(() => {
 // ═══════════════════════════════════════════════════════════════
 describe('Tier Definitions', () => {
     it('free tier has correct limits', () => {
-        expect(TIERS.free.auditsPerWeek).toBe(3);
+        expect(TIERS.free.auditsPerWeek).toBe(2);
         expect(TIERS.free.marketRefreshMs).toBe(60 * 60 * 1000); // 60 min
-        expect(TIERS.free.historyLimit).toBe(4);
-        expect(TIERS.free.models).toEqual(['gemini-2.5-flash']);
+        expect(TIERS.free.historyLimit).toBe(8);
+        expect(TIERS.free.models).toEqual(['gemini-2.5-flash', 'gpt-4o-mini']);
     });
 
     it('pro tier has unlimited access', () => {
@@ -45,7 +45,8 @@ describe('Tier Definitions', () => {
         expect(TIERS.pro.models).toContain('gemini-2.5-flash');
         expect(TIERS.pro.models).toContain('gemini-2.5-pro');
         expect(TIERS.pro.models).toContain('o3-mini');
-        expect(TIERS.pro.models).toContain('claude-sonnet-4-20250514');
+        expect(TIERS.pro.models).toContain('o3-mini');
+        // claude-sonnet-4-6 is Coming Soon — not in active models list
     });
 });
 
@@ -59,8 +60,8 @@ describe('IAP Constants', () => {
     });
 
     it('has display pricing', () => {
-        expect(IAP_PRICING.monthly.price).toBe('$4.99');
-        expect(IAP_PRICING.yearly.price).toBe('$39.99');
+        expect(IAP_PRICING.monthly.price).toBe('$6.99');
+        expect(IAP_PRICING.yearly.price).toBe('$49.99');
         expect(IAP_PRICING.yearly.savings).toBeTruthy();
     });
 });
@@ -131,7 +132,8 @@ describe('Model Gating (raw tier, not affected by GATING_MODE)', () => {
     it('free user cannot access pro models', async () => {
         expect(await isModelAvailable('gemini-2.5-pro')).toBe(false);
         expect(await isModelAvailable('o3-mini')).toBe(false);
-        expect(await isModelAvailable('claude-sonnet-4-20250514')).toBe(false);
+        expect(await isModelAvailable('o3-mini')).toBe(false);
+        // claude-sonnet-4-6 is Coming Soon — removed from tier models
     });
 
     it('pro user can access all models', async () => {
@@ -139,7 +141,8 @@ describe('Model Gating (raw tier, not affected by GATING_MODE)', () => {
         expect(await isModelAvailable('gemini-2.5-flash')).toBe(true);
         expect(await isModelAvailable('gemini-2.5-pro')).toBe(true);
         expect(await isModelAvailable('o3-mini')).toBe(true);
-        expect(await isModelAvailable('claude-sonnet-4-20250514')).toBe(true);
+        expect(await isModelAvailable('o3-mini')).toBe(true);
+        // claude-sonnet-4-6 is Coming Soon — not yet available
     });
 });
 

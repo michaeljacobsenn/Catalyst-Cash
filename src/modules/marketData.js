@@ -579,8 +579,23 @@ function getWorkerUrl() {
  * Fetch live prices for an array of ticker symbols.
  * Returns { [SYMBOL]: { price, change, changePct, name } }
  */
+const _inflightRequests = new Map();
 export async function fetchMarketPrices(symbols, forceRefresh = false) {
     if (!symbols || symbols.length === 0) return {};
+
+    // Deduplicate concurrent requests for the same symbols
+    if (!forceRefresh) {
+        const dedupeKey = [...symbols].sort().join(",");
+        if (_inflightRequests.has(dedupeKey)) return _inflightRequests.get(dedupeKey);
+        const promise = _fetchMarketPricesImpl(symbols, forceRefresh);
+        _inflightRequests.set(dedupeKey, promise);
+        promise.finally(() => _inflightRequests.delete(dedupeKey));
+        return promise;
+    }
+    return _fetchMarketPricesImpl(symbols, forceRefresh);
+}
+
+async function _fetchMarketPricesImpl(symbols, forceRefresh) {
 
     // Check local cache first (skip if forceRefresh)
     if (!forceRefresh) {
@@ -628,7 +643,17 @@ export async function fetchMarketPrices(symbols, forceRefresh = false) {
 
     const url = getWorkerUrl();
     if (!url) {
-        console.warn("[MarketData] no worker URL configured — VITE_PROXY_URL is empty");
+        console.warn("[MarketData] no worker URL configured — falling back to stale cache");
+        try {
+            const cached = await db.get(CACHE_KEY);
+            if (cached && typeof cached === "object") {
+                const filtered = {};
+                for (const sym of symbols) {
+                    if (cached[sym]) filtered[sym] = cached[sym];
+                }
+                if (Object.keys(filtered).length > 0) return filtered;
+            }
+        } catch (_) { /* ignore */ }
         return {};
     }
 
@@ -678,10 +703,21 @@ export async function fetchMarketPrices(symbols, forceRefresh = false) {
                         } catch { return null; }
                     })
                 );
-                for (const result of batchResults) {
+                for (let j = 0; j < batchResults.length; j++) {
+                    const result = batchResults[j];
+                    const sym = batch[j];
                     if (result.status === "fulfilled" && result.value) {
-                        data[result.value.symbol] = result.value;
-                        console.warn(`[MarketData] Yahoo fallback got ${result.value.symbol}: $${result.value.price}`);
+                        data[sym] = result.value;
+                        console.warn(`[MarketData] Yahoo fallback got ${sym}: $${result.value.price}`);
+                    } else {
+                        console.warn(`[MarketData] Yahoo failed for ${sym}, attempting to use last known cached price.`);
+                        try {
+                            const cached = await db.get(CACHE_KEY);
+                            if (cached && cached[sym]) {
+                                data[sym] = cached[sym];
+                                console.warn(`[MarketData] Recovered cached price for ${sym}: $${cached[sym].price}`);
+                            }
+                        } catch (e) { }
                     }
                 }
                 // Delay between batches to respect rate limits

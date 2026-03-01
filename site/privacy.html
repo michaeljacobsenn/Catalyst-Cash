@@ -39,10 +39,18 @@
       font-weight: 700;
     }
 
+    h3 {
+      font-size: 15px;
+      margin: 16px 0 6px;
+      color: #CBD5E1;
+      font-weight: 600;
+    }
+
     p,
     li {
-      line-height: 1.6;
+      line-height: 1.7;
       color: #94A3B8;
+      font-size: 14px;
     }
 
     a {
@@ -70,75 +78,150 @@
       margin: 16px 0;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     }
+
+    .highlight {
+      border-color: #10B981;
+      background: rgba(16, 185, 129, 0.03);
+    }
+
+    .accent {
+      border-color: #00E5FF;
+      background: rgba(0, 229, 255, 0.03);
+    }
+
+    strong {
+      color: #E2E8F0;
+    }
+
+    ul {
+      padding-left: 20px;
+    }
   </style>
 </head>
 
 <body>
   <div class="wrap">
     <h1>Catalyst Cash Privacy Policy</h1>
-    <div class="meta">Effective date: 2026-02-23</div>
+    <div class="meta">Effective date: 2026-03-01 · Last updated: 2026-03-01</div>
 
-    <div class="card">
-      <p>Catalyst Cash is a personal financial audit app. You control the data you enter. This policy explains what data
-        is processed, how it’s used, and your choices.</p>
-    </div>
-
-    <h2>Data We Process</h2>
-    <ul>
-      <li><strong>User‑entered financial data</strong> (balances, debts, renewals, notes) used to generate audit
-        outputs.</li>
-      <li><strong>App settings</strong> (preferences, provider/model selections, and optional personal rules).</li>
-      <li><strong>Usage metadata</strong> (e.g., audit count) if you use a paid API tier.</li>
-    </ul>
-
-    <h2>How Your Data Is Used</h2>
-    <ul>
-      <li>To generate audits and insights based on the data you input.</li>
-      <li>To render history, charts, and summaries locally on your device.</li>
-      <li>To enforce paid usage limits if you subscribe to a paid plan.</li>
-    </ul>
-
-    <h2>Third‑Party AI Providers & Zero-Logging Guarantee</h2>
-    <div class="card" style="border-color: #00E5FF; background: rgba(0,229,255,0.03);">
-      <p style="color: #F8FAFC; margin-bottom: 0;"><strong>🔥 ZERO LOGGING & ZERO AI TRAINING 🔥</strong><br>Catalyst
-        Cash utilizes a revolutionary <strong>Direct-to-Provider</strong> architecture. If you use your own API key to
-        connect to an LLM provider (like OpenAI or Anthropic), your data goes <strong>straight from your physical device
-          to the provider</strong>. We have zero servers in the middle. We do not log your math. We do not store your
-        payload. Furthermore, API usage through major providers (unlike standard consumer web accounts) is
-        <strong>governed by strict enterprise data agreements that explicitly prohibit your data from being used to
-          train their AI models</strong>. Your data remains completely anonymous and utterly under your control.
+    <div class="card highlight">
+      <p style="color: #F8FAFC; margin-bottom: 0;"><strong>🔒 Privacy-First Architecture</strong><br>
+        Catalyst Cash is built from the ground up with privacy at its core. Your financial data is processed
+        <strong>locally on your device</strong>. We do not operate servers that store, access, or process your personal
+        financial information. We cannot see your data. We cannot access your data. Period.
       </p>
     </div>
-    <p>We do not have a middle-man API to monitor your inputs. You hold the keys, you hold the data.</p>
 
-    <h2>Encrypted Sync & Backups</h2>
-    <p>Optional cloud sync (Google Drive, iCloud) and manual backups are secured using <strong>AES‑256‑GCM
-        encryption</strong>. If you set an app passcode, it is used as the encryption key. We cannot decrypt your data;
-      only you hold the key.</p>
-
-    <h2>Local Storage</h2>
-    <p>Your audits, settings, and rules are stored locally on your device. If you enable device backup (iCloud), Apple
-      may sync app data according to your device settings.</p>
-
-    <h2>Data Sharing</h2>
+    <h2>1. Information We Do NOT Collect</h2>
+    <p>Unlike most financial apps, Catalyst Cash does <strong>not</strong>:</p>
     <ul>
-      <li>We do not sell personal data.</li>
-      <li>We do not share data with third parties except when you request an audit using a third‑party AI provider.</li>
+      <li>Collect or store your bank login credentials</li>
+      <li>Maintain servers that process or retain your financial data</li>
+      <li>Sell, rent, or share personal data with third parties for marketing</li>
+      <li>Use your data to train AI models</li>
+      <li>Track your behavior across apps or websites</li>
+      <li>Access your AI chat conversations — they are stored locally and auto-expire within 24 hours</li>
+      <li>Collect analytics or telemetry about your financial activity</li>
     </ul>
 
-    <h2>Security</h2>
-    <p>All sensitive data including API keys, tokens, and passcodes are stored securely on your device. We use standard
-      system encryption (Keychain/Preferences) to ensure your credentials remain private.</p>
-
-    <h2>Your Choices</h2>
+    <h2>2. Information Processed Locally on Your Device</h2>
+    <p>The following data is processed and stored <strong>exclusively on your device</strong>:</p>
     <ul>
-      <li>Use free mode (manual copy/paste) with no API usage.</li>
-      <li>Clear history or factory reset at any time.</li>
-      <li>Opt in or out of API Mode.</li>
+      <li><strong>Financial data</strong> you enter manually (balances, debts, renewals, investment holdings, savings goals)</li>
+      <li><strong>Audit results</strong> generated by AI providers based on your input</li>
+      <li><strong>App settings</strong> (preferences, model selections, optional personal rules)</li>
+      <li><strong>AI chat history</strong> (auto-expires after 24 hours; PII is automatically scrubbed before local storage; never persisted in privacy mode)</li>
+      <li><strong>Credit card portfolio data</strong> (card details, utilization, renewal dates)</li>
     </ul>
 
-    <h2>Contact</h2>
-    <p>For privacy questions, contact: <strong>support@catalystcash.app</strong></p>
+    <h2>3. Third-Party AI Providers</h2>
+    <div class="card accent">
+      <p style="color: #F8FAFC; margin-bottom: 0;"><strong>🔥 Direct-to-Provider Architecture</strong><br>
+        When you use AI features, your data is sent <strong>directly from your device to your chosen AI provider</strong>
+        (e.g., OpenAI, Google Gemini, Anthropic Claude). There are no Catalyst Cash servers in between. We never
+        intercept, log, store, or have access to these transmissions. Furthermore, API usage through major AI providers
+        is <strong>governed by their API terms which explicitly prohibit using your data to train models</strong>.
+      </p>
+    </div>
+    <p>You are responsible for reviewing the privacy policy and terms of service of your chosen AI provider:</p>
+    <ul>
+      <li><a href="https://openai.com/policies/api-data-usage-policies" target="_blank">OpenAI API Data Usage Policy</a></li>
+      <li><a href="https://ai.google.dev/gemini-api/terms" target="_blank">Google Gemini API Terms</a></li>
+      <li><a href="https://www.anthropic.com/policies/privacy" target="_blank">Anthropic Privacy Policy</a></li>
+    </ul>
+
+    <h2>4. AI Chat Data Retention</h2>
+    <p>Chat conversations with Catalyst AI are handled with the following safeguards:</p>
+    <ul>
+      <li><strong>Auto-expiry:</strong> All chat messages are automatically deleted after 24 hours</li>
+      <li><strong>PII scrubbing:</strong> Before local storage, sensitive patterns (credit card numbers, SSNs, account numbers) are automatically masked</li>
+      <li><strong>Privacy mode:</strong> When privacy mode is enabled, chat messages are never written to disk — they exist only in memory during the active session</li>
+      <li><strong>No server storage:</strong> Chat messages are never transmitted to or stored on any server we control</li>
+      <li><strong>User control:</strong> You can clear all chat history at any time with a single tap</li>
+    </ul>
+
+    <h2>5. Plaid Bank Connections (Optional)</h2>
+    <p>If you choose to link bank accounts via Plaid:</p>
+    <ul>
+      <li>Your bank credentials are entered directly into Plaid's secure interface — we never see or store them</li>
+      <li>Plaid provides read-only access tokens to retrieve account balances and transaction data</li>
+      <li>You can disconnect any linked account at any time</li>
+      <li>Plaid's data practices are governed by <a href="https://plaid.com/legal/#end-user-privacy-policy" target="_blank">Plaid's End User Privacy Policy</a></li>
+    </ul>
+
+    <h2>6. iCloud Backup & Encrypted Sync</h2>
+    <p>Optional cloud sync and backups are secured using <strong>AES-256-GCM encryption</strong>. If you set an app
+      passcode, it serves as the encryption key. We cannot decrypt your data; only you hold the key. Apple may
+      sync app data to iCloud according to your device settings.</p>
+
+    <h2>7. Data Sharing</h2>
+    <ul>
+      <li>We do <strong>not</strong> sell personal data</li>
+      <li>We do <strong>not</strong> share data with third parties for advertising or marketing</li>
+      <li>We do <strong>not</strong> monetize your financial information in any way</li>
+      <li>The only data transmission occurs when <strong>you</strong> initiate an AI audit or chat, which goes directly to your chosen AI provider</li>
+    </ul>
+
+    <h2>8. Children's Privacy (COPPA)</h2>
+    <p>Catalyst Cash is not directed to children under the age of 13. We do not knowingly collect personal information
+      from children. If you believe a child has provided us with personal information, please contact us immediately
+      and we will take steps to delete such information.</p>
+
+    <h2>9. California Privacy Rights (CCPA)</h2>
+    <p>California residents have the right to:</p>
+    <ul>
+      <li><strong>Know</strong> what personal information is collected (see Section 2 above — it's all local)</li>
+      <li><strong>Delete</strong> their data at any time via Settings → Factory Reset</li>
+      <li><strong>Opt-out</strong> of the sale of personal information (we never sell personal data)</li>
+      <li><strong>Non-discrimination</strong> for exercising privacy rights</li>
+    </ul>
+    <p>Because all data is stored locally on your device and we have no access to it, you have full and
+      immediate control over your information at all times.</p>
+
+    <h2>10. Data Security</h2>
+    <ul>
+      <li>All sensitive data (API keys, tokens, passcodes) are stored securely using native device Keychain/Preferences</li>
+      <li>Optional backups use AES-256-GCM encryption</li>
+      <li>No plaintext financial data is ever transmitted to our servers (we don't have data servers)</li>
+      <li>AI chat PII is automatically scrubbed before any local persistence</li>
+    </ul>
+
+    <h2>11. Your Choices & Controls</h2>
+    <ul>
+      <li>Use free mode (manual copy/paste) with zero API connectivity</li>
+      <li>Clear audit history, chat history, or all data at any time</li>
+      <li>Enable/disable privacy mode (prevents any local chat persistence)</li>
+      <li>Disconnect bank accounts via Plaid at any time</li>
+      <li>Delete your account and all associated data instantly</li>
+    </ul>
+
+    <h2>12. Changes to This Policy</h2>
+    <p>We may update this Privacy Policy from time to time. If we make material changes to how your data is
+      processed or stored, we will notify you within the Application or by updating the Effective Date.
+      Your continued use of the Application constitutes acceptance of any revisions.</p>
+
+    <h2>13. Contact</h2>
+    <p>For privacy questions or data deletion requests, contact: <strong>support@catalystcash.app</strong></p>
   </div>
 </body>
 

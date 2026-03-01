@@ -20,6 +20,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { db } from "./utils.js";
+import { getIssuerCards } from "./issuerCards.js";
 
 const PLAID_STORAGE_KEY = "plaid-connections";
 const API_BASE = "https://api.catalystcash.app";
@@ -72,6 +73,7 @@ export async function createLinkToken() {
     const res = await fetch(`${API_BASE}/plaid/link-token`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
     });
     if (!res.ok) throw new Error(`Link token failed: ${res.status}`);
     const data = await res.json();
@@ -133,37 +135,43 @@ export async function exchangeToken(publicToken) {
  * Full Link flow: open Link → exchange token → store connection.
  * Returns the new connection object.
  */
-export async function connectBank() {
-    const { publicToken, metadata } = await openPlaidLink();
-    const { accessToken, itemId } = await exchangeToken(publicToken);
+export async function connectBank(onSuccess, onError) {
+    try {
+        const { publicToken, metadata } = await openPlaidLink();
+        const { accessToken, itemId } = await exchangeToken(publicToken);
 
-    const connection = {
-        id: itemId,
-        institutionName: metadata.institution?.name || "Unknown Bank",
-        institutionId: metadata.institution?.institution_id || null,
-        accessToken,
-        accounts: (metadata.accounts || []).map(a => ({
-            plaidAccountId: a.id,
-            name: a.name,
-            officialName: a.official_name || a.name,
-            type: a.type,         // "depository" | "credit" | "loan" | "investment"
-            subtype: a.subtype,   // "checking" | "savings" | "credit card" | etc.
-            mask: a.mask,         // last 4 digits
-            linkedCardId: null,   // Will be auto-matched
-            linkedBankAccountId: null,
-            balance: null,
-        })),
-        lastSync: null,
-    };
+        const connection = {
+            id: itemId,
+            institutionName: metadata.institution?.name || "Unknown Bank",
+            institutionId: metadata.institution?.institution_id || null,
+            accessToken,
+            accounts: (metadata.accounts || []).map(a => ({
+                plaidAccountId: a.id,
+                name: a.name,
+                officialName: a.official_name || a.name,
+                type: a.type,         // "depository" | "credit" | "loan" | "investment"
+                subtype: a.subtype,   // "checking" | "savings" | "credit card" | etc.
+                mask: a.mask,         // last 4 digits
+                linkedCardId: null,   // Will be auto-matched
+                linkedBankAccountId: null,
+                balance: null,
+            })),
+            lastSync: null,
+        };
 
-    const conns = await getConnections();
-    // Replace existing connection for same item, or append
-    const idx = conns.findIndex(c => c.id === itemId);
-    if (idx >= 0) conns[idx] = connection;
-    else conns.push(connection);
-    await saveConnections(conns);
+        const conns = await getConnections();
+        // Replace existing connection for same item, or append
+        const idx = conns.findIndex(c => c.id === itemId);
+        if (idx >= 0) conns[idx] = connection;
+        else conns.push(connection);
+        await saveConnections(conns);
 
-    return connection;
+        if (onSuccess) onSuccess(connection);
+        return connection;
+    } catch (err) {
+        if (onError) onError(err);
+        else throw err;
+    }
 }
 
 // ─── Balance Fetching ─────────────────────────────────────────
@@ -274,7 +282,44 @@ function normalizeInstitution(plaidName) {
  * @param {Array} bankAccounts - Current bank-accounts array
  * @returns {Object} { matched, unmatched, newCards, newBankAccounts }
  */
-export function autoMatchAccounts(connection, cards = [], bankAccounts = []) {
+export function fuzzyMatchCardName(plaidName, catalogNames) {
+    if (!plaidName || !catalogNames || !catalogNames.length) return plaidName;
+
+    // exact match
+    const exact = catalogNames.find(c => c.toLowerCase() === plaidName.toLowerCase());
+    if (exact) return exact;
+
+    // Tokenize based on alphanumeric chars
+    const getTokens = (str) => str.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
+    const plaidTokens = getTokens(plaidName);
+
+    let bestMatch = null;
+    let bestScore = 0;
+
+    for (const catName of catalogNames) {
+        const catTokens = getTokens(catName);
+        let matchCount = 0;
+
+        for (const pt of plaidTokens) {
+            if (catTokens.includes(pt)) {
+                matchCount++;
+            }
+        }
+
+        // Bonus for subset matching (if plaid tokens are fully contained)
+        if (matchCount === plaidTokens.length && matchCount > bestScore) {
+            bestScore = matchCount + 10;
+            bestMatch = catName;
+        } else if (matchCount > bestScore && matchCount >= (plaidTokens.length / 2)) {
+            bestScore = matchCount;
+            bestMatch = catName;
+        }
+    }
+
+    return bestMatch || plaidName;
+}
+
+export function autoMatchAccounts(connection, cards = [], bankAccounts = [], cardCatalog = null) {
     const matched = [];
     const unmatched = [];
     const newCards = [];
@@ -312,9 +357,12 @@ export function autoMatchAccounts(connection, cards = [], bankAccounts = []) {
                 acct.linkedCardId = cardMatch.id;
             } else {
                 // Prepare a new card record for user to review
+                const catCards = cardCatalog && normalizedInst ? getIssuerCards(normalizedInst, cardCatalog).map(c => c.name) : [];
+                const bestName = fuzzyMatchCardName(acct.officialName || acct.name, catCards);
+
                 newCards.push({
                     id: `plaid_${acct.plaidAccountId}`,
-                    name: acct.officialName || acct.name,
+                    name: bestName,
                     institution: normalizedInst || "Other",
                     nickname: "",
                     limit: acct.balance?.limit || null,

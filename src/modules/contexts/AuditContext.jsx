@@ -9,7 +9,7 @@ import { useToast } from '../Toast.jsx';
 import { getProvider, getModel } from '../providers.js';
 import { getSystemPrompt } from '../prompts.js';
 import { log } from '../logger.js';
-import { getHistoryLimit } from '../subscription.js';
+import { getHistoryLimit, getOrCreateDeviceId, recordAuditUsage } from '../subscription.js';
 import { useSettings } from './SettingsContext.jsx';
 import { usePortfolio } from './PortfolioContext.jsx';
 import { useNavigation } from './NavigationContext.jsx';
@@ -183,6 +183,8 @@ export function AuditProvider({ children }) {
     setIsTest(testMode);
     setLoading(true); setError(null); navTo("results"); setStreamText(""); setElapsed(0);
     timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       let raw = "";
       if (manualResultText) {
@@ -231,9 +233,9 @@ export function AuditProvider({ children }) {
         const scrubbedMsg = scrubber.scrub(msg);
 
         // Execute API Call — deviceId for backend rate limiting
-        const deviceId = (await db.get("device-id")) || "unknown";
+        const deviceId = await getOrCreateDeviceId();
         if (useStream) {
-          for await (const chunk of streamAudit(trimmedApiKey, scrubbedMsg, aiProvider, aiModel, livePrompt, historyForProvider, deviceId)) {
+          for await (const chunk of streamAudit(trimmedApiKey, scrubbedMsg, aiProvider, aiModel, livePrompt, historyForProvider, deviceId, controller.signal)) {
             raw += chunk;
             setStreamText(scrubber.unscrub(raw)); // Unscrub on the fly for viewing
           }
@@ -273,7 +275,6 @@ export function AuditProvider({ children }) {
           score: parsed.healthScore?.score || null,
           status: parsed.status || "UNKNOWN"
         };
-        const updatedTrend = [...trendContext, trendEntry].slice(-8);
         setTrendContext(prev => {
           const next = [...prev, trendEntry].slice(-8);
           db.set("trend-context", next);
@@ -296,14 +297,19 @@ export function AuditProvider({ children }) {
       haptic.success();
       toast.success(testMode ? "Test audit complete — saved to history" : "Audit imported successfully");
 
+      // Record audit usage for subscription quota tracking
+      if (!testMode && !manualResultText) {
+        recordAuditUsage().catch(() => { });
+      }
+
       // Evaluate badges after audit
       if (!testMode) {
+        let computedStreak = 0;
         try {
           // Compute actual streak from audit history
           const getISOWeek = (ds) => { const dt = new Date(ds); dt.setDate(dt.getDate() + 3 - (dt.getDay() + 6) % 7); const w1 = new Date(dt.getFullYear(), 0, 4); return `${dt.getFullYear()}-W${String(1 + Math.round(((dt - w1) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7)).padStart(2, '0')}`; };
           const realForStreak = nh.filter(a => !a.isTest && a.date);
           const weeks = [...new Set(realForStreak.map(a => getISOWeek(a.date)))].sort().reverse();
-          let computedStreak = 0;
           if (weeks.length) {
             const curWeek = getISOWeek(new Date().toISOString().split("T")[0]);
             let checkW = weeks[0] === curWeek ? curWeek : weeks[0];
@@ -425,7 +431,7 @@ export function AuditProvider({ children }) {
       toast.error(e.message || "Failed to parse audit response");
     }
     finally { setLoading(false); setStreamText(""); }
-  }, [navTo, setResultsBackTarget, history, toast]);
+  }, [navTo, setResultsBackTarget, history, toast, financialConfig, trendContext]);
 
   const value = {
     current, setCurrent,

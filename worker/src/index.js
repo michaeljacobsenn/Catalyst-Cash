@@ -54,11 +54,21 @@ async function checkRateLimit(deviceId) {
 }
 
 // ─── Gemini Provider ─────────────────────────────────────────
-async function callGemini(apiKey, { snapshot, systemPrompt, history, model, stream }) {
+async function callGemini(apiKey, { snapshot, systemPrompt, history, model, stream, responseFormat }) {
     const m = model || DEFAULTS.gemini;
     const endpoint = stream
         ? `https://generativelanguage.googleapis.com/v1beta/models/${m}:streamGenerateContent?alt=sse&key=${apiKey}`
         : `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
+
+    const genConfig = {
+        maxOutputTokens: 12000,
+        temperature: 0.1,
+        topP: 0.95,
+    };
+    // Only force JSON output for audits — chat needs natural language
+    if (responseFormat !== "text") {
+        genConfig.responseMimeType = "application/json";
+    }
 
     const body = {
         contents: [
@@ -69,12 +79,7 @@ async function callGemini(apiKey, { snapshot, systemPrompt, history, model, stre
             { parts: [{ text: snapshot }], role: "user" },
         ],
         systemInstruction: { parts: [{ text: systemPrompt }] },
-        generationConfig: {
-            maxOutputTokens: 12000,
-            temperature: 0.1,
-            topP: 0.95,
-            responseMimeType: "application/json",
-        },
+        generationConfig: genConfig,
     };
 
     const res = await fetch(endpoint, {
@@ -98,7 +103,7 @@ async function callGemini(apiKey, { snapshot, systemPrompt, history, model, stre
 }
 
 // ─── OpenAI Provider ─────────────────────────────────────────
-async function callOpenAI(apiKey, { snapshot, systemPrompt, history, model, stream }) {
+async function callOpenAI(apiKey, { snapshot, systemPrompt, history, model, stream, responseFormat }) {
     const m = model || DEFAULTS.openai;
     const isReasoning = m.startsWith("o");
 
@@ -118,7 +123,10 @@ async function callOpenAI(apiKey, { snapshot, systemPrompt, history, model, stre
         body.max_tokens = 12000;
         body.temperature = 0.1;
         body.top_p = 0.95;
-        body.response_format = { type: "json_object" };
+        // Only force JSON output for audits — chat needs natural language
+        if (responseFormat !== "text") {
+            body.response_format = { type: "json_object" };
+        }
     }
 
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -144,12 +152,12 @@ async function callOpenAI(apiKey, { snapshot, systemPrompt, history, model, stre
 }
 
 // ─── Claude Provider ─────────────────────────────────────────
-async function callClaude(apiKey, { snapshot, systemPrompt, history, model, stream }) {
+async function callClaude(apiKey, { snapshot, systemPrompt, history, model, stream, responseFormat }) {
     const body = {
         model: model || DEFAULTS.claude,
         max_tokens: 12000,
-        temperature: 1,
-        stream: stream !== false,
+        temperature: 0.1,
+        stream: stream || false,
         system: systemPrompt,
         messages: [
             ...(history || []),
@@ -451,7 +459,7 @@ export default {
             });
         }
 
-        const { snapshot, systemPrompt, history, model, stream, provider } = body;
+        const { snapshot, systemPrompt, history, model, stream, provider, responseFormat } = body;
 
         if (!snapshot || !systemPrompt) {
             return new Response(JSON.stringify({ error: "Missing required fields: snapshot, systemPrompt" }), {
@@ -490,6 +498,7 @@ export default {
                 history,
                 model,
                 stream: shouldStream,
+                responseFormat: responseFormat || "json",
             });
 
             // Streaming: pipe raw response through

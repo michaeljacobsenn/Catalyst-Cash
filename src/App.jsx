@@ -3,7 +3,7 @@ import { App as CapApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import {
   History, Plus, RefreshCw, X, Eye, EyeOff,
-  AlertTriangle, Loader2, CreditCard, Settings, Info, Home, Zap, Trash2, ClipboardPaste, LayoutDashboard, ReceiptText, Clock
+  AlertTriangle, Loader2, CreditCard, Settings, Info, Home, Zap, Trash2, ClipboardPaste, LayoutDashboard, ReceiptText, Clock, MessageCircle
 } from "lucide-react";
 import { T, DEFAULT_CARD_PORTFOLIO, RENEWAL_CATEGORIES, APP_VERSION } from "./modules/constants.js";
 import { DEFAULT_PROVIDER_ID, DEFAULT_MODEL_ID, getProvider, getModel } from "./modules/providers.js";
@@ -24,6 +24,7 @@ import DashboardTab from "./modules/tabs/DashboardTab.jsx";
 import InputForm from "./modules/tabs/InputForm.jsx";
 import ResultsView from "./modules/tabs/ResultsView.jsx";
 import HistoryTab from "./modules/tabs/HistoryTab.jsx";
+import AIChatTab from "./modules/tabs/AIChatTab.jsx";
 import SettingsTab from "./modules/tabs/SettingsTab.jsx";
 import CardPortfolioTab from "./modules/tabs/CardPortfolioTab.jsx";
 import RenewalsTab from "./modules/tabs/RenewalsTab.jsx";
@@ -36,8 +37,9 @@ import { PortfolioProvider, usePortfolio } from "./modules/contexts/PortfolioCon
 import { NavigationProvider, useNavigation } from "./modules/contexts/NavigationContext.jsx";
 import { AuditProvider, useAudit } from "./modules/contexts/AuditContext.jsx";
 import { uploadToICloud } from "./modules/cloudSync.js";
-import { isSecuritySensitiveKey } from "./modules/securityKeys.js";
 import { isPro, getGatingMode } from "./modules/subscription.js";
+import { initRevenueCat } from "./modules/revenuecat.js";
+import { isSecuritySensitiveKey } from "./modules/securityKeys.js";
 import { evaluateBadges, unlockBadge, BADGE_DEFINITIONS } from "./modules/badges.js";
 
 function flattenSeedRenewals() {
@@ -80,6 +82,7 @@ export default function AppRoot() {
 
 function CatalystCash() {
   const toast = useToast();
+  useEffect(() => { window.toast = toast; }, [toast]);
   const online = useOnline();
 
   const { requireAuth, setRequireAuth, appPasscode, setAppPasscode, useFaceId, setUseFaceId, isLocked, setIsLocked, privacyMode, setPrivacyMode, lockTimeout, setLockTimeout, appleLinkedId, setAppleLinkedId, isSecurityReady } = useSecurity();
@@ -100,8 +103,10 @@ function CatalystCash() {
   // Pro subscription state — resolved async on mount
   const [proEnabled, setProEnabled] = useState(true);
   useEffect(() => {
-    if (getGatingMode() === "off") { setProEnabled(true); return; }
-    isPro().then(setProEnabled).catch(() => setProEnabled(false));
+    initRevenueCat().then(() => {
+      if (getGatingMode() === "off") { setProEnabled(true); return; }
+      isPro().then(setProEnabled).catch(() => setProEnabled(false));
+    });
   }, []);
 
   const [showQuickMenu, setShowQuickMenu] = useState(false);
@@ -142,7 +147,7 @@ function CatalystCash() {
         if (!("personal-rules" in backup.data)) {
           backup.data["personal-rules"] = personalRules ?? "";
         }
-        await uploadToICloud(backup, appPasscode || null);
+        await uploadToICloud(backup, null); // Auto-sync unencrypted (iCloud is per-user scoped); manual exports still use passphrase
       } catch (e) {
         console.error("iCloud auto-sync error:", e);
       }
@@ -151,22 +156,7 @@ function CatalystCash() {
     return () => clearTimeout(iCloudSyncTimer.current);
   }, [ready, history, renewals, cards, financialConfig, personalRules, appleLinkedId]);
 
-  useEffect(() => {
-    if (!ready || !cards.length) return;
-    let changed = false;
-    const next = (renewals || []).map(r => {
-      if (r.chargedToId || !r.chargedTo) return r;
-      const match = cards.find(c =>
-        c.name === r.chargedTo ||
-        getCardLabel(cards, c) === r.chargedTo ||
-        r.chargedTo.endsWith(c.name)
-      );
-      if (!match) return r;
-      changed = true;
-      return { ...r, chargedToId: match.id, chargedTo: getCardLabel(cards, match) };
-    });
-    if (changed) setRenewals(next);
-  }, [cards, ready]);
+
   useEffect(() => { scrollRef.current?.scrollTo({ top: 0, behavior: "auto" }) }, [tab]);
 
   useEffect(() => {
@@ -253,44 +243,59 @@ function CatalystCash() {
   // ═══════════════════════════════════════════════════════════════
   const handleDemoAudit = () => {
     const demoJSON = {
-      headerCard: { status: "YELLOW", details: ["Demo audit with sample data", "Your real audit will use your actual finances"] },
-      healthScore: { score: 72, grade: "C+", trend: "flat", summary: "Solid foundation but credit card debt and tight margins are holding back growth." },
-      alertsCard: ["⚠️ Credit card balance is 42% of limit — aim for under 30%", "🔔 Car insurance due in 12 days ($187)"],
+      headerCard: { status: "GREEN", details: ["Demo audit with sample data", "Your real audit will use your actual finances"] },
+      healthScore: { score: 88, grade: "A-", trend: "up", summary: "Excellent financial momentum. Strong savings buffers and aggressive debt paydown are compounding your wealth rapidly." },
+      alertsCard: ["✅ Car insurance completely covered by Vault", "💰 Roth IRA maxed out for the year", "⚠️ Chase Sapphire utilization at 28% — aim for under 15%"],
       dashboardCard: [
-        { category: "Checking", amount: "$2,340.00", status: "Above floor" },
-        { category: "Vault", amount: "$4,120.00", status: "On track" },
-        { category: "Pending", amount: "$847.00", status: "3 bills due" },
-        { category: "Debts", amount: "$6,890.00", status: "2 cards" },
-        { category: "Available", amount: "$1,493.00", status: "After obligations" }
+        { category: "Checking", amount: "$8,450.00", status: "Above floor" },
+        { category: "Vault", amount: "$22,200.00", status: "Fully funded" },
+        { category: "Investments", amount: "$45,000.00", status: "Growing" },
+        { category: "Other Assets", amount: "$101,000.00", status: "Home Equity" },
+        { category: "Debts", amount: "$3,690.00", status: "1 card carrying balance" }
       ],
+      netWorth: 172960.00,
       weeklyMoves: [
-        "💳 Pay Chase Sapphire minimum ($45) — due in 3 days",
-        "🏦 Transfer $200 to Emergency Fund vault",
-        "📊 Review Discover balance for 0% promo deadline (ends Apr 15)",
-        "💰 Set aside $187 for car insurance (due Feb 28)"
+        "💳 Pay Chase Sapphire $500 aggressive principal payment",
+        "📈 Transfer $1,000 to Vanguard Brokerage",
+        "📊 Review Q3 savings goals progress",
+        "💰 Rebalance Crypto portfolio"
       ],
       radar: [
-        { item: "Car Insurance", amount: "$187.00", date: new Date(Date.now() + 12 * 86400000).toISOString().split("T")[0] },
-        { item: "Chase Sapphire Min", amount: "$45.00", date: new Date(Date.now() + 3 * 86400000).toISOString().split("T")[0] }
+        { item: "Electric Bill", amount: "$145.00", date: new Date(Date.now() + 5 * 86400000).toISOString().split("T")[0] },
+        { item: "Property Tax", amount: "$1,100.00", date: new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0] }
       ],
       longRangeRadar: [
-        { item: "Discover Promo Ends", amount: "$3,200.00", date: "2026-04-15" },
-        { item: "Roth IRA Contribution", amount: "$500.00", date: "2026-03-15" }
+        { item: "Home Maintenance Fund", amount: "$5,000.00", date: "2026-06-01" },
+        { item: "Family Vacation", amount: "$3,500.00", date: "2026-08-15" }
       ],
-      milestones: ["Emergency fund hits $5K target by April", "Chase Sapphire payoff by Q3 at current pace"],
-      investments: { balance: "$12,450.00", asOf: new Date().toISOString().split("T")[0], gateStatus: "Closed — debt APR exceeds market returns" },
-      nextAction: "Pay the Chase minimum today, then move $200 into the Emergency Fund vault. Review Discover promo deadline this weekend."
+      milestones: ["Emergency fund fully stocked at 6 months", "Net Worth crossed $150K milestone last month"],
+      investments: { balance: "$45,000.00", asOf: new Date().toISOString().split("T")[0], gateStatus: "Open — accelerating contributions" },
+      nextAction: "Execute the $500 Chase Sapphire payment to crush high-interest debt, then funnel your excess $1,000 into Vanguard to maximize your wealth snowball."
     };
     const raw = JSON.stringify(demoJSON);
     const parsed = parseAudit(raw);
     if (!parsed) { toast.error("Demo parsing failed"); return; }
+    const demoPortfolio = {
+      bankAccounts: [
+        { id: "demo-chk-1", bank: "Chase", name: "Chase Total Checking", accountType: "checking", mask: "7890", balance: 8450, type: "depository", subtype: "checking", date: new Date().toISOString() },
+        { id: "demo-sav-1", bank: "Ally", name: "Ally High Yield Savings", accountType: "savings", mask: "1234", balance: 22200, type: "depository", subtype: "savings", date: new Date().toISOString() }
+      ],
+      cards: [
+        { id: "demo-card-1", institution: "Chase", name: "Chase Sapphire Preferred", mask: "4321", balance: 3690, limit: 15000, apr: 24.99, lastPaymentDate: new Date().toISOString(), network: "visa" },
+        { id: "demo-card-2", institution: "Amex", name: "Amex Gold", mask: "9876", balance: 0, limit: null, apr: 0, lastPaymentDate: new Date().toISOString(), network: "amex" }
+      ],
+      renewals: [
+        { id: "demo-ren-1", name: "Netflix", amount: 15.49, interval: 1, intervalUnit: "months", nextDue: new Date(Date.now() + 5 * 86400000).toISOString().split("T")[0], category: "subs" },
+        { id: "demo-ren-2", name: "Car Insurance", amount: 145.00, interval: 1, intervalUnit: "months", nextDue: new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0], category: "insurance" }
+      ]
+    };
+
     const audit = {
-      ts: Date.now(), date: new Date().toISOString().split("T")[0],
-      raw, parsed, isTest: true, moveChecks: {},
+      ts: new Date().toISOString(), date: new Date().toISOString().split("T")[0],
+      raw, parsed, isTest: true, moveChecks: {}, demoPortfolio,
       form: {
-        date: new Date().toISOString().split("T")[0], checking: "2340", ally: "4120", debts: [
-          { name: "Chase Sapphire", balance: "3690", limit: "8000", apr: "24.99", minPayment: "45", nextDue: "" },
-          { name: "Discover It", balance: "3200", limit: "6000", apr: "0", minPayment: "35", nextDue: "" }
+        date: new Date().toISOString().split("T")[0], checking: "8450", ally: "15200", debts: [
+          { name: "Chase Sapphire", balance: "3690", limit: "15000", apr: "24.99", minPayment: "45", nextDue: "" }
         ]
       }
     };
@@ -303,8 +308,13 @@ function CatalystCash() {
   };
 
   const handleRefreshDashboard = async () => {
+    // Remove all demo/test audits from history
+    const cleanedHistory = history.filter(a => !a.isTest);
+    setHistory(cleanedHistory);
+    await db.set("audit-history", cleanedHistory);
+
     // Find the most recent real (non-test) audit
-    const realAudit = history.find(a => !a.isTest);
+    const realAudit = cleanedHistory.length > 0 ? cleanedHistory[0] : null;
     if (realAudit) {
       setCurrent(realAudit);
       setMoveChecks(realAudit.moveChecks || {});
@@ -388,7 +398,7 @@ function CatalystCash() {
 
   const navItems = [
     { id: "input", label: "Audit", icon: Plus, isCenter: false },
-    { id: "history", label: "History", icon: Clock, isCenter: false },
+    { id: "chat", label: "Ask AI", icon: MessageCircle, isCenter: false },
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, isCenter: true },
     { id: "renewals", label: "Expenses", icon: ReceiptText, isCenter: false },
     { id: "cards", label: "Accounts", icon: CreditCard, isCenter: false }
@@ -477,18 +487,18 @@ function CatalystCash() {
           background: showGuide ? T.bg.surface : T.bg.glass, backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
           display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
           color: showGuide ? T.accent.primary : T.text.dim, transition: "color .2s, border-color .2s",
-          visibility: (tab === "history" || tab === "settings") ? "hidden" : "visible"
+          visibility: (tab === "history" || tab === "settings" || tab === "chat") ? "hidden" : "visible"
         }}><Info size={16} strokeWidth={1.8} /></button>
         <button onClick={() => setPrivacyMode(p => !p)} style={{
           width: 36, height: 36, borderRadius: 10, border: `1px solid ${privacyMode ? T.border.focus : T.border.default}`,
           background: privacyMode ? T.bg.surface : T.bg.glass, backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
           display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
           color: privacyMode ? T.accent.primary : T.text.dim, transition: "color .2s, border-color .2s",
-          visibility: (tab === "history" || tab === "settings" || tab === "input") ? "hidden" : "visible"
+          visibility: (tab === "history" || tab === "settings" || tab === "input" || tab === "chat") ? "hidden" : "visible"
         }} aria-label={privacyMode ? "Disable Privacy Mode" : "Enable Privacy Mode"}>{privacyMode ? <EyeOff size={16} strokeWidth={1.8} /> : <Eye size={16} strokeWidth={1.8} />}</button>
       </div>
       <span style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", fontSize: 13, fontWeight: 700, color: T.text.secondary, fontFamily: T.font.mono, letterSpacing: "0.04em", textAlign: "center", whiteSpace: "nowrap" }}>
-        {tab === "dashboard" ? "HOME" : tab === "history" ? "HISTORY" : tab === "renewals" ? "EXPENSES" : tab === "cards" ? "ACCOUNTS" : tab === "input" ? "INPUT" : tab === "results" ? "RESULTS" : tab === "settings" ? "CONFIG" : ""}
+        {tab === "dashboard" ? "HOME" : tab === "history" ? "HISTORY" : tab === "chat" ? "ASK AI" : tab === "renewals" ? "EXPENSES" : tab === "cards" ? "ACCOUNTS" : tab === "input" ? "INPUT" : tab === "results" ? "RESULTS" : tab === "settings" ? "CONFIG" : ""}
       </span>
       <button onClick={() => tab === "settings" ? navTo(lastCenterTab.current) : navTo("settings")} style={{
         width: 36, height: 36, borderRadius: 10, border: `1px solid ${tab === "settings" ? T.border.focus : T.border.default}`,
@@ -518,6 +528,7 @@ function CatalystCash() {
       }}
       onTouchEnd={e => {
         if (!swipeStart.current) return;
+        if (loading) { swipeStart.current = null; return; } // block swipe during audit
         const endX = e.changedTouches[0].clientX;
         const endY = e.changedTouches[0].clientY;
         const dx = endX - swipeStart.current.x;
@@ -549,8 +560,8 @@ function CatalystCash() {
         swipeStart.current = null;
       }}
       style={{
-        flex: 1, overflowY: (tab === "settings" || tab === "input") ? "hidden" : "auto", position: "relative",
-        display: tab === "input" ? "none" : undefined
+        flex: 1, overflowY: (tab === "settings" || tab === "input" || tab === "chat") ? "hidden" : "auto", position: "relative",
+        display: (tab === "input" || tab === "chat") ? "none" : undefined
       }}>
       {error && <Card style={{ borderColor: `${T.status.red}20`, background: T.status.redDim, margin: "8px 20px", borderLeft: `3px solid ${T.status.red}` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -604,7 +615,28 @@ function CatalystCash() {
     {/* ═══════ OVERLAY PANELS — rendered OUTSIDE main scroll but INSIDE flex flow ═══════ */}
     {inputMounted && <div className="slide-pane"
       onTouchMove={() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); }}
-      style={{
+      onTouchStart={e => {
+        swipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+      }}
+      onTouchEnd={e => {
+        if (!swipeStart.current) return;
+        const endX = e.changedTouches[0].clientX;
+        const endY = e.changedTouches[0].clientY;
+        const dx = endX - swipeStart.current.x;
+        const dy = endY - swipeStart.current.y;
+        const absDx = Math.abs(dx);
+        const absDy = Math.abs(dy);
+        const elapsed = Date.now() - swipeStart.current.t;
+        const velocity = elapsed > 0 ? absDx / elapsed : 0;
+        const isHorizontal = absDx > absDy * 1.5;
+        const meetsDistance = absDx > 50;
+        const meetsVelocity = velocity > 0.3;
+        if (isHorizontal && meetsDistance && meetsVelocity) {
+          if (dx < 0) swipeToTab("left");
+          else swipeToTab("right");
+        }
+        swipeStart.current = null;
+      }} style={{
         display: tab === "input" ? "flex" : "none",
         flexDirection: "column",
         flex: 1, minHeight: 0,
@@ -615,11 +647,38 @@ function CatalystCash() {
         paddingBottom: 24, // Clear the 14px Action button protrusion 
       }}>
       <InputForm onSubmit={handleSubmit} isLoading={loading} lastAudit={current}
-        renewals={renewals} cardAnnualFees={cardAnnualFees} cards={cards}
+        renewals={renewals} cardAnnualFees={cardAnnualFees} cards={cards} bankAccounts={bankAccounts}
         onManualImport={handleManualImport} toast={toast} financialConfig={financialConfig} aiProvider={aiProvider} personalRules={personalRules}
         persona={persona}
         instructionHash={instructionHash} setInstructionHash={setInstructionHash} db={db} proEnabled={proEnabled}
         onBack={() => navTo("dashboard")} />
+    </div>}
+    {tab === "chat" && <div
+      onTouchStart={e => {
+        swipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+      }}
+      onTouchEnd={e => {
+        if (!swipeStart.current) return;
+        const endX = e.changedTouches[0].clientX;
+        const endY = e.changedTouches[0].clientY;
+        const dx = endX - swipeStart.current.x;
+        const dy = endY - swipeStart.current.y;
+        const absDx = Math.abs(dx);
+        const absDy = Math.abs(dy);
+        const elapsed = Date.now() - swipeStart.current.t;
+        const velocity = elapsed > 0 ? absDx / elapsed : 0;
+        if (absDx > absDy * 1.5 && absDx > 50 && velocity > 0.3) {
+          if (dx < 0) swipeToTab("left");
+          else swipeToTab("right");
+        }
+        swipeStart.current = null;
+      }}
+      style={{
+        display: "flex", flex: 1, minHeight: 0,
+        zIndex: 15, background: T.bg.base,
+        width: "100%", boxSizing: "border-box"
+      }}>
+      <AIChatTab proEnabled={proEnabled} />
     </div>}
     {tab === "settings" && <SettingsTab
       apiKey={apiKey} setApiKey={setApiKey}
@@ -655,6 +714,10 @@ function CatalystCash() {
       WebkitBackdropFilter: "blur(24px) saturate(1.6)",
       borderTop: `1px solid ${T.border.default}`,
       flexShrink: 0, position: "relative",
+      // Lock nav while audit runs
+      pointerEvents: loading ? "none" : "auto",
+      opacity: loading ? 0.45 : 1,
+      transition: "opacity .3s ease",
     }}>
       {/* QUICK ACTIONS MENU */}
       {showQuickMenu && (
@@ -670,6 +733,9 @@ function CatalystCash() {
             <button onClick={() => { setShowQuickMenu(false); navTo("input"); }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: 'transparent', border: 'none', color: T.text.primary, fontSize: 14, fontWeight: 600, cursor: 'pointer', borderRadius: T.radius.sm }}>
               <Plus size={18} color={T.accent.emerald} /> Start New Audit
             </button>
+            <button onClick={() => { setShowQuickMenu(false); navTo("history"); }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: 'transparent', border: 'none', color: T.text.primary, fontSize: 14, fontWeight: 600, cursor: 'pointer', borderRadius: T.radius.sm }}>
+              <Clock size={18} color={T.accent.primary} /> Audit History
+            </button>
 
             <div style={{ height: 1, background: T.border.default, margin: '4px 0' }} />
             <button onClick={() => { setShowQuickMenu(false); navTo("settings"); }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: 'transparent', border: 'none', color: T.text.primary, fontSize: 14, fontWeight: 600, cursor: 'pointer', borderRadius: T.radius.sm }}>
@@ -679,15 +745,36 @@ function CatalystCash() {
         </>
       )}
 
+      {/* Audit-running indicator strip */}
+      {loading && <div style={{
+        position: "absolute", top: 0, left: 0, right: 0, height: 2,
+        background: `linear-gradient(90deg, transparent, ${T.accent.primary}, ${T.accent.emerald}, transparent)`,
+        animation: "shimmer 1.8s ease-in-out infinite",
+        backgroundSize: "200% 100%"
+      }} />}
+
       <div style={{
         position: "absolute", top: -1, left: "10%", right: "10%", height: 1,
-        background: `linear-gradient(90deg,transparent,${T.accent.primary}25,${T.accent.emerald}20,transparent)`
+        background: loading ? "none" : `linear-gradient(90deg,transparent,${T.accent.primary}25,${T.accent.emerald}20,transparent)`
       }} />
 
       <div style={{
+        position: "relative",
         display: "flex", justifyContent: "space-evenly", alignItems: "flex-end",
         paddingTop: 6, paddingBottom: "calc(env(safe-area-inset-bottom, 10px) + 4px)"
       }}>
+        {/* Sliding Active Indicator */}
+        {navItems.findIndex(n => n.id === tab) !== -1 && (
+          <div style={{
+            position: "absolute", top: 0,
+            width: 20, height: 3,
+            background: `linear-gradient(90deg,${T.accent.primary}80,${T.accent.primary})`, borderRadius: 2,
+            left: `calc(${navItems.findIndex(n => n.id === tab) * 20}% + 10% - 10px)`,
+            transition: "left 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease",
+            opacity: tab === "dashboard" ? 0 : 1,
+            pointerEvents: "none"
+          }} />
+        )}
         {navItems.map((n) => {
           const Icon = n.icon; const isCenter = n.isCenter;
           const active = tab === n.id;
@@ -724,13 +811,9 @@ function CatalystCash() {
               background: "none", border: "none", cursor: "pointer",
               color: active ? T.accent.primary : T.text.muted,
               padding: "4px 0", minHeight: 48,
-              transition: "color .2s ease", position: "relative",
+              transition: "color .3s ease", position: "relative",
               userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none"
             }}>
-            {active && !isCenter && <div style={{
-              position: "absolute", top: -6, width: 20, height: 2.5,
-              background: `linear-gradient(90deg,${T.accent.primary}80,${T.accent.primary})`, borderRadius: 2
-            }} />}
             {isCenter ?
               <div style={{
                 width: 48, height: 48, borderRadius: 16, marginTop: -12,
@@ -738,15 +821,23 @@ function CatalystCash() {
                 border: `2px solid ${active ? "transparent" : T.border.default}`,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 boxShadow: active ? T.shadow.navBtn : T.shadow.card,
-                transition: "all .25s ease",
-                animation: active ? "glowPulse 2.5s ease-in-out infinite" : "none"
+                transition: "all .3s cubic-bezier(0.16, 1, 0.3, 1)",
+                animation: active ? "glowPulse 2.5s ease-in-out infinite" : "none",
+                transform: active ? "scale(1.05)" : "scale(1)"
               }}>
                 <Icon size={22} strokeWidth={active ? 2.5 : 1.5} color={active ? "#fff" : T.text.muted} />
               </div> :
-              <Icon size={20} strokeWidth={active ? 2.5 : 1.5} />}
+              <div style={{
+                transition: "transform .3s cubic-bezier(0.16, 1, 0.3, 1)",
+                transform: active ? "translateY(-2px)" : "translateY(0px)"
+              }}>
+                <Icon size={20} strokeWidth={active ? 2.5 : 1.5} />
+              </div>
+            }
             <span style={{
               fontSize: 10, fontWeight: active ? 700 : 500, fontFamily: T.font.mono,
-              marginTop: isCenter ? 2 : 0, letterSpacing: "0.02em"
+              marginTop: isCenter ? 2 : 0, letterSpacing: "0.02em",
+              transition: "color .3s ease"
             }}>{n.label}</span>
           </button>;
         })}

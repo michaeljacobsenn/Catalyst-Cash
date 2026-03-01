@@ -26,6 +26,13 @@ export async function updateWidgetData({
     weeklyMovesTotal = 0,
     streak = 0,
     lastAuditDate = null,
+    // ── Expanded payload for richer widgets ──
+    checkingBalance = null,
+    dailyBurnRate = null,
+    status = "",
+    nextPayday = "",
+    budgetBurnPct = null,
+    percentile = null,
 } = {}) {
     try {
         const widgetPayload = {
@@ -37,6 +44,13 @@ export async function updateWidgetData({
             streak,
             lastAuditDate: lastAuditDate || new Date().toISOString(),
             updatedAt: new Date().toISOString(),
+            // Extended data — widgets can opt-in to these
+            checkingBalance,
+            dailyBurnRate,
+            status,
+            nextPayday,
+            budgetBurnPct,
+            percentile,
         };
 
         await Preferences.set({

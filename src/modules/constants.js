@@ -1,13 +1,14 @@
 // ═══════════════════════════════════════════════════════════════
 // APP VERSION — single source of truth
 // ═══════════════════════════════════════════════════════════════
-export const APP_VERSION = "1.5.1-BETA";
+export const APP_VERSION = "1.6.0";
 
 // ═══════════════════════════════════════════════════════════════
 // DESIGN TOKENS — Catalyst Cash Brand Palette
 // Icon: deep violet (#3D1B6B) → emerald green (#1A6B40)
 // ═══════════════════════════════════════════════════════════════
-export const T = {
+
+const DARK_TOKENS = {
   bg: {
     base: "#07090F",
     card: "#0D0F18",
@@ -30,19 +31,15 @@ export const T = {
     muted: "#2E3248",
   },
   accent: {
-    // Primary — deep brand violet (left side of shield)
     primary: "#7B5EA7",
     primaryDim: "rgba(123,94,167,0.12)",
     primaryGlow: "rgba(123,94,167,0.24)",
     primarySoft: "rgba(123,94,167,0.18)",
-    // Secondary — emerald (right side of shield)
     emerald: "#2ECC71",
     emeraldDim: "rgba(46,204,113,0.10)",
     emeraldSoft: "rgba(46,204,113,0.18)",
-    // Legacy copper alias kept for backward compat
     copper: "#2ECC71",
     copperDim: "rgba(46,204,113,0.10)",
-    // Gradient: violet → emerald (matches icon)
     gradient: "linear-gradient(135deg,#7B5EA7,#1A9B5A)",
     gradientNav: "linear-gradient(135deg,#6B4E97,#1A8B50)",
   },
@@ -58,18 +55,98 @@ export const T = {
     purple: "#9B6FD4",
     purpleDim: "rgba(155,111,212,0.08)",
   },
-  radius: { sm: 8, md: 12, lg: 16, xl: 24 },
   shadow: {
+    sm: "0 1px 2px rgba(0,0,0,0.25)",
     card: "0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25)",
     elevated: "0 4px 12px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.3)",
     glow: "0 0 20px rgba(123,94,167,0.18), 0 0 6px rgba(123,94,167,0.12)",
     navBtn: "0 4px 20px rgba(123,94,167,0.35), 0 2px 8px rgba(0,0,0,0.5), 0 0 30px rgba(46,204,113,0.12)",
   },
+};
+
+const LIGHT_TOKENS = {
+  bg: {
+    base: "#F5F3F0",
+    card: "#FFFFFF",
+    elevated: "#F0EDE8",
+    surface: "#E8E5E0",
+    hover: "rgba(0,0,0,0.02)",
+    glass: "rgba(255,255,255,0.82)",
+    navGlass: "rgba(245,243,240,0.92)",
+  },
+  border: {
+    subtle: "rgba(90,70,130,0.08)",
+    default: "rgba(90,70,130,0.12)",
+    focus: "rgba(110,75,180,0.50)",
+    glow: "rgba(110,75,180,0.12)",
+  },
+  text: {
+    primary: "#1A1625",
+    secondary: "#5A5470",
+    dim: "#8A8498",
+    muted: "#C8C4D0",
+  },
+  accent: {
+    primary: "#6B4E97",
+    primaryDim: "rgba(107,78,151,0.08)",
+    primaryGlow: "rgba(107,78,151,0.16)",
+    primarySoft: "rgba(107,78,151,0.10)",
+    emerald: "#1A9B5A",
+    emeraldDim: "rgba(26,155,90,0.08)",
+    emeraldSoft: "rgba(26,155,90,0.12)",
+    copper: "#1A9B5A",
+    copperDim: "rgba(26,155,90,0.08)",
+    gradient: "linear-gradient(135deg,#6B4E97,#1A9B5A)",
+    gradientNav: "linear-gradient(135deg,#5E4290,#178A4E)",
+  },
+  status: {
+    green: "#1A9B5A",
+    greenDim: "rgba(26,155,90,0.06)",
+    amber: "#C8922E",
+    amberDim: "rgba(200,146,46,0.06)",
+    red: "#D04050",
+    redDim: "rgba(208,64,80,0.06)",
+    blue: "#4580C8",
+    blueDim: "rgba(69,128,200,0.06)",
+    purple: "#7B5EA7",
+    purpleDim: "rgba(123,94,167,0.06)",
+  },
+  shadow: {
+    sm: "0 1px 3px rgba(0,0,0,0.06)",
+    card: "0 1px 4px rgba(0,0,0,0.06), 0 0 1px rgba(0,0,0,0.08)",
+    elevated: "0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)",
+    glow: "0 0 20px rgba(107,78,151,0.10), 0 0 6px rgba(107,78,151,0.06)",
+    navBtn: "0 4px 20px rgba(107,78,151,0.20), 0 2px 8px rgba(0,0,0,0.08), 0 0 30px rgba(26,155,90,0.06)",
+  },
+};
+
+// Shared tokens (don't change between themes)
+const SHARED_TOKENS = {
+  radius: { sm: 8, md: 12, lg: 16, xl: 24 },
   font: {
     mono: "'JetBrains Mono',ui-monospace,monospace",
     sans: "'Inter',-apple-system,BlinkMacSystemFont,sans-serif",
   },
 };
+
+// T starts as dark — mutated in-place by applyTheme()
+export const T = { ...DARK_TOKENS, ...SHARED_TOKENS };
+
+/**
+ * Apply a theme by mutating T in-place.
+ * Every component importing T will see updated values on next render.
+ * @param {"dark"|"light"} mode
+ */
+export function applyTheme(mode) {
+  const tokens = mode === "light" ? LIGHT_TOKENS : DARK_TOKENS;
+  Object.assign(T.bg, tokens.bg);
+  Object.assign(T.border, tokens.border);
+  Object.assign(T.text, tokens.text);
+  Object.assign(T.accent, tokens.accent);
+  Object.assign(T.status, tokens.status);
+  Object.assign(T.shadow, tokens.shadow);
+  T._mode = mode; // track current mode
+}
 
 // Issuer brand colors
 export const ISSUER_COLORS = {

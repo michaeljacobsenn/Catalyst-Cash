@@ -38,33 +38,36 @@ export async function getNotificationPermission() {
  * Compute the Date object for the next payday reminder.
  *
  * Rules:
- *  - If paycheckTime is set (e.g. "06:00"), notify 12h before on the day prior.
- *    e.g. Friday 06:00 → Thursday 18:00
- *  - If paycheckTime is missing/falsy, notify at 09:00 the day before payday.
+ *  - Notify 12 hours before paycheckTime on payday itself.
+ *    e.g. Wednesday 18:00 → Wednesday 06:00
+ *    e.g. Friday 06:00 → Thursday 18:00 (wraps to day before)
+ *  - If paycheckTime is missing/falsy, notify at 09:00 on payday.
  *  - Always targets strictly the NEXT occurrence (never today if it already passed).
  */
 export function computeNextReminderDate(payday, paycheckTime) {
     const targetDay = DAY_MAP[payday];
     if (targetDay === undefined) return null;
 
-    // Parse paycheckTime -> notification hour/minute
+    // Parse paycheckTime -> notification hour/minute (12h before)
     let notifyHour = 9;
     let notifyMin = 0;
+    let dayOffset = 0; // 0 = same day as payday, -1 = day before
     if (paycheckTime && /^\d{1,2}:\d{2}$/.test(paycheckTime)) {
         const [h, m] = paycheckTime.split(":").map(Number);
-        // 12 hours before paycheckTime, wrapping into previous day
         const totalMins = h * 60 + m - 12 * 60;
         if (totalMins >= 0) {
             notifyHour = Math.floor(totalMins / 60);
             notifyMin = totalMins % 60;
+            dayOffset = 0; // same day
         } else {
+            // Wrapped to previous day (e.g. paycheck at 06:00 → remind at 18:00 day before)
             notifyHour = Math.floor((totalMins + 24 * 60) / 60);
             notifyMin = ((totalMins % 60) + 60) % 60;
+            dayOffset = -1;
         }
     }
 
-    // Notification fires the day BEFORE payday
-    const notifyDay = (targetDay - 1 + 7) % 7;
+    const notifyDay = (targetDay + dayOffset + 7) % 7;
 
     const now = new Date();
     let diff = (notifyDay - now.getDay() + 7) % 7;
@@ -108,8 +111,8 @@ export async function schedulePaydayReminder(payday, paycheckTime) {
             notifications: [
                 {
                     id: PAYDAY_REMINDER_ID,
-                    title: "💰 Payday Tomorrow — Plan Your Snapshot",
-                    body: `${dayName} is tomorrow. Open the app to run your financial audit before ${timeLabel} hits.`,
+                    title: "💰 Payday Today — Run Your Snapshot",
+                    body: `${dayName} paycheck incoming. Open the app to run your financial audit before ${timeLabel}.`,
                     schedule: { at: fireAt, allowWhileIdle: true },
                     sound: "default",
                     smallIcon: "ic_stat_icon_config_sample",

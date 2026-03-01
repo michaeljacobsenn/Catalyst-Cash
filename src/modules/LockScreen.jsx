@@ -158,7 +158,7 @@ export default function LockScreen() {
         setStatus("bypassing");
         try {
             const result = await SignInWithApple.authorize({
-                clientId: 'com.jacobsen.catalystcash',
+                clientId: 'com.jacobsen.portfoliopro',
                 redirectURI: 'https://api.catalystcash.app/auth/apple/callback',
                 scopes: 'email name'
             });
@@ -169,8 +169,7 @@ export default function LockScreen() {
             } else {
                 showError("Apple ID does not match linked account.");
             }
-        } catch (error) {
-            console.error(error);
+        } catch {
             showError("Apple Sign-In failed or was cancelled.");
         }
     };
@@ -208,6 +207,11 @@ export default function LockScreen() {
             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
             padding: "40px 32px", gap: 0,
         }}>
+            <style>{`
+@keyframes pinDotPop { 0% { transform: scale(0.5); } 60% { transform: scale(1.2); } 100% { transform: scale(1); } }
+@keyframes pinShake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+@keyframes breathe { 0%, 100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.08); } }
+            `}</style>
             {/* App Icon */}
             <div style={{
                 width: 80, height: 80, borderRadius: 22, overflow: "hidden",
@@ -242,15 +246,17 @@ export default function LockScreen() {
             {showPinPad ? (
                 <div style={{ width: "100%", maxWidth: 280, display: "flex", flexDirection: "column", alignItems: "center" }}>
                     {/* PIN Indicators */}
-                    <div style={{ display: "flex", gap: 16, marginBottom: 40, height: 20, alignItems: "center" }}>
-                        {[0, 1, 2, 3].map(i => (
-                            <div key={i} style={{
+                    <div style={{ display: "flex", gap: 16, marginBottom: 40, height: 20, alignItems: "center", animation: failed ? "pinShake .4s ease" : "none" }}>
+                        {[0, 1, 2, 3].map(i => {
+                            const filled = pinEntry.length > i;
+                            return <div key={i} style={{
                                 width: 14, height: 14, borderRadius: 7,
                                 border: `1.5px solid ${failed ? T.status.red : T.accent.primary}`,
-                                background: pinEntry.length > i ? (failed ? T.status.red : T.accent.primary) : "transparent",
-                                transition: "all .15s cubic-bezier(.16,1,.3,1)"
-                            }} />
-                        ))}
+                                background: filled ? (failed ? T.status.red : T.accent.primary) : "transparent",
+                                transition: "all .15s cubic-bezier(.16,1,.3,1)",
+                                animation: filled && !failed ? "pinDotPop .25s ease" : "none",
+                            }} />;
+                        })}
                     </div>
 
                     {/* Numpad */}
@@ -274,7 +280,7 @@ export default function LockScreen() {
                             cursor: useFaceId ? "pointer" : "default", WebkitTapHighlightColor: "transparent",
                             opacity: useFaceId ? 1 : 0
                         }}>
-                            <Fingerprint size={32} strokeWidth={1.5} />
+                            <Fingerprint size={32} strokeWidth={1.5} style={{ animation: "breathe 3s ease-in-out infinite" }} />
                         </button>
                         <button onClick={() => handleNumPress(0)} style={{
                             width: 72, height: 72, borderRadius: 36, background: "rgba(255,255,255,0.08)",
@@ -311,7 +317,7 @@ export default function LockScreen() {
                         marginBottom: 12,
                     }}
                 >
-                    <Fingerprint size={20} />
+                    <Fingerprint size={20} style={{ animation: "breathe 3s ease-in-out infinite" }} />
                     {status === "authenticating" ? "Authenticating..." : "Unlock with Face ID"}
                 </button>
             )}

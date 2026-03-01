@@ -4,8 +4,9 @@ import { haptic } from '../haptics.js';
 
 const NavigationContext = createContext(null);
 
-// ── Swipeable tab order (Input/Results/Settings are overlays, not in swipe chain) ──
-const SWIPE_TAB_ORDER = ["history", "dashboard", "renewals", "cards"];
+// ── Swipeable tab order ──
+// Mirrors the bottom nav bar order exactly: Audit | Ask AI | Dashboard | Expenses | Accounts
+const SWIPE_TAB_ORDER = ["input", "chat", "dashboard", "renewals", "cards"];
 
 export function NavigationProvider({ children }) {
     const [tab, setTab] = useState("dashboard");
@@ -61,7 +62,7 @@ export function NavigationProvider({ children }) {
         setTab(prev => {
             const effectiveTab = prev === "settings" ? lastCenterTab.current : prev;
             const idx = SWIPE_TAB_ORDER.indexOf(effectiveTab);
-            if (idx === -1) return prev; // current tab not swipeable (input, results, settings)
+            if (idx === -1) return prev; // current tab not swipeable (results, settings)
 
             let nextIdx;
             if (direction === "left") {
@@ -77,7 +78,8 @@ export function NavigationProvider({ children }) {
             // Set directional animation class BEFORE the tab changes
             setSwipeAnimClass(direction === "left" ? "tab-slide-right" : "tab-slide-left");
 
-            // Update refs
+            // Update refs & state for input tab
+            if (nextTab === "input") setInputMounted(true);
             if (nextTab === "dashboard" || nextTab === "input") lastCenterTab.current = nextTab;
 
             // Push browser history

@@ -5,8 +5,8 @@ import { fmt, fmtDate, exportAudit, exportAllAudits, exportSelectedAudits, expor
 import { Card, Badge } from "../ui.jsx";
 import { Mono, StatusDot, EmptyState } from "../components.jsx";
 import { haptic } from "../haptics.js";
-import { shouldShowGating, getHistoryLimit } from "../subscription.js";
-import { ProBanner } from "./ProPaywall.jsx";
+import { shouldShowGating } from "../subscription.js";
+import ProPaywall, { ProBanner } from "./ProPaywall.jsx";
 
 import { useAudit } from '../contexts/AuditContext.jsx';
 import { useNavigation } from '../contexts/NavigationContext.jsx';
@@ -28,8 +28,11 @@ export default memo(function HistoryTab({ toast }) {
     const exitSel = () => { setSelMode(false); setSel(new Set()); };
     const doExportSel = () => { exportSelectedAudits(audits.filter((_, i) => sel.has(i))); exitSel(); };
 
+    const [showPaywall, setShowPaywall] = useState(false);
+
     return <div className="page-body" style={{ paddingBottom: 0 }}>
-        {shouldShowGating() && <ProBanner label="Showing last 4 audits" sublabel="Upgrade to Pro for full history" />}
+        {shouldShowGating() && <ProBanner onUpgrade={() => setShowPaywall(true)} label="Showing last 8 audits" sublabel="Upgrade to Pro for full history" />}
+        {showPaywall && <ProPaywall onClose={() => setShowPaywall(false)} />}
         <div style={{ paddingTop: 6, paddingBottom: 8, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
             <div><h1 style={{ fontSize: 22, fontWeight: 800 }}>History</h1>
                 <Mono size={11} color={T.text.dim}>{audits.length} audits stored</Mono></div>
@@ -81,13 +84,31 @@ export default memo(function HistoryTab({ toast }) {
         {audits.length === 0 ? <EmptyState icon={Calendar} title="No History Yet" message="Perform a financial audit to see your history and trends right here." /> :
             audits.map((a, i) => {
                 const isConfirming = confirmDelete === i;
-                return <Card key={a.ts || i} animate delay={Math.min(i * 25, 300)}
+                const rawStatus = a.parsed?.status || "UNKNOWN";
+                let sColor = "UNKNOWN";
+                let sText = rawStatus;
+                const m = rawStatus.match(/^(GREEN|YELLOW|RED)[\s:;-]*(.*)$/i);
+                if (m) {
+                    sColor = m[1].toUpperCase();
+                    sText = m[2] ? m[2].trim() : "";
+                } else if (rawStatus.toUpperCase().includes("GREEN")) { sColor = "GREEN"; sText = rawStatus.replace(/GREEN/i, "").trim(); }
+                else if (rawStatus.toUpperCase().includes("YELLOW")) { sColor = "YELLOW"; sText = rawStatus.replace(/YELLOW/i, "").trim(); }
+                else if (rawStatus.toUpperCase().includes("RED")) { sColor = "RED"; sText = rawStatus.replace(/RED/i, "").trim(); }
+                if (sText.startsWith(":") || sText.startsWith("-")) sText = sText.slice(1).trim();
+
+                const cHex = sColor === "GREEN" ? T.status.green : sColor === "YELLOW" ? T.status.amber : sColor === "RED" ? T.status.red : T.text.muted;
+
+                return <Card key={a.ts || i} animate delay={Math.min(i * 40, 400)}
                     onClick={selMode ? () => toggle(i) : isConfirming ? undefined : () => onSelect(a)}
                     style={{
-                        ...(sel.has(i) ? { borderColor: `${T.accent.primary}35`, background: `${T.accent.primary}04` } : {}),
+                        padding: "16px",
+                        position: "relative",
+                        overflow: "hidden",
+                        ...(sel.has(i) ? { borderColor: `${T.accent.primary}35`, background: `${T.accent.primary}08` } : {}),
                         ...(isConfirming ? { borderColor: `${T.status.red}30`, background: `${T.status.red}06` } : {}),
-                        borderLeft: `3px solid ${a.parsed?.status === "GREEN" ? T.status.green : a.parsed?.status === "YELLOW" ? T.status.amber : a.parsed?.status === "RED" ? T.status.red : T.text.muted}20`
                     }}>
+                    <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: cHex, opacity: 0.8 }} />
+                    <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 60, background: `linear-gradient(90deg, ${cHex}15, transparent)`, pointerEvents: "none" }} />
                     {isConfirming ? (
                         <div>
                             <p style={{ fontSize: 12, color: T.status.red, fontWeight: 600, marginBottom: 10 }}>Delete audit from {fmtDate(a.date)}?</p>
@@ -104,21 +125,92 @@ export default memo(function HistoryTab({ toast }) {
                             </div>
                         </div>
                     ) : (
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                            {selMode && <div style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, border: `2px solid ${sel.has(i) ? "transparent" : T.text.dim}`, background: sel.has(i) ? T.accent.primary : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>
-                                {sel.has(i) && <CheckCircle size={11} color={T.bg.base} strokeWidth={3} />}</div>}
-                            <div style={{ flex: 1 }}>
-                                <Mono size={13} weight={600}>{fmtDate(a.date)}</Mono>
-                                {a.isTest && <div style={{ marginTop: 4 }}><Badge variant="amber">TEST</Badge></div>}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                            {/* Top Row: Date & Actions */}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                    {selMode && <div style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, border: `2px solid ${sel.has(i) ? "transparent" : T.text.dim}`, background: sel.has(i) ? T.accent.primary : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>
+                                        {sel.has(i) && <CheckCircle size={12} color={T.bg.base} strokeWidth={3} />}</div>}
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                            <span style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
+                                                {fmtDate(a.date)}
+                                            </span>
+                                            {a.isTest && <Badge variant="amber" style={{ padding: "3px 6px" }}>TEST</Badge>}
+                                        </div>
+                                        {a.parsed?.netWorth != null && (
+                                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                                                <Mono size={14} weight={700} color={T.accent.primary}>{fmt(a.parsed.netWorth)}</Mono>
+                                                <span style={{ fontSize: 10, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em" }}>NET WORTH</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div style={{ display: "flex", gap: 6, position: "relative", zIndex: 2 }}>
+                                    {!selMode && <button onClick={e => { e.stopPropagation(); exportAudit(a); }} style={{ width: 32, height: 32, borderRadius: T.radius.md, border: `1px solid ${T.border.subtle}`, background: T.bg.elevated, color: T.text.secondary, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>
+                                        <Download size={14} strokeWidth={2.5} /></button>}
+                                    {!selMode && <button onClick={e => { e.stopPropagation(); setConfirmDelete(i); haptic.warning(); }} style={{ width: 32, height: 32, borderRadius: T.radius.md, border: `1px solid ${T.status.red}20`, background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>
+                                        <Trash2 size={14} strokeWidth={2.5} /></button>}
+                                </div>
                             </div>
-                            <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                                <StatusDot status={a.parsed?.status || "UNKNOWN"} />
-                                {a.parsed?.netWorth != null && <Mono size={12} weight={700} color={T.accent.primary}>{fmt(a.parsed.netWorth)}</Mono>}
-                                <div style={{ display: "flex", gap: 4 }}>
-                                    {!selMode && <button onClick={e => { e.stopPropagation(); exportAudit(a); }} style={{ width: 26, height: 26, borderRadius: T.radius.sm, border: `1px solid ${T.border.subtle}`, background: "transparent", color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                        <Download size={10} /></button>}
-                                    {!selMode && <button onClick={e => { e.stopPropagation(); setConfirmDelete(i); haptic.warning(); }} style={{ width: 26, height: 26, borderRadius: T.radius.sm, border: `1px solid ${T.status.red}20`, background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                        <Trash2 size={10} /></button>}
+
+                            {/* Health Score + Model Badge Row */}
+                            {(a.parsed?.healthScore?.score != null || a.model) && (
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                    {a.parsed?.healthScore?.score != null && (() => {
+                                        const score = a.parsed.healthScore.score;
+                                        const scoreColor = score >= 80 ? T.status.green : score >= 60 ? T.status.amber : T.status.red;
+                                        return <span style={{
+                                            fontSize: 10, fontWeight: 800, color: scoreColor,
+                                            background: `${scoreColor}15`, border: `1px solid ${scoreColor}30`,
+                                            padding: "2px 8px", borderRadius: 99, fontFamily: T.font.mono,
+                                            letterSpacing: "0.04em",
+                                        }}>SCORE: {score}</span>;
+                                    })()}
+                                    {a.model && <span style={{
+                                        fontSize: 9, fontWeight: 700, color: T.text.dim,
+                                        background: `${T.text.dim}12`, border: `1px solid ${T.text.dim}20`,
+                                        padding: "2px 7px", borderRadius: 99, fontFamily: T.font.mono,
+                                        letterSpacing: "0.03em", textTransform: "uppercase",
+                                    }}>{a.model}</span>}
+                                </div>
+                            )}
+
+                            {/* Key Metrics Row */}
+                            {a.form && (
+                                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                                    {a.form.checking != null && <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                        <span style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase" }}>CHK</span>
+                                        <Mono size={11} weight={600} color={T.text.secondary}>{fmt(parseFloat(a.form.checking) || 0)}</Mono>
+                                    </div>}
+                                    {a.form.debts?.length > 0 && <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                        <span style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase" }}>DEBT</span>
+                                        <Mono size={11} weight={600} color={T.status.red}>{fmt(a.form.debts.reduce((s, d) => s + (parseFloat(d.balance) || 0), 0))}</Mono>
+                                    </div>}
+                                    {a.form.savings != null && parseFloat(a.form.savings) > 0 && <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                        <span style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase" }}>SAV</span>
+                                        <Mono size={11} weight={600} color={T.status.green}>{fmt(parseFloat(a.form.savings) || 0)}</Mono>
+                                    </div>}
+                                </div>
+                            )}
+
+                            {/* Status Pill */}
+                            <div style={{
+                                display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px",
+                                background: `linear-gradient(135deg, ${cHex}15, ${cHex}05)`,
+                                borderRadius: T.radius.md, border: `1px solid ${cHex}30`
+                            }}>
+                                <div style={{ width: 10, height: 10, borderRadius: "50%", background: cHex, boxShadow: `0 0 12px ${cHex}80`, flexShrink: 0, marginTop: 3 }} />
+                                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                    <span style={{ fontSize: 11, fontWeight: 800, color: cHex, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                                        {sColor}
+                                    </span>
+                                    {sText && (
+                                        <span style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.4, opacity: 0.9 }}>
+                                            {sText}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         </div>

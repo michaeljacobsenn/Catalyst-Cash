@@ -70,9 +70,15 @@ export default function WeeklyChallenges() {
 
                 // Check if the user missed last week
                 if (savedStats.lastWeek && savedStats.lastWeek !== weekKey) {
-                    const lastNum = parseInt(savedStats.lastWeek.split("W")[1] || "0");
-                    const thisNum = parseInt(weekKey.split("W")[1] || "0");
-                    if (thisNum - lastNum > 1 || (thisNum === 1 && lastNum < 52)) {
+                    const [lastYear, lastWPart] = savedStats.lastWeek.split("-W");
+                    const [thisYear, thisWPart] = weekKey.split("-W");
+                    const lastNum = parseInt(lastWPart || "0");
+                    const thisNum = parseInt(thisWPart || "0");
+                    const sameYear = lastYear === thisYear;
+                    // Consecutive = same year & gap of 1, OR year-end wrap (W52/W53 → W01)
+                    const isConsecutive = (sameYear && thisNum - lastNum === 1) ||
+                        (!sameYear && thisNum === 1 && lastNum >= 52);
+                    if (!isConsecutive) {
                         savedStats.streak = 0; // Reset streak on missed week
                     }
                 }

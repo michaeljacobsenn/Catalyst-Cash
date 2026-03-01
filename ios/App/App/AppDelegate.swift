@@ -9,6 +9,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Set dark background on the native window so no white bars show during load
         window?.backgroundColor = UIColor(red: 0.024, green: 0.035, blue: 0.055, alpha: 1.0)
+        
+        // RevenueCat is initialized from the JS side via revenuecat.js → Purchases.configure()
+        // Do NOT double-init here — iOS 18+ crashes on duplicate Purchases.configure() calls.
+        
         // Local plugins are registered via CAP_PLUGIN macros in their .m files
         return true
     }

@@ -170,11 +170,12 @@ export const MoveRow = ({ item, checked, onToggle, index }) => {
 let diIdCounter = 0;
 export const DI = ({ value, onChange, placeholder = "0.00", label = "Amount" }) => {
     const [id] = useState(() => `di-${++diIdCounter}`);
+    const [focused, setFocused] = useState(false);
     return (
         <div style={{ position: "relative" }}>
             <label htmlFor={id} style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap" }}>{label}</label>
-            <span aria-hidden="true" style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600 }}>$</span>
-            <input id={id} type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={value} placeholder={placeholder} onChange={onChange} aria-label={label} style={{ paddingLeft: 28, fontFamily: T.font.mono, fontWeight: 600 }} />
+            <span aria-hidden="true" style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: focused ? T.accent.primary : T.text.dim, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600, transition: "color 0.3s ease" }}>$</span>
+            <input id={id} type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={value} placeholder={placeholder} onChange={onChange} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} aria-label={label} style={{ paddingLeft: 28, fontFamily: T.font.mono, fontWeight: 600 }} />
         </div>
     );
 };
@@ -288,14 +289,14 @@ export const EmptyState = ({ icon: Icon, title, message, action, delay = 0 }) =>
         animationDelay: `${delay}ms`, display: "flex", flexDirection: "column", alignItems: "center"
     }}>
         <div style={{
-            width: 64, height: 64, borderRadius: 22, background: T.bg.elevated,
-            border: `1px solid ${T.border.default}`, display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: T.shadow.elevated, marginBottom: 20, position: "relative"
+            width: 72, height: 72, borderRadius: 24, background: `linear-gradient(135deg, ${T.accent.primaryDim}, ${T.bg.card})`,
+            border: `1px solid ${T.accent.primarySoft}`, display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: `0 0 40px ${T.accent.primaryDim}, inset 0 2px 10px rgba(255,255,255,0.05)`, marginBottom: 24, position: "relative"
         }}>
-            <Icon size={28} color={T.text.muted} strokeWidth={1.5} />
-            <div style={{ position: "absolute", inset: -8, borderRadius: 28, border: `1px dashed ${T.border.default}`, opacity: 0.4 }} />
+            <Icon size={32} color={T.accent.primary} strokeWidth={1.5} style={{ filter: `drop-shadow(0 2px 8px ${T.accent.primaryGlow})` }} />
+            <div style={{ position: "absolute", inset: -12, borderRadius: 36, border: `1px dashed ${T.border.focus}`, opacity: 0.3, animation: "spin 20s linear infinite" }} />
         </div>
-        <h3 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, marginBottom: 8 }}>{title}</h3>
+        <h3 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, marginBottom: 8, letterSpacing: "-0.01em" }}>{title}</h3>
         <p style={{ fontSize: 13, color: T.text.dim, lineHeight: 1.6, maxWidth: 280, margin: "0 auto" }}>{message}</p>
         {action}
     </div>

@@ -31,6 +31,8 @@
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
 	</dict>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Catalyst Cash requires Face ID to securely authenticate your financial data.</string>
@@ -38,6 +40,18 @@
 	<string>Catalyst Cash needs access to save exported run reports to your device.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Catalyst Cash needs access to share exported run reports from your device.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Catalyst Cash accesses your calendar to schedule financial reminders.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Catalyst Cash accesses contacts if you choose to share your reports.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Catalyst Cash needs camera access for reading barcodes or cards.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Catalyst Cash needs microphone access for voice input features if enabled.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Catalyst Cash accesses your location to map local transactions.</string>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>Catalyst Cash uses tracking to securely attribute subscription data.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

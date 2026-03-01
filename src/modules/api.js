@@ -31,7 +31,7 @@ function extractSSEText(parsed) {
   return "";
 }
 
-async function* streamBackend(snapshot, model, sysText, history, deviceId, backendProvider, signal) {
+async function* streamBackend(snapshot, model, sysText, history, deviceId, backendProvider, signal, responseFormat) {
   const res = await fetch(`${BACKEND_URL}/audit`, {
     method: "POST",
     headers: {
@@ -45,6 +45,7 @@ async function* streamBackend(snapshot, model, sysText, history, deviceId, backe
       model,
       stream: true,
       provider: backendProvider || "gemini",
+      responseFormat: responseFormat || "json",
     }),
     signal,
   });
@@ -81,12 +82,12 @@ async function* streamBackend(snapshot, model, sysText, history, deviceId, backe
         const parsed = JSON.parse(d);
         const text = extractSSEText(parsed);
         if (text) yield text;
-      } catch (e) { console.warn("[SSE] Backend parse error:", e.message, "chunk:", d.slice(0, 80)); }
+      } catch (e) { log.warn("api", "Backend SSE parse error", { chunk: d.slice(0, 40) }); }
     }
   }
 }
 
-async function callBackend(snapshot, model, sysText, history, deviceId, backendProvider) {
+async function callBackend(snapshot, model, sysText, history, deviceId, backendProvider, responseFormat) {
   const res = await fetch(`${BACKEND_URL}/audit`, {
     method: "POST",
     headers: {
@@ -100,6 +101,7 @@ async function callBackend(snapshot, model, sysText, history, deviceId, backendP
       model,
       stream: false,
       provider: backendProvider || "gemini",
+      responseFormat: responseFormat || "json",
     }),
   });
 
@@ -122,7 +124,7 @@ async function callBackend(snapshot, model, sysText, history, deviceId, backendP
 // ═══════════════════════════════════════════════════════════════
 // OPENAI / ChatGPT (BYOK Developer Mode)
 // ═══════════════════════════════════════════════════════════════
-function buildBodyOpenAI(snapshot, stream, model, sysText, history = []) {
+function buildBodyOpenAI(snapshot, stream, model, sysText, history = [], isChat = false) {
   const m = model || "o1";
   const isReasoning = m.startsWith("o");
   const body = {
@@ -141,17 +143,20 @@ function buildBodyOpenAI(snapshot, stream, model, sysText, history = []) {
     body.max_tokens = 12000;
     body.temperature = 0.1;
     body.top_p = 0.95;
-    body.response_format = { type: "json_object" };
+    // Only force JSON output for audits — chat needs natural language
+    if (!isChat) {
+      body.response_format = { type: "json_object" };
+    }
   }
 
   return JSON.stringify(body);
 }
 
-async function* streamOpenAI(apiKey, snapshot, model, sysText, history, baseUrl = "https://api.openai.com/v1/chat/completions", signal) {
+async function* streamOpenAI(apiKey, snapshot, model, sysText, history, baseUrl = "https://api.openai.com/v1/chat/completions", signal, isChat = false) {
   const res = await fetch(baseUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-    body: buildBodyOpenAI(snapshot, true, model, sysText, history),
+    body: buildBodyOpenAI(snapshot, true, model, sysText, history, isChat),
     signal,
   });
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
@@ -165,16 +170,16 @@ async function* streamOpenAI(apiKey, snapshot, model, sysText, history, baseUrl 
         const e = JSON.parse(d);
         const text = e.choices?.[0]?.delta?.content;
         if (text) yield text;
-      } catch (e) { console.warn("[SSE] OpenAI parse error:", e.message); }
+      } catch { log.warn("api", "OpenAI SSE parse error"); }
     }
   }
 }
 
-async function callOpenAI(apiKey, snapshot, model, sysText, history, baseUrl = "https://api.openai.com/v1/chat/completions") {
+async function callOpenAI(apiKey, snapshot, model, sysText, history, baseUrl = "https://api.openai.com/v1/chat/completions", isChat = false) {
   const res = await fetch(baseUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-    body: buildBodyOpenAI(snapshot, false, model, sysText, history)
+    body: buildBodyOpenAI(snapshot, false, model, sysText, history, isChat)
   });
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
   const data = await res.json();
@@ -184,28 +189,32 @@ async function callOpenAI(apiKey, snapshot, model, sysText, history, baseUrl = "
 // ═══════════════════════════════════════════════════════════════
 // GOOGLE / GEMINI (BYOK Developer Mode)
 // ═══════════════════════════════════════════════════════════════
-function buildBodyGemini(snapshot, sysText, history = []) {
+function buildBodyGemini(snapshot, sysText, history = [], isChat = false) {
+  const genConfig = {
+    maxOutputTokens: 12000,
+    temperature: 0.1,
+    topP: 0.95,
+  };
+  // Only force JSON output for audits — chat needs natural language
+  if (!isChat) {
+    genConfig.responseMimeType = "application/json";
+  }
   return JSON.stringify({
     contents: [
-      ...(history || []),
+      ...(history || []).filter(h => h.parts && h.parts.some(p => p.text && p.text.trim().length > 0)),
       { parts: [{ text: snapshot }], role: "user" }
     ],
     systemInstruction: { parts: [{ text: sysText }] },
-    generationConfig: {
-      maxOutputTokens: 12000,
-      temperature: 0.1,
-      topP: 0.95,
-      responseMimeType: "application/json"
-    }
+    generationConfig: genConfig
   });
 }
 
-async function* streamGemini(apiKey, snapshot, model, sysText, history, signal) {
+async function* streamGemini(apiKey, snapshot, model, sysText, history, signal, isChat = false) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model || "gemini-2.5-flash"}:streamGenerateContent?alt=sse&key=${apiKey}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: buildBodyGemini(snapshot, sysText, history),
+    body: buildBodyGemini(snapshot, sysText, history, isChat),
     signal,
   });
   if (!res.ok) {
@@ -232,17 +241,17 @@ async function* streamGemini(apiKey, snapshot, model, sysText, history, signal) 
         const parsed = JSON.parse(d);
         const text = parsed.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") || "";
         if (text) yield text;
-      } catch (e) { console.warn("[SSE] Gemini parse error:", e.message); }
+      } catch { log.warn("api", "Gemini SSE parse error"); }
     }
   }
 }
 
-async function callGemini(apiKey, snapshot, model, sysText, history) {
+async function callGemini(apiKey, snapshot, model, sysText, history, isChat = false) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model || "gemini-2.5-flash"}:generateContent?key=${apiKey}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: buildBodyGemini(snapshot, sysText, history)
+    body: buildBodyGemini(snapshot, sysText, history, isChat)
   });
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
@@ -273,7 +282,7 @@ function buildHeadersClaude(apiKey) {
 
 function buildBodyClaude(snapshot, stream, model, sysText, history = []) {
   return JSON.stringify({
-    model: model || "claude-4-5-sonnet-20250929",
+    model: model || "claude-sonnet-4-6",
     max_tokens: 12000,
     temperature: 0.1,
     stream: stream || false,
@@ -285,7 +294,7 @@ function buildBodyClaude(snapshot, stream, model, sysText, history = []) {
   });
 }
 
-async function* streamClaude(apiKey, snapshot, model, sysText, history, signal) {
+async function* streamClaude(apiKey, snapshot, model, sysText, history, signal, isChat = false) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: buildHeadersClaude(apiKey),
@@ -307,12 +316,12 @@ async function* streamClaude(apiKey, snapshot, model, sysText, history, signal) 
         if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
           if (parsed.delta.text) yield parsed.delta.text;
         }
-      } catch (e) { console.warn("[SSE] Claude parse error:", e.message); }
+      } catch { log.warn("api", "Claude SSE parse error"); }
     }
   }
 }
 
-async function callClaude(apiKey, snapshot, model, sysText, history) {
+async function callClaude(apiKey, snapshot, model, sysText, history, isChat = false) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: buildHeadersClaude(apiKey),
@@ -327,24 +336,26 @@ async function callClaude(apiKey, snapshot, model, sysText, history) {
 // PUBLIC API — provider-aware router
 // Supports "backend" mode (no API key needed) + BYOK fallback
 // ═══════════════════════════════════════════════════════════════
-export async function* streamAudit(apiKey, snapshot, providerId = "backend", model, sysText, history = [], deviceId, signal) {
-  log.info("audit", "Audit started", { provider: providerId, model, streaming: true });
+export async function* streamAudit(apiKey, snapshot, providerId = "backend", model, sysText, history = [], deviceId, signal, isChat = false) {
+  const responseFormat = isChat ? "text" : "json";
+  log.info("audit", "Audit started", { provider: providerId, model, streaming: true, isChat });
   switch (providerId) {
-    case "backend": yield* streamBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), signal); break;
-    case "openai": yield* streamOpenAI(apiKey, snapshot, model, sysText, history, undefined, signal); break;
-    case "gemini": yield* streamGemini(apiKey, snapshot, model, sysText, history, signal); break;
-    case "claude": yield* streamClaude(apiKey, snapshot, model, sysText, history, signal); break;
-    default: yield* streamBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), signal); break;
+    case "backend": yield* streamBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), signal, responseFormat); break;
+    case "openai": yield* streamOpenAI(apiKey, snapshot, model, sysText, history, undefined, signal, isChat); break;
+    case "gemini": yield* streamGemini(apiKey, snapshot, model, sysText, history, signal, isChat); break;
+    case "claude": yield* streamClaude(apiKey, snapshot, model, sysText, history, signal, isChat); break;
+    default: yield* streamBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), signal, responseFormat); break;
   }
 }
 
-export async function callAudit(apiKey, snapshot, providerId = "backend", model, sysText, history = [], deviceId) {
-  log.info("audit", "Audit started", { provider: providerId, model, streaming: false });
+export async function callAudit(apiKey, snapshot, providerId = "backend", model, sysText, history = [], deviceId, isChat = false) {
+  const responseFormat = isChat ? "text" : "json";
+  log.info("audit", "Audit started", { provider: providerId, model, streaming: false, isChat });
   switch (providerId) {
-    case "backend": return callBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model));
-    case "openai": return callOpenAI(apiKey, snapshot, model, sysText, history);
-    case "gemini": return callGemini(apiKey, snapshot, model, sysText, history);
-    case "claude": return callClaude(apiKey, snapshot, model, sysText, history);
-    default: return callBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model));
+    case "backend": return callBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), responseFormat);
+    case "openai": return callOpenAI(apiKey, snapshot, model, sysText, history, undefined, isChat);
+    case "gemini": return callGemini(apiKey, snapshot, model, sysText, history, isChat);
+    case "claude": return callClaude(apiKey, snapshot, model, sysText, history, isChat);
+    default: return callBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), responseFormat);
   }
 }

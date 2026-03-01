@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Eye, EyeOff, ArrowLeft, Cloud, Download, Upload, CheckCircle, AlertTriangle, ChevronDown, Loader2, ExternalLink, Pencil, Check, ChevronRight, Shield, Cpu, Target, Briefcase, Landmark, Database, Lock, Settings, Info, Building2, Plus, Unplug } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, Cloud, Download, Upload, CheckCircle, AlertTriangle, ChevronDown, Loader2, ExternalLink, Pencil, Check, ChevronRight, Shield, Cpu, Target, Briefcase, Landmark, Database, Lock, Settings, Info, Building2, Plus, Unplug, Sun, Moon, Monitor } from "lucide-react";
 import { T, APP_VERSION } from "../constants.js";
 import { AI_PROVIDERS, getProvider } from "../providers.js";
 import { getLogsAsText, clearLogs } from "../logger.js";
-import { Card, Label } from "../ui.jsx";
+import { Card, Label, InlineTooltip } from "../ui.jsx";
 import { Mono } from "../components.jsx";
 import { db, FaceId, nativeExport, fmt } from "../utils.js";
 
@@ -18,8 +18,9 @@ import { generateBackupSpreadsheet } from "../spreadsheet.js";
 import { getConnections, removeConnection, connectBank } from "../plaid.js";
 import { shouldShowGating, checkAuditQuota, getRawTier } from "../subscription.js";
 import ProPaywall, { ProBanner } from "./ProPaywall.jsx";
+import { presentCustomerCenter } from "../revenuecat.js";
 
-const ENABLE_PLAID = false; // Toggle to false to hide, true to show Plaid integration
+const ENABLE_PLAID = true; // Toggle to false to hide, true to show Plaid integration
 
 // Legacy key migration: if old "api-key" exists, treat as openai key
 async function migrateApiKey() {
@@ -83,18 +84,80 @@ async function importBackup(file, getPassphrase) {
                         bytes[i] = binary_string.charCodeAt(i);
                     }
                     const wb = XLSX.read(bytes.buffer, { type: "array" });
-                    const sheetName = wb.SheetNames.find(n => n.includes("Setup Data")) || wb.SheetNames[0];
-                    const ws = wb.Sheets[sheetName];
-                    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
                     const config = {};
-                    for (const row of rows) {
-                        // In our format, key is col A (index 0) and val is col C (index 2)
-                        const key = String(row[0] || "").trim();
-                        const rawVal = String(row[2] ?? "").trim();
-                        if (!key || !rawVal || key === "field_key" || key === "Config Key") continue;
-                        const num = parseFloat(rawVal);
-                        config[key] = isNaN(num) ? (rawVal === "true" ? true : rawVal === "false" ? false : rawVal) : num;
+
+                    // Helper to get sheet data
+                    const getSheetRows = (sheetName) => {
+                        const name = wb.SheetNames.find(n => n.includes(sheetName));
+                        if (!name) return null;
+                        return XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: "" });
+                    };
+
+                    // 1. Parse Setup Data (Key/Value list)
+                    const setupRows = getSheetRows("Setup Data") || getSheetRows(wb.SheetNames[0]);
+                    if (setupRows) {
+                        for (const row of setupRows) {
+                            const key = String(row[0] || "").trim();
+                            const rawVal = String(row[2] ?? "").trim();
+                            if (!key || !rawVal || key === "field_key" || key.includes("DO NOT EDIT")) continue;
+                            const num = parseFloat(rawVal);
+                            config[key] = isNaN(num) ? (rawVal === "true" ? true : rawVal === "false" ? false : rawVal) : num;
+                        }
                     }
+
+                    // Helper to parse array sheets
+                    const parseArraySheet = (sheetName, mapFn) => {
+                        const rows = getSheetRows(sheetName);
+                        if (!rows || rows.length <= 1) return undefined;
+                        const items = [];
+                        // Skip header row (index 0)
+                        for (let i = 1; i < rows.length; i++) {
+                            const row = rows[i];
+                            if (!row.some(cell => String(cell).trim() !== "")) continue;
+                            const item = mapFn(row);
+                            if (item) items.push(item);
+                        }
+                        return items.length > 0 ? items : undefined;
+                    };
+
+                    // 2. Parse Arrays
+                    config.incomeSources = parseArraySheet("Income Sources", (r) => ({
+                        id: String(r[0] || Date.now() + Math.random()).trim(),
+                        name: String(r[1] || "Unnamed Source").trim(),
+                        amount: parseFloat(r[2]) || 0,
+                        frequency: String(r[3] || "monthly").trim(),
+                        type: String(r[4] || "active").trim(),
+                        nextDate: String(r[5] || "").trim()
+                    })) || config.incomeSources;
+
+                    config.budgetCategories = parseArraySheet("Budget Categories", (r) => ({
+                        id: String(r[0] || Date.now() + Math.random()).trim(),
+                        name: String(r[1] || "Unnamed Category").trim(),
+                        allocated: parseFloat(r[2]) || 0,
+                        group: String(r[3] || "Expenses").trim()
+                    })) || config.budgetCategories;
+
+                    config.savingsGoals = parseArraySheet("Savings Goals", (r) => ({
+                        id: String(r[0] || Date.now() + Math.random()).trim(),
+                        name: String(r[1] || "Unnamed Goal").trim(),
+                        target: parseFloat(r[2]) || 0,
+                        saved: parseFloat(r[3]) || 0
+                    })) || config.savingsGoals;
+
+                    config.nonCardDebts = parseArraySheet("Non-Card Debts", (r) => ({
+                        id: String(r[0] || Date.now() + Math.random()).trim(),
+                        name: String(r[1] || "Unnamed Debt").trim(),
+                        balance: parseFloat(r[2]) || 0,
+                        minPayment: parseFloat(r[3]) || 0,
+                        apr: parseFloat(r[4]) || 0
+                    })) || config.nonCardDebts;
+
+                    config.otherAssets = parseArraySheet("Other Assets", (r) => ({
+                        id: String(r[0] || Date.now() + Math.random()).trim(),
+                        name: String(r[1] || "Unnamed Asset").trim(),
+                        value: parseFloat(r[2]) || 0
+                    })) || config.otherAssets;
+
                     const existing = (await db.get("financial-config")) || {};
                     await db.set("financial-config", { ...existing, ...config, _fromSetupWizard: true });
                     resolve({ count: Object.keys(config).length, exportedAt: new Date().toISOString() });
@@ -124,7 +187,7 @@ import { usePortfolio } from '../contexts/PortfolioContext.jsx';
 
 export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestoreComplete, onShowGuide, proEnabled = false }) {
     const { useStreaming, setUseStreaming } = useAudit();
-    const { apiKey, setApiKey, aiProvider, setAiProvider, aiModel, setAiModel, financialConfig, setFinancialConfig, personalRules, setPersonalRules, autoBackupInterval, setAutoBackupInterval, notifPermission, persona, setPersona } = useSettings();
+    const { apiKey, setApiKey, aiProvider, setAiProvider, aiModel, setAiModel, financialConfig, setFinancialConfig, personalRules, setPersonalRules, autoBackupInterval, setAutoBackupInterval, notifPermission, persona, setPersona, themeMode, setThemeMode } = useSettings();
     const { requireAuth, setRequireAuth, appPasscode, setAppPasscode, useFaceId, setUseFaceId, lockTimeout, setLockTimeout, appleLinkedId, setAppleLinkedId } = useSecurity();
     const { cards, renewals } = usePortfolio();
 
@@ -145,8 +208,8 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
         if (Capacitor.getPlatform() === 'web') return;
         try {
             const result = await SignInWithApple.authorize({
-                clientId: 'com.jacobsen.catalystcash',
-                redirectURI: 'https://com.jacobsen.catalystcash/login',
+                clientId: 'com.jacobsen.portfoliopro',
+                redirectURI: 'https://api.catalystcash.app/auth/apple/callback',
                 scopes: 'email name'
             });
             // console.log("Apple Sign-In Success:", result);
@@ -185,6 +248,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
     const [activeMenu, setActiveMenu] = useState(null); // null means root menu, otherwise string ID of the menu
     const [showModelPicker, setShowModelPicker] = useState(false);
     const [ppModal, setPpModal] = useState({ open: false, mode: "export", label: "", resolve: null, value: "" });
+    const [setupDismissed, setSetupDismissed] = useState(() => !!localStorage.getItem('setup-progress-dismissed'));
     const [showApiSetup, setShowApiSetup] = useState(Boolean((apiKey || "").trim()));
     const [editingSection, setEditingSection] = useState(null);
     const [showPaywall, setShowPaywall] = useState(false);
@@ -541,6 +605,67 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
 
                 {!activeMenu && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingBottom: 40, marginTop: 12 }}>
+                        {/* ── Appearance Toggle ── */}
+                        <div>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginLeft: 16, marginBottom: 8, display: "block", letterSpacing: "0.03em", textTransform: "uppercase" }}>Appearance</span>
+                            <div style={{
+                                background: T.bg.card, borderRadius: T.radius.xl,
+                                border: `1px solid ${T.border.subtle}`, padding: "14px 16px",
+                                display: "flex", alignItems: "center", justifyContent: "space-between"
+                            }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                                    <div style={{
+                                        width: 28, height: 28, borderRadius: 8,
+                                        background: `${T.accent.primary}20`,
+                                        display: "flex", alignItems: "center", justifyContent: "center"
+                                    }}>
+                                        {themeMode === "light" ? <Sun size={16} color={T.status.amber} /> :
+                                            themeMode === "dark" ? <Moon size={16} color={T.accent.primary} /> :
+                                                <Monitor size={16} color={T.text.secondary} />}
+                                    </div>
+                                    <span style={{ fontSize: 16, fontWeight: 600, color: T.text.primary }}>Theme</span>
+                                </div>
+                                {/* iOS-style 3-option pill */}
+                                <div style={{
+                                    display: "flex", position: "relative",
+                                    background: T.bg.elevated, borderRadius: 10,
+                                    border: `1px solid ${T.border.subtle}`, padding: 3,
+                                    gap: 2
+                                }}>
+                                    {/* Sliding indicator */}
+                                    <div style={{
+                                        position: "absolute", top: 3, left: 3,
+                                        width: "calc((100% - 10px) / 3)",
+                                        height: "calc(100% - 6px)", borderRadius: 8,
+                                        background: T.accent.gradient,
+                                        boxShadow: `0 2px 8px ${T.accent.primaryGlow}`,
+                                        transform: `translateX(${themeMode === "system" ? "0%" : themeMode === "light" ? "calc(100% + 2px)" : "calc(200% + 4px)"})`,
+                                        transition: "transform .3s cubic-bezier(.16,1,.3,1)"
+                                    }} />
+                                    {[
+                                        { id: "system", icon: Monitor, label: "Auto" },
+                                        { id: "light", icon: Sun, label: "Light" },
+                                        { id: "dark", icon: Moon, label: "Dark" }
+                                    ].map(opt => (
+                                        <button key={opt.id} onClick={() => { setThemeMode(opt.id); haptic.light(); }}
+                                            style={{
+                                                position: "relative", zIndex: 1,
+                                                display: "flex", alignItems: "center", gap: 4,
+                                                padding: "6px 10px", borderRadius: 8,
+                                                border: "none", background: "transparent",
+                                                cursor: "pointer", transition: "color .25s",
+                                                color: themeMode === opt.id ? "#fff" : T.text.dim,
+                                                fontSize: 11, fontWeight: 700,
+                                                fontFamily: T.font.sans, whiteSpace: "nowrap"
+                                            }}>
+                                            <opt.icon size={12} strokeWidth={2.5} />
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
                         {/* App Preferences */}
                         <div>
                             <span style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginLeft: 16, marginBottom: 8, display: "block", letterSpacing: "0.03em", textTransform: "uppercase" }}>App Preferences</span>
@@ -579,48 +704,57 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                         {/* Subscription (visible when gating is on) */}
                         {shouldShowGating() && <div>
                             <span style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginLeft: 16, marginBottom: 8, display: "block", letterSpacing: "0.03em", textTransform: "uppercase" }}>Subscription</span>
-                            <ProBanner onUpgrade={() => setShowPaywall(true)} label="Upgrade to Pro" sublabel="Unlimited audits, all models, 15m market data" />
+                            {proEnabled ? (
+                                <button onClick={() => presentCustomerCenter()} style={{
+                                    width: "100%", padding: "14px 16px", borderRadius: T.radius.xl,
+                                    border: `1px solid ${T.accent.primary}40`, background: `${T.accent.primary}10`,
+                                    color: T.accent.primary, fontSize: 14, fontWeight: 700, cursor: "pointer",
+                                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                                    boxShadow: `0 4px 12px ${T.accent.primary}10`
+                                }}>
+                                    <span>Manage Pro Subscription</span>
+                                    <ChevronRight size={18} color={T.accent.primary} />
+                                </button>
+                            ) : (
+                                <ProBanner onUpgrade={() => setShowPaywall(true)} label="Upgrade to Pro" sublabel="150 audits/mo, all models, 15m market data" />
+                            )}
                         </div>}
 
-                        {/* Setup Progress — deferred onboarding items */}
-                        {(() => {
-                            const fc = financialConfig || {};
-                            const steps = [
-                                { label: "Income configured", done: !!(fc.paycheckStandard || fc.hourlyRateNet || fc.averagePaycheck), nav: "income" },
-                                { label: "Spend allowance set", done: !!fc.weeklySpendAllowance, nav: "income" },
-                                { label: "Checking floor set", done: !!fc.emergencyFloor, nav: "income" },
-                                { label: "Credit cards added", done: (cards || []).length > 0, nav: null },
-                                { label: "Bills & renewals added", done: (renewals || []).length > 0, nav: null },
-                            ];
-                            const done = steps.filter(s => s.done).length;
-                            const total = steps.length;
-                            const pct = Math.round((done / total) * 100);
-                            return <div style={{ marginBottom: 4 }}>
-                                <span style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginLeft: 16, marginBottom: 8, display: "block", letterSpacing: "0.03em", textTransform: "uppercase" }}>Setup Progress</span>
-                                <div style={{ background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, padding: "14px 16px" }}>
-                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                                        <span style={{ fontSize: 13, fontWeight: 700, color: pct === 100 ? T.status.green : T.text.primary }}>{pct === 100 ? "✅ All set!" : `${done}/${total} complete`}</span>
-                                        <span style={{ fontSize: 11, fontWeight: 700, color: pct === 100 ? T.status.green : T.accent.primary, fontFamily: T.font.mono }}>{pct}%</span>
-                                    </div>
-                                    <div style={{ height: 4, borderRadius: 2, background: T.bg.surface, marginBottom: 12 }}>
-                                        <div style={{ height: 4, borderRadius: 2, background: pct === 100 ? T.status.green : T.accent.primary, width: `${pct}%`, transition: "width 0.4s ease" }} />
-                                    </div>
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                        {steps.map((s, i) => <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                <span style={{ fontSize: 12, opacity: s.done ? 1 : 0.4 }}>{s.done ? "✅" : "⬜"}</span>
-                                                <span style={{ fontSize: 12, fontWeight: 600, color: s.done ? T.text.dim : T.text.primary }}>{s.label}</span>
-                                            </div>
-                                            {!s.done && s.nav && <button onClick={() => { setActiveSegment("finance"); setFinanceTab(s.nav); navDir.current = 'forward'; setActiveMenu(s.nav); haptic.light(); }}
-                                                style={{ fontSize: 10, fontWeight: 700, color: T.accent.primary, background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}>Set up →</button>}
-                                        </div>)}
-                                    </div>
-                                </div>
-                            </div>;
-                        })()}
 
-                        {/* Setup Progress — deferred onboarding items */}
+                        {/* Financial Profile */}
+                        <div>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginLeft: 16, marginBottom: 8, display: "block", letterSpacing: "0.03em", textTransform: "uppercase" }}>Financial Profile</span>
+                            <div style={{ background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, overflow: "hidden" }}>
+                                {[
+                                    { id: "income", label: "Income & Cash Flow", icon: Briefcase, color: T.accent.emerald },
+                                    { id: "debts", label: "Debts & Liabilities", icon: Landmark, color: T.status.red },
+                                    { id: "targets", label: "Savings Targets", icon: Target, color: T.status.blue },
+                                    { id: "rules", label: "Custom Rules", icon: Settings, color: T.status.amber }
+                                ].map((item, i, arr) => (
+                                    <button key={item.id} onClick={() => { setActiveSegment("finance"); setFinanceTab(item.id); navDir.current = 'forward'; setActiveMenu(item.id); haptic.light(); }}
+                                        style={{
+                                            margin: 0, width: "100%", padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
+                                            background: "transparent", border: "none", borderBottom: i < arr.length - 1 ? `1px solid ${T.border.subtle}` : "none",
+                                            cursor: "pointer", textAlign: "left"
+                                        }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                                            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${item.color}20`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                                <item.icon size={16} color={item.color} />
+                                            </div>
+                                            <span style={{ fontSize: 16, fontWeight: 600, color: T.text.primary }}>{item.label}</span>
+                                        </div>
+                                        <ChevronRight size={18} color={T.text.muted} />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Setup Progress — deferred onboarding items (auto-hide after 30 days or all done) */}
                         {(() => {
+                            // Auto-hide: seed install date + check 30-day expiry
+                            const installTs = parseInt(localStorage.getItem('app-install-ts') || '0', 10);
+                            if (!installTs) localStorage.setItem('app-install-ts', String(Date.now()));
+                            const daysSinceInstall = installTs ? (Date.now() - installTs) / 86400000 : 0;
                             const fc = financialConfig || {};
                             const steps = [
                                 { label: "Connect your income", done: !!(fc.paycheckStandard || fc.hourlyRateNet || fc.averagePaycheck), nav: "income" },
@@ -632,9 +766,17 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                             const done = steps.filter(s => s.done).length;
                             const total = steps.length;
                             const pct = Math.round((done / total) * 100);
+                            // Auto-hide: all criteria met OR 30 days since install OR manually dismissed
+                            if (pct === 100 || daysSinceInstall >= 30 || setupDismissed) return null;
                             return <div style={{ marginBottom: 4 }}>
                                 <span style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginLeft: 16, marginBottom: 8, display: "block", letterSpacing: "0.03em", textTransform: "uppercase" }}>Setup Progress</span>
-                                <div style={{ background: `linear-gradient(145deg, ${T.bg.card}, ${T.bg.surface})`, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, padding: "16px 20px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", backdropFilter: "blur(12px)" }}>
+                                <div style={{ background: `linear-gradient(145deg, ${T.bg.card}, ${T.bg.surface})`, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, padding: "16px 20px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", backdropFilter: "blur(12px)", position: "relative" }}>
+                                    <button onClick={() => { localStorage.setItem('setup-progress-dismissed', '1'); setSetupDismissed(true); haptic.light(); }} style={{
+                                        position: "absolute", top: 10, right: 10, width: 24, height: 24, borderRadius: "50%",
+                                        border: `1px solid ${T.border.subtle}`, background: T.bg.surface, color: T.text.muted,
+                                        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                                        fontSize: 12, fontWeight: 700, lineHeight: 1, padding: 0
+                                    }}>×</button>
                                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                             <div style={{ width: 32, height: 32, borderRadius: "50%", background: pct === 100 ? `${T.status.green}1A` : `${T.accent.primary}1A`, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${pct === 100 ? T.status.green : T.accent.primary}40` }}>
@@ -665,34 +807,6 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                 </div>
                             </div>;
                         })()}
-
-                        {/* Financial Profile */}
-                        <div>
-                            <span style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginLeft: 16, marginBottom: 8, display: "block", letterSpacing: "0.03em", textTransform: "uppercase" }}>Financial Profile</span>
-                            <div style={{ background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, overflow: "hidden" }}>
-                                {[
-                                    { id: "income", label: "Income & Cash Flow", icon: Briefcase, color: T.accent.emerald },
-                                    { id: "debts", label: "Debts & Liabilities", icon: Landmark, color: T.status.red },
-                                    { id: "targets", label: "Savings Targets", icon: Target, color: T.status.blue },
-                                    { id: "rules", label: "Custom Rules", icon: Settings, color: T.status.amber }
-                                ].map((item, i, arr) => (
-                                    <button key={item.id} onClick={() => { setActiveSegment("finance"); setFinanceTab(item.id); navDir.current = 'forward'; setActiveMenu(item.id); haptic.light(); }}
-                                        style={{
-                                            margin: 0, width: "100%", padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
-                                            background: "transparent", border: "none", borderBottom: i < arr.length - 1 ? `1px solid ${T.border.subtle}` : "none",
-                                            cursor: "pointer", textAlign: "left"
-                                        }}>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                                            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${item.color}20`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                                <item.icon size={16} color={item.color} />
-                                            </div>
-                                            <span style={{ fontSize: 16, fontWeight: 600, color: T.text.primary }}>{item.label}</span>
-                                        </div>
-                                        <ChevronRight size={18} color={T.text.muted} />
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
                     </div>
                 )}
 
@@ -725,27 +839,37 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                             {currentProvider.models.map(m => {
                                 const active = aiModel === m.id;
                                 const isPro = m.tier === "pro";
-                                const locked = isPro && !proEnabled;
+                                const locked = (isPro && !proEnabled) || m.disabled;
                                 return <button key={m.id} onClick={() => { if (!locked) { setAiModel(m.id); setAiProvider("backend"); } }} style={{
                                     padding: "10px 14px", borderRadius: T.radius.md,
                                     border: `1.5px solid ${active ? T.accent.primary : T.border.default}`,
                                     background: active ? T.accent.primaryDim : T.bg.elevated,
                                     textAlign: "left", cursor: locked ? "default" : "pointer",
-                                    opacity: locked ? 0.5 : 1,
+                                    opacity: locked ? 0.4 : 1,
                                     display: "flex", justifyContent: "space-between", alignItems: "center",
                                     transition: "all .2s ease",
                                 }}>
                                     <div>
                                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                             <span style={{ fontSize: 13, fontWeight: active ? 700 : 600, color: active ? T.accent.primary : T.text.primary }}>{m.name}</span>
-                                            {isPro && <span style={{
+                                            {m.comingSoon ? <span style={{
+                                                fontSize: 8, fontWeight: 800, color: T.text.muted,
+                                                background: `${T.text.muted}15`,
+                                                border: `1px solid ${T.text.muted}30`,
+                                                padding: "1px 6px", borderRadius: 99, letterSpacing: "0.06em",
+                                            }}>SOON</span> : isPro ? <span style={{
                                                 fontSize: 8, fontWeight: 800, color: "#FFD700",
                                                 background: "linear-gradient(135deg, #FFD70020, #FFA50020)",
                                                 border: "1px solid #FFD70030",
                                                 padding: "1px 6px", borderRadius: 99, letterSpacing: "0.06em",
-                                            }}>PRO</span>}
+                                            }}>PRO</span> : <span style={{
+                                                fontSize: 8, fontWeight: 800, color: T.status.green,
+                                                background: `${T.status.green}15`,
+                                                border: `1px solid ${T.status.green}30`,
+                                                padding: "1px 6px", borderRadius: 99, letterSpacing: "0.06em",
+                                            }}>FREE</span>}
                                         </div>
-                                        <span style={{ fontSize: 10, color: T.text.dim, marginTop: 2, display: "block" }}>{m.note}</span>
+                                        <span style={{ fontSize: 10, color: T.text.dim, marginTop: 2, display: "block" }}>{m.comingSoon ? "Coming soon" : m.note}</span>
                                     </div>
                                     {active && <div style={{ width: 8, height: 8, borderRadius: "50%", background: T.accent.primary, boxShadow: `0 0 8px ${T.accent.primary}80` }} />}
                                 </button>;
@@ -896,6 +1020,15 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                 }}>
                                     <Download size={14} /> EXPORT LOG
                                 </button>
+                                <button onClick={() => setConfirmFactoryReset(true)} style={{
+                                    padding: "10px 14px", borderRadius: T.radius.md,
+                                    border: `1px solid ${T.status.red}30`, background: `${T.status.red}15`,
+                                    color: T.status.red, fontSize: 12, fontWeight: 700,
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    fontFamily: T.font.mono, cursor: "pointer", transition: "all .2s"
+                                }}>
+                                    DELETE ALL DATA
+                                </button>
                                 <button onClick={async () => {
                                     await clearLogs();
                                     setStatusMsg("Debug log cleared.");
@@ -907,15 +1040,6 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                     fontFamily: T.font.mono, cursor: "pointer", transition: "all .2s"
                                 }}>
                                     CLEAR
-                                </button>
-                                <button onClick={() => setConfirmFactoryReset(true)} style={{
-                                    padding: "10px 14px", borderRadius: T.radius.md,
-                                    border: `1px solid ${T.status.red}30`, background: `${T.status.red}15`,
-                                    color: T.status.red, fontSize: 12, fontWeight: 700,
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                    fontFamily: T.font.mono, cursor: "pointer", transition: "all .2s"
-                                }}>
-                                    DELETE ALL DATA
                                 </button>
                             </div>
                         </div>
@@ -1148,9 +1272,21 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                     <span>Terms of Service</span>
                                     <ExternalLink size={14} color={T.text.dim} />
                                 </button>
-                                <p style={{ fontSize: 11, color: T.text.muted, lineHeight: 1.4, marginTop: 4 }}>
-                                    Your data never leaves your device unless you explicitly enable cloud sync.
-                                    API requests are sent directly to your selected AI provider.
+                                <div style={{
+                                    padding: "12px 16px", borderRadius: T.radius.md,
+                                    background: `${T.status.amber}08`, border: `1px solid ${T.status.amber}20`
+                                }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: T.status.amber, marginBottom: 4 }}>⚠️ AI Disclaimer</div>
+                                    <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.5, margin: 0 }}>
+                                        Catalyst Cash is not a financial advisor and does not act in a fiduciary capacity. All AI-generated
+                                        insights are for informational and educational purposes only. Always consult a licensed financial
+                                        professional before making significant financial decisions.
+                                    </p>
+                                </div>
+                                <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.5, marginTop: 4 }}>
+                                    🔒 Your data is processed locally on your device. We never see, access, or store your financial
+                                    information. AI chat conversations auto-expire after 24 hours with PII automatically scrubbed.
+                                    API requests go directly from your device to your chosen AI provider.
                                 </p>
                             </div>
                         </div>
@@ -1626,7 +1762,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                         </div>
                                     </div>
                                     <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>CHECKING FLOOR</span>
+                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}><InlineTooltip term="Floor">CHECKING FLOOR</InlineTooltip></span>
                                         <div style={{ position: "relative" }}>
                                             <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
                                             <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.emergencyFloor || ""} onChange={e => setFinancialConfig({ ...financialConfig, emergencyFloor: parseFloat(e.target.value) || 0 })}
@@ -1647,7 +1783,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                         <p style={{ fontSize: 10, color: T.text.muted, marginTop: 4, lineHeight: 1.3 }}>Federal bracket (post-tax paychecks already assumed).</p>
                                     </div>
                                     <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>MIN LIQUIDITY</span>
+                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}><InlineTooltip term="Floor">MIN LIQUIDITY</InlineTooltip></span>
                                         <div style={{ position: "relative" }}>
                                             <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
                                             <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.minCashFloor || ""} onChange={e => setFinancialConfig({ ...financialConfig, minCashFloor: parseFloat(e.target.value) || 0 })}
@@ -2026,7 +2162,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                         </div>
                     </div>
                 </div>
-            </div >
-        </div > {/* close animation wrapper */}
-    </div >;
+            </div>
+        </div> {/* close animation wrapper */}
+    </div>;
 }

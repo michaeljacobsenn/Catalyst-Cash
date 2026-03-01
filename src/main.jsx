@@ -9,5 +9,10 @@ import { SplashScreen } from '@capacitor/splash-screen';
 const root = createRoot(document.getElementById('root'));
 root.render(<App />);
 
-// Hide splash after React renders
-SplashScreen.hide({ fadeOutDuration: 300 }).catch(() => {});
+// Hide splash AFTER React has had time to mount and paint.
+// Without this delay, iOS 18 WKWebView shows a white flash or crashes
+// because the DOM isn't ready when the splash is dismissed.
+setTimeout(() => {
+  SplashScreen.hide({ fadeOutDuration: 300 }).catch(() => {});
+}, 600);
+

@@ -3,16 +3,16 @@ import { T } from "../constants.js";
 import { AI_PROVIDERS } from "../providers.js";
 import { db } from "../utils.js";
 import {
-    PageWelcome, PageImport, PageIncome,
-    PageAI, PageSecurity, PageDone
+    PageWelcome, PageImport, PagePass1,
+    PagePass2, PagePass3, PageDone
 } from "./SetupWizardPages.jsx";
 
 const PAGES = [
-    { id: "welcome", emoji: "👋", title: "Welcome", subtitle: "Your AI-powered financial co-pilot." },
+    { id: "welcome", emoji: "👋", title: "Welcome", subtitle: "AI-powered financial intelligence." },
     { id: "import", emoji: "📥", title: "Import Data", subtitle: "Already have a backup? Skip manual entry." },
-    { id: "income", emoji: "💰", title: "Income", subtitle: "How and when do you get paid?" },
-    { id: "ai", emoji: "🤖", title: "AI Provider", subtitle: "Pick your AI. Gemini is free." },
-    { id: "security", emoji: "🔒", title: "Security", subtitle: "Keep your data safe." },
+    { id: "pass1", emoji: "⚡️", title: "Pass 1: Core Profile", subtitle: "Income, pay schedule, and spending allowances." },
+    { id: "pass2", emoji: "🎯", title: "Pass 2: Safety Targets", subtitle: "Floor limits, reserves, and tax optimization." },
+    { id: "pass3", emoji: "⚙️", title: "Pass 3: Power Features", subtitle: "Bank sync, retirement, AI engine, and security." },
     { id: "done", emoji: "🎉", title: "All Set!", subtitle: "" },
 ];
 const TOTAL = PAGES.length;
@@ -59,6 +59,24 @@ export default function SetupWizard() {
     const { setOnboardingComplete } = useNavigation();
     const toast = useToast();
     const onComplete = () => setOnboardingComplete(true);
+
+    // Called from Import page "Go to Dashboard" — saves data and exits directly
+    const skipToDashboard = async () => {
+        setSaving(true);
+        try {
+            // Save AI provider + model defaults
+            await db.set("ai-provider", ai.aiProvider);
+            await db.set("ai-model", ai.aiModel);
+            // Mark onboarding complete so wizard never shows again
+            await db.set("onboarding-complete", true);
+            // Exit the wizard directly
+            setIsExiting(true);
+            setTimeout(() => window.location.reload(), 300);
+        } catch (e) {
+            toast?.error("Save failed: " + (e.message || "unknown error"));
+        }
+        setSaving(false);
+    };
 
     const [step, setStep] = useState(0);
     const [saving, setSaving] = useState(false);
@@ -228,23 +246,32 @@ export default function SetupWizard() {
                             <PageWelcome onNext={next} />
                         )}
                         {pageId === "import" && (
-                            <PageImport onNext={next} toast={toast} onComplete={() => { saveAndFinish(); }} />
+                            <PageImport onNext={next} toast={toast} onComplete={skipToDashboard} />
                         )}
-                        {pageId === "income" && (
-                            <PageIncome
-                                data={income} onChange={updateIncome}
+                        {pageId === "pass1" && (
+                            <PagePass1
+                                data={{ ...income, ...spending }}
+                                onChange={(k, v) => {
+                                    if (k in income) updateIncome(k, v);
+                                    else updateSpending(k, v);
+                                }}
                                 onNext={next} onBack={back} onSkip={skip}
                             />
                         )}
-                        {pageId === "ai" && (
-                            <PageAI
-                                data={ai} onChange={updateAi}
+                        {pageId === "pass2" && (
+                            <PagePass2
+                                data={{ ...income, ...spending }}
+                                onChange={(k, v) => {
+                                    if (k in income) updateIncome(k, v);
+                                    else updateSpending(k, v);
+                                }}
                                 onNext={next} onBack={back} onSkip={skip}
                             />
                         )}
-                        {pageId === "security" && (
-                            <PageSecurity
-                                data={security} onChange={updateSecurity}
+                        {pageId === "pass3" && (
+                            <PagePass3
+                                ai={ai} security={security} spending={spending}
+                                updateAi={updateAi} updateSecurity={updateSecurity} updateSpending={updateSpending}
                                 onNext={handleSecurityNext}
                                 onBack={back}
                                 onSkip={handleSecuritySkip}

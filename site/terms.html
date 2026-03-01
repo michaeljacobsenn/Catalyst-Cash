@@ -41,8 +41,9 @@
 
     p,
     li {
-      line-height: 1.6;
+      line-height: 1.7;
       color: #94A3B8;
+      font-size: 14px;
     }
 
     a {
@@ -70,67 +71,171 @@
       margin: 16px 0;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     }
+
+    .warning {
+      border-color: #F59E0B;
+      background: rgba(245, 158, 11, 0.03);
+    }
+
+    strong {
+      color: #E2E8F0;
+    }
+
+    ul {
+      padding-left: 20px;
+    }
   </style>
 </head>
 
 <body>
   <div class="wrap">
     <h1>Catalyst Cash Terms of Service</h1>
-    <div class="meta">Effective date: 2026-02-25</div>
+    <div class="meta">Effective date: 2026-03-01 · Last updated: 2026-03-01</div>
 
     <div class="card">
-      <p>Welcome to Catalyst Cash. By downloading, accessing, or using the Application, you agree to be bound by these
-        Terms of Service. If you do not agree to these Terms, you may not use the Application.</p>
+      <p>Welcome to Catalyst Cash ("the Application", "the App"). By downloading, accessing, or using the Application,
+        you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, you may not use
+        the Application.</p>
     </div>
 
-    <h2>1. The Native Engine & AI API Providers</h2>
-    <p>Catalyst Cash is a financial software tool designed to organize, calculate, and construct financial plans. The
-      application uses a "Direct-to-Provider" method to forward these constraints to an AI provider of your choice
-      (e.g., OpenAI, Google, Anthropic). <strong>You are solely responsible for ensuring compliance with the Terms of
-        Service of your chosen third-party AI provider</strong> and for managing your own API keys or subscription fees.
+    <h2>1. Eligibility</h2>
+    <p>You must be at least 18 years old and able to lawfully enter into and form contracts under applicable law to
+      use the Application. The Application is intended for residents of the United States and is governed by U.S. law.
+      By using the Application, you represent that you meet these eligibility requirements.</p>
+
+    <h2>2. Description of Service</h2>
+    <p>Catalyst Cash is a personal financial management tool designed to help you organize, track, and analyze your
+      finances. The Application uses a "Direct-to-Provider" architecture to send your locally-entered financial data to
+      third-party AI providers of your choice for analysis. You control what data is entered and when it is shared.</p>
+
+    <h2>3. Not Professional Financial Advice — No Fiduciary Relationship</h2>
+    <div class="card warning">
+      <p style="color: #F8FAFC; margin-bottom: 0;"><strong>⚠️ IMPORTANT FINANCIAL DISCLAIMER</strong><br><br>
+        Catalyst Cash and its creators are <strong>NOT</strong> registered investment advisors, broker-dealers,
+        certified
+        financial planners, tax advisors, or fiduciaries. We do not provide personalized investment advice and
+        <strong>do not act in a fiduciary capacity</strong>.<br><br>
+        All insights, analyses, health scores, recommendations, and AI-generated outputs are for
+        <strong>informational and educational purposes only</strong>. They are not tailored to your individual financial
+        situation, risk tolerance, or investment objectives beyond the data you manually provide.<br><br>
+        <strong>You should always consult with a qualified, licensed financial professional before making any
+          significant financial decisions.</strong> All investment strategies and investments involve risk of loss.
+        Past performance is not indicative of future results.
+      </p>
+    </div>
+
+    <h2>4. AI-Generated Content & Limitations</h2>
+    <p>The Application utilizes third-party AI models (such as OpenAI GPT, Google Gemini, and Anthropic Claude) to
+      generate financial analyses and conversational responses. You acknowledge that:</p>
+    <ul>
+      <li><strong>AI outputs may be inaccurate.</strong> Large Language Models can and do make arithmetic mistakes,
+        generate "hallucinations," or produce misleading content. You agree to independently verify any calculations,
+        advice, or recommendations.</li>
+      <li><strong>AI lacks judgment.</strong> AI-generated responses lack human judgment, personal context, and
+        professional expertise. They are not a substitute for qualified financial advice.</li>
+      <li><strong>No guarantee of accuracy.</strong> We make no warranties as to the accuracy, reliability,
+        completeness,
+        or timeliness of any AI-generated output.</li>
+      <li><strong>Your responsibility.</strong> You are solely responsible for how you use AI outputs and for any
+        financial decisions you make based on them.</li>
+    </ul>
+
+    <h2>5. Third-Party AI Providers</h2>
+    <p>When you use AI features (audits, chat), your data is sent directly from your device to the AI provider you
+      selected. <strong>You are solely responsible for ensuring compliance with the Terms of Service of your chosen
+        third-party AI provider</strong> and for managing your own API keys or subscription fees. Catalyst Cash is not
+      affiliated with, endorsed by, or sponsored by any AI provider.</p>
+
+    <h2>6. Third-Party Integrations (Plaid)</h2>
+    <p>If you choose to connect bank accounts via Plaid, you authorize Plaid to access your financial account
+      information
+      in accordance with <a href="https://plaid.com/legal" target="_blank">Plaid's Terms of Service</a> and
+      <a href="https://plaid.com/legal/#end-user-privacy-policy" target="_blank">End User Privacy Policy</a>.
+      Catalyst Cash does not store your bank login credentials. We are not responsible for the accuracy or availability
+      of data retrieved from third-party financial institutions via Plaid.
     </p>
 
-    <h2>2. Not Professional Financial Advice</h2>
-    <p><strong>Catalyst Cash is not a certified financial planner, broker, or tax advisor.</strong> All insights, plans,
-      and debt strategies generated by the app and AI providers are mathematically driven suggestions meant for
-      educational and organizational purposes only. You should always consult with a licensed financial professional
-      before making any significant financial decisions.</p>
+    <h2>7. Subscriptions, Payments & Refunds</h2>
+    <p>Catalyst Cash may offer subscription tiers ("Free" and "Pro"). All subscriptions are managed through Apple's
+      App Store and are subject to Apple's terms and refund policies. Subscription fees are charged in U.S. Dollars.
+      You may cancel your subscription at any time through your device's subscription settings. If you use your own
+      API key, usage costs are determined by your AI provider and are your sole responsibility.</p>
 
-    <h2>3. Accuracy of Output & Algorithmic Liability</h2>
-    <p>The calculations and forecasts (such as the Cash Flow Calendar and Monte Carlo Simulator) depend entirely on the
-      accuracy of the data you provide. We do not warrant or guarantee that any mathematical output, tax estimate, or
-      financial prediction made by the app or its associated large language models will be 100% accurate, flawless, or
-      free of "hallucinations." <strong>By using Catalyst Cash, you explicitly acknowledge that Large Language Models
-        can and will make arithmetic mistakes. You agree to hold the developer(s) of Catalyst Cash completely harmless
-        for any and all algorithmic errors, UI bugs, or incorrect financial guidance that results in capital
-        loss.</strong></p>
+    <h2>8. User Conduct</h2>
+    <p>You agree not to:</p>
+    <ul>
+      <li>Decompile, reverse engineer, disassemble, or modify the Application</li>
+      <li>Use the Application for any illegal, fraudulent, or unauthorized purpose</li>
+      <li>Attempt to circumvent subscription limits, rate limits, or access controls</li>
+      <li>Distribute, sublicense, or commercially exploit the Application without written consent</li>
+      <li>Use the Application to generate financial advice for others in a professional capacity</li>
+    </ul>
 
-    <h2>4. Liability & Data Loss</h2>
-    <p>Catalyst Cash stores your data locally on your device. We do not actively maintain cloud backups of your personal
-      financial information unless you explicitly trigger a backup to your device's native file system or a paired
-      provider like iCloud. <strong>We are not liable for any data loss, financial damages, or penalties you may suffer
-        as a result of using the Application, lost passwords, or misplaced API keys.</strong></p>
+    <h2>9. Intellectual Property</h2>
+    <p>The Application, including its design, code, and content, is the property of its creators and is protected by
+      copyright, trademark, and other intellectual property laws. You are granted a limited, revocable, non-exclusive,
+      non-transferable license to use the Application for personal, non-commercial use.</p>
 
-    <h2>5. Subscriptions and Access Limits</h2>
-    <p>Should you choose to subscribe to a hosted tier instead of supplying your own API key, your usage will be subject
-      to reasonable rate limits designed to prevent abuse and ensure uptime for all customers. Refusal to abide by these
-      limits constitutes grounds for account termination without refund.</p>
+    <h2>10. Data & Privacy</h2>
+    <p>Your use of the Application is also governed by our <a href="privacy.html">Privacy Policy</a>. Your data is
+      stored locally on your device. We do not maintain servers that process or retain your personal financial
+      information. You are solely responsible for maintaining the security of your device and any data stored on it.</p>
 
-    <h2>6. Limitation of Liability</h2>
-    <p>To the maximum extent permitted by applicable law, in no event shall Catalyst Cash, its creators, affiliates, or
-      licensors be liable for any indirect, punitive, incidental, special, consequential, or exemplary damages,
-      including without limitation damages for loss of profits, goodwill, use, data, or other intangible losses.
-      <strong>Under no circumstances will Catalyst Cash be responsible for any damage, loss, or injury resulting from
-        hacking, tampering, or other unauthorized access or use of the service or your account or the information
-        contained therein.</strong>
-    </p>
+    <h2>11. Limitation of Liability</h2>
+    <p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL CATALYST CASH, ITS CREATORS, AFFILIATES,
+      DIRECTORS, OFFICERS, EMPLOYEES, AGENTS, OR LICENSORS BE LIABLE FOR ANY INDIRECT, PUNITIVE, INCIDENTAL, SPECIAL,
+      CONSEQUENTIAL, OR EXEMPLARY DAMAGES, INCLUDING WITHOUT LIMITATION DAMAGES FOR LOSS OF PROFITS, GOODWILL, USE,
+      DATA, OR OTHER INTANGIBLE LOSSES, ARISING OUT OF OR IN CONNECTION WITH YOUR USE OF, OR INABILITY TO USE, THE
+      APPLICATION OR ITS CONTENT.</p>
+    <p><strong>Under no circumstances will Catalyst Cash be responsible for any damage, loss, or injury resulting
+        from:</strong></p>
+    <ul>
+      <li>Inaccurate AI-generated financial advice, calculations, or recommendations</li>
+      <li>Errors in data you enter into the Application</li>
+      <li>Unauthorized access to your device or account</li>
+      <li>Data loss due to device failure, software updates, or user error</li>
+      <li>Financial losses resulting from decisions made using the Application's outputs</li>
+      <li>Unavailability or changes to third-party AI providers or financial data services</li>
+    </ul>
 
-    <h2>7. Changes to Terms & Future Service Evolution</h2>
-    <p>Catalyst Cash is continuously evolving. We reserve the right to modify these Terms at any time, including and
-      especially to accommodate <strong>future transitions to hosted backend architectures, cloud synchronization
-        features, or new premium subscription tiers.</strong> If we make material changes to how your data is processed
-      or stored, we will notify you within the Application or by updating the Effective Date of this document. Your
-      continued use of the Application following such updates signifies your acceptance of any revisions.</p>
+    <h2>12. Indemnification</h2>
+    <p>You agree to indemnify, defend, and hold harmless Catalyst Cash and its creators, affiliates, directors,
+      officers,
+      employees, and agents from and against any and all claims, damages, obligations, losses, liabilities, costs, or
+      debt arising from: (a) your use of the Application; (b) your violation of these Terms; (c) your violation of any
+      third-party right, including any intellectual property or privacy right; or (d) any claim that your use of the
+      Application caused damage to a third party.</p>
+
+    <h2>13. Disclaimer of Warranties</h2>
+    <p>THE APPLICATION AND ALL CONTENT ARE PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER
+      EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+      PURPOSE, TITLE, AND NON-INFRINGEMENT. WE DO NOT WARRANT THAT THE APPLICATION WILL BE UNINTERRUPTED, ERROR-FREE,
+      OR FREE OF HARMFUL COMPONENTS.</p>
+
+    <h2>14. Dispute Resolution</h2>
+    <p>Any disputes arising from or relating to these Terms shall be resolved through binding arbitration in accordance
+      with the rules of the American Arbitration Association (AAA), rather than in court, except that either party may
+      seek injunctive relief in court for intellectual property matters. THE PARTIES WAIVE THEIR RIGHT TO A JURY TRIAL
+      AND TO PARTICIPATE IN A CLASS ACTION.</p>
+
+    <h2>15. Governing Law</h2>
+    <p>These Terms shall be governed by and construed in accordance with the laws of the State of Delaware, without
+      regard to conflict of law principles.</p>
+
+    <h2>16. Severability</h2>
+    <p>If any provision of these Terms is found to be unenforceable, the remaining provisions shall continue in full
+      force and effect.</p>
+
+    <h2>17. Changes to Terms</h2>
+    <p>Catalyst Cash is continuously evolving. We reserve the right to modify these Terms at any time. If we make
+      material changes, we will notify you within the Application or by updating the Effective Date. Your continued use
+      of the Application following such updates constitutes acceptance of the revised Terms.</p>
+
+    <h2>18. Termination</h2>
+    <p>We reserve the right to suspend or terminate your access to the Application at any time, with or without cause,
+      and with or without notice. Upon termination, your right to use the Application ceases immediately. Provisions
+      that by their nature should survive termination (including limitations of liability, indemnification, and
+      dispute resolution) shall survive.</p>
 
     <h2>Contact</h2>
     <p>If you have any questions about these Terms, please contact us at: <strong>support@catalystcash.app</strong></p>

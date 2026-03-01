@@ -18,7 +18,8 @@
             padding: 0;
             width: 100%;
             height: 100%;
-            background-color: #06080F;
+            background-color: #04060A;
+            /* Deepest black/blue */
             color: #94A3B8;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             -webkit-print-color-adjust: exact;
@@ -34,8 +35,8 @@
         .page {
             position: relative;
             box-sizing: border-box;
-            padding: 20px 40px;
-            background-color: #06080F;
+            padding: 0 40px;
+            background-color: #04060A;
         }
 
         /* Typography */
@@ -55,7 +56,6 @@
             margin-bottom: 70px;
             page-break-after: always;
             height: calc(100vh - 80px);
-            /* Fill the page */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -67,13 +67,14 @@
             height: 140px;
             margin-bottom: 30px;
             object-fit: contain;
+            filter: drop-shadow(0 0 40px rgba(0, 229, 255, 0.2));
         }
 
         .label-pill {
             display: inline-block;
-            border: 1px solid rgba(157, 114, 234, 0.4);
-            color: #D8B4FE;
-            background: rgba(157, 114, 234, 0.05);
+            border: 1px solid rgba(0, 229, 255, 0.4);
+            color: #00E5FF;
+            background: rgba(0, 229, 255, 0.05);
             padding: 6px 18px;
             border-radius: 999px;
             font-size: 10px;
@@ -82,10 +83,11 @@
             font-weight: 700;
             margin-bottom: 24px;
             font-family: 'JetBrains Mono', monospace;
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.1);
         }
 
         h1 {
-            color: #9D72EA;
+            color: #FFFFFF;
             font-size: 56px;
             font-weight: 800;
             letter-spacing: -2px;
@@ -102,13 +104,25 @@
 
         /* Section Containers */
         .section-card {
-            border: 1px solid rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.05);
             border-radius: 20px;
             padding: 30px;
             background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
             margin-bottom: 24px;
             page-break-inside: avoid;
             break-inside: avoid;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .section-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
         }
 
         .section-header {
@@ -118,7 +132,7 @@
         }
 
         .section-number {
-            color: rgba(157, 114, 234, 0.4);
+            color: rgba(0, 229, 255, 0.4);
             font-size: 24px;
             font-family: 'JetBrains Mono', monospace;
             font-weight: 700;
@@ -137,7 +151,7 @@
             color: #CBD5E1;
             font-size: 14px;
             line-height: 1.6;
-            margin-bottom: 20px;
+            margin-bottom: 24px;
         }
 
         p {
@@ -165,12 +179,12 @@
         }
 
         code {
-            background: rgba(157, 114, 234, 0.15);
+            background: rgba(0, 229, 255, 0.1);
             padding: 3px 6px;
             border-radius: 4px;
             font-family: 'JetBrains Mono', monospace;
             font-size: 12px;
-            color: #D8B4FE;
+            color: #00E5FF;
             font-weight: 600;
         }
 
@@ -192,6 +206,7 @@
             border: 1px solid rgba(255, 255, 255, 0.04);
             border-radius: 16px;
             padding: 24px;
+            transition: all 0.3s ease;
         }
 
         .feature-box h3 {
@@ -199,6 +214,9 @@
             font-size: 16px;
             font-weight: 600;
             margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .feature-box p {
@@ -210,13 +228,25 @@
         .insight-box {
             margin-top: 24px;
             border-radius: 12px;
-            border: 1px solid rgba(80, 227, 194, 0.2);
-            background: rgba(80, 227, 194, 0.05);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            background: rgba(16, 185, 129, 0.05);
             padding: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .insight-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: #10B981;
         }
 
         .insight-header {
-            color: #50E3C2;
+            color: #10B981;
             font-size: 10px;
             font-family: 'JetBrains Mono', monospace;
             font-weight: 700;
@@ -228,6 +258,60 @@
         .insight-box p {
             color: #E2E8F0;
             margin: 0;
+        }
+
+        /* Pro vs Free Section */
+        .tier-box {
+            border-radius: 16px;
+            padding: 24px;
+            position: relative;
+        }
+
+        .tier-free {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .tier-pro {
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.05), rgba(255, 165, 0, 0.05));
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            box-shadow: 0 4px 30px rgba(255, 215, 0, 0.05);
+        }
+
+        .tier-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .tier-pro .tier-header {
+            border-bottom-color: rgba(255, 215, 0, 0.15);
+        }
+
+        .tier-box ul {
+            padding-left: 0;
+            list-style: none;
+        }
+
+        .tier-box li {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 12px;
+            color: #E2E8F0;
+        }
+
+        .tier-box li::before {
+            content: '✓';
+            color: #10B981;
+            font-weight: 800;
+        }
+
+        .tier-pro li::before {
+            color: #FFD700;
         }
 
         .step-list {
@@ -251,13 +335,13 @@
             width: 28px;
             height: 28px;
             border-radius: 14px;
-            background: #9D72EA;
+            background: #00E5FF;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
+            color: #04060A;
             font-size: 12px;
-            font-weight: 700;
+            font-weight: 800;
             font-family: 'JetBrains Mono', monospace;
             position: absolute;
             top: 24px;
@@ -302,6 +386,7 @@
             font-family: 'JetBrains Mono', monospace;
             font-size: 11px;
             padding-top: 40px;
+            padding-bottom: 40px;
             border-top: 1px dashed rgba(255, 255, 255, 0.05);
             margin-top: 20px;
         }
@@ -309,7 +394,7 @@
         /* ── Mobile Optimization ── */
         @media screen and (max-width: 768px) {
             .page {
-                padding: 20px 16px;
+                padding: 0 16px;
             }
 
             .header-wrapper {
@@ -367,9 +452,9 @@
         }
 
         .setup-warning {
-            background: rgba(224, 168, 77, 0.1);
-            border: 1px solid rgba(224, 168, 77, 0.3);
-            border-left: 4px solid #E0A84D;
+            background: rgba(0, 229, 255, 0.05);
+            border: 1px solid rgba(0, 229, 255, 0.3);
+            border-left: 4px solid #00E5FF;
             padding: 18px 20px;
             border-radius: 8px;
             margin: 30px 0;
@@ -379,9 +464,12 @@
 
         .setup-warning h3 {
             margin-top: 0;
-            color: #E0A84D;
+            color: #00E5FF;
             font-size: 16px;
             margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .setup-warning p {
@@ -410,20 +498,23 @@
             </div>
             <p class="lead">Catalyst Cash is an elite <strong>Financial Command Center</strong> designed for individuals
                 who demand absolute control and deterministic wealth growth. It treats your personal capital as a
-                high-performance engine.</p>
+                high-performance engine driven by localized AI.</p>
 
             <div class="grid-3">
                 <div class="feature-box">
-                    <h3>Native Edge</h3>
-                    <p>Zero data leaves your device. Biometric Lock ensures your Private Rules stay private.</p>
+                    <h3>🛡️ Zero-Knowledge</h3>
+                    <p>Financial data strictly never touches our servers. Your profile lives and breathes securely on
+                        your device.</p>
                 </div>
                 <div class="feature-box">
-                    <h3>Manual Freedom</h3>
-                    <p>Designed to bypass cloud limitations using <strong>Manual Clipboard Mode</strong>.</p>
+                    <h3>🧠 Catalyst AI</h3>
+                    <p>Integrated intelligence engine that reads your entire portfolio simultaneously to find deep
+                        operational efficiencies.</p>
                 </div>
                 <div class="feature-box">
-                    <h3>Waterfall Logic</h3>
-                    <p>Hierarchical decision tree that ensures survival before aggressive payoffs.</p>
+                    <h3>🌉 Direct-to-Provider</h3>
+                    <p>API requests bypass standard middle-men and connect securely with top-tier LLMs for absolute
+                        privacy.</p>
                 </div>
             </div>
         </div>
@@ -433,43 +524,48 @@
                 <span class="section-number">02 /</span>
                 <h2 class="section-title">The Weekly Operating Routine</h2>
             </div>
-            <p class="lead">Follow this 4-step sequence every Sunday morning to maintain total fiscal agency.</p>
+            <p class="lead">Execute this 4-step sequence every Sunday morning to maintain total fiscal agency and
+                eliminate financial blind spots.</p>
 
             <div class="step-list">
                 <div class="step-item">
                     <div class="step-circle">1</div>
                     <div class="step-content">
-                        <h3>Snapshot</h3>
-                        <p>Enter current balances. Toggle <code>Privacy Mode</code> for public environments.</p>
+                        <h3>Sync Plaid or Manual</h3>
+                        <p>Pull live balances from Plaid instantly, or manually enter your cash flow snapshot if running
+                            fully disconnected.</p>
                     </div>
                 </div>
                 <div class="step-item">
                     <div class="step-circle">2</div>
                     <div class="step-content">
-                        <h3>The Bundle</h3>
-                        <p>Tap <code>Download Instructions (.txt)</code> and upload to your AI once per project.</p>
+                        <h3>Run the AI Audit</h3>
+                        <p>Tap the center button. Catalyst AI analyzes your cash constraints against all debts,
+                            renewals, and savings rules.</p>
                     </div>
                 </div>
                 <div class="step-item">
                     <div class="step-circle">3</div>
                     <div class="step-content">
-                        <h3>The Audit</h3>
-                        <p>Tap <code>Copy Weekly Prompt</code> and paste it into the AI chat for live logic.</p>
+                        <h3>Act on Insights</h3>
+                        <p>The dashboard updates immediately with your exact availability after obligations. Action the
+                            AI's guidance.</p>
                     </div>
                 </div>
                 <div class="step-item">
                     <div class="step-circle">4</div>
                     <div class="step-content">
-                        <h3>The Bridge</h3>
-                        <p>Paste the response back into <code>Import AI Result</code> to refresh your dashboard.</p>
+                        <h3>Contextual Chat</h3>
+                        <p>Have questions? Open the Ask AI tab. The system has 100% context of your profile, instantly.
+                        </p>
                     </div>
                 </div>
             </div>
 
             <div class="insight-box">
-                <div class="insight-header">Auditor Insight</div>
-                <p>By using the <strong>.txt Instruction Bundle</strong>, you give the AI persistent memory of your
-                    complex rules, making updates lightning fast.</p>
+                <div class="insight-header">Chat Ephemerality Protocol</div>
+                <p><strong>To maximize privacy</strong>, all AI chat conversations are automatically destroyed after 24
+                    hours. Your sensitive PII is intrinsically scrubbed before any local storage occurs.</p>
             </div>
         </div>
 
@@ -478,135 +574,143 @@
                 <span class="section-number">03 /</span>
                 <h2 class="section-title">Security & Fast Access</h2>
             </div>
-            <p class="lead">The Security Suite protects your net worth and private rules using native iOS/Mac
-                biometrics.</p>
+            <p class="lead">The Security System protects your net worth and private rules using edge biometrics.</p>
 
             <ul>
-                <li><strong>Passcode Setup:</strong> Go to <code>Settings</code> → <code>Require Passcode</code>. Create
-                    a 4-digit PIN. This is the fail-safe if biometrics fail.</li>
-                <li><strong>Biometric Enrollment:</strong> Toggle <code>Enable Face ID</code>. The system will trigger a
-                    native iOS prompt to link your biometrics to the application state.</li>
-                <li><strong>Relock Precision:</strong> Adjust the <code>Relock After</code> timer. Options range from
-                    <code>Immediately</code> (Max Security) to <code>1 Hour</code> (Workflow Efficiency).
+                <li><strong>Passcode Lock:</strong> Found in <code>Settings</code>. Create a 4-digit PIN to establish
+                    the base cryptographic wall.</li>
+                <li><strong>Biometric Enforcement:</strong> Toggle <code>Face ID / Touch ID</code>. The system links
+                    your biometrics to unlock the application instantly.</li>
+                <li><strong>Relock Precision:</strong> Adjust the <code>Auto-Lock After</code> timer. Options range from
+                    <code>Immediately</code> (Max Security) to <code>15 Minutes</code> (Workflow Efficiency).
                 </li>
+                <li><strong>Privacy Mode:</strong> Found in the AI Chat. When toggled, zero chat history is committed to
+                    the local disk — pure ephemeral RAM execution.</li>
             </ul>
         </div>
 
         <div class="section-card">
             <div class="section-header">
                 <span class="section-number">04 /</span>
-                <h2 class="section-title">AI Navigation Shortcuts</h2>
+                <h2 class="section-title">Free vs. Pro Architecture</h2>
             </div>
-            <p class="lead">Speed is the primary variable in maintaining a weekly routine. Use these integrated
-                shortcuts.</p>
+            <p class="lead">Capitalize on the intelligence tier that matches your operational intensity.</p>
 
             <div class="grid-2">
-                <div class="feature-box">
-                    <h3>Claude Shortcut</h3>
-                    <p>Tap the <strong>Claude</strong> button in Results View to instantly launch the official Anthropic
-                        app with your payload ready.</p>
+                <div class="tier-box tier-free">
+                    <div class="tier-header">
+                        <h3 style="margin:0; color:#F8FAFC; font-size:20px;">Free Tier</h3>
+                        <span
+                            style="font-size:12px; font-weight:700; background:rgba(255,255,255,0.1); padding:4px 10px; border-radius:99px;">$0
+                            / mo</span>
+                    </div>
+                    <ul>
+                        <li><strong style="color:white">3</strong> Full AI Audits per month</li>
+                        <li><strong style="color:white">10</strong> Asset manual refreshes/mo</li>
+                        <li>On-device strict privacy</li>
+                        <li>Powered by standard intelligence models (e.g. Gemini Flash)</li>
+                        <li>Full Plaid Integration</li>
+                    </ul>
                 </div>
-                <div class="feature-box">
-                    <h3>ChatGPT Shortcut</h3>
-                    <p>Launches the <strong>OpenAI</strong> mobile app and triggers the system clipboard for immediate
-                        pasting.</p>
+                <div class="tier-box tier-pro">
+                    <div class="tier-header">
+                        <h3 style="margin:0; color:#FFD700; font-size:20px;">Catalyst Pro</h3>
+                        <span
+                            style="font-size:12px; font-weight:800; color:#FFD700; background:rgba(255,215,0,0.1); padding:4px 10px; border-radius:99px; border:1px solid rgba(255,215,0,0.3);">PREMIUM</span>
+                    </div>
+                    <ul>
+                        <li><strong>Unlimited</strong> AI Audits</li>
+                        <li><strong>Unlimited</strong> Asset refreshes</li>
+                        <li>Access elite reasoning engines: <strong>GPT-4o</strong> & <strong>Claude 3.5 Sonnet</strong>
+                        </li>
+                        <li>Priority API execution queue</li>
+                        <li>Advanced chart rendering</li>
+                    </ul>
                 </div>
             </div>
 
             <div class="insight-box"
-                style="border-color: rgba(157, 114, 234, 0.3); background: rgba(157, 114, 234, 0.05);">
-                <div class="insight-header" style="color: #9D72EA;">Shortcut Tip</div>
-                <p>Turn on <code>JSON Output</code> in Settings for a perfectly structured AI response that the app can
-                    parse with 100% accuracy.</p>
+                style="border-color: rgba(0, 229, 255, 0.3); background: rgba(0, 229, 255, 0.05); margin-top:24px;">
+                <div class="insight-header" style="color: #00E5FF;">Bring Your Own Key (BYOK)</div>
+                <p>Advanced users can entirely bypass the subscription by supplying their own OpenAI or Anthropic API
+                    key in Settings. You pay the provider directly at developer cost.</p>
             </div>
         </div>
 
         <div class="section-card">
             <div class="section-header">
                 <span class="section-number">05 /</span>
-                <h2 class="section-title">Building Your Portfolio</h2>
+                <h2 class="section-title">Building Your Ledger</h2>
             </div>
-            <p class="lead">A high-fidelity audit requires accurate card and subscription data. Initialize these first.
-            </p>
+            <p class="lead">A high-fidelity AI audit demands exact constraints. The more data you map, the higher the
+                intelligence output.</p>
 
             <ul style="margin-bottom: 24px;">
-                <li><strong>Card Portfolio:</strong> Add cards with their <code>Credit Limit</code> and
-                    <code>APR</code>. Toggle <code>Waived?</code> if you have a first-year-free promotion active.
+                <li><strong>Income & Budgets:</strong> Map your <code>Income Sources</code> (Salary, Contracts,
+                    Dividends) and set maximum weekly thresholds in your <code>Budget Categories</code>.</li>
+                <li><strong>Card Portfolio:</strong> Add cards detailing their <code>Limit</code> and
+                    <code>APR</code>. The AI maps utilization strictly against your credit health. Toggle
+                    <code>Waived</code> to ignore 0% APR promo fees.
                 </li>
-                <li><strong>Renewals & Bills:</strong> Group items into <code>Categories</code> (Fixed, Subs, Sinking
-                    Funds). Use the <code>Charged To</code> selector to link bills to specific cards.</li>
-                <li><strong>Vaults & Sinking Funds:</strong> Define your long-term needs in the Tracker. The AI uses
-                    this to calculate your <strong>weekly pacing requirement</strong>.</li>
+                <li><strong>Renewals Hub:</strong> Log every subscription and recurring bill. Assign exactly which card
+                    gets hit. The AI calculates rolling 7-day obligations.</li>
+                <li><strong>Assets & Liabilities:</strong> Connect your Brokerage, 401(k), Crypto, and Non-Card Debts
+                    (Mortgage, Auto, Student). Liquid and illiquid capital are separated for safety calculations.</li>
             </ul>
-
-            <div class="grid-2">
-                <div class="feature-box">
-                    <h3>Promo APR Support</h3>
-                    <p>Detected 0% APR offers are tracked with expiration dates to ensure they are cleared before the
-                        interest-clock expires.</p>
-                </div>
-                <div class="feature-box">
-                    <h3>Waived Fee Logic</h3>
-                    <p>Cards marked "Waived" are excluded from total annual fee projections until you manually toggle
-                        the status off.</p>
-                </div>
-            </div>
         </div>
 
         <div class="section-card">
             <div class="section-header">
                 <span class="section-number">06 /</span>
-                <h2 class="section-title">Data Governance</h2>
+                <h2 class="section-title">Data Sovereignty</h2>
             </div>
-            <p class="lead">You own your data. Catalyst Cash provides tools for backup, migration, and purging.</p>
+            <p class="lead">Total data ownership. Catalyst Cash provides tools for native encrypted backups and
+                migrations.</p>
 
             <div class="grid-3" style="margin-bottom: 30px;">
                 <div class="feature-box">
-                    <h3>File System</h3>
-                    <p>Data automatically saves securely on your device. No cloud sync required.</p>
+                    <h3>iCloud Auto-Sync</h3>
+                    <p>Link your Apple ID to continuously background-sync encrypted payloads securely to your private
+                        iCloud Drive.</p>
                 </div>
                 <div class="feature-box">
-                    <h3>JSON Export</h3>
-                    <p>Tap <code>EXPORT JSON</code> to save a human readable file of your entire system state to your
-                        device.</p>
+                    <h3>Excel I/O Matrix</h3>
+                    <p>Download your entire setup as a multi-sheet <code>Excel (.xlsx)</code>. Edit in bulk, and push it
+                        back into the App seamlessly.</p>
                 </div>
                 <div class="feature-box">
-                    <h3>The Restore</h3>
-                    <p>Tap <code>RESTORE</code> and select a previous JSON backup to instantly rebuild your portfolio.
-                    </p>
+                    <h3>.enc Native Archival</h3>
+                    <p>Generate AES-256 encrypted JSON blobs. Store them anywhere — a cold-storage vault, Google Drive,
+                        or a USB stick.</p>
                 </div>
             </div>
 
             <div class="feature-box danger-zone">
-                <div class="danger-header">Danger Zone — Irreversible Actions</div>
+                <div class="danger-header">Danger Zone — Eradication Protocols</div>
                 <div class="grid-2">
                     <div>
                         <h3 style="color: #F8FAFC; font-size: 14px; margin-bottom: 6px;">Clear Audit History</h3>
-                        <p style="color: #64748B; font-size: 12px;">Deletes only the snapshots. Keeps cards, settings,
-                            and renewals intact.</p>
+                        <p style="color: #64748B; font-size: 12px;">Destroys all historical AI snapshot data. Keeps your
+                            configured cards, settings, and portfolios fully intact.</p>
                     </div>
                     <div>
                         <h3 style="color: #F8FAFC; font-size: 14px; margin-bottom: 6px;">Factory Reset</h3>
-                        <p style="color: #64748B; font-size: 12px;">Wipes 100% of data. Returns the application to a
-                            blank state.</p>
+                        <p style="color: #64748B; font-size: 12px;">Thermonuclear wipe. Eradicates 100% of data, keys,
+                            and history immediately. Returns app to blank factory state.</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="setup-warning"
-            style="background: rgba(224, 168, 77, 0.1); border: 1px solid rgba(224, 168, 77, 0.3); border-left: 4px solid #E0A84D; padding: 18px 20px; border-radius: 8px; margin: 30px 0;">
-            <h3 style="margin-top: 0; color: #E0A84D; font-size: 16px; margin-bottom: 8px;">⚠️ Critical Pre-Requisite:
-                Configure Your Profile</h3>
-            <p style="margin: 0; color: #E4E6F0; font-size: 14px; line-height: 1.5;">Before running your first audit, it
-                is mandatory to fully configure your <strong>Financial Profile</strong> in the Settings tab. The AI
-                engine requires exact inputs regarding your strict weekly spending limits, savings targets, and debt
-                allocations to provide mathematical accuracy. If your profile is incomplete, the system will reject or
-                miscalculate your audit.</p>
+        <div class="setup-warning">
+            <h3>⚡ Core Optimization Rule</h3>
+            <p><strong>The Emergency Floor is absolute.</strong> The AI is programmed to treat your Floor setting as a
+                strict survival limit. If your Checking Balance combined with 7-Day impending obligations breaches this
+                floor, the AI will alert <strong>Code Red</strong> and halt optional allocations. Respect the floor.</p>
         </div>
 
         <div class="footer-meta">
-            Catalyst Cash Operational Systems // v1.3.1-BETA
+            Catalyst Cash Operational Systems // v1.5.2
         </div>
     </div>
 </body>

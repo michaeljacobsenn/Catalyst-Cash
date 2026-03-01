@@ -12,9 +12,10 @@ export const AI_PROVIDERS = [
         badge: "✨ Default",
         models: [
             { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", note: "Fast reasoning — included free", tier: "free", provider: "gemini" },
+            { id: "gpt-4o-mini", name: "GPT-4o mini", note: "OpenAI quality — included free", tier: "free", provider: "openai" },
             { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", note: "Advanced deep reasoning", tier: "pro", provider: "gemini" },
             { id: "o3-mini", name: "OpenAI o3-mini", note: "OpenAI reasoning engine", tier: "pro", provider: "openai" },
-            { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", note: "Anthropic's top reasoning model", tier: "pro", provider: "claude" },
+            { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", note: "Anthropic's latest reasoning model", tier: "pro", provider: "claude", disabled: true, comingSoon: true },
         ],
         defaultModel: "gemini-2.5-flash",
         supportsStreaming: true,

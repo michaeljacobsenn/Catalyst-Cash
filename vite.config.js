@@ -1,15 +1,15 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// Strip 'crossorigin' from <script> tags — it causes issues in Capacitor's
+// Strip 'crossorigin' from <script> and <link> tags — it causes issues in Capacitor's
 // WKWebView which serves content from capacitor:// scheme.
 function stripCrossorigin() {
   return {
     name: 'strip-crossorigin',
     enforce: 'post',
     transformIndexHtml(html) {
-      // Only strip crossorigin from <script> tags, not <link> tags
-      return html.replace(/<script([^>]*) crossorigin([^>]*)>/g, '<script$1$2>');
+      // Strip crossorigin from all tags (script and link modulepreload)
+      return html.replace(/ crossorigin/g, '');
     },
   };
 }

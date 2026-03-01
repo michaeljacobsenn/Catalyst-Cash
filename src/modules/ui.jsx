@@ -49,44 +49,47 @@ export const GlobalStyles = () => (
     @keyframes slidePaneIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 
     /* ── Native iOS-style horizontal swipe transitions ── */
-    @keyframes tabSlideFromRight{from{opacity:0;transform:translateX(80px)}to{opacity:1;transform:translateX(0)}}
-    @keyframes tabSlideFromLeft{from{opacity:0;transform:translateX(-80px)}to{opacity:1;transform:translateX(0)}}
+    @keyframes tabSlideFromRight{from{opacity:0;transform:translateX(50px) scale(0.98)}to{opacity:1;transform:translateX(0) scale(1)}}
+    @keyframes tabSlideFromLeft{from{opacity:0;transform:translateX(-50px) scale(0.98)}to{opacity:1;transform:translateX(0) scale(1)}}
 
-    .slide-up{animation:slideUp .35s cubic-bezier(.16,1,.3,1) both}
+    .slide-up{animation:slideUp .4s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
     .fade-in{animation:fadeIn .4s ease both}
-    .scale-in{animation:scaleIn .3s cubic-bezier(.16,1,.3,1) both}
-    .shimmer-bg{background:linear-gradient(90deg,${T.bg.card} 30%,${T.bg.elevated} 50%,${T.bg.card} 70%);background-size:200% 100%;animation:shimmer 1.8s ease-in-out infinite}
+    .scale-in{animation:scaleIn .4s cubic-bezier(.16,1,.3,1) both}
+    .shimmer-bg{background:linear-gradient(90deg,${T.bg.card} 30%,${T.bg.elevated} 50%,${T.bg.card} 70%);background-size:200% 100%;animation:shimmer 2.5s ease-in-out 1 forwards}
     .pulse-alert{animation:pulseAlert 2s infinite}
-    .tab-transition{animation:tabSlideIn .28s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
-    .tab-slide-right{animation:tabSlideFromRight .32s cubic-bezier(.25,.46,.45,.94) both;will-change:transform,opacity}
-    .tab-slide-left{animation:tabSlideFromLeft .32s cubic-bezier(.25,.46,.45,.94) both;will-change:transform,opacity}
-    .slide-pane{animation:slidePaneIn .3s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
+    .spin{animation:spin .8s linear infinite}
+    .tab-transition{animation:tabSlideIn .35s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
+    .tab-slide-right{animation:tabSlideFromRight .4s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
+    .tab-slide-left{animation:tabSlideFromLeft .4s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
+    .slide-pane{animation:slidePaneIn .35s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
 
     /* Top 0.0001% Micro-Animations */
     .hover-card {
-      transition: border-color .3s ease, box-shadow .3s cubic-bezier(0.2, 0.8, 0.2, 1), transform .3s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+      transition: border-color .4s ease, box-shadow .4s cubic-bezier(0.16, 1, 0.3, 1), transform .4s cubic-bezier(0.16, 1, 0.3, 1) !important;
     }
     .hover-card:hover {
-      transform: translateY(-3px) scale(1.01) !important;
-      box-shadow: 0 16px 40px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.4), 0 0 0 1px rgba(160,140,220,0.15) !important;
-      border-color: rgba(160,140,220,0.3) !important;
+      transform: translateY(-4px) scale(1.015) !important;
+      box-shadow: 0 20px 48px rgba(0,0,0,0.6), 0 8px 16px rgba(0,0,0,0.5), 0 0 0 1px rgba(160,140,220,0.2) !important;
+      border-color: rgba(160,140,220,0.4) !important;
       z-index: 10;
     }
     .hover-card:active {
-      transform: translateY(-1px) scale(0.99) !important;
-      transition: transform 0.1s ease !important;
+      transform: translateY(0px) scale(0.97) !important;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4), 0 0 0 1px rgba(160,140,220,0.1) !important;
+      transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease !important;
     }
     
     .hover-btn {
-      transition: transform .2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow .2s ease, filter .2s ease !important;
+      transition: transform .3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow .3s ease, filter .3s ease !important;
     }
     .hover-btn:not(:disabled):hover {
-      transform: translateY(-1px) !important;
-      filter: brightness(1.1);
+      transform: translateY(-2px) !important;
+      filter: brightness(1.15);
     }
     .hover-btn:not(:disabled):active {
-      transform: translateY(1px) scale(0.97) !important;
-      filter: brightness(0.95);
+      transform: translateY(1px) scale(0.94) !important;
+      filter: brightness(0.9);
+      transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), filter 0.15s ease !important;
     }
     
     /* Scroll area */
@@ -342,3 +345,43 @@ export const ProgressBar = ({ progress = 0, color = T.accent.primary, style }) =
     />
   </div>
 );
+
+export const InlineTooltip = ({ term, children }) => {
+  const descriptions = {
+    "Floor": "The absolute minimum balance you require in your checking account after all obligations.",
+    "Available": "Cash technically in your account, but potentially reserved by upcoming bills or floors.",
+    "Available Capital": "Your checking balance minus your global floor and buffers.",
+    "Promo sprint": "Accelerated payoff of a 0% APR card right before the promo period ends to avoid deferred interest.",
+    "Sinking fund": "Money incrementally saved for a known future expense.",
+    "Emergency reserve": "Your liquid safety net, usually kept in a High-Yield Savings Account (HYSA)."
+  };
+  const [show, setShow] = React.useState(false);
+  const text = descriptions[term] || term;
+
+  return (
+    <span
+      className="inline-tooltip-wrapper"
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+      onClick={(e) => { e.stopPropagation(); setShow(!show); }}
+      style={{ position: "relative", display: "inline-flex", alignItems: "center", cursor: "help", borderBottom: `1px dotted ${T.text.secondary}`, color: "inherit", zIndex: show ? 50 : 1 }}
+    >
+      {children || term}
+      {show && (
+        <span className="fade-in" style={{
+          position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)",
+          marginBottom: 8, padding: "8px 12px", background: T.bg.elevated, color: T.text.secondary,
+          fontSize: 11, fontWeight: 500, fontFamily: T.font.sans, lineHeight: 1.4,
+          borderRadius: 8, border: `1px solid ${T.border.default}`, boxShadow: T.shadow.elevated,
+          width: "max-content", maxWidth: 260, zIndex: 100, textAlign: "center", pointerEvents: "none"
+        }}>
+          {text}
+          <svg style={{ position: "absolute", bottom: -5, left: "50%", transform: "translateX(-50%)" }} width="10" height="5" viewBox="0 0 10 5" fill="none">
+            <path d="M0 0L5 5L10 0H0Z" fill={T.bg.elevated} />
+            <path d="M0 0L5 5L10 0" stroke={T.border.default} />
+          </svg>
+        </span>
+      )}
+    </span>
+  );
+};

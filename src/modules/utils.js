@@ -112,10 +112,18 @@ export const fmt = n => {
 export const fmtDate = d => {
   if (!d) return "—";
   try {
-    const [y, m, day] = d.split("-").map(Number);
+    const parts = String(d).split(/[T\s]/)[0].split("-");
+    if (parts.length !== 3) {
+      // Fallback or attempt to parse directly if not YYYY-MM-DD
+      const parsed = new Date(d);
+      if (isNaN(parsed.getTime())) return String(d);
+      return parsed.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    }
+    const [y, m, day] = parts.map(Number);
     const date = new Date(y, m - 1, day);
+    if (isNaN(date.getTime())) return String(d);
     return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  } catch { return d; }
+  } catch { return String(d); }
 };
 
 // Strip parenthetical clarifiers from paycheck labels in Next Action.
@@ -242,8 +250,8 @@ export function parseJSON(raw) {
     raw,
     status: j.headerCard?.status || "UNKNOWN",
     mode: "FULL", // Implicit in the new architecture unless overridden
-    netWorth: parseCurrency(j.investments?.netWorth) ?? parseCurrency(j.investments?.balance),
-    netWorthDelta: j.investments?.netWorthDelta || null,
+    netWorth: parseCurrency(j.netWorth) ?? parseCurrency(j.investments?.netWorth) ?? parseCurrency(j.investments?.balance),
+    netWorthDelta: j.netWorthDelta ?? j.investments?.netWorthDelta ?? null,
     healthScore: j.healthScore || null, // { score, grade, trend, summary }
     structured: j,
     sections: {
@@ -303,6 +311,8 @@ export function extractDashboardMetrics(parsed) {
   return {
     checking: rowValue.checking ?? legacyChecking,
     vault: rowValue.vault ?? rowValue.savings ?? legacyVault,
+    investments: rowValue.investments ?? null,
+    otherAssets: rowValue['other assets'] ?? null,
     pending: rowValue.pending ?? legacyPending,
     debts: rowValue.debts ?? null,
     available: rowValue.available ?? legacyAvailable

@@ -10,9 +10,10 @@ function formatShortDate(dateStr) {
 }
 
 export default function CashFlowCalendar({ config, cards, renewals, checkingBalance, snapshotDate }) {
-    if (config.trackChecking === false) return null;
-
+    // useMemo MUST come before any early returns (Rules of Hooks)
     const timeline = useMemo(() => {
+        // Guard: config not loaded yet or tracking disabled
+        if (!config || config.trackChecking === false) return null;
         const today = snapshotDate || new Date().toISOString().split('T')[0];
         const daysAhead = 35; // Look ahead 5 weeks
         let currentBalance = checkingBalance || 0;
@@ -44,7 +45,7 @@ export default function CashFlowCalendar({ config, cards, renewals, checkingBala
             let dueDate = r.nextDue;
             // Estimate nextDue if missing, based on cadence
             if (!dueDate) {
-                if (r.cadence === "monthly" || (r.interval === 1 && r.intervalUnit === "month")) {
+                if (r.cadence === "monthly" || (r.interval === 1 && (r.intervalUnit === "months" || r.intervalUnit === "month"))) {
                     dueDate = getNextDateForDayOfMonth(today, r.dueDay || 1);
                 } else {
                     return; // Skip non-monthly renewals without a date — can't estimate
@@ -184,6 +185,9 @@ export default function CashFlowCalendar({ config, cards, renewals, checkingBala
         return { events: days, minBalance, minBalanceDate };
     }, [config, cards, renewals, checkingBalance, snapshotDate]);
 
+    // Early returns AFTER all hooks
+    if (!timeline || !config || config.trackChecking === false) return null;
+
     if (!timeline.events || timeline.events.length === 0) {
         return (
             <Card>
@@ -196,7 +200,7 @@ export default function CashFlowCalendar({ config, cards, renewals, checkingBala
     }
 
     return (
-        <Card>
+        <Card animate>
             <Label>Cash Flow Horizon (35 Days)</Label>
 
             {/* Radar Summary Alert */}
@@ -225,7 +229,7 @@ export default function CashFlowCalendar({ config, cards, renewals, checkingBala
                 <div style={{ position: "absolute", left: 15, top: 10, bottom: 10, width: 2, background: T.border.default, zIndex: 0 }} />
 
                 {timeline.events.map((day, i) => (
-                    <div key={i} style={{ display: "flex", gap: 12, position: "relative", zIndex: 1 }}>
+                    <div key={i} style={{ display: "flex", gap: 12, position: "relative", zIndex: 1, animation: `fadeInUp .35s ease-out ${Math.min(i * 0.04, 0.6)}s both` }}>
                         <div style={{
                             width: 32, height: 32, borderRadius: 16, background: T.bg.elevated,
                             border: `2px solid ${day.isNegative ? T.status.red : (day.events.some(e => e.type === 'income') ? T.status.green : T.border.default)}`,

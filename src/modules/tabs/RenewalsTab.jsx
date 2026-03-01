@@ -14,9 +14,15 @@ const YEAR_OPTIONS = [1, 2, 3];
 const DAY_OPTIONS = Array.from({ length: 90 }, (_, i) => i + 1);
 
 import { usePortfolio } from '../contexts/PortfolioContext.jsx';
+import { useAudit } from '../contexts/AuditContext.jsx';
 
 export default memo(function RenewalsTab() {
-    const { renewals, setRenewals, cardAnnualFees, cards } = usePortfolio();
+    const { current } = useAudit();
+    const portfolioContext = usePortfolio();
+    const renewals = current?.isTest ? (current.demoPortfolio?.renewals || []) : portfolioContext.renewals;
+    const setRenewals = current?.isTest ? () => { } : portfolioContext.setRenewals;
+    const cards = current?.isTest ? (current.demoPortfolio?.cards || []) : portfolioContext.cards;
+    const { cardAnnualFees } = portfolioContext;
     const [editing, setEditing] = useState(null); // index within user renewals
     const [editVal, setEditVal] = useState({});
     const [showAdd, setShowAdd] = useState(false);
@@ -25,24 +31,18 @@ export default memo(function RenewalsTab() {
 
     // Merge user renewals + auto-generated card annual fees
     const allItems = useMemo(() => {
-        // Filter out fulfilled one-time expenses (past due date)
         const now = new Date().toISOString().split("T")[0];
-        const items = [...(renewals || [])].filter(r => {
-            if (r.intervalUnit === "one-time" && r.nextDue && r.nextDue < now) return false;
-            return true;
-        });
+        const items = [...(renewals || [])].map((r, idx) => ({
+            ...r,
+            originalIndex: idx,
+            isExpired: r.intervalUnit === "one-time" && r.nextDue && r.nextDue < now
+        }));
         (cardAnnualFees || []).forEach(af => {
             const exists = items.some(r => (r.linkedCardId && af.linkedCardId && r.linkedCardId === af.linkedCardId) || r.name === af.name || r.linkedCardAF === af.cardName);
             if (!exists) items.push(af);
         });
         return items;
     }, [renewals, cardAnnualFees]);
-
-    const renewalIndexByRef = useMemo(() => {
-        const indexMap = new Map();
-        (renewals || []).forEach((r, idx) => indexMap.set(r, idx));
-        return indexMap;
-    }, [renewals]);
 
     // Group by category
     const grouped = useMemo(() => {
@@ -56,12 +56,13 @@ export default memo(function RenewalsTab() {
             medical: { label: "Medical & Health", color: T.accent.emerald },
             sinking: { label: "Sinking Funds", color: T.status.purple },
             onetime: { label: "One-Time Expenses", color: T.status.amber },
+            inactive: { label: "Inactive & History", color: T.text.muted },
             // Legacy aliases for backward compatibility
             fixed: { label: "Housing & Utilities", color: T.status.red },
             monthly: { label: "Housing & Utilities", color: T.status.red },
             cadence: { label: "Subscriptions", color: T.accent.primary },
             periodic: { label: "Subscriptions", color: T.accent.primary },
-            af: { label: "One-Time Expenses", color: T.status.amber },
+            af: { label: "Annual Fees", color: T.accent.copper || T.status.amber },
         };
 
         if (sortBy !== "type") {
@@ -73,9 +74,14 @@ export default memo(function RenewalsTab() {
         }
 
         allItems.forEach(item => {
+            if (item.isCancelled || item.isExpired) {
+                if (!cats["inactive"]) cats["inactive"] = { ...catMeta.inactive, id: "inactive", items: [] };
+                cats["inactive"].items.push(item);
+                return;
+            }
             const rawCat = item.isCardAF ? "af" : (item.category || "subs");
             // Legacy category normalization
-            const legacyMap = { ss: "subs", fixed: "housing", monthly: "housing", cadence: "subs", periodic: "subs", af: "onetime" };
+            const legacyMap = { ss: "subs", fixed: "housing", monthly: "housing", cadence: "subs", periodic: "subs" };
             const catId = legacyMap[rawCat] || rawCat;
             if (!cats[catId]) cats[catId] = { ...catMeta[catId] || catMeta.subs, id: catId, items: [] };
             cats[catId].items.push(item);
@@ -106,13 +112,14 @@ export default memo(function RenewalsTab() {
             });
         });
 
-        const order = ["housing", "fixed", "monthly", "medical", "essentials", "insurance", "transport", "subs", "ss", "cadence", "periodic", "sinking", "onetime", "af"];
+        const order = ["housing", "fixed", "monthly", "medical", "essentials", "insurance", "transport", "subs", "ss", "cadence", "periodic", "sinking", "onetime", "af", "inactive"];
         return order.filter(id => cats[id]).map(id => cats[id]);
     }, [allItems, sortBy]);
 
     const monthlyTotal = useMemo(() => {
         let t = 0;
         allItems.forEach(i => {
+            if (i.isCancelled || i.isExpired) return;
             const int = i.interval || 1;
             const unit = i.intervalUnit || "months";
             if (unit === "days") t += i.amount / int * 30.44;
@@ -148,19 +155,24 @@ export default memo(function RenewalsTab() {
         if (renewalIndex == null || renewalIndex < 0) return;
         const label = editVal.chargedToId ? resolveCardLabel(cards || [], editVal.chargedToId, editVal.chargedTo) : editVal.chargedTo;
         const newName = (editVal.name || "").trim() || fallbackName;
-        setRenewals((renewals || []).map((r, idx) => idx === renewalIndex ? {
+        setRenewals(prev => (prev || []).map((r, idx) => idx === renewalIndex ? {
             ...r, name: newName, amount: parseFloat(editVal.amount) || 0, interval: editVal.interval,
             intervalUnit: editVal.intervalUnit, cadence: formatInterval(editVal.interval, editVal.intervalUnit),
             source: editVal.source, chargedTo: label, chargedToId: editVal.chargedToId, nextDue: editVal.nextDue,
             category: editVal.category || r.category
         } : r));
         setEditing(null);
-    }, [editVal, cards, renewals, setRenewals]);
+    }, [editVal, cards, setRenewals]);
     const removeItem = useCallback((renewalIndex, itemName) => {
         if (renewalIndex == null || renewalIndex < 0) return;
         if (!window.confirm(`Delete "${itemName}"? This cannot be undone.`)) return;
-        setRenewals((renewals || []).filter((_, idx) => idx !== renewalIndex));
-    }, [renewals, setRenewals]);
+        setRenewals(prev => (prev || []).filter((_, idx) => idx !== renewalIndex));
+    }, [setRenewals]);
+
+    const toggleCancel = useCallback((renewalIndex) => {
+        if (renewalIndex == null || renewalIndex < 0) return;
+        setRenewals(prev => (prev || []).map((r, idx) => idx === renewalIndex ? { ...r, isCancelled: !r.isCancelled } : r));
+    }, [setRenewals]);
 
     const addItem = () => {
         if (!addForm.name.trim() || !addForm.amount) return;
@@ -317,21 +329,21 @@ export default memo(function RenewalsTab() {
         {/* Categories */}
         {grouped.length === 0 ?
             <EmptyState icon={AlertTriangle} title="Track Every Dollar" message="Add your recurring bills and subscriptions to see a clear monthly forecast across all accounts." /> :
-            grouped.map(cat => (
-                <Card key={cat.id} animate variant="glass" style={{ marginBottom: 16, padding: 0, overflow: "hidden", borderLeft: `3px solid ${cat.color}` }}>
+            grouped.map((cat, catIdx) => (
+                <Card key={cat.id} animate delay={Math.min(catIdx * 60, 300)} variant="glass" style={{ marginBottom: 16, padding: 0, overflow: "hidden", borderLeft: `3px solid ${cat.color}` }}>
                     <div style={{ padding: "12px 14px", background: `${cat.color}08`, borderBottom: `1px solid ${T.border.subtle}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: cat.color, textTransform: "uppercase", letterSpacing: "0.05em" }}>{cat.label}</span>
                         <Mono size={10} color={T.text.dim}>{cat.items.length} items</Mono>
                     </div>
                     <div style={{ padding: "4px 14px" }}>
                         {cat.items.map((item, i) => {
-                            const renewalIndex = renewalIndexByRef.get(item);
+                            const renewalIndex = item.originalIndex;
                             const isUserRenewal = renewalIndex != null && renewalIndex >= 0;
                             const itemKey = item.linkedCardId
                                 ? `card-af-${item.linkedCardId}`
                                 : `${item.name || "item"}-${item.nextDue || ""}-${item.amount || 0}-${i}`;
 
-                            return <div key={itemKey} style={{ borderBottom: i === cat.items.length - 1 ? "none" : `1px solid ${T.border.subtle}`, padding: "12px 0" }}>
+                            return <div key={itemKey} style={{ borderBottom: i === cat.items.length - 1 ? "none" : `1px solid ${T.border.subtle}`, padding: "12px 0", animation: `fadeInUp .3s ease-out ${Math.min(i * 0.04, 0.4)}s both` }}>
                                 {editing === renewalIndex ?
                                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                                         <div style={{ display: "flex", gap: 8 }}>
@@ -383,9 +395,11 @@ export default memo(function RenewalsTab() {
                                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 30 }}>
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                                <span style={{ fontSize: 12, fontWeight: 500, color: T.text.primary }}>{item.name}</span>
+                                                <span style={{ fontSize: 12, fontWeight: 500, color: (item.isCancelled || item.isExpired) ? T.text.muted : T.text.primary, textDecoration: item.isCancelled ? "line-through" : "none" }}>{item.name}</span>
                                                 {item.isCardAF && <Badge variant="gold" style={{ fontSize: 8, padding: "1px 5px" }}>AUTO</Badge>}
                                                 {item.isWaived && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.status.green, borderColor: `${T.status.green}40` }}>WAIVED</Badge>}
+                                                {item.isCancelled && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.muted, borderColor: T.border.default }}>CANCELLED</Badge>}
+                                                {item.isExpired && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.muted, borderColor: T.border.default }}>EXPIRED</Badge>}
                                             </div>
                                             <div style={{ display: "flex", gap: 8, marginTop: 3, flexWrap: "wrap", alignItems: "center" }}>
                                                 <Mono size={10} color={T.text.dim}>{item.cadence || formatInterval(item.interval, item.intervalUnit)}</Mono>
@@ -399,6 +413,11 @@ export default memo(function RenewalsTab() {
                                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                                             <Mono size={13} weight={700} color={cat.color}>{fmt(item.amount)}</Mono>
                                             {!item.isCardAF && isUserRenewal && editing !== renewalIndex && <>
+                                                {!item.isExpired && <button onClick={() => toggleCancel(renewalIndex)} style={{
+                                                    height: 30, padding: "0 10px", borderRadius: T.radius.sm,
+                                                    border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, fontFamily: T.font.mono,
+                                                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700
+                                                }}>{item.isCancelled ? "RESTORE" : "CANCEL"}</button>}
                                                 <button onClick={() => startEdit(item, renewalIndex)} style={{
                                                     width: 30, height: 30, borderRadius: T.radius.sm,
                                                     border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim,
