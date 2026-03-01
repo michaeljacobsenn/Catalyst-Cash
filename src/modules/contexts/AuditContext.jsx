@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { db, parseAudit, cyrb53 } from '../utils.js';
 import { streamAudit, callAudit } from '../api.js';
-import { generateStrategy } from '../engine.js';
+import { generateStrategy, mergeSnapshotDebts } from '../engine.js';
 import { buildScrubber } from '../scrubber.js';
 import { evaluateBadges, BADGE_DEFINITIONS } from '../badges.js';
 import { haptic } from '../haptics.js';
@@ -195,10 +195,11 @@ export function AuditProvider({ children }) {
         const promptRenewals = [...(renewals || []), ...(cardAnnualFees || [])];
 
         // Native Engine Run: Calculate floors, targets, and debt override natively before prompt generation
+        const strategyCards = mergeSnapshotDebts(cards || [], formData?.debts || [], financialConfig?.defaultAPR || 0);
         const computedStrategy = generateStrategy(financialConfig, {
           checkingBalance: parseFloat(formData.checking || 0),
           savingsTotal: parseFloat(formData.savings || 0),
-          cards: cards || [],
+          cards: strategyCards,
           renewals: promptRenewals,
           snapshotDate: formData.date
         });

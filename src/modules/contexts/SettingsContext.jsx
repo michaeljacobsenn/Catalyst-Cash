@@ -30,6 +30,9 @@ export const DEFAULT_FINANCIAL_CONFIG = {
     trackHabits: false,
     defaultAPR: 24.99,
     arbitrageTargetAPR: 6.00,
+    fireExpectedReturnPct: 7.00,
+    fireInflationPct: 2.50,
+    fireSafeWithdrawalPct: 4.00,
     investmentBrokerage: 0.00,
     investmentRoth: 0.00,
     investmentsAsOfDate: "",
@@ -205,6 +208,7 @@ export function SettingsProvider({ children }) {
     useEffect(() => { if (isSettingsReady) db.set("personal-rules", personalRules); }, [personalRules, isSettingsReady]);
     useEffect(() => { if (isSettingsReady) db.set("ai-consent-accepted", aiConsent); }, [aiConsent, isSettingsReady]);
     useEffect(() => { if (isSettingsReady) db.set("ai-persona", persona); }, [persona, isSettingsReady]);
+    useEffect(() => { if (isSettingsReady) db.set("theme-mode", themeMode); }, [themeMode, isSettingsReady]);
 
     // Theme mode setter: apply tokens + persist + force re-render
     const setThemeMode = useCallback((mode) => {

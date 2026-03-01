@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Plus, Minus, Trash2, AlertTriangle, CheckCircle, Zap, Loader2, Clipboard, Download, ExternalLink, AlertCircle } from "lucide-react";
 import { T, formatInterval } from "../constants.js";
 import { Card, Label, Badge } from "../ui.jsx";
 import { Mono, DI } from "../components.jsx";
 import { getSystemPrompt } from "../prompts.js";
-import { generateStrategy } from "../engine.js";
+import { generateStrategy, mergeSnapshotDebts } from "../engine.js";
 import { resolveCardLabel, getShortCardLabel } from "../cards.js";
 import { nativeExport, cyrb53, fmt } from "../utils.js";
 import { fetchMarketPrices, calcPortfolioValue } from "../marketData.js";
@@ -103,6 +103,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
         heavyHorizonStart: 15, heavyHorizonEnd: 45, heavyHorizonThreshold: 0.00,
         greenStatusTarget: 0.00, emergencyReserveTarget: 0.00, habitName: "Coffee Pods", habitRestockCost: 25, habitCheckThreshold: 6,
         habitCriticalThreshold: 3, trackHabits: false, defaultAPR: 24.99,
+        fireExpectedReturnPct: 7, fireInflationPct: 2.5, fireSafeWithdrawalPct: 4,
         investmentBrokerage: 0, investmentRoth: 0, investmentsAsOfDate: "",
         trackRoth: false, rothContributedYTD: 0, rothAnnualLimit: 0,
         autoTrackRothYTD: true,
@@ -119,11 +120,15 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
     };
     const promptRenewals = [...(renewals || []), ...(cardAnnualFees || [])];
 
+    const strategyCards = useMemo(() => (
+        mergeSnapshotDebts(cards || [], form.debts || [], activeConfig?.defaultAPR || 0)
+    ), [cards, form.debts, activeConfig?.defaultAPR]);
+
     // Compute exact strategy using current form inputs
     const computedStrategy = generateStrategy(activeConfig, {
         checkingBalance: parseFloat(form.checking || 0),
         savingsTotal: parseFloat(form.savings || 0),
-        cards: cards || [],
+        cards: strategyCards,
         renewals: promptRenewals,
         snapshotDate: form.date
     });

@@ -4,6 +4,8 @@
  * natively to ensure reliable calculations without relying on LLM hallucinations.
  */
 
+import { cmpString, fromCents, toBps, toCents } from "./moneyMath.js";
+
 // Helper: Add days to a date string (YYYY-MM-DD)
 export function addDays(dateStr, days) {
     const d = new Date(dateStr);
@@ -60,146 +62,270 @@ export function getNextPayday(anchorDate, paydayDayOfWeek) {
     return addDays(anchorDate, daysUntilTarget);
 }
 
+function normalizeName(value, fallback = "Debt") {
+    const text = String(value || "").trim();
+    return text || fallback;
+}
+
+function parseDueDay(value) {
+    const day = Number.parseInt(value, 10);
+    if (!Number.isFinite(day) || day < 1) return null;
+    return Math.min(day, 31);
+}
+
+function isCardChargedRenewal(renewal, cards) {
+    const chargedToId = String(renewal?.chargedToId || "").trim();
+    if (chargedToId && cards.some(c => String(c?.id || "") === chargedToId)) return true;
+
+    const chargedTo = String(renewal?.chargedTo || "").trim().toLowerCase();
+    if (!chargedTo) return false;
+    return cards.some(c => {
+        const names = [c?.name, c?.nickname, c?.institution]
+            .map(v => String(v || "").trim().toLowerCase())
+            .filter(Boolean);
+        return names.some(n => chargedTo === n || chargedTo.includes(n));
+    });
+}
+
+function compareAvalanchePriority(a, b) {
+    if (a.aprBps !== b.aprBps) return b.aprBps - a.aprBps;
+    if (a.balanceCents !== b.balanceCents) return a.balanceCents - b.balanceCents;
+    if (a.minimumCents !== b.minimumCents) return b.minimumCents - a.minimumCents;
+    return cmpString(a.name, b.name);
+}
+
+function compareCfiPriority(a, b) {
+    // Compare balance/minimum without floating-point division:
+    // a.balance/a.min < b.balance/b.min  <=>  a.balance*b.min < b.balance*a.min
+    const left = a.balanceCents * b.minimumCents;
+    const right = b.balanceCents * a.minimumCents;
+    if (left !== right) return left - right;
+    if (a.aprBps !== b.aprBps) return b.aprBps - a.aprBps;
+    if (a.balanceCents !== b.balanceCents) return a.balanceCents - b.balanceCents;
+    return cmpString(a.name, b.name);
+}
+
+function comparePromoPriority(a, b) {
+    // Urgency score = balance * postAPR / daysToExpiration (compare ratios exactly).
+    const left = (a.balanceCents * a.postAprBps) * b.daysToExp;
+    const right = (b.balanceCents * b.postAprBps) * a.daysToExp;
+    if (left !== right) return right - left;
+    if (a.daysToExp !== b.daysToExp) return a.daysToExp - b.daysToExp;
+    return compareAvalanchePriority(a, b);
+}
+
+function getCfiThreshold(payFrequency, daysToNextPaycheck) {
+    const freq = String(payFrequency || "").toLowerCase();
+    if (freq.includes("weekly") && freq.includes("bi")) return 35;
+    if (freq.includes("weekly")) return 50;
+    if (freq.includes("semi")) return 30;
+    if (freq.includes("monthly")) return 25;
+    if (daysToNextPaycheck <= 8) return 50;
+    if (daysToNextPaycheck <= 16) return 35;
+    return 25;
+}
+
+function normalizeSnapshotDebt(card, snapshotDebt, defaultAprBps) {
+    const debt = snapshotDebt || {};
+    const cardAprBps = toBps(card?.apr ?? 0);
+    const debtAprBps = toBps(debt?.apr ?? card?.apr ?? 0);
+    const aprBps = debtAprBps > 0 ? debtAprBps : (cardAprBps > 0 ? cardAprBps : defaultAprBps);
+
+    return {
+        ...card,
+        balance: fromCents(toCents(debt?.balance ?? card?.balance ?? 0)),
+        minPayment: fromCents(toCents(debt?.minPayment ?? debt?.minimum ?? card?.minPayment ?? 0)),
+        apr: aprBps / 100
+    };
+}
+
+function findSnapshotDebtForCard(card, snapshotDebts) {
+    const cardId = String(card?.id || "").trim();
+    const cardName = String(card?.name || "").trim().toLowerCase();
+    const cardNickname = String(card?.nickname || "").trim().toLowerCase();
+    const cardInstitution = String(card?.institution || "").trim().toLowerCase();
+
+    return snapshotDebts.find(d => {
+        const debtCardId = String(d?.cardId || "").trim();
+        if (cardId && debtCardId && cardId === debtCardId) return true;
+
+        const debtName = String(d?.name || "").trim().toLowerCase();
+        if (!debtName) return false;
+        return (
+            debtName === cardName ||
+            debtName === cardNickname ||
+            debtName === cardInstitution
+        );
+    });
+}
+
+// Merge debt balances entered in the audit form onto portfolio cards.
+// This prevents stale strategy decisions when the user overrides balances in snapshot input.
+export function mergeSnapshotDebts(cards = [], snapshotDebts = [], defaultApr = 0) {
+    const defaultAprBps = toBps(defaultApr);
+    return (cards || []).map(card => normalizeSnapshotDebt(
+        card,
+        findSnapshotDebtForCard(card, snapshotDebts || []),
+        defaultAprBps
+    ));
+}
+
 export function generateStrategy(config, snapshot) {
     const {
         checkingBalance = 0,
         savingsTotal = 0,
         cards = [],
+        nonCardDebts = config?.nonCardDebts || [],
         renewals = [],
         snapshotDate = new Date().toISOString().split('T')[0]
     } = snapshot;
 
     // 1. Calculate Core Floors
-    const weeklySpendAllowance = Number.isFinite(config?.weeklySpendAllowance) ? config.weeklySpendAllowance : 0;
-    const emergencyFloor = Number.isFinite(config?.emergencyFloor) ? config.emergencyFloor : 0;
-    const totalCheckingFloor = weeklySpendAllowance + emergencyFloor;
+    const weeklySpendAllowanceCents = toCents(config?.weeklySpendAllowance || 0);
+    const emergencyFloorCents = toCents(config?.emergencyFloor || 0);
+    const totalCheckingFloorCents = weeklySpendAllowanceCents + emergencyFloorCents;
 
     // 2. Determine Timeline
     const nextPayday = config.payday ? getNextPayday(snapshotDate, config.payday) : addDays(snapshotDate, 7);
     const daysToNextPaycheck = daysBetween(snapshotDate, nextPayday);
 
     // 3. Time Critical Bills Gate (Due <= Next Payday)
-    let timeCriticalAmount = 0;
+    let timeCriticalAmountCents = 0;
+    let timeCriticalMinimumsCents = 0;
     const timeCriticalItems = [];
 
     // 3a. Renewals
     if (renewals && renewals.length > 0) {
         renewals.forEach(r => {
             if (r.nextDue && daysBetween(snapshotDate, r.nextDue) <= daysToNextPaycheck) {
-                // Only count if it's explicitly charged to checking, or if 'chargedTo' isn't a known card
-                const isCardCharge = cards.some(c => c.name.toLowerCase() === (r.chargedTo || "").toLowerCase());
+                // Only count if it's explicitly charged to checking (card charges are paid later via card minimums/full-pay).
+                const isCardCharge = isCardChargedRenewal(r, cards || []);
                 if (!isCardCharge) {
-                    const amt = parseFloat(r.amount) || 0;
-                    timeCriticalAmount += amt;
-                    timeCriticalItems.push({ name: r.name, amount: amt, due: r.nextDue });
-                }
-            }
-        });
-    }
-
-    // 3b. Card Minimums
-    let totalCardMinimumsToPay = 0;
-    if (cards && cards.length > 0) {
-        cards.forEach(c => {
-            if (c.balance > 0 && c.minPayment > 0) {
-                totalCardMinimumsToPay += c.minPayment;
-
-                if (c.paymentDueDay) {
-                    const nextDueDate = getNextDateForDayOfMonth(snapshotDate, c.paymentDueDay);
-                    const daysUntilDue = daysBetween(snapshotDate, nextDueDate);
-                    // Time-critical if due before next payday
-                    if (daysUntilDue >= 0 && daysUntilDue <= daysToNextPaycheck) {
-                        timeCriticalAmount += c.minPayment;
-                        timeCriticalItems.push({ name: `${c.name} Minimum`, amount: c.minPayment, due: nextDueDate });
+                    const amountCents = toCents(r.amount);
+                    if (amountCents > 0) {
+                        timeCriticalAmountCents += amountCents;
+                        timeCriticalItems.push({ name: normalizeName(r.name, "Renewal"), amount: fromCents(amountCents), due: r.nextDue });
                     }
                 }
             }
         });
     }
 
+    // 3b. Debt minimums (cards + non-card debts)
+    const defaultAprBps = toBps(config?.defaultAPR || 0);
+    const debtEntries = [];
+
+    (cards || []).forEach(c => {
+        const balanceCents = toCents(c?.balance || 0);
+        if (balanceCents <= 0) return;
+        debtEntries.push({
+            type: "card",
+            name: normalizeName(c?.name, "Card"),
+            balanceCents,
+            minimumCents: Math.max(0, toCents(c?.minPayment || 0)),
+            aprBps: Math.max(0, toBps(c?.apr || 0) || defaultAprBps),
+            dueDay: parseDueDay(c?.paymentDueDay),
+            hasPromoApr: !!c?.hasPromoApr,
+            promoAprExp: c?.promoAprExp || null
+        });
+    });
+
+    (nonCardDebts || []).forEach(d => {
+        const balanceCents = toCents(d?.balance || 0);
+        if (balanceCents <= 0) return;
+        debtEntries.push({
+            type: "nonCard",
+            name: normalizeName(d?.name, "Loan"),
+            balanceCents,
+            minimumCents: Math.max(0, toCents(d?.minimum ?? d?.minPayment ?? 0)),
+            aprBps: Math.max(0, toBps(d?.apr || 0) || defaultAprBps),
+            dueDay: parseDueDay(d?.dueDay),
+            hasPromoApr: false,
+            promoAprExp: null
+        });
+    });
+
+    let totalMinimumsToPayCents = 0;
+    debtEntries.forEach(debt => {
+        if (debt.minimumCents <= 0) return;
+        totalMinimumsToPayCents += debt.minimumCents;
+
+        if (!debt.dueDay) return;
+        const nextDueDate = getNextDateForDayOfMonth(snapshotDate, debt.dueDay);
+        const daysUntilDue = daysBetween(snapshotDate, nextDueDate);
+        if (daysUntilDue >= 0 && daysUntilDue <= daysToNextPaycheck) {
+            timeCriticalAmountCents += debt.minimumCents;
+            timeCriticalMinimumsCents += debt.minimumCents;
+            timeCriticalItems.push({ name: `${debt.name} Minimum`, amount: fromCents(debt.minimumCents), due: nextDueDate });
+        }
+    });
+
     // 4. Required Transfer Engine
-    const cashAvailableAboveFloor = checkingBalance - totalCheckingFloor;
-    const isNegativeCashFlow = cashAvailableAboveFloor < 0;
-    let requiredTransfer = 0;
-    if (cashAvailableAboveFloor < timeCriticalAmount) {
-        requiredTransfer = Math.min((timeCriticalAmount - cashAvailableAboveFloor), savingsTotal);
+    const checkingBalanceCents = toCents(checkingBalance || 0);
+    const savingsTotalCents = Math.max(0, toCents(savingsTotal || 0));
+    const cashAvailableAboveFloorCents = checkingBalanceCents - totalCheckingFloorCents;
+    const isNegativeCashFlow = cashAvailableAboveFloorCents < 0;
+    let requiredTransferCents = 0;
+    if (cashAvailableAboveFloorCents < timeCriticalAmountCents) {
+        requiredTransferCents = Math.min((timeCriticalAmountCents - cashAvailableAboveFloorCents), savingsTotalCents);
     }
 
     // 5. Debt Kill vs Arbitrage (CFI logic)
     let recommendedDebtTarget = null;
-    let recommendedDebtPayment = 0;
+    let recommendedDebtPaymentCents = 0;
+    let strategyMethod = null;
 
     // Calculate surplus after floors and time-critical items
-    // IMPORTANT: Deduct total minimums NOT captured in time-critical bills but still owed this cycle 
+    // IMPORTANT: Deduct total minimums NOT captured in time-critical bills but still owed this cycle
     // to find the true *excess* operational surplus for debt payoff.
-    const nonTimeCriticalMinimums = totalCardMinimumsToPay - timeCriticalItems.filter(i => i.name.includes("Minimum")).reduce((s, i) => s + i.amount, 0);
-    const operationalSurplus = cashAvailableAboveFloor - timeCriticalAmount - Math.max(0, nonTimeCriticalMinimums);
+    const nonTimeCriticalMinimumsCents = Math.max(0, totalMinimumsToPayCents - timeCriticalMinimumsCents);
+    const operationalSurplusCents = cashAvailableAboveFloorCents - timeCriticalAmountCents - nonTimeCriticalMinimumsCents;
 
-    if (operationalSurplus > 0 && cards && cards.length > 0) {
-        // Filter active debts
-        const activeDebts = cards.filter(c => c.balance > 0);
+    if (operationalSurplusCents > 0 && debtEntries.length > 0) {
+        const activeDebts = debtEntries.filter(c => c.balanceCents > 0);
 
         if (activeDebts.length > 0) {
-            // Calculate Cash Flow Index (CFI) = Balance / Minimum Payment
-            // A CFI < 50 means the debt is a heavy cash-flow drag and should be killed first
-            let lowestCFI = Infinity;
-            let highestAPR = -1;
-            let targetByCFI = null;
-            let targetByAPR = null;
-            let targetByPromoExp = null;
-            let nearestPromoDays = Infinity;
+            const cfiCandidates = activeDebts
+                .filter(d => d.minimumCents > 0)
+                .sort(compareCfiPriority);
+            const targetByCFI = cfiCandidates[0] || null;
 
-            activeDebts.forEach(debt => {
-                // Guard: skip CFI calc if minPayment is 0 or missing (avoids division by zero)
-                if (debt.minPayment > 0) {
-                    const cfi = debt.balance / debt.minPayment;
-                    if (cfi < lowestCFI) {
-                        lowestCFI = cfi;
-                        targetByCFI = debt;
-                    }
-                } else if (debt.balance > 0 && (!targetByCFI || debt.balance < targetByCFI.balance)) {
-                    // No minPayment but has balance — treat as ultra-low CFI (quick kill candidate)
-                    lowestCFI = 0;
-                    targetByCFI = debt;
-                }
-                if (debt.apr > highestAPR) {
-                    highestAPR = debt.apr;
-                    targetByAPR = debt;
-                }
-                if (debt.hasPromoApr && debt.promoAprExp) {
-                    const daysToExp = daysBetween(snapshotDate, debt.promoAprExp);
-                    if (daysToExp > 0 && daysToExp <= 90) {
-                        // Weight by urgency: balance * post-promo APR impact / days remaining
-                        const postApr = debt.apr || 25; // assume 25% if APR unknown
-                        const urgencyScore = (debt.balance * postApr) / (daysToExp * 100);
-                        const prevScore = targetByPromoExp
-                            ? (targetByPromoExp.balance * (targetByPromoExp.apr || 25)) / (nearestPromoDays * 100)
-                            : 0;
-                        if (!targetByPromoExp || urgencyScore > prevScore) {
-                            nearestPromoDays = daysToExp;
-                            targetByPromoExp = debt;
-                        }
-                    }
-                }
-            });
+            const targetByAPR = [...activeDebts].sort(compareAvalanchePriority)[0] || null;
 
-            // Dynamic CFI threshold: scales with paycheck frequency
-            // Standard: 50 for weekly pay, ~35 for biweekly, ~25 for monthly
-            const cfiThreshold = Math.max(25, Math.min(50, daysToNextPaycheck * 7));
+            const promoCandidates = activeDebts
+                .filter(d => d.hasPromoApr && d.promoAprExp)
+                .map(d => {
+                    const daysToExp = daysBetween(snapshotDate, d.promoAprExp);
+                    if (daysToExp <= 0 || daysToExp > 90) return null;
+                    return {
+                        ...d,
+                        daysToExp,
+                        postAprBps: Math.max(d.aprBps, defaultAprBps || 2500)
+                    };
+                })
+                .filter(Boolean)
+                .sort(comparePromoPriority);
+            const targetByPromoExp = promoCandidates[0] || null;
 
-            // Override Hierarchy:
-            // 1. Promo Expirations (< 90 days) prevent retro-active interest bombs
-            // 2. CFI Drag (< threshold) frees up massive cash flow rapidly
-            // 3. Highest APR Avalanche (standard mathematically optimal path)
+            const cfiThreshold = getCfiThreshold(config?.payFrequency, daysToNextPaycheck);
+            const cfiBeatsThreshold = targetByCFI
+                ? targetByCFI.balanceCents < (cfiThreshold * targetByCFI.minimumCents)
+                : false;
+
+            // Override hierarchy:
+            // 1) promo expiry risk, 2) sub-threshold CFI drag, 3) APR avalanche.
             if (targetByPromoExp) {
-                recommendedDebtTarget = targetByPromoExp.name + ` (Promo expires in ${nearestPromoDays}d)`;
-                recommendedDebtPayment = Math.min(operationalSurplus, targetByPromoExp.balance);
-            } else if (lowestCFI < cfiThreshold && targetByCFI) {
+                recommendedDebtTarget = `${targetByPromoExp.name} (Promo expires in ${targetByPromoExp.daysToExp}d)`;
+                recommendedDebtPaymentCents = Math.min(operationalSurplusCents, targetByPromoExp.balanceCents);
+                strategyMethod = "promo-sprint";
+            } else if (cfiBeatsThreshold && targetByCFI) {
                 recommendedDebtTarget = targetByCFI.name;
-                recommendedDebtPayment = Math.min(operationalSurplus, targetByCFI.balance);
+                recommendedDebtPaymentCents = Math.min(operationalSurplusCents, targetByCFI.balanceCents);
+                strategyMethod = "cfi-override";
             } else if (targetByAPR) {
                 recommendedDebtTarget = targetByAPR.name;
-                recommendedDebtPayment = Math.min(operationalSurplus, targetByAPR.balance);
+                recommendedDebtPaymentCents = Math.min(operationalSurplusCents, targetByAPR.balanceCents);
+                strategyMethod = "avalanche";
             }
         }
     }
@@ -207,15 +333,16 @@ export function generateStrategy(config, snapshot) {
     return {
         snapshotDate,
         nextPayday,
-        totalCheckingFloor,
-        timeCriticalAmount,
+        totalCheckingFloor: fromCents(totalCheckingFloorCents),
+        timeCriticalAmount: fromCents(timeCriticalAmountCents),
         timeCriticalItems,
-        requiredTransfer,
+        requiredTransfer: fromCents(requiredTransferCents),
         isNegativeCashFlow,
-        operationalSurplus: Math.max(0, operationalSurplus),
+        operationalSurplus: fromCents(Math.max(0, operationalSurplusCents)),
         debtStrategy: {
             target: recommendedDebtTarget,
-            amount: recommendedDebtPayment
+            amount: fromCents(recommendedDebtPaymentCents),
+            method: strategyMethod
         }
     };
 }

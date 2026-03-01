@@ -5,71 +5,89 @@ import { useState, useMemo } from "react";
 import { T } from "../constants.js";
 import { Card, Label } from "../ui.jsx";
 import { Mono } from "../components.jsx";
+import { cmpString, fromCents, monthlyInterestCents, toBps, toCents } from "../moneyMath.js";
+
+const DEFAULT_MIN_PAYMENT_CENTS = 2500;
+
+function sortDebtsForStrategy(strategy, list) {
+    const sorted = [...list];
+    if (strategy === "avalanche") {
+        sorted.sort((a, b) => {
+            if (a.aprBps !== b.aprBps) return b.aprBps - a.aprBps;
+            if (a.balanceCents !== b.balanceCents) return a.balanceCents - b.balanceCents;
+            if (a.minPaymentCents !== b.minPaymentCents) return b.minPaymentCents - a.minPaymentCents;
+            return cmpString(a.name, b.name);
+        });
+        return sorted;
+    }
+
+    // Snowball = smallest balance first, deterministic ties on APR then minimum.
+    sorted.sort((a, b) => {
+        if (a.balanceCents !== b.balanceCents) return a.balanceCents - b.balanceCents;
+        if (a.aprBps !== b.aprBps) return b.aprBps - a.aprBps;
+        if (a.minPaymentCents !== b.minPaymentCents) return b.minPaymentCents - a.minPaymentCents;
+        return cmpString(a.name, b.name);
+    });
+    return sorted;
+}
 
 function simulatePayoff(debts, extraMonthly, strategy) {
     if (!debts?.length) return { months: 0, totalInterest: 0, timeline: [] };
 
     let balances = debts.map(d => ({
         name: d.name || "Card",
-        balance: parseFloat(d.balance) || 0,
-        apr: parseFloat(d.apr) || 0,
-        minPayment: parseFloat(d.minPayment) || 25,
-        limit: parseFloat(d.limit) || 0,
-    })).filter(d => d.balance > 0);
+        balanceCents: Math.max(0, toCents(d.balance || 0)),
+        aprBps: Math.max(0, toBps(d.apr || 0)),
+        minPaymentCents: Math.max(0, toCents(d.minPayment || 0)) || DEFAULT_MIN_PAYMENT_CENTS,
+    })).filter(d => d.balanceCents > 0);
 
     if (!balances.length) return { months: 0, totalInterest: 0, timeline: [] };
 
-    // Sort by strategy
-    if (strategy === "avalanche") {
-        balances.sort((a, b) => b.apr - a.apr); // Highest APR first
-    } else {
-        balances.sort((a, b) => a.balance - b.balance); // Lowest balance first (snowball)
-    }
-
     let months = 0;
-    let totalInterest = 0;
+    let totalInterestCents = 0;
     const timeline = [];
     const maxMonths = 360; // 30 year cap
 
-    while (balances.some(d => d.balance > 0.01) && months < maxMonths) {
+    while (balances.some(d => d.balanceCents > 0) && months < maxMonths) {
         months++;
-        let extraLeft = extraMonthly;
-        let monthInterest = 0;
+        let extraLeftCents = Math.max(0, toCents(extraMonthly || 0));
+        let monthInterestCents = 0;
 
         // Apply interest
         for (const d of balances) {
-            if (d.balance <= 0) continue;
-            const interest = (d.balance * (d.apr / 100)) / 12;
-            d.balance += interest;
-            monthInterest += interest;
-            totalInterest += interest;
+            if (d.balanceCents <= 0) continue;
+            const interestCents = monthlyInterestCents(d.balanceCents, d.aprBps);
+            d.balanceCents += interestCents;
+            monthInterestCents += interestCents;
+            totalInterestCents += interestCents;
         }
 
         // Pay minimums
         for (const d of balances) {
-            if (d.balance <= 0) continue;
-            const payment = Math.min(d.minPayment, d.balance);
-            d.balance -= payment;
+            if (d.balanceCents <= 0) continue;
+            const paymentCents = Math.min(d.minPaymentCents, d.balanceCents);
+            d.balanceCents -= paymentCents;
         }
 
-        // Apply extra payment to priority target
-        for (const d of balances) {
-            if (d.balance <= 0 || extraLeft <= 0) continue;
-            const payment = Math.min(extraLeft, d.balance);
-            d.balance -= payment;
-            extraLeft -= payment;
+        // Re-rank after minimums. This keeps ties and strategy transitions mathematically correct.
+        const orderedDebts = sortDebtsForStrategy(strategy, balances.filter(d => d.balanceCents > 0));
+        for (const d of orderedDebts) {
+            if (d.balanceCents <= 0 || extraLeftCents <= 0) continue;
+            const paymentCents = Math.min(extraLeftCents, d.balanceCents);
+            d.balanceCents -= paymentCents;
+            extraLeftCents -= paymentCents;
         }
 
-        if (months % 3 === 0 || months <= 3 || !balances.some(d => d.balance > 0.01)) {
+        if (months % 3 === 0 || months <= 3 || !balances.some(d => d.balanceCents > 0)) {
             timeline.push({
                 month: months,
-                totalDebt: balances.reduce((s, d) => s + Math.max(0, d.balance), 0),
-                interest: monthInterest
+                totalDebt: fromCents(balances.reduce((s, d) => s + Math.max(0, d.balanceCents), 0)),
+                interest: fromCents(monthInterestCents)
             });
         }
     }
 
-    return { months, totalInterest, timeline };
+    return { months, totalInterest: fromCents(totalInterestCents), timeline };
 }
 
 export default function DebtSimulator({ cards = [], financialConfig }) {
@@ -83,7 +101,7 @@ export default function DebtSimulator({ cards = [], financialConfig }) {
             balance: c.balance, apr: c.apr, minPayment: c.minPayment, limit: c.limit
         }));
         const nonCardDebts = (financialConfig?.nonCardDebts || []).filter(d => parseFloat(d.balance) > 0).map(d => ({
-            name: d.name || "Loan", balance: d.balance, apr: d.apr || 0, minPayment: d.minPayment || 0, limit: 0
+            name: d.name || "Loan", balance: d.balance, apr: d.apr || 0, minPayment: d.minimum ?? d.minPayment ?? 0, limit: 0
         }));
         return [...cardDebts, ...nonCardDebts];
     }, [cards, financialConfig]);
@@ -200,13 +218,18 @@ export default function DebtSimulator({ cards = [], financialConfig }) {
             </div>)}
         </div>
 
+        {/* Strategy Disclaimer */}
+        <p style={{ fontSize: 9, color: T.text.muted, textAlign: "center", margin: "4px 0 12px", lineHeight: 1.4 }}>
+            Avalanche minimizes total interest paid. Snowball provides psychological momentum by eliminating debts faster. Both are valid approaches.
+        </p>
+
         {/* Impact Summary */}
         {monthsSaved > 0 && <div style={{
             padding: "12px 14px", borderRadius: T.radius.md, textAlign: "center",
             background: `${T.status.green}10`, border: `1px solid ${T.status.green}25`
         }}>
             <p style={{ fontSize: 12, fontWeight: 700, color: T.status.green, margin: 0 }}>
-                💰 Extra ${extraPayment}/mo saves you {monthsSaved} months and ${interestSaved.toLocaleString("en-US", { maximumFractionDigits: 0 })} in interest
+                💰 Extra ${extraPayment}/mo could save you {monthsSaved} months and ${interestSaved.toLocaleString("en-US", { maximumFractionDigits: 0 })} in interest
             </p>
         </div>}
     </Card>;

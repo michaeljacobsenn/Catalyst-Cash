@@ -143,4 +143,49 @@ describe('Engine Strategy Logic - generateStrategy', () => {
         expect(strategy.operationalSurplus).toBe(0);
         expect(strategy.debtStrategy.amount).toBe(0);
     });
+
+    it('APR ties resolve deterministically (balance -> minimum -> name)', () => {
+        const strategy = generateStrategy(baseConfig, {
+            snapshotDate: '2024-01-01',
+            checkingBalance: 6000,
+            cards: [
+                { name: 'Alpha Card', balance: 1000, minPayment: 50, apr: 20 },
+                { name: 'Beta Card', balance: 1000, minPayment: 80, apr: 20 }
+            ]
+        });
+
+        // Same APR and balance: higher minimum wins as deterministic tie-breaker.
+        expect(strategy.debtStrategy.target).toBe('Beta Card');
+    });
+
+    it('CFI override never promotes debts with zero minimums', () => {
+        const strategy = generateStrategy(baseConfig, {
+            snapshotDate: '2024-01-01',
+            checkingBalance: 6000,
+            cards: [
+                { name: 'No Minimum', balance: 500, minPayment: 0, apr: 5 },
+                { name: 'High APR', balance: 3000, minPayment: 100, apr: 29 }
+            ]
+        });
+
+        // Zero-min debt must not receive artificial CFI priority.
+        expect(strategy.debtStrategy.target).toBe('High APR');
+    });
+
+    it('includes non-card debt minimums in time-critical gate', () => {
+        const strategy = generateStrategy({
+            ...baseConfig,
+            nonCardDebts: [
+                { name: 'Car Loan', balance: 10000, minimum: 300, apr: 8, dueDay: 3 }
+            ]
+        }, {
+            snapshotDate: '2024-01-01', // next payday Jan 5
+            checkingBalance: 1800,
+            savingsTotal: 0,
+            cards: []
+        });
+
+        expect(strategy.timeCriticalAmount).toBe(300);
+        expect(strategy.debtStrategy.target).toBe('Car Loan');
+    });
 });

@@ -28,7 +28,7 @@ const FEATURES = [
 
 // ── Coming soon features (creates anticipation) ──────────────
 const COMING_SOON = [
-    { label: "Net Worth Projections", icon: "🔮", desc: "See where you'll be in 1, 5, 10 years" },
+    { label: "Net Worth Projections", icon: "🔮", desc: "See where you could be in 1, 5, 10 years" },
     { label: "Goal Tracking", icon: "🏁", desc: "Debt-free dates & savings milestones" },
     { label: "iOS Widgets", icon: "📱", desc: "Glanceable net worth on your home screen" },
 ];
@@ -103,7 +103,7 @@ export default function ProPaywall({ onClose }) {
                     background: `${T.accent.primary}10`, border: `1px solid ${T.accent.primary}20`,
                     fontSize: 11, fontWeight: 700, color: T.accent.primary, fontFamily: T.font.mono
                 }}>
-                    🛡️ Built by financial analysts · Privacy-first
+                    🛡️ Designed for financial clarity · Privacy-first
                 </div>
             </div>
 
