@@ -1,16 +1,18 @@
 import React from "react";
 import { T } from "./constants.js";
+import { haptic } from "./haptics.js";
 
 export const GlobalStyles = () => (
   <style>{`
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html,body,#root{height:100dvh;height:100vh;background:${T.bg.base};font-family:${T.font.sans};color:${T.text.primary};-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow:hidden;-webkit-text-size-adjust:100%}
     
-    /* Form elements — polished, large touch targets */
+    /* iOS 18 Typography & Form elements — minimum 44pt touch targets */
     input,textarea,select{
       font-family:${T.font.sans};background:${T.bg.elevated};
       border:1.5px solid ${T.border.default};color:${T.text.primary};
-      border-radius:${T.radius.md}px;padding:14px 16px;font-size:16px;line-height:1.2;min-height:44px;
+      border-radius:${T.radius.md}px;padding:14px 16px;font-size:16px;line-height:1.2;
+      min-height:44px; /* HIG 44pt Touch Target */
       width:100%;outline:none;transition:border-color .25s ease,box-shadow .25s ease,background .25s ease;
       -webkit-appearance:none;-webkit-tap-highlight-color:transparent;
     }
@@ -52,9 +54,14 @@ export const GlobalStyles = () => (
     @keyframes tabSlideFromRight{from{opacity:0;transform:translateX(50px) scale(0.98)}to{opacity:1;transform:translateX(0) scale(1)}}
     @keyframes tabSlideFromLeft{from{opacity:0;transform:translateX(-50px) scale(0.98)}to{opacity:1;transform:translateX(0) scale(1)}}
 
-    .slide-up{animation:slideUp .4s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
-    .fade-in{animation:fadeIn .4s ease both}
-    .scale-in{animation:scaleIn .4s cubic-bezier(.16,1,.3,1) both}
+    /* Native Apple Spring Physics (UISpringTimingParameters equivalent) */
+    :root {
+      --spring-soft: cubic-bezier(0.175, 0.885, 0.32, 1.15);
+      --spring-stiff: cubic-bezier(0.25, 1, 0.5, 1);
+    }
+    .slide-up{animation:slideUp .5s var(--spring-soft) both;will-change:transform,opacity}
+    .fade-in{animation:fadeIn .4s var(--spring-stiff) both}
+    .scale-in{animation:scaleIn .4s var(--spring-soft) both}
     .shimmer-bg{background:linear-gradient(90deg,${T.bg.card} 30%,${T.bg.elevated} 50%,${T.bg.card} 70%);background-size:200% 100%;animation:shimmer 2.5s ease-in-out 1 forwards}
     .pulse-alert{animation:pulseAlert 2s infinite}
     .spin{animation:spin .8s linear infinite}
@@ -63,33 +70,34 @@ export const GlobalStyles = () => (
     .tab-slide-left{animation:tabSlideFromLeft .4s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
     .slide-pane{animation:slidePaneIn .35s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
 
-    /* Top 0.0001% Micro-Animations */
+    /* Top 0.0001% Micro-Animations & Haptic Press States */
     .hover-card {
-      transition: border-color .4s ease, box-shadow .4s cubic-bezier(0.16, 1, 0.3, 1), transform .4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+      transition: border-color .4s ease, box-shadow .4s var(--spring-stiff), transform .4s var(--spring-stiff) !important;
     }
     .hover-card:hover {
-      transform: translateY(-4px) scale(1.015) !important;
-      box-shadow: 0 20px 48px rgba(0,0,0,0.6), 0 8px 16px rgba(0,0,0,0.5), 0 0 0 1px rgba(160,140,220,0.2) !important;
-      border-color: rgba(160,140,220,0.4) !important;
+      transform: translateY(-2px) scale(1.01) !important;
+      box-shadow: 0 16px 32px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.3), 0 0 0 1px rgba(160,140,220,0.15) !important;
+      border-color: rgba(160,140,220,0.3) !important;
       z-index: 10;
     }
     .hover-card:active {
-      transform: translateY(0px) scale(0.97) !important;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4), 0 0 0 1px rgba(160,140,220,0.1) !important;
+      transform: translateY(2px) scale(0.96) !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5), 0 0 0 1px rgba(160,140,220,0.05) !important;
       transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease !important;
     }
     
     .hover-btn {
-      transition: transform .3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow .3s ease, filter .3s ease !important;
+      transition: transform .3s var(--spring-stiff), box-shadow .3s ease, filter .3s ease, opacity .3s ease !important;
     }
     .hover-btn:not(:disabled):hover {
-      transform: translateY(-2px) !important;
-      filter: brightness(1.15);
+      transform: translateY(-1px) !important;
+      filter: brightness(1.1);
     }
     .hover-btn:not(:disabled):active {
       transform: translateY(1px) scale(0.94) !important;
       filter: brightness(0.9);
-      transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), filter 0.15s ease !important;
+      opacity: 0.8;
+      transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), filter 0.1s ease, opacity 0.1s ease !important;
     }
     
     /* Scroll area */
@@ -112,9 +120,19 @@ export const GlobalStyles = () => (
       padding-top:clamp(12px,2vh,18px);
     }
 
-    /* Button resets */
-    button{-webkit-tap-highlight-color:transparent;font-family:${T.font.sans};touch-action:manipulation;user-select:none}
-    a,[role="button"]{touch-action:manipulation}
+    /* Button resets & Accessibility 44pt min target */
+    button{
+      -webkit-tap-highlight-color:transparent;font-family:${T.font.sans};touch-action:manipulation;
+      user-select:none;
+      min-height: 44px; /* Strict HIG Compliance */
+      min-width: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    a,[role="button"],.hover-card {
+      touch-action:manipulation;
+    }
 
     /* Safe area helpers */
     @supports(padding:max(0px)){
@@ -188,8 +206,14 @@ export const Card = ({ children, style, animate, delay = 0, onClick, variant = "
 
   return (
     <div
-      onClick={onClick}
-      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(e); } } : undefined}
+      onClick={(e) => {
+        if (onClick) {
+          haptic.selection();
+          // Note: using selection() for lightweight UI interactions (tabs, cards) instead of impact, which is heavier
+          onClick(e);
+        }
+      }}
+      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); haptic.selection(); onClick(e); } } : undefined}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
       className={`${animate ? "slide-up " : ""}${onClick ? "hover-card " : ""}`}
@@ -198,10 +222,9 @@ export const Card = ({ children, style, animate, delay = 0, onClick, variant = "
         borderRadius: T.radius.lg,
         padding: "18px 16px",
         marginBottom: 10,
-        transition: "border-color .25s ease, box-shadow .25s ease, transform .2s ease",
+        ...style,
         ...(onClick ? { cursor: "pointer", position: "relative" } : {}),
         ...(animate ? { animationDelay: `${delay}ms` } : {}),
-        ...style,
       }}
     >
       {children}

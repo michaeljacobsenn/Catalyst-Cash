@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { ChevronDown, ChevronUp, CheckCircle, Loader2 } from "lucide-react";
+import { CheckCircle, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { T } from "./constants.js";
 import { fmt } from "./utils.js";
-import { Card, Badge } from "./ui.jsx";
+import { Badge, Card } from "./ui.jsx";
+import { haptic } from "./haptics.js";
 
 // ═══════════════════════════════════════════════════════════════
 // COUNT-UP ANIMATION
@@ -93,21 +94,26 @@ export const Md = ({ text }) => {
         {text.split("\n").map((line, i) => {
             if (!line.trim()) return <div key={i} style={{ height: 6 }} />;
             if (/^---+$/.test(line.trim())) return <Divider key={i} />;
-            if (line.startsWith("### ")) return <h4 key={i} style={{ color: T.text.primary, fontSize: 13, fontWeight: 700, margin: "10px 0 4px", fontFamily: T.font.mono }}>{line.slice(4).replace(/\*\*/g, "").trim()}</h4>;
-            if (line.startsWith("## ")) return <h3 key={i} style={{ color: T.text.primary, fontSize: 14, fontWeight: 700, margin: "12px 0 5px" }}>{line.slice(3).replace(/\*\*/g, "").trim()}</h3>;
-            // Catch compressed headers (e.g. "**DASHBOARD CARD**" without leading ##)
-            if (/^\*\*[A-Z\s]+CARD\*\*$/.test(line.trim())) return <h3 key={i} style={{ color: T.text.primary, fontSize: 14, fontWeight: 700, margin: "12px 0 5px" }}>{line.replace(/\*\*/g, "").trim()}</h3>;
+            // Headline (17pt, semibold) - iOS HIG
+            if (line.startsWith("### ")) return <h4 key={i} style={{ color: T.text.primary, fontSize: 17, fontWeight: 600, letterSpacing: "-0.02em", margin: "14px 0 6px", fontFamily: T.font.mono }}>{line.slice(4).replace(/\*\*/g, "").trim()}</h4>;
+            // Title 2 (22pt, bold) - iOS HIG
+            if (line.startsWith("## ")) return <h3 key={i} style={{ color: T.text.primary, fontSize: 22, fontWeight: 700, letterSpacing: "-0.01em", margin: "18px 0 8px" }}>{line.slice(3).replace(/\*\*/g, "").trim()}</h3>;
+            // Catch compressed headers (e.g. "**DASHBOARD CARD**" without leading ##) - Treat as Headline
+            if (/^\*\*[A-Z\s]+CARD\*\*$/.test(line.trim())) return <h3 key={i} style={{ color: T.text.primary, fontSize: 17, fontWeight: 600, margin: "14px 0 6px" }}>{line.replace(/\*\*/g, "").trim()}</h3>;
 
             if (line.startsWith("|")) {
                 const cells = line.split("|").filter(c => c.trim()).map(c => c.trim());
                 if (cells.every(c => /^[-:]+$/.test(c))) return null;
-                return <div key={i} style={{ display: "flex", gap: 2, fontSize: 11, fontFamily: T.font.mono, padding: "4px 0", borderBottom: `1px solid ${T.border.subtle}` }}>
+                return <div key={i} style={{
+                    display: "flex", gap: 2, fontSize: 13, // Footnote
+                    fontFamily: T.font.mono, padding: "6px 0", borderBottom: `1px solid ${T.border.subtle}`
+                }}>
                     {cells.map((c, j) => <span key={j} style={{ flex: 1, padding: "2px 4px", color: T.text.secondary }}>{c.replace(/\*\*/g, "")}</span>)}</div>;
             }
             const parts = line.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
-            return <p key={i} style={{ marginBottom: 3 }}>{parts.map((p, j) => {
+            return <p key={i} style={{ marginBottom: 4, fontSize: 15, lineHeight: 1.6 }}>{parts.map((p, j) => { // Subheadline size
                 if (p.startsWith("**") && p.endsWith("**")) return <strong key={j} style={{ color: T.text.primary, fontWeight: 700 }}>{p.slice(2, -2)}</strong>;
-                if (p.startsWith("`") && p.endsWith("`")) return <code key={j} style={{ fontFamily: T.font.mono, fontSize: 11, color: T.accent.primary, background: T.accent.primaryDim, padding: "2px 6px", borderRadius: 4 }}>{p.slice(1, -1)}</code>;
+                if (p.startsWith("`") && p.endsWith("`")) return <code key={j} style={{ fontFamily: T.font.mono, fontSize: 13, color: T.accent.primary, background: T.accent.primaryDim, padding: "2px 6px", borderRadius: 4 }}>{p.slice(1, -1)}</code>;
                 return <span key={j}>{p}</span>;
             })}</p>;
         })}</div>;
@@ -116,7 +122,7 @@ export const Md = ({ text }) => {
 export const Section = ({ title, icon: Icon, content, accentColor, defaultOpen = true, badge, delay = 0 }) => {
     const [open, setOpen] = useState(defaultOpen);
     if (!content?.trim()) return null;
-    const toggle = () => setOpen(!open);
+    const toggle = () => { haptic.selection(); setOpen(!open); };
     return <Card animate delay={delay}>
         <div onClick={toggle}
             onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}
@@ -140,8 +146,12 @@ export const Section = ({ title, icon: Icon, content, accentColor, defaultOpen =
 
 export const MoveRow = ({ item, checked, onToggle, index }) => {
     const tm = { REQUIRED: "red", DEADLINE: "amber", PROMO: "blue", OPTIONAL: "gray" };
-    return <div className="slide-up" onClick={onToggle}
-        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
+    const handleToggle = () => {
+        if (!checked) haptic.light(); else haptic.selection();
+        onToggle();
+    };
+    return <div className="slide-up" onClick={handleToggle}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleToggle(); } }}
         role="checkbox" aria-checked={!!checked} tabIndex={0}
         aria-label={item.text}
         style={{
