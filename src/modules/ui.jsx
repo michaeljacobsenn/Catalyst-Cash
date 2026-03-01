@@ -5,7 +5,7 @@ import { haptic } from "./haptics.js";
 export const GlobalStyles = () => (
   <style>{`
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    html,body,#root{height:100dvh;height:100vh;background:${T.bg.base};font-family:${T.font.sans};color:${T.text.primary};-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow:hidden;-webkit-text-size-adjust:100%}
+    html,body,#root{height:100dvh;height:100vh;background:var(--cc-bg-base, ${T.bg.base});font-family:${T.font.sans};color:${T.text.primary};-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow:hidden;-webkit-text-size-adjust:100%}
     
     /* iOS 18 Typography & Form elements — minimum 44pt touch targets */
     input,textarea,select{

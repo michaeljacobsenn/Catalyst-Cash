@@ -9,9 +9,18 @@ import { Card, Label, Badge } from "../ui.jsx";
 import { Mono, EmptyState } from "../components.jsx";
 import SearchableSelect from "../SearchableSelect.jsx";
 import { fetchMarketPrices, getTickerOptions } from "../marketData.js";
-import { connectBank, autoMatchAccounts, fetchBalances, fetchAllBalances, applyBalanceSync } from "../plaid.js";
+import { connectBank, autoMatchAccounts, fetchBalances, fetchAllBalances, applyBalanceSync, saveConnectionLinks } from "../plaid.js";
 
 const ENABLE_PLAID = true;
+
+function mergeUniqueById(existing = [], incoming = []) {
+    if (!incoming.length) return existing;
+    const map = new Map(existing.map(item => [item.id, item]));
+    for (const item of incoming) {
+        if (!map.has(item.id)) map.set(item.id, item);
+    }
+    return Array.from(map.values());
+}
 
 const INSTITUTIONS = [
     "Amex", "Bank of America", "Barclays", "Capital One", "Chase", "Citi",
@@ -49,21 +58,23 @@ export default memo(function CardPortfolioTab() {
             await connectBank(
                 async (connection) => {
                     // Auto-match Plaid accounts to existing cards/bank accounts
-                    const { newCards, newBankAccounts } = autoMatchAccounts(connection, cards, bankAccounts);
+                    const { newCards, newBankAccounts } = autoMatchAccounts(connection, cards, bankAccounts, cardCatalog);
+                    await saveConnectionLinks(connection);
 
-                    // Merge new records into portfolio
-                    if (newCards.length > 0) setCards(prev => [...prev, ...newCards]);
-                    if (newBankAccounts.length > 0) setBankAccounts(prev => [...prev, ...newBankAccounts]);
+                    // Build deterministic local snapshot so we do not drop new Plaid records.
+                    const allCards = mergeUniqueById(cards, newCards);
+                    const allBanks = mergeUniqueById(bankAccounts, newBankAccounts);
+                    setCards(allCards);
+                    setBankAccounts(allBanks);
 
                     // Fetch live balances and apply them
                     try {
                         const refreshed = await fetchBalances(connection.id);
                         if (refreshed) {
-                            const allCards = [...cards, ...newCards];
-                            const allBanks = [...bankAccounts, ...newBankAccounts];
                             const { updatedCards, updatedBankAccounts } = applyBalanceSync(refreshed, allCards, allBanks);
                             setCards(updatedCards);
                             setBankAccounts(updatedBankAccounts);
+                            await saveConnectionLinks(refreshed);
                         }
                     } catch { /* balance fetch is best-effort */ }
 
@@ -88,6 +99,7 @@ export default memo(function CardPortfolioTab() {
                     const syncData = applyBalanceSync(res, allCards, allBanks);
                     allCards = syncData.updatedCards;
                     allBanks = syncData.updatedBankAccounts;
+                    await saveConnectionLinks(res);
                 }
             }
             setCards(allCards);

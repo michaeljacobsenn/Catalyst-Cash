@@ -269,6 +269,30 @@ function normalizeInstitution(plaidName) {
     return INSTITUTION_ALIASES[lower] || plaidName;
 }
 
+function normText(v) {
+    return String(v || "").toLowerCase().trim();
+}
+
+function normDigits(v) {
+    return String(v || "").replace(/\D/g, "");
+}
+
+function extractLast4(card) {
+    if (!card) return null;
+    const direct = [card.last4, card.mask]
+        .map(normDigits)
+        .find(v => v.length >= 4);
+    if (direct) return direct.slice(-4);
+
+    const notesMatch = String(card.notes || "").match(/···\s?(\d{4})/);
+    if (notesMatch) return notesMatch[1];
+    return null;
+}
+
+function sameInstitution(a, b) {
+    return normText(a) === normText(b);
+}
+
 /**
  * Auto-match Plaid accounts to existing cards and bank accounts.
  *
@@ -332,25 +356,30 @@ export function autoMatchAccounts(connection, cards = [], bankAccounts = [], car
         let linkedType = null; // "card" | "bank"
 
         if (acct.type === "credit") {
+            const acctLast4 = normDigits(acct.mask).slice(-4) || null;
+            const acctName = normText(acct.officialName || acct.name);
+
             // Try to match to existing card
-            const matchByMask = acct.mask
+            const matchByPlaidId = cards.find(c => c._plaidAccountId === acct.plaidAccountId);
+            const matchByMask = !matchByPlaidId && acctLast4
                 ? cards.find(c =>
-                    c.institution?.toLowerCase() === normalizedInst?.toLowerCase() &&
-                    c.name?.toLowerCase().includes(acct.mask)
+                    sameInstitution(c.institution, normalizedInst) &&
+                    extractLast4(c) === acctLast4
                 )
                 : null;
 
-            const matchByName = !matchByMask
+            const matchByName = !matchByPlaidId && !matchByMask && acctName
                 ? cards.find(c =>
-                    c.institution?.toLowerCase() === normalizedInst?.toLowerCase() &&
-                    (
-                        c.name?.toLowerCase().includes(acct.name?.toLowerCase()) ||
-                        acct.officialName?.toLowerCase().includes(c.name?.toLowerCase())
-                    )
+                    sameInstitution(c.institution, normalizedInst) &&
+                    (() => {
+                        const cardName = normText(c.nickname || c.name);
+                        if (!cardName || cardName.length < 4 || acctName.length < 4) return false;
+                        return cardName.includes(acctName) || acctName.includes(cardName);
+                    })()
                 )
                 : null;
 
-            const cardMatch = matchByMask || matchByName;
+            const cardMatch = matchByPlaidId || matchByMask || matchByName;
             if (cardMatch) {
                 linkedId = cardMatch.id;
                 linkedType = "card";
@@ -360,12 +389,14 @@ export function autoMatchAccounts(connection, cards = [], bankAccounts = [], car
                 const catCards = cardCatalog && normalizedInst ? getIssuerCards(normalizedInst, cardCatalog).map(c => c.name) : [];
                 const bestName = fuzzyMatchCardName(acct.officialName || acct.name, catCards);
 
-                newCards.push({
+                const newCard = {
                     id: `plaid_${acct.plaidAccountId}`,
                     name: bestName,
                     institution: normalizedInst || "Other",
                     nickname: "",
                     limit: acct.balance?.limit || null,
+                    mask: acct.mask || null,
+                    last4: acctLast4,
                     annualFee: null,
                     annualFeeDue: "",
                     annualFeeWaived: false,
@@ -379,26 +410,32 @@ export function autoMatchAccounts(connection, cards = [], bankAccounts = [], car
                     minPayment: null,
                     _plaidAccountId: acct.plaidAccountId,
                     _plaidConnectionId: connection.id,
-                });
+                };
+                newCards.push(newCard);
+                linkedId = newCard.id;
+                linkedType = "card";
+                acct.linkedCardId = newCard.id;
             }
         } else if (acct.type === "depository") {
             // Try to match to existing bank account
-            const matchByName = bankAccounts.find(b =>
-                b.bank?.toLowerCase() === normalizedInst?.toLowerCase() &&
+            const matchByPlaidId = bankAccounts.find(b => b._plaidAccountId === acct.plaidAccountId);
+            const matchByName = !matchByPlaidId ? bankAccounts.find(b =>
+                sameInstitution(b.bank, normalizedInst) &&
                 (
-                    b.name?.toLowerCase().includes(acct.name?.toLowerCase()) ||
-                    acct.officialName?.toLowerCase().includes(b.name?.toLowerCase()) ||
+                    normText(b.name).includes(normText(acct.name)) ||
+                    normText(acct.officialName).includes(normText(b.name)) ||
                     (acct.subtype === b.accountType)
                 )
-            );
+            ) : null;
 
-            if (matchByName) {
-                linkedId = matchByName.id;
+            const bankMatch = matchByPlaidId || matchByName;
+            if (bankMatch) {
+                linkedId = bankMatch.id;
                 linkedType = "bank";
-                acct.linkedBankAccountId = matchByName.id;
+                acct.linkedBankAccountId = bankMatch.id;
             } else {
                 // Prepare a new bank account record
-                newBankAccounts.push({
+                const newBank = {
                     id: `plaid_${acct.plaidAccountId}`,
                     bank: normalizedInst || "Other",
                     accountType: acct.subtype === "savings" ? "savings" : "checking",
@@ -407,7 +444,11 @@ export function autoMatchAccounts(connection, cards = [], bankAccounts = [], car
                     notes: `Auto-imported from Plaid (···${acct.mask || "?"})`,
                     _plaidAccountId: acct.plaidAccountId,
                     _plaidConnectionId: connection.id,
-                });
+                };
+                newBankAccounts.push(newBank);
+                linkedId = newBank.id;
+                linkedType = "bank";
+                acct.linkedBankAccountId = newBank.id;
             }
         }
 
@@ -419,6 +460,37 @@ export function autoMatchAccounts(connection, cards = [], bankAccounts = [], car
     }
 
     return { matched, unmatched, newCards, newBankAccounts };
+}
+
+/**
+ * Persist in-memory account link IDs back to storage.
+ * Without this, refresh fetches a stale connection with null links.
+ */
+export async function saveConnectionLinks(connection) {
+    if (!connection?.id || !Array.isArray(connection.accounts)) return;
+
+    const conns = await getConnections();
+    const idx = conns.findIndex(c => c.id === connection.id);
+    if (idx < 0) return;
+
+    const linkByAccountId = new Map(
+        connection.accounts.map(a => [a.plaidAccountId, {
+            linkedCardId: a.linkedCardId,
+            linkedBankAccountId: a.linkedBankAccountId
+        }])
+    );
+
+    conns[idx].accounts = (conns[idx].accounts || []).map(acct => {
+        const patch = linkByAccountId.get(acct.plaidAccountId);
+        if (!patch) return acct;
+        return {
+            ...acct,
+            linkedCardId: patch.linkedCardId ?? acct.linkedCardId ?? null,
+            linkedBankAccountId: patch.linkedBankAccountId ?? acct.linkedBankAccountId ?? null,
+        };
+    });
+
+    await saveConnections(conns);
 }
 
 /**
@@ -438,6 +510,12 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = []) {
     for (const acct of connection.accounts) {
         if (!acct.balance) continue;
 
+        // Self-healing fallback: recover link via plaid account id.
+        const fallbackCard = !acct.linkedCardId
+            ? updatedCards.find(c => c._plaidAccountId === acct.plaidAccountId)
+            : null;
+        if (!acct.linkedCardId && fallbackCard) acct.linkedCardId = fallbackCard.id;
+
         if (acct.linkedCardId) {
             const idx = updatedCards.findIndex(c => c.id === acct.linkedCardId);
             if (idx >= 0) {
@@ -449,8 +527,9 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = []) {
                     _plaidLimit: acct.balance.limit,
                     _plaidLastSync: connection.lastSync,
                     _plaidAccountId: acct.plaidAccountId,
-                    // Auto-update credit limit if Plaid provides it and we don't have one
-                    limit: updatedCards[idx].limit || acct.balance.limit || null,
+                    _plaidConnectionId: connection.id,
+                    // Credit limit should only be filled when missing.
+                    limit: updatedCards[idx].limit ?? acct.balance.limit ?? null,
                 };
                 balanceSummary.push({
                     name: updatedCards[idx].nickname || updatedCards[idx].name,
@@ -460,6 +539,11 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = []) {
                 });
             }
         }
+
+        const fallbackBank = !acct.linkedBankAccountId
+            ? updatedBankAccounts.find(b => b._plaidAccountId === acct.plaidAccountId)
+            : null;
+        if (!acct.linkedBankAccountId && fallbackBank) acct.linkedBankAccountId = fallbackBank.id;
 
         if (acct.linkedBankAccountId) {
             const idx = updatedBankAccounts.findIndex(b => b.id === acct.linkedBankAccountId);
@@ -471,6 +555,7 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = []) {
                     _plaidAvailable: acct.balance.available,
                     _plaidLastSync: connection.lastSync,
                     _plaidAccountId: acct.plaidAccountId,
+                    _plaidConnectionId: connection.id,
                 };
                 balanceSummary.push({
                     name: updatedBankAccounts[idx].name,

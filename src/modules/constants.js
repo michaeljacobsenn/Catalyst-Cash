@@ -146,6 +146,14 @@ export function applyTheme(mode) {
   Object.assign(T.status, tokens.status);
   Object.assign(T.shadow, tokens.shadow);
   T._mode = mode; // track current mode
+
+  // Keep native/webview surfaces in sync even if a memoized view skips a render.
+  if (typeof document !== "undefined") {
+    document.documentElement.dataset.theme = mode;
+    document.documentElement.style.setProperty("--cc-bg-base", tokens.bg.base);
+    document.documentElement.style.colorScheme = mode;
+    if (document.body) document.body.style.background = tokens.bg.base;
+  }
 }
 
 // Issuer brand colors

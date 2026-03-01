@@ -15,12 +15,21 @@ import { uploadToICloud } from "../cloudSync.js";
 import { isSecuritySensitiveKey } from "../securityKeys.js";
 // xlsx is loaded dynamically in importBackup() to reduce initial bundle size
 import { generateBackupSpreadsheet } from "../spreadsheet.js";
-import { getConnections, removeConnection, connectBank } from "../plaid.js";
+import { getConnections, removeConnection, connectBank, autoMatchAccounts, fetchBalances, applyBalanceSync, saveConnectionLinks } from "../plaid.js";
 import { shouldShowGating, checkAuditQuota, getRawTier } from "../subscription.js";
 import ProPaywall, { ProBanner } from "./ProPaywall.jsx";
 import { presentCustomerCenter } from "../revenuecat.js";
 
 const ENABLE_PLAID = true; // Toggle to false to hide, true to show Plaid integration
+
+function mergeUniqueById(existing = [], incoming = []) {
+    if (!incoming.length) return existing;
+    const map = new Map(existing.map(item => [item.id, item]));
+    for (const item of incoming) {
+        if (!map.has(item.id)) map.set(item.id, item);
+    }
+    return Array.from(map.values());
+}
 
 // Legacy key migration: if old "api-key" exists, treat as openai key
 async function migrateApiKey() {
@@ -189,7 +198,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
     const { useStreaming, setUseStreaming } = useAudit();
     const { apiKey, setApiKey, aiProvider, setAiProvider, aiModel, setAiModel, financialConfig, setFinancialConfig, personalRules, setPersonalRules, autoBackupInterval, setAutoBackupInterval, notifPermission, persona, setPersona, themeMode, setThemeMode } = useSettings();
     const { requireAuth, setRequireAuth, appPasscode, setAppPasscode, useFaceId, setUseFaceId, lockTimeout, setLockTimeout, appleLinkedId, setAppleLinkedId } = useSecurity();
-    const { cards, renewals } = usePortfolio();
+    const { cards, setCards, bankAccounts, setBankAccounts, cardCatalog, renewals } = usePortfolio();
 
     // Auth Plugins state management
     const [lastBackupTS, setLastBackupTS] = useState(null);
@@ -1348,7 +1357,30 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                 setIsPlaidConnecting(true);
                                 try {
                                     await connectBank(
-                                        async () => {
+                                        async (connection) => {
+                                            try {
+                                                const { newCards, newBankAccounts } = autoMatchAccounts(connection, cards, bankAccounts, cardCatalog);
+                                                await saveConnectionLinks(connection);
+
+                                                const allCards = mergeUniqueById(cards, newCards);
+                                                const allBanks = mergeUniqueById(bankAccounts, newBankAccounts);
+                                                setCards(allCards);
+                                                setBankAccounts(allBanks);
+
+                                                try {
+                                                    const refreshed = await fetchBalances(connection.id);
+                                                    if (refreshed) {
+                                                        const syncData = applyBalanceSync(refreshed, allCards, allBanks);
+                                                        setCards(syncData.updatedCards);
+                                                        setBankAccounts(syncData.updatedBankAccounts);
+                                                        await saveConnectionLinks(refreshed);
+                                                    }
+                                                } catch {
+                                                    // Best effort only; connection succeeded.
+                                                }
+                                            } catch (err) {
+                                                console.error(err);
+                                            }
                                             setPlaidConnections(await getConnections());
                                             if (window.toast) window.toast.success("Bank linked successfully!");
                                         },
