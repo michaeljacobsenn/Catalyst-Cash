@@ -206,9 +206,9 @@ export default function ProPaywall({ onClose }) {
  * Only renders when shouldShowGating() is true (controlled by parent).
  */
 export function ProBanner({ onUpgrade, label, sublabel }) {
-    return <button onClick={() => { haptic.light(); onUpgrade?.(); }} style={{
+    return <button className="hover-btn" onClick={() => { haptic.light(); onUpgrade?.(); }} style={{
         width: "100%", padding: "12px 16px", borderRadius: T.radius.lg,
-        border: `1px solid ${T.accent.primary}30`,
+        border: `1px solid ${T.accent.primaryDim}`,
         background: `linear-gradient(135deg, ${T.accent.primary}08, ${T.accent.primary}15)`,
         cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between",
         marginBottom: 12

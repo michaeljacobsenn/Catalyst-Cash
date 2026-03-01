@@ -106,7 +106,7 @@ export function SettingsProvider({ children }) {
     const [aiConsent, setAiConsent] = useState(false);
     const [showAiConsent, setShowAiConsent] = useState(false);
     const [themeMode, setThemeModeRaw] = useState("dark"); // "system" | "light" | "dark"
-    const [, forceRender] = useState(0);
+    const [themeTick, forceRender] = useState(0);
     const [financialConfig, dispatchFinConfig] = useReducer(financialConfigReducer, DEFAULT_FINANCIAL_CONFIG);
 
     // Backward-compatible wrapper: accepts either a new state object, a function updater, or dispatch action
@@ -254,7 +254,7 @@ export function SettingsProvider({ children }) {
         notifPermission, setNotifPermission,
         aiConsent, setAiConsent,
         showAiConsent, setShowAiConsent,
-        themeMode, setThemeMode,
+        themeMode, setThemeMode, themeTick,
         financialConfig, setFinancialConfig,
         isSettingsReady
     };

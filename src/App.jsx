@@ -512,7 +512,7 @@ function CatalystCash() {
     {/* ═══════ OFFLINE BANNER ═══════ */}
     {!online && (
       <div style={{
-        background: `${T.status.amber}15`, borderBottom: `1px solid ${T.status.amber}30`,
+        background: T.status.amberDim, borderBottom: `1px solid ${T.status.amber}30`,
         padding: "6px 16px", textAlign: "center",
         fontSize: 11, color: T.status.amber, fontWeight: 600, fontFamily: T.font.mono,
         flexShrink: 0

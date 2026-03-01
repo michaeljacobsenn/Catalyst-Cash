@@ -196,7 +196,7 @@ import { usePortfolio } from '../contexts/PortfolioContext.jsx';
 
 export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestoreComplete, onShowGuide, proEnabled = false }) {
     const { useStreaming, setUseStreaming } = useAudit();
-    const { apiKey, setApiKey, aiProvider, setAiProvider, aiModel, setAiModel, financialConfig, setFinancialConfig, personalRules, setPersonalRules, autoBackupInterval, setAutoBackupInterval, notifPermission, persona, setPersona, themeMode, setThemeMode } = useSettings();
+    const { apiKey, setApiKey, aiProvider, setAiProvider, aiModel, setAiModel, financialConfig, setFinancialConfig, personalRules, setPersonalRules, autoBackupInterval, setAutoBackupInterval, notifPermission, persona, setPersona, themeMode, setThemeMode, themeTick } = useSettings();
     const { requireAuth, setRequireAuth, appPasscode, setAppPasscode, useFaceId, setUseFaceId, lockTimeout, setLockTimeout, appleLinkedId, setAppleLinkedId } = useSecurity();
     const { cards, setCards, bankAccounts, setBankAccounts, cardCatalog, renewals } = usePortfolio();
 
