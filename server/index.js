@@ -3,6 +3,7 @@ import helmet from "helmet";
 import fetch from "node-fetch";
 import path from "path";
 import { fileURLToPath } from "url";
+import { registerPlaidRoutes } from "./plaid-routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,6 +11,15 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.use(helmet());
 app.use(express.json({ limit: "2mb" }));
+
+// CORS for native Capacitor app
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Content-Type, x-pp-secret, x-pp-user, x-pp-tier");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  return next();
+});
 app.get("/privacy", (_req, res) => {
   res.sendFile(path.join(__dirname, "public/privacy.html"));
 });
@@ -143,6 +153,9 @@ app.post("/audit/gemini", requireAuth, checkLimit, async (req, res) => {
     return res.status(500).json({ error: e.message || "Gemini proxy failed" });
   }
 });
+
+// ── Plaid Routes ─────────────────────────────────────────────
+registerPlaidRoutes(app, requireAuth);
 
 app.listen(PORT, () => {
   console.log(`Catalyst Cash proxy running on :${PORT}`);

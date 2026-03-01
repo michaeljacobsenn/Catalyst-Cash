@@ -29,7 +29,7 @@ import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
 // BETA NOTE: Keep "off" until IAP is wired with StoreKit 2 or
 // RevenueCat. Flip to "soft" for soft launch, "live" for GA.
 // ──────────────────────────────────────────────────────────────
-const GATING_MODE = "off";
+const GATING_MODE = "soft";  // "off" = dev | "soft" = beta (banners, no hard-block) | "live" = GA
 
 /**
  * Get the current gating mode.

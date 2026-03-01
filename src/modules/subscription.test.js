@@ -67,54 +67,55 @@ describe('IAP Constants', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// GATING MODE (currently "off" for development)
+// GATING MODE (currently "soft" for beta)
 // ═══════════════════════════════════════════════════════════════
 describe('Gating Mode', () => {
-    it('default gating mode is "off"', () => {
-        expect(getGatingMode()).toBe('off');
+    it('default gating mode is "soft"', () => {
+        expect(getGatingMode()).toBe('soft');
     });
 
-    it('isGatingEnforced returns false when off', () => {
+    it('isGatingEnforced returns false when soft', () => {
         expect(isGatingEnforced()).toBe(false);
     });
 
-    it('shouldShowGating returns false when off', () => {
-        expect(shouldShowGating()).toBe(false);
+    it('shouldShowGating returns true when soft', () => {
+        expect(shouldShowGating()).toBe(true);
     });
 });
 
 // ═══════════════════════════════════════════════════════════════
-// GATING_MODE = "off" BEHAVIOR
-// When gating is off, everything should return Pro-level access
-// (except model availability which uses raw tier)
+// SOFT GATING — Free-tier limits shown (not enforced)
+// Users see banners/limits but are not hard-blocked
 // ═══════════════════════════════════════════════════════════════
-describe('Gating OFF — Pro-level access for all', () => {
-    it('getCurrentTier returns Pro tier', async () => {
+describe('Soft Gating — Free-tier limits with banners', () => {
+    it('getCurrentTier returns Free tier for unpaid users', async () => {
         const tier = await getCurrentTier();
-        expect(tier.id).toBe('pro');
+        expect(tier.id).toBe('free');
     });
 
-    it('checkAuditQuota returns unlimited', async () => {
+    it('checkAuditQuota returns free-tier limits', async () => {
         const quota = await checkAuditQuota();
         expect(quota.allowed).toBe(true);
-        expect(quota.remaining).toBe(Infinity);
-        expect(quota.limit).toBe(Infinity);
+        expect(quota.limit).toBe(TIERS.free.auditsPerWeek);
     });
 
-    it('getMarketRefreshTTL returns Pro-level 15 min', async () => {
+    it('getMarketRefreshTTL returns free-tier 60 min', async () => {
         const ttl = await getMarketRefreshTTL();
-        expect(ttl).toBe(15 * 60 * 1000);
+        expect(ttl).toBe(60 * 60 * 1000);
     });
 
-    it('getHistoryLimit returns Infinity', async () => {
+    it('getHistoryLimit returns free-tier limit', async () => {
         const limit = await getHistoryLimit();
-        expect(limit).toBe(Infinity);
+        expect(limit).toBe(TIERS.free.historyLimit);
     });
 
-    it('hasFeature returns true for pro features', async () => {
-        expect(await hasFeature('premium_models')).toBe(true);
-        expect(await hasFeature('unlimited_audits')).toBe(true);
-        expect(await hasFeature('export_csv')).toBe(true);
+    it('hasFeature returns false for pro-only features', async () => {
+        expect(await hasFeature('premium_models')).toBe(false);
+        expect(await hasFeature('unlimited_audits')).toBe(false);
+    });
+
+    it('hasFeature returns true for free-tier features', async () => {
+        expect(await hasFeature('basic_audit')).toBe(true);
     });
 });
 
