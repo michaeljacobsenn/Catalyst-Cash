@@ -12,6 +12,7 @@ import DebtSimulator from "./DebtSimulator.jsx";
 import WeeklyChallenges from "./WeeklyChallenges.jsx";
 import CashFlowCalendar from "./CashFlowCalendar.jsx";
 import BudgetTab from "./BudgetTab.jsx";
+import { computeFireProjection } from "../fire.js";
 import { haptic } from "../haptics.js";
 import { shouldShowGating } from "../subscription.js";
 import ProPaywall, { ProBanner } from "./ProPaywall.jsx";
@@ -20,6 +21,28 @@ import { useAudit } from '../contexts/AuditContext.jsx';
 import { useSettings } from '../contexts/SettingsContext.jsx';
 import { usePortfolio } from '../contexts/PortfolioContext.jsx';
 import { useNavigation } from '../contexts/NavigationContext.jsx';
+
+function summarizeTrend(data, key, formatter) {
+    if (!Array.isArray(data) || data.length < 2) {
+        return { direction: "flat", change: "insufficient data", start: null, end: null };
+    }
+    const first = data[0]?.[key];
+    const last = data[data.length - 1]?.[key];
+    if (!Number.isFinite(first) || !Number.isFinite(last)) {
+        return { direction: "flat", change: "insufficient data", start: null, end: null };
+    }
+    const delta = last - first;
+    const pct = first !== 0 ? (delta / Math.abs(first)) * 100 : 0;
+    const direction = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
+    const absPct = Math.abs(pct);
+    const pctText = Number.isFinite(absPct) ? `${absPct.toFixed(1)}%` : "0.0%";
+    return {
+        direction,
+        change: delta === 0 ? "unchanged" : `${direction} ${pctText}`,
+        start: formatter(first),
+        end: formatter(last)
+    };
+}
 
 export default memo(function DashboardTab({ onRestore, proEnabled = false, onDemoAudit, onRefreshDashboard }) {
     const { current, history, handleManualImport } = useAudit();
@@ -69,6 +92,14 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
         }
         return { accounts: result, total: grandTotal };
     }, [financialConfig, marketPrices]);
+
+    const fireProjection = useMemo(() => computeFireProjection({
+        financialConfig,
+        renewals,
+        cards,
+        portfolioMarketValue: investmentSnapshot.total,
+        asOfDate: current?.date || new Date().toISOString().split("T")[0]
+    }), [financialConfig, renewals, cards, investmentSnapshot.total, current?.date]);
 
     // Active analytics tab
     const [chartTab, setChartTab] = useState("networth");
@@ -124,6 +155,21 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
             return { date: m ? `${months[parseInt(m, 10) - 1]} ${d} ` : "?", spent: Math.max(0, prev - checking) };
         });
     }, [history]);
+
+    const chartA11y = useMemo(() => {
+        const netWorthTrend = summarizeTrend(chartData, "nw", v => fmt(v));
+        const healthTrend = summarizeTrend(scoreData, "score", v => `${Math.round(v)}`);
+        const spendingTrend = summarizeTrend(spendData, "spent", v => fmt(v));
+
+        return {
+            netWorthLabel: `Net worth chart with ${chartData.length} points, trend ${netWorthTrend.change}. Start ${netWorthTrend.start ?? "N/A"}, end ${netWorthTrend.end ?? "N/A"}.`,
+            netWorthHint: "This area chart shows net worth progression over recent audits. Upward movement indicates improving total assets minus debts.",
+            healthLabel: `Health score chart with ${scoreData.length} points, trend ${healthTrend.change}. Start ${healthTrend.start ?? "N/A"}, end ${healthTrend.end ?? "N/A"}.`,
+            healthHint: "This chart tracks the financial health score over time. Higher values indicate stronger liquidity, debt control, and savings discipline.",
+            spendingLabel: `Weekly spending chart with ${spendData.length} points, trend ${spendingTrend.change}. Start ${spendingTrend.start ?? "N/A"}, end ${spendingTrend.end ?? "N/A"}.`,
+            spendingHint: "This chart shows estimated weekly spending based on checking-balance changes between audits.",
+        };
+    }, [chartData, scoreData, spendData]);
 
     // Confetti
     const [runConfetti, setRunConfetti] = useState(false);
@@ -264,11 +310,11 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
             {/* View Toggle (Always Visible as requested) */}
             <div style={{ display: "flex", background: T.bg.elevated, padding: 4, borderRadius: T.radius.lg, marginBottom: 16, border: `1px solid ${T.border.subtle} ` }}>
                 {[{ id: "command", label: "Command Center" }, { id: "budget", label: "Weekly Budget" }].map(v => (
-                    <button key={v.id} onClick={() => { haptic.light(); setViewMode(v.id); }} style={{
+                    <button key={v.id} className="a11y-hit-target" onClick={() => { haptic.light(); setViewMode(v.id); }} style={{
                         flex: 1, padding: "8px 12px", border: "none", borderRadius: T.radius.md,
                         background: viewMode === v.id ? T.bg.card : "transparent",
                         color: viewMode === v.id ? T.text.primary : T.text.dim,
-                        fontSize: 12, fontWeight: 700, cursor: "pointer",
+                        fontSize: 12, fontWeight: 700, cursor: "pointer", lineHeight: 1.3,
                         boxShadow: viewMode === v.id ? T.shadow.navBtn : "none",
                         transition: "all .2s ease"
                     }}>{v.label}</button>
@@ -428,6 +474,8 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
     const radius = 40;
     const circumference = 2 * Math.PI * radius;
     const arcLength = (score / 100) * circumference * 0.75;
+    const healthGaugeLabel = `Health score gauge showing ${score} out of 100, grade ${grade}, status ${cleanStatus}.`;
+    const healthGaugeHint = "The circular gauge summarizes current financial health. A higher score indicates better overall financial stability.";
 
     // ── Synthetic Percentile (client-side, no real user data) ──
     // Normal CDF approximation (Abramowitz & Stegun) — μ=62, σ=16
@@ -462,11 +510,14 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
 @keyframes ambientGlow { 0%, 100% { background-position: 0% 0%; } 50% { background-position: 100% 100%; } }
             .hover-lift { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)!important; cursor: default; }
             .hover-lift:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08)!important; }
-            .chart-tab { padding: 5px 12px; border-radius: 20px; border: none; font-size: 10px; font-weight: 700; cursor: pointer; font-family: ${T.font.mono}; letter-spacing: 0.05em; text-transform: uppercase; transition: all .2s; }
+            .chart-tab { padding: 5px 12px; border-radius: 20px; border: none; font-size: 10px; font-weight: 700; cursor: pointer; font-family: ${T.font.mono}; letter-spacing: 0.05em; text-transform: uppercase; transition: all .2s; white-space: normal; line-height: 1.2; }
             .chart-tab-active { background: ${T.accent.primary}; color: #fff; box-shadow: 0 2px 8px ${T.accent.primary}40; }
             .chart-tab-inactive { background: ${T.bg.elevated}; color: ${T.text.dim}; }
             .alert-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; animation: slideInRight .4s ease-out both; }
             .alert-strip::-webkit-scrollbar { display: none; }
+            .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+            .a11y-hit-target { position: relative; }
+            .a11y-hit-target::after { content: ""; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
 `}</style>
 
         {runConfetti && <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, pointerEvents: "none" }}>
@@ -477,11 +528,11 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
             <div style={{ flex: 1, display: "flex", background: T.bg.elevated, padding: 3, borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle} ` }}>
                 {[{ id: "command", label: "Command Center" }, { id: "budget", label: "Weekly Budget" }].map(v => (
-                    <button key={v.id} onClick={() => { haptic.light(); setViewMode(v.id); }} style={{
+                    <button key={v.id} className="a11y-hit-target" onClick={() => { haptic.light(); setViewMode(v.id); }} style={{
                         flex: 1, padding: "6px 12px", border: "none", borderRadius: T.radius.md,
                         background: viewMode === v.id ? T.bg.card : "transparent",
                         color: viewMode === v.id ? T.text.primary : T.text.dim,
-                        fontSize: 12, fontWeight: 700, cursor: "pointer",
+                        fontSize: 12, fontWeight: 700, cursor: "pointer", lineHeight: 1.3,
                         boxShadow: viewMode === v.id ? T.shadow.navBtn : "none",
                         transition: "all .2s ease"
                     }}>{v.label}</button>
@@ -491,7 +542,7 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
             {/* Action buttons (Export / Share) */}
             {current && <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                 {[{ fn: () => exportAudit(current), icon: Download }, { fn: () => shareAudit(current), icon: ExternalLink }].map(({ fn, icon: I }, i) =>
-                    <button key={i} onClick={fn} style={{
+                    <button key={i} className="a11y-hit-target" onClick={fn} style={{
                         width: 36, height: 36, borderRadius: T.radius.md,
                         border: `1px solid ${T.border.subtle} `, background: T.bg.elevated, color: T.text.primary,
                         cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
@@ -522,7 +573,7 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                             <div style={{ fontSize: 10, fontWeight: 800, color: T.status.amber, fontFamily: T.font.mono, letterSpacing: "0.06em" }}>DEMO DATA</div>
                             <p style={{ fontSize: 10, color: T.text.secondary, lineHeight: 1.4, margin: 0 }}>Showing sample data from a demo audit</p>
                         </div>
-                        <button onClick={onRefreshDashboard} style={{
+                        <button className="a11y-hit-target" onClick={onRefreshDashboard} style={{
                             display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: T.radius.md, border: "none",
                             background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`,
                             color: "#fff", fontSize: 10, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0
@@ -550,7 +601,12 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                     {/* Top section: Score gauge + Net Worth */}
                     <div style={{ padding: "20px 18px 14px", display: "flex", alignItems: "center", gap: 16 }}>
                         {/* Health Score Gauge (compact) */}
-                        {hs.score != null && <div style={{ position: "relative", width: 90, height: 80, flexShrink: 0 }}>
+                        {hs.score != null && <div
+                            role="img"
+                            aria-label={healthGaugeLabel}
+                            aria-describedby="health-score-gauge-hint"
+                            style={{ position: "relative", width: 90, height: 80, flexShrink: 0 }}
+                        >
                             <svg width="90" height="80" viewBox="0 0 90 80">
                                 <circle cx="45" cy="45" r={radius} fill="none" stroke={`${T.border.default} `}
                                     strokeWidth="6" strokeLinecap="round"
@@ -575,8 +631,9 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                                 position: "absolute", bottom: -2, left: "50%", transform: "translateX(-50%)",
                                 fontSize: 7, fontWeight: 800, color: scoreColor, fontFamily: T.font.mono,
                                 background: `${scoreColor}12`, padding: "2px 7px", borderRadius: 10,
-                                border: `1px solid ${scoreColor}20`, whiteSpace: "nowrap", letterSpacing: "0.02em"
+                                border: `1px solid ${scoreColor}20`, letterSpacing: "0.02em"
                             }}>Top {100 - percentile}%</div>}
+                            <span id="health-score-gauge-hint" className="sr-only">{healthGaugeHint}</span>
                         </div>}
 
                         {/* Net Worth + Status */}
@@ -595,7 +652,7 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                                 </div>}
                             </div>
                             <p style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: T.text.dim, marginBottom: 4, fontFamily: T.font.mono, fontWeight: 700 }}>Net Worth</p>
-                            <div style={{ display: "flex", alignItems: "baseline", gap: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
                                 <CountUp
                                     value={p?.netWorth ?? 0}
                                     size={28}
@@ -634,10 +691,10 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                             borderRight: i < quickMetrics.length - 1 ? `1px solid ${T.border.subtle}` : "none",
                             animation: `fadeInUp .4s ease-out ${i * 0.06}s both`
                         }}>
-                            <div style={{ fontSize: 8, fontWeight: 800, color: T.text.dim, fontFamily: T.font.mono, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 3, whiteSpace: "nowrap" }}>
+                            <div style={{ fontSize: 8, fontWeight: 800, color: T.text.dim, fontFamily: T.font.mono, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 3, lineHeight: 1.2, overflowWrap: "anywhere" }}>
                                 {l === "Available" ? <InlineTooltip>{l}</InlineTooltip> : l}
                             </div>
-                            <div style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                            <div style={{ fontVariantNumeric: "tabular-nums", overflowWrap: "anywhere", lineHeight: 1.2 }}>
                                 <CountUp value={v ?? 0} size={11} weight={800} color={c} />
                             </div>
                         </div>)}
@@ -716,18 +773,86 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                     </div>
                 </Card>}
 
+                {/* ═══ FIRE PROJECTION ═══ */}
+                <Card animate delay={140} style={{
+                    background: `linear-gradient(160deg, ${T.bg.card}, ${T.status.blue}08)`,
+                    borderColor: `${T.status.blue}20`
+                }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ width: 26, height: 26, borderRadius: 7, background: `${T.status.blue}18`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <Target size={13} color={T.status.blue} strokeWidth={2.5} />
+                            </div>
+                            <span style={{ fontSize: 12, fontWeight: 700 }}>FIRE Projection</span>
+                        </div>
+                        <Mono size={10} color={T.text.dim}>REAL RETURN {fireProjection.realReturnPct?.toFixed(2) ?? "0.00"}%</Mono>
+                    </div>
+
+                    {fireProjection.status === "ok" ? (
+                        <>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+                                <div style={{ padding: "8px 10px", borderRadius: T.radius.sm, background: `${T.status.green}10`, border: `1px solid ${T.status.green}20` }}>
+                                    <div style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono }}>TARGET DATE</div>
+                                    <div style={{ fontSize: 12, fontWeight: 800, color: T.status.green }}>{fireProjection.projectedFireDate ? fmtDate(fireProjection.projectedFireDate) : "Now"}</div>
+                                </div>
+                                <div style={{ padding: "8px 10px", borderRadius: T.radius.sm, background: `${T.status.blue}10`, border: `1px solid ${T.status.blue}20` }}>
+                                    <div style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono }}>YEARS TO FIRE</div>
+                                    <div style={{ fontSize: 12, fontWeight: 800, color: T.status.blue }}>
+                                        {Number.isFinite(fireProjection.projectedYearsToFire) ? fireProjection.projectedYearsToFire.toFixed(1) : "—"}
+                                    </div>
+                                </div>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                                <div style={{ padding: "7px 8px", borderRadius: T.radius.sm, background: T.bg.elevated }}>
+                                    <div style={{ fontSize: 8, color: T.text.dim, fontFamily: T.font.mono }}>INCOME</div>
+                                    <Mono size={10} weight={700} color={T.status.green}>{fmt(fireProjection.annualIncome)}</Mono>
+                                </div>
+                                <div style={{ padding: "7px 8px", borderRadius: T.radius.sm, background: T.bg.elevated }}>
+                                    <div style={{ fontSize: 8, color: T.text.dim, fontFamily: T.font.mono }}>EXPENSES</div>
+                                    <Mono size={10} weight={700} color={T.status.red}>{fmt(fireProjection.annualExpenses)}</Mono>
+                                </div>
+                                <div style={{ padding: "7px 8px", borderRadius: T.radius.sm, background: T.bg.elevated }}>
+                                    <div style={{ fontSize: 8, color: T.text.dim, fontFamily: T.font.mono }}>SAVINGS RATE</div>
+                                    <Mono size={10} weight={700} color={(fireProjection.savingsRatePct || 0) >= 0 ? T.status.blue : T.status.red}>
+                                        {fireProjection.savingsRatePct != null ? `${fireProjection.savingsRatePct.toFixed(1)}%` : "—"}
+                                    </Mono>
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <div style={{
+                            padding: "10px 12px",
+                            borderRadius: T.radius.sm,
+                            background: `${T.status.amber}10`,
+                            border: `1px solid ${T.status.amber}25`,
+                            fontSize: 11,
+                            color: T.text.secondary,
+                            lineHeight: 1.5
+                        }}>
+                            FIRE horizon is currently not solvable with the active assumptions (reason: {fireProjection.reason || "unstable-inputs"}). Increase annual savings or expected real return.
+                        </div>
+                    )}
+                </Card>
+
                 {/* ═══ SINKING FUNDS — Progress Rings ═══ */}
                 {p?.paceData?.length > 0 && <Card animate delay={150}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                         <div style={{ width: 26, height: 26, borderRadius: 7, background: T.accent.copperDim, display: "flex", alignItems: "center", justifyContent: "center" }}>
                             <Target size={13} color={T.accent.copper} strokeWidth={2.5} /></div>
                         <span style={{ fontSize: 12, fontWeight: 700 }}><InlineTooltip term="Sinking fund">Sinking Funds</InlineTooltip></span></div>
+                    <span id="sinking-funds-chart-hint" className="sr-only">Each circular chart represents one sinking fund progress from zero to one hundred percent of target.</span>
                     <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4, WebkitOverflowScrolling: "touch" }}>
                         {p.paceData.map((d, i) => {
                             const pct = d.target > 0 ? Math.min((d.saved / d.target) * 100, 100) : 0;
                             const rc = pct >= 90 ? T.status.green : pct >= 50 ? T.status.amber : T.status.red;
                             const r = 28, circ = 2 * Math.PI * r, arc = (pct / 100) * circ;
-                            return <div key={i} style={{ textAlign: "center", flexShrink: 0, minWidth: 80, animation: `fadeInUp .4s ease-out ${i * 0.06}s both` }}>
+                            return <div
+                                key={i}
+                                role="img"
+                                aria-describedby="sinking-funds-chart-hint"
+                                aria-label={`${d.name} sinking fund progress ${Math.round(pct)} percent. Saved ${fmt(d.saved)} out of ${fmt(d.target)}.`}
+                                style={{ textAlign: "center", flexShrink: 0, minWidth: 80, animation: `fadeInUp .4s ease-out ${i * 0.06}s both` }}
+                            >
                                 <div style={{ position: "relative", width: 64, height: 64, margin: "0 auto 6px" }}>
                                     <svg width="64" height="64" viewBox="0 0 64 64">
                                         <circle cx="32" cy="32" r={r} fill="none" stroke={`${T.border.default}`} strokeWidth="5" />
@@ -739,7 +864,11 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                                         <span style={{ fontSize: 11, fontWeight: 800, color: rc, fontFamily: T.font.mono }}>{Math.round(pct)}%</span>
                                     </div>
                                 </div>
-                                <div style={{ fontSize: 10, fontWeight: 700, color: T.text.primary, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
+                                <div style={{
+                                    fontSize: 10, fontWeight: 700, color: T.text.primary, marginBottom: 2,
+                                    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+                                    overflow: "hidden", wordBreak: "break-word", lineHeight: 1.2
+                                }}>{d.name}</div>
                                 <div style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono }}>{fmt(d.saved)}/{fmt(d.target)}</div>
                             </div>;
                         })}
@@ -762,13 +891,21 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                                 { id: "health", label: "Health", show: scoreData.length > 1 },
                                 { id: "spending", label: "Spending", show: spendData.length > 1 },
                             ].filter(t => t.show).map(tab => <button key={tab.id}
-                                className={`chart-tab ${chartTab === tab.id ? "chart-tab-active" : "chart-tab-inactive"}`}
+                                className={`chart-tab a11y-hit-target ${chartTab === tab.id ? "chart-tab-active" : "chart-tab-inactive"}`}
                                 onClick={() => setChartTab(tab.id)}
                             >{tab.label}</button>)}
                         </div>
                     </div>
 
-                    {chartTab === "networth" && chartData.length > 1 && <div key="chart-networth" style={{ animation: "fadeInUp .3s ease-out both" }}><ResponsiveContainer width="100%" height={160}>
+                    {chartTab === "networth" && chartData.length > 1 && <div
+                        key="chart-networth"
+                        role="img"
+                        aria-label={chartA11y.netWorthLabel}
+                        aria-describedby="networth-chart-hint"
+                        style={{ animation: "fadeInUp .3s ease-out both" }}
+                    >
+                        <span id="networth-chart-hint" className="sr-only">{chartA11y.netWorthHint}</span>
+                        <ResponsiveContainer width="100%" height={160} aria-hidden="true">
                         <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="nwG" x1="0" y1="0" x2="0" y2="1">
@@ -786,7 +923,15 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                         </AreaChart>
                     </ResponsiveContainer></div>}
 
-                    {chartTab === "health" && scoreData.length > 1 && <div key="chart-health" style={{ animation: "fadeInUp .3s ease-out both" }}><ResponsiveContainer width="100%" height={160}>
+                    {chartTab === "health" && scoreData.length > 1 && <div
+                        key="chart-health"
+                        role="img"
+                        aria-label={chartA11y.healthLabel}
+                        aria-describedby="health-chart-hint"
+                        style={{ animation: "fadeInUp .3s ease-out both" }}
+                    >
+                        <span id="health-chart-hint" className="sr-only">{chartA11y.healthHint}</span>
+                        <ResponsiveContainer width="100%" height={160} aria-hidden="true">
                         <AreaChart data={scoreData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="hsG" x1="0" y1="0" x2="0" y2="1">
@@ -805,7 +950,15 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                     </ResponsiveContainer></div>}
 
                     {
-                        chartTab === "spending" && spendData.length > 1 && <div key="chart-spending" style={{ animation: "fadeInUp .3s ease-out both" }}><ResponsiveContainer width="100%" height={160}>
+                        chartTab === "spending" && spendData.length > 1 && <div
+                            key="chart-spending"
+                            role="img"
+                            aria-label={chartA11y.spendingLabel}
+                            aria-describedby="spending-chart-hint"
+                            style={{ animation: "fadeInUp .3s ease-out both" }}
+                        >
+                            <span id="spending-chart-hint" className="sr-only">{chartA11y.spendingHint}</span>
+                            <ResponsiveContainer width="100%" height={160} aria-hidden="true">
                             <AreaChart data={spendData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="spG" x1="0" y1="0" x2="0" y2="1">
@@ -854,7 +1007,7 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                                         animation: `fadeInUp .3s ease-out ${i * 0.05}s both`
                                     }}>
                                         <div style={{ fontSize: 20, marginBottom: 2 }}>{b.emoji}</div>
-                                        <div style={{ fontSize: 8, fontWeight: 700, color: tc.text, fontFamily: T.font.mono, lineHeight: 1.2, whiteSpace: "nowrap" }}>{b.name}</div>
+                                        <div style={{ fontSize: 8, fontWeight: 700, color: tc.text, fontFamily: T.font.mono, lineHeight: 1.2, whiteSpace: "normal", overflowWrap: "anywhere" }}>{b.name}</div>
                                     </div>;
                                 }) : (
                                     <div style={{ padding: "10px 14px", fontSize: 11, color: T.text.muted, textAlign: "center", width: "100%" }}>
