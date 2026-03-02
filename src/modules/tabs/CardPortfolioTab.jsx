@@ -922,38 +922,16 @@ export default memo(function CardPortfolioTab() {
                                     </div>;
                                 })}
 
-                            {/* Inline Add Holding */}
+                            {/* Inline Add Holding mapped to bottom sheet */}
                             {setFinancialConfig && <div style={{ marginTop: items.length > 0 ? 12 : 0, paddingTop: items.length > 0 ? 12 : 0, borderTop: items.length > 0 ? `1px solid ${T.border.subtle}` : "none" }}>
-                                <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <SearchableSelect
-                                            value={newHoldingSymbol[key] || ""}
-                                            onChange={v => setNewHoldingSymbol(p => ({ ...p, [key]: v }))}
-                                            placeholder={key === "crypto" ? "Search crypto…" : "Search ticker…"}
-                                            options={[
-                                                ...getTickerOptions(key).map(c => ({ value: c.symbol, label: `${c.symbol.replace('-USD', '')} — ${c.name}` })),
-                                                { value: "__custom__", label: "Custom ticker…" }
-                                            ]}
-                                        />
-                                    </div>
-                                    <input type="number" inputMode="decimal" value={newHoldingShares[key] || ""} onChange={e => setNewHoldingShares(p => ({ ...p, [key]: e.target.value }))} placeholder={key === "crypto" ? "Amt" : "Shares"}
-                                        style={{ width: 60, flexShrink: 0, padding: "0 8px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12, fontFamily: T.font.mono, outline: "none" }} />
-                                    <button onClick={() => {
-                                        const symbol = (newHoldingSymbol[key] || "").toUpperCase().trim();
-                                        const shares = parseFloat(newHoldingShares[key] || 0);
-                                        if (!symbol || !shares) return;
-                                        const cur = financialConfig?.holdings || {};
-                                        setFinancialConfig({ ...financialConfig, holdings: { ...cur, [key]: [...(cur[key] || []), { symbol, shares }] } });
-                                        setNewHoldingSymbol(p => ({ ...p, [key]: "" }));
-                                        setNewHoldingShares(p => ({ ...p, [key]: "" }));
-                                    }} disabled={!newHoldingSymbol[key] || !newHoldingShares[key]} style={{
-                                        padding: "0 12px", flexShrink: 0, borderRadius: T.radius.md, border: "none",
-                                        background: (!newHoldingSymbol[key] || !newHoldingShares[key]) ? T.bg.elevated : `${color}20`,
-                                        color: (!newHoldingSymbol[key] || !newHoldingShares[key]) ? T.text.muted : color,
-                                        fontSize: 12, fontWeight: 700, cursor: (!newHoldingSymbol[key] || !newHoldingShares[key]) ? "not-allowed" : "pointer",
-                                        transition: "all .2s"
-                                    }}>+</button>
-                                </div>
+                                <button onClick={() => openSheet('invest')} className="hover-lift" style={{
+                                    width: "100%", padding: 12, borderRadius: T.radius.sm,
+                                    border: `1px dashed ${color}60`, background: `${color}05`,
+                                    color: color, fontSize: 12, fontWeight: 800, cursor: "pointer",
+                                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6
+                                }}>
+                                    <Plus size={14} /> Add to {label}
+                                </button>
                             </div>}
                         </div></div>
                     </Card>;

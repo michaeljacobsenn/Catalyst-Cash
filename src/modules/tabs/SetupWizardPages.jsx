@@ -698,6 +698,9 @@ export function PagePass3({ ai, security, spending, updateAi, updateSecurity, up
                 </>
             )}
 
+            <WizToggle label="Track HSA" sub="Triple tax-advantaged health savings" checked={spending.trackHSA} onChange={v => updateSpending("trackHSA", v)} />
+            <WizToggle label="Track Crypto" sub="Monitor your digital assets" checked={spending.trackCrypto !== false} onChange={v => updateSpending("trackCrypto", v)} />
+
             {/* AI ENGINE */}
             <div style={{ margin: "24px 0 12px", borderTop: `1px solid ${T.border.subtle}`, paddingTop: 20 }}>
                 <h3 style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, margin: "0 0 4px 0" }}>AI Intelligence</h3>

@@ -99,6 +99,7 @@ export default function SetupWizard() {
         greenStatusTarget: "", emergencyReserveTarget: "", defaultAPR: "24.99",
         trackRothContributions: false, rothAnnualLimit: "",
         track401k: false, k401AnnualLimit: "", k401EmployerMatchPct: "", k401EmployerMatchLimit: "",
+        trackHSA: false, trackCrypto: true,
     }); // Spending state preserved for saveAndFinish defaults
     const [ai, setAi] = useState({
         aiProvider: "backend", aiModel: "gemini-2.5-flash", apiKey: "",
@@ -153,6 +154,8 @@ export default function SetupWizard() {
                 k401AnnualLimit: parseFloat(spending.k401AnnualLimit) || existing.k401AnnualLimit || 0,
                 k401EmployerMatchPct: parseFloat(spending.k401EmployerMatchPct) || existing.k401EmployerMatchPct || 0,
                 k401EmployerMatchLimit: parseFloat(spending.k401EmployerMatchLimit) || existing.k401EmployerMatchLimit || 0,
+                trackHSA: spending.trackHSA,
+                trackCrypto: spending.trackCrypto !== false,
             };
             delete merged._fromSetupWizard;
             await db.set("financial-config", merged);
