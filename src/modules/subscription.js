@@ -87,9 +87,9 @@ export const TIERS = {
         id: "free",
         name: "Free",
         auditsPerWeek: 2,                    // Covers weekly audit + 1 re-run
-        chatMessagesPerDay: 15,              // ~1/hr waking hours, hooks users
+        chatMessagesPerDay: 10,              // ~1/hr waking hours, hooks users
         marketRefreshMs: 60 * 60 * 1000,     // 60 minutes
-        historyLimit: 8,                      // ~2 months of trends (generous)
+        historyLimit: 12,                     // ~3 months of trends (quarterly)
         models: ["gemini-2.5-flash", "gpt-4o-mini"],  // Standard AI — low cost, fast
         features: [
             "basic_audit",          // Core AI audit
@@ -115,7 +115,7 @@ export const TIERS = {
         name: "Pro",
         auditsPerWeek: Infinity,             // No weekly cap (monthly cap of 150 applies)
         chatMessagesPerDay: Infinity,        // No daily cap enforced at tier level (PRO_DAILY_CHAT_CAP = 100 applies)
-        marketRefreshMs: 15 * 60 * 1000,     // 15 minutes
+        marketRefreshMs: 5 * 60 * 1000,      // 5 minutes
         historyLimit: Infinity,               // All history
         models: [
             "gemini-2.5-flash",               // Standard AI

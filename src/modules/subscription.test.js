@@ -34,13 +34,13 @@ describe('Tier Definitions', () => {
     it('free tier has correct limits', () => {
         expect(TIERS.free.auditsPerWeek).toBe(2);
         expect(TIERS.free.marketRefreshMs).toBe(60 * 60 * 1000); // 60 min
-        expect(TIERS.free.historyLimit).toBe(8);
+        expect(TIERS.free.historyLimit).toBe(12);
         expect(TIERS.free.models).toEqual(['gemini-2.5-flash', 'gpt-4o-mini']);
     });
 
     it('pro tier has unlimited access', () => {
         expect(TIERS.pro.auditsPerWeek).toBe(Infinity);
-        expect(TIERS.pro.marketRefreshMs).toBe(15 * 60 * 1000); // 15 min
+        expect(TIERS.pro.marketRefreshMs).toBe(5 * 60 * 1000); // 5 min
         expect(TIERS.pro.historyLimit).toBe(Infinity);
         expect(TIERS.pro.models).toContain('gemini-2.5-flash');
         expect(TIERS.pro.models).toContain('gemini-2.5-pro');
