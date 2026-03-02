@@ -75,7 +75,7 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
             { key: "roth", label: "Roth IRA", enabled: !!financialConfig?.trackRothContributions, color: "#8B5CF6" },
             { key: "brokerage", label: "Brokerage", enabled: !!financialConfig?.trackBrokerage, color: "#10B981" },
             { key: "hsa", label: "HSA", enabled: !!financialConfig?.trackHSA, color: "#06B6D4" },
-            { key: "crypto", label: "Crypto", enabled: !!financialConfig?.trackCrypto, color: "#F59E0B" },
+            { key: "crypto", label: "Crypto", enabled: financialConfig?.trackCrypto !== false, color: "#F59E0B" },
         ];
         const result = [];
         let grandTotal = 0;

@@ -256,7 +256,7 @@ export default memo(function CardPortfolioTab() {
         { key: "k401", label: "401(k)", enabled: !!financialConfig?.track401k, color: T.status.blue },
         { key: "brokerage", label: "Brokerage", enabled: !!financialConfig?.trackBrokerage, color: T.accent.emerald },
         { key: "hsa", label: "HSA", enabled: !!financialConfig?.trackHSA, color: "#06B6D4" },
-        { key: "crypto", label: "Crypto", enabled: true, color: T.status.amber },
+        { key: "crypto", label: "Crypto", enabled: financialConfig?.trackCrypto !== false, color: T.status.amber },
     ];
     const enabledInvestments = investmentSections.filter(s => s.enabled || (holdings[s.key] || []).length > 0);
     const allHoldingSymbols = useMemo(() => {

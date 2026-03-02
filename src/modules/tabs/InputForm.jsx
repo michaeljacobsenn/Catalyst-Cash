@@ -718,7 +718,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                         </div>
                     </Card>
                 )}
-                {financialConfig?.enableHoldings && (financialConfig?.holdings?.crypto || []).length > 0 && holdingValues.crypto > 0 && (
+                {financialConfig?.enableHoldings && financialConfig?.trackCrypto !== false && (financialConfig?.holdings?.crypto || []).length > 0 && holdingValues.crypto > 0 && (
                     <Card style={{ marginBottom: 10, border: `1px solid ${T.status.amber}25` }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <Label style={{ marginBottom: 0 }}>Crypto Portfolio</Label>

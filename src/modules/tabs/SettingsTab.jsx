@@ -1424,6 +1424,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                     { key: "trackChecking", label: "Checking Account", desc: "Primary checking balance" },
                                     { key: "trackSavings", label: "Savings (HYSA)", desc: "High-yield savings balance" },
                                     { key: "trackPaycheck", label: "Paycheck Tracking", desc: "Auto-add paycheck to checking" },
+                                    { key: "trackCrypto", label: "Crypto Tracking", desc: "Include crypto in portfolio & audits" },
                                 ].map(({ key, label, desc }) => {
                                     // Default to true (on) when not set — backward compatible
                                     const isOn = financialConfig?.[key] !== false;
