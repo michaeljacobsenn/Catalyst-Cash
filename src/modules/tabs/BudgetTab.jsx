@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Pencil, Check, Trash2, DollarSign, Briefcase } from "lucide-react";
+import { Plus, Pencil, Check, Trash2, DollarSign, Briefcase, Target, Activity, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { T } from "../constants.js";
 import { fmt } from "../utils.js";
 import { Card, Label, ProgressBar } from "../ui.jsx";
@@ -10,16 +10,21 @@ export default function BudgetTab({ budgetCategories = [], budgetActuals = {}, w
     const [editingBudget, setEditingBudget] = useState(false);
     const [editingIncome, setEditingIncome] = useState(false);
 
-    // Calculate totals
+    // Calculate totals (CFO Standardized Annualized Math)
     const totalMonthlyBudget = budgetCategories.reduce((sum, cat) => sum + (cat.monthlyTarget || 0), 0);
     const now = new Date();
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const weeksInMonth = daysInMonth / 7;
+    const weeksInMonth = 52.14 / 12; // Standard 4.345 weeks/mo for consistent burn rate
     const totalWeeklyBudget = (totalMonthlyBudget / weeksInMonth) + (weeklySpendAllowance || 0);
     const totalWeeklyActuals = Object.values(budgetActuals).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
     const isOverBudget = totalWeeklyActuals > totalWeeklyBudget;
     const progressPct = totalWeeklyBudget > 0 ? Math.min((totalWeeklyActuals / totalWeeklyBudget) * 100, 100) : 0;
     const ringColor = isOverBudget ? T.status.red : (progressPct > 85 ? T.status.amber : T.status.green);
+
+    // Pacing logic: Monday = 1, Sunday = 7
+    const dayOfWeek = now.getDay() === 0 ? 7 : now.getDay();
+    const expectedPacePct = (dayOfWeek / 7) * 100;
+    const isRunningHot = !isOverBudget && progressPct > expectedPacePct + 5;
+    const isUnderPace = !isOverBudget && progressPct < expectedPacePct - 5;
 
     // Income totals
     const totalMonthlyIncome = incomeSources.reduce((sum, s) => {
@@ -65,32 +70,49 @@ export default function BudgetTab({ budgetCategories = [], budgetActuals = {}, w
 
     return (
         <div style={{ paddingBottom: 24 }}>
-            {/* ═══ Hero Ring Chart ═══ */}
-            <Card animate variant="glass" style={{ textAlign: "center", position: "relative", padding: "32px 20px", overflow: "hidden" }}>
-                <div style={{ position: "absolute", top: -60, left: "50%", transform: "translateX(-50%)", width: 200, height: 200, background: ringColor, filter: "blur(90px)", opacity: 0.15, borderRadius: "50%", pointerEvents: "none", transition: "background 1s ease" }} />
-                <div style={{ position: "relative", width: 180, height: 180, margin: "0 auto 20px" }}>
-                    <svg width="180" height="180" viewBox="0 0 180 180" style={{ transform: "rotate(-90deg)" }}>
-                        <circle cx="90" cy="90" r="80" fill="none" stroke={T.bg.surface} strokeWidth="12" />
-                        <circle cx="90" cy="90" r="80" fill="none" stroke={ringColor} strokeWidth="12"
-                            strokeDasharray={`${progressPct * 5.02} 502`} strokeLinecap="round"
-                            style={{ transition: "stroke-dasharray 1s ease-out, stroke 0.5s ease" }} />
+            {/* ═══ Hero Ring Chart (CFO Enhanced) ═══ */}
+            <Card animate variant="glass" style={{ textAlign: "center", position: "relative", padding: "40px 20px 32px", overflow: "hidden" }}>
+                <div style={{ position: "absolute", top: -40, left: "50%", transform: "translateX(-50%)", width: 240, height: 240, background: ringColor, filter: "blur(90px)", opacity: 0.15, borderRadius: "50%", pointerEvents: "none", transition: "background 1s ease" }} />
+
+                <div style={{ position: "relative", width: 200, height: 200, margin: "0 auto 24px" }}>
+                    {/* SVG Filters for Glow */}
+                    <svg width="200" height="200" viewBox="0 0 200 200" style={{ transform: "rotate(-90deg)", position: "absolute", inset: 0 }}>
+                        <defs>
+                            <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="6" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                        </defs>
+                        <circle cx="100" cy="100" r="86" fill="none" stroke={`${T.bg.surface}80`} strokeWidth="16" />
+                        <circle cx="100" cy="100" r="86" fill="none" stroke={ringColor} strokeWidth="16"
+                            strokeDasharray={`${progressPct * 5.4} 540`} strokeLinecap="round" filter="url(#neonGlow)"
+                            style={{ transition: "stroke-dasharray 1s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.5s ease" }} />
                     </svg>
-                    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", marginTop: -4 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Spent This Week</div>
-                        <div style={{ fontSize: 32, fontWeight: 800, color: T.text.primary, fontFamily: T.font.mono, letterSpacing: "-1px" }}>{fmt(totalWeeklyActuals)}</div>
-                        <div style={{ fontSize: 13, color: isOverBudget ? T.status.red : T.text.secondary, marginTop: 4, fontWeight: 600 }}>
-                            of {fmt(totalWeeklyBudget)} limit
+
+                    {/* Inner Content */}
+                    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", marginTop: -2 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Weekly Spend</div>
+                        <div style={{ fontSize: 38, fontWeight: 800, color: T.text.primary, fontFamily: T.font.mono, letterSpacing: "-1.5px", fontVariantNumeric: "tabular-nums" }}>{fmt(totalWeeklyActuals)}</div>
+                        <div style={{ fontSize: 12, color: T.text.secondary, marginTop: 6, fontWeight: 600, background: `${T.bg.surface}80`, padding: "4px 10px", borderRadius: 99, border: `1px solid ${T.border.subtle}` }}>
+                            Limit: {fmt(totalWeeklyBudget)}
                         </div>
                     </div>
                 </div>
 
+                {/* Status Pills */}
                 {isOverBudget ? (
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: T.status.redDim, color: T.status.red, padding: "6px 14px", borderRadius: 99, fontSize: 12, fontWeight: 700 }}>
-                        <span style={{ fontSize: 14 }}>⚠️</span> Over Budget by {fmt(totalWeeklyActuals - totalWeeklyBudget)}
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: T.status.redDim, color: T.status.red, border: `1px solid ${T.status.red}40`, padding: "8px 16px", borderRadius: 99, fontSize: 13, fontWeight: 700, boxShadow: `0 4px 12px ${T.status.red}20` }}>
+                        <AlertTriangle size={16} strokeWidth={2.5} /> Over Budget by {fmt(totalWeeklyActuals - totalWeeklyBudget)}
                     </div>
                 ) : (
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: T.status.greenDim, color: T.status.green, padding: "6px 14px", borderRadius: 99, fontSize: 12, fontWeight: 700 }}>
-                        <span style={{ fontSize: 14 }}>📈</span> {fmt(totalWeeklyBudget - totalWeeklyActuals)} Remaining
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: T.status.greenDim, color: T.status.green, border: `1px solid ${T.status.green}40`, padding: "8px 16px", borderRadius: 99, fontSize: 13, fontWeight: 800, letterSpacing: "-0.02em", boxShadow: `0 4px 12px ${T.status.green}20` }}>
+                            <CheckCircle2 size={16} strokeWidth={2.5} /> {fmt(totalWeeklyBudget - totalWeeklyActuals)} Remaining
+                        </div>
+                        {/* Pacing Indicator */}
+                        {isRunningHot && <div style={{ fontSize: 11, color: T.status.amber, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}><TrendingUp size={12} /> Running hotter than daily pace</div>}
+                        {isUnderPace && <div style={{ fontSize: 11, color: T.status.blue, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}><TrendingDown size={12} /> Spending slower than daily pace</div>}
+                        {!isRunningHot && !isUnderPace && totalWeeklyBudget > 0 && <div style={{ fontSize: 11, color: T.text.dim, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}><Activity size={12} /> Spending is perfectly on pace</div>}
                     </div>
                 )}
             </Card>
@@ -109,14 +131,18 @@ export default function BudgetTab({ budgetCategories = [], budgetActuals = {}, w
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {budgetCategories.length === 0 && !editingBudget ? (
-                    <div className="shimmer-bg" style={{ textAlign: "center", padding: "30px 20px", borderRadius: T.radius.lg, border: `1px dashed ${T.border.subtle}`, backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
-                        <span style={{ fontSize: 24, display: "block", marginBottom: 10 }}>📊</span>
-                        <div style={{ fontSize: 13, color: T.text.secondary, lineHeight: 1.5, marginBottom: 12 }}>Set monthly spending targets to track your budget.</div>
-                        <button onClick={addCategory} style={{
-                            padding: "8px 20px", borderRadius: T.radius.md, border: "none",
-                            background: T.accent.gradient, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer"
+                    <div className="shimmer-bg" style={{ textAlign: "center", padding: "40px 20px", borderRadius: T.radius.lg, border: `1px dashed ${T.border.subtle}`, background: T.bg.elevated, backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
+                        <div style={{ width: 48, height: 48, borderRadius: "50%", background: T.accent.gradient, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 8px 24px ${T.accent.emerald}40` }}>
+                            <Target size={24} color="#FFF" strokeWidth={2} />
+                        </div>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, marginBottom: 6 }}>Initialize Lean Budget</div>
+                        <div style={{ fontSize: 13, color: T.text.secondary, lineHeight: 1.5, marginBottom: 20, maxWidth: 280, margin: "0 auto 20px" }}>Set exact monthly spending targets. The V2 agent will auto-convert them into strict weekly limits for precision tracking, regardless of the month's length.</div>
+                        <button onClick={addCategory} className="hover-btn" style={{
+                            padding: "12px 24px", borderRadius: T.radius.md, border: "none",
+                            background: T.accent.gradient, color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer",
+                            boxShadow: `0 4px 16px ${T.accent.emerald}40`, letterSpacing: "0.02em"
                         }}>
-                            <Plus size={12} style={{ marginRight: 4, verticalAlign: -2 }} /> Add First Category
+                            <Plus size={14} style={{ marginRight: 6, verticalAlign: -2 }} /> Build First Target
                         </button>
                     </div>
                 ) : editingBudget ? (
@@ -146,7 +172,7 @@ export default function BudgetTab({ budgetCategories = [], budgetActuals = {}, w
                         const isCatOver = spent > weeklyCatTarget;
 
                         return (
-                            <Card key={cat.name} animate delay={Math.min(i * 50, 300)} variant="glass" style={{ padding: "16px", position: "relative", overflow: "hidden" }}>
+                            <Card key={cat.name} animate delay={Math.min(i * 50, 300)} variant="glass" className="hover-card" style={{ padding: "16px", position: "relative", overflow: "hidden" }}>
                                 <div style={{ position: "absolute", right: -30, top: -30, width: 80, height: 80, background: isCatOver ? T.status.red : (pct > 80 ? T.status.amber : T.accent.primary), filter: "blur(40px)", opacity: 0.1, borderRadius: "50%", pointerEvents: "none" }} />
                                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
                                     <div>
@@ -171,7 +197,7 @@ export default function BudgetTab({ budgetCategories = [], budgetActuals = {}, w
 
             {/* ═══ Weekly Allowance ═══ */}
             <Label style={{ marginTop: 14 }}>General Allowance Target</Label>
-            <Card animate variant="glass" style={{ padding: "16px", position: "relative", overflow: "hidden", borderLeft: `3px solid ${T.accent.emerald}` }}>
+            <Card animate variant="glass" className="hover-card" style={{ padding: "16px", position: "relative", overflow: "hidden", borderLeft: `3px solid ${T.accent.emerald}` }}>
                 <div style={{ position: "absolute", right: -20, bottom: -20, width: 100, height: 100, background: T.accent.emerald, filter: "blur(50px)", opacity: 0.12, borderRadius: "50%", pointerEvents: "none" }} />
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                     <div>
