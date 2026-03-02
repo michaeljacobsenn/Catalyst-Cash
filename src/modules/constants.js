@@ -129,8 +129,8 @@ const SHARED_TOKENS = {
   },
 };
 
-// T starts as dark — mutated in-place by applyTheme()
-export const T = { ...DARK_TOKENS, ...SHARED_TOKENS };
+// Deep clone so we don't accidentally mutate the master templates
+export const T = JSON.parse(JSON.stringify({ ...DARK_TOKENS, ...SHARED_TOKENS }));
 
 /**
  * Apply a theme by mutating T in-place.
@@ -139,12 +139,14 @@ export const T = { ...DARK_TOKENS, ...SHARED_TOKENS };
  */
 export function applyTheme(mode) {
   const tokens = mode === "light" ? LIGHT_TOKENS : DARK_TOKENS;
-  Object.assign(T.bg, tokens.bg);
-  Object.assign(T.border, tokens.border);
-  Object.assign(T.text, tokens.text);
-  Object.assign(T.accent, tokens.accent);
-  Object.assign(T.status, tokens.status);
-  Object.assign(T.shadow, tokens.shadow);
+  const safeTokens = JSON.parse(JSON.stringify(tokens));
+
+  Object.assign(T.bg, safeTokens.bg);
+  Object.assign(T.border, safeTokens.border);
+  Object.assign(T.text, safeTokens.text);
+  Object.assign(T.accent, safeTokens.accent);
+  Object.assign(T.status, safeTokens.status);
+  Object.assign(T.shadow, safeTokens.shadow);
   T._mode = mode; // track current mode
 
   // Keep native/webview surfaces in sync even if a memoized view skips a render.
