@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // APP VERSION — single source of truth
 // ═══════════════════════════════════════════════════════════════
-export const APP_VERSION = "1.6.0";
+export const APP_VERSION = "2.0.0";
 
 // ═══════════════════════════════════════════════════════════════
 // DESIGN TOKENS — Catalyst Cash Brand Palette
@@ -155,6 +155,10 @@ export function applyTheme(mode) {
     document.documentElement.style.setProperty("--cc-bg-base", tokens.bg.base);
     document.documentElement.style.colorScheme = mode;
     if (document.body) document.body.style.background = tokens.bg.base;
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute("content", mode === "light" ? tokens.bg.base : "#04060A");
+    }
   }
 }
 

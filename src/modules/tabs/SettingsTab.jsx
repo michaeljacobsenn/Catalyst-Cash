@@ -424,7 +424,9 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
 
     const Toggle = ({ value, onChange }) => (
         <button onClick={() => onChange(!value)} style={{
-            width: 48, height: 28, borderRadius: 14, border: "none",
+            width: 48, height: 28, minWidth: 48, minHeight: 28,
+            borderRadius: 14, border: "none", padding: 0, margin: 0,
+            WebkitAppearance: "none", appearance: "none",
             background: value ? T.accent.primary : T.text.muted, cursor: "pointer", position: "relative", flexShrink: 0,
             transition: "background .25s ease", boxShadow: value ? `0 0 10px ${T.accent.primaryDim}` : "none"
         }}>
@@ -555,7 +557,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
             position: "sticky", top: 0, zIndex: 10,
             paddingTop: "calc(env(safe-area-inset-top, 0px) + 6px)",
             paddingLeft: 16, paddingRight: 16, paddingBottom: 8,
-            background: `rgba(4, 6, 10, 0.85)`, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+            background: T.bg.navGlass, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
             borderBottom: `1px solid ${T.border.subtle}`,
             flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "space-between"
@@ -576,7 +578,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                 }}><ArrowLeft size={16} /></button>}
             </div>
             <div style={{ textAlign: "center", flex: 1, minWidth: 0, overflow: "hidden" }}>
-                <h1 style={{ fontSize: 18, fontWeight: 800, margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <h1 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {activeMenu === "ai" ? "AI & Engine" :
                         activeMenu === "backup" ? "Backup & Data" :
                             activeMenu === "security" ? "Security" :

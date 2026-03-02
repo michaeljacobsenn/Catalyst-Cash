@@ -1,6 +1,21 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { T } from "./constants.js";
 import { haptic } from "./haptics.js";
+
+// ═══════════════════════════════════════════════════════════════
+// GLOBAL HAPTICS — Auto-fire haptic.light() on every button tap
+// Single delegated listener, zero per-component wiring needed
+// ═══════════════════════════════════════════════════════════════
+export function useGlobalHaptics() {
+  useEffect(() => {
+    const handler = (e) => {
+      const btn = e.target.closest("button, [role='button']");
+      if (btn && !btn.disabled) haptic.light();
+    };
+    document.addEventListener("touchstart", handler, { passive: true });
+    return () => document.removeEventListener("touchstart", handler);
+  }, []);
+}
 
 export const GlobalStyles = () => (
   <style>{`
@@ -44,7 +59,9 @@ export const GlobalStyles = () => (
     @keyframes pulseAlert{0%,100%{box-shadow:0 0 0 0 rgba(248,81,73,0.4)}70%{box-shadow:0 0 0 10px rgba(248,81,73,0)}}
     @keyframes confettiFall{0%{transform:translateY(0) rotate(0deg) scale(1);opacity:1}100%{transform:translateY(85vh) rotate(720deg) scale(0.3);opacity:0}}
     @keyframes confettiBurst{0%{transform:translateY(0) scale(0);opacity:0}15%{opacity:1;transform:translateY(-20px) scale(1)}100%{transform:translateY(85vh) rotate(720deg) scale(0.3);opacity:0}}
+    @keyframes floatUp{0%{transform:translateY(0);opacity:0.8}50%{transform:translateY(-10px);opacity:1}100%{transform:translateY(0);opacity:0.6}}
     @keyframes tabSlideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
     @keyframes tabFadeIn{from{opacity:0}to{opacity:1}}
     @keyframes settingsSlideIn{from{opacity:0;transform:translateX(50px)}to{opacity:1;transform:translateX(0)}}
     @keyframes settingsSlideOut{from{opacity:0;transform:translateX(-50px)}to{opacity:1;transform:translateX(0)}}
@@ -98,6 +115,29 @@ export const GlobalStyles = () => (
       filter: brightness(0.9);
       opacity: 0.8;
       transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), filter 0.1s ease, opacity 0.1s ease !important;
+    }
+
+    /* Smooth section collapse/expand */
+    .collapse-section{
+      overflow:hidden;
+      transition:max-height .35s cubic-bezier(0.16, 1, 0.3, 1), opacity .25s ease;
+    }
+    .collapse-section[data-collapsed="true"]{
+      max-height:0 !important;
+      opacity:0;
+      pointer-events:none;
+    }
+    .collapse-section[data-collapsed="false"]{
+      max-height:5000px;
+      opacity:1;
+    }
+
+    /* Animated chevron for expand/collapse */
+    .chevron-animated{
+      transition:transform .3s var(--spring-stiff);
+    }
+    .chevron-animated[data-open="true"]{
+      transform:rotate(180deg);
     }
     
     /* Scroll area */
@@ -156,6 +196,24 @@ export const GlobalStyles = () => (
     }
     /* Remove focus ring for mouse/touch (only :focus-visible above applies for keyboard) */
     :focus:not(:focus-visible){outline:none;}
+
+    /* ── Premium Input Focus Glow ── */
+    input:focus,textarea:focus,select:focus{
+      border-color:${T.accent.primary} !important;
+      box-shadow:0 0 0 3px ${T.accent.primaryGlow}, 0 0 12px ${T.accent.primaryDim} !important;
+      transition:border-color .2s ease, box-shadow .3s ease !important;
+    }
+
+    /* ── Card Press Feedback (for tappable cards) ── */
+    .card-press{
+      transition:transform .3s var(--spring-stiff), box-shadow .3s ease !important;
+      cursor:pointer;
+    }
+    .card-press:active{
+      transform:scale(0.97) !important;
+      box-shadow:0 2px 6px rgba(0,0,0,0.3) !important;
+      transition:transform .1s ease, box-shadow .1s ease !important;
+    }
 
     /* ── Landscape mode: constrain to a centered 520px pillar ── */
     @media (orientation:landscape) and (max-height:600px){

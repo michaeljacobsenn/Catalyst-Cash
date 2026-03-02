@@ -12,7 +12,10 @@ export default function BudgetTab({ budgetCategories = [], budgetActuals = {}, w
 
     // Calculate totals
     const totalMonthlyBudget = budgetCategories.reduce((sum, cat) => sum + (cat.monthlyTarget || 0), 0);
-    const totalWeeklyBudget = (totalMonthlyBudget / 4.33) + (weeklySpendAllowance || 0);
+    const now = new Date();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const weeksInMonth = daysInMonth / 7;
+    const totalWeeklyBudget = (totalMonthlyBudget / weeksInMonth) + (weeklySpendAllowance || 0);
     const totalWeeklyActuals = Object.values(budgetActuals).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
     const isOverBudget = totalWeeklyActuals > totalWeeklyBudget;
     const progressPct = totalWeeklyBudget > 0 ? Math.min((totalWeeklyActuals / totalWeeklyBudget) * 100, 100) : 0;
@@ -21,7 +24,7 @@ export default function BudgetTab({ budgetCategories = [], budgetActuals = {}, w
     // Income totals
     const totalMonthlyIncome = incomeSources.reduce((sum, s) => {
         const amt = s.amount || 0;
-        if (s.frequency === "weekly") return sum + amt * 4.33;
+        if (s.frequency === "weekly") return sum + amt * weeksInMonth;
         if (s.frequency === "bi-weekly") return sum + amt * 2.17;
         return sum + amt;
     }, 0);
@@ -137,7 +140,7 @@ export default function BudgetTab({ budgetCategories = [], budgetActuals = {}, w
                     </Card>
                 ) : (
                     budgetCategories.map((cat, i) => {
-                        const weeklyCatTarget = (cat.monthlyTarget || 0) / 4.33;
+                        const weeklyCatTarget = (cat.monthlyTarget || 0) / weeksInMonth;
                         const spent = parseFloat(budgetActuals[cat.name]) || 0;
                         const pct = weeklyCatTarget > 0 ? Math.min((spent / weeklyCatTarget) * 100, 100) : 0;
                         const isCatOver = spent > weeklyCatTarget;

@@ -9,19 +9,24 @@ import { haptic } from "./haptics.js";
 // COUNT-UP ANIMATION
 // ═══════════════════════════════════════════════════════════════
 export const CountUp = ({ value, duration = 800, prefix = "", suffix = "", formatter, color, size = 14, weight = 800 }) => {
-    const [display, setDisplay] = useState(0);
-    const raf = useRef(null);
-    const startTs = useRef(null);
     const raw = typeof value === "number" ? value : parseFloat(value) || 0;
     const numVal = Number.isFinite(raw) ? raw : 0;
+    const [display, setDisplay] = useState(numVal);
+    const raf = useRef(null);
+    const startTs = useRef(null);
+    const prevValRef = useRef(numVal);
 
     useEffect(() => {
+        const from = prevValRef.current;
+        prevValRef.current = numVal;
+        // Skip animation if value hasn't changed
+        if (from === numVal) { setDisplay(numVal); return; }
         startTs.current = performance.now();
         const animate = (now) => {
             const elapsed = now - startTs.current;
             const progress = Math.min(elapsed / duration, 1);
             const eased = 1 - Math.pow(1 - progress, 4); // easeOutQuart
-            setDisplay(numVal * eased);
+            setDisplay(from + (numVal - from) * eased);
             if (progress < 1) raf.current = requestAnimationFrame(animate);
         };
         raf.current = requestAnimationFrame(animate);
@@ -185,7 +190,7 @@ export const DI = ({ value, onChange, placeholder = "0.00", label = "Amount" }) 
         <div style={{ position: "relative" }}>
             <label htmlFor={id} style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap" }}>{label}</label>
             <span aria-hidden="true" style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: focused ? T.accent.primary : T.text.dim, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600, transition: "color 0.3s ease" }}>$</span>
-            <input id={id} type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={value} placeholder={placeholder} onChange={onChange} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} aria-label={label} style={{ paddingLeft: 28, fontFamily: T.font.mono, fontWeight: 600 }} />
+            <input id={id} type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={value} placeholder={placeholder} onChange={onChange} onFocus={(e) => { setFocused(true); setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300); }} onBlur={() => setFocused(false)} aria-label={label} style={{ paddingLeft: 28, fontFamily: T.font.mono, fontWeight: 600 }} />
         </div>
     );
 };
@@ -291,24 +296,70 @@ export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel
 
 
 // ═══════════════════════════════════════════════════════════════
-// EMPTY STATE
+// EMPTY STATE — Premium with ambient orbits & staggered reveal
 // ═══════════════════════════════════════════════════════════════
 export const EmptyState = ({ icon: Icon, title, message, action, delay = 0 }) => (
     <div className="scale-in" style={{
-        textAlign: "center", padding: "64px 20px",
-        animationDelay: `${delay}ms`, display: "flex", flexDirection: "column", alignItems: "center"
+        textAlign: "center", padding: "56px 24px 48px",
+        animationDelay: `${delay}ms`, display: "flex", flexDirection: "column", alignItems: "center",
+        position: "relative", overflow: "hidden"
     }}>
+        {/* Ambient gradient blobs */}
         <div style={{
-            width: 72, height: 72, borderRadius: 24, background: `linear-gradient(135deg, ${T.accent.primaryDim}, ${T.bg.card})`,
-            border: `1px solid ${T.accent.primarySoft}`, display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: `0 0 40px ${T.accent.primaryDim}, inset 0 2px 10px rgba(255,255,255,0.05)`, marginBottom: 24, position: "relative"
-        }}>
-            <Icon size={32} color={T.accent.primary} strokeWidth={1.5} style={{ filter: `drop-shadow(0 2px 8px ${T.accent.primaryGlow})` }} />
-            <div style={{ position: "absolute", inset: -12, borderRadius: 36, border: `1px dashed ${T.border.focus}`, opacity: 0.3, animation: "spin 20s linear infinite" }} />
+            position: "absolute", top: -40, left: "20%", width: 120, height: 120,
+            background: T.accent.primary, filter: "blur(80px)", opacity: 0.08, borderRadius: "50%", pointerEvents: "none"
+        }} />
+        <div style={{
+            position: "absolute", bottom: -30, right: "15%", width: 100, height: 100,
+            background: T.accent.emerald, filter: "blur(70px)", opacity: 0.06, borderRadius: "50%", pointerEvents: "none"
+        }} />
+
+        {/* Icon container with dual orbits */}
+        <div style={{ position: "relative", width: 96, height: 96, marginBottom: 28 }}>
+            {/* Outer orbit */}
+            <div style={{
+                position: "absolute", inset: -16, borderRadius: "50%",
+                border: `1px dashed ${T.border.focus}`, opacity: 0.2,
+                animation: "spin 25s linear infinite"
+            }}>
+                <div style={{
+                    position: "absolute", top: -3, left: "50%", width: 6, height: 6,
+                    borderRadius: "50%", background: T.accent.primary, opacity: 0.6
+                }} />
+            </div>
+            {/* Inner orbit (counter-rotating) */}
+            <div style={{
+                position: "absolute", inset: -4, borderRadius: "50%",
+                border: `1px dashed ${T.accent.emeraldSoft}`, opacity: 0.25,
+                animation: "spin 15s linear infinite reverse"
+            }}>
+                <div style={{
+                    position: "absolute", bottom: -2, right: "10%", width: 4, height: 4,
+                    borderRadius: "50%", background: T.accent.emerald, opacity: 0.5
+                }} />
+            </div>
+            {/* Main icon backdrop */}
+            <div style={{
+                width: 96, height: 96, borderRadius: 28,
+                background: `linear-gradient(145deg, ${T.accent.primaryDim}, ${T.bg.card})`,
+                border: `1px solid ${T.accent.primarySoft}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: `0 0 48px ${T.accent.primaryDim}, 0 8px 32px rgba(0,0,0,0.15), inset 0 2px 10px rgba(255,255,255,0.05)`
+            }}>
+                <Icon size={36} color={T.accent.primary} strokeWidth={1.5}
+                    style={{ filter: `drop-shadow(0 2px 10px ${T.accent.primaryGlow})` }} />
+            </div>
         </div>
-        <h3 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, marginBottom: 8, letterSpacing: "-0.01em" }}>{title}</h3>
-        <p style={{ fontSize: 13, color: T.text.dim, lineHeight: 1.6, maxWidth: 280, margin: "0 auto" }}>{message}</p>
-        {action}
+
+        <h3 style={{
+            fontSize: 20, fontWeight: 800, color: T.text.primary, marginBottom: 10,
+            letterSpacing: "-0.02em", animation: "fadeInUp .5s ease-out .15s both"
+        }}>{title}</h3>
+        <p style={{
+            fontSize: 13, color: T.text.secondary, lineHeight: 1.7, maxWidth: 300,
+            margin: "0 auto", animation: "fadeInUp .5s ease-out .25s both"
+        }}>{message}</p>
+        {action && <div style={{ marginTop: 20, animation: "fadeInUp .5s ease-out .35s both" }}>{action}</div>}
     </div>
 );
 

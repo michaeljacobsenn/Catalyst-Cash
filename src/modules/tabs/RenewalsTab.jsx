@@ -239,19 +239,19 @@ export default memo(function RenewalsTab() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
                     <p style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, whiteSpace: "nowrap" }}>{allItems.length} items</p>
                     <div style={{ width: 1, height: 10, background: T.border.default }} />
-                    <button onClick={() => setShowAdd(!showAdd)} style={{
-                        display: "flex", alignItems: "center", gap: 4, padding: "2px 6px",
-                        borderRadius: T.radius.sm, border: `1px solid ${showAdd ? T.status.amber : T.accent.primary}30`,
+                    <button onClick={() => setShowAdd(!showAdd)} className="hover-btn" style={{
+                        display: "flex", alignItems: "center", gap: 5, padding: "6px 12px",
+                        borderRadius: T.radius.md, border: `1px solid ${showAdd ? T.status.amber : T.accent.primary}30`,
                         background: showAdd ? T.status.amberDim : T.accent.primaryDim, color: showAdd ? T.status.amber : T.accent.primary,
-                        fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono
+                        fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono, minHeight: 36
                     }}>
-                        {showAdd ? <><X size={10} />CANCEL</> : <><Plus size={10} />ADD</>}
+                        {showAdd ? <><X size={12} />CANCEL</> : <><Plus size={12} />ADD</>}
                     </button>
                 </div>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", padding: "6px 8px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, marginTop: 4 }}>
-                <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ fontSize: 10, color: T.text.secondary, background: "transparent", border: "none", cursor: "pointer", fontFamily: T.font.mono, fontWeight: 800, padding: 0, outline: "none", textTransform: "uppercase" }}>
+            <div style={{ display: "flex", alignItems: "center", padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, marginTop: 4, minHeight: 36 }}>
+                <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ fontSize: 11, color: T.text.secondary, background: "transparent", border: "none", cursor: "pointer", fontFamily: T.font.mono, fontWeight: 800, padding: 0, outline: "none", textTransform: "uppercase" }}>
                     <option value="type">Sort: Type</option>
                     <option value="date">Sort: Soonest</option>
                     <option value="amount">Sort: Value</option>
@@ -317,7 +317,7 @@ export default memo(function RenewalsTab() {
                     <input type="date" value={addForm.nextDue} onChange={e => setAddForm(p => ({ ...p, nextDue: e.target.value }))}
                         style={{ width: "100%", padding: "10px 10px 10px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, boxSizing: "border-box" }} />
                 </div>
-                <button onClick={addItem} disabled={!addForm.name.trim() || !addForm.amount} style={{
+                <button onClick={addItem} disabled={!addForm.name.trim() || !addForm.amount} className="hover-btn" style={{
                     padding: 14, borderRadius: T.radius.md, border: "none",
                     background: (addForm.name.trim() && addForm.amount) ? `linear-gradient(135deg,${T.accent.primary},#6C60FF)` : T.text.muted,
                     color: (addForm.name.trim() && addForm.amount) ? T.bg.base : T.text.dim, fontSize: 13, fontWeight: 800,
@@ -330,7 +330,7 @@ export default memo(function RenewalsTab() {
         {grouped.length === 0 ?
             <EmptyState icon={AlertTriangle} title="Track Every Dollar" message="Add your recurring bills and subscriptions to see a clear monthly forecast across all accounts." /> :
             grouped.map((cat, catIdx) => (
-                <Card key={cat.id} animate delay={Math.min(catIdx * 60, 300)} variant="glass" style={{ marginBottom: 16, padding: 0, overflow: "hidden", borderLeft: `3px solid ${cat.color}` }}>
+                <Card key={cat.id} animate delay={Math.min(catIdx * 60, 300)} variant="glass" className="hover-card" style={{ marginBottom: 16, padding: 0, overflow: "hidden", borderLeft: `3px solid ${cat.color}` }}>
                     <div style={{ padding: "12px 14px", background: `${cat.color}08`, borderBottom: `1px solid ${T.border.subtle}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: cat.color, textTransform: "uppercase", letterSpacing: "0.05em" }}>{cat.label}</span>
                         <Mono size={10} color={T.text.dim}>{cat.items.length} items</Mono>
@@ -383,13 +383,13 @@ export default memo(function RenewalsTab() {
                                             </div>
                                         </div>
                                         <div style={{ display: "flex", gap: 8 }}>
-                                            <button onClick={() => saveEdit(renewalIndex, item.name)} style={{
-                                                flex: 1, padding: 10, borderRadius: T.radius.sm,
-                                                border: "none", background: T.accent.primaryDim, color: T.accent.primary, fontSize: 10, fontWeight: 700, cursor: "pointer"
+                                            <button onClick={() => saveEdit(renewalIndex, item.name)} className="hover-btn" style={{
+                                                flex: 1, padding: 14, borderRadius: T.radius.md,
+                                                border: "none", background: T.accent.primaryDim, color: T.accent.primary, fontSize: 12, fontWeight: 700, cursor: "pointer"
                                             }}>Save</button>
-                                            <button onClick={() => setEditing(null)} style={{
-                                                flex: 1, padding: 10, borderRadius: T.radius.sm,
-                                                border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 10, cursor: "pointer"
+                                            <button onClick={() => setEditing(null)} className="hover-btn" style={{
+                                                flex: 1, padding: 14, borderRadius: T.radius.md,
+                                                border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 12, cursor: "pointer"
                                             }}>Cancel</button>
                                         </div></div> :
                                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 30 }}>
@@ -414,20 +414,20 @@ export default memo(function RenewalsTab() {
                                             <Mono size={13} weight={700} color={cat.color}>{fmt(item.amount)}</Mono>
                                             {!item.isCardAF && isUserRenewal && editing !== renewalIndex && <>
                                                 {!item.isExpired && <button onClick={() => toggleCancel(renewalIndex)} style={{
-                                                    height: 30, padding: "0 10px", borderRadius: T.radius.sm,
+                                                    height: 36, padding: "0 12px", borderRadius: T.radius.md,
                                                     border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, fontFamily: T.font.mono,
-                                                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700
+                                                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700
                                                 }}>{item.isCancelled ? "RESTORE" : "CANCEL"}</button>}
                                                 <button onClick={() => startEdit(item, renewalIndex)} style={{
-                                                    width: 30, height: 30, borderRadius: T.radius.sm,
+                                                    width: 36, height: 36, borderRadius: T.radius.md,
                                                     border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim,
-                                                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11
+                                                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13
                                                 }}>✎</button>
                                                 <button onClick={() => removeItem(renewalIndex, item.name)} style={{
-                                                    width: 30, height: 30, borderRadius: T.radius.sm,
+                                                    width: 36, height: 36, borderRadius: T.radius.md,
                                                     border: "none", background: T.status.redDim, color: T.status.red,
                                                     cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
-                                                }}><X size={11} /></button>
+                                                }}><X size={13} /></button>
                                             </>}
                                         </div></div>}
                             </div>;

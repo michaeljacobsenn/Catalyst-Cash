@@ -30,29 +30,44 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
             {audit.isTest && <Badge variant="amber" style={{ marginTop: 4 }}>TEST · NOT SAVED</Badge>}
         </div>
 
-        {/* Completion Percentage */}
+        {/* Completion Progress Ring */}
         {p?.moveItems?.length > 0 && (() => {
             const done = Object.values(moveChecks).filter(Boolean).length;
             const total = p.moveItems.length;
             const pct = Math.round((done / total) * 100);
-            const pctColor = pct >= 80 ? T.status.green : pct >= 40 ? T.status.amber : T.text.dim;
+            const pctColor = pct >= 100 ? T.status.green : pct >= 80 ? T.status.green : pct >= 40 ? T.status.amber : T.text.dim;
+            const allDone = pct >= 100;
+            const circumference = 2 * Math.PI * 16; // r=16
+            const strokeOffset = circumference - (circumference * pct / 100);
             return <div style={{
-                display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-                background: `${pctColor}10`, border: `1px solid ${pctColor}25`,
-                borderRadius: T.radius.md, marginBottom: 8, animation: "fadeInUp .4s ease-out both"
+                display: "flex", alignItems: "center", gap: 14, padding: "12px 16px",
+                background: allDone ? `${T.status.green}12` : `${pctColor}08`,
+                border: `1px solid ${allDone ? T.status.green : pctColor}20`,
+                borderRadius: T.radius.lg, marginBottom: 10,
+                animation: allDone ? "glowPulse 2s ease-in-out infinite" : "fadeInUp .4s ease-out both",
+                position: "relative", overflow: "hidden"
             }}>
-                <div style={{
-                    width: 36, height: 36, borderRadius: "50%", position: "relative",
-                    background: `conic-gradient(${pctColor} ${pct * 3.6}deg, ${T.border.default} ${pct * 3.6}deg)`,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: T.bg.card, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <span style={{ fontSize: 10, fontWeight: 900, color: pctColor, fontFamily: T.font.mono }}>{pct}%</span>
-                    </div>
+                {/* Celebration sparkles when all done */}
+                {allDone && <>
+                    <span style={{ position: "absolute", top: 4, right: 14, fontSize: 16, animation: "floatUp 2s ease-out infinite", opacity: 0.8 }}>✨</span>
+                    <span style={{ position: "absolute", top: 8, right: 42, fontSize: 12, animation: "floatUp 2.4s ease-out 0.3s infinite", opacity: 0.6 }}>🎉</span>
+                    <span style={{ position: "absolute", bottom: 4, right: 28, fontSize: 14, animation: "floatUp 2.8s ease-out 0.6s infinite", opacity: 0.7 }}>⭐</span>
+                </>}
+                {/* SVG Progress Ring */}
+                <svg width="44" height="44" viewBox="0 0 40 40" style={{ flexShrink: 0, transform: "rotate(-90deg)" }}>
+                    <circle cx="20" cy="20" r="16" fill="none" stroke={T.border.default} strokeWidth="3.5" />
+                    <circle cx="20" cy="20" r="16" fill="none" stroke={pctColor} strokeWidth="3.5"
+                        strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={strokeOffset}
+                        style={{ transition: "stroke-dashoffset 0.8s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.4s ease" }} />
+                </svg>
+                <div style={{ position: "absolute", left: 16, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <span style={{ fontSize: 11, fontWeight: 900, color: pctColor, fontFamily: T.font.mono }}>{pct}%</span>
                 </div>
-                <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>{done}/{total} Moves Complete</div>
-                    <div style={{ fontSize: 10, color: T.text.dim }}>{pct >= 100 ? "All done! 🎉" : "Keep going — check off your weekly moves"}</div>
+                <div style={{ marginLeft: 4 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>{done}/{total} Moves Complete</div>
+                    <div style={{ fontSize: 10, color: allDone ? T.status.green : T.text.dim, fontWeight: allDone ? 700 : 400 }}>
+                        {allDone ? "All moves executed! Financial momentum secured 🔥" : `${total - done} remaining — keep crushing it`}
+                    </div>
                 </div>
             </div>;
         })()}

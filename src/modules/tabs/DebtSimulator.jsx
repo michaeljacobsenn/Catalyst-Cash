@@ -7,7 +7,15 @@ import { Card, Label } from "../ui.jsx";
 import { Mono } from "../components.jsx";
 import { cmpString, fromCents, monthlyInterestCents, toBps, toCents } from "../moneyMath.js";
 
-const DEFAULT_MIN_PAYMENT_CENTS = 2500;
+const FLOOR_MIN_PAYMENT_CENTS = 2500; // $25 absolute floor
+
+// Realistic minimum payment: max($25, 1% of balance + monthly interest)
+// Matches standard US credit card issuer requirements
+function computeMinPaymentCents(balanceCents, aprBps) {
+    const interest = monthlyInterestCents(balanceCents, aprBps);
+    const onePercent = Math.ceil(balanceCents / 100);
+    return Math.max(FLOOR_MIN_PAYMENT_CENTS, onePercent + interest);
+}
 
 function sortDebtsForStrategy(strategy, list) {
     const sorted = [...list];
@@ -34,12 +42,17 @@ function sortDebtsForStrategy(strategy, list) {
 function simulatePayoff(debts, extraMonthly, strategy) {
     if (!debts?.length) return { months: 0, totalInterest: 0, timeline: [] };
 
-    let balances = debts.map(d => ({
-        name: d.name || "Card",
-        balanceCents: Math.max(0, toCents(d.balance || 0)),
-        aprBps: Math.max(0, toBps(d.apr || 0)),
-        minPaymentCents: Math.max(0, toCents(d.minPayment || 0)) || DEFAULT_MIN_PAYMENT_CENTS,
-    })).filter(d => d.balanceCents > 0);
+    let balances = debts.map(d => {
+        const balanceCents = Math.max(0, toCents(d.balance || 0));
+        const aprBps = Math.max(0, toBps(d.apr || 0));
+        const userMin = Math.max(0, toCents(d.minPayment || 0));
+        return {
+            name: d.name || "Card",
+            balanceCents,
+            aprBps,
+            minPaymentCents: userMin > 0 ? userMin : computeMinPaymentCents(balanceCents, aprBps),
+        };
+    }).filter(d => d.balanceCents > 0);
 
     if (!balances.length) return { months: 0, totalInterest: 0, timeline: [] };
 
@@ -163,7 +176,7 @@ export default function DebtSimulator({ cards = [], financialConfig }) {
                 onChange={e => setExtraPayment(parseInt(e.target.value))}
                 style={{
                     width: "100%", height: 6, appearance: "none", WebkitAppearance: "none",
-                    background: `linear-gradient(to right, ${T.accent.primary} ${extraPayment / 10}%, ${T.border.default} ${extraPayment / 10}%)`,
+                    background: `linear-gradient(to right, ${T.accent.primary} ${(extraPayment / 1000) * 100}%, ${T.border.default} ${(extraPayment / 1000) * 100}%)`,
                     borderRadius: 3, outline: "none", cursor: "pointer"
                 }} />
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>

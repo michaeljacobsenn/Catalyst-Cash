@@ -10,7 +10,7 @@ import { DEFAULT_PROVIDER_ID, DEFAULT_MODEL_ID, getProvider, getModel } from "./
 import { db, parseAudit, exportAllAudits, exportSelectedAudits, exportAuditCSV, advanceExpiredDate, cyrb53 } from "./modules/utils.js";
 import { ensureCardIds, getCardLabel } from "./modules/cards.js";
 import { loadCardCatalog } from "./modules/issuerCards.js";
-import { GlobalStyles, Card, ErrorBoundary } from "./modules/ui.jsx";
+import { GlobalStyles, Card, ErrorBoundary, useGlobalHaptics } from "./modules/ui.jsx";
 import { StreamingView } from "./modules/components.jsx";
 import { streamAudit, callAudit } from "./modules/api.js";
 import { getSystemPrompt } from "./modules/prompts.js";
@@ -84,6 +84,7 @@ function CatalystCash() {
   const toast = useToast();
   useEffect(() => { window.toast = toast; }, [toast]);
   const online = useOnline();
+  useGlobalHaptics(); // Auto-haptic on every button tap
 
   const { requireAuth, setRequireAuth, appPasscode, setAppPasscode, useFaceId, setUseFaceId, isLocked, setIsLocked, privacyMode, setPrivacyMode, lockTimeout, setLockTimeout, appleLinkedId, setAppleLinkedId, isSecurityReady } = useSecurity();
   const { apiKey, setApiKey, aiProvider, setAiProvider, aiModel, setAiModel, persona, setPersona, personalRules, setPersonalRules, autoBackupInterval, setAutoBackupInterval, notifPermission, aiConsent, setAiConsent, showAiConsent, setShowAiConsent, financialConfig, setFinancialConfig, isSettingsReady } = useSettings();
@@ -97,6 +98,36 @@ function CatalystCash() {
   const swipeStart = useRef(null);
   const longPressTimer = useRef(null);
   const touchStartTime = useRef(0);
+
+  // ── Shared swipe gesture handler (used by main scroll, input pane, chat pane) ──
+  const handleSwipeTouchStart = (e) => {
+    swipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+  };
+  const handleSwipeTouchEnd = (e) => {
+    if (!swipeStart.current) return;
+    if (loading) { swipeStart.current = null; return; }
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const dx = endX - swipeStart.current.x;
+    const dy = endY - swipeStart.current.y;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+    const elapsed = Date.now() - swipeStart.current.t;
+    const velocity = elapsed > 0 ? absDx / elapsed : 0;
+    const isHorizontal = absDx > absDy * 1.5;
+    const meetsDistance = absDx > 50;
+    const meetsVelocity = velocity > 0.3;
+    if (isHorizontal && meetsDistance && meetsVelocity) {
+      const renderTab = tab === "settings" ? lastCenterTab.current : tab;
+      if (renderTab === "results" && dx > 0 && (viewing || resultsBackTarget === "history")) {
+        setResultsBackTarget(null); navTo("history"); haptic.light();
+      } else if (SWIPE_TAB_ORDER.includes(renderTab)) {
+        if (dx < 0) swipeToTab("left");
+        else swipeToTab("right");
+      }
+    }
+    swipeStart.current = null;
+  };
 
   const ready = isSecurityReady && isSettingsReady && isPortfolioReady && isAuditReady;
 
@@ -407,17 +438,35 @@ function CatalystCash() {
   // Native iOS swipe-back is handled via WKWebView allowsBackForwardNavigationGestures
   // (set in capacitor.config.ts). The popstate listener (above) handles the navigation.
 
-  if (!ready) return <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100dvh", background: T.bg.base }}>
+  if (!ready) return <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100dvh", background: T.bg.base, position: "relative", overflow: "hidden" }}>
     <GlobalStyles />
-    <div style={{
-      position: "relative", width: 90, height: 90, marginBottom: 28,
-      animation: "pulseShadow 2s infinite cubic-bezier(0.4, 0, 0.2, 1)"
-    }}>
-      <div style={{ position: "absolute", inset: -6, borderRadius: 26, background: `conic-gradient(from 0deg, transparent, ${T.accent.primary}40, transparent)`, animation: "spin 2s linear infinite" }} />
-      <img src="/icon-512.png" style={{ position: "relative", width: "100%", height: "100%", borderRadius: 20, zIndex: 2, background: T.bg.base, boxShadow: `0 8px 32px rgba(0,0,0,0.4)` }} />
+    {/* Ambient gradient blobs */}
+    <div style={{ position: "absolute", top: "15%", left: "10%", width: 200, height: 200, background: T.accent.primary, filter: "blur(100px)", opacity: 0.06, borderRadius: "50%", pointerEvents: "none" }} />
+    <div style={{ position: "absolute", bottom: "20%", right: "10%", width: 160, height: 160, background: T.accent.emerald, filter: "blur(90px)", opacity: 0.05, borderRadius: "50%", pointerEvents: "none" }} />
+
+    {/* Icon + Orbits */}
+    <div style={{ position: "relative", width: 110, height: 110, marginBottom: 32 }}>
+      {/* Outer orbit */}
+      <div style={{ position: "absolute", inset: -18, borderRadius: "50%", border: `1px dashed ${T.border.focus}`, opacity: 0.2, animation: "spin 20s linear infinite" }}>
+        <div style={{ position: "absolute", top: -3, left: "50%", width: 6, height: 6, borderRadius: "50%", background: T.accent.primary, opacity: 0.5 }} />
+      </div>
+      {/* Inner orbit */}
+      <div style={{ position: "absolute", inset: -6, borderRadius: "50%", border: `1px dashed ${T.accent.emeraldSoft}`, opacity: 0.2, animation: "spin 12s linear infinite reverse" }}>
+        <div style={{ position: "absolute", bottom: -2, right: "15%", width: 4, height: 4, borderRadius: "50%", background: T.accent.emerald, opacity: 0.4 }} />
+      </div>
+      {/* Conic gradient spinner */}
+      <div style={{ position: "absolute", inset: -4, borderRadius: 30, background: `conic-gradient(from 0deg, transparent, ${T.accent.primary}40, transparent)`, animation: "spin 2s linear infinite" }} />
+      {/* App icon */}
+      <img src="/icon-512.png" alt="" style={{ position: "relative", width: "100%", height: "100%", borderRadius: 24, zIndex: 2, background: T.bg.base, boxShadow: `0 12px 48px rgba(0,0,0,0.4), 0 0 40px ${T.accent.primaryDim}` }} />
     </div>
-    <h1 style={{ fontSize: 26, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.04em", marginBottom: 8 }}>Catalyst Cash</h1>
-    <p style={{ fontSize: 11, color: T.accent.primary, fontFamily: T.font.mono, letterSpacing: "2px", fontWeight: 700 }}>INITIALIZING CORE ENGINE</p>
+
+    <h1 style={{ fontSize: 28, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.04em", marginBottom: 8, animation: "fadeInUp .5s ease-out .1s both" }}>Catalyst Cash</h1>
+    <p style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, letterSpacing: "3px", fontWeight: 700, textTransform: "uppercase", marginBottom: 32, animation: "fadeInUp .5s ease-out .2s both" }}>INITIALIZING</p>
+
+    {/* Shimmer progress bar */}
+    <div style={{ width: 140, height: 3, borderRadius: 2, background: T.border.default, overflow: "hidden", animation: "fadeInUp .5s ease-out .3s both" }}>
+      <div style={{ width: "40%", height: "100%", borderRadius: 2, background: T.accent.gradient, animation: "shimmer 2s ease-in-out infinite" }} />
+    </div>
   </div>;
 
   if (!onboardingComplete) return (
@@ -477,36 +526,36 @@ function CatalystCash() {
       position: "relative",
       display: "flex", alignItems: "center", justifyContent: "space-between",
       padding: `calc(env(safe-area-inset-top, 0px) + 4px) 16px 8px 16px`,
-      background: "rgba(6, 9, 14, 0.65)", flexShrink: 0, zIndex: 10,
+      background: T.bg.navGlass, flexShrink: 0, zIndex: 10,
       backdropFilter: "blur(24px) saturate(1.8)", WebkitBackdropFilter: "blur(24px) saturate(1.8)",
       borderBottom: `1px solid ${T.border.subtle}`
     }}>
       <div style={{ display: "flex", gap: 8 }}>
         <button onClick={() => setShowGuide(!showGuide)} style={{
-          width: 36, height: 36, borderRadius: 10, border: `1px solid ${showGuide ? T.border.focus : T.border.default}`,
+          width: 44, height: 44, borderRadius: 12, border: `1px solid ${showGuide ? T.border.focus : T.border.default}`,
           background: showGuide ? T.bg.surface : T.bg.glass, backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
           display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
           color: showGuide ? T.accent.primary : T.text.dim, transition: "color .2s, border-color .2s",
           visibility: (tab === "history" || tab === "settings" || tab === "chat") ? "hidden" : "visible"
-        }}><Info size={16} strokeWidth={1.8} /></button>
+        }}><Info size={18} strokeWidth={1.8} /></button>
         <button onClick={() => setPrivacyMode(p => !p)} style={{
-          width: 36, height: 36, borderRadius: 10, border: `1px solid ${privacyMode ? T.border.focus : T.border.default}`,
+          width: 44, height: 44, borderRadius: 12, border: `1px solid ${privacyMode ? T.border.focus : T.border.default}`,
           background: privacyMode ? T.bg.surface : T.bg.glass, backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
           display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
           color: privacyMode ? T.accent.primary : T.text.dim, transition: "color .2s, border-color .2s",
           visibility: (tab === "history" || tab === "settings" || tab === "input" || tab === "chat") ? "hidden" : "visible"
-        }} aria-label={privacyMode ? "Disable Privacy Mode" : "Enable Privacy Mode"}>{privacyMode ? <EyeOff size={16} strokeWidth={1.8} /> : <Eye size={16} strokeWidth={1.8} />}</button>
+        }} aria-label={privacyMode ? "Disable Privacy Mode" : "Enable Privacy Mode"}>{privacyMode ? <EyeOff size={18} strokeWidth={1.8} /> : <Eye size={18} strokeWidth={1.8} />}</button>
       </div>
       <span style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", fontSize: 13, fontWeight: 700, color: T.text.secondary, fontFamily: T.font.mono, letterSpacing: "0.04em", textAlign: "center", whiteSpace: "nowrap" }}>
-        {tab === "dashboard" ? "HOME" : tab === "history" ? "HISTORY" : tab === "chat" ? "ASK AI" : tab === "renewals" ? "EXPENSES" : tab === "cards" ? "ACCOUNTS" : tab === "input" ? "INPUT" : tab === "results" ? "RESULTS" : tab === "settings" ? "CONFIG" : ""}
+        {{ dashboard: "HOME", history: "HISTORY", chat: "ASK AI", renewals: "EXPENSES", cards: "ACCOUNTS", input: "INPUT", results: "RESULTS", settings: "CONFIG" }[tab] || ""}
       </span>
       <button onClick={() => tab === "settings" ? navTo(lastCenterTab.current) : navTo("settings")} style={{
-        width: 36, height: 36, borderRadius: 10, border: `1px solid ${tab === "settings" ? T.border.focus : T.border.default}`,
+        width: 44, height: 44, borderRadius: 12, border: `1px solid ${tab === "settings" ? T.border.focus : T.border.default}`,
         background: tab === "settings" ? T.bg.surface : T.bg.glass, backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
         display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
         color: tab === "settings" ? T.accent.primary : T.text.dim, transition: "color .2s, border-color .2s",
         visibility: tab === "settings" ? "hidden" : "visible"
-      }} aria-label="Open Settings"><Settings size={16} strokeWidth={1.8} /></button>
+      }} aria-label="Open Settings"><Settings size={18} strokeWidth={1.8} /></button>
     </div>
 
     {/* ═══════ OFFLINE BANNER ═══════ */}
@@ -523,42 +572,8 @@ function CatalystCash() {
 
     <div ref={scrollRef} className="scroll-area safe-scroll-body"
       onTouchMove={() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); }}
-      onTouchStart={e => {
-        swipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
-      }}
-      onTouchEnd={e => {
-        if (!swipeStart.current) return;
-        if (loading) { swipeStart.current = null; return; } // block swipe during audit
-        const endX = e.changedTouches[0].clientX;
-        const endY = e.changedTouches[0].clientY;
-        const dx = endX - swipeStart.current.x;
-        const dy = endY - swipeStart.current.y;
-        const absDx = Math.abs(dx);
-        const absDy = Math.abs(dy);
-        const elapsed = Date.now() - swipeStart.current.t;
-        const velocity = elapsed > 0 ? absDx / elapsed : 0; // px/ms
-
-        // ── Native iOS swipe navigation ──
-        // Must be primarily horizontal (2:1 ratio), exceed minimum distance, and reasonable speed
-        const isHorizontal = absDx > absDy * 1.5;
-        const meetsDistance = absDx > 50;
-        const meetsVelocity = velocity > 0.3; // iOS-like flick sensitivity (0.3 px/ms)
-
-        if (isHorizontal && meetsDistance && meetsVelocity) {
-          const renderTab = tab === "settings" ? lastCenterTab.current : tab;
-
-          // Special case: edge-swipe-back for Results → History
-          if (renderTab === "results" && dx > 0 && (viewing || resultsBackTarget === "history")) {
-            setResultsBackTarget(null); navTo("history"); haptic.light();
-          }
-          // Full-width swipe between tabs in SWIPE_TAB_ORDER
-          else if (SWIPE_TAB_ORDER.includes(renderTab)) {
-            if (dx < 0) swipeToTab("left");  // finger went left → next tab
-            else swipeToTab("right");          // finger went right → prev tab
-          }
-        }
-        swipeStart.current = null;
-      }}
+      onTouchStart={handleSwipeTouchStart}
+      onTouchEnd={handleSwipeTouchEnd}
       style={{
         flex: 1, overflowY: (tab === "settings" || tab === "input" || tab === "chat") ? "hidden" : "auto", position: "relative",
         display: (tab === "input" || tab === "chat") ? "none" : undefined
@@ -615,28 +630,9 @@ function CatalystCash() {
     {/* ═══════ OVERLAY PANELS — rendered OUTSIDE main scroll but INSIDE flex flow ═══════ */}
     {inputMounted && <div className="slide-pane"
       onTouchMove={() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); }}
-      onTouchStart={e => {
-        swipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
-      }}
-      onTouchEnd={e => {
-        if (!swipeStart.current) return;
-        const endX = e.changedTouches[0].clientX;
-        const endY = e.changedTouches[0].clientY;
-        const dx = endX - swipeStart.current.x;
-        const dy = endY - swipeStart.current.y;
-        const absDx = Math.abs(dx);
-        const absDy = Math.abs(dy);
-        const elapsed = Date.now() - swipeStart.current.t;
-        const velocity = elapsed > 0 ? absDx / elapsed : 0;
-        const isHorizontal = absDx > absDy * 1.5;
-        const meetsDistance = absDx > 50;
-        const meetsVelocity = velocity > 0.3;
-        if (isHorizontal && meetsDistance && meetsVelocity) {
-          if (dx < 0) swipeToTab("left");
-          else swipeToTab("right");
-        }
-        swipeStart.current = null;
-      }} style={{
+      onTouchStart={handleSwipeTouchStart}
+      onTouchEnd={handleSwipeTouchEnd}
+      style={{
         display: tab === "input" ? "flex" : "none",
         flexDirection: "column",
         flex: 1, minHeight: 0,
@@ -654,25 +650,8 @@ function CatalystCash() {
         onBack={() => navTo("dashboard")} />
     </div>}
     {tab === "chat" && <div
-      onTouchStart={e => {
-        swipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
-      }}
-      onTouchEnd={e => {
-        if (!swipeStart.current) return;
-        const endX = e.changedTouches[0].clientX;
-        const endY = e.changedTouches[0].clientY;
-        const dx = endX - swipeStart.current.x;
-        const dy = endY - swipeStart.current.y;
-        const absDx = Math.abs(dx);
-        const absDy = Math.abs(dy);
-        const elapsed = Date.now() - swipeStart.current.t;
-        const velocity = elapsed > 0 ? absDx / elapsed : 0;
-        if (absDx > absDy * 1.5 && absDx > 50 && velocity > 0.3) {
-          if (dx < 0) swipeToTab("left");
-          else swipeToTab("right");
-        }
-        swipeStart.current = null;
-      }}
+      onTouchStart={handleSwipeTouchStart}
+      onTouchEnd={handleSwipeTouchEnd}
       style={{
         display: "flex", flex: 1, minHeight: 0,
         zIndex: 15, background: T.bg.base,

@@ -167,6 +167,7 @@ export default memo(function AIChatTab({ proEnabled = false }) {
     const [error, setError] = useState(null);
     const [showScrollDown, setShowScrollDown] = useState(false);
     const [chatQuota, setChatQuota] = useState({ allowed: true, remaining: Infinity, limit: Infinity, used: 0 });
+    const [inputFocused, setInputFocused] = useState(false);
 
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
@@ -645,9 +646,9 @@ export default memo(function AIChatTab({ proEnabled = false }) {
                 <div style={{
                     flex: 1, position: "relative",
                     background: T.bg.elevated, borderRadius: T.radius.lg,
-                    border: `1.5px solid ${T.border.focus}`,
+                    border: `1.5px solid ${inputFocused ? T.border.focus : T.border.default}`,
                     transition: "border-color .3s ease, box-shadow .3s ease",
-                    boxShadow: `0 0 0 1px ${T.accent.primary}10`
+                    boxShadow: inputFocused ? `0 0 0 3px ${T.accent.primary}15` : "none"
                 }}>
                     <textarea
                         ref={inputRef}
@@ -659,6 +660,8 @@ export default memo(function AIChatTab({ proEnabled = false }) {
                             e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
                         }}
                         onKeyDown={handleKeyDown}
+                        onFocus={() => setInputFocused(true)}
+                        onBlur={() => setInputFocused(false)}
                         placeholder={isStreaming ? "Waiting for response..." : "Ask about your finances..."}
                         disabled={isStreaming}
                         rows={1}

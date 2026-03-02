@@ -363,41 +363,57 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                         <Zap size={22} color={T.accent.emerald} style={{ margin: "0 auto 14px", display: "block" }} />
                         <p style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>See the full experience</p>
                         <p style={{ fontSize: 11, color: T.text.secondary, marginBottom: 14, lineHeight: 1.5 }}>Run a demo audit with sample data — takes 2 seconds, no setup required</p>
-                        <button onClick={onDemoAudit} style={{
-                            padding: "12px 28px", borderRadius: T.radius.lg, border: "none",
+                        <button onClick={onDemoAudit} className="hover-btn" style={{
+                            padding: "14px 32px", borderRadius: T.radius.lg, border: "none",
                             background: `linear-gradient(135deg, ${T.accent.emerald},#1A8B50)`,
-                            color: "#fff", fontSize: 13, fontWeight: 800,
+                            color: "#fff", fontSize: 14, fontWeight: 800,
                             cursor: "pointer", boxShadow: T.shadow.navBtn,
+                            letterSpacing: "0.02em"
                         }}>Try Demo Audit ✨</button>
                     </Card>
 
                     <Card animate delay={160} style={{ textAlign: "center", padding: 16, marginTop: 8 }}>
                         <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Ready with your real numbers?</p>
                         <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5, marginBottom: 12 }}>Enter a weekly snapshot to power your financial command center</p>
-                        <button onClick={onRunAudit} style={{
-                            padding: "10px 24px", borderRadius: T.radius.md, border: `1px solid ${T.accent.primary}40`,
-                            background: T.accent.primaryDim, color: T.accent.primary, fontSize: 12, fontWeight: 700, cursor: "pointer"
+                        <button onClick={onRunAudit} className="hover-btn" style={{
+                            padding: "12px 28px", borderRadius: T.radius.md, border: `1px solid ${T.accent.primary}40`,
+                            background: T.accent.primaryDim, color: T.accent.primary, fontSize: 13, fontWeight: 700, cursor: "pointer"
                         }}>Go to Input →</button>
                     </Card>
 
                     <Card style={{ marginTop: 8 }}>
                         <Label>{needsSetup ? "Complete Your Setup" : "Quick Links"}</Label>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
-                            <button onClick={onGoSettings} style={{
-                                padding: "12px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`,
-                                background: T.bg.elevated, color: T.text.primary, fontSize: 12, fontWeight: 700,
-                                cursor: "pointer", textAlign: "left"
-                            }}>Financial Profile & Settings</button>
-                            {needsCards && <button onClick={onGoCards} style={{
-                                padding: "12px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`,
-                                background: T.bg.elevated, color: T.text.primary, fontSize: 12, fontWeight: 700,
-                                cursor: "pointer", textAlign: "left"
-                            }}>Add Credit Cards</button>}
-                            {needsRenewals && <button onClick={onGoRenewals} style={{
-                                padding: "12px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`,
-                                background: T.bg.elevated, color: T.text.primary, fontSize: 12, fontWeight: 700,
-                                cursor: "pointer", textAlign: "left"
-                            }}>Add Renewals & Bills</button>}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8 }}>
+                            <button onClick={onGoSettings} className="hover-btn" style={{
+                                padding: "14px 16px", borderRadius: T.radius.md,
+                                border: `1px solid ${T.border.default}`, borderLeft: `3px solid ${T.accent.primary}`,
+                                background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontWeight: 700,
+                                cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center",
+                                justifyContent: "space-between"
+                            }}>
+                                <span>⚙️  Financial Profile & Settings</span>
+                                <span style={{ fontSize: 14, color: T.text.muted }}>›</span>
+                            </button>
+                            {needsCards && <button onClick={onGoCards} className="hover-btn" style={{
+                                padding: "14px 16px", borderRadius: T.radius.md,
+                                border: `1px solid ${T.border.default}`, borderLeft: `3px solid ${T.status.blue}`,
+                                background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontWeight: 700,
+                                cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center",
+                                justifyContent: "space-between"
+                            }}>
+                                <span>💳  Add Credit Cards</span>
+                                <span style={{ fontSize: 14, color: T.text.muted }}>›</span>
+                            </button>}
+                            {needsRenewals && <button onClick={onGoRenewals} className="hover-btn" style={{
+                                padding: "14px 16px", borderRadius: T.radius.md,
+                                border: `1px solid ${T.border.default}`, borderLeft: `3px solid ${T.accent.emerald}`,
+                                background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontWeight: 700,
+                                cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center",
+                                justifyContent: "space-between"
+                            }}>
+                                <span>📋  Add Renewals & Bills</span>
+                                <span style={{ fontSize: 14, color: T.text.muted }}>›</span>
+                            </button>}
                         </div>
                     </Card>
 
@@ -546,7 +562,7 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
             <div style={{ flex: 1, display: "flex", background: T.bg.elevated, padding: 3, borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle} ` }}>
                 {[{ id: "command", label: "Command Center" }, { id: "budget", label: "Weekly Budget" }].map(v => (
-                    <button key={v.id} className="a11y-hit-target" onClick={() => { haptic.light(); setViewMode(v.id); }} style={{
+                    <button key={v.id} className="a11y-hit-target hover-btn" onClick={() => { haptic.light(); setViewMode(v.id); }} style={{
                         flex: 1, padding: "6px 12px", border: "none", borderRadius: T.radius.md,
                         background: viewMode === v.id ? T.bg.card : "transparent",
                         color: viewMode === v.id ? T.text.primary : T.text.dim,
@@ -560,13 +576,13 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
             {/* Action buttons (Export / Share) */}
             {current && <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                 {[{ fn: () => exportAudit(current), icon: Download }, { fn: () => shareAudit(current), icon: ExternalLink }].map(({ fn, icon: I }, i) =>
-                    <button key={i} className="a11y-hit-target" onClick={fn} style={{
-                        width: 36, height: 36, borderRadius: T.radius.md,
+                    <button key={i} className="a11y-hit-target hover-btn" onClick={fn} style={{
+                        width: 44, height: 44, borderRadius: T.radius.md,
                         border: `1px solid ${T.border.subtle} `, background: T.bg.elevated, color: T.text.primary,
                         cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
                         boxShadow: T.shadow.sm, flexShrink: 0
                     }}>
-                        <I size={15} strokeWidth={2.2} /></button>)}
+                        <I size={17} strokeWidth={2.2} /></button>)}
             </div>}
         </div>
 
@@ -604,7 +620,7 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                 {showPaywall && <ProPaywall onClose={() => setShowPaywall(false)} />}
 
                 {/* ═══ COMMAND HEADER — Consolidated Hero ═══ */}
-                <Card animate style={{
+                <Card animate className="hover-card" style={{
                     padding: 0, marginBottom: 12, overflow: "hidden", position: "relative",
                     background: T.bg.card,
                     borderColor: `${scoreColor} 15`,

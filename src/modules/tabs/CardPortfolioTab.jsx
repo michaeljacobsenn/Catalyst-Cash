@@ -342,7 +342,7 @@ export default memo(function CardPortfolioTab() {
                 <h1 style={{ fontSize: 26, fontWeight: 900, letterSpacing: "-0.02em" }}>Wealth Overview</h1>
                 <p style={{ fontSize: 13, color: T.text.dim, marginTop: 4, fontFamily: T.font.mono }}>{totalAccounts} connected entries</p>
             </div>
-            {ENABLE_PLAID && (cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId)) && (<button onClick={handleRefreshPlaid} disabled={plaidRefreshing} style={{
+            {ENABLE_PLAID && (cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId)) && (<button onClick={handleRefreshPlaid} disabled={plaidRefreshing} className="hover-btn" style={{
                 display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 20,
                 border: `1px solid ${T.status.blue}30`, background: `${T.status.blue}10`,
                 color: T.status.blue, fontSize: 12, fontWeight: 700, cursor: plaidRefreshing ? "wait" : "pointer",
@@ -355,7 +355,7 @@ export default memo(function CardPortfolioTab() {
         </div>
 
         {/* Ultra-Premium Wealth Dashboard */}
-        <Card animate style={{
+        <Card animate className="hover-card" style={{
             position: "relative",
             padding: 0,
             overflow: "hidden",
@@ -397,13 +397,13 @@ export default memo(function CardPortfolioTab() {
 
         {/* Unified floating buttons — Add Account + optional Plaid */}
         <div style={{ display: "flex", gap: 12, marginTop: 16, marginBottom: 8 }}>
-            <button onClick={() => openSheet()} style={{
+            <button onClick={() => openSheet()} className="hover-btn" style={{
                 flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 24,
                 border: "1px solid transparent", boxSizing: "border-box",
                 background: T.accent.gradient, color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer",
                 boxShadow: `0 6px 20px ${T.accent.primary}40`, letterSpacing: "0.03em"
             }}><Plus size={16} />Add Account</button>
-            {ENABLE_PLAID && <button onClick={handlePlaidConnect} disabled={plaidLoading} style={{
+            {ENABLE_PLAID && <button onClick={handlePlaidConnect} disabled={plaidLoading} className="hover-btn" style={{
                 flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 24,
                 border: "1px solid rgba(255,255,255,0.1)", boxSizing: "border-box", background: "#000000",
                 color: "#FFFFFF", fontSize: 13, fontWeight: 800, cursor: plaidLoading ? "wait" : "pointer",
@@ -449,7 +449,7 @@ export default memo(function CardPortfolioTab() {
                 <Badge variant="outline" style={{ fontSize: 10, color: cards.length > 0 ? T.accent.primary : T.text.muted, borderColor: cards.length > 0 ? `${T.accent.primary}40` : T.border.default }}>
                     {cards.length === 0 ? "0 cards" : cards.length}
                 </Badge>
-                {collapsedSections.creditCards ? <ChevronDown size={16} color={T.text.muted} /> : <ChevronUp size={16} color={T.text.muted} />}
+                <ChevronDown size={16} color={T.text.muted} className="chevron-animated" data-open={String(!collapsedSections.creditCards)} />
             </div>
         </div>
 
@@ -458,7 +458,7 @@ export default memo(function CardPortfolioTab() {
             grouped.map(([inst, cardsInCategory]) => {
                 const colors = ic(inst);
                 const isCollapsed = collapsedIssuers[inst];
-                return <Card key={inst} animate variant="glass" style={{ marginBottom: 16, padding: 0, overflow: "hidden", borderLeft: `4px solid ${colors.text}` }}>
+                return <Card key={inst} animate variant="glass" className="hover-card" style={{ marginBottom: 16, padding: 0, overflow: "hidden", borderLeft: `4px solid ${colors.text}` }}>
                     <div onClick={() => setCollapsedIssuers(p => ({ ...p, [inst]: !isCollapsed }))} style={{ padding: "16px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${colors.text}08` }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                             <div style={{ padding: 6, borderRadius: 8, background: colors.text, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -467,9 +467,9 @@ export default memo(function CardPortfolioTab() {
                             <span style={{ fontSize: 13, fontWeight: 800, color: colors.text, textTransform: "uppercase", letterSpacing: "0.05em" }}>{inst}</span>
                             <Badge variant="outline" style={{ fontSize: 11, color: colors.text, borderColor: `${colors.text}40` }}>{cardsInCategory.length}</Badge>
                         </div>
-                        {isCollapsed ? <ChevronDown size={14} color={T.text.dim} /> : <ChevronUp size={14} color={T.text.dim} />}
+                        <ChevronDown size={14} color={T.text.dim} className="chevron-animated" data-open={String(!isCollapsed)} />
                     </div>
-                    {!isCollapsed && <div style={{ padding: "16px 18px" }}>
+                    <div className="collapse-section" data-collapsed={String(isCollapsed)}><div style={{ padding: "16px 18px" }}>
                         {cardsInCategory.map((card, i) => (
                             <div key={card.id} style={{ borderBottom: i === cardsInCategory.length - 1 ? "none" : `1px solid ${T.border.subtle}`, padding: "14px 0" }}>
                                 {editingCard === card.id ?
@@ -613,13 +613,13 @@ export default memo(function CardPortfolioTab() {
                                                 <Mono size={card._plaidBalance != null ? 10 : 13} weight={700} color={card._plaidBalance != null ? T.text.dim : colors.text}>{card._plaidBalance != null ? "Limit " : ""}{fmt(card.limit)}</Mono>
                                             </div>
                                             <button onClick={() => startEdit(card)} style={{
-                                                width: 30, height: 30, borderRadius: T.radius.sm,
+                                                width: 36, height: 36, borderRadius: T.radius.md,
                                                 border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim,
                                                 cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
                                             }}>
                                                 <Edit3 size={11} /></button>
                                             {editingCard !== card.id && <button onClick={() => removeCard(card.id)} style={{
-                                                width: 30, height: 30, borderRadius: T.radius.sm,
+                                                width: 36, height: 36, borderRadius: T.radius.md,
                                                 border: "none", background: T.status.redDim, color: T.status.red,
                                                 cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
                                             }}>
@@ -628,7 +628,7 @@ export default memo(function CardPortfolioTab() {
                                     </div>}
                             </div>
                         ))}
-                    </div>}
+                    </div></div>
                 </Card>;
             })
         )}
@@ -692,7 +692,7 @@ export default memo(function CardPortfolioTab() {
                 <Badge variant="outline" style={{ fontSize: 10, color: bankAccounts.length > 0 ? T.status.blue : T.text.muted, borderColor: bankAccounts.length > 0 ? `${T.status.blue}40` : T.border.default }}>
                     {bankAccounts.length === 0 ? "0 accounts" : bankAccounts.length}
                 </Badge>
-                {collapsedSections.bankAccounts ? <ChevronDown size={16} color={T.text.muted} /> : <ChevronUp size={16} color={T.text.muted} />}
+                <ChevronDown size={16} color={T.text.muted} className="chevron-animated" data-open={String(!collapsedSections.bankAccounts)} />
             </div>
         </div>
 
@@ -708,7 +708,7 @@ export default memo(function CardPortfolioTab() {
                     <Card style={{ padding: "16px", textAlign: "center" }}><p style={{ fontSize: 11, color: T.text.muted }}>No checking accounts yet</p></Card> :
                     groupedChecking.map(([bank, accts]) => {
                         const isCollapsed = collapsedBanks[`checking-${bank}`];
-                        return <Card key={`c-${bank}`} animate variant="glass" style={{ marginBottom: 12, padding: 0, overflow: "hidden", borderLeft: `4px solid ${T.status.blue}` }}>
+                        return <Card key={`c-${bank}`} animate variant="glass" className="hover-card" style={{ marginBottom: 12, padding: 0, overflow: "hidden", borderLeft: `4px solid ${T.status.blue}` }}>
                             <div onClick={() => setCollapsedBanks(p => ({ ...p, [`checking-${bank}`]: !isCollapsed }))} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${T.status.blue}08` }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                                     <div style={{ padding: 5, borderRadius: 7, background: T.status.blue, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -717,9 +717,9 @@ export default memo(function CardPortfolioTab() {
                                     <span style={{ fontSize: 12, fontWeight: 800, color: T.status.blue, textTransform: "uppercase", letterSpacing: "0.05em" }}>{bank}</span>
                                     <Badge variant="outline" style={{ fontSize: 10, color: T.status.blue, borderColor: `${T.status.blue}40` }}>{accts.length}</Badge>
                                 </div>
-                                {isCollapsed ? <ChevronDown size={14} color={T.text.dim} /> : <ChevronUp size={14} color={T.text.dim} />}
+                                <ChevronDown size={14} color={T.text.dim} className="chevron-animated" data-open={String(!isCollapsed)} />
                             </div>
-                            {!isCollapsed && <div style={{ padding: "12px 18px" }}>
+                            <div className="collapse-section" data-collapsed={String(isCollapsed)}><div style={{ padding: "12px 18px" }}>
                                 {accts.sort((a, b) => a.name.localeCompare(b.name)).map((acct, i) => (
                                     <div key={acct.id} style={{ borderBottom: i === accts.length - 1 ? "none" : `1px solid ${T.border.subtle}`, padding: "12px 0" }}>
                                         {editingBank === acct.id ?
@@ -750,13 +750,13 @@ export default memo(function CardPortfolioTab() {
                                                 </div>
                                                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                                                     {acct._plaidBalance != null && <Mono size={14} weight={900} color={T.status.blue}>{fmt(acct._plaidBalance)}</Mono>}
-                                                    <button onClick={() => startEditBank(acct)} style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={11} /></button>
-                                                    <button onClick={() => removeBankAccount(acct.id)} style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={11} /></button>
+                                                    <button onClick={() => startEditBank(acct)} style={{ width: 36, height: 36, borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={13} /></button>
+                                                    <button onClick={() => removeBankAccount(acct.id)} style={{ width: 36, height: 36, borderRadius: T.radius.md, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
                                                 </div>
                                             </div>}
                                     </div>
                                 ))}
-                            </div>}
+                            </div></div>
                         </Card>;
                     })}
 
@@ -770,7 +770,7 @@ export default memo(function CardPortfolioTab() {
                     <Card style={{ padding: "16px", textAlign: "center" }}><p style={{ fontSize: 11, color: T.text.muted }}>No savings accounts yet</p></Card> :
                     groupedSavings.map(([bank, accts]) => {
                         const isCollapsed = collapsedBanks[`savings-${bank}`];
-                        return <Card key={`s-${bank}`} animate variant="glass" style={{ marginBottom: 12, padding: 0, overflow: "hidden", borderLeft: `4px solid ${T.accent.emerald}` }}>
+                        return <Card key={`s-${bank}`} animate variant="glass" className="hover-card" style={{ marginBottom: 12, padding: 0, overflow: "hidden", borderLeft: `4px solid ${T.accent.emerald}` }}>
                             <div onClick={() => setCollapsedBanks(p => ({ ...p, [`savings-${bank}`]: !isCollapsed }))} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${T.accent.emerald}08` }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                                     <div style={{ padding: 5, borderRadius: 7, background: T.accent.emerald, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -779,9 +779,9 @@ export default memo(function CardPortfolioTab() {
                                     <span style={{ fontSize: 12, fontWeight: 800, color: T.accent.emerald, textTransform: "uppercase", letterSpacing: "0.05em" }}>{bank}</span>
                                     <Badge variant="outline" style={{ fontSize: 10, color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>{accts.length}</Badge>
                                 </div>
-                                {isCollapsed ? <ChevronDown size={14} color={T.text.dim} /> : <ChevronUp size={14} color={T.text.dim} />}
+                                <ChevronDown size={14} color={T.text.dim} className="chevron-animated" data-open={String(!isCollapsed)} />
                             </div>
-                            {!isCollapsed && <div style={{ padding: "12px 18px" }}>
+                            <div className="collapse-section" data-collapsed={String(isCollapsed)}><div style={{ padding: "12px 18px" }}>
                                 {accts.sort((a, b) => a.name.localeCompare(b.name)).map((acct, i) => (
                                     <div key={acct.id} style={{ borderBottom: i === accts.length - 1 ? "none" : `1px solid ${T.border.subtle}`, padding: "12px 0" }}>
                                         {editingBank === acct.id ?
@@ -812,13 +812,13 @@ export default memo(function CardPortfolioTab() {
                                                 </div>
                                                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                                                     {acct._plaidBalance != null && <Mono size={14} weight={900} color={T.accent.emerald}>{fmt(acct._plaidBalance)}</Mono>}
-                                                    <button onClick={() => startEditBank(acct)} style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={11} /></button>
-                                                    <button onClick={() => removeBankAccount(acct.id)} style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={11} /></button>
+                                                    <button onClick={() => startEditBank(acct)} style={{ width: 36, height: 36, borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={13} /></button>
+                                                    <button onClick={() => removeBankAccount(acct.id)} style={{ width: 36, height: 36, borderRadius: T.radius.md, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
                                                 </div>
                                             </div>}
                                     </div>
                                 ))}
-                            </div>}
+                            </div></div>
                         </Card>;
                     })}
             </>
@@ -843,7 +843,7 @@ export default memo(function CardPortfolioTab() {
             </div>
             <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Investments</h2>
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-                <button onClick={(e) => { e.stopPropagation(); handleRefreshPrices(); }} disabled={refreshingPrices} title="Refresh prices" style={{ width: 28, height: 28, borderRadius: 8, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: refreshingPrices ? T.text.muted : T.accent.emerald, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", opacity: refreshingPrices ? 0.6 : 1 }}>
+                <button onClick={(e) => { e.stopPropagation(); handleRefreshPrices(); }} disabled={refreshingPrices} title="Refresh prices" style={{ width: 36, height: 36, borderRadius: 10, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: refreshingPrices ? T.text.muted : T.accent.emerald, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", opacity: refreshingPrices ? 0.6 : 1 }}>
                     <RefreshCw size={13} className={refreshingPrices ? "spin" : ""} />
                 </button>
                 <Badge variant="outline" style={{ fontSize: 10, color: investTotalValue > 0 ? T.accent.emerald : T.text.muted, borderColor: investTotalValue > 0 ? `${T.accent.emerald}40` : T.border.default }}>
@@ -884,14 +884,14 @@ export default memo(function CardPortfolioTab() {
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                 {sectionValue > 0 && <Mono size={15} weight={800} color={color}>{fmt(sectionValue)}</Mono>}
-                                {isCollapsed ? <ChevronDown size={16} color={T.text.dim} /> : <ChevronUp size={16} color={T.text.dim} />}
+                                {isCollapsed ? <ChevronDown size={16} color={T.text.dim} className="chevron-animated" data-open="false" /> : <ChevronDown size={16} color={T.text.dim} className="chevron-animated" data-open="true" />}
                             </div>
                             {/* Dynamic progress bar underneath */}
                             {sectionValue > 0 && <div style={{ width: "100%", height: 3, background: `${T.border.default}`, borderRadius: 2, marginTop: 12, overflow: "hidden", display: "flex" }}>
                                 <div style={{ width: `${percentOfTotal}%`, background: color, transition: "width 1s cubic-bezier(0.4, 0, 0.2, 1)" }} />
                             </div>}
                         </div>
-                        {!isCollapsed && <div style={{ padding: "12px 18px" }}>
+                        <div className="collapse-section" data-collapsed={String(isCollapsed)}><div style={{ padding: "12px 18px" }}>
                             {items.length === 0 ?
                                 <p style={{ fontSize: 11, color: T.text.muted, textAlign: "center", padding: "8px 0" }}>No holdings yet — add your first below.</p> :
                                 items.sort((a, b) => (a.symbol || "").localeCompare(b.symbol || "")).map((h, i) => {
@@ -955,7 +955,7 @@ export default memo(function CardPortfolioTab() {
                                     }}>+</button>
                                 </div>
                             </div>}
-                        </div>}
+                        </div></div>
                     </Card>;
                 })}
             </>
@@ -1006,9 +1006,9 @@ export default memo(function CardPortfolioTab() {
                             <span style={{ fontSize: 12, fontWeight: 800, color: T.status.amber, textTransform: "uppercase", letterSpacing: "0.05em" }}>ACTIVE DEBTS</span>
                             <Badge variant="outline" style={{ fontSize: 10, color: T.status.amber, borderColor: `${T.status.amber}40` }}>{nonCardDebts.length}</Badge>
                         </div>
-                        {collapsedDebts ? <ChevronDown size={14} color={T.text.dim} /> : <ChevronUp size={14} color={T.text.dim} />}
+                        <ChevronDown size={14} color={T.text.dim} className="chevron-animated" data-open={String(!collapsedDebts)} />
                     </div>
-                    {!collapsedDebts && <div style={{ padding: "12px 18px" }}>
+                    <div className="collapse-section" data-collapsed={String(collapsedDebts)}><div style={{ padding: "12px 18px" }}>
                         {nonCardDebts.sort((a, b) => (b.balance || 0) - (a.balance || 0)).map((debt, i) => (
                             <div key={debt.id || i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: i === nonCardDebts.length - 1 ? "none" : `1px solid ${T.border.subtle}` }}>
                                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -1022,7 +1022,7 @@ export default memo(function CardPortfolioTab() {
                                 <Mono size={13} weight={700} color={T.status.amber}>{fmt(debt.balance)}</Mono>
                             </div>
                         ))}
-                    </div>}
+                    </div></div>
                 </Card>
                 <p style={{ fontSize: 10, color: T.text.muted, textAlign: "center", fontFamily: T.font.mono, marginTop: 8 }}>Manage debts in Settings → Debts & Liabilities</p>
             </>
@@ -1046,7 +1046,7 @@ export default memo(function CardPortfolioTab() {
                 <Badge variant="outline" style={{ fontSize: 10, color: T.accent.primary, borderColor: `${T.accent.primary}40` }}>
                     {savingsGoals.length} goal{savingsGoals.length !== 1 ? "s" : ""}
                 </Badge>
-                {collapsedSections.savingsGoals ? <ChevronDown size={16} color={T.text.muted} /> : <ChevronUp size={16} color={T.text.muted} />}
+                <ChevronDown size={16} color={T.text.muted} className="chevron-animated" data-open={String(!collapsedSections.savingsGoals)} />
             </div>
         </div>
 

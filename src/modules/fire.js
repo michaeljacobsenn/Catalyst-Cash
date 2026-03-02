@@ -5,6 +5,23 @@ const DEFAULT_SWR_BPS = 400; // 4.00%
 const DEFAULT_EXPECTED_RETURN_BPS = 700; // 7.00%
 const DEFAULT_INFLATION_BPS = 250; // 2.50%
 
+/**
+ * Normalize a percentage config value to basis points.
+ * Config stores percentages as whole numbers (e.g. 4 = 4%, 7.5 = 7.5%).
+ * toBps() treats its input as "the number before the %" (24.99 → 2499 bps),
+ * which is correct for APR strings but wrong if the value is already a
+ * decimal fraction (0.04 meaning 4%). This helper disambiguates.
+ */
+function pctToBps(value, fallbackBps) {
+    if (value == null || value === "") return fallbackBps;
+    const n = typeof value === "string" ? parseFloat(value) : value;
+    if (!Number.isFinite(n) || n === 0) return fallbackBps;
+    // Values < 1 are assumed to be decimal fractions (0.04 = 4%)
+    // Values >= 1 are assumed to be whole percentages (4 = 4%)
+    if (Math.abs(n) < 1) return Math.round(n * BPS_SCALE);
+    return Math.round(n * 100);
+}
+
 function safeNumber(value, fallback = 0) {
     return Number.isFinite(value) ? value : fallback;
 }
@@ -130,9 +147,9 @@ export function computeFireProjection({
     const annualSavingsCents = annualIncomeCents - annualExpensesCents;
     const currentPortfolioCents = currentPortfolioFromInputsCents(financialConfig, portfolioMarketValue);
 
-    const swrBps = Math.max(1, toBps(financialConfig?.fireSafeWithdrawalPct ?? DEFAULT_SWR_BPS / 100) || DEFAULT_SWR_BPS);
-    const expectedReturnBps = toBps(financialConfig?.fireExpectedReturnPct ?? financialConfig?.arbitrageTargetAPR ?? DEFAULT_EXPECTED_RETURN_BPS / 100) || DEFAULT_EXPECTED_RETURN_BPS;
-    const inflationBps = toBps(financialConfig?.fireInflationPct ?? DEFAULT_INFLATION_BPS / 100) || DEFAULT_INFLATION_BPS;
+    const swrBps = pctToBps(financialConfig?.fireSafeWithdrawalPct, DEFAULT_SWR_BPS);
+    const expectedReturnBps = pctToBps(financialConfig?.fireExpectedReturnPct ?? financialConfig?.arbitrageTargetAPR, DEFAULT_EXPECTED_RETURN_BPS);
+    const inflationBps = pctToBps(financialConfig?.fireInflationPct, DEFAULT_INFLATION_BPS);
 
     const targetPortfolioCents = Math.ceil((annualExpensesCents * BPS_SCALE) / swrBps);
     const base = {
