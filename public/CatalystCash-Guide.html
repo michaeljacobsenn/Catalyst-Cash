@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@600;700;800&display=swap');
 
         @page {
             margin: 0;
@@ -24,6 +24,7 @@
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
+            scroll-behavior: smooth;
         }
 
         *,
@@ -37,12 +38,15 @@
             box-sizing: border-box;
             padding: 0 40px;
             background-color: #04060A;
+            max-width: 900px;
+            margin: 0 auto;
         }
 
         /* Typography */
         h1,
         h2,
         h3,
+        h4,
         p,
         ul,
         li {
@@ -50,69 +54,123 @@
             padding: 0;
         }
 
+        ::selection {
+            background: rgba(0, 229, 255, 0.3);
+            color: #fff;
+        }
+
         .header-wrapper {
             text-align: center;
             margin-top: 60px;
             margin-bottom: 70px;
-            page-break-after: always;
             height: calc(100vh - 80px);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            position: relative;
+        }
+
+        /* Ambient background glow for hero */
+        .header-wrapper::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(123, 94, 167, 0.25) 0%, rgba(0,0,0,0) 70%);
+            z-index: -1;
+            filter: blur(40px);
         }
 
         .splash-logo {
-            width: 140px;
-            height: 140px;
+            width: 150px;
+            height: 150px;
             margin-bottom: 30px;
             object-fit: contain;
-            filter: drop-shadow(0 0 40px rgba(0, 229, 255, 0.2));
+            filter: drop-shadow(0 0 50px rgba(123, 94, 167, 0.3));
         }
 
         .label-pill {
-            display: inline-block;
-            border: 1px solid rgba(0, 229, 255, 0.4);
-            color: #00E5FF;
-            background: rgba(0, 229, 255, 0.05);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid rgba(123, 94, 167, 0.4);
+            color: #D4C4FB;
+            background: rgba(123, 94, 167, 0.1);
             padding: 6px 18px;
             border-radius: 999px;
-            font-size: 10px;
+            font-size: 11px;
             text-transform: uppercase;
             letter-spacing: 2px;
-            font-weight: 700;
+            font-weight: 800;
             margin-bottom: 24px;
             font-family: 'JetBrains Mono', monospace;
-            box-shadow: 0 0 20px rgba(0, 229, 255, 0.1);
+            box-shadow: 0 0 20px rgba(123, 94, 167, 0.2);
+        }
+
+        .label-pill::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: #00E5FF;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #00E5FF;
         }
 
         h1 {
             color: #FFFFFF;
-            font-size: 56px;
-            font-weight: 800;
-            letter-spacing: -2px;
-            line-height: 1.1;
+            font-size: 64px;
+            font-weight: 900;
+            letter-spacing: -2.5px;
+            line-height: 1.05;
+            background: linear-gradient(135deg, #FFFFFF 0%, #A1A1AA 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         .subtitle {
             color: #64748B;
-            font-size: 16px;
-            margin-top: 16px;
+            font-size: 18px;
+            margin-top: 20px;
             font-weight: 500;
             letter-spacing: -0.2px;
+            max-width: 500px;
+            line-height: 1.5;
+        }
+
+        .scroll-indicator {
+            position: absolute;
+            bottom: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            color: #475569;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .scroll-line {
+            width: 1px;
+            height: 40px;
+            background: linear-gradient(to bottom, #475569, transparent);
         }
 
         /* Section Containers */
         .section-card {
             border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
-            padding: 30px;
+            border-radius: 24px;
+            padding: 40px;
             background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
-            margin-bottom: 24px;
-            page-break-inside: avoid;
-            break-inside: avoid;
+            margin-bottom: 32px;
             position: relative;
             overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
         }
 
         .section-card::after {
@@ -122,101 +180,112 @@
             left: 0;
             width: 100%;
             height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
         }
 
         .section-header {
             display: flex;
             align-items: center;
-            margin-bottom: 16px;
+            margin-bottom: 20px;
         }
 
         .section-number {
-            color: rgba(0, 229, 255, 0.4);
+            color: rgba(123, 94, 167, 0.6);
             font-size: 24px;
             font-family: 'JetBrains Mono', monospace;
-            font-weight: 700;
+            font-weight: 800;
             margin-right: 16px;
         }
 
         .section-title {
             color: #F8FAFC;
-            font-size: 24px;
-            font-weight: 700;
+            font-size: 26px;
+            font-weight: 800;
             letter-spacing: -0.5px;
         }
 
         /* Content Elements */
         p.lead {
             color: #CBD5E1;
-            font-size: 14px;
+            font-size: 15px;
             line-height: 1.6;
-            margin-bottom: 24px;
+            margin-bottom: 28px;
+            font-weight: 500;
         }
 
         p {
             color: #94A3B8;
-            font-size: 13px;
+            font-size: 14px;
             line-height: 1.6;
-            margin-bottom: 12px;
+            margin-bottom: 14px;
         }
 
         ul {
             padding-left: 20px;
-            margin-bottom: 12px;
+            margin-bottom: 16px;
         }
 
         li {
             color: #94A3B8;
-            font-size: 13px;
+            font-size: 14px;
             line-height: 1.6;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
         }
 
         li strong {
             color: #F1F5F9;
-            font-weight: 600;
+            font-weight: 700;
         }
 
         code {
-            background: rgba(0, 229, 255, 0.1);
+            background: rgba(123, 94, 167, 0.15);
             padding: 3px 6px;
-            border-radius: 4px;
+            border-radius: 6px;
             font-family: 'JetBrains Mono', monospace;
             font-size: 12px;
-            color: #00E5FF;
+            color: #D4C4FB;
             font-weight: 600;
+            border: 1px solid rgba(123, 94, 167, 0.2);
         }
 
         /* Grid Layouts for specific sections */
         .grid-3 {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
+            gap: 24px;
         }
 
         .grid-2 {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 20px;
+            gap: 24px;
         }
 
         .feature-box {
-            background: rgba(0, 0, 0, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.04);
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.05);
             border-radius: 16px;
             padding: 24px;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-box:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.02);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
 
         .feature-box h3 {
             color: #F8FAFC;
             font-size: 16px;
-            font-weight: 600;
+            font-weight: 700;
             margin-bottom: 12px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
         }
 
         .feature-box p {
@@ -226,13 +295,14 @@
         }
 
         .insight-box {
-            margin-top: 24px;
-            border-radius: 12px;
-            border: 1px solid rgba(16, 185, 129, 0.2);
+            margin-top: 30px;
+            border-radius: 16px;
+            border: 1px solid rgba(16, 185, 129, 0.25);
             background: rgba(16, 185, 129, 0.05);
-            padding: 24px;
+            padding: 24px 30px;
             position: relative;
             overflow: hidden;
+            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.05);
         }
 
         .insight-box::before {
@@ -243,28 +313,36 @@
             width: 4px;
             height: 100%;
             background: #10B981;
+            box-shadow: 0 0 10px #10B981;
         }
 
         .insight-header {
-            color: #10B981;
-            font-size: 10px;
+            color: #34D399;
+            font-size: 11px;
             font-family: 'JetBrains Mono', monospace;
-            font-weight: 700;
+            font-weight: 800;
             letter-spacing: 1.5px;
             text-transform: uppercase;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .insight-box p {
             color: #E2E8F0;
             margin: 0;
+            font-size: 14px;
+            line-height: 1.6;
         }
 
         /* Pro vs Free Section */
         .tier-box {
-            border-radius: 16px;
-            padding: 24px;
+            border-radius: 20px;
+            padding: 30px;
             position: relative;
+            display: flex;
+            flex-direction: column;
         }
 
         .tier-free {
@@ -273,79 +351,101 @@
         }
 
         .tier-pro {
-            background: linear-gradient(135deg, rgba(255, 215, 0, 0.05), rgba(255, 165, 0, 0.05));
-            border: 1px solid rgba(255, 215, 0, 0.3);
-            box-shadow: 0 4px 30px rgba(255, 215, 0, 0.05);
+            background: linear-gradient(145deg, rgba(123, 94, 167, 0.1), rgba(0, 0, 0, 0.2));
+            border: 1px solid rgba(123, 94, 167, 0.4);
+            box-shadow: 0 10px 40px rgba(123, 94, 167, 0.15);
+        }
+
+        .tier-pro::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 20px;
+            padding: 1px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.4), transparent);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
         }
 
         .tier-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 16px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         }
 
         .tier-pro .tier-header {
-            border-bottom-color: rgba(255, 215, 0, 0.15);
+            border-bottom-color: rgba(123, 94, 167, 0.3);
         }
 
         .tier-box ul {
             padding-left: 0;
             list-style: none;
+            margin-bottom: auto;
         }
 
         .tier-box li {
             display: flex;
             align-items: flex-start;
-            gap: 10px;
-            margin-bottom: 12px;
-            color: #E2E8F0;
+            gap: 12px;
+            margin-bottom: 14px;
+            color: #CBD5E1;
+            font-size: 14px;
         }
 
         .tier-box li::before {
             content: '✓';
-            color: #10B981;
-            font-weight: 800;
+            color: #00E5FF;
+            font-weight: 900;
         }
 
         .tier-pro li::before {
-            color: #FFD700;
+            color: #D4C4FB;
         }
 
         .step-list {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 20px;
+            gap: 24px;
             list-style: none;
             padding: 0;
         }
 
         .step-item {
-            background: rgba(0, 0, 0, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            border-radius: 16px;
-            padding: 24px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 30px;
             position: relative;
             margin-bottom: 0;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .step-item:hover {
+            border-color: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.02);
         }
 
         .step-circle {
-            width: 28px;
-            height: 28px;
-            border-radius: 14px;
-            background: #00E5FF;
+            width: 32px;
+            height: 32px;
+            border-radius: 16px;
+            background: #D4C4FB;
             display: flex;
             align-items: center;
             justify-content: center;
             color: #04060A;
-            font-size: 12px;
+            font-size: 14px;
             font-weight: 800;
             font-family: 'JetBrains Mono', monospace;
             position: absolute;
             top: 24px;
             left: 24px;
+            box-shadow: 0 0 15px rgba(123, 94, 167, 0.4);
         }
 
         .step-content {
@@ -354,80 +454,111 @@
 
         .step-content h3 {
             color: #F8FAFC;
-            font-size: 16px;
-            font-weight: 600;
+            font-size: 18px;
+            font-weight: 700;
             margin-bottom: 10px;
         }
 
         .step-content p {
-            font-size: 13px;
+            font-size: 14px;
             color: #64748B;
+            line-height: 1.6;
         }
 
         .danger-zone {
-            border-color: rgba(239, 68, 68, 0.2);
-            background: rgba(239, 68, 68, 0.02);
-            margin-top: 30px;
+            border-color: rgba(239, 68, 68, 0.3);
+            background: rgba(239, 68, 68, 0.04);
+            margin-top: 40px;
         }
 
         .danger-header {
             color: #EF4444;
-            font-size: 10px;
+            font-size: 11px;
             font-family: 'JetBrains Mono', monospace;
-            font-weight: 700;
+            font-weight: 800;
             letter-spacing: 1.5px;
-            margin-bottom: 16px;
+            margin-bottom: 20px;
             text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .danger-header::before {
+            content: '⚠️';
+            font-size: 14px;
         }
 
         .footer-meta {
             text-align: center;
-            color: rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.3);
             font-family: 'JetBrains Mono', monospace;
-            font-size: 11px;
-            padding-top: 40px;
-            padding-bottom: 40px;
-            border-top: 1px dashed rgba(255, 255, 255, 0.05);
-            margin-top: 20px;
+            font-size: 12px;
+            padding-top: 50px;
+            padding-bottom: 50px;
+            border-top: 1px dashed rgba(255, 255, 255, 0.1);
+            margin-top: 40px;
+            letter-spacing: 1px;
+        }
+
+        .cfo-rule {
+            background: linear-gradient(to right, rgba(0, 229, 255, 0.08), rgba(0, 0, 0, 0));
+            border-left: 4px solid #00E5FF;
+            padding: 24px;
+            border-radius: 0 12px 12px 0;
+            margin: 20px 0;
+        }
+
+        .cfo-rule h4 {
+            color: #00E5FF;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .cfo-rule p {
+            color: #F8FAFC;
+            font-size: 15px;
+            font-weight: 500;
+            margin-bottom: 0;
         }
 
         /* ── Mobile Optimization ── */
         @media screen and (max-width: 768px) {
             .page {
-                padding: 0 16px;
+                padding: 0 20px;
             }
 
             .header-wrapper {
                 margin-top: 40px;
                 margin-bottom: 40px;
+                height: 85vh;
             }
 
             h1 {
-                font-size: 38px;
-                letter-spacing: -1px;
+                font-size: 42px;
+                letter-spacing: -1.5px;
             }
 
             .subtitle {
-                font-size: 14px;
+                font-size: 15px;
             }
 
             .grid-3,
             .grid-2,
             .step-list {
                 grid-template-columns: 1fr;
-                gap: 12px;
+                gap: 16px;
             }
 
             .section-card {
-                padding: 20px;
+                padding: 24px;
             }
 
             .section-title {
-                font-size: 20px;
-            }
-
-            .section-number {
-                font-size: 18px;
+                font-size: 22px;
             }
 
             .feature-box,
@@ -436,8 +567,8 @@
             }
 
             .step-circle {
-                top: 24px;
-                left: 24px;
+                top: 20px;
+                left: 20px;
             }
 
             .splash-logo {
@@ -447,36 +578,8 @@
             }
 
             .step-content {
-                margin-top: 32px;
+                margin-top: 36px;
             }
-        }
-
-        .setup-warning {
-            background: rgba(0, 229, 255, 0.05);
-            border: 1px solid rgba(0, 229, 255, 0.3);
-            border-left: 4px solid #00E5FF;
-            padding: 18px 20px;
-            border-radius: 8px;
-            margin: 30px 0;
-            page-break-inside: avoid;
-            break-inside: avoid;
-        }
-
-        .setup-warning h3 {
-            margin-top: 0;
-            color: #00E5FF;
-            font-size: 16px;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .setup-warning p {
-            margin: 0;
-            color: #E4E6F0;
-            font-size: 14px;
-            line-height: 1.5;
         }
     </style>
 </head>
@@ -487,34 +590,34 @@
         <div class="header-wrapper">
             <img src="./icon-512.png" alt="Catalyst Cash Logo" class="splash-logo" />
             <div class="label-pill">Elite Operational Protocol</div>
-            <h1 style="margin-top: 0px;">Catalyst Cash</h1>
-            <div class="subtitle">Command Manual for the Autonomous Financial Operator</div>
+            <h1 style="margin-top: 0px;">Catalyst V2</h1>
+            <div class="subtitle">The Autonomous CFO & Wealth Management Terminal</div>
+            
+            <div class="scroll-indicator">
+                <span>SCROLL</span>
+                <div class="scroll-line"></div>
+            </div>
         </div>
 
         <div class="section-card">
             <div class="section-header">
                 <span class="section-number">01 /</span>
-                <h2 class="section-title">The Auditor's Philosophy</h2>
+                <h2 class="section-title">The Terminal Philosophy</h2>
             </div>
-            <p class="lead">Catalyst Cash is an elite <strong>Financial Command Center</strong> designed for individuals
-                who demand absolute control and deterministic wealth growth. It treats your personal capital as a
-                high-performance engine driven by localized AI.</p>
+            <p class="lead">Catalyst Cash V2 transcends budgeting. It is a <strong>High-Fidelity Wealth Command Center</strong> designed for individuals who demand deterministic capital growth and absolute financial control.</p>
 
             <div class="grid-3">
                 <div class="feature-box">
                     <h3>🛡️ Zero-Knowledge</h3>
-                    <p>Financial data strictly never touches our servers. Your profile lives and breathes securely on
-                        your device.</p>
+                    <p>Financial sovereignty is non-negotiable. Your exact ledgers, keys, and balances never touch our servers. Execution occurs entirely on the edge.</p>
                 </div>
                 <div class="feature-box">
-                    <h3>🧠 Catalyst AI</h3>
-                    <p>Integrated intelligence engine that reads your entire portfolio simultaneously to find deep
-                        operational efficiencies.</p>
+                    <h3>🧠 Catalyst Coach</h3>
+                    <p>An integrated, multi-modal intelligence protocol. Catalyst digests your entire portfolio matrix instantly to formulate Wall Street-grade optimization.</p>
                 </div>
                 <div class="feature-box">
-                    <h3>🌉 Direct-to-Provider</h3>
-                    <p>API requests bypass standard middle-men and connect securely with top-tier LLMs for absolute
-                        privacy.</p>
+                    <h3>⚡ Direct Execution</h3>
+                    <p>By bypassing standard middleware, API requests are routed securely to top-tier LLMs for unparalleled speed and privacy.</p>
                 </div>
             </div>
         </div>
@@ -522,195 +625,153 @@
         <div class="section-card">
             <div class="section-header">
                 <span class="section-number">02 /</span>
-                <h2 class="section-title">The Weekly Operating Routine</h2>
+                <h2 class="section-title">The V2 Wealth Ledger</h2>
             </div>
-            <p class="lead">Execute this 4-step sequence every Sunday morning to maintain total fiscal agency and
-                eliminate financial blind spots.</p>
+            <p class="lead">A precise AI audit is only as potent as its data constraints. V2 introduces a holistic, multi-asset aggregation mapping protocol.</p>
 
-            <div class="step-list">
-                <div class="step-item">
-                    <div class="step-circle">1</div>
-                    <div class="step-content">
-                        <h3>Sync Plaid or Manual</h3>
-                        <p>Pull live balances from Plaid instantly, or manually enter your cash flow snapshot if running
-                            fully disconnected.</p>
-                    </div>
-                </div>
-                <div class="step-item">
-                    <div class="step-circle">2</div>
-                    <div class="step-content">
-                        <h3>Run the AI Audit</h3>
-                        <p>Tap the center button. Catalyst AI analyzes your cash constraints against all debts,
-                            renewals, and savings rules.</p>
-                    </div>
-                </div>
-                <div class="step-item">
-                    <div class="step-circle">3</div>
-                    <div class="step-content">
-                        <h3>Act on Insights</h3>
-                        <p>The dashboard updates immediately with your exact availability after obligations. Action the
-                            AI's guidance.</p>
-                    </div>
-                </div>
-                <div class="step-item">
-                    <div class="step-circle">4</div>
-                    <div class="step-content">
-                        <h3>Contextual Chat</h3>
-                        <p>Have questions? Open the Ask AI tab. The system has 100% context of your profile, instantly.
-                        </p>
-                    </div>
-                </div>
+            <ul style="margin-bottom: 24px;">
+                <li><strong>Liquidity Matrix (Bank Sync):</strong> Connect via Plaid to continuously monitor checking velocity and high-yield savings reserves.</li>
+                <li><strong>Credit Portfolio Engine:</strong> Map cards, credit limits, and exact APRs. The system predicts rolling 7-day liability exposure against cash on hand.</li>
+                <li><strong>Tax-Advantaged Tracking:</strong> Monitor <code>HSA</code>, <code>401(k)</code> matching thresholds, and <code>Roth IRA</code> contribution limits. Maximize tax-sheltered capital.</li>
+                <li><strong>Alternative Asset Ledgers:</strong> Connect <code>Crypto</code> holdings to live market data and classify <code>Other Assets</code> by liquidity state (Liquid vs. Locked).</li>
+            </ul>
+
+            <div class="cfo-rule">
+                <h4>CFO Protocol #1: The Safety Floor</h4>
+                <p>The system is programmed to treat your Emergency Floor limit as a strict survival barrier. Should 7-day obligations push your reserves below this floor, Catalyst enters Code Red and halts optional allocations.</p>
             </div>
-
-            <div class="insight-box">
-                <div class="insight-header">Chat Ephemerality Protocol</div>
-                <p><strong>To maximize privacy</strong>, all AI chat conversations are automatically destroyed after 24
-                    hours. Your sensitive PII is intrinsically scrubbed before any local storage occurs.</p>
+            
+            <div class="cfo-rule">
+                <h4>CFO Protocol #2: Debt Avalanche Execution</h4>
+                <p>The integrated Debt Simulator automatically sequences non-card liabilities (Mortgage, Auto, Student Loans) to optimize payoff velocity by highest effective APR, mathematically guaranteeing the lowest interest loss.</p>
             </div>
         </div>
 
         <div class="section-card">
             <div class="section-header">
                 <span class="section-number">03 /</span>
-                <h2 class="section-title">Security & Fast Access</h2>
+                <h2 class="section-title">The Weekly Operation Cycle</h2>
             </div>
-            <p class="lead">The Security System protects your net worth and private rules using edge biometrics.</p>
+            <p class="lead">Engage this 4-step execution loop every Sunday to maintain total fiscal agency, eliminate blind spots, and compound capital.</p>
 
-            <ul>
-                <li><strong>Passcode Lock:</strong> Found in <code>Settings</code>. Create a 4-digit PIN to establish
-                    the base cryptographic wall.</li>
-                <li><strong>Biometric Enforcement:</strong> Toggle <code>Face ID / Touch ID</code>. The system links
-                    your biometrics to unlock the application instantly.</li>
-                <li><strong>Relock Precision:</strong> Adjust the <code>Auto-Lock After</code> timer. Options range from
-                    <code>Immediately</code> (Max Security) to <code>15 Minutes</code> (Workflow Efficiency).
-                </li>
-                <li><strong>Privacy Mode:</strong> Found in the AI Chat. When toggled, zero chat history is committed to
-                    the local disk — pure ephemeral RAM execution.</li>
-            </ul>
+            <div class="step-list">
+                <div class="step-item">
+                    <div class="step-circle">1</div>
+                    <div class="step-content">
+                        <h3>Pulse Synchronization</h3>
+                        <p>Trigger a global Plaid refresh to pull live balances, or manually reconcile offline accounts to establish the weekly baseline.</p>
+                    </div>
+                </div>
+                <div class="step-item">
+                    <div class="step-circle">2</div>
+                    <div class="step-content">
+                        <h3>Execute Global Audit</h3>
+                        <p>Deploy Catalyst AI. The engine simulates cash flow, analyzing immediate runway against incoming debits, subscription renewals, and yield limits.</p>
+                    </div>
+                </div>
+                <div class="step-item">
+                    <div class="step-circle">3</div>
+                    <div class="step-content">
+                        <h3>Act on Intelligence</h3>
+                        <p>The dashboard updates instantly to reflect your absolute available spending power. Execute the strategic shifts recommended by the Coach.</p>
+                    </div>
+                </div>
+                <div class="step-item">
+                    <div class="step-circle">4</div>
+                    <div class="step-content">
+                        <h3>Contextual Querying</h3>
+                        <p>Require advanced scenario modeling? Open Ask AI. The agent possesses 100% context of your profile, instantly rendering charts and strategic plans.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="insight-box">
+                <div class="insight-header">Chat Ephemerality Protocol</div>
+                <p><strong>To enforce absolute privacy</strong>, all AI chat transcripts are purged from memory after 24 hours. Your sensitive Net Worth geometry is intrinsically scrubbed before any local transmission occurs.</p>
+            </div>
         </div>
 
         <div class="section-card">
             <div class="section-header">
                 <span class="section-number">04 /</span>
-                <h2 class="section-title">Free vs. Pro Architecture</h2>
+                <h2 class="section-title">Catalyst Pro vs Free Architecture</h2>
             </div>
-            <p class="lead">Capitalize on the intelligence tier that matches your operational intensity.</p>
+            <p class="lead">Upgrade your intelligence bandwidth. V2 introduces best-in-class multi-model routing capabilities.</p>
 
             <div class="grid-2">
                 <div class="tier-box tier-free">
                     <div class="tier-header">
-                        <h3 style="margin:0; color:#F8FAFC; font-size:20px;">Free Tier</h3>
-                        <span
-                            style="font-size:12px; font-weight:700; background:rgba(255,255,255,0.1); padding:4px 10px; border-radius:99px;">$0
-                            / mo</span>
+                        <h3 style="margin:0; color:#F8FAFC; font-size:22px; font-weight:800;">Basic Terminal</h3>
+                        <span style="font-size:12px; font-weight:700; background:rgba(255,255,255,0.1); padding:4px 10px; border-radius:99px;">$0 / mo</span>
                     </div>
                     <ul>
                         <li><strong style="color:white">3</strong> Full AI Audits per month</li>
-                        <li><strong style="color:white">10</strong> Asset manual refreshes/mo</li>
-                        <li>On-device strict privacy</li>
-                        <li>Powered by standard intelligence models (e.g. Gemini Flash)</li>
+                        <li><strong style="color:white">10</strong> AI Chat queries per day</li>
+                        <li>Powered by lightweight edge models</li>
                         <li>Full Plaid Integration</li>
+                        <li>Local encrypted data storage</li>
                     </ul>
                 </div>
                 <div class="tier-box tier-pro">
                     <div class="tier-header">
-                        <h3 style="margin:0; color:#FFD700; font-size:20px;">Catalyst Pro</h3>
-                        <span
-                            style="font-size:12px; font-weight:800; color:#FFD700; background:rgba(255,215,0,0.1); padding:4px 10px; border-radius:99px; border:1px solid rgba(255,215,0,0.3);">PREMIUM</span>
+                        <h3 style="margin:0; color:#fff; font-size:22px; font-weight:800;">Catalyst Pro <span style="font-size: 16px; font-weight: 500; opacity: 0.7;">V2</span></h3>
+                        <span style="font-size:12px; font-weight:800; color:#D4C4FB; background:rgba(123, 94, 167, 0.2); border: 1px solid rgba(123, 94, 167, 0.5); padding:4px 10px; border-radius:99px;">ELITE TIER</span>
                     </div>
                     <ul>
-                        <li><strong>Unlimited</strong> AI Audits</li>
-                        <li><strong>Unlimited</strong> Asset refreshes</li>
-                        <li>Access elite reasoning engines: <strong>GPT-4o</strong> & <strong>Claude 3.5 Sonnet</strong>
-                        </li>
-                        <li>Priority API execution queue</li>
-                        <li>Advanced chart rendering</li>
+                        <li><strong>Unlimited</strong> Global AI Audits</li>
+                        <li><strong>Unlimited</strong> Neural Chat Interactions</li>
+                        <li>Access elite reasoning engines: <strong>GPT-4o</strong> & <strong>Claude 3.5 Sonnet</strong></li>
+                        <li>Advanced Multi-Factor Chart Rendering</li>
+                        <li>Priority Serverless Execution Queue</li>
                     </ul>
                 </div>
             </div>
 
-            <div class="insight-box"
-                style="border-color: rgba(0, 229, 255, 0.3); background: rgba(0, 229, 255, 0.05); margin-top:24px;">
-                <div class="insight-header" style="color: #00E5FF;">Bring Your Own Key (BYOK)</div>
-                <p>Advanced users can entirely bypass the subscription by supplying their own OpenAI or Anthropic API
-                    key in Settings. You pay the provider directly at developer cost.</p>
+            <div class="insight-box" style="border-color: rgba(123, 94, 167, 0.4); background: rgba(123, 94, 167, 0.05); margin-top:24px;">
+                <div class="insight-header" style="color: #D4C4FB;">Developer Protocol: BYOK</div>
+                <p>Engineers and advanced power users can bypass subscriptions entirely by submitting their own OpenAI, Anthropic, or Google API keys in Settings. You pay wholesale compute costs directly to the provider.</p>
             </div>
         </div>
 
         <div class="section-card">
             <div class="section-header">
                 <span class="section-number">05 /</span>
-                <h2 class="section-title">Building Your Ledger</h2>
+                <h2 class="section-title">Data Sovereignty & Encryption</h2>
             </div>
-            <p class="lead">A high-fidelity AI audit demands exact constraints. The more data you map, the higher the
-                intelligence output.</p>
-
-            <ul style="margin-bottom: 24px;">
-                <li><strong>Income & Budgets:</strong> Map your <code>Income Sources</code> (Salary, Contracts,
-                    Dividends) and set maximum weekly thresholds in your <code>Budget Categories</code>.</li>
-                <li><strong>Card Portfolio:</strong> Add cards detailing their <code>Limit</code> and
-                    <code>APR</code>. The AI maps utilization strictly against your credit health. Toggle
-                    <code>Waived</code> to ignore 0% APR promo fees.
-                </li>
-                <li><strong>Renewals Hub:</strong> Log every subscription and recurring bill. Assign exactly which card
-                    gets hit. The AI calculates rolling 7-day obligations.</li>
-                <li><strong>Assets & Liabilities:</strong> Connect your Brokerage, 401(k), Crypto, and Non-Card Debts
-                    (Mortgage, Auto, Student). Liquid and illiquid capital are separated for safety calculations.</li>
-            </ul>
-        </div>
-
-        <div class="section-card">
-            <div class="section-header">
-                <span class="section-number">06 /</span>
-                <h2 class="section-title">Data Sovereignty</h2>
-            </div>
-            <p class="lead">Total data ownership. Catalyst Cash provides tools for native encrypted backups and
-                migrations.</p>
+            <p class="lead">Complete custody over your financial architecture. Catalyst provides robust, enterprise-grade tooling for backup and archival.</p>
 
             <div class="grid-3" style="margin-bottom: 30px;">
                 <div class="feature-box">
-                    <h3>iCloud Auto-Sync</h3>
-                    <p>Link your Apple ID to continuously background-sync encrypted payloads securely to your private
-                        iCloud Drive.</p>
+                    <h3>iCloud Key-Sync</h3>
+                    <p>Link your Apple ID to silently background-sync encrypted payloads to your private iCloud container, instantly restoring state across iOS devices.</p>
                 </div>
                 <div class="feature-box">
-                    <h3>Excel I/O Matrix</h3>
-                    <p>Download your entire setup as a multi-sheet <code>Excel (.xlsx)</code>. Edit in bulk, and push it
-                        back into the App seamlessly.</p>
+                    <h3>Excel Matrix I/O</h3>
+                    <p>Export your entire ledger as an unencrypted <code>.xlsx</code> workbook. Modify thousands of rows locally, and push the matrix back into the App seamlessly.</p>
                 </div>
                 <div class="feature-box">
-                    <h3>.enc Native Archival</h3>
-                    <p>Generate AES-256 encrypted JSON blobs. Store them anywhere — a cold-storage vault, Google Drive,
-                        or a USB stick.</p>
+                    <h3>AES-256 Vault Export</h3>
+                    <p>Generate native `.enc` encrypted JSON blobs. Store your entire fiscal life securely on a Yubikey, cold-storage drive, or secure vault.</p>
                 </div>
             </div>
 
             <div class="feature-box danger-zone">
-                <div class="danger-header">Danger Zone — Eradication Protocols</div>
+                <div class="danger-header">Danger Zone — Remote Wipe Protocols</div>
                 <div class="grid-2">
                     <div>
-                        <h3 style="color: #F8FAFC; font-size: 14px; margin-bottom: 6px;">Clear Audit History</h3>
-                        <p style="color: #64748B; font-size: 12px;">Destroys all historical AI snapshot data. Keeps your
-                            configured cards, settings, and portfolios fully intact.</p>
+                        <h3 style="color: #F8FAFC; font-size: 14px; margin-bottom: 6px;">Purge Audit Memory</h3>
+                        <p style="color: #64748B; font-size: 13px;">Destroys all historical AI snapshot data from local disk. Retains ledger configurations and portfolio setup.</p>
                     </div>
                     <div>
-                        <h3 style="color: #F8FAFC; font-size: 14px; margin-bottom: 6px;">Factory Reset</h3>
-                        <p style="color: #64748B; font-size: 12px;">Thermonuclear wipe. Eradicates 100% of data, keys,
-                            and history immediately. Returns app to blank factory state.</p>
+                        <h3 style="color: #F8FAFC; font-size: 14px; margin-bottom: 6px;">Execute Factory Wipe</h3>
+                        <p style="color: #64748B; font-size: 13px;">The thermonuclear option. Eradicates 100% of data, biometric links, API keys, and history immediately. Returns application to absolute zero.</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="setup-warning">
-            <h3>⚡ Core Optimization Rule</h3>
-            <p><strong>The Emergency Floor is absolute.</strong> The AI is programmed to treat your Floor setting as a
-                strict survival limit. If your Checking Balance combined with 7-Day impending obligations breaches this
-                floor, the AI will alert <strong>Code Red</strong> and halt optional allocations. Respect the floor.</p>
-        </div>
-
         <div class="footer-meta">
-            Catalyst Cash Operational Systems // v1.5.2
+            CATALYST CASH V2 OPERATIONAL SYSTEMS // ENCRYPTED LOCALLY
         </div>
     </div>
 </body>
