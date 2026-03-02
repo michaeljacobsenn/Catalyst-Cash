@@ -6,6 +6,7 @@
 
 const ANTHROPIC_VERSION = "2023-06-01";
 const MAX_AUDITS_PER_DAY = 10;
+const MAX_CHATS_PER_DAY = 100;
 const MAX_BODY_SIZE = 100_000; // 100KB max request body
 const VALID_PROVIDERS = ["gemini", "openai", "claude"];
 const PLAID_ENV = "production"; // "sandbox", "development", or "production"
@@ -30,9 +31,11 @@ function corsHeaders(origin, env) {
 }
 
 // ─── Rate Limiting (per-device, using Cache API) ─────────────
-async function checkRateLimit(deviceId) {
+async function checkRateLimit(deviceId, isChat) {
     const cache = caches.default;
-    const key = `https://rate-limit.internal/${deviceId}`;
+    const limit = isChat ? MAX_CHATS_PER_DAY : MAX_AUDITS_PER_DAY;
+    const type = isChat ? "chat" : "audit";
+    const key = `https://rate-limit.internal/${deviceId}/${type}`;
     const cached = await cache.match(key);
 
     let count = 0;
@@ -40,8 +43,8 @@ async function checkRateLimit(deviceId) {
         count = parseInt(await cached.text(), 10) || 0;
     }
 
-    if (count >= MAX_AUDITS_PER_DAY) {
-        return { allowed: false, remaining: 0 };
+    if (count >= limit) {
+        return { allowed: false, remaining: 0, limit };
     }
 
     const newCount = count + 1;
@@ -50,7 +53,7 @@ async function checkRateLimit(deviceId) {
     });
     await cache.put(key, res);
 
-    return { allowed: true, remaining: MAX_AUDITS_PER_DAY - newCount };
+    return { allowed: true, remaining: limit - newCount, limit };
 }
 
 // ─── Gemini Provider ─────────────────────────────────────────
@@ -421,26 +424,6 @@ export default {
             });
         }
 
-        // ─── Rate Limit Check ─────────────────────────────────
-        const deviceId = request.headers.get("X-Device-ID") ||
-            request.headers.get("CF-Connecting-IP") || "unknown";
-
-        const rateResult = await checkRateLimit(deviceId);
-        if (!rateResult.allowed) {
-            return new Response(JSON.stringify({
-                error: "Rate limit exceeded. Maximum 10 audits per day.",
-                retryAfter: 86400,
-            }), {
-                status: 429,
-                headers: {
-                    ...cors,
-                    "Content-Type": "application/json",
-                    "X-RateLimit-Remaining": "0",
-                    "Retry-After": "86400",
-                },
-            });
-        }
-
         // ─── Parse Request Body ───────────────────────────────
         let body;
         try {
@@ -456,6 +439,29 @@ export default {
             return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
                 status: 400,
                 headers: { ...cors, "Content-Type": "application/json" },
+            });
+        }
+
+        const isChat = body.responseFormat === "text";
+
+        // ─── Rate Limit Check ─────────────────────────────────
+        const deviceId = request.headers.get("X-Device-ID") ||
+            request.headers.get("CF-Connecting-IP") || "unknown";
+
+        const rateResult = await checkRateLimit(deviceId, isChat);
+        if (!rateResult.allowed) {
+            const limitName = isChat ? "chats" : "audits";
+            return new Response(JSON.stringify({
+                error: `Rate limit exceeded. Maximum ${rateResult.limit} ${limitName} per day.`,
+                retryAfter: 86400,
+            }), {
+                status: 429,
+                headers: {
+                    ...cors,
+                    "Content-Type": "application/json",
+                    "X-RateLimit-Remaining": "0",
+                    "Retry-After": "86400",
+                },
             });
         }
 
