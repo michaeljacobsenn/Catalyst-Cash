@@ -112,6 +112,13 @@ export default memo(function CardPortfolioTab() {
     const [addForm, setAddForm] = useState({ institution: "", cardChoice: "", customName: "", nickname: "", limit: "", annualFee: "", annualFeeDue: "", annualFeeWaived: false, notes: "", apr: "", hasPromoApr: false, promoAprAmount: "", promoAprExp: "", statementCloseDay: "", paymentDueDay: "", minPayment: "" });
     const [editBankForm, setEditBankForm] = useState({});
 
+    // ── Hoisted states for internal bottom-sheet forms ──
+    const [addInvestFormKey, setAddInvestFormKey] = useState("brokerage");
+    const [addInvestFormSym, setAddInvestFormSym] = useState("");
+    const [addInvestFormShr, setAddInvestFormShr] = useState("");
+    const [addGoalForm, setAddGoalForm] = useState({ name: "", targetAmount: "", currentAmount: "", targetDate: "" });
+    const [addAssetForm, setAddAssetForm] = useState({ name: "", value: "", liquid: false });
+
     // Holdings management state
     const [newHoldingSymbol, setNewHoldingSymbol] = useState({});
     const [newHoldingShares, setNewHoldingShares] = useState({});
@@ -1340,53 +1347,69 @@ export default memo(function CardPortfolioTab() {
                         })()}
 
                         {/* ── INVESTMENT FORM ── */}
-                        {addSheetStep === "invest" && (() => {
-                            const [iKey, setIKey] = useState("brokerage");
-                            const opts = [
-                                { key: "roth", label: "Roth IRA", color: T.accent.primary },
-                                { key: "k401", label: "401(k)", color: T.status.blue },
-                                { key: "brokerage", label: "Brokerage", color: T.accent.emerald },
-                                { key: "hsa", label: "HSA", color: "#06B6D4" },
-                                { key: "crypto", label: "Crypto", color: T.status.amber },
-                            ];
-                            const [sym, setSym] = useState("");
-                            const [shr, setShr] = useState("");
-                            const canAdd = !!(sym?.trim() && parseFloat(shr || 0) > 0);
-                            return <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{opts.map(o => <button key={o.key} onClick={() => setIKey(o.key)} style={{ padding: "7px 14px", borderRadius: 99, border: `1.5px solid ${iKey === o.key ? o.color : T.border.default}`, background: iKey === o.key ? `${o.color}18` : "transparent", color: iKey === o.key ? o.color : T.text.secondary, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{o.label}</button>)}</div>
-                                <SearchableSelect value={sym} onChange={setSym} placeholder={iKey === "crypto" ? "Search crypto…" : "Search ticker…"} options={[...getTickerOptions(iKey).map(c => ({ value: c.symbol, label: `${c.symbol.replace("-USD", "")} — ${c.name}` })), { value: "__custom__", label: "Custom ticker…" }]} />
-                                {sym === "__custom__" && <input placeholder="Enter ticker symbol" onChange={e => setSym(e.target.value.toUpperCase())} style={{ padding: "11px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 13 }} />}
-                                <input type="number" inputMode="decimal" value={shr} onChange={e => setShr(e.target.value)} placeholder={iKey === "crypto" ? "Amount" : "Shares"} style={{ padding: "11px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 13 }} />
-                                <button onClick={() => { if (!canAdd) return; const finalSym = sym.toUpperCase().replace("-USD", "") + (iKey === "crypto" ? "-USD" : ""); const cur = financialConfig?.holdings || {}; setFinancialConfig({ ...financialConfig, holdings: { ...cur, [iKey]: [...(cur[iKey] || []), { symbol: finalSym, shares: parseFloat(shr) }] } }); setCollapsedSections(p => ({ ...p, investments: false })); closeSheet(); }} disabled={!canAdd} style={{ padding: "14px", borderRadius: T.radius.md, border: "none", background: canAdd ? `linear-gradient(135deg, ${T.accent.emerald}, #0ca678)` : T.bg.card, color: canAdd ? "#fff" : T.text.muted, fontSize: 14, fontWeight: 800, cursor: canAdd ? "pointer" : "not-allowed", transition: "all .2s" }}>Add Holding</button>
-                            </div>;
-                        })()}
+                        {addSheetStep === "invest" && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                    {[
+                                        { key: "roth", label: "Roth IRA", color: T.accent.primary },
+                                        { key: "k401", label: "401(k)", color: T.status.blue },
+                                        { key: "brokerage", label: "Brokerage", color: T.accent.emerald },
+                                        { key: "hsa", label: "HSA", color: "#06B6D4" },
+                                        { key: "crypto", label: "Crypto", color: T.status.amber },
+                                    ].map(o => (
+                                        <button key={o.key} onClick={() => setAddInvestFormKey(o.key)} style={{ padding: "7px 14px", borderRadius: 99, border: `1.5px solid ${addInvestFormKey === o.key ? o.color : T.border.default}`, background: addInvestFormKey === o.key ? `${o.color}18` : "transparent", color: addInvestFormKey === o.key ? o.color : T.text.secondary, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{o.label}</button>
+                                    ))}
+                                </div>
+                                <SearchableSelect value={addInvestFormSym} onChange={setAddInvestFormSym} placeholder={addInvestFormKey === "crypto" ? "Search crypto…" : "Search ticker…"} options={[...getTickerOptions(addInvestFormKey).map(c => ({ value: c.symbol, label: `${c.symbol.replace("-USD", "")} — ${c.name}` })), { value: "__custom__", label: "Custom ticker…" }]} />
+                                {addInvestFormSym === "__custom__" && <input placeholder="Enter ticker symbol" onChange={e => setAddInvestFormSym(e.target.value.toUpperCase())} style={{ padding: "11px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 13 }} />}
+                                <input type="number" inputMode="decimal" value={addInvestFormShr} onChange={e => setAddInvestFormShr(e.target.value)} placeholder={addInvestFormKey === "crypto" ? "Amount" : "Shares"} style={{ padding: "11px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 13 }} />
+                                <button onClick={() => {
+                                    const canAdd = !!(addInvestFormSym?.trim() && parseFloat(addInvestFormShr || 0) > 0);
+                                    if (!canAdd) return;
+                                    const finalSym = addInvestFormSym.toUpperCase().replace("-USD", "") + (addInvestFormKey === "crypto" ? "-USD" : "");
+                                    const cur = financialConfig?.holdings || {};
+                                    setFinancialConfig({ ...financialConfig, holdings: { ...cur, [addInvestFormKey]: [...(cur[addInvestFormKey] || []), { symbol: finalSym, shares: parseFloat(addInvestFormShr) }] } });
+                                    setCollapsedSections(p => ({ ...p, investments: false }));
+                                    setAddInvestFormKey("brokerage"); setAddInvestFormSym(""); setAddInvestFormShr("");
+                                    closeSheet();
+                                }} disabled={!(!!(addInvestFormSym?.trim() && parseFloat(addInvestFormShr || 0) > 0))} style={{ padding: "14px", borderRadius: T.radius.md, border: "none", background: !!(addInvestFormSym?.trim() && parseFloat(addInvestFormShr || 0) > 0) ? `linear-gradient(135deg, ${T.accent.emerald}, #0ca678)` : T.bg.card, color: !!(addInvestFormSym?.trim() && parseFloat(addInvestFormShr || 0) > 0) ? "#fff" : T.text.muted, fontSize: 14, fontWeight: 800, cursor: !!(addInvestFormSym?.trim() && parseFloat(addInvestFormShr || 0) > 0) ? "pointer" : "not-allowed", transition: "all .2s" }}>Add Holding</button>
+                            </div>
+                        )}
 
                         {/* ── SAVINGS GOAL FORM ── */}
-                        {addSheetStep === "goal" && (() => {
-                            const [gf, setGf] = useState({ name: "", targetAmount: "", currentAmount: "", targetDate: "" });
-                            const canAdd = !!gf.name.trim();
-                            return <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                                <input value={gf.name} onChange={e => setGf(p => ({ ...p, name: e.target.value }))} placeholder="Goal name (e.g. Emergency Fund)" style={{ padding: "11px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 13 }} />
+                        {addSheetStep === "goal" && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                                <input value={addGoalForm.name} onChange={e => setAddGoalForm(p => ({ ...p, name: e.target.value }))} placeholder="Goal name (e.g. Emergency Fund)" style={{ padding: "11px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 13 }} />
                                 <div style={{ display: "flex", gap: 8 }}>
-                                    <div style={{ flex: 1, position: "relative" }}><span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontWeight: 700 }}>$</span><input type="number" inputMode="decimal" value={gf.targetAmount} onChange={e => setGf(p => ({ ...p, targetAmount: e.target.value }))} placeholder="Target" style={{ width: "100%", padding: "11px 11px 11px 26px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 13, boxSizing: "border-box" }} /></div>
-                                    <div style={{ flex: 1, position: "relative" }}><span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontWeight: 700 }}>$</span><input type="number" inputMode="decimal" value={gf.currentAmount} onChange={e => setGf(p => ({ ...p, currentAmount: e.target.value }))} placeholder="Current" style={{ width: "100%", padding: "11px 11px 11px 26px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 13, boxSizing: "border-box" }} /></div>
+                                    <div style={{ flex: 1, position: "relative" }}><span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontWeight: 700 }}>$</span><input type="number" inputMode="decimal" value={addGoalForm.targetAmount} onChange={e => setAddGoalForm(p => ({ ...p, targetAmount: e.target.value }))} placeholder="Target" style={{ width: "100%", padding: "11px 11px 11px 26px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 13, boxSizing: "border-box" }} /></div>
+                                    <div style={{ flex: 1, position: "relative" }}><span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontWeight: 700 }}>$</span><input type="number" inputMode="decimal" value={addGoalForm.currentAmount} onChange={e => setAddGoalForm(p => ({ ...p, currentAmount: e.target.value }))} placeholder="Current" style={{ width: "100%", padding: "11px 11px 11px 26px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 13, boxSizing: "border-box" }} /></div>
                                 </div>
-                                <input type="date" value={gf.targetDate} onChange={e => setGf(p => ({ ...p, targetDate: e.target.value }))} style={{ padding: "11px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 13 }} />
-                                <button onClick={() => { if (!canAdd) return; setFinancialConfig({ ...financialConfig, savingsGoals: [...(financialConfig?.savingsGoals || []), { name: gf.name.trim(), targetAmount: parseFloat(gf.targetAmount) || 0, currentAmount: parseFloat(gf.currentAmount) || 0, targetDate: gf.targetDate }] }); setCollapsedSections(p => ({ ...p, savingsGoals: false })); closeSheet(); }} disabled={!canAdd} style={{ padding: "14px", borderRadius: T.radius.md, border: "none", background: canAdd ? T.accent.gradient : T.bg.card, color: canAdd ? "#fff" : T.text.muted, fontSize: 14, fontWeight: 800, cursor: canAdd ? "pointer" : "not-allowed", transition: "all .2s" }}>Add Goal</button>
-                            </div>;
-                        })()}
+                                <input type="date" value={addGoalForm.targetDate} onChange={e => setAddGoalForm(p => ({ ...p, targetDate: e.target.value }))} style={{ padding: "11px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 13 }} />
+                                <button onClick={() => {
+                                    if (!addGoalForm.name.trim()) return;
+                                    setFinancialConfig({ ...financialConfig, savingsGoals: [...(financialConfig?.savingsGoals || []), { name: addGoalForm.name.trim(), targetAmount: parseFloat(addGoalForm.targetAmount) || 0, currentAmount: parseFloat(addGoalForm.currentAmount) || 0, targetDate: addGoalForm.targetDate }] });
+                                    setCollapsedSections(p => ({ ...p, savingsGoals: false }));
+                                    setAddGoalForm({ name: "", targetAmount: "", currentAmount: "", targetDate: "" });
+                                    closeSheet();
+                                }} disabled={!addGoalForm.name.trim()} style={{ padding: "14px", borderRadius: T.radius.md, border: "none", background: !!addGoalForm.name.trim() ? T.accent.gradient : T.bg.card, color: !!addGoalForm.name.trim() ? "#fff" : T.text.muted, fontSize: 14, fontWeight: 800, cursor: !!addGoalForm.name.trim() ? "pointer" : "not-allowed", transition: "all .2s" }}>Add Goal</button>
+                            </div>
+                        )}
 
                         {/* ── OTHER ASSET FORM ── */}
-                        {addSheetStep === "asset" && (() => {
-                            const [af, setAf] = useState({ name: "", value: "", liquid: false });
-                            const canAdd = !!af.name.trim();
-                            return <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                                <input value={af.name} onChange={e => setAf(p => ({ ...p, name: e.target.value }))} placeholder="Asset name (e.g. Vehicle, Property)" style={{ padding: "11px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 13 }} />
-                                <div style={{ position: "relative" }}><span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontWeight: 700 }}>$</span><input type="number" inputMode="decimal" value={af.value} onChange={e => setAf(p => ({ ...p, value: e.target.value }))} placeholder="Estimated value" style={{ width: "100%", padding: "11px 11px 11px 26px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 13, boxSizing: "border-box" }} /></div>
-                                <button onClick={() => setAf(p => ({ ...p, liquid: !p.liquid }))} style={{ padding: "12px 16px", borderRadius: T.radius.md, border: `1.5px solid ${af.liquid ? T.accent.emerald : T.border.default}`, background: af.liquid ? `${T.accent.emerald}12` : "transparent", color: af.liquid ? T.accent.emerald : T.text.secondary, fontSize: 13, fontWeight: 700, cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 8 }}>{af.liquid ? "💧" : "🔒"} {af.liquid ? "Liquid (can access quickly)" : "Illiquid (locked up / long-term)"}</button>
-                                <button onClick={() => { if (!canAdd) return; setFinancialConfig({ ...financialConfig, otherAssets: [...(financialConfig?.otherAssets || []), { name: af.name.trim(), value: parseFloat(af.value) || 0, liquid: af.liquid }] }); setCollapsedSections(p => ({ ...p, otherAssets: false })); closeSheet(); }} disabled={!canAdd} style={{ padding: "14px", borderRadius: T.radius.md, border: "none", background: canAdd ? `linear-gradient(135deg, ${T.accent.copper}, #e67e22)` : T.bg.card, color: canAdd ? "#fff" : T.text.muted, fontSize: 14, fontWeight: 800, cursor: canAdd ? "pointer" : "not-allowed", transition: "all .2s" }}>Add Asset</button>
-                            </div>;
-                        })()}
+                        {addSheetStep === "asset" && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                                <input value={addAssetForm.name} onChange={e => setAddAssetForm(p => ({ ...p, name: e.target.value }))} placeholder="Asset name (e.g. Vehicle, Property)" style={{ padding: "11px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 13 }} />
+                                <div style={{ position: "relative" }}><span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontWeight: 700 }}>$</span><input type="number" inputMode="decimal" value={addAssetForm.value} onChange={e => setAddAssetForm(p => ({ ...p, value: e.target.value }))} placeholder="Estimated value" style={{ width: "100%", padding: "11px 11px 11px 26px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 13, boxSizing: "border-box" }} /></div>
+                                <button onClick={() => setAddAssetForm(p => ({ ...p, liquid: !p.liquid }))} style={{ padding: "12px 16px", borderRadius: T.radius.md, border: `1.5px solid ${addAssetForm.liquid ? T.accent.emerald : T.border.default}`, background: addAssetForm.liquid ? `${T.accent.emerald}12` : "transparent", color: addAssetForm.liquid ? T.accent.emerald : T.text.secondary, fontSize: 13, fontWeight: 700, cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 8 }}>{addAssetForm.liquid ? "💧" : "🔒"} {addAssetForm.liquid ? "Liquid (can access quickly)" : "Illiquid (locked up / long-term)"}</button>
+                                <button onClick={() => {
+                                    if (!addAssetForm.name.trim()) return;
+                                    setFinancialConfig({ ...financialConfig, otherAssets: [...(financialConfig?.otherAssets || []), { name: addAssetForm.name.trim(), value: parseFloat(addAssetForm.value) || 0, liquid: addAssetForm.liquid }] });
+                                    setCollapsedSections(p => ({ ...p, otherAssets: false }));
+                                    setAddAssetForm({ name: "", value: "", liquid: false });
+                                    closeSheet();
+                                }} disabled={!addAssetForm.name.trim()} style={{ padding: "14px", borderRadius: T.radius.md, border: "none", background: !!addAssetForm.name.trim() ? `linear-gradient(135deg, ${T.accent.copper}, #e67e22)` : T.bg.card, color: !!addAssetForm.name.trim() ? "#fff" : T.text.muted, fontSize: 14, fontWeight: 800, cursor: !!addAssetForm.name.trim() ? "pointer" : "not-allowed", transition: "all .2s" }}>Add Asset</button>
+                            </div>
+                        )}
 
                     </div>
                 </div>
