@@ -75,7 +75,7 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
             { key: "roth", label: "Roth IRA", enabled: !!financialConfig?.trackRothContributions, color: "#8B5CF6" },
             { key: "brokerage", label: "Brokerage", enabled: !!financialConfig?.trackBrokerage, color: "#10B981" },
             { key: "hsa", label: "HSA", enabled: !!financialConfig?.trackHSA, color: "#06B6D4" },
-            { key: "crypto", label: "Crypto", enabled: true, color: "#F59E0B" },
+            { key: "crypto", label: "Crypto", enabled: !!financialConfig?.trackCrypto, color: "#F59E0B" },
         ];
         const result = [];
         let grandTotal = 0;
@@ -93,13 +93,31 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
         return { accounts: result, total: grandTotal };
     }, [financialConfig, marketPrices]);
 
-    const fireProjection = useMemo(() => computeFireProjection({
-        financialConfig,
-        renewals,
-        cards,
-        portfolioMarketValue: investmentSnapshot.total,
-        asOfDate: current?.date || new Date().toISOString().split("T")[0]
-    }), [financialConfig, renewals, cards, investmentSnapshot.total, current?.date]);
+    const fireProjection = useMemo(() => {
+        if (current?.isTest) {
+            // Mock high-earner configs to yield a good 10-15 year FIRE date for the demo
+            return computeFireProjection({
+                financialConfig: {
+                    incomeSources: [{ amount: 150000, frequency: "yearly" }],
+                    budgetCategories: [{ monthlyTarget: 4000 }],
+                    fireExpectedReturnPct: 7,
+                    fireInflationPct: 2.5,
+                    fireSafeWithdrawalPct: 4,
+                },
+                renewals: [],
+                cards: [],
+                portfolioMarketValue: 180000, // mock starting capital
+                asOfDate: current?.date || new Date().toISOString().split("T")[0]
+            });
+        }
+        return computeFireProjection({
+            financialConfig,
+            renewals,
+            cards,
+            portfolioMarketValue: investmentSnapshot.total,
+            asOfDate: current?.date || new Date().toISOString().split("T")[0]
+        });
+    }, [financialConfig, renewals, cards, investmentSnapshot.total, current?.date, current?.isTest]);
 
     // Active analytics tab
     const [chartTab, setChartTab] = useState("networth");
@@ -906,22 +924,22 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                     >
                         <span id="networth-chart-hint" className="sr-only">{chartA11y.netWorthHint}</span>
                         <ResponsiveContainer width="100%" height={160} aria-hidden="true">
-                        <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                            <defs>
-                                <linearGradient id="nwG" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor={T.accent.primary} stopOpacity={0.3} />
-                                    <stop offset="100%" stopColor={T.accent.primary} stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <XAxis dataKey="date" tick={{ fontSize: 10, fill: T.text.dim, fontFamily: T.font.mono }} axisLine={false} tickLine={false} />
-                            <YAxis hide domain={["dataMin-200", "dataMax+200"]} />
-                            <Tooltip contentStyle={{ background: T.bg.elevated, border: `1px solid ${T.border.default}`, borderRadius: T.radius.md, fontSize: 11, fontFamily: T.font.mono, boxShadow: T.shadow.elevated }}
-                                formatter={v => [fmt(v), "Net Worth"]} />
-                            <Area type="monotone" dataKey="nw" stroke={T.accent.primary} strokeWidth={2.5} fill="url(#nwG)" baseValue="dataMin"
-                                dot={{ fill: T.accent.primary, r: 3, strokeWidth: 0 }}
-                                activeDot={{ r: 5, fill: T.accent.primary, stroke: "#fff", strokeWidth: 2 }} />
-                        </AreaChart>
-                    </ResponsiveContainer></div>}
+                            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="nwG" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor={T.accent.primary} stopOpacity={0.3} />
+                                        <stop offset="100%" stopColor={T.accent.primary} stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: T.text.dim, fontFamily: T.font.mono }} axisLine={false} tickLine={false} />
+                                <YAxis hide domain={["dataMin-200", "dataMax+200"]} />
+                                <Tooltip contentStyle={{ background: T.bg.elevated, border: `1px solid ${T.border.default}`, borderRadius: T.radius.md, fontSize: 11, fontFamily: T.font.mono, boxShadow: T.shadow.elevated }}
+                                    formatter={v => [fmt(v), "Net Worth"]} />
+                                <Area type="monotone" dataKey="nw" stroke={T.accent.primary} strokeWidth={2.5} fill="url(#nwG)" baseValue="dataMin"
+                                    dot={{ fill: T.accent.primary, r: 3, strokeWidth: 0 }}
+                                    activeDot={{ r: 5, fill: T.accent.primary, stroke: "#fff", strokeWidth: 2 }} />
+                            </AreaChart>
+                        </ResponsiveContainer></div>}
 
                     {chartTab === "health" && scoreData.length > 1 && <div
                         key="chart-health"
@@ -932,22 +950,22 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                     >
                         <span id="health-chart-hint" className="sr-only">{chartA11y.healthHint}</span>
                         <ResponsiveContainer width="100%" height={160} aria-hidden="true">
-                        <AreaChart data={scoreData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                            <defs>
-                                <linearGradient id="hsG" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor={T.status.green} stopOpacity={0.3} />
-                                    <stop offset="100%" stopColor={T.status.green} stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <XAxis dataKey="date" tick={{ fontSize: 10, fill: T.text.dim, fontFamily: T.font.mono }} axisLine={false} tickLine={false} />
-                            <YAxis hide domain={[0, 100]} />
-                            <Tooltip contentStyle={{ background: T.bg.elevated, border: `1px solid ${T.border.default}`, borderRadius: T.radius.md, fontSize: 11, fontFamily: T.font.mono, boxShadow: T.shadow.elevated }}
-                                formatter={(v, n, props) => [`${v} /100 (${props.payload.grade})`, "Health Score"]} />
-                            <Area type="monotone" dataKey="score" stroke={T.status.green} strokeWidth={2.5} fill="url(#hsG)"
-                                dot={{ fill: T.status.green, r: 3, strokeWidth: 0 }}
-                                activeDot={{ r: 5, fill: T.status.green, stroke: "#fff", strokeWidth: 2 }} />
-                        </AreaChart>
-                    </ResponsiveContainer></div>}
+                            <AreaChart data={scoreData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="hsG" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor={T.status.green} stopOpacity={0.3} />
+                                        <stop offset="100%" stopColor={T.status.green} stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: T.text.dim, fontFamily: T.font.mono }} axisLine={false} tickLine={false} />
+                                <YAxis hide domain={[0, 100]} />
+                                <Tooltip contentStyle={{ background: T.bg.elevated, border: `1px solid ${T.border.default}`, borderRadius: T.radius.md, fontSize: 11, fontFamily: T.font.mono, boxShadow: T.shadow.elevated }}
+                                    formatter={(v, n, props) => [`${v} /100 (${props.payload.grade})`, "Health Score"]} />
+                                <Area type="monotone" dataKey="score" stroke={T.status.green} strokeWidth={2.5} fill="url(#hsG)"
+                                    dot={{ fill: T.status.green, r: 3, strokeWidth: 0 }}
+                                    activeDot={{ r: 5, fill: T.status.green, stroke: "#fff", strokeWidth: 2 }} />
+                            </AreaChart>
+                        </ResponsiveContainer></div>}
 
                     {
                         chartTab === "spending" && spendData.length > 1 && <div
@@ -959,22 +977,22 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                         >
                             <span id="spending-chart-hint" className="sr-only">{chartA11y.spendingHint}</span>
                             <ResponsiveContainer width="100%" height={160} aria-hidden="true">
-                            <AreaChart data={spendData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                                <defs>
-                                    <linearGradient id="spG" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor={T.status.amber} stopOpacity={0.3} />
-                                        <stop offset="100%" stopColor={T.status.amber} stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: T.text.dim, fontFamily: T.font.mono }} axisLine={false} tickLine={false} />
-                                <YAxis hide domain={[0, "auto"]} />
-                                <Tooltip contentStyle={{ background: T.bg.elevated, border: `1px solid ${T.border.default}`, borderRadius: T.radius.md, fontSize: 11, fontFamily: T.font.mono, boxShadow: T.shadow.elevated }}
-                                    formatter={v => [fmt(v), "Weekly Spend"]} />
-                                <Area type="monotone" dataKey="spent" stroke={T.status.amber} strokeWidth={2.5} fill="url(#spG)"
-                                    dot={{ fill: T.status.amber, r: 3, strokeWidth: 0 }}
-                                    activeDot={{ r: 5, fill: T.status.amber, stroke: "#fff", strokeWidth: 2 }} />
-                            </AreaChart>
-                        </ResponsiveContainer></div>
+                                <AreaChart data={spendData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                                    <defs>
+                                        <linearGradient id="spG" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stopColor={T.status.amber} stopOpacity={0.3} />
+                                            <stop offset="100%" stopColor={T.status.amber} stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: T.text.dim, fontFamily: T.font.mono }} axisLine={false} tickLine={false} />
+                                    <YAxis hide domain={[0, "auto"]} />
+                                    <Tooltip contentStyle={{ background: T.bg.elevated, border: `1px solid ${T.border.default}`, borderRadius: T.radius.md, fontSize: 11, fontFamily: T.font.mono, boxShadow: T.shadow.elevated }}
+                                        formatter={v => [fmt(v), "Weekly Spend"]} />
+                                    <Area type="monotone" dataKey="spent" stroke={T.status.amber} strokeWidth={2.5} fill="url(#spG)"
+                                        dot={{ fill: T.status.amber, r: 3, strokeWidth: 0 }}
+                                        activeDot={{ r: 5, fill: T.status.amber, stroke: "#fff", strokeWidth: 2 }} />
+                                </AreaChart>
+                            </ResponsiveContainer></div>
                     }
                 </Card>}
 

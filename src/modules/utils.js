@@ -32,7 +32,7 @@ export const PdfViewer = registerPlugin('PdfViewer');
 export async function nativeExport(filename, content, mimeType = "text/plain", isBase64 = false) {
   if (Capacitor.isNativePlatform()) {
     try {
-      const opts = { path: filename, data: content, directory: Directory.Documents, recursive: true };
+      const opts = { path: filename, data: content, directory: Directory.Cache, recursive: true };
       if (!isBase64) opts.encoding = 'utf8';
       const res = await Filesystem.writeFile(opts);
       await Share.share({ title: filename, url: res.uri, files: [res.uri], dialogTitle: 'Export File' });

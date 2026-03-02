@@ -42,8 +42,9 @@ export default memo(function HistoryTab({ toast }) {
                 <button onClick={() => { setSelMode(!selMode); setSel(new Set()); }} style={{ padding: "7px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: selMode ? T.accent.primary : T.text.dim, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono, transition: "all .2s ease" }}>
                     {selMode ? "CANCEL" : "SELECT"}</button>
                 <button onClick={() => exportAuditCSV(audits)} title="Export CSV" style={{ width: 32, height: 32, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 700, fontFamily: T.font.mono, transition: "all .2s ease" }}>CSV</button>
-                <button onClick={() => exportAllAudits(audits)} title="Export All JSON" style={{ width: 32, height: 32, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s ease" }}>
-                    <Download size={13} /></button>
+                <button onClick={() => exportAllAudits(audits)} title="Export All JSON" style={{ padding: "7px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono, transition: "all .2s ease" }}>
+                    JSON
+                </button>
             </div>}
         </div>
         <div style={{ display: "flex", gap: 10, marginBottom: showManualPaste ? 8 : 16 }}>
