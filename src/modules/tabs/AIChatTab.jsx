@@ -402,6 +402,7 @@ export default memo(function AIChatTab({ proEnabled = false }) {
 
     return <div style={{
         display: "flex", flexDirection: "column", height: "100%",
+        width: "100%", boxSizing: "border-box",
         position: "relative"
     }}>
         <style>{`
