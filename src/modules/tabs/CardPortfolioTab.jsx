@@ -9,7 +9,7 @@ import { Card, Label, Badge } from "../ui.jsx";
 import { Mono, EmptyState } from "../components.jsx";
 import SearchableSelect from "../SearchableSelect.jsx";
 import { fetchMarketPrices, getTickerOptions } from "../marketData.js";
-import { connectBank, autoMatchAccounts, fetchBalances, fetchAllBalances, applyBalanceSync, saveConnectionLinks } from "../plaid.js";
+import { connectBank, autoMatchAccounts, fetchBalancesAndLiabilities, fetchAllBalancesAndLiabilities, applyBalanceSync, saveConnectionLinks } from "../plaid.js";
 
 const ENABLE_PLAID = true;
 
@@ -69,7 +69,7 @@ export default memo(function CardPortfolioTab() {
 
                     // Fetch live balances and apply them
                     try {
-                        const refreshed = await fetchBalances(connection.id);
+                        const refreshed = await fetchBalancesAndLiabilities(connection.id);
                         if (refreshed) {
                             const { updatedCards, updatedBankAccounts } = applyBalanceSync(refreshed, allCards, allBanks);
                             setCards(updatedCards);
@@ -91,7 +91,7 @@ export default memo(function CardPortfolioTab() {
     const handleRefreshPlaid = async () => {
         setPlaidRefreshing(true);
         try {
-            const results = await fetchAllBalances();
+            const results = await fetchAllBalancesAndLiabilities();
             let allCards = [...cards];
             let allBanks = [...bankAccounts];
             for (const res of results) {

@@ -227,6 +227,92 @@ export async function fetchAllBalances() {
     return results;
 }
 
+// ─── Liabilities Fetching (Credit Card Metadata) ─────────────
+
+/**
+ * Fetch credit card liabilities for a connection from Plaid.
+ * Returns enriched metadata: APR, statement close date, payment due date,
+ * minimum payment, last payment amount/date.
+ *
+ * Plaid's /liabilities/get response shape for credit cards:
+ *   liabilities.credit[]: { account_id, aprs[], last_payment_amount,
+ *     last_payment_date, last_statement_balance, last_statement_issue_date,
+ *     minimum_payment_amount, next_payment_due_date }
+ */
+export async function fetchLiabilities(connectionId) {
+    const conns = await getConnections();
+    const conn = conns.find(c => c.id === connectionId);
+    if (!conn) throw new Error("Connection not found");
+
+    const res = await fetch(`${API_BASE}/plaid/liabilities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessToken: conn.accessToken }),
+    });
+    if (!res.ok) throw new Error(`Liabilities fetch failed: ${res.status}`);
+    const data = await res.json();
+
+    // Plaid returns { liabilities: { credit: [...] }, accounts: [...] }
+    const creditLiabilities = data?.liabilities?.credit || [];
+
+    // Store liabilities data on matching connection accounts
+    for (const acct of conn.accounts) {
+        if (acct.type !== "credit") continue;
+        const liability = creditLiabilities.find(l => l.account_id === acct.plaidAccountId);
+        if (liability) {
+            acct.liability = {
+                // APR: Plaid returns an array of APR breakdowns (purchase, balance_transfer, cash_advance)
+                aprs: (liability.aprs || []).map(a => ({
+                    type: a.apr_type,           // "purchase_apr" | "balance_transfer_apr" | "cash_advance_apr"
+                    percentage: a.apr_percentage,
+                    balanceSubject: a.balance_subject_to_apr,
+                })),
+                purchaseApr: (liability.aprs || []).find(a => a.apr_type === "purchase_apr")?.apr_percentage ?? null,
+                lastPaymentAmount: liability.last_payment_amount,
+                lastPaymentDate: liability.last_payment_date,
+                lastStatementBalance: liability.last_statement_balance,
+                lastStatementDate: liability.last_statement_issue_date,
+                minimumPayment: liability.minimum_payment_amount,
+                nextPaymentDueDate: liability.next_payment_due_date,
+            };
+        }
+    }
+
+    conn.lastLiabilitySync = new Date().toISOString();
+    await saveConnections(conns);
+    return conn;
+}
+
+/**
+ * Fetch balances AND liabilities for a connection in parallel.
+ * This is the preferred method — one call gets everything.
+ */
+export async function fetchBalancesAndLiabilities(connectionId) {
+    const [balConn] = await Promise.allSettled([
+        fetchBalances(connectionId),
+        fetchLiabilities(connectionId),
+    ]);
+    // Re-read from storage since both wrote concurrently
+    const conns = await getConnections();
+    return conns.find(c => c.id === connectionId) || balConn.value;
+}
+
+/**
+ * Fetch balances + liabilities for ALL connections in parallel.
+ */
+export async function fetchAllBalancesAndLiabilities() {
+    const conns = await getConnections();
+    const results = [];
+    for (const conn of conns) {
+        try {
+            results.push(await fetchBalancesAndLiabilities(conn.id));
+        } catch (e) {
+            results.push({ ...conn, _error: e.message });
+        }
+    }
+    return results;
+}
+
 // ─── Auto-Matching Engine ─────────────────────────────────────
 
 /**
@@ -520,16 +606,41 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = []) {
             const idx = updatedCards.findIndex(c => c.id === acct.linkedCardId);
             if (idx >= 0) {
                 const oldBal = updatedCards[idx]._plaidBalance;
+                const card = updatedCards[idx];
+                const liab = acct.liability || {};
+
+                // Extract payment due day from Plaid's next_payment_due_date (ISO string → day-of-month)
+                const plaidDueDay = liab.nextPaymentDueDate
+                    ? new Date(liab.nextPaymentDueDate).getUTCDate()
+                    : null;
+
+                // Extract statement close day from Plaid's last_statement_issue_date
+                // Statement typically closes ~21 days before payment due date
+                const plaidStmtDay = liab.lastStatementDate
+                    ? new Date(liab.lastStatementDate).getUTCDate()
+                    : null;
+
                 updatedCards[idx] = {
-                    ...updatedCards[idx],
+                    ...card,
+                    // ── Balance data (always overwrite with latest) ──
                     _plaidBalance: acct.balance.current,
                     _plaidAvailable: acct.balance.available,
                     _plaidLimit: acct.balance.limit,
                     _plaidLastSync: connection.lastSync,
                     _plaidAccountId: acct.plaidAccountId,
                     _plaidConnectionId: connection.id,
-                    // Credit limit should only be filled when missing.
-                    limit: updatedCards[idx].limit ?? acct.balance.limit ?? null,
+                    // ── Liability metadata (store raw for reference) ──
+                    _plaidLiability: liab,
+                    // ── Fill-if-missing: credit limit ──
+                    limit: card.limit ?? acct.balance.limit ?? null,
+                    // ── Fill-if-missing: APR (purchase APR from Plaid) ──
+                    apr: card.apr ?? liab.purchaseApr ?? null,
+                    // ── Fill-if-missing: statement close day ──
+                    statementCloseDay: card.statementCloseDay ?? plaidStmtDay,
+                    // ── Fill-if-missing: payment due day ──
+                    paymentDueDay: card.paymentDueDay ?? plaidDueDay,
+                    // ── Fill-if-missing: minimum payment ──
+                    minPayment: card.minPayment ?? liab.minimumPayment ?? null,
                 };
                 balanceSummary.push({
                     name: updatedCards[idx].nickname || updatedCards[idx].name,

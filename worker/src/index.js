@@ -258,7 +258,7 @@ export default {
                         country_codes: ["US"],
                         language: "en",
                         user: { client_user_id: reqBody.userId || "catalyst-user" },
-                        products: ["transactions"] // or whatever products we need
+                        products: ["transactions", "liabilities"]
                     };
                 } else if (url.pathname === "/plaid/exchange") {
                     plaidEndpoint = "/item/public_token/exchange";
@@ -269,6 +269,13 @@ export default {
                     };
                 } else if (url.pathname === "/plaid/balances") {
                     plaidEndpoint = "/accounts/balance/get";
+                    plaidBody = {
+                        client_id: env.PLAID_CLIENT_ID,
+                        secret: env.PLAID_SECRET,
+                        access_token: reqBody.accessToken
+                    };
+                } else if (url.pathname === "/plaid/liabilities") {
+                    plaidEndpoint = "/liabilities/get";
                     plaidBody = {
                         client_id: env.PLAID_CLIENT_ID,
                         secret: env.PLAID_SECRET,
