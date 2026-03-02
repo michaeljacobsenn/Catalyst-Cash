@@ -189,8 +189,26 @@ export const DI = ({ value, onChange, placeholder = "0.00", label = "Amount" }) 
     return (
         <div style={{ position: "relative" }}>
             <label htmlFor={id} style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap" }}>{label}</label>
-            <span aria-hidden="true" style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: focused ? T.accent.primary : T.text.dim, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600, transition: "color 0.3s ease" }}>$</span>
-            <input id={id} type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={value} placeholder={placeholder} onChange={onChange} onFocus={(e) => { setFocused(true); setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300); }} onBlur={() => setFocused(false)} aria-label={label} style={{ paddingLeft: 28, fontFamily: T.font.mono, fontWeight: 600 }} />
+            <span aria-hidden="true" style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: focused ? T.accent.primary : T.text.dim, fontFamily: T.font.mono, fontSize: 14, fontWeight: 700, transition: "color 0.3s ease" }}>$</span>
+            <input
+                id={id} type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={value} placeholder={placeholder} onChange={onChange}
+                onFocus={(e) => {
+                    setFocused(true);
+                    setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+                }}
+                onBlur={() => setFocused(false)}
+                aria-label={label}
+                className="app-input"
+                style={{
+                    width: "100%", padding: "12px 14px", paddingLeft: 28,
+                    borderRadius: T.radius.md, background: T.bg.elevated,
+                    border: `1.5px solid ${focused ? T.accent.primary : T.border.default}`,
+                    color: T.text.primary, fontSize: 14, outline: "none",
+                    boxSizing: "border-box", transition: "all 0.2s",
+                    fontFamily: T.font.mono, fontWeight: 700,
+                    boxShadow: focused ? `0 0 0 3px ${T.accent.primary}30` : "none"
+                }}
+            />
         </div>
     );
 };
