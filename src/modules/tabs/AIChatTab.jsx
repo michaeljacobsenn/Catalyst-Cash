@@ -467,8 +467,8 @@ export default memo(function AIChatTab({ proEnabled = false }) {
                 /* ── EMPTY STATE ── */
                 <div style={{
                     flex: 1, display: "flex", flexDirection: "column",
-                    alignItems: "center", justifyContent: "center",
-                    padding: "10px", textAlign: "center",
+                    alignItems: "center", justifyContent: "flex-start",
+                    padding: "10px", paddingTop: "8vh", textAlign: "center",
                     animation: "fadeIn .5s ease"
                 }}>
                     <div style={{
@@ -635,7 +635,7 @@ export default memo(function AIChatTab({ proEnabled = false }) {
         {/* ── INPUT BAR ── */}
         <div style={{
             padding: "8px 12px",
-            paddingBottom: "calc(8px + env(safe-area-inset-bottom, 0px))",
+            paddingBottom: "8px",
             borderTop: `1px solid ${T.border.subtle}`,
             background: T.bg.glass, backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
             flexShrink: 0
