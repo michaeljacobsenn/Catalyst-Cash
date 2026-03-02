@@ -187,7 +187,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
         activeConfig.track401k && (form.k401Balance || activeConfig.k401Balance),
         form.debts.some(d => (d.name || d.cardId) && d.balance)
     ].filter(Boolean).length;
-    const canSubmit = filledFields >= 2 && !isLoading;
+    const canSubmit = filledFields >= 1 && !isLoading;
 
     const buildMsg = () => {
         const toNum = v => {
@@ -446,27 +446,28 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
             </div>
         </div>
 
-        {/* ── REQUIRED FIELDS ── */}
+        {/* ── SNAPSHOT ITEMS ── */}
         <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.12em", color: T.text.secondary, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 22, height: 22, borderRadius: 7, background: `${T.accent.emerald}18`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <CheckCircle size={13} color={T.accent.emerald} strokeWidth={2.5} />
-                </div>
-                Required Limits
-            </div>
-
-            <Card variant="glass" style={{ marginBottom: 12, position: "relative", overflow: "hidden" }}>
+            <Card className="hover-card" variant="glass" style={{ marginBottom: 12, position: "relative", overflow: "hidden" }}>
                 <div style={{ position: "absolute", right: -20, top: -20, width: 60, height: 60, background: T.accent.primary, filter: "blur(40px)", opacity: 0.06, borderRadius: "50%", pointerEvents: "none" }} />
                 <Label style={{ fontWeight: 800 }}>Date & Time</Label>
                 <div style={{ display: "grid", gridTemplateColumns: "1.4fr 0.9fr", gap: 10 }}>
-                    <input type="date" value={form.date} onChange={e => s("date", e.target.value)} />
-                    <input type="time" value={form.time} onChange={e => s("time", e.target.value)} />
+                    <input type="date" value={form.date} onChange={e => s("date", e.target.value)}
+                        style={{ width: "100%", padding: "12px 14px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1.5px solid ${T.border.default}`, color: T.text.primary, fontSize: 13, outline: "none", boxSizing: "border-box", transition: "all 0.2s", fontFamily: T.font.sans, fontWeight: 700 }}
+                        onFocus={e => { e.target.style.borderColor = T.accent.primary; e.target.style.boxShadow = `0 0 0 3px ${T.accent.primary}30`; }}
+                        onBlur={e => { e.target.style.borderColor = T.border.default; e.target.style.boxShadow = "none"; }}
+                    />
+                    <input type="time" value={form.time} onChange={e => s("time", e.target.value)}
+                        style={{ width: "100%", padding: "12px 14px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1.5px solid ${T.border.default}`, color: T.text.primary, fontSize: 13, outline: "none", boxSizing: "border-box", transition: "all 0.2s", fontFamily: T.font.sans, fontWeight: 700 }}
+                        onFocus={e => { e.target.style.borderColor = T.accent.primary; e.target.style.boxShadow = `0 0 0 3px ${T.accent.primary}30`; }}
+                        onBlur={e => { e.target.style.borderColor = T.border.default; e.target.style.boxShadow = "none"; }}
+                    />
                 </div>
             </Card>
             {(activeConfig.trackChecking !== false || activeConfig.trackSavings !== false) && <div style={{ display: "grid", gridTemplateColumns: (activeConfig.trackChecking !== false && activeConfig.trackSavings !== false) ? "1fr 1fr" : "1fr", gap: 10 }}>
                 {activeConfig.trackChecking !== false && (() => {
                     const hasPlaid = plaidData.checking !== null;
-                    return <Card variant="glass" style={{ marginBottom: 10, position: "relative", overflow: "hidden" }}>
+                    return <Card className="hover-card" variant="glass" style={{ marginBottom: 10, position: "relative", overflow: "hidden" }}>
                         <div style={{ position: "absolute", right: -15, top: -15, width: 50, height: 50, background: T.accent.emerald, filter: "blur(35px)", opacity: 0.07, borderRadius: "50%", pointerEvents: "none" }} />
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: (hasPlaid && !overridePlaid.checking) ? 0 : 8 }}>
                             <Label style={{ fontWeight: 800, marginBottom: 0 }}>Checking Balance</Label>
@@ -485,7 +486,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                 })()}
                 {activeConfig.trackSavings !== false && (() => {
                     const hasPlaid = plaidData.vault !== null;
-                    return <Card variant="glass" style={{ marginBottom: 10, position: "relative", overflow: "hidden" }}>
+                    return <Card className="hover-card" variant="glass" style={{ marginBottom: 10, position: "relative", overflow: "hidden" }}>
                         <div style={{ position: "absolute", right: -15, top: -15, width: 50, height: 50, background: "#3B82F6", filter: "blur(35px)", opacity: 0.07, borderRadius: "50%", pointerEvents: "none" }} />
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: (hasPlaid && !overridePlaid.vault) ? 0 : 8 }}>
                             <Label style={{ fontWeight: 800, marginBottom: 0 }}>Savings (HYSA)</Label>
@@ -504,16 +505,17 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                 })()}
             </div>}
 
-            <Card variant="glass" style={{ marginBottom: 12, position: "relative", overflow: "hidden" }}>
+            <Card className="hover-card" variant="glass" style={{ marginBottom: 12, position: "relative", overflow: "hidden" }}>
                 <div style={{ position: "absolute", left: -20, bottom: -20, width: 70, height: 70, background: T.accent.primary, filter: "blur(45px)", opacity: 0.06, borderRadius: "50%", pointerEvents: "none" }} />
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                     <Label style={{ fontWeight: 800, marginBottom: 0 }}>Credit Card Balances</Label>
-                    <button onClick={addD} style={{
-                        display: "flex", alignItems: "center", gap: 4, padding: "6px 12px", borderRadius: T.radius.sm,
-                        border: `1px solid ${T.accent.primary}30`, background: `${T.accent.primary}0A`, color: T.accent.primary, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono,
-                        transition: "all .2s ease"
+                    <button className="hover-btn" onClick={addD} style={{
+                        display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: T.radius.sm,
+                        border: `1px solid ${T.accent.primary}40`, background: `${T.accent.primary}15`,
+                        color: T.accent.primary, fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: T.font.mono,
+                        transition: "all .2s ease", boxShadow: `0 2px 10px ${T.accent.primary}20`
                     }}>
-                        <Plus size={11} />ADD</button></div>
+                        <Plus size={13} strokeWidth={3} /> ADD</button></div>
                 {form.debts.map((d, i) => {
                     const plaidDebt = d.cardId ? plaidData.debts?.find(pd => pd.cardId === d.cardId) : null;
                     const hasPlaid = plaidDebt && plaidDebt.balance !== null;
