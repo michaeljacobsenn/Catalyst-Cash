@@ -184,14 +184,19 @@ export async function connectBank(onSuccess, onError) {
 export async function fetchBalances(connectionId) {
     const conns = await getConnections();
     const conn = conns.find(c => c.id === connectionId);
-    if (!conn) throw new Error("Connection not found");
+    if (!conn) { console.warn(`[Plaid] fetchBalances: connection ${connectionId} NOT FOUND`); throw new Error("Connection not found"); }
+    console.warn(`[Plaid] fetchBalances: calling API for ${conn.institutionName}, hasToken=${!!conn.accessToken}, tokenPrefix=${conn.accessToken?.substring(0, 12)}...`);
 
     const res = await fetchWithRetry(`${API_BASE}/plaid/balances`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accessToken: conn.accessToken }),
     });
-    if (!res.ok) throw new Error(`Balance fetch failed: ${res.status}`);
+    if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        console.warn(`[Plaid] fetchBalances FAILED: HTTP ${res.status} — ${errBody.substring(0, 200)}`);
+        throw new Error(`Balance fetch failed: ${res.status}`);
+    }
     const { accounts } = await res.json();
     console.warn(`[Plaid] fetchBalances: ${accounts?.length || 0} accounts returned for ${conn.institutionName}`);
 
@@ -307,11 +312,14 @@ export async function fetchBalancesAndLiabilities(connectionId) {
  */
 export async function fetchAllBalancesAndLiabilities() {
     const conns = await getConnections();
+    console.warn(`[Plaid] fetchAllBalancesAndLiabilities: ${conns.length} connections found`);
     const results = [];
     for (const conn of conns) {
+        console.warn(`[Plaid] processing connection: ${conn.institutionName} (${conn.id}), hasToken=${!!conn.accessToken}`);
         try {
             results.push(await fetchBalancesAndLiabilities(conn.id));
         } catch (e) {
+            console.warn(`[Plaid] ERROR for ${conn.institutionName}: ${e.message}`);
             results.push({ ...conn, _error: e.message });
         }
     }
