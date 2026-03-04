@@ -18,8 +18,7 @@
             padding: 0;
             width: 100%;
             height: 100%;
-            background-color: #04060A;
-            /* Deepest black/blue */
+            background-color: #0C121B;
             color: #94A3B8;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             -webkit-print-color-adjust: exact;
@@ -37,9 +36,47 @@
             position: relative;
             box-sizing: border-box;
             padding: 0 40px;
-            background-color: #04060A;
+            background-color: #0C121B;
             max-width: 900px;
             margin: 0 auto;
+        }
+
+        /* Animations */
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fade-up {
+            animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+        }
+
+        .delay-1 {
+            animation-delay: 0.1s;
+        }
+
+        .delay-2 {
+            animation-delay: 0.2s;
+        }
+
+        .delay-3 {
+            animation-delay: 0.3s;
+        }
+
+        .delay-4 {
+            animation-delay: 0.4s;
+        }
+
+        .delay-5 {
+            animation-delay: 0.5s;
         }
 
         /* Typography */
@@ -71,7 +108,6 @@
             position: relative;
         }
 
-        /* Ambient background glow for hero */
         .header-wrapper::before {
             content: '';
             position: absolute;
@@ -80,17 +116,34 @@
             transform: translate(-50%, -50%);
             width: 300px;
             height: 300px;
-            background: radial-gradient(circle, rgba(123, 94, 167, 0.25) 0%, rgba(0,0,0,0) 70%);
+            background: radial-gradient(circle, rgba(123, 94, 167, 0.25) 0%, rgba(0, 0, 0, 0) 70%);
             z-index: -1;
             filter: blur(40px);
         }
 
+        @keyframes pulse-glow {
+
+            0%,
+            100% {
+                filter: drop-shadow(0 0 50px rgba(123, 94, 167, 0.4));
+                transform: scale(1);
+            }
+
+            50% {
+                filter: drop-shadow(0 0 80px rgba(123, 94, 167, 0.7));
+                transform: scale(1.05);
+            }
+        }
+
         .splash-logo {
-            width: 150px;
-            height: 150px;
+            width: 200px;
+            height: 200px;
             margin-bottom: 30px;
             object-fit: contain;
-            filter: drop-shadow(0 0 50px rgba(123, 94, 167, 0.3));
+            border-radius: 46px;
+            filter: drop-shadow(0 0 50px rgba(123, 94, 167, 0.4));
+            mix-blend-mode: screen;
+            animation: pulse-glow 3s infinite ease-in-out;
         }
 
         .label-pill {
@@ -115,9 +168,9 @@
             content: '';
             width: 6px;
             height: 6px;
-            background: #00E5FF;
+            background: #2ECC71;
             border-radius: 50%;
-            box-shadow: 0 0 8px #00E5FF;
+            box-shadow: 0 0 8px #2ECC71;
         }
 
         h1 {
@@ -128,6 +181,7 @@
             line-height: 1.05;
             background: linear-gradient(135deg, #FFFFFF 0%, #A1A1AA 100%);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -170,7 +224,7 @@
             margin-bottom: 32px;
             position: relative;
             overflow: hidden;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
         }
 
         .section-card::after {
@@ -248,7 +302,7 @@
             border: 1px solid rgba(123, 94, 167, 0.2);
         }
 
-        /* Grid Layouts for specific sections */
+        /* Grid Layouts */
         .grid-3 {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -275,7 +329,7 @@
             transform: translateY(-2px);
             border-color: rgba(255, 255, 255, 0.1);
             background: rgba(255, 255, 255, 0.02);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         }
 
         .feature-box h3 {
@@ -312,8 +366,8 @@
             left: 0;
             width: 4px;
             height: 100%;
-            background: #10B981;
-            box-shadow: 0 0 10px #10B981;
+            background: #2ECC71;
+            box-shadow: 0 0 10px #2ECC71;
         }
 
         .insight-header {
@@ -336,7 +390,7 @@
             line-height: 1.6;
         }
 
-        /* Pro vs Free Section */
+        /* Tier Comparison */
         .tier-box {
             border-radius: 20px;
             padding: 30px;
@@ -362,7 +416,7 @@
             inset: 0;
             border-radius: 20px;
             padding: 1px;
-            background: linear-gradient(135deg, rgba(255,255,255,0.4), transparent);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), transparent);
             -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
             -webkit-mask-composite: xor;
             mask-composite: exclude;
@@ -399,7 +453,7 @@
 
         .tier-box li::before {
             content: '✓';
-            color: #00E5FF;
+            color: #2ECC71;
             font-weight: 900;
         }
 
@@ -438,7 +492,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #04060A;
+            color: #07090F;
             font-size: 14px;
             font-weight: 800;
             font-family: 'JetBrains Mono', monospace;
@@ -503,14 +557,14 @@
 
         .cfo-rule {
             background: linear-gradient(to right, rgba(0, 229, 255, 0.08), rgba(0, 0, 0, 0));
-            border-left: 4px solid #00E5FF;
+            border-left: 4px solid #2ECC71;
             padding: 24px;
             border-radius: 0 12px 12px 0;
             margin: 20px 0;
         }
 
         .cfo-rule h4 {
-            color: #00E5FF;
+            color: #2ECC71;
             font-family: 'JetBrains Mono', monospace;
             font-size: 12px;
             text-transform: uppercase;
@@ -523,6 +577,42 @@
             font-size: 15px;
             font-weight: 500;
             margin-bottom: 0;
+        }
+
+        /* Feature card with emoji */
+        .feat-card {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 20px;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .feat-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.02);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        }
+
+        .feat-emoji {
+            font-size: 28px;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .feat-card h3 {
+            color: #F8FAFC;
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .feat-card p {
+            font-size: 12px;
+            color: #64748B;
+            margin-bottom: 0;
+            line-height: 1.5;
         }
 
         /* ── Mobile Optimization ── */
@@ -587,193 +677,381 @@
 <body>
 
     <div class="page">
-        <div class="header-wrapper">
-            <img src="./icon-512.png" alt="Catalyst Cash Logo" class="splash-logo" />
-            <div class="label-pill">Elite Operational Protocol</div>
-            <h1 style="margin-top: 0px;">Catalyst V2</h1>
-            <div class="subtitle">The Autonomous CFO & Wealth Management Terminal</div>
-            
-            <div class="scroll-indicator">
+        <!-- ═══ HERO ═══ -->
+        <div class="header-wrapper animate-fade-up" role="banner">
+            <img src="./icon-512.png?v=4" alt="Catalyst Cash Logo" class="splash-logo" />
+            <div class="label-pill">Your Money, Simplified</div>
+            <h1 style="margin-top: 0px;">Catalyst Cash</h1>
+            <div class="subtitle">Your personal AI finance coach — built to help you spend smarter, pay off debt faster,
+                and grow your wealth.</div>
+
+            <div class="scroll-indicator" aria-hidden="true">
                 <span>SCROLL</span>
                 <div class="scroll-line"></div>
             </div>
         </div>
 
-        <div class="section-card">
+        <!-- ═══ 01 — WHAT IS IT? ═══ -->
+        <div class="section-card animate-fade-up delay-1" role="region" aria-label="What is Catalyst Cash">
             <div class="section-header">
                 <span class="section-number">01 /</span>
-                <h2 class="section-title">The Terminal Philosophy</h2>
+                <h2 class="section-title">What is Catalyst Cash?</h2>
             </div>
-            <p class="lead">Catalyst Cash V2 transcends budgeting. It is a <strong>High-Fidelity Wealth Command Center</strong> designed for individuals who demand deterministic capital growth and absolute financial control.</p>
+            <p class="lead">Catalyst Cash is a <strong>privacy-first AI finance app</strong> that gives you the kind of
+                advice
+                usually reserved for people with financial advisors — except it's instant, automatic, and lives on your
+                iPhone.</p>
 
             <div class="grid-3">
                 <div class="feature-box">
-                    <h3>🛡️ Zero-Knowledge</h3>
-                    <p>Financial sovereignty is non-negotiable. Your exact ledgers, keys, and balances never touch our servers. Execution occurs entirely on the edge.</p>
+                    <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2ECC71" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg> Privacy-First</h3>
+                    <p>Your financial data never leaves your device. No accounts on our servers, no data mining — your
+                        money is your business.</p>
                 </div>
                 <div class="feature-box">
-                    <h3>🧠 Catalyst Coach</h3>
-                    <p>An integrated, multi-modal intelligence protocol. Catalyst digests your entire portfolio matrix instantly to formulate Wall Street-grade optimization.</p>
+                    <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7B5EA7" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                            <rect x="9" y="9" width="6" height="6"></rect>
+                            <line x1="9" y1="1" x2="9" y2="4"></line>
+                            <line x1="15" y1="1" x2="15" y2="4"></line>
+                            <line x1="9" y1="20" x2="9" y2="23"></line>
+                            <line x1="15" y1="20" x2="15" y2="23"></line>
+                            <line x1="20" y1="9" x2="23" y2="9"></line>
+                            <line x1="20" y1="14" x2="23" y2="14"></line>
+                            <line x1="1" y1="9" x2="4" y2="9"></line>
+                            <line x1="1" y1="14" x2="4" y2="14"></line>
+                        </svg> AI-Powered</h3>
+                    <p>Your AI coach reads your full financial picture — every balance, bill, and card — then gives you
+                        specific, actionable advice tailored to your exact situation.</p>
                 </div>
                 <div class="feature-box">
-                    <h3>⚡ Direct Execution</h3>
-                    <p>By bypassing standard middleware, API requests are routed securely to top-tier LLMs for unparalleled speed and privacy.</p>
+                    <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2ECC71" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                        </svg> Fast & Secure</h3>
+                    <p>AI requests go directly from your device to the AI provider — no middleman, no delays. Your API
+                        keys are encrypted locally on your iPhone.</p>
                 </div>
             </div>
         </div>
 
-        <div class="section-card">
+        <!-- ═══ 02 — WHAT YOU CAN TRACK ═══ -->
+        <div class="section-card animate-fade-up delay-1" role="region" aria-label="What you can track">
             <div class="section-header">
                 <span class="section-number">02 /</span>
-                <h2 class="section-title">The V2 Wealth Ledger</h2>
+                <h2 class="section-title">What You Can Track</h2>
             </div>
-            <p class="lead">A precise AI audit is only as potent as its data constraints. V2 introduces a holistic, multi-asset aggregation mapping protocol.</p>
+            <p class="lead">The more Catalyst knows about your finances, the smarter its advice gets. Here's everything
+                you can add to your portfolio:</p>
 
             <ul style="margin-bottom: 24px;">
-                <li><strong>Liquidity Matrix (Bank Sync):</strong> Connect via Plaid to continuously monitor checking velocity and high-yield savings reserves.</li>
-                <li><strong>Credit Portfolio Engine:</strong> Map cards, credit limits, and exact APRs. The system predicts rolling 7-day liability exposure against cash on hand.</li>
-                <li><strong>Tax-Advantaged Tracking:</strong> Monitor <code>HSA</code>, <code>401(k)</code> matching thresholds, and <code>Roth IRA</code> contribution limits. Maximize tax-sheltered capital.</li>
-                <li><strong>Alternative Asset Ledgers:</strong> Connect <code>Crypto</code> holdings to live market data and classify <code>Other Assets</code> by liquidity state (Liquid vs. Locked).</li>
+                <li><strong>Bank Accounts (Checking & Savings):</strong> Connect via Plaid for automatic balance
+                    updates, or enter them manually. Catalyst monitors your cash flow and spending runway.</li>
+                <li><strong>Credit Cards:</strong> Track every card — balances, limits, APRs, annual fees, and due
+                    dates. Catalyst flags utilization spikes and finds optimization opportunities.</li>
+                <li><strong>Debts & Loans:</strong> Add auto loans, student loans, mortgages, or personal debt. The
+                    built-in Debt Simulator shows you exactly how to pay them off fastest.</li>
+                <li><strong>Investments:</strong> Sync brokerage, Roth IRA, and 401(k) accounts via Plaid — or add them
+                    manually — to see your complete net worth in one view.</li>
+                <li><strong>Crypto:</strong> Add your crypto holdings with live market prices pulled automatically.</li>
+                <li><strong>Other Assets:</strong> Track real estate, vehicles, valuables — anything with a dollar
+                    value. Classify each as Liquid or Locked.</li>
             </ul>
 
             <div class="cfo-rule">
-                <h4>CFO Protocol #1: The Safety Floor</h4>
-                <p>The system is programmed to treat your Emergency Floor limit as a strict survival barrier. Should 7-day obligations push your reserves below this floor, Catalyst enters Code Red and halts optional allocations.</p>
+                <h4>How It Works: The Safety Floor</h4>
+                <p>Set a minimum "Emergency Floor" for your checking account. If your upcoming bills would push you
+                    below that floor, Catalyst warns you immediately so you can adjust before it's too late.</p>
             </div>
-            
+
             <div class="cfo-rule">
-                <h4>CFO Protocol #2: Debt Avalanche Execution</h4>
-                <p>The integrated Debt Simulator automatically sequences non-card liabilities (Mortgage, Auto, Student Loans) to optimize payoff velocity by highest effective APR, mathematically guaranteeing the lowest interest loss.</p>
+                <h4>How It Works: Smart Debt Payoff</h4>
+                <p>The Debt Simulator automatically orders your debts by highest interest rate first (the "avalanche"
+                    method). This is mathematically proven to save the most money on interest over time.</p>
             </div>
         </div>
 
-        <div class="section-card">
+        <!-- ═══ 03 — FEATURES AT A GLANCE ═══ -->
+        <div class="section-card animate-fade-up delay-1" role="region" aria-label="Features">
             <div class="section-header">
                 <span class="section-number">03 /</span>
-                <h2 class="section-title">The Weekly Operation Cycle</h2>
+                <h2 class="section-title">Everything You Get</h2>
             </div>
-            <p class="lead">Engage this 4-step execution loop every Sunday to maintain total fiscal agency, eliminate blind spots, and compound capital.</p>
+            <p class="lead">Catalyst Cash packs more financial tools into one app than most people have bookmarked
+                across ten websites.</p>
+
+            <div class="grid-3">
+                <div class="feat-card">
+                    <span class="feat-emoji">📊</span>
+                    <h3>Dashboard</h3>
+                    <p>Your financial health score, spending pacing, cash-on-hand, and upcoming bills — all in one
+                        glance.</p>
+                </div>
+                <div class="feat-card">
+                    <span class="feat-emoji">💳</span>
+                    <h3>Accounts</h3>
+                    <p>Full portfolio view — credit cards, bank accounts, debts, investments, crypto, and other assets
+                        in one place.</p>
+                </div>
+                <div class="feat-card">
+                    <span class="feat-emoji">🔄</span>
+                    <h3>Expense Tracker</h3>
+                    <p>Track every recurring bill and subscription. See your total monthly burn. Cancel or restore items
+                        instantly.</p>
+                </div>
+                <div class="feat-card">
+                    <span class="feat-emoji">🤖</span>
+                    <h3>AI Check-In</h3>
+                    <p>Run a weekly audit. Catalyst AI analyzes your full picture and tells you exactly what to do this
+                        week.</p>
+                </div>
+                <div class="feat-card">
+                    <span class="feat-emoji">💬</span>
+                    <h3>Ask AI</h3>
+                    <p>Chat with your AI coach anytime. It knows your exact balances and can answer questions like "Can
+                        I afford this?" or "How do I pay off my car faster?"</p>
+                </div>
+                <div class="feat-card">
+                    <span class="feat-emoji">📈</span>
+                    <h3>Debt Simulator</h3>
+                    <p>Model payoff strategies for your loans. See how extra payments save you thousands in interest.
+                    </p>
+                </div>
+                <div class="feat-card">
+                    <span class="feat-emoji">🏆</span>
+                    <h3>Credit Score Simulator</h3>
+                    <p>Estimate how specific actions — like paying down a card or opening a new account — affect your
+                        credit score.</p>
+                </div>
+                <div class="feat-card">
+                    <span class="feat-emoji">📞</span>
+                    <h3>Bill Negotiation</h3>
+                    <p>AI generates custom scripts for calling your providers to negotiate lower rates on bills and
+                        subscriptions.</p>
+                </div>
+                <div class="feat-card">
+                    <span class="feat-emoji">🔥</span>
+                    <h3>FIRE Calculator</h3>
+                    <p>Calculate your path to financial independence and early retirement based on your actual numbers.
+                    </p>
+                </div>
+                <div class="feat-card">
+                    <span class="feat-emoji">📅</span>
+                    <h3>Cash Flow Calendar</h3>
+                    <p>Visualize when money comes in and goes out. See your daily projected balance across the month.
+                    </p>
+                </div>
+                <div class="feat-card">
+                    <span class="feat-emoji">🎯</span>
+                    <h3>Weekly Challenges</h3>
+                    <p>Fun, practical money challenges that build better habits — like a no-spend day or cooking all
+                        meals at home.</p>
+                </div>
+                <div class="feat-card">
+                    <span class="feat-emoji">🏦</span>
+                    <h3>Bank Linking (Plaid)</h3>
+                    <p>Securely connect your bank accounts for automatic balance updates. Credentials never touch our
+                        servers.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ 04 — WEEKLY ROUTINE ═══ -->
+        <div class="section-card animate-fade-up delay-1" role="region" aria-label="Weekly routine">
+            <div class="section-header">
+                <span class="section-number">04 /</span>
+                <h2 class="section-title">Your Weekly Routine</h2>
+            </div>
+            <p class="lead">Spend 5 minutes each week to stay on top of your money. Here's the simple routine that makes
+                Catalyst work best:</p>
 
             <div class="step-list">
                 <div class="step-item">
                     <div class="step-circle">1</div>
                     <div class="step-content">
-                        <h3>Pulse Synchronization</h3>
-                        <p>Trigger a global Plaid refresh to pull live balances, or manually reconcile offline accounts to establish the weekly baseline.</p>
+                        <h3>Update Your Balances</h3>
+                        <p>If you use Plaid, your balances update automatically. Otherwise, quickly update your checking
+                            balance and any card balances that changed.</p>
                     </div>
                 </div>
                 <div class="step-item">
                     <div class="step-circle">2</div>
                     <div class="step-content">
-                        <h3>Execute Global Audit</h3>
-                        <p>Deploy Catalyst AI. The engine simulates cash flow, analyzing immediate runway against incoming debits, subscription renewals, and yield limits.</p>
+                        <h3>Run Your Check-In</h3>
+                        <p>Tap the Audit button. Catalyst AI will analyze your cash flow, upcoming bills, credit
+                            utilization, and spending pace — then give you a clear action plan.</p>
                     </div>
                 </div>
                 <div class="step-item">
                     <div class="step-circle">3</div>
                     <div class="step-content">
-                        <h3>Act on Intelligence</h3>
-                        <p>The dashboard updates instantly to reflect your absolute available spending power. Execute the strategic shifts recommended by the Coach.</p>
+                        <h3>Review Your Results</h3>
+                        <p>Your Dashboard updates with your health score, available spending money, and any alerts.
+                            Green means you're on track. Red means take action now.</p>
                     </div>
                 </div>
                 <div class="step-item">
                     <div class="step-circle">4</div>
                     <div class="step-content">
-                        <h3>Contextual Querying</h3>
-                        <p>Require advanced scenario modeling? Open Ask AI. The agent possesses 100% context of your profile, instantly rendering charts and strategic plans.</p>
+                        <h3>Ask Follow-Up Questions</h3>
+                        <p>Need more detail? Open Ask AI to chat directly. Ask things like "Should I pay off my Visa or
+                            my car loan first?" and get instant, personalized advice.</p>
                     </div>
                 </div>
             </div>
 
             <div class="insight-box">
-                <div class="insight-header">Chat Ephemerality Protocol</div>
-                <p><strong>To enforce absolute privacy</strong>, all AI chat transcripts are purged from memory after 24 hours. Your sensitive Net Worth geometry is intrinsically scrubbed before any local transmission occurs.</p>
+                <div class="insight-header">Your Chats Auto-Delete</div>
+                <p><strong>For your privacy</strong>, all AI chat conversations are automatically deleted after 24
+                    hours. Your financial data is scrubbed from chat history before any processing occurs.</p>
             </div>
         </div>
 
-        <div class="section-card">
+        <!-- ═══ 05 — FREE VS PRO ═══ -->
+        <div class="section-card animate-fade-up delay-1" role="region" aria-label="Plans and pricing">
             <div class="section-header">
-                <span class="section-number">04 /</span>
-                <h2 class="section-title">Catalyst Pro vs Free Architecture</h2>
+                <span class="section-number">05 /</span>
+                <h2 class="section-title">Free vs Pro</h2>
             </div>
-            <p class="lead">Upgrade your intelligence bandwidth. V2 introduces best-in-class multi-model routing capabilities.</p>
+            <p class="lead">The free plan gives you the complete app. Pro removes the limits and upgrades the AI.</p>
 
             <div class="grid-2">
                 <div class="tier-box tier-free">
                     <div class="tier-header">
-                        <h3 style="margin:0; color:#F8FAFC; font-size:22px; font-weight:800;">Basic Terminal</h3>
-                        <span style="font-size:12px; font-weight:700; background:rgba(255,255,255,0.1); padding:4px 10px; border-radius:99px;">$0 / mo</span>
+                        <h3 style="margin:0; color:#F8FAFC; font-size:22px; font-weight:800;">Free Plan</h3>
+                        <span
+                            style="font-size:12px; font-weight:700; background:rgba(255,255,255,0.1); padding:4px 10px; border-radius:99px;">$0
+                            / mo</span>
                     </div>
                     <ul>
-                        <li><strong style="color:white">3</strong> Full AI Audits per month</li>
-                        <li><strong style="color:white">10</strong> AI Chat queries per day</li>
-                        <li>Powered by lightweight edge models</li>
-                        <li>Full Plaid Integration</li>
+                        <li><strong style="color:white">2</strong> AI Check-Ins per week</li>
+                        <li><strong style="color:white">10</strong> AI Chat messages per day</li>
+                        <li>Powered by Gemini 2.5 Flash</li>
+                        <li>Full Plaid bank linking</li>
+                        <li>All tools: Debt Sim, Credit Sim, FIRE Calc</li>
                         <li>Local encrypted data storage</li>
                     </ul>
                 </div>
                 <div class="tier-box tier-pro">
                     <div class="tier-header">
-                        <h3 style="margin:0; color:#fff; font-size:22px; font-weight:800;">Catalyst Pro <span style="font-size: 16px; font-weight: 500; opacity: 0.7;">V2</span></h3>
-                        <span style="font-size:12px; font-weight:800; color:#D4C4FB; background:rgba(123, 94, 167, 0.2); border: 1px solid rgba(123, 94, 167, 0.5); padding:4px 10px; border-radius:99px;">ELITE TIER</span>
+                        <h3 style="margin:0; color:#fff; font-size:22px; font-weight:800;">Catalyst Pro</h3>
+                        <span
+                            style="font-size:12px; font-weight:800; color:#D4C4FB; background:rgba(123, 94, 167, 0.2); border: 1px solid rgba(123, 94, 167, 0.5); padding:4px 10px; border-radius:99px;">$6.99/mo</span>
                     </div>
                     <ul>
-                        <li><strong>Unlimited</strong> Global AI Audits</li>
-                        <li><strong>Unlimited</strong> Neural Chat Interactions</li>
-                        <li>Access elite reasoning engines: <strong>GPT-4o</strong> & <strong>Claude 3.5 Sonnet</strong></li>
-                        <li>Advanced Multi-Factor Chart Rendering</li>
-                        <li>Priority Serverless Execution Queue</li>
+                        <li><strong>Unlimited</strong> AI Check-Ins</li>
+                        <li><strong>Unlimited</strong> AI Chat messages</li>
+                        <li>Premium AI models: <strong>GPT-4o</strong> & <strong>o3-mini</strong></li>
+                        <li>Advanced analytics charts</li>
+                        <li>Faster AI responses</li>
+                        <li>Annual plan: <strong>$49.99/yr</strong> (save 40%)</li>
                     </ul>
                 </div>
             </div>
 
-            <div class="insight-box" style="border-color: rgba(123, 94, 167, 0.4); background: rgba(123, 94, 167, 0.05); margin-top:24px;">
-                <div class="insight-header" style="color: #D4C4FB;">Developer Protocol: BYOK</div>
-                <p>Engineers and advanced power users can bypass subscriptions entirely by submitting their own OpenAI, Anthropic, or Google API keys in Settings. You pay wholesale compute costs directly to the provider.</p>
+            <div class="insight-box"
+                style="border-color: rgba(123, 94, 167, 0.4); background: rgba(123, 94, 167, 0.05); margin-top:24px;">
+                <div class="insight-header" style="color: #D4C4FB;">Bring Your Own API Key</div>
+                <p>Power users can skip the subscription entirely by adding their own OpenAI, Anthropic, or Google API
+                    key in Settings.
+                    You pay the AI provider directly at their wholesale rates — often pennies per query.</p>
             </div>
         </div>
 
-        <div class="section-card">
+        <!-- ═══ 06 — PRIVACY & BACKUP ═══ -->
+        <div class="section-card animate-fade-up delay-1" role="region" aria-label="Privacy and backup">
             <div class="section-header">
-                <span class="section-number">05 /</span>
-                <h2 class="section-title">Data Sovereignty & Encryption</h2>
+                <span class="section-number">06 /</span>
+                <h2 class="section-title">Privacy & Backup</h2>
             </div>
-            <p class="lead">Complete custody over your financial architecture. Catalyst provides robust, enterprise-grade tooling for backup and archival.</p>
+            <p class="lead">You have complete control over your data. Catalyst gives you multiple ways to back up,
+                export, and protect your finances.</p>
 
             <div class="grid-3" style="margin-bottom: 30px;">
                 <div class="feature-box">
-                    <h3>iCloud Key-Sync</h3>
-                    <p>Link your Apple ID to silently background-sync encrypted payloads to your private iCloud container, instantly restoring state across iOS devices.</p>
+                    <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2ECC71" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg> iCloud Auto-Backup</h3>
+                    <p>Sign in with Apple to enable automatic iCloud backups. Your data syncs continuously and restores
+                        on any iPhone with your Apple ID.</p>
                 </div>
                 <div class="feature-box">
-                    <h3>Excel Matrix I/O</h3>
-                    <p>Export your entire ledger as an unencrypted <code>.xlsx</code> workbook. Modify thousands of rows locally, and push the matrix back into the App seamlessly.</p>
+                    <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2ECC71" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <line x1="12" y1="20" x2="12" y2="10"></line>
+                            <line x1="18" y1="20" x2="18" y2="4"></line>
+                            <line x1="6" y1="20" x2="6" y2="16"></line>
+                        </svg> Spreadsheet Export</h3>
+                    <p>Export your entire portfolio as an <code>.xlsx</code> spreadsheet. Edit in Excel or Google
+                        Sheets, then import it back into the app.</p>
                 </div>
                 <div class="feature-box">
-                    <h3>AES-256 Vault Export</h3>
-                    <p>Generate native `.enc` encrypted JSON blobs. Store your entire fiscal life securely on a Yubikey, cold-storage drive, or secure vault.</p>
+                    <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7B5EA7" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg> Encrypted Backup</h3>
+                    <p>Create a password-protected <code>.enc</code> backup file. Store it in iCloud Drive, AirDrop it
+                        to a new phone, or save it anywhere you trust.</p>
                 </div>
             </div>
 
+            <div class="cfo-rule">
+                <h4>Built with Your Trust in Mind</h4>
+                <p>Catalyst Cash is not a financial advisor. All AI insights are for informational purposes only. We
+                    never see, access, or store your financial data — everything stays on your device.</p>
+            </div>
+
             <div class="feature-box danger-zone">
-                <div class="danger-header">Danger Zone — Remote Wipe Protocols</div>
+                <div class="danger-header">Reset & Delete</div>
                 <div class="grid-2">
                     <div>
-                        <h3 style="color: #F8FAFC; font-size: 14px; margin-bottom: 6px;">Purge Audit Memory</h3>
-                        <p style="color: #64748B; font-size: 13px;">Destroys all historical AI snapshot data from local disk. Retains ledger configurations and portfolio setup.</p>
+                        <h3 style="color: #F8FAFC; font-size: 14px; margin-bottom: 6px;">Clear History</h3>
+                        <p style="color: #64748B; font-size: 13px;">Deletes all past AI check-in results. Your accounts
+                            and settings are kept.</p>
                     </div>
                     <div>
-                        <h3 style="color: #F8FAFC; font-size: 14px; margin-bottom: 6px;">Execute Factory Wipe</h3>
-                        <p style="color: #64748B; font-size: 13px;">The thermonuclear option. Eradicates 100% of data, biometric links, API keys, and history immediately. Returns application to absolute zero.</p>
+                        <h3 style="color: #F8FAFC; font-size: 14px; margin-bottom: 6px;">Factory Reset</h3>
+                        <p style="color: #64748B; font-size: 13px;">Permanently erases all data — accounts, API keys,
+                            history, and settings. The app resets to its first-launch state. <strong>Back up
+                                first.</strong></p>
                     </div>
                 </div>
             </div>
         </div>
 
         <div class="footer-meta">
-            CATALYST CASH V2 OPERATIONAL SYSTEMS // ENCRYPTED LOCALLY
+            CATALYST CASH // YOUR DATA STAYS ON YOUR DEVICE
         </div>
     </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.animationPlayState = 'running';
+                        entry.target.style.opacity = '1';
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, {
+                threshold: 0.1
+            });
+
+            document.querySelectorAll('.animate-fade-up').forEach((el, index) => {
+                if (index > 0) {
+                    el.style.animationPlayState = 'paused';
+                }
+                observer.observe(el);
+            });
+        });
+    </script>
 </body>
 
 </html>

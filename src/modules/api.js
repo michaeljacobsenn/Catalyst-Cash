@@ -1,6 +1,7 @@
 import { getSystemPrompt } from "./prompts.js";
 import { getBackendProvider } from "./providers.js";
 import { log } from "./logger.js";
+import { fetchWithRetry } from "./fetchWithRetry.js";
 
 // ═══════════════════════════════════════════════════════════════
 // AI API MODULE — Catalyst Cash
@@ -88,7 +89,7 @@ async function* streamBackend(snapshot, model, sysText, history, deviceId, backe
 }
 
 async function callBackend(snapshot, model, sysText, history, deviceId, backendProvider, responseFormat) {
-  const res = await fetch(`${BACKEND_URL}/audit`, {
+  const res = await fetchWithRetry(`${BACKEND_URL}/audit`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

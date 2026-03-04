@@ -91,7 +91,7 @@ export default function BudgetTab({ budgetCategories = [], budgetActuals = {}, w
 
                     {/* Inner Content */}
                     <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", marginTop: -2 }}>
-                        <div style={{ fontSize: 11, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Weekly Spend</div>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Weekly Spend</div>
                         <div style={{ fontSize: 38, fontWeight: 800, color: T.text.primary, fontFamily: T.font.mono, letterSpacing: "-1.5px", fontVariantNumeric: "tabular-nums" }}>{fmt(totalWeeklyActuals)}</div>
                         <div style={{ fontSize: 12, color: T.text.secondary, marginTop: 6, fontWeight: 600, background: `${T.bg.surface}80`, padding: "4px 10px", borderRadius: 99, border: `1px solid ${T.border.subtle}` }}>
                             Limit: {fmt(totalWeeklyBudget)}
@@ -139,8 +139,8 @@ export default function BudgetTab({ budgetCategories = [], budgetActuals = {}, w
                         <div style={{ fontSize: 13, color: T.text.secondary, lineHeight: 1.5, marginBottom: 20, maxWidth: 280, margin: "0 auto 20px" }}>Set exact monthly spending targets. The V2 agent will auto-convert them into strict weekly limits for precision tracking, regardless of the month's length.</div>
                         <button onClick={addCategory} className="hover-btn" style={{
                             padding: "12px 24px", borderRadius: T.radius.md, border: "none",
-                            background: T.accent.gradient, color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer",
-                            boxShadow: `0 4px 16px ${T.accent.emerald}40`, letterSpacing: "0.02em"
+                            background: T.accent.primary, color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer",
+                            boxShadow: `inset 0 1px 1px rgba(255,255,255,0.15), 0 4px 16px ${T.accent.primary}30`, letterSpacing: "0.02em"
                         }}>
                             <Plus size={14} style={{ marginRight: 6, verticalAlign: -2 }} /> Build First Target
                         </button>
@@ -227,7 +227,8 @@ export default function BudgetTab({ budgetCategories = [], budgetActuals = {}, w
                         <div style={{ fontSize: 13, color: T.text.secondary, lineHeight: 1.5, marginBottom: 12 }}>Track freelance, side-gig, or other income beyond your primary paycheck.</div>
                         <button onClick={addIncome} style={{
                             padding: "8px 20px", borderRadius: T.radius.md, border: "none",
-                            background: T.accent.gradient, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer"
+                            background: T.accent.primary, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                            boxShadow: `inset 0 1px 1px rgba(255,255,255,0.15), 0 4px 12px ${T.accent.primary}30`
                         }}>
                             <Plus size={12} style={{ marginRight: 4, verticalAlign: -2 }} /> Add Income Source
                         </button>
@@ -261,7 +262,7 @@ export default function BudgetTab({ budgetCategories = [], budgetActuals = {}, w
                             <div key={i} style={{ padding: "12px 16px", borderBottom: i < incomeSources.length - 1 ? `1px solid ${T.border.subtle}` : "none", display: "flex", justifyContent: "space-between", alignItems: "center", animation: `fadeInUp .3s ease-out ${i * 0.05}s both` }}>
                                 <div>
                                     <div style={{ fontSize: 13, fontWeight: 600, color: T.text.primary }}>{src.name || "Unnamed"}</div>
-                                    <div style={{ fontSize: 10, color: T.text.muted, fontFamily: T.font.mono, textTransform: "uppercase", marginTop: 2 }}>{src.frequency || "monthly"}</div>
+                                    <div style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, textTransform: "uppercase", marginTop: 2 }}>{src.frequency || "monthly"}</div>
                                 </div>
                                 <div style={{ fontSize: 14, fontWeight: 700, color: T.status.green, fontFamily: T.font.mono }}>
                                     +{fmt(src.amount || 0)}

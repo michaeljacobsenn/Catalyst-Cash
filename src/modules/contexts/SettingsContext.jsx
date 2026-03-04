@@ -77,7 +77,8 @@ export const DEFAULT_FINANCIAL_CONFIG = {
     otherAssets: 0,
     otherAssetsLabel: "",
     insuranceDeductibles: [],
-    bigTicketItems: []
+    bigTicketItems: [],
+    plaidInvestments: []
 };
 
 function financialConfigReducer(state, action) {
@@ -88,6 +89,8 @@ function financialConfigReducer(state, action) {
             return { ...state, ...action.payload };
         case 'REPLACE':
             return { ...action.payload };
+        case 'FUNCTIONAL_UPDATE':
+            return action.updater(state);
         case 'RESET_YTD':
             return { ...state, rothContributedYTD: 0, k401ContributedYTD: 0 };
         default:
@@ -110,11 +113,12 @@ export function SettingsProvider({ children }) {
     const [financialConfig, dispatchFinConfig] = useReducer(financialConfigReducer, DEFAULT_FINANCIAL_CONFIG);
 
     // Backward-compatible wrapper: accepts either a new state object, a function updater, or dispatch action
+    // Stable reference — reducer handles functional updates so no stale closure risk
     const setFinancialConfig = useCallback((valueOrFn) => {
         if (typeof valueOrFn === 'function') {
             // Functional updater pattern: setFinancialConfig(prev => ({ ...prev, field: val }))
-            // We bridge this by reading current state via a MERGE dispatch
-            dispatchFinConfig({ type: 'REPLACE', payload: valueOrFn(financialConfig) });
+            // Delegated to reducer so `prev` is always the latest state
+            dispatchFinConfig({ type: 'FUNCTIONAL_UPDATE', updater: valueOrFn });
         } else if (valueOrFn?.type) {
             // Direct dispatch: setFinancialConfig({ type: 'SET_FIELD', field: 'payday', value: 'Monday' })
             dispatchFinConfig(valueOrFn);
@@ -122,7 +126,7 @@ export function SettingsProvider({ children }) {
             // Object merge: setFinancialConfig({ payday: 'Monday' })
             dispatchFinConfig({ type: 'MERGE', payload: valueOrFn });
         }
-    }, [financialConfig]);
+    }, []);
 
     const [isSettingsReady, setIsSettingsReady] = useState(false);
 

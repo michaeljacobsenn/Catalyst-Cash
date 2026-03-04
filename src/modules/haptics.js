@@ -9,6 +9,8 @@ const safe = fn => async () => { try { await fn(); } catch { } };
 export const haptic = {
     /** Light tap — tab switch, checkbox toggle */
     light: safe(() => Haptics.impact({ style: ImpactStyle.Light })),
+    /** Selection tap — picker scrolling, active element selection */
+    selection: safe(() => Haptics.impact({ style: ImpactStyle.Light })),
     /** Medium tap — button press, card select */
     medium: safe(() => Haptics.impact({ style: ImpactStyle.Medium })),
     /** Heavy tap — destructive action confirmation */

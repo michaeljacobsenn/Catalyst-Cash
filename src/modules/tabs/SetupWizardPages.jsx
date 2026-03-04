@@ -16,7 +16,7 @@ const ENABLE_PLAID = true;
 export const WizBtn = ({ children, onClick, variant = "primary", disabled = false, style = {} }) => {
     const base = { padding: "13px 20px", borderRadius: T.radius.lg, fontWeight: 700, fontSize: 14, cursor: disabled ? "not-allowed" : "pointer", border: "none", transition: "opacity .2s", opacity: disabled ? 0.4 : 1, fontFamily: T.font.sans, ...style };
     const v = {
-        primary: { background: T.accent.gradient, color: "#fff", boxShadow: `0 4px 14px ${T.accent.primary}40` },
+        primary: { background: T.accent.primary, color: "#fff", boxShadow: `inset 0 1px 1px rgba(255,255,255,0.15), 0 4px 14px ${T.accent.primary}40` },
         ghost: { background: "transparent", color: T.text.secondary, border: `1px solid ${T.border.default}` },
         skip: { background: "transparent", color: T.text.dim, border: "none", fontSize: 13, padding: "8px 12px" },
     };
@@ -31,13 +31,13 @@ export const WizField = ({ label, hint, children }) => (
     </div>
 );
 
-export const WizInput = ({ value, onChange, placeholder, type = "text", style = {} }) => (
-    <input className="wiz-input" type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+export const WizInput = ({ value, onChange, placeholder, type = "text", style = {}, "aria-label": ariaLabel }) => (
+    <input className="wiz-input" type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} aria-label={ariaLabel || placeholder}
         style={{ width: "100%", padding: "11px 14px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1px solid ${T.border.default}`, color: T.text.primary, fontSize: 14, outline: "none", fontFamily: T.font.sans, boxSizing: "border-box", transition: "all 0.2s", ...style }} />
 );
 
-export const WizSelect = ({ value, onChange, options }) => (
-    <select className="wiz-input" value={value} onChange={e => onChange(e.target.value)}
+export const WizSelect = ({ value, onChange, options, "aria-label": ariaLabel }) => (
+    <select className="wiz-input" value={value} onChange={e => onChange(e.target.value)} aria-label={ariaLabel}
         style={{ width: "100%", padding: "11px 14px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1px solid ${T.border.default}`, color: T.text.primary, fontSize: 14, outline: "none", fontFamily: T.font.sans, boxSizing: "border-box", transition: "all 0.2s" }}>
         {options.map(o => <option key={o.value ?? o} value={o.value ?? o} style={{ background: T.bg.elevated }}>{o.label ?? o}</option>)}
     </select>
@@ -120,6 +120,61 @@ export function PageWelcome({ onNext }) {
                         <div>
                             <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, lineHeight: 1.2 }}>{title}</div>
                             <div style={{ fontSize: 11, color: T.text.dim, marginTop: 1, lineHeight: 1.3 }}>{sub}</div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Capability Stats */}
+            <div style={{
+                display: "flex", gap: 0, marginBottom: 20, borderRadius: T.radius.lg,
+                overflow: "hidden", border: `1px solid ${T.border.subtle}`,
+            }}>
+                {[
+                    { icon: "🧠", stat: "5", label: "AI models" },
+                    { icon: "🛡️", stat: "100%", label: "On-device" },
+                    { icon: "🎁", stat: "Free", label: "Core features" },
+                ].map((s, i) => (
+                    <div key={i} style={{
+                        flex: 1, padding: "12px 8px", textAlign: "center",
+                        background: T.bg.elevated,
+                        borderRight: i < 2 ? `1px solid ${T.border.subtle}` : "none",
+                    }}>
+                        <div style={{ fontSize: 14, marginBottom: 2 }}>{s.icon}</div>
+                        <div style={{ fontSize: 15, fontWeight: 900, color: T.text.primary, fontFamily: T.font.mono }}>{s.stat}</div>
+                        <div style={{ fontSize: 9, color: T.text.dim, fontWeight: 600 }}>{s.label}</div>
+                    </div>
+                ))}
+            </div>
+
+            {/* How It Works — Value Prop */}
+            <div style={{
+                marginBottom: 20, textAlign: "left", padding: "16px",
+                background: `linear-gradient(160deg, ${T.accent.primary}06, ${T.accent.emerald}06)`,
+                borderRadius: T.radius.lg, border: `1px solid ${T.accent.primary}15`,
+            }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>
+                    How It Works
+                </div>
+                {[
+                    { step: "1", title: "Enter your numbers", sub: "2 minutes — checking, savings, debts, spending" },
+                    { step: "2", title: "AI generates your gameplan", sub: "Prioritized actions, debt strategy, and health score" },
+                    { step: "3", title: "Track progress weekly", sub: "Streaks, charts, badges — watch your wealth grow" },
+                ].map((s, i) => (
+                    <div key={i} style={{
+                        display: "flex", alignItems: "flex-start", gap: 12,
+                        marginBottom: i < 2 ? 10 : 0,
+                    }}>
+                        <div style={{
+                            width: 26, height: 26, borderRadius: 13, flexShrink: 0,
+                            background: T.accent.primary, color: "#fff",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 12, fontWeight: 900, fontFamily: T.font.mono,
+                            boxShadow: `0 2px 8px ${T.accent.primary}40`,
+                        }}>{s.step}</div>
+                        <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>{s.title}</div>
+                            <div style={{ fontSize: 11, color: T.text.dim, lineHeight: 1.3 }}>{s.sub}</div>
                         </div>
                     </div>
                 ))}
@@ -392,7 +447,7 @@ export function PageImport({ onNext, toast, onComplete }) {
 
             {/* Download templates */}
             <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Download a blank template</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Download a blank template</div>
                 <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={() => downloadTemplate("/CatalystCash-Setup-Template.xlsx", "CatalystCash-Setup-Template.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
                         disabled={importing}
@@ -561,7 +616,7 @@ export function PagePass2({ data, onChange, onNext, onBack, onSkip }) {
 }
 
 // ─── PAGE 4: Pass 3 (Advanced Settings) ────────────────────────────────────────
-export function PagePass3({ ai, security, spending, updateAi, updateSecurity, updateSpending, onNext, onBack, onSkip, saving, appleLinkedId, setAppleLinkedId }) {
+export function PagePass3({ ai, security, spending, updateAi, updateSecurity, updateSpending, themeMode, setThemeMode, onNext, onBack, onSkip, saving, appleLinkedId, setAppleLinkedId }) {
     const provider = AI_PROVIDERS[0];
     const [confirm, setConfirm] = useState("");
     const [plaidConnecting, setPlaidConnecting] = useState(false);
@@ -651,11 +706,11 @@ export function PagePass3({ ai, security, spending, updateAi, updateSecurity, up
                             </p>
                         )}
                         <div style={{ display: "flex", gap: 8 }}>
-                            <button onClick={handlePlaidConnect} disabled={plaidConnecting} style={{
-                                flex: 1, padding: "11px 16px", borderRadius: T.radius.md, border: "none",
-                                background: T.accent.gradient, color: "#fff", fontSize: 13, fontWeight: 700,
+                            <button onClick={(e) => { haptic.medium(); handlePlaidConnect(e); }} disabled={plaidConnecting} style={{
+                                flex: 1, padding: "14px", borderRadius: T.radius.md, border: "none",
+                                background: T.accent.primary, color: "#fff", fontSize: 13, fontWeight: 700,
                                 cursor: plaidConnecting ? "not-allowed" : "pointer", opacity: plaidConnecting ? 0.6 : 1,
-                                boxShadow: `0 4px 14px ${T.accent.primary}30`,
+                                boxShadow: `inset 0 1px 1px rgba(255,255,255,0.15), 0 4px 12px ${T.accent.primary}30`,
                                 transition: "all 0.2s",
                             }}>
                                 {plaidConnecting ? "Connecting…" : plaidCount > 0 ? "+ Link Another Bank" : "🔗 Link via Plaid"}
@@ -700,6 +755,20 @@ export function PagePass3({ ai, security, spending, updateAi, updateSecurity, up
 
             <WizToggle label="Track HSA" sub="Triple tax-advantaged health savings" checked={spending.trackHSA} onChange={v => updateSpending("trackHSA", v)} />
             <WizToggle label="Track Crypto" sub="Monitor your digital assets" checked={spending.trackCrypto !== false} onChange={v => updateSpending("trackCrypto", v)} />
+
+            {/* APP EXPERIENCE */}
+            <div style={{ margin: "24px 0 12px", borderTop: `1px solid ${T.border.subtle}`, paddingTop: 20 }}>
+                <h3 style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, margin: "0 0 4px 0" }}>App Experience</h3>
+                <p style={{ fontSize: 11, color: T.text.muted, margin: "0 0 16px 0" }}>Choose how Catalyst Cash looks and feels.</p>
+            </div>
+
+            <WizField label="Theme Mode" hint="System matches your device settings. Select Light or Dark to override.">
+                <WizSelect value={themeMode || "system"} onChange={v => setThemeMode(v)} options={[
+                    { value: "system", label: "⚙️ System Auto" },
+                    { value: "dark", label: "🌙 Dark Mode" },
+                    { value: "light", label: "☀️ Light Mode" },
+                ]} />
+            </WizField>
 
             {/* AI ENGINE */}
             <div style={{ margin: "24px 0 12px", borderTop: `1px solid ${T.border.subtle}`, paddingTop: 20 }}>

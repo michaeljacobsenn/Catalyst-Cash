@@ -52,11 +52,13 @@ function StepHeader({ step }) {
 
 import { useSecurity } from '../contexts/SecurityContext.jsx';
 import { useNavigation } from '../contexts/NavigationContext.jsx';
+import { useSettings } from '../contexts/SettingsContext.jsx';
 import { useToast } from '../Toast.jsx';
 
 export default function SetupWizard() {
     const { setAppleLinkedId, appleLinkedId } = useSecurity();
     const { setOnboardingComplete } = useNavigation();
+    const { themeMode, setThemeMode } = useSettings();
     const toast = useToast();
     const onComplete = () => setOnboardingComplete(true);
 
@@ -275,6 +277,7 @@ export default function SetupWizard() {
                             <PagePass3
                                 ai={ai} security={security} spending={spending}
                                 updateAi={updateAi} updateSecurity={updateSecurity} updateSpending={updateSpending}
+                                themeMode={themeMode} setThemeMode={setThemeMode}
                                 onNext={handleSecurityNext}
                                 onBack={back}
                                 onSkip={handleSecuritySkip}

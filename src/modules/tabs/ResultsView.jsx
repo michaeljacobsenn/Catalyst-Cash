@@ -1,26 +1,106 @@
 import { useState, memo } from "react";
-import { TrendingUp, AlertTriangle, Clock, ChevronDown, ChevronUp, Activity, RefreshCw, CheckSquare, Target, Zap } from "lucide-react";
+import { TrendingUp, AlertTriangle, Clock, ChevronDown, ChevronUp, Activity, RefreshCw, CheckSquare, Target, Zap, CheckCircle } from "lucide-react";
 import { T } from "../constants.js";
 import { fmtDate, stripPaycheckParens } from "../utils.js";
 import { Card, Badge, InlineTooltip } from "../ui.jsx";
 import { Mono, Section, MoveRow, Md } from "../components.jsx";
+import { haptic } from "../haptics.js";
 
 import { useSettings } from '../contexts/SettingsContext.jsx';
 import { useAudit } from '../contexts/AuditContext.jsx';
+import { usePortfolio } from '../contexts/PortfolioContext.jsx';
+import { useNavigation } from '../contexts/NavigationContext.jsx';
+import { createPortal } from "react-dom";
 
 export default memo(function ResultsView({ audit, moveChecks, onToggleMove, streak = 0 }) {
     const { financialConfig } = useSettings();
     const { history } = useAudit();
+    const { bankAccounts, setBankAccounts, cards, setCards, renewals, setRenewals, badges, setBadges } = usePortfolio();
+    const { navTo } = useNavigation();
+
     const [showRaw, setShowRaw] = useState(false);
+    const [showAutoUpdateModal, setShowAutoUpdateModal] = useState(false);
+    const [showExitPrompt, setShowExitPrompt] = useState(false);
     if (!audit) return <div style={{
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
         height: "60vh", padding: 32, textAlign: "center"
     }}>
-        <Activity size={28} color={T.text.muted} style={{ marginBottom: 14, opacity: .4 }} />
         <p style={{ fontSize: 14, fontWeight: 600, color: T.text.dim }}>No results yet</p></div>;
     const p = audit.parsed || {};
     const sections = p.sections || {};
+    const form = audit.form || {};
+
+    const handleApplyMoves = () => {
+        haptic.medium();
+        const moves = p.moveItems || [];
+        const chk = parseFloat(form.checking || bankAccounts.find(a => /chk|check/i.test(a.name) || /chk|check/i.test(a.type))?.balance || 0);
+        let chkDelta = 0;
+        const debtsImpact = {}; // card/debt name -> amount reduction
+
+        moves.forEach((m, i) => {
+            if (moveChecks[i]) {
+                const amt = parseFloat(m.amount) || 0;
+                chkDelta -= amt;
+
+                // Extremely naive matching for demo: if the move text contains the card name
+                cards.forEach(c => {
+                    const label = (c.name || "Card").toLowerCase();
+                    if (m.desc && m.desc.toLowerCase().includes(label) && amt > 0) {
+                        debtsImpact[c.id] = (debtsImpact[c.id] || 0) + amt;
+                    }
+                });
+
+                // Match against custom debts
+                const nonCardDebts = form.debts || [];
+                nonCardDebts.forEach(d => {
+                    const label = (d.name || "").toLowerCase();
+                    if (label && m.desc && m.desc.toLowerCase().includes(label) && amt > 0) {
+                        debtsImpact[d.id] = (debtsImpact[d.id] || 0) + amt;
+                    }
+                });
+            }
+        });
+
+        // Apply changes
+        let updatedBankAccounts = [...bankAccounts];
+        const mainChkIndex = updatedBankAccounts.findIndex(a => /chk|check/i.test(a.name) || /chk|check/i.test(a.type));
+        if (mainChkIndex >= 0) {
+            updatedBankAccounts[mainChkIndex].balance = Math.max(0, (parseFloat(updatedBankAccounts[mainChkIndex].balance) || 0) + chkDelta);
+        } else if (updatedBankAccounts.length > 0) {
+            updatedBankAccounts[0].balance = Math.max(0, (parseFloat(updatedBankAccounts[0].balance) || 0) + chkDelta);
+        }
+        setBankAccounts(updatedBankAccounts);
+
+        // Update card balances
+        let updatedCards = cards.map(c => {
+            if (debtsImpact[c.id]) {
+                const bal = parseFloat(c.balance) || 0;
+                return { ...c, balance: Math.max(0, bal - debtsImpact[c.id]) };
+            }
+            return c;
+        });
+        setCards(updatedCards);
+
+        if (window.toast) window.toast.success("Balances updated based on selected moves!");
+        setShowAutoUpdateModal(false);
+        navTo("dashboard");
+    };
+
+    const handleExitResults = () => {
+        const hasMoves = p.moveItems?.length > 0;
+        if (hasMoves) {
+            haptic.selection();
+            setShowExitPrompt(true);
+        } else {
+            navTo("dashboard");
+        }
+    };
+
     return <div className="page-body" style={{ paddingBottom: 0 }}>
+        <button onClick={handleExitResults} style={{
+            display: "flex", alignItems: "center", gap: 6, padding: "8px 0", marginBottom: 8,
+            background: "none", border: "none", color: T.accent.primary, fontSize: 13, fontWeight: 700, cursor: "pointer"
+        }}>← Back to Dashboard</button>
         <div style={{ padding: "14px 0 12px", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
             <div><h1 style={{ fontSize: 22, fontWeight: 800 }}>Full Results</h1>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
@@ -221,5 +301,81 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
                 before making financial decisions. The app developer assumes no liability for actions taken based on this output.
             </p>
         </div>
+
+        {/* ── AUTO UPDATE ACTIONS CTA ── */}
+        {p.moveItems?.length > 0 && Object.values(moveChecks).filter(Boolean).length > 0 && (
+            <button onClick={() => { haptic.selection(); setShowAutoUpdateModal(true); }} className="hover-btn" style={{
+                width: "100%", padding: "16px", borderRadius: T.radius.lg, border: "none",
+                background: `linear-gradient(135deg, ${T.accent.emerald}, #20b2aa)`,
+                color: T.bg.base, fontSize: 15, fontWeight: 800, cursor: "pointer",
+                marginTop: 20, marginBottom: 8, boxShadow: `0 4px 16px ${T.accent.emerald}40`
+            }}>
+                Review & Apply {Object.values(moveChecks).filter(Boolean).length} Moves
+            </button>
+        )}
+
+        {/* ── AUTO UPDATE MODAL ── */}
+        {showAutoUpdateModal && createPortal(
+            <div style={{
+                position: "fixed", inset: 0, zIndex: 99999, background: "rgba(0,0,0,0.7)",
+                backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+                display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+                animation: "fadeIn 0.2s ease"
+            }} onClick={() => setShowAutoUpdateModal(false)}>
+                <div onClick={e => e.stopPropagation()} style={{
+                    width: "100%", maxWidth: 360, background: T.bg.card, borderRadius: 24,
+                    padding: 24, border: `1px solid ${T.border.default}`, boxShadow: T.shadow.elevated,
+                    animation: "scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+                }}>
+                    <div style={{ fontSize: 32, textAlign: "center", marginBottom: 12 }}>🔄</div>
+                    <h2 style={{ fontSize: 20, fontWeight: 800, textAlign: "center", margin: "0 0 8px", color: T.text.primary }}>Auto-Update Balances?</h2>
+                    <p style={{ fontSize: 13, color: T.text.secondary, textAlign: "center", lineHeight: 1.4, margin: "0 0 20px" }}>
+                        Applying the {Object.values(moveChecks).filter(Boolean).length} selected moves will seamlessly deduct the funds from your primary Checking account and apply them to the identified Debt targets across Catalyst Cash.
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <button onClick={handleApplyMoves} className="hover-btn" style={{
+                            padding: "14px", borderRadius: T.radius.lg, border: "none", background: T.accent.emerald,
+                            color: "white", fontSize: 14, fontWeight: 800, cursor: "pointer"
+                        }}>Yes, Apply & Update Portfolio</button>
+                        <button onClick={() => setShowAutoUpdateModal(false)} className="hover-btn" style={{
+                            padding: "14px", borderRadius: T.radius.lg, border: `1px solid ${T.border.default}`,
+                            background: "transparent", color: T.text.secondary, fontSize: 14, fontWeight: 700, cursor: "pointer"
+                        }}>Cancel & Return to Results</button>
+                    </div>
+                </div>
+            </div>, document.body
+        )}
+
+        {/* ── EXIT PROMPT MODAL ── */}
+        {showExitPrompt && createPortal(
+            <div style={{
+                position: "fixed", inset: 0, zIndex: 99999, background: "rgba(0,0,0,0.7)",
+                backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+                display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+                animation: "fadeIn 0.2s ease"
+            }} onClick={() => { setShowExitPrompt(false); navTo("dashboard"); }}>
+                <div onClick={e => e.stopPropagation()} style={{
+                    width: "100%", maxWidth: 360, background: T.bg.card, borderRadius: 24,
+                    padding: 24, border: `1px solid ${T.border.default}`, boxShadow: T.shadow.elevated,
+                    animation: "scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+                }}>
+                    <div style={{ fontSize: 32, textAlign: "center", marginBottom: 12 }}>💰</div>
+                    <h2 style={{ fontSize: 18, fontWeight: 800, textAlign: "center", margin: "0 0 8px", color: T.text.primary }}>Update Balances?</h2>
+                    <p style={{ fontSize: 13, color: T.text.secondary, textAlign: "center", lineHeight: 1.4, margin: "0 0 20px" }}>
+                        Your audit suggested {p.moveItems?.length || 0} financial moves. Would you like to auto-update your account balances based on these recommendations before leaving?
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <button onClick={() => { setShowExitPrompt(false); setShowAutoUpdateModal(true); }} className="hover-btn" style={{
+                            padding: "14px", borderRadius: T.radius.lg, border: "none", background: T.accent.emerald,
+                            color: "white", fontSize: 14, fontWeight: 800, cursor: "pointer"
+                        }}>Yes, Review & Update</button>
+                        <button onClick={() => { setShowExitPrompt(false); navTo("dashboard"); }} className="hover-btn" style={{
+                            padding: "14px", borderRadius: T.radius.lg, border: `1px solid ${T.border.default}`,
+                            background: "transparent", color: T.text.secondary, fontSize: 14, fontWeight: 700, cursor: "pointer"
+                        }}>Skip & Return to Dashboard</button>
+                    </div>
+                </div>
+            </div>, document.body
+        )}
     </div>;
 })

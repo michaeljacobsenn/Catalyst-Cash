@@ -39,7 +39,7 @@ function openAiApp(appId) {
 // Sanitize dollar input: strip non-numeric chars except decimal point
 const sanitizeDollar = v => v.replace(/[^0-9.]/g, "").replace(/\.(?=.*\.)/g, "");
 
-export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, cardAnnualFees, cards, bankAccounts, onManualImport, toast, financialConfig, aiProvider, personalRules, persona = null, instructionHash, setInstructionHash, db, onBack, proEnabled = false }) {
+export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, cardAnnualFees, cards, bankAccounts, onManualImport, toast, financialConfig, setFinancialConfig, aiProvider, personalRules, setPersonalRules, persona = null, instructionHash, setInstructionHash, db, onBack, proEnabled = false }) {
     const today = new Date();
 
     // Auto-fill from Plaid if available
@@ -68,6 +68,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
     const [overrideInvest, setOverrideInvest] = useState({ roth: false, brokerage: false, k401: false });
     const [overridePlaid, setOverridePlaid] = useState({ checking: false, vault: false, debts: {} });
     const [showAdvanced, setShowAdvanced] = useState(false);
+    const [showConfig, setShowConfig] = useState(false);
 
     // Auto-calculate portfolio values from cached market prices
     useEffect(() => {
@@ -452,12 +453,12 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                 <div style={{ position: "absolute", right: -20, top: -20, width: 60, height: 60, background: T.accent.primary, filter: "blur(40px)", opacity: 0.06, borderRadius: "50%", pointerEvents: "none" }} />
                 <Label style={{ fontWeight: 800 }}>Date & Time</Label>
                 <div style={{ display: "grid", gridTemplateColumns: "1.4fr 0.9fr", gap: 10 }}>
-                    <input type="date" value={form.date} onChange={e => s("date", e.target.value)}
+                    <input type="date" aria-label="Audit date" value={form.date} onChange={e => s("date", e.target.value)}
                         style={{ width: "100%", padding: "12px 14px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1.5px solid ${T.border.default}`, color: T.text.primary, fontSize: 13, outline: "none", boxSizing: "border-box", transition: "all 0.2s", fontFamily: T.font.sans, fontWeight: 700 }}
                         onFocus={e => { e.target.style.borderColor = T.accent.primary; e.target.style.boxShadow = `0 0 0 3px ${T.accent.primary}30`; }}
                         onBlur={e => { e.target.style.borderColor = T.border.default; e.target.style.boxShadow = "none"; }}
                     />
-                    <input type="time" value={form.time} onChange={e => s("time", e.target.value)}
+                    <input type="time" aria-label="Audit time" value={form.time} onChange={e => s("time", e.target.value)}
                         style={{ width: "100%", padding: "12px 14px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1.5px solid ${T.border.default}`, color: T.text.primary, fontSize: 13, outline: "none", boxSizing: "border-box", transition: "all 0.2s", fontFamily: T.font.sans, fontWeight: 700 }}
                         onFocus={e => { e.target.style.borderColor = T.accent.primary; e.target.style.boxShadow = `0 0 0 3px ${T.accent.primary}30`; }}
                         onBlur={e => { e.target.style.borderColor = T.border.default; e.target.style.boxShadow = "none"; }}
@@ -481,7 +482,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                                 }}>{overridePlaid.checking ? "CANCEL" : "OVERRIDE"}</button>
                             </div>}
                         </div>
-                        {(!hasPlaid || overridePlaid.checking) && <DI value={form.checking} onChange={e => s("checking", sanitizeDollar(e.target.value))} placeholder={hasPlaid ? `Auto: ${fmt(plaidData.checking)}` : "0.00"} />}
+                        {(!hasPlaid || overridePlaid.checking) && <DI label="Checking balance" value={form.checking} onChange={e => s("checking", sanitizeDollar(e.target.value))} placeholder={hasPlaid ? `Auto: ${fmt(plaidData.checking)}` : "0.00"} />}
                     </Card>;
                 })()}
                 {activeConfig.trackSavings !== false && (() => {
@@ -500,7 +501,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                                 }}>{overridePlaid.vault ? "CANCEL" : "OVERRIDE"}</button>
                             </div>}
                         </div>
-                        {(!hasPlaid || overridePlaid.vault) && <DI value={form.savings} onChange={e => s("savings", sanitizeDollar(e.target.value))} placeholder={hasPlaid ? `Auto: ${fmt(plaidData.vault)}` : "0.00"} />}
+                        {(!hasPlaid || overridePlaid.vault) && <DI label="Savings balance" value={form.savings} onChange={e => s("savings", sanitizeDollar(e.target.value))} placeholder={hasPlaid ? `Auto: ${fmt(plaidData.vault)}` : "0.00"} />}
                     </Card>;
                 })()}
             </div>}
@@ -538,7 +539,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                             </div>
                         )}
                         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                            <select value={d.cardId || d.name || ""} onChange={e => {
+                            <select aria-label={`Debt card ${i + 1}`} value={d.cardId || d.name || ""} onChange={e => {
                                 const val = e.target.value;
                                 const card = (cards || []).find(c => c.id === val || c.name === val);
                                 const newCardId = card?.id || "";
@@ -638,6 +639,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                                 {activeConfig.incomeType === "hourly" ? "HOURS WORKED" : activeConfig.incomeType === "variable" ? "PAYCHECK AMOUNT" : "PAYCHECK OVERRIDE"}
                             </div>
                             <input type="number" inputMode="decimal" pattern="[0-9]*" step={activeConfig.incomeType === "hourly" ? "0.5" : "0.01"}
+                                aria-label={activeConfig.incomeType === "hourly" ? "Hours worked" : activeConfig.incomeType === "variable" ? "Paycheck amount" : "Paycheck override"}
                                 value={form.paycheckAddOverride} onChange={e => s("paycheckAddOverride", e.target.value)}
                                 placeholder={`Use config ${activeConfig.incomeType === "hourly" ? "hrs" : "$"}`}
                                 style={{ width: "100%", padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 14 }} />
@@ -749,6 +751,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                             {/* Row 1: card picker + amount + remove */}
                             <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
                                 <select
+                                    aria-label={`Pending charge card ${ci + 1}`}
                                     value={charge.cardId || ""}
                                     onChange={e => {
                                         const val = e.target.value;
@@ -778,6 +781,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                             {/* Row 2: description */}
                             <input
                                 type="text"
+                                aria-label={`Pending charge description ${ci + 1}`}
                                 value={charge.description || ""}
                                 onChange={e => setForm(p => ({ ...p, pendingCharges: p.pendingCharges.map((ch, j) => j === ci ? { ...ch, description: e.target.value } : ch) }))}
                                 placeholder="Description (optional)"
@@ -839,6 +843,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                                         <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 12, fontWeight: 600 }}>$</span>
                                         <input
                                             type="number" inputMode="decimal" pattern="[0-9]*" step="0.01"
+                                            aria-label={`${cat.name} weekly spending`}
                                             value={budgetActuals[cat.name] || ""}
                                             onChange={e => setBudgetActuals(p => ({ ...p, [cat.name]: e.target.value }))}
                                             placeholder="0.00"
@@ -857,7 +862,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                     <p style={{ fontSize: 10, color: T.text.muted, marginBottom: 8, lineHeight: 1.4 }}>Paste a CSV export from Mint, Rocket Money, or your bank to auto-include the last 30 days of spending in the audit.</p>
                     {parsedTransactions.length === 0 ? (
                         <>
-                            <textarea value={csvText} onChange={e => setCsvText(e.target.value)} placeholder="Paste CSV data here (Date, Amount, Description)..."
+                            <textarea aria-label="CSV transaction data" value={csvText} onChange={e => setCsvText(e.target.value)} placeholder="Paste CSV data here (Date, Amount, Description)..."
                                 style={{ width: "100%", height: 60, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 11, fontFamily: T.font.mono, resize: "none", boxSizing: "border-box", marginBottom: 8 }} />
                             <button onClick={async () => {
                                 if (!csvText) return;
@@ -913,9 +918,85 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                     )}
                 </Card>
 
-                <Card variant="glass"><Label>Notes for this week</Label><textarea value={form.notes} onChange={e => s("notes", e.target.value)} placeholder="Examples: reimbursements, changes, or 'none'" /></Card>
+                <Card variant="glass"><Label>Notes for this week</Label><textarea aria-label="Notes for this week" value={form.notes} onChange={e => s("notes", e.target.value)} placeholder="Examples: reimbursements, changes, or 'none'" /></Card>
             </div>
         )}
+
+        {/* ── FINANCIAL PROFILE & RULES ── */}
+        <div style={{ marginTop: 12, marginBottom: 24, borderTop: `1px solid ${T.border.subtle}`, paddingTop: 14 }}>
+            <button onClick={() => { haptic.medium(); setShowConfig(!showConfig); }} style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "16px 20px", borderRadius: T.radius.lg, border: `1px solid ${showConfig ? T.accent.primary + '50' : T.border.subtle}`,
+                background: showConfig ? `${T.accent.primary}0D` : T.bg.glass,
+                backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+                color: showConfig ? T.text.primary : T.text.secondary,
+                cursor: "pointer", transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                boxShadow: showConfig ? `0 4px 16px ${T.accent.primary}1A, inset 0 1px 0 ${T.accent.primary}15` : "none"
+            }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 30, height: 30, borderRadius: 10, background: showConfig ? `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)` : T.bg.card, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: showConfig ? `0 2px 12px ${T.accent.primary}50` : "none", transition: "all .3s" }}>
+                        <Zap size={14} color={showConfig ? "#fff" : T.text.muted} strokeWidth={2.5} />
+                    </div>
+                    <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: "-0.01em" }}>Financial Profile & AI Rules</span>
+                </div>
+                <div style={{ transform: `rotate(${showConfig ? 180 : 0}deg)`, transition: "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)", display: "flex" }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+                </div>
+            </button>
+
+            {showConfig && (
+                <div style={{ animation: "fadeInUp 0.4s ease-out both", marginTop: 12 }}>
+                    <Card style={{ marginBottom: 12 }}>
+                        <Label>Income & Cash Flow</Label>
+                        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                            {["salary", "hourly", "variable"].map(type => (
+                                <button key={type} onClick={() => { haptic.light(); setFinancialConfig({ ...financialConfig, incomeType: type }); }} style={{
+                                    flex: 1, padding: "10px 0", borderRadius: T.radius.sm,
+                                    border: `1px solid ${financialConfig?.incomeType === type ? T.accent.primary : T.border.default}`,
+                                    background: financialConfig?.incomeType === type ? `${T.accent.primary}15` : T.bg.elevated,
+                                    color: financialConfig?.incomeType === type ? T.accent.primary : T.text.secondary,
+                                    fontSize: 12, fontWeight: 700, cursor: "pointer", textTransform: "capitalize", transition: "all .2s"
+                                }}>{type}</button>
+                            ))}
+                        </div>
+
+                        {financialConfig?.incomeType === "salary" && (
+                            <div style={{ position: "relative" }}>
+                                <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 14, fontWeight: 600 }}>$</span>
+                                <input type="number" inputMode="decimal" aria-label="Monthly take-home salary" value={financialConfig?.monthlySalary || ""} onChange={e => setFinancialConfig && setFinancialConfig({ ...financialConfig, monthlySalary: parseFloat(e.target.value) || 0 })} placeholder="Monthly Take-Home Salary" className="app-input" style={{ width: "100%", padding: "12px 14px 12px 28px", borderRadius: T.radius.md, border: `1.5px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 14, boxSizing: "border-box", outline: "none" }} />
+                            </div>
+                        )}
+
+                        {financialConfig?.incomeType === "hourly" && (
+                            <div style={{ display: "flex", gap: 10 }}>
+                                <div style={{ flex: 1, position: "relative" }}>
+                                    <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 14, fontWeight: 600 }}>$</span>
+                                    <input type="number" inputMode="decimal" aria-label="Hourly rate" value={financialConfig?.hourlyRate || ""} onChange={e => setFinancialConfig && setFinancialConfig({ ...financialConfig, hourlyRate: parseFloat(e.target.value) || 0 })} placeholder="Hourly Rate" className="app-input" style={{ width: "100%", padding: "12px 14px 12px 28px", borderRadius: T.radius.md, border: `1.5px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 14, boxSizing: "border-box", outline: "none" }} />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <input type="number" inputMode="decimal" aria-label="Hours per week" value={financialConfig?.assumedHours || ""} onChange={e => setFinancialConfig && setFinancialConfig({ ...financialConfig, assumedHours: parseFloat(e.target.value) || 0 })} placeholder="Hrs/Week" className="app-input" style={{ width: "100%", padding: "12px 14px", borderRadius: T.radius.md, border: `1.5px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 14, boxSizing: "border-box", outline: "none" }} />
+                                </div>
+                            </div>
+                        )}
+
+                        {financialConfig?.incomeType === "variable" && (
+                            <div style={{ position: "relative" }}>
+                                <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 14, fontWeight: 600 }}>$</span>
+                                <input type="number" inputMode="decimal" aria-label="Typical paycheck amount" value={financialConfig?.typicalPaycheck || ""} onChange={e => setFinancialConfig && setFinancialConfig({ ...financialConfig, typicalPaycheck: parseFloat(e.target.value) || 0 })} placeholder="Typical Paycheck" className="app-input" style={{ width: "100%", padding: "12px 14px 12px 28px", borderRadius: T.radius.md, border: `1.5px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 14, boxSizing: "border-box", outline: "none" }} />
+                            </div>
+                        )}
+                    </Card>
+
+                    <Card style={{ marginBottom: 12 }}>
+                        <Label>Custom AI Rules & Persona</Label>
+                        <p style={{ fontSize: 11, color: T.text.muted, marginBottom: 10, lineHeight: 1.4 }}>
+                            Define strict rules or change how the AI speaks to you.
+                        </p>
+                        <textarea aria-label="Custom AI rules and persona" value={personalRules || ""} onChange={e => setPersonalRules && setPersonalRules(e.target.value)} placeholder="e.g. Always remind me to save 20%. Be aggressive about my debt." style={{ width: "100%", height: 80, padding: "12px", borderRadius: T.radius.md, border: `1.5px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.sans, resize: "none", boxSizing: "border-box", outline: "none" }} className="app-input" />
+                    </Card>
+                </div>
+            )}
+        </div>
 
         {/* Easy Win 5: Validation Nudges */}
         {validationWarnings.length > 0 && (
@@ -1077,6 +1158,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                     Paste the AI's audit response here to import it — no input setup required.
                 </p>
                 <textarea
+                    aria-label="Import AI result"
                     placeholder="Paste the AI's full response here (entire response)"
                     value={manualResultText}
                     onChange={e => setManualResultText(e.target.value)}

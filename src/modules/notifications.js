@@ -140,7 +140,132 @@ export async function cancelPaydayReminder() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// WEEKLY AUDIT NUDGE — fires Sunday at 10am if no audit this week
+// POST-AUDIT CELEBRATION — fires 3 hours after an audit
+// ═══════════════════════════════════════════════════════════════
+const POST_AUDIT_CELEBRATION_ID = 1004;
+
+/**
+ * Schedule a celebratory notification 3 hours after completing an audit.
+ * Reinforces the habit with positive feedback.
+ */
+export async function schedulePostAuditCelebration(score, streak) {
+    try {
+        await LocalNotifications.cancel({ notifications: [{ id: POST_AUDIT_CELEBRATION_ID }] });
+
+        const { display } = await LocalNotifications.checkPermissions();
+        if (display !== "granted") return false;
+
+        const fireAt = new Date(Date.now() + 3 * 60 * 60 * 1000); // 3 hours from now
+
+        const messages = [
+            score >= 90 ? `🏆 Health score: ${score}! You're in elite territory.` :
+                score >= 75 ? `📊 Health score: ${score} — solid progress. Keep pushing.` :
+                    score >= 50 ? `💪 Health score: ${score} — building momentum. Every week counts.` :
+                        `📈 Health score: ${score} — you showed up. That's what matters.`,
+        ];
+        let body = messages[0];
+        if (streak > 1) body += ` W${streak} streak 🔥`;
+
+        await LocalNotifications.schedule({
+            notifications: [{
+                id: POST_AUDIT_CELEBRATION_ID,
+                title: "✅ Audit Complete!",
+                body,
+                schedule: { at: fireAt, allowWhileIdle: true },
+                sound: "default",
+                smallIcon: "ic_stat_icon_config_sample",
+                iconColor: "#2ECC71",
+            }],
+        });
+        return true;
+    } catch (err) {
+        console.warn("[notifications] schedulePostAuditCelebration failed:", err);
+        return false;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MID-WEEK CHECK-IN — fires Wednesday at noon
+// ═══════════════════════════════════════════════════════════════
+const MID_WEEK_CHECK_IN_ID = 1005;
+
+export async function scheduleMidWeekCheckIn(weeklyAllowance) {
+    try {
+        await LocalNotifications.cancel({ notifications: [{ id: MID_WEEK_CHECK_IN_ID }] });
+
+        const { display } = await LocalNotifications.checkPermissions();
+        if (display !== "granted") return false;
+
+        const now = new Date();
+        let daysUntilWed = (3 - now.getDay() + 7) % 7;
+        if (daysUntilWed === 0 && now.getHours() >= 12) daysUntilWed = 7;
+
+        const fireAt = new Date(
+            now.getFullYear(), now.getMonth(), now.getDate() + daysUntilWed,
+            12, 0, 0, 0
+        );
+
+        const body = weeklyAllowance > 0
+            ? `Halfway through the week — check if you're tracking under your $${weeklyAllowance} allowance.`
+            : `Halfway through the week — quick pulse check on your spending.`;
+
+        await LocalNotifications.schedule({
+            notifications: [{
+                id: MID_WEEK_CHECK_IN_ID,
+                title: "📊 Mid-Week Pulse",
+                body,
+                schedule: { at: fireAt, every: "week", allowWhileIdle: true },
+                sound: "default",
+                smallIcon: "ic_stat_icon_config_sample",
+                iconColor: "#7B5EA7",
+            }],
+        });
+        return true;
+    } catch (err) {
+        console.warn("[notifications] scheduleMidWeekCheckIn failed:", err);
+        return false;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MONTH-END SUMMARY — fires 28th of each month at 10am
+// ═══════════════════════════════════════════════════════════════
+const MONTH_END_SUMMARY_ID = 1006;
+
+export async function scheduleMonthEndSummary() {
+    try {
+        await LocalNotifications.cancel({ notifications: [{ id: MONTH_END_SUMMARY_ID }] });
+
+        const { display } = await LocalNotifications.checkPermissions();
+        if (display !== "granted") return false;
+
+        const now = new Date();
+        let fireAt = new Date(now.getFullYear(), now.getMonth(), 28, 10, 0, 0, 0);
+        if (fireAt.getTime() <= now.getTime()) {
+            // Next month's 28th
+            fireAt = new Date(now.getFullYear(), now.getMonth() + 1, 28, 10, 0, 0, 0);
+        }
+
+        await LocalNotifications.schedule({
+            notifications: [{
+                id: MONTH_END_SUMMARY_ID,
+                title: "📅 Month-End Check",
+                body: "Run a quick audit before the month closes to capture your full financial picture.",
+                schedule: { at: fireAt, every: "month", allowWhileIdle: true },
+                sound: "default",
+                smallIcon: "ic_stat_icon_config_sample",
+                iconColor: "#E0A84D",
+            }],
+        });
+        return true;
+    } catch (err) {
+        console.warn("[notifications] scheduleMonthEndSummary failed:", err);
+        return false;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WEEKLY AUDIT NUDGE — fires every Sunday at 10am (repeating)
 // ═══════════════════════════════════════════════════════════════
 export async function scheduleWeeklyAuditNudge() {
     try {
@@ -165,7 +290,7 @@ export async function scheduleWeeklyAuditNudge() {
                     id: WEEKLY_AUDIT_NUDGE_ID,
                     title: "📊 Weekly Snapshot Time",
                     body: "Take 2 minutes to run your financial audit. Consistent tracking builds wealth.",
-                    schedule: { at: fireAt, allowWhileIdle: true },
+                    schedule: { at: fireAt, every: "week", allowWhileIdle: true },
                     sound: "default",
                     smallIcon: "ic_stat_icon_config_sample",
                     iconColor: "#2ECC71",
@@ -186,6 +311,70 @@ export async function scheduleWeeklyAuditNudge() {
 export async function cancelWeeklyAuditNudge() {
     try {
         await LocalNotifications.cancel({ notifications: [{ id: WEEKLY_AUDIT_NUDGE_ID }] });
+    } catch { /* ignore */ }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STREAK AT RISK NUDGE — fires Saturday 6pm if no audit this week
+// ═══════════════════════════════════════════════════════════════
+const STREAK_AT_RISK_ID = 1003;
+
+/**
+ * Schedule a streak-at-risk reminder for Saturday at 6pm.
+ * Only schedules if `hasAuditThisWeek` is false.
+ * Call this on app start and after each audit (to cancel if audit done).
+ */
+export async function scheduleStreakAtRiskNudge(hasAuditThisWeek) {
+    try {
+        // Always cancel first
+        await LocalNotifications.cancel({ notifications: [{ id: STREAK_AT_RISK_ID }] });
+
+        // If user already ran an audit this week, don't nag
+        if (hasAuditThisWeek) return false;
+
+        const { display } = await LocalNotifications.checkPermissions();
+        if (display !== "granted") return false;
+
+        // Find next Saturday at 18:00
+        const now = new Date();
+        let daysUntilSat = (6 - now.getDay() + 7) % 7;
+        if (daysUntilSat === 0 && now.getHours() >= 18) daysUntilSat = 7;
+
+        const fireAt = new Date(
+            now.getFullYear(), now.getMonth(), now.getDate() + daysUntilSat,
+            18, 0, 0, 0
+        );
+
+        // Don't schedule if it's already past Saturday 6pm this week
+        if (fireAt.getTime() <= now.getTime()) return false;
+
+        await LocalNotifications.schedule({
+            notifications: [
+                {
+                    id: STREAK_AT_RISK_ID,
+                    title: "🔥 Your Streak Is at Risk!",
+                    body: "Run a quick 2-minute audit before the weekend ends to keep your streak alive.",
+                    schedule: { at: fireAt, allowWhileIdle: true },
+                    sound: "default",
+                    smallIcon: "ic_stat_icon_config_sample",
+                    iconColor: "#E85C6A",
+                },
+            ],
+        });
+
+        return true;
+    } catch (err) {
+        console.warn("[notifications] scheduleStreakAtRiskNudge failed:", err);
+        return false;
+    }
+}
+
+/**
+ * Cancel the streak at risk nudge (call after user runs an audit).
+ */
+export async function cancelStreakAtRiskNudge() {
+    try {
+        await LocalNotifications.cancel({ notifications: [{ id: STREAK_AT_RISK_ID }] });
     } catch { /* ignore */ }
 }
 

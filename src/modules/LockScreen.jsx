@@ -203,14 +203,19 @@ export default function LockScreen() {
     return (
         <div style={{
             position: "fixed", inset: 0, zIndex: 99999,
-            background: "rgba(6, 9, 14, 0.97)",
+            background: "#05050A",
             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            padding: "40px 32px", gap: 0,
+            padding: "40px 32px", gap: 0, overflow: "hidden"
         }}>
+            <div style={{
+                position: "absolute", top: "20%", left: "50%", transform: "translate(-50%, -50%)", width: "150vw", height: "100vh",
+                background: `radial-gradient(circle, ${T.accent.emerald}15 0%, transparent 60%)`, zIndex: -1, pointerEvents: "none", animation: "ambientBreathe 8s ease-in-out infinite alternate"
+            }} />
             <style>{`
 @keyframes pinDotPop { 0% { transform: scale(0.5); } 60% { transform: scale(1.2); } 100% { transform: scale(1); } }
 @keyframes pinShake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
 @keyframes breathe { 0%, 100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.08); } }
+@keyframes ambientBreathe { 0% { opacity: 0.5; transform: translate(-50%, -50%) scale(0.9); } 100% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } }
             `}</style>
             {/* App Icon */}
             <div style={{
@@ -230,7 +235,11 @@ export default function LockScreen() {
                 }
             </div>
 
-            <h1 style={{ fontSize: 26, fontWeight: 800, color: T.text.primary, margin: 0, marginBottom: 6 }}>Catalyst Cash</h1>
+            <h1 style={{
+                fontSize: 28, fontWeight: 900,
+                background: "linear-gradient(135deg, #FFF 30%, #A0AEC0 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                margin: 0, marginBottom: 8, letterSpacing: "-0.02em"
+            }}>Catalyst Cash</h1>
             <p style={{
                 fontSize: 13, fontFamily: T.font.mono, letterSpacing: "0.06em",
                 color: failed ? T.status.red : T.text.muted, marginBottom: 40, marginTop: 0
@@ -246,15 +255,16 @@ export default function LockScreen() {
             {showPinPad ? (
                 <div style={{ width: "100%", maxWidth: 280, display: "flex", flexDirection: "column", alignItems: "center" }}>
                     {/* PIN Indicators */}
-                    <div style={{ display: "flex", gap: 16, marginBottom: 40, height: 20, alignItems: "center", animation: failed ? "pinShake .4s ease" : "none" }}>
+                    <div style={{ display: "flex", gap: 18, marginBottom: 44, height: 20, alignItems: "center", animation: failed ? "pinShake .4s ease" : "none" }}>
                         {[0, 1, 2, 3].map(i => {
                             const filled = pinEntry.length > i;
                             return <div key={i} style={{
                                 width: 14, height: 14, borderRadius: 7,
                                 border: `1.5px solid ${failed ? T.status.red : T.accent.primary}`,
-                                background: filled ? (failed ? T.status.red : T.accent.primary) : "transparent",
-                                transition: "all .15s cubic-bezier(.16,1,.3,1)",
-                                animation: filled && !failed ? "pinDotPop .25s ease" : "none",
+                                background: filled ? (failed ? T.status.red : T.accent.primary) : "rgba(255,255,255,0.05)",
+                                boxShadow: filled && !failed ? `0 0 12px ${T.accent.primary}80` : "none",
+                                transition: "all .2s cubic-bezier(.34, 1.56, .64, 1)",
+                                animation: filled && !failed ? "pinDotPop .3s ease" : "none",
                             }} />;
                         })}
                     </div>
@@ -266,35 +276,37 @@ export default function LockScreen() {
                     }}>
                         {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
                             <button key={num} onClick={() => handleNumPress(num)} style={{
-                                width: 72, height: 72, borderRadius: 36, background: "rgba(255,255,255,0.08)",
-                                border: "1px solid rgba(255,255,255,0.1)", color: T.text.primary, fontSize: 28,
-                                fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center",
-                                cursor: "pointer", transition: "background .15s", WebkitTapHighlightColor: "transparent"
+                                width: 76, height: 76, borderRadius: 38, background: "rgba(255,255,255,0.06)",
+                                border: "1px solid rgba(255,255,255,0.05)", borderTop: "1px solid rgba(255,255,255,0.12)", borderLeft: "1px solid rgba(255,255,255,0.08)",
+                                color: "#FFF", fontSize: 28, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center",
+                                cursor: "pointer", transition: "all .2s ease", WebkitTapHighlightColor: "transparent",
+                                backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", boxShadow: "0 8px 16px rgba(0,0,0,0.2)"
                             }}>
                                 {num}
                             </button>
                         ))}
                         <button onClick={useFaceId ? tryDeviceAuth : undefined} style={{
-                            width: 72, height: 72, borderRadius: 36, background: "transparent",
+                            width: 76, height: 76, borderRadius: 38, background: "transparent",
                             border: "none", color: useFaceId ? T.accent.primary : "transparent", display: "flex", alignItems: "center", justifyContent: "center",
                             cursor: useFaceId ? "pointer" : "default", WebkitTapHighlightColor: "transparent",
                             opacity: useFaceId ? 1 : 0
                         }}>
-                            <Fingerprint size={32} strokeWidth={1.5} style={{ animation: "breathe 3s ease-in-out infinite" }} />
+                            <Fingerprint size={34} strokeWidth={1.5} style={{ animation: "breathe 3s ease-in-out infinite" }} />
                         </button>
                         <button onClick={() => handleNumPress(0)} style={{
-                            width: 72, height: 72, borderRadius: 36, background: "rgba(255,255,255,0.08)",
-                            border: "1px solid rgba(255,255,255,0.1)", color: T.text.primary, fontSize: 28,
-                            fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center",
-                            cursor: "pointer", transition: "background .15s", WebkitTapHighlightColor: "transparent"
+                            width: 76, height: 76, borderRadius: 38, background: "rgba(255,255,255,0.06)",
+                            border: "1px solid rgba(255,255,255,0.05)", borderTop: "1px solid rgba(255,255,255,0.12)", borderLeft: "1px solid rgba(255,255,255,0.08)",
+                            color: "#FFF", fontSize: 28, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center",
+                            cursor: "pointer", transition: "all .2s ease", WebkitTapHighlightColor: "transparent",
+                            backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", boxShadow: "0 8px 16px rgba(0,0,0,0.2)"
                         }}>
                             0
                         </button>
                         <button onClick={() => handleNumPress("delete")} style={{
-                            width: 72, height: 72, borderRadius: 36, background: "transparent",
-                            border: "none", color: T.text.primary, fontSize: 16, fontWeight: 600,
+                            width: 76, height: 76, borderRadius: 38, background: "transparent",
+                            border: "none", color: "#FFF", fontSize: 13, fontWeight: 700, letterSpacing: "0.05em",
                             display: "flex", alignItems: "center", justifyContent: "center",
-                            cursor: "pointer", WebkitTapHighlightColor: "transparent"
+                            cursor: "pointer", WebkitTapHighlightColor: "transparent", opacity: 0.8
                         }}>
                             DELETE
                         </button>

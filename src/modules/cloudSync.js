@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { encrypt, decrypt, isEncrypted } from "./crypto.js";
+import { fetchWithRetry } from "./fetchWithRetry.js";
 
 // ═══════════════════════════════════════════════════════════════
 // GOOGLE DRIVE (App Data Folder) SYNC
@@ -11,7 +12,7 @@ const FILE_NAME = "CatalystCash_CloudSync.json";
 export async function uploadToGoogleDrive(accessToken, payload, passphrase = null) {
     if (!accessToken) return false;
     try {
-        const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${FILE_NAME}'`, {
+        const searchRes = await fetchWithRetry(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${FILE_NAME}'`, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
         if (!searchRes.ok) {
@@ -46,7 +47,7 @@ export async function uploadToGoogleDrive(accessToken, payload, passphrase = nul
         }
         form.append('file', new Blob([fileContent], { type: 'application/json' }));
 
-        const uploadRes = await fetch(uploadUrl, {
+        const uploadRes = await fetchWithRetry(uploadUrl, {
             method,
             headers: { 'Authorization': `Bearer ${accessToken}` },
             body: form
@@ -69,7 +70,7 @@ export async function uploadToGoogleDrive(accessToken, payload, passphrase = nul
 export async function downloadFromGoogleDrive(accessToken, passphrase = null) {
     if (!accessToken) return null;
     try {
-        const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${FILE_NAME}'`, {
+        const searchRes = await fetchWithRetry(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${FILE_NAME}'`, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
         if (!searchRes.ok) {
@@ -83,7 +84,7 @@ export async function downloadFromGoogleDrive(accessToken, passphrase = null) {
         if (!searchData.files || searchData.files.length === 0) return null;
 
         const fileId = searchData.files[0].id;
-        const dlRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+        const dlRes = await fetchWithRetry(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
 
@@ -117,7 +118,9 @@ export async function downloadFromGoogleDrive(accessToken, passphrase = null) {
 // ═══════════════════════════════════════════════════════════════
 
 export async function uploadToICloud(payload, passphrase = null) {
-    if (Capacitor.getPlatform() !== 'ios') return false;
+    if (Capacitor.getPlatform() !== 'ios') {
+        console.warn("iCloud sync natively relies on iOS Documents directory. Attempting graceful Capacitor Filesystem fallback for Web/Mac testing.");
+    }
     try {
         let data = JSON.stringify(payload);
         if (passphrase) {
@@ -139,15 +142,40 @@ export async function uploadToICloud(payload, passphrase = null) {
 }
 
 export async function downloadFromICloud(passphrase = null) {
-    if (Capacitor.getPlatform() !== 'ios') return null;
+    if (Capacitor.getPlatform() !== 'ios') {
+        console.warn("iCloud sync natively relies on iOS Documents directory. Attempting graceful Capacitor Filesystem fallback for Web/Mac testing.");
+    }
+
+    // Step 1: Read the file from the Documents directory
+    let result;
     try {
-        const result = await Filesystem.readFile({
+        result = await Filesystem.readFile({
             path: FILE_NAME,
             directory: Directory.Documents,
             encoding: Encoding.UTF8,
         });
+    } catch (e) {
+        // File doesn't exist yet — expected on first launch, not an error
+        const msg = e?.message || String(e);
+        if (msg.includes("not exist") || msg.includes("ENOENT") || msg.includes("File does not exist") || msg.includes("NOT_FOUND")) {
+            return null;
+        }
+        // Actual filesystem read error — log and return null
+        console.error("iCloud Sync Read Error: Failed to read backup file from Documents directory.", e);
+        return null;
+    }
 
-        const data = JSON.parse(result.data);
+    // Step 2: Parse the JSON content
+    let data;
+    try {
+        data = JSON.parse(result.data);
+    } catch (e) {
+        console.error("iCloud Sync Parse Error: Backup file exists but contains invalid JSON. File may be corrupted.", e);
+        return null;
+    }
+
+    // Step 3: Decrypt if needed and return
+    try {
         if (isEncrypted(data)) {
             if (!passphrase) throw new Error("iCloud data is encrypted — passphrase required");
             const decrypted = await decrypt(data, passphrase);
@@ -155,7 +183,7 @@ export async function downloadFromICloud(passphrase = null) {
         }
         return data;
     } catch (e) {
-        // File likely doesn't exist yet — not an error
+        console.error("iCloud Sync Decrypt Error: Failed to decrypt or parse backup data.", e);
         return null;
     }
 }

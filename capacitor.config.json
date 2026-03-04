@@ -10,16 +10,16 @@
   },
   "plugins": {
     "SplashScreen": {
-      "launchShowDuration": 2000,
+      "launchShowDuration": 2500,
       "launchAutoHide": false,
-      "backgroundColor": "#060910",
+      "backgroundColor": "#0C121B",
       "showSpinner": false,
       "androidSplashResourceName": "splash",
       "iosSpinnerStyle": "small"
     },
     "StatusBar": {
       "style": "Dark",
-      "backgroundColor": "#060910"
+      "backgroundColor": "#0C121B"
     },
     "Preferences": {
       "group": "CatalystCashStorage"
