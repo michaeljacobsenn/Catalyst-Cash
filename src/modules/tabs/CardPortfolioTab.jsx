@@ -120,12 +120,15 @@ export default memo(function CardPortfolioTab() {
     const [plaidRefreshing, setPlaidRefreshing] = useState(false);
     const REFRESH_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
     const handleRefreshPlaid = async () => {
+        console.warn('[Plaid] handleRefreshPlaid ENTERED');
         // Tiered cooldown: Free = 60min, Pro = 5min
         const tier = await getCurrentTier();
         const cooldown = REFRESH_COOLDOWNS[tier.id] || REFRESH_COOLDOWNS.free;
         const lastSync = cards.find(c => c._plaidLastSync)?._plaidLastSync
             || bankAccounts.find(b => b._plaidLastSync)?._plaidLastSync;
-        if (lastSync && (Date.now() - new Date(lastSync).getTime()) < cooldown) {
+        console.warn(`[Plaid] tier=${tier.id}, cooldown=${cooldown}ms, lastSync=${lastSync}, elapsed=${lastSync ? Date.now() - new Date(lastSync).getTime() : 'N/A'}ms`);
+        // TEMPORARILY BYPASSED FOR DEBUGGING
+        if (false && lastSync && (Date.now() - new Date(lastSync).getTime()) < cooldown) {
             const minsLeft = Math.ceil((cooldown - (Date.now() - new Date(lastSync).getTime())) / 60000);
             if (window.toast) window.toast.info(`Next sync available in ${minsLeft} min${tier.id === "free" ? " (Pro: every 5 min)" : ""}`);
             return;
