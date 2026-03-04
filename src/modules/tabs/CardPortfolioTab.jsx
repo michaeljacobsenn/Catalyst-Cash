@@ -136,10 +136,12 @@ export default memo(function CardPortfolioTab() {
         setPlaidRefreshing(true);
         try {
             const results = await fetchAllBalancesAndLiabilities();
+            console.warn(`[Plaid] handleRefreshPlaid: ${results.length} results, errors: ${results.filter(r => r._error).map(r => r._error).join(', ') || 'none'}`);
             let allCards = [...cards];
             let allBanks = [...bankAccounts];
             let allInvests = [...(financialConfig.plaidInvestments || [])];
             let investmentsChanged = false;
+            let successCount = 0;
             for (const res of results) {
                 if (!res._error) {
                     const syncData = applyBalanceSync(res, allCards, allBanks, allInvests);
@@ -150,13 +152,20 @@ export default memo(function CardPortfolioTab() {
                         investmentsChanged = true;
                     }
                     await saveConnectionLinks(res);
+                    successCount++;
                 }
             }
             setCards(allCards);
             setBankAccounts(allBanks);
             if (investmentsChanged) setFinancialConfig({ ...financialConfig, plaidInvestments: allInvests });
-            haptic.success();
-            if (window.toast) window.toast.success("Balances synced successfully");
+            if (successCount > 0) {
+                haptic.success();
+                if (window.toast) window.toast.success("Balances synced successfully");
+            } else {
+                const firstErr = results.find(r => r._error)?._error || "Unknown error";
+                console.warn(`[Plaid] ALL connections failed: ${firstErr}`);
+                if (window.toast) window.toast.error(`Sync failed: ${firstErr}`);
+            }
         } catch (e) { console.error(e); if (window.toast) window.toast.error("Failed to sync balances. Try again."); }
         finally { setPlaidRefreshing(false); }
     };
