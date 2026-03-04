@@ -193,6 +193,7 @@ export async function fetchBalances(connectionId) {
     });
     if (!res.ok) throw new Error(`Balance fetch failed: ${res.status}`);
     const { accounts } = await res.json();
+    console.warn(`[Plaid] fetchBalances: ${accounts?.length || 0} accounts returned for ${conn.institutionName}`);
 
     // Update stored balances
     for (const acct of conn.accounts) {
@@ -204,6 +205,7 @@ export async function fetchBalances(connectionId) {
                 limit: fresh.balances?.limit,
                 currency: fresh.balances?.iso_currency_code || "USD",
             };
+            console.warn(`[Plaid]   → ${acct.name}: bal=${fresh.balances?.current}, limit=${fresh.balances?.limit}, avail=${fresh.balances?.available}`);
         }
     }
     conn.lastSync = new Date().toISOString();
@@ -255,6 +257,7 @@ export async function fetchLiabilities(connectionId) {
 
     // Plaid returns { liabilities: { credit: [...] }, accounts: [...] }
     const creditLiabilities = data?.liabilities?.credit || [];
+    console.warn(`[Plaid] fetchLiabilities: ${creditLiabilities.length} credit liabilities for ${conn.institutionName}`);
 
     // Store liabilities data on matching connection accounts
     for (const acct of conn.accounts) {
@@ -276,6 +279,7 @@ export async function fetchLiabilities(connectionId) {
                 minimumPayment: liability.minimum_payment_amount,
                 nextPaymentDueDate: liability.next_payment_due_date,
             };
+            console.warn(`[Plaid]   → ${acct.name}: apr=${acct.liability.purchaseApr}, minPmt=${acct.liability.minimumPayment}, stmtDate=${acct.liability.lastStatementDate}, dueDate=${acct.liability.nextPaymentDueDate}`);
         }
     }
 
@@ -293,7 +297,7 @@ export async function fetchBalancesAndLiabilities(connectionId) {
     // Both functions read connections, modify, and saveConnections();
     // running them in parallel causes the last writer to overwrite the other's changes.
     await fetchBalances(connectionId);
-    try { await fetchLiabilities(connectionId); } catch (_) { /* liabilities may not be supported */ }
+    try { await fetchLiabilities(connectionId); } catch (e) { console.warn(`[Plaid] liabilities skipped for ${connectionId}: ${e.message}`); }
     const conns = await getConnections();
     return conns.find(c => c.id === connectionId);
 }
@@ -671,7 +675,7 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
                     // ── Liability metadata (store raw for reference) ──
                     _plaidLiability: liab,
                     // ── Fill-if-missing: credit limit ──
-                    limit: card.limit ?? acct.balance.limit ?? null,
+                    limit: card.limit ?? acct.balance?.limit ?? null,
                     // ── Fill-if-missing: APR (purchase APR from Plaid) ──
                     apr: card.apr ?? liab.purchaseApr ?? null,
                     // ── Fill-if-missing: statement close day ──
@@ -681,6 +685,7 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
                     // ── Fill-if-missing: minimum payment ──
                     minPayment: card.minPayment ?? liab.minimumPayment ?? null,
                 };
+                console.warn(`[Plaid] applyBalanceSync → card "${updatedCards[idx].nickname || updatedCards[idx].name}": bal=${acct.balance?.current}, limit=${updatedCards[idx].limit}, apr=${updatedCards[idx].apr}, dueDay=${updatedCards[idx].paymentDueDay}, stmtDay=${updatedCards[idx].statementCloseDay}, linked=${acct.linkedCardId}`);
                 balanceSummary.push({
                     name: updatedCards[idx].nickname || updatedCards[idx].name,
                     type: "credit",
