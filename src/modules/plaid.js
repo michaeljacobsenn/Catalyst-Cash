@@ -64,6 +64,21 @@ export async function removeConnection(connectionId) {
     await saveConnections(conns.filter(c => c.id !== connectionId));
 }
 
+/**
+ * Purge connections that are missing an access token or ID.
+ * These are broken connections created by the snake_case bug in exchangeToken.
+ * Should be called once on app startup.
+ */
+export async function purgeBrokenConnections() {
+    const conns = await getConnections();
+    const broken = conns.filter(c => !c.accessToken || !c.id);
+    if (broken.length > 0) {
+        console.warn(`[Plaid] Purging ${broken.length} broken connection(s): ${broken.map(c => c.institutionName).join(', ')}`);
+        await saveConnections(conns.filter(c => c.accessToken && c.id));
+    }
+    return broken.length;
+}
+
 // ─── Plaid Link Flow ──────────────────────────────────────────
 
 /**
@@ -129,7 +144,9 @@ export async function exchangeToken(publicToken) {
         body: JSON.stringify({ publicToken }),
     });
     if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`);
-    return await res.json(); // { accessToken, itemId }
+    const data = await res.json();
+    // Plaid returns snake_case (access_token, item_id); map to camelCase
+    return { accessToken: data.access_token, itemId: data.item_id };
 }
 
 /**
@@ -184,8 +201,8 @@ export async function connectBank(onSuccess, onError) {
 export async function fetchBalances(connectionId) {
     const conns = await getConnections();
     const conn = conns.find(c => c.id === connectionId);
-    if (!conn) { console.warn(`[Plaid] fetchBalances: connection ${connectionId} NOT FOUND`); throw new Error("Connection not found"); }
-    console.warn(`[Plaid] fetchBalances: calling API for ${conn.institutionName}, hasToken=${!!conn.accessToken}, tokenPrefix=${conn.accessToken?.substring(0, 12)}...`);
+    if (!conn) throw new Error(`Connection ${connectionId} not found`);
+    if (!conn.accessToken) throw new Error(`No access token for ${conn.institutionName} — please disconnect and reconnect via Plaid`);
 
     const res = await fetchWithRetry(`${API_BASE}/plaid/balances`, {
         method: "POST",
@@ -198,7 +215,6 @@ export async function fetchBalances(connectionId) {
         throw new Error(`Balance fetch failed: ${res.status}`);
     }
     const { accounts } = await res.json();
-    console.warn(`[Plaid] fetchBalances: ${accounts?.length || 0} accounts returned for ${conn.institutionName}`);
 
     // Update stored balances
     for (const acct of conn.accounts) {
@@ -262,7 +278,6 @@ export async function fetchLiabilities(connectionId) {
 
     // Plaid returns { liabilities: { credit: [...] }, accounts: [...] }
     const creditLiabilities = data?.liabilities?.credit || [];
-    console.warn(`[Plaid] fetchLiabilities: ${creditLiabilities.length} credit liabilities for ${conn.institutionName}`);
 
     // Store liabilities data on matching connection accounts
     for (const acct of conn.accounts) {
@@ -284,7 +299,6 @@ export async function fetchLiabilities(connectionId) {
                 minimumPayment: liability.minimum_payment_amount,
                 nextPaymentDueDate: liability.next_payment_due_date,
             };
-            console.warn(`[Plaid]   → ${acct.name}: apr=${acct.liability.purchaseApr}, minPmt=${acct.liability.minimumPayment}, stmtDate=${acct.liability.lastStatementDate}, dueDate=${acct.liability.nextPaymentDueDate}`);
         }
     }
 
@@ -312,14 +326,12 @@ export async function fetchBalancesAndLiabilities(connectionId) {
  */
 export async function fetchAllBalancesAndLiabilities() {
     const conns = await getConnections();
-    console.warn(`[Plaid] fetchAllBalancesAndLiabilities: ${conns.length} connections found`);
     const results = [];
     for (const conn of conns) {
-        console.warn(`[Plaid] processing connection: ${conn.institutionName} (${conn.id}), hasToken=${!!conn.accessToken}`);
         try {
             results.push(await fetchBalancesAndLiabilities(conn.id));
         } catch (e) {
-            console.warn(`[Plaid] ERROR for ${conn.institutionName}: ${e.message}`);
+            console.warn(`[Plaid] sync failed for ${conn.institutionName}: ${e.message}`);
             results.push({ ...conn, _error: e.message });
         }
     }
@@ -693,7 +705,7 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
                     // ── Fill-if-missing: minimum payment ──
                     minPayment: card.minPayment ?? liab.minimumPayment ?? null,
                 };
-                console.warn(`[Plaid] applyBalanceSync → card "${updatedCards[idx].nickname || updatedCards[idx].name}": bal=${acct.balance?.current}, limit=${updatedCards[idx].limit}, apr=${updatedCards[idx].apr}, dueDay=${updatedCards[idx].paymentDueDay}, stmtDay=${updatedCards[idx].statementCloseDay}, linked=${acct.linkedCardId}`);
+                console.warn(`[Plaid] synced card "${updatedCards[idx].nickname || updatedCards[idx].name}": bal=${acct.balance?.current}, limit=${updatedCards[idx].limit}`);
                 balanceSummary.push({
                     name: updatedCards[idx].nickname || updatedCards[idx].name,
                     type: "credit",

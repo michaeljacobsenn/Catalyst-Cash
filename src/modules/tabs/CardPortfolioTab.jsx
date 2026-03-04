@@ -10,11 +10,14 @@ import { Card, Label, Badge } from "../ui.jsx";
 import { Mono, EmptyState } from "../components.jsx";
 import SearchableSelect from "../SearchableSelect.jsx";
 import { fetchMarketPrices, getTickerOptions } from "../marketData.js";
-import { connectBank, autoMatchAccounts, fetchBalancesAndLiabilities, fetchAllBalancesAndLiabilities, applyBalanceSync, saveConnectionLinks } from "../plaid.js";
+import { connectBank, autoMatchAccounts, fetchBalancesAndLiabilities, fetchAllBalancesAndLiabilities, applyBalanceSync, saveConnectionLinks, purgeBrokenConnections } from "../plaid.js";
 import { haptic } from "../haptics.js";
 import { getCurrentTier } from "../subscription.js";
 
 const ENABLE_PLAID = true;
+
+// One-time cleanup flag — runs once per app session
+let _purgeDone = false;
 
 function mergeUniqueById(existing = [], incoming = []) {
     if (!incoming.length) return existing;
@@ -55,6 +58,17 @@ export default memo(function CardPortfolioTab() {
     const [plaidError, setPlaidError] = useState(null);
     const openSheet = (step = null) => { setShowAddSheet(true); setAddSheetStep(step); setPlaidResult(null); setPlaidError(null); };
     const closeSheet = () => { setShowAddSheet(false); setAddSheetStep(null); setPlaidResult(null); setPlaidError(null); };
+
+    // Purge broken connections (missing access token due to previous bug) on first mount
+    useEffect(() => {
+        if (_purgeDone) return;
+        _purgeDone = true;
+        purgeBrokenConnections().then(count => {
+            if (count > 0 && window.toast) {
+                window.toast.info(`Removed ${count} broken connection(s) — please reconnect via Plaid`);
+            }
+        }).catch(() => { });
+    }, []);
     const handlePlaidConnect = async () => {
         setPlaidLoading(true); setPlaidResult(null); setPlaidError(null);
         try {
@@ -120,15 +134,12 @@ export default memo(function CardPortfolioTab() {
     const [plaidRefreshing, setPlaidRefreshing] = useState(false);
     const REFRESH_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
     const handleRefreshPlaid = async () => {
-        console.warn('[Plaid] handleRefreshPlaid ENTERED');
         // Tiered cooldown: Free = 60min, Pro = 5min
         const tier = await getCurrentTier();
         const cooldown = REFRESH_COOLDOWNS[tier.id] || REFRESH_COOLDOWNS.free;
         const lastSync = cards.find(c => c._plaidLastSync)?._plaidLastSync
             || bankAccounts.find(b => b._plaidLastSync)?._plaidLastSync;
-        console.warn(`[Plaid] tier=${tier.id}, cooldown=${cooldown}ms, lastSync=${lastSync}, elapsed=${lastSync ? Date.now() - new Date(lastSync).getTime() : 'N/A'}ms`);
-        // TEMPORARILY BYPASSED FOR DEBUGGING
-        if (false && lastSync && (Date.now() - new Date(lastSync).getTime()) < cooldown) {
+        if (lastSync && (Date.now() - new Date(lastSync).getTime()) < cooldown) {
             const minsLeft = Math.ceil((cooldown - (Date.now() - new Date(lastSync).getTime())) / 60000);
             if (window.toast) window.toast.info(`Next sync available in ${minsLeft} min${tier.id === "free" ? " (Pro: every 5 min)" : ""}`);
             return;
