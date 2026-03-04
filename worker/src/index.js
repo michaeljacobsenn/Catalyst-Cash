@@ -258,7 +258,8 @@ export default {
                         country_codes: ["US"],
                         language: "en",
                         user: { client_user_id: reqBody.userId || "catalyst-user" },
-                        products: ["transactions", "liabilities"]
+                        products: ["transactions", "balance"],
+                        optional_products: ["liabilities", "investments"]
                     };
                 } else if (url.pathname === "/plaid/exchange") {
                     plaidEndpoint = "/item/public_token/exchange";

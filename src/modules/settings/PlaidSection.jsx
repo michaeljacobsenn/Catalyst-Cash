@@ -2,7 +2,7 @@ import { useState } from "react";
 import { T } from "../constants.js";
 import { Card, Label } from "../ui.jsx";
 import { Plus, Building2, Unplug, Loader2 } from "lucide-react";
-import { getConnections, removeConnection, connectBank, autoMatchAccounts, fetchBalances, applyBalanceSync, saveConnectionLinks } from "../plaid.js";
+import { getConnections, removeConnection, connectBank, autoMatchAccounts, fetchBalancesAndLiabilities, applyBalanceSync, saveConnectionLinks } from "../plaid.js";
 
 function mergeUniqueById(existing = [], incoming = []) {
     const ids = new Set(existing.map(e => e.id).filter(Boolean));
@@ -89,7 +89,7 @@ export default function PlaidSection({ cards, setCards, bankAccounts, setBankAcc
                                 }
 
                                 try {
-                                    const refreshed = await fetchBalances(connection.id);
+                                    const refreshed = await fetchBalancesAndLiabilities(connection.id);
                                     if (refreshed) {
                                         const syncData = applyBalanceSync(refreshed, allCards, allBanks, allInvests);
                                         setCards(syncData.updatedCards);

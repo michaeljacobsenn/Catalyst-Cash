@@ -305,6 +305,36 @@ export default memo(function RenewalsTab() {
             <Mono size={10} color={T.text.dim} style={{ display: "block", marginTop: 4 }}>{fmt(monthlyTotal / 4.33)}/wk · {fmt(monthlyTotal * 12)}/yr</Mono>
         </Card>
 
+        {/* Credit Utilization Summary */}
+        {(() => {
+            const plaidCards = (cards || []).filter(c => c._plaidBalance != null && c._plaidBalance > 0);
+            if (plaidCards.length === 0) return null;
+            const totalBal = plaidCards.reduce((s, c) => s + (c._plaidBalance || 0), 0);
+            const totalLim = plaidCards.reduce((s, c) => s + (c._plaidLimit || c.limit || 0), 0);
+            const totalUtil = totalLim > 0 ? (totalBal / totalLim) * 100 : 0;
+            const utilColor = (pct) => pct > 50 ? T.status.red : pct > 30 ? T.status.amber : T.status.green;
+            return <Card animate delay={40} style={{ padding: "14px 16px", borderLeft: `3px solid ${utilColor(totalUtil)}40` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary, fontFamily: T.font.mono, textTransform: "uppercase", letterSpacing: "0.08em" }}>Credit Utilization</span>
+                    {totalLim > 0 && <Mono size={11} weight={800} color={utilColor(totalUtil)}>{totalUtil.toFixed(0)}% overall</Mono>}
+                </div>
+                {plaidCards.map(c => {
+                    const bal = c._plaidBalance || 0;
+                    const lim = c._plaidLimit || c.limit || 0;
+                    const pct = lim > 0 ? Math.min((bal / lim) * 100, 100) : 0;
+                    return <div key={c.id} style={{ marginBottom: 8 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: T.text.primary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "55%" }}>{c.nickname || c.name}</span>
+                            <Mono size={11} weight={700} color={T.text.secondary}>{fmt(bal)}{lim > 0 ? ` / ${fmt(lim)}` : ""}</Mono>
+                        </div>
+                        {lim > 0 && <div style={{ height: 4, borderRadius: 2, background: T.bg.elevated, overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${pct}%`, borderRadius: 2, background: utilColor(pct), transition: "width .4s ease" }} />
+                        </div>}
+                    </div>;
+                })}
+            </Card>;
+        })()}
+
         {/* Info */}
         <Card animate delay={50} style={{ padding: "12px 16px", borderLeft: `3px solid ${T.status.green}30` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
