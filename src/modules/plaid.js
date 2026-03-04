@@ -289,13 +289,13 @@ export async function fetchLiabilities(connectionId) {
  * This is the preferred method — one call gets everything.
  */
 export async function fetchBalancesAndLiabilities(connectionId) {
-    const [balConn] = await Promise.allSettled([
-        fetchBalances(connectionId),
-        fetchLiabilities(connectionId),
-    ]);
-    // Re-read from storage since both wrote concurrently
+    // Run sequentially to avoid concurrent read→modify→save race condition.
+    // Both functions read connections, modify, and saveConnections();
+    // running them in parallel causes the last writer to overwrite the other's changes.
+    await fetchBalances(connectionId);
+    try { await fetchLiabilities(connectionId); } catch (_) { /* liabilities may not be supported */ }
     const conns = await getConnections();
-    return conns.find(c => c.id === connectionId) || balConn.value;
+    return conns.find(c => c.id === connectionId);
 }
 
 /**
@@ -633,7 +633,7 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
     const balanceSummary = [];
 
     for (const acct of connection.accounts) {
-        if (!acct.balance) continue;
+        if (!acct.balance && !acct.liability) continue;
 
         // Self-healing fallback: recover link via plaid account id.
         const fallbackCard = !acct.linkedCardId
@@ -662,10 +662,10 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
                 updatedCards[idx] = {
                     ...card,
                     // ── Balance data (always overwrite with latest) ──
-                    _plaidBalance: acct.balance.current,
-                    _plaidAvailable: acct.balance.available,
-                    _plaidLimit: acct.balance.limit,
-                    _plaidLastSync: connection.lastSync,
+                    _plaidBalance: acct.balance?.current ?? card._plaidBalance,
+                    _plaidAvailable: acct.balance?.available ?? card._plaidAvailable,
+                    _plaidLimit: acct.balance?.limit ?? card._plaidLimit,
+                    _plaidLastSync: connection.lastSync || connection.lastLiabilitySync,
                     _plaidAccountId: acct.plaidAccountId,
                     _plaidConnectionId: connection.id,
                     // ── Liability metadata (store raw for reference) ──
