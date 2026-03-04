@@ -10,11 +10,12 @@ import { Card, Label, Badge } from "../ui.jsx";
 import { Mono, EmptyState } from "../components.jsx";
 import SearchableSelect from "../SearchableSelect.jsx";
 import { fetchMarketPrices, getTickerOptions } from "../marketData.js";
-import { connectBank, autoMatchAccounts, fetchBalancesAndLiabilities, fetchAllBalancesAndLiabilities, applyBalanceSync, saveConnectionLinks, purgeBrokenConnections } from "../plaid.js";
+import { connectBank, autoMatchAccounts, fetchBalancesAndLiabilities, fetchAllBalancesAndLiabilities, applyBalanceSync, saveConnectionLinks, purgeBrokenConnections, getConnections } from "../plaid.js";
 import { haptic } from "../haptics.js";
-import { getCurrentTier } from "../subscription.js";
+import { getCurrentTier, isGatingEnforced } from "../subscription.js";
 
 const ENABLE_PLAID = true;
+const REFRESH_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
 
 // One-time cleanup flag — runs once per app session
 let _purgeDone = false;
@@ -100,7 +101,10 @@ export default memo(function CardPortfolioTab() {
                             }
                             await saveConnectionLinks(refreshed);
                         }
-                    } catch { /* balance fetch is best-effort */ }
+                    } catch (balErr) {
+                        console.error('[Plaid] Balance fetch after connect failed:', balErr?.message || balErr);
+                        if (window.toast) window.toast.info('Connected! Tap Sync to fetch balances.');
+                    }
 
                     setPlaidResult('success');
                     setCollapsedSections(p => ({ ...p, creditCards: false, bankAccounts: false }));
@@ -126,23 +130,41 @@ export default memo(function CardPortfolioTab() {
                         }
                     }, 2200);
                 },
-                (err) => { if (err?.message !== 'cancelled') { setPlaidResult('error'); setPlaidError(err?.message || 'Connection failed'); } }
+                (err) => {
+                    if (err?.message !== 'cancelled') {
+                        setPlaidResult('error');
+                        const msg = err?.message || 'Connection failed';
+                        setPlaidError(msg);
+                        if (window.toast) window.toast.error(msg);
+                    }
+                }
             );
         } finally { setPlaidLoading(false); }
     };
 
     const [plaidRefreshing, setPlaidRefreshing] = useState(false);
-    const REFRESH_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
     const handleRefreshPlaid = async () => {
-        // Tiered cooldown: Free = 60min, Pro = 5min
-        const tier = await getCurrentTier();
-        const cooldown = REFRESH_COOLDOWNS[tier.id] || REFRESH_COOLDOWNS.free;
-        const lastSync = cards.find(c => c._plaidLastSync)?._plaidLastSync
-            || bankAccounts.find(b => b._plaidLastSync)?._plaidLastSync;
-        if (lastSync && (Date.now() - new Date(lastSync).getTime()) < cooldown) {
-            const minsLeft = Math.ceil((cooldown - (Date.now() - new Date(lastSync).getTime())) / 60000);
-            if (window.toast) window.toast.info(`Next sync available in ${minsLeft} min${tier.id === "free" ? " (Pro: every 5 min)" : ""}`);
+        if (plaidRefreshing) return; // Guard against double-tap
+
+        // Check if there are any Plaid connections to sync
+        const conns = await getConnections();
+        if (conns.length === 0) {
+            if (window.toast) window.toast.info("No bank connections — tap 'Connect with Plaid' to add one");
             return;
+        }
+
+        // Tiered cooldown: Free = 60min, Pro = 5min
+        // Skip cooldown in soft gating mode (beta — don't block)
+        if (isGatingEnforced()) {
+            const tier = await getCurrentTier();
+            const cooldown = REFRESH_COOLDOWNS[tier.id] || REFRESH_COOLDOWNS.free;
+            const lastSync = cards.find(c => c._plaidLastSync)?._plaidLastSync
+                || bankAccounts.find(b => b._plaidLastSync)?._plaidLastSync;
+            if (lastSync && (Date.now() - new Date(lastSync).getTime()) < cooldown) {
+                const minsLeft = Math.ceil((cooldown - (Date.now() - new Date(lastSync).getTime())) / 60000);
+                if (window.toast) window.toast.info(`Next sync available in ${minsLeft} min${tier.id === "free" ? " (Pro: every 5 min)" : ""}`);
+                return;
+            }
         }
         setPlaidRefreshing(true);
         try {
@@ -153,9 +175,11 @@ export default memo(function CardPortfolioTab() {
             let allInvests = [...(financialConfig.plaidInvestments || [])];
             let investmentsChanged = false;
             let successCount = 0;
-            for (const res of results) {
+            for (let i = 0; i < results.length; i++) {
+                const res = results[i];
                 if (!res._error) {
                     const syncData = applyBalanceSync(res, allCards, allBanks, allInvests);
+                    console.warn(`[Plaid] applyBalanceSync for ${res.institutionName}: ${syncData.balanceSummary.length} accounts updated`, syncData.balanceSummary);
                     allCards = syncData.updatedCards;
                     allBanks = syncData.updatedBankAccounts;
                     if (syncData.updatedPlaidInvestments) {
@@ -171,9 +195,9 @@ export default memo(function CardPortfolioTab() {
             if (investmentsChanged) setFinancialConfig({ ...financialConfig, plaidInvestments: allInvests });
             if (successCount > 0) {
                 haptic.success();
-                if (window.toast) window.toast.success("Balances synced successfully");
+                if (window.toast) window.toast.success(`Synced ${successCount} bank${successCount !== 1 ? 's' : ''} successfully`);
             } else {
-                const firstErr = results.find(r => r._error)?._error || "Unknown error";
+                const firstErr = results.find(r => r._error)?._error || "No connections available";
                 console.warn(`[Plaid] ALL connections failed: ${firstErr}`);
                 if (window.toast) window.toast.error(`Sync failed: ${firstErr}`);
             }
@@ -201,6 +225,7 @@ export default memo(function CardPortfolioTab() {
     const [collapsedSections, setCollapsedSections] = useState({
         creditCards: true,
         bankAccounts: true,
+        savingsAccounts: true,
         investments: true,
         savingsGoals: true,
         otherAssets: true,
@@ -508,7 +533,7 @@ export default memo(function CardPortfolioTab() {
             <span style={{ fontSize: 12, fontWeight: 800, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.06em", lineHeight: "44px" }}>Categories</span>
             <button onClick={() => {
                 const allCol = Object.values(collapsedSections).every(Boolean);
-                setCollapsedSections({ creditCards: !allCol, bankAccounts: !allCol, investments: !allCol, debts: !allCol, savingsGoals: !allCol, otherAssets: !allCol });
+                setCollapsedSections({ creditCards: !allCol, bankAccounts: !allCol, savingsAccounts: !allCol, investments: !allCol, debts: !allCol, savingsGoals: !allCol, otherAssets: !allCol });
             }} style={{ border: "none", background: "transparent", color: T.accent.primary, fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
                 {Object.values(collapsedSections).every(Boolean) ? "Expand All" : "Collapse All"}
             </button>
@@ -706,6 +731,13 @@ export default memo(function CardPortfolioTab() {
                                                     cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
                                                 }}>
                                                     <Edit3 size={11} /></button>
+                                                <button onClick={() => { if (window.confirm(`Delete "${card.nickname || card.name}"?`)) removeCard(card.id); }} style={{
+                                                    width: 36, height: 36, borderRadius: T.radius.md,
+                                                    border: `1px solid ${T.status.red}30`, background: `${T.status.red}10`, color: T.status.red,
+                                                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                                                    transition: "all 0.2s"
+                                                }}>
+                                                    <X size={13} /></button>
                                             </div>
                                         </div>}
                                 </div>
@@ -754,8 +786,8 @@ export default memo(function CardPortfolioTab() {
         return Object.entries(g).sort((a, b) => a[0].localeCompare(b[0]));
     }, [savingsAccounts]);
 
-    const bankSection = bankAccounts.length > 0 ? <div>
-        {/* Premium Section Header: Bank Accounts */}
+    const bankSection = checkingAccounts.length > 0 ? <div>
+        {/* Premium Section Header: Checking Accounts */}
         <div
             onClick={() => setCollapsedSections(p => ({ ...p, bankAccounts: !p.bankAccounts }))}
             style={{
@@ -768,10 +800,10 @@ export default memo(function CardPortfolioTab() {
             <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.status.blue}1A`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 12px ${T.status.blue}10` }}>
                 <Landmark size={14} color={T.status.blue} />
             </div>
-            <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Bank Accounts</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Checking Accounts</h2>
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-                <Badge variant="outline" style={{ fontSize: 10, color: bankAccounts.length > 0 ? T.status.blue : T.text.muted, borderColor: bankAccounts.length > 0 ? `${T.status.blue}40` : T.border.default }}>
-                    {bankAccounts.length === 0 ? "0 accounts" : bankAccounts.length}
+                <Badge variant="outline" style={{ fontSize: 10, color: checkingAccounts.length > 0 ? T.status.blue : T.text.muted, borderColor: checkingAccounts.length > 0 ? `${T.status.blue}40` : T.border.default }}>
+                    {checkingAccounts.length}
                 </Badge>
                 <ChevronDown size={16} color={T.text.muted} className="chevron-animated" data-open={String(!collapsedSections.bankAccounts)} />
             </div>
@@ -779,12 +811,6 @@ export default memo(function CardPortfolioTab() {
 
         {!collapsedSections.bankAccounts && (
             <>
-                {/* Premium Sub-header: Checking */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 12 }}>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: T.status.blue, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.font.mono }}>Checking Accounts</span>
-                    <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${T.status.blue}30, transparent)` }} />
-                </div>
-
                 {groupedChecking.length === 0 ?
                     <Card style={{ padding: "16px", textAlign: "center" }}><p style={{ fontSize: 11, color: T.text.muted }}>No checking accounts yet</p></Card> :
                     groupedChecking.map(([bank, accts]) => {
@@ -842,70 +868,90 @@ export default memo(function CardPortfolioTab() {
                             </div></div>
                         </Card>;
                     })}
+            </>
+        )}
+    </div> : null;
 
-                {/* Premium Sub-header: Savings */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 24, marginBottom: 12 }}>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: T.accent.emerald, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.font.mono }}>Savings Accounts</span>
-                    <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${T.accent.emerald}30, transparent)` }} />
-                </div>
+    const savingsSection = savingsAccounts.length > 0 ? <div>
+        {/* Premium Section Header: Savings Accounts */}
+        <div
+            onClick={() => setCollapsedSections(p => ({ ...p, savingsAccounts: !p.savingsAccounts }))}
+            style={{
+                display: "flex", alignItems: "center", gap: 12, marginTop: 8, marginBottom: collapsedSections.savingsAccounts ? 8 : 16,
+                padding: "16px 20px", borderRadius: 24, cursor: "pointer", userSelect: "none",
+                background: T.bg.glass, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+                border: `1px solid ${T.border.subtle}`, boxShadow: `0 4px 16px rgba(0,0,0,0.15), inset 0 1px 1px rgba(255,255,255,0.05)`,
+                transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+            }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent.emerald}1A`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 12px ${T.accent.emerald}10` }}>
+                <DollarSign size={14} color={T.accent.emerald} />
+            </div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Savings Accounts</h2>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                <Badge variant="outline" style={{ fontSize: 10, color: savingsAccounts.length > 0 ? T.accent.emerald : T.text.muted, borderColor: savingsAccounts.length > 0 ? `${T.accent.emerald}40` : T.border.default }}>
+                    {savingsAccounts.length}
+                </Badge>
+                <ChevronDown size={16} color={T.text.muted} className="chevron-animated" data-open={String(!collapsedSections.savingsAccounts)} />
+            </div>
+        </div>
 
-                {groupedSavings.length === 0 ?
-                    <Card style={{ padding: "16px", textAlign: "center" }}><p style={{ fontSize: 11, color: T.text.muted }}>No savings accounts yet</p></Card> :
-                    groupedSavings.map(([bank, accts]) => {
-                        const isCollapsed = collapsedBanks[`savings-${bank}`];
-                        return <Card key={`s-${bank}`} animate variant="glass" className="hover-card" style={{ marginBottom: 12, padding: 0, overflow: "hidden", borderLeft: `4px solid ${T.accent.emerald}` }}>
-                            <div onClick={() => setCollapsedBanks(p => ({ ...p, [`savings-${bank}`]: !isCollapsed }))} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${T.accent.emerald}08` }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                    <div style={{ padding: 5, borderRadius: 7, background: T.accent.emerald, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                        <DollarSign size={12} color={T.bg.card} />
-                                    </div>
-                                    <span style={{ fontSize: 12, fontWeight: 800, color: T.accent.emerald, textTransform: "uppercase", letterSpacing: "0.05em" }}>{bank}</span>
-                                    <Badge variant="outline" style={{ fontSize: 10, color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>{accts.length}</Badge>
+        {!collapsedSections.savingsAccounts && (
+            <>
+                {groupedSavings.map(([bank, accts]) => {
+                    const isCollapsed = collapsedBanks[`savings-${bank}`];
+                    return <Card key={`s-${bank}`} animate variant="glass" className="hover-card" style={{ marginBottom: 12, padding: 0, overflow: "hidden", borderLeft: `4px solid ${T.accent.emerald}` }}>
+                        <div onClick={() => setCollapsedBanks(p => ({ ...p, [`savings-${bank}`]: !isCollapsed }))} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${T.accent.emerald}08` }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <div style={{ padding: 5, borderRadius: 7, background: T.accent.emerald, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                    <DollarSign size={12} color={T.bg.card} />
                                 </div>
-                                <ChevronDown size={14} color={T.text.dim} className="chevron-animated" data-open={String(!isCollapsed)} />
+                                <span style={{ fontSize: 12, fontWeight: 800, color: T.accent.emerald, textTransform: "uppercase", letterSpacing: "0.05em" }}>{bank}</span>
+                                <Badge variant="outline" style={{ fontSize: 10, color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>{accts.length}</Badge>
                             </div>
-                            <div className="collapse-section" data-collapsed={String(isCollapsed)}><div style={{ padding: 0 }}>
-                                {accts.sort((a, b) => a.name.localeCompare(b.name)).map((acct, i) => (
-                                    <div key={acct.id} style={{ borderBottom: i === accts.length - 1 ? "none" : `1px solid ${T.border.subtle}` }}>
-                                        <div style={{ padding: "12px 18px" }}>
-                                            {editingBank === acct.id ?
-                                                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                                                    <input value={editBankForm.name} onChange={e => setEditBankForm(p => ({ ...p, name: e.target.value }))} placeholder="Account name" aria-label="Account name"
-                                                        style={{ width: "100%", fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
-                                                    <div style={{ display: "flex", gap: 8 }}>
-                                                        <div style={{ flex: 0.4, position: "relative" }}>
-                                                            <input type="number" inputMode="decimal" step="0.01" value={editBankForm.apy} onChange={e => setEditBankForm(p => ({ ...p, apy: e.target.value }))} placeholder="APY" aria-label="APY percentage"
-                                                                style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
-                                                            <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 12 }}>%</span>
-                                                        </div>
-                                                        <input value={editBankForm.notes} onChange={e => setEditBankForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notes" aria-label="Account notes"
-                                                            style={{ flex: 1, fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
+                            <ChevronDown size={14} color={T.text.dim} className="chevron-animated" data-open={String(!isCollapsed)} />
+                        </div>
+                        <div className="collapse-section" data-collapsed={String(isCollapsed)}><div style={{ padding: 0 }}>
+                            {accts.sort((a, b) => a.name.localeCompare(b.name)).map((acct, i) => (
+                                <div key={acct.id} style={{ borderBottom: i === accts.length - 1 ? "none" : `1px solid ${T.border.subtle}` }}>
+                                    <div style={{ padding: "12px 18px" }}>
+                                        {editingBank === acct.id ?
+                                            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                                <input value={editBankForm.name} onChange={e => setEditBankForm(p => ({ ...p, name: e.target.value }))} placeholder="Account name" aria-label="Account name"
+                                                    style={{ width: "100%", fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
+                                                <div style={{ display: "flex", gap: 8 }}>
+                                                    <div style={{ flex: 0.4, position: "relative" }}>
+                                                        <input type="number" inputMode="decimal" step="0.01" value={editBankForm.apy} onChange={e => setEditBankForm(p => ({ ...p, apy: e.target.value }))} placeholder="APY" aria-label="APY percentage"
+                                                            style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                                        <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 12 }}>%</span>
                                                     </div>
-                                                    <div style={{ display: "flex", gap: 8 }}>
-                                                        <button onClick={() => saveEditBank(acct.id)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: `${T.accent.emerald}18`, color: T.accent.emerald, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Check size={14} />Save</button>
-                                                        <button onClick={() => { if (window.confirm(`Delete "${acct.name}"?`)) removeBankAccount(acct.id); }} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>Delete</button>
-                                                        <button onClick={() => setEditingBank(null)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
+                                                    <input value={editBankForm.notes} onChange={e => setEditBankForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notes" aria-label="Account notes"
+                                                        style={{ flex: 1, fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
+                                                </div>
+                                                <div style={{ display: "flex", gap: 8 }}>
+                                                    <button onClick={() => saveEditBank(acct.id)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: `${T.accent.emerald}18`, color: T.accent.emerald, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Check size={14} />Save</button>
+                                                    <button onClick={() => { if (window.confirm(`Delete "${acct.name}"?`)) removeBankAccount(acct.id); }} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>Delete</button>
+                                                    <button onClick={() => setEditingBank(null)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
+                                                </div>
+                                            </div> :
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{acct.name}</span>
+                                                    <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                                                        {acct.apy > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>{acct.apy}% APY</Badge>}
+                                                        {acct.notes && <Mono size={10} color={T.text.dim}>{acct.notes}</Mono>}
                                                     </div>
-                                                </div> :
-                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                                        <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{acct.name}</span>
-                                                        <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
-                                                            {acct.apy > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>{acct.apy}% APY</Badge>}
-                                                            {acct.notes && <Mono size={10} color={T.text.dim}>{acct.notes}</Mono>}
-                                                        </div>
-                                                    </div>
-                                                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                                                        <Mono size={14} weight={900} color={acct._plaidBalance != null ? T.accent.emerald : T.text.muted}>{acct._plaidBalance != null ? fmt(acct._plaidBalance) : "\u2014"}</Mono>
-                                                        <button onClick={() => startEditBank(acct)} style={{ width: 36, height: 36, borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={13} /></button>
-                                                    </div>
-                                                </div>}
-                                        </div>
+                                                </div>
+                                                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                                                    <Mono size={14} weight={900} color={acct._plaidBalance != null ? T.accent.emerald : T.text.muted}>{acct._plaidBalance != null ? fmt(acct._plaidBalance) : "\u2014"}</Mono>
+                                                    <button onClick={() => startEditBank(acct)} style={{ width: 36, height: 36, borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={13} /></button>
+                                                </div>
+                                            </div>}
                                     </div>
-                                ))}
-                            </div></div>
-                        </Card>;
-                    })}
+                                </div>
+                            ))}
+                        </div></div>
+                    </Card>;
+                })}
             </>
         )}
     </div> : null;
@@ -1347,6 +1393,7 @@ export default memo(function CardPortfolioTab() {
         `}</style>
         {headerSection}
         {bankSection}
+        {savingsSection}
         {creditCardsSection}
         {investmentsSection}
         {savingsGoalsSection}

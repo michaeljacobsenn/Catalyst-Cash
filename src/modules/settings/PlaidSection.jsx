@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { T } from "../constants.js";
 import { Card, Label } from "../ui.jsx";
 import { Plus, Building2, Unplug, Loader2 } from "lucide-react";
@@ -12,12 +12,99 @@ function mergeUniqueById(existing = [], incoming = []) {
 export default function PlaidSection({ cards, setCards, bankAccounts, setBankAccounts, financialConfig, setFinancialConfig, cardCatalog }) {
     const [plaidConnections, setPlaidConnections] = useState([]);
     const [isPlaidConnecting, setIsPlaidConnecting] = useState(false);
-    const [loaded, setLoaded] = useState(false);
 
-    // Load connections on first render
-    if (!loaded) {
-        getConnections().then(c => { setPlaidConnections(c || []); setLoaded(true); });
-    }
+    // Load connections on mount
+    useEffect(() => {
+        getConnections().then(c => setPlaidConnections(c || [])).catch(() => { });
+    }, []);
+
+    const handleDisconnect = async (conn) => {
+        if (!window.confirm(`Disconnect ${conn.institutionName || 'this bank'}? This will also remove all accounts imported from this connection.`)) return;
+        await removeConnection(conn.id);
+        // Remove Plaid-imported cards/accounts that belonged to this connection
+        const connId = conn.id;
+        setCards(prev => prev.filter(c => c._plaidConnectionId !== connId));
+        setBankAccounts(prev => prev.filter(b => b._plaidConnectionId !== connId));
+        const plaidInvests = financialConfig?.plaidInvestments || [];
+        const filteredInvests = plaidInvests.filter(i => i._plaidConnectionId !== connId);
+        if (filteredInvests.length !== plaidInvests.length) {
+            setFinancialConfig({ type: 'SET_FIELD', field: 'plaidInvestments', value: filteredInvests });
+        }
+        setPlaidConnections(await getConnections());
+        if (window.toast) window.toast.success("Connection and imported accounts removed");
+    };
+
+    const handleConnect = async () => {
+        if (isPlaidConnecting) return;
+        setIsPlaidConnecting(true);
+        try {
+            await connectBank(
+                async (connection) => {
+                    try {
+                        const plaidInvestments = financialConfig?.plaidInvestments || [];
+                        const { newCards, newBankAccounts, newPlaidInvestments } = autoMatchAccounts(connection, cards, bankAccounts, cardCatalog, plaidInvestments);
+                        await saveConnectionLinks(connection);
+
+                        const allCards = mergeUniqueById(cards, newCards);
+                        const allBanks = mergeUniqueById(bankAccounts, newBankAccounts);
+                        const allInvests = mergeUniqueById(plaidInvestments, newPlaidInvestments);
+                        setCards(allCards);
+                        setBankAccounts(allBanks);
+                        if (newPlaidInvestments.length > 0) {
+                            setFinancialConfig({ type: 'SET_FIELD', field: 'plaidInvestments', value: allInvests });
+                        }
+
+                        // Fetch live balances (best-effort)
+                        try {
+                            const refreshed = await fetchBalancesAndLiabilities(connection.id);
+                            if (refreshed) {
+                                const syncData = applyBalanceSync(refreshed, allCards, allBanks, allInvests);
+                                setCards(syncData.updatedCards);
+                                setBankAccounts(syncData.updatedBankAccounts);
+                                if (syncData.updatedPlaidInvestments) {
+                                    setFinancialConfig({ type: 'SET_FIELD', field: 'plaidInvestments', value: syncData.updatedPlaidInvestments });
+                                }
+                                await saveConnectionLinks(refreshed);
+                            }
+                        } catch (balErr) {
+                            console.error('[Plaid] Balance fetch after connect failed:', balErr?.message || balErr);
+                            if (window.toast) window.toast.info('Connected! Tap Sync to fetch balances.');
+                        }
+
+                        setPlaidConnections(await getConnections());
+                        if (window.toast) window.toast.success("Bank linked successfully!");
+
+                        // Prompt user to review imported accounts
+                        const importedCount = newCards.length + newBankAccounts.length + newPlaidInvestments.length;
+                        if (importedCount > 0) {
+                            setTimeout(() => {
+                                window.alert(
+                                    `${importedCount} account${importedCount !== 1 ? "s" : ""} imported!\n\n` +
+                                    "Plaid may assign generic names like \"Credit Card\" instead of the actual product name.\n\n" +
+                                    "Please go to the Accounts tab and tap the ✏️ edit button on each imported account to verify and update:\n" +
+                                    "• Card name (e.g. Sapphire Preferred)\n" +
+                                    "• APR\n" +
+                                    "• Annual fee & due date\n" +
+                                    "• Statement close & payment due days"
+                                );
+                            }, 500);
+                        }
+                    } catch (err) {
+                        console.error('[Plaid] Post-connect processing error:', err);
+                    }
+                },
+                (err) => {
+                    console.error(err);
+                    if (window.toast) window.toast.error("Failed to link bank");
+                }
+            );
+        } catch (err) {
+            console.error(err);
+            if (window.toast) window.toast.error(err.message || "Failed to initialize Plaid");
+        } finally {
+            setIsPlaidConnecting(false);
+        }
+    };
 
     return (
         <Card style={{ borderLeft: `3px solid ${T.status.purple || "#8a2be2"}40` }}>
@@ -44,19 +131,14 @@ export default function PlaidSection({ cards, setCards, bankAccounts, setBankAcc
                         }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                                 <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                                    {conn.institution_logo ? <img src={`data:image/png;base64,${conn.institution_logo}`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Building2 size={16} color="#000" />}
+                                    {conn.institutionLogo ? <img src={`data:image/png;base64,${conn.institutionLogo}`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Building2 size={16} color="#000" />}
                                 </div>
                                 <div>
-                                    <span style={{ fontSize: 14, fontWeight: 700, color: T.text.primary, display: "block" }}>{conn.institution_name}</span>
+                                    <span style={{ fontSize: 14, fontWeight: 700, color: T.text.primary, display: "block" }}>{conn.institutionName || "Unknown Bank"}</span>
                                     <span style={{ fontSize: 11, color: T.text.muted, marginTop: 2, display: "block" }}>{conn.accounts?.length || 0} Accounts Linked</span>
                                 </div>
                             </div>
-                            <button onClick={async () => {
-                                if (!window.confirm(`Disconnect ${conn.institution_name}?`)) return;
-                                await removeConnection(conn.id);
-                                setPlaidConnections(await getConnections());
-                                if (window.toast) window.toast.success("Connection removed");
-                            }} aria-label={`Disconnect ${conn.institution_name}`} style={{
+                            <button onClick={() => handleDisconnect(conn)} aria-label={`Disconnect ${conn.institutionName || 'bank'}`} style={{
                                 width: 36, height: 36, borderRadius: T.radius.sm, border: "none",
                                 background: T.status.redDim, color: T.status.red, cursor: "pointer",
                                 display: "flex", alignItems: "center", justifyContent: "center"
@@ -68,73 +150,7 @@ export default function PlaidSection({ cards, setCards, bankAccounts, setBankAcc
                 )}
             </div>
 
-            <button onClick={async () => {
-                if (isPlaidConnecting) return;
-                setIsPlaidConnecting(true);
-                try {
-                    await connectBank(
-                        async (connection) => {
-                            try {
-                                const plaidInvestments = financialConfig?.plaidInvestments || [];
-                                const { newCards, newBankAccounts, newPlaidInvestments } = autoMatchAccounts(connection, cards, bankAccounts, cardCatalog, plaidInvestments);
-                                await saveConnectionLinks(connection);
-
-                                const allCards = mergeUniqueById(cards, newCards);
-                                const allBanks = mergeUniqueById(bankAccounts, newBankAccounts);
-                                const allInvests = mergeUniqueById(plaidInvestments, newPlaidInvestments);
-                                setCards(allCards);
-                                setBankAccounts(allBanks);
-                                if (newPlaidInvestments.length > 0) {
-                                    setFinancialConfig({ type: 'SET_FIELD', field: 'plaidInvestments', value: allInvests });
-                                }
-
-                                try {
-                                    const refreshed = await fetchBalancesAndLiabilities(connection.id);
-                                    if (refreshed) {
-                                        const syncData = applyBalanceSync(refreshed, allCards, allBanks, allInvests);
-                                        setCards(syncData.updatedCards);
-                                        setBankAccounts(syncData.updatedBankAccounts);
-                                        if (syncData.updatedPlaidInvestments) {
-                                            setFinancialConfig({ type: 'SET_FIELD', field: 'plaidInvestments', value: syncData.updatedPlaidInvestments });
-                                        }
-                                        await saveConnectionLinks(refreshed);
-                                    }
-                                } catch {
-                                    // Best effort only; connection succeeded.
-                                }
-                            } catch (err) {
-                                console.error(err);
-                            }
-                            setPlaidConnections(await getConnections());
-                            if (window.toast) window.toast.success("Bank linked successfully!");
-
-                            const importedCount = newCards.length + newBankAccounts.length + newPlaidInvestments.length;
-                            if (importedCount > 0) {
-                                setTimeout(() => {
-                                    window.alert(
-                                        `${importedCount} account${importedCount !== 1 ? "s" : ""} imported!\n\n` +
-                                        "Plaid may assign generic names like \"Credit Card\" instead of the actual product name.\n\n" +
-                                        "Please go to the Accounts tab and tap the ✏️ edit button on each imported account to verify and update:\n" +
-                                        "• Card name (e.g. Sapphire Preferred)\n" +
-                                        "• APR\n" +
-                                        "• Annual fee & due date\n" +
-                                        "• Statement close & payment due days"
-                                    );
-                                }, 500);
-                            }
-                        },
-                        (err) => {
-                            console.error(err);
-                            if (window.toast) window.toast.error("Failed to link bank");
-                        }
-                    );
-                } catch (err) {
-                    console.error(err);
-                    if (window.toast) window.toast.error(err.message || "Failed to initialize Plaid");
-                } finally {
-                    setIsPlaidConnecting(false);
-                }
-            }} disabled={isPlaidConnecting} style={{
+            <button onClick={handleConnect} disabled={isPlaidConnecting} style={{
                 width: "100%", padding: 14, borderRadius: T.radius.md,
                 border: "none", background: T.accent.primary, color: "white",
                 fontSize: 14, fontWeight: 700, cursor: isPlaidConnecting ? "not-allowed" : "pointer",

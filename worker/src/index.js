@@ -258,7 +258,7 @@ export default {
                         country_codes: ["US"],
                         language: "en",
                         user: { client_user_id: reqBody.userId || "catalyst-user" },
-                        products: ["transactions", "balance"],
+                        products: ["transactions"],
                         optional_products: ["liabilities", "investments"]
                     };
                 } else if (url.pathname === "/plaid/exchange") {
@@ -273,7 +273,10 @@ export default {
                     plaidBody = {
                         client_id: env.PLAID_CLIENT_ID,
                         secret: env.PLAID_SECRET,
-                        access_token: reqBody.accessToken
+                        access_token: reqBody.accessToken,
+                        options: {
+                            min_last_updated_datetime: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+                        }
                     };
                 } else if (url.pathname === "/plaid/liabilities") {
                     plaidEndpoint = "/liabilities/get";
