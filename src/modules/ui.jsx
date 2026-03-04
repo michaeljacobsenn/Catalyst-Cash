@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { T } from "./constants.js";
 import { haptic } from "./haptics.js";
 
@@ -107,8 +107,7 @@ export const GlobalStyles = () => (
       transition: transform .3s var(--spring-stiff), box-shadow .3s ease, filter .3s ease, opacity .3s ease !important;
     }
     .hover-btn:not(:disabled):hover {
-      transform: translateY(-1px) !important;
-      filter: brightness(1.1);
+      filter: brightness(1.05);
     }
     .hover-btn:not(:disabled):active {
       transform: translateY(1px) scale(0.94) !important;
@@ -185,7 +184,7 @@ export const GlobalStyles = () => (
 
     /* ── Double-tap-zoom prevention (pinch-to-zoom PRESERVED per WCAG 1.4.4) ── */
     html{touch-action:pan-x pan-y pinch-zoom;-ms-touch-action:pan-x pan-y pinch-zoom}
-    *{-webkit-user-select:none;user-select:none}
+    *{-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
     input,textarea,select,[contenteditable]{-webkit-user-select:text;user-select:text}
 
     /* ── WCAG 2.4.7: Focus Visible — high-contrast keyboard focus ring ── */
@@ -278,8 +277,8 @@ export const Card = ({ children, style, animate, delay = 0, onClick, variant = "
       style={{
         ...v,
         borderRadius: T.radius.lg,
-        padding: "18px 16px",
-        marginBottom: 10,
+        padding: "16px",
+        marginBottom: 8,
         ...style,
         ...(onClick ? { cursor: "pointer", position: "relative" } : {}),
         ...(animate ? { animationDelay: `${delay}ms` } : {}),
@@ -308,74 +307,8 @@ export const Label = ({ children, style }) => (
   </label>
 );
 
-export class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { error: null, errorInfo: null };
-  }
-  static getDerivedStateFromError(error) {
-    return { error };
-  }
-  componentDidCatch(error, errorInfo) {
-    this.setState({ errorInfo });
-    console.error("[ErrorBoundary]", error, errorInfo?.componentStack);
-  }
-  render() {
-    if (this.state.error)
-      return (
-        <div
-          role="alert"
-          style={{
-            background: T.status.redDim,
-            border: `1px solid ${T.status.red}20`,
-            borderRadius: T.radius.lg,
-            padding: "18px 16px",
-            margin: "8px 16px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: T.status.red }}>Display Error</span>
-          </div>
-          <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5, marginBottom: 10 }}>
-            {this.state.error.message || "Failed to render."}
-          </p>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={() => this.setState({ error: null, errorInfo: null })}
-              style={{
-                padding: "8px 16px",
-                borderRadius: T.radius.md,
-                border: "none",
-                background: T.status.red,
-                color: "#fff",
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              Retry
-            </button>
-            <button
-              onClick={() => { this.setState({ error: null, errorInfo: null }); window.location.reload(); }}
-              style={{
-                padding: "8px 16px",
-                borderRadius: T.radius.md,
-                border: `1px solid ${T.border.default}`,
-                background: "transparent",
-                color: T.text.secondary,
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              Reload App
-            </button>
-          </div>
-        </div>
-      );
-    return this.props.children;
-  }
-}
+// Unified ErrorBoundary — delegates to standalone module with error telemetry (reportError)
+export { default as ErrorBoundary } from "./ErrorBoundary.jsx";
 
 export const Badge = ({ variant = "gray", children, style }) => {
   const m = {
@@ -438,18 +371,25 @@ export const InlineTooltip = ({ term, children }) => {
   };
   const [show, setShow] = React.useState(false);
   const text = descriptions[term] || term;
+  const tooltipId = `tooltip-${(term || "").replace(/\s+/g, "-").toLowerCase()}`;
 
   return (
     <span
       className="inline-tooltip-wrapper"
+      tabIndex={0}
+      role="button"
+      aria-describedby={show ? tooltipId : undefined}
       onMouseEnter={() => setShow(true)}
       onMouseLeave={() => setShow(false)}
+      onFocus={() => setShow(true)}
+      onBlur={() => setShow(false)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setShow(!show); } if (e.key === "Escape") setShow(false); }}
       onClick={(e) => { e.stopPropagation(); setShow(!show); }}
       style={{ position: "relative", display: "inline-flex", alignItems: "center", cursor: "help", borderBottom: `1px dotted ${T.text.secondary}`, color: "inherit", zIndex: show ? 50 : 1 }}
     >
       {children || term}
       {show && (
-        <span className="fade-in" style={{
+        <span id={tooltipId} role="tooltip" className="fade-in" style={{
           position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)",
           marginBottom: 8, padding: "8px 12px", background: T.bg.elevated, color: T.text.secondary,
           fontSize: 11, fontWeight: 500, fontFamily: T.font.sans, lineHeight: 1.4,

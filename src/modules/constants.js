@@ -10,13 +10,13 @@ export const APP_VERSION = "2.0.0";
 
 const DARK_TOKENS = {
   bg: {
-    base: "#07090F",
-    card: "#0D0F18",
-    elevated: "#141622",
-    surface: "#1A1D2A",
-    hover: "#20243200",
-    glass: "rgba(13,15,24,0.75)",
-    navGlass: "rgba(7,9,15,0.88)",
+    base: "#0C121B",      // Exactly matches Native iOS Splash Background & X Header
+    card: "#121822",      // Slightly elevated card background
+    elevated: "#181E29",
+    surface: "#1E2430",
+    hover: "rgba(110,75,180,0.08)",
+    glass: "rgba(12,18,27,0.75)",
+    navGlass: "rgba(12,18,27,0.88)",
   },
   border: {
     subtle: "rgba(160,140,220,0.06)",
@@ -157,7 +157,7 @@ export function applyTheme(mode) {
     if (document.body) document.body.style.background = tokens.bg.base;
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
-      metaThemeColor.setAttribute("content", mode === "light" ? tokens.bg.base : "#04060A");
+      metaThemeColor.setAttribute("content", tokens.bg.base);
     }
   }
 }

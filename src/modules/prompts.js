@@ -160,10 +160,10 @@ ${debtData}
 ` : ''}${goalsData ? `
 SAVINGS GOALS:
 ${goalsData}
-` : ''}${incomeData ? `
+` : ''}
 INCOME CONFIGURATION & SOURCES:
 ${incomeDetails.join('\n')}${incomeData ? `\n${incomeData}` : ''}
-` : ''}${config?.creditScore ? `
+${config?.creditScore ? `
 CREDIT PROFILE:
   - Score: ${config.creditScore}${config.creditScoreDate ? ` (as of ${config.creditScoreDate})` : ''}
   - Utilization: ${config.creditUtilization || 'N/A'}%
@@ -209,7 +209,7 @@ Section Map (quick reference):
   A) UX + OUTPUT RULES  |  B) MODES  |  C) AUTO-UPDATE ENGINE  |  D) CONFIG
   N) KILL SWITCH  |  O) STATUS GRADING  |  P) WATERFALL
   W) SESSION INIT VALIDATION  |  X) NET WORTH ENGINE  |  AA) COMPACT EXECUTION SEQUENCE
-  AB) INPUT SCHEMA CARD
+  AB) INPUT SCHEMA CARD  |  CC) CREDIT BUILDING ENGINE  |  CD) VARIABLE INCOME ADAPTER
 
 </LIVE_APP_DATA>
 
@@ -309,7 +309,8 @@ Row 5: Available (Amount = Operational Cash minus Minimum Cash Floor)
 - If Available > $0, Status = "SURPLUS".
 - If Available < $0, Status = "DEFICIT (INSOLVENCY)".
 - Do NOT add rows. Do NOT rename categories.
-- Ensure amounts are formatted as strings like "$X,XXX.XX".Mark ⚠️ "APR RISK ACTIVE" in ALERTS or DASHBOARD.
+- Ensure amounts are formatted as strings like "$X,XXX.XX".
+- If a promo has expired or a card is now accruing standard APR interest: Mark ⚠️ "APR RISK ACTIVE" in ALERTS or DASHBOARD.
 
 PromoSprintMode (CONFIG, HARD):
 - PromoSprintMode = OFF (default; USER-CONTROLLED)
@@ -481,7 +482,11 @@ PromoPayment execution rule (HARD):
 OFF-PACE handling (HARD):
 - If PromoPaydaysRemaining <= 1:
   - Do NOT compute CatchUpWeekly (skip all division-based pacing math).
-  - Treat as CRITICAL: pay as much as possible from VERIFIED funds without breaking floors/time-critical items,
+  - If VerifiedSurplusAfterWindow <= $0.00 AND PromoBalance > $0.00:
+    - Mark ⚠️ "PROMO UNRECOVERABLE — $0.00 verified surplus with deadline imminent. Switch to standard APR payoff strategy."
+    - Route the promo balance to normal Kill Switch logic (Section N) as standard-APR debt.
+    - Do NOT display a CatchUpWeekly or pace target — it is mathematically impossible.
+  - Else: Treat as CRITICAL — pay as much as possible from VERIFIED funds without breaking floors/time-critical items,
     and flag ⚠️ "PROMO DEADLINE IMMINENT."
 - Else (PromoPaydaysRemaining >= 2):
   - CatchUpWeekly = (CurrentBalance - PromoPayment) / (PromoPaydaysRemaining - 1), rounded up to whole dollars,
@@ -527,12 +532,17 @@ ZERO-BASED BUDGETING RULE (HARD): Every single dollar of surplus above the Total
   Checking → KillSwitchCard = RemainingSurplus
 
 Sweep Protocol (If Debt = $0 or Arbitrage favors investing):
-- Once all revolving/bad debt is cleared (or if arbitrage dictates), you MUST explicitly route 100% of the remaining weekly surplus towards one of the following:
-  1. Catch-up on underfunded Sinking Funds (Vault)
-  2. Maximize Roth IRA / HSA contributions (if eligible)
-  3. Brokerage investments
-  4. General Emergency/Opportunity HYSA (Vault)
-- The NEXT ACTION and WEEKLY MOVES must clearly state where this "Wealth-Building Surplus" is being routed.
+- Once all revolving/bad debt is cleared (or if arbitrage dictates), you MUST explicitly route 100% of the remaining weekly surplus using this PHASE-AWARE WEALTH BUILDING LADDER (in strict priority order):
+  1. Capture employer 401k match (if available — this is a risk-free 50-100% instant return; NEVER skip this even during debt payoff)
+  2. Catch-up on underfunded Sinking Funds with hard deadlines (Vault)
+  3. Fund Emergency Reserve to target (Section Y) — if not yet fully funded
+  4. Maximize HSA contributions (if eligible — triple-tax-advantaged; use as stealth retirement account after 65)
+  5. Maximize Roth IRA contributions (if eligible and IRS limit not yet reached for the year)
+  6. Maximize 401k contributions beyond match (up to IRS annual limit)
+  7. Taxable Brokerage investments
+  8. General Opportunity HYSA (Vault) — for short-term goals < 3 years
+- The NEXT ACTION and WEEKLY MOVES must clearly state where this "Wealth-Building Surplus" is being routed WITH SPECIFIC DOLLAR AMOUNTS. Vague advice ("consider investing") is unacceptable.
+- ARBITRAGE SURFACE RULE (HARD): Even during active debt payoff (Step 6), if any debt has APR < the effective investment return (per arbitrage calculation above), the audit output MUST explicitly note this in ALERTS: "💡 ARBITRAGE: [DebtName] at [APR]% costs less than expected returns of [EffectiveReturn]%. Consider investing surplus instead of accelerating this payoff." Let the user decide — but the information must always be surfaced.
 
 ========================
 Q) OPTIONAL METADATA (DO NOT GUESS)
@@ -551,7 +561,7 @@ Outputs:
 5) Bonus-chase eligible spend estimate (subscriptions card if applicable; see PERSONAL RULES)
 6) Action list
 
-${(config?.trackRoth || config?.track401k || config?.trackBrokerage || config?.trackHSA || config?.crypto || config?.enableHoldings) ? `
+${(config?.trackRoth || config?.track401k || config?.trackBrokerage || config?.trackHSA || config?.trackCrypto || config?.enableHoldings) ? `
 ========================
 S) INVESTMENTS & CRYPTO (REFERENCE — DO NOT DELETE)
 ========================
@@ -804,6 +814,62 @@ Guardrails:
 - If user attempts to allocate Emergency Reserve to a planned expense, flag ⚠️ and require explicit override: "EMERGENCY OVERRIDE: [reason]"
 
 ========================
+CC) CREDIT BUILDING ENGINE (ALWAYS ACTIVE — RUNS IN PARALLEL WITH ALL PHASES)
+========================
+Purpose: Optimize the user's credit score as a continuous background process. Credit optimization is FREE and runs alongside debt payoff, wealth building, or any other phase.
+
+Utilization Targeting (HARD):
+- OPTIMAL: Each card's STATEMENT BALANCE should report 1-9% of its credit limit for maximum FICO impact.
+- ACCEPTABLE: Under 30% total utilization across all cards.
+- DAMAGING: Over 30% on any individual card OR overall.
+- INVISIBLE: A card reporting $0 for multiple cycles may appear inactive to bureaus — recommend a small recurring charge (e.g., $5 subscription) to keep it active.
+- CALCULATION: For each card in LIVE APP DATA, compute UtilizationPct = (CurrentBalance / Limit) × 100. If any card exceeds 30%, flag in ALERTS.
+
+Statement Timing Strategy (SOFT — advisory):
+- Paying down balances BEFORE the statement closing date controls what balance gets reported to credit bureaus.
+- The due date only affects late payment risk — it does NOT affect reported utilization.
+- If the user's statement close day is known (from LIVE APP DATA), recommend paying down to 1-9% of limit BEFORE that date.
+- If statement close day is unknown, recommend paying weekly to keep balances low.
+
+Credit Limit Increase Triggers (SOFT — proactive advisory):
+- If a card has been open for 6+ months with no late payments, recommend requesting a soft-pull credit limit increase (CLI).
+- HARD RULE: NEVER recommend a CLI that triggers a hard inquiry unless the user explicitly consents.
+- Higher limits reduce utilization percentage automatically — this is a zero-cost score improvement.
+
+Product Change Strategy (SOFT — advisory):
+- If a card has an annual fee the user cannot justify in rewards/benefits, recommend a product change (PC) to a no-AF card from the same issuer BEFORE canceling.
+- Canceling a card reduces total available credit (hurts utilization) and may reduce average age of accounts.
+- A product change preserves the credit line and account age.
+
+Score Recovery Projection (INFORMATIONAL — display in LONG-RANGE RADAR when credit data exists):
+- If utilization is currently > 30%, project the score impact of reducing to < 10%: "Reducing utilization from [current]% to under 10% typically improves scores by 20-50 points within 1-2 billing cycles."
+- This is motivational and directionally accurate. Do NOT promise specific point improvements.
+
+========================
+CD) VARIABLE INCOME ADAPTER (ACTIVE WHEN incomeType = 'hourly' OR 'variable')
+========================
+Purpose: Provide income-smoothing guidance for users with unpredictable paychecks.
+
+Income Smoothing Strategy:
+- Recommend maintaining a 2-paycheck buffer in checking to absorb paycheck variability.
+- Buffer = 2 × AveragePaycheck (or 2 × (HourlyRate × TypicalHours) for hourly workers).
+- This buffer is IN ADDITION TO the TotalCheckingFloor.
+
+Lean vs. Fat Paycheck Allocation (SOFT — advisory in WEEKLY MOVES):
+- FAT PAYCHECK (above average): Excess above average should be split:
+  - 50% → debt kill acceleration (if debt exists) or investing (if debt-free)
+  - 30% → income buffer replenishment (if below 2-paycheck target)
+  - 20% → savings goals / sinking funds catch-up
+- LEAN PAYCHECK (below average): Tighten allocation:
+  - Cover floor + minimums + time-critical obligations ONLY
+  - Defer vault funding, debt kill surplus, and optional allocations by 1 paycheck
+  - Do NOT defer minimum payments — credit score protection is non-negotiable
+
+Dashboard Display:
+- When variable income is active, DASHBOARD should include: "Income Buffer: $[amount] / $[target] ([X]% funded)"
+- If buffer is < 50% funded, flag ⚠️ "INCOME BUFFER LOW — prioritize replenishment."
+
+========================
 Z) 90-DAY FORWARD RADAR — KEY MILESTONES (HARD)
 ========================
 Purpose: Proactive visibility into upcoming cash pressure points, complementing the reactive Radar (≤90 days) and Pace Tables.
@@ -910,9 +976,11 @@ COMPACT EXECUTION SEQUENCE (run top-to-bottom, no skipping):
   [ ] 5.2  Net Worth computation (Section X) — must print InvestmentsAsOfDate (Section S)
   [ ] 5.3  90-Day Forward Radar — Key Milestones (Section Z)
   [ ] 5.4  Status Grading: GREEN / YELLOW / RED (Section O)
-  [ ] 5.5  Assemble JSON Schema mapping cleanly based on these computations.
-  [ ] 5.6  AUTO-UPDATES LOG: append all changes or "No changes" (Section C)
-  [ ] 5.7  Run Quality Score (see below) — VALIDATE
+  [ ] 5.5  Credit Building Engine checks: utilization flags, statement timing, CLI triggers (Section CC)
+  [ ] 5.6  Variable Income Adapter: if applicable, compute income buffer and lean/fat allocation (Section CD)
+  [ ] 5.7  Assemble JSON Schema mapping cleanly based on these computations.
+  [ ] 5.8  AUTO-UPDATES LOG: append all changes or "No changes" (Section C)
+  [ ] 5.9  Run Quality Score (see below) — VALIDATE
 
 Run Quality Score (HARD):
 - At the end of every audit output, run the internal Quality block:
@@ -1243,7 +1311,7 @@ COMMUNICATION STYLE (USER PREFERENCE): DATA NERD 🤓
   const wrapper = "\n\n" + getJsonWrapper(providerId);
 
   // Attention anchor — placed at the very end (highest-attention zone)
-  const attentionAnchor = providerId === "anthropic" || !providerId || providerId === "claude" || providerId === "gemini" || providerId === "openai" ? `
+  const attentionAnchor = providerId === "anthropic" || !providerId || providerId === "claude" || providerId === "gemini" || providerId === "openai" || providerId === "backend" ? `
 
 <critical_reminder>
 YOU ARE ABOUT TO OUTPUT YOUR RESPONSE. Before outputting, verify:

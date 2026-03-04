@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense, lazy } from "react";
 import { Eye, EyeOff, ArrowLeft, Cloud, Download, Upload, CheckCircle, AlertTriangle, ChevronDown, Loader2, ExternalLink, Pencil, Check, ChevronRight, Shield, Cpu, Target, Briefcase, Landmark, Database, Lock, Settings, Info, Building2, Plus, Unplug, Sun, Moon, Monitor } from "lucide-react";
 import { T, APP_VERSION } from "../constants.js";
 import { AI_PROVIDERS, getProvider } from "../providers.js";
 import { getLogsAsText, clearLogs } from "../logger.js";
+import { getErrorLog, clearErrorLog } from "../errorReporter.js";
 import { Card, Label, InlineTooltip } from "../ui.jsx";
 import { Mono } from "../components.jsx";
 import { db, FaceId, nativeExport, fmt } from "../utils.js";
@@ -15,7 +16,8 @@ import { uploadToICloud } from "../cloudSync.js";
 import { isSecuritySensitiveKey } from "../securityKeys.js";
 // xlsx is loaded dynamically in importBackup() to reduce initial bundle size
 import { generateBackupSpreadsheet } from "../spreadsheet.js";
-import { getConnections, removeConnection, connectBank, autoMatchAccounts, fetchBalances, applyBalanceSync, saveConnectionLinks } from "../plaid.js";
+import { getConnections } from "../plaid.js";
+const LazyPlaidSection = lazy(() => import("../settings/PlaidSection.jsx"));
 import { shouldShowGating, checkAuditQuota, getRawTier } from "../subscription.js";
 import ProPaywall, { ProBanner } from "./ProPaywall.jsx";
 import { presentCustomerCenter } from "../revenuecat.js";
@@ -194,7 +196,7 @@ import { useSettings } from '../contexts/SettingsContext.jsx';
 import { useSecurity } from '../contexts/SecurityContext.jsx';
 import { usePortfolio } from '../contexts/PortfolioContext.jsx';
 
-export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestoreComplete, onShowGuide, proEnabled = false }) {
+export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, onBack, onRestoreComplete, onShowGuide, proEnabled = false }) {
     const { useStreaming, setUseStreaming } = useAudit();
     const { apiKey, setApiKey, aiProvider, setAiProvider, aiModel, setAiModel, financialConfig, setFinancialConfig, personalRules, setPersonalRules, autoBackupInterval, setAutoBackupInterval, notifPermission, persona, setPersona, themeMode, setThemeMode, themeTick } = useSettings();
     const { requireAuth, setRequireAuth, appPasscode, setAppPasscode, useFaceId, setUseFaceId, lockTimeout, setLockTimeout, appleLinkedId, setAppleLinkedId } = useSecurity();
@@ -202,16 +204,68 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
 
     // Auth Plugins state management
     const [lastBackupTS, setLastBackupTS] = useState(null);
-    const [plaidConnections, setPlaidConnections] = useState([]);
-    const [isPlaidConnecting, setIsPlaidConnecting] = useState(false);
 
     useEffect(() => {
         // Initialization now handled at root level in App.jsx
         db.get("last-backup-ts").then(ts => setLastBackupTS(ts)).catch(() => { });
-        if (ENABLE_PLAID) {
-            getConnections().then(conns => setPlaidConnections(conns || [])).catch(() => { });
-        }
     }, []);
+
+    // ── Auto-backup scheduling ──────────────────────────────────
+    // When Apple Sign-In is linked and an auto-backup interval is
+    // configured, check on mount and periodically whether enough
+    // time has elapsed since the last backup. If so, trigger a
+    // silent iCloud backup in the background.
+    useEffect(() => {
+        if (!appleLinkedId || autoBackupInterval === "off") return;
+
+        const intervalMs = {
+            daily: 24 * 60 * 60 * 1000,
+            weekly: 7 * 24 * 60 * 60 * 1000,
+            monthly: 30 * 24 * 60 * 60 * 1000,
+        }[autoBackupInterval];
+
+        if (!intervalMs) return;
+
+        const checkAndBackup = async () => {
+            try {
+                const ts = await db.get("last-backup-ts");
+                const elapsed = Date.now() - (ts || 0);
+                if (elapsed >= intervalMs) {
+                    // Build a backup payload (mirrors forceICloudSync logic)
+                    const backup = { app: "Catalyst Cash", version: APP_VERSION, exportedAt: new Date().toISOString(), data: {} };
+                    const keys = await db.keys();
+                    for (const key of keys) {
+                        if (isSecuritySensitiveKey(key)) continue;
+                        const val = await db.get(key);
+                        if (val !== null) backup.data[key] = val;
+                    }
+                    if (!("personal-rules" in backup.data)) {
+                        backup.data["personal-rules"] = personalRules ?? "";
+                    }
+                    const success = await uploadToICloud(backup, appPasscode || null);
+                    if (success) {
+                        const now = Date.now();
+                        await db.set("last-backup-ts", now);
+                        setLastBackupTS(now);
+                        console.log("Auto-backup to iCloud completed successfully.");
+                    } else {
+                        console.warn("Auto-backup to iCloud failed (upload returned false).");
+                    }
+                }
+            } catch (e) {
+                console.error("Auto-backup to iCloud error:", e);
+            }
+        };
+
+        // Run immediately on mount / when settings change
+        checkAndBackup();
+
+        // Also re-check every 60 seconds so that if the user leaves the
+        // settings tab open for a long session, the backup still fires
+        // once the interval elapses.
+        const timer = setInterval(checkAndBackup, 60 * 1000);
+        return () => clearInterval(timer);
+    }, [appleLinkedId, autoBackupInterval, appPasscode, personalRules]);
 
     const handleAppleSignIn = async () => {
         if (Capacitor.getPlatform() === 'web') return;
@@ -269,10 +323,6 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
     const [isForceSyncing, setIsForceSyncing] = useState(false);
 
     const forceICloudSync = async () => {
-        if (Capacitor.getPlatform() !== 'ios') {
-            if (window.toast) window.toast.error("iCloud sync is only available on iOS.");
-            return;
-        }
         setIsForceSyncing(true);
         try {
             const backup = { app: "Catalyst Cash", version: APP_VERSION, exportedAt: new Date().toISOString(), data: {} };
@@ -528,6 +578,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                         type="password"
                         autoFocus
                         placeholder="Passphrase"
+                        aria-label="Backup passphrase"
                         value={ppModal.value}
                         onChange={e => setPpModal(m => ({ ...m, value: e.target.value }))}
                         onKeyDown={e => { if (e.key === "Enter") ppConfirm(); if (e.key === "Escape") ppCancel(); }}
@@ -732,34 +783,6 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                         </div>}
 
 
-                        {/* Financial Profile */}
-                        <div>
-                            <span style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginLeft: 16, marginBottom: 8, display: "block", letterSpacing: "0.03em", textTransform: "uppercase" }}>Financial Profile</span>
-                            <div style={{ background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, overflow: "hidden" }}>
-                                {[
-                                    { id: "income", label: "Income & Cash Flow", icon: Briefcase, color: T.accent.emerald },
-                                    { id: "debts", label: "Debts & Liabilities", icon: Landmark, color: T.status.red },
-                                    { id: "targets", label: "Savings Targets", icon: Target, color: T.status.blue },
-                                    { id: "rules", label: "Custom Rules", icon: Settings, color: T.status.amber }
-                                ].map((item, i, arr) => (
-                                    <button key={item.id} onClick={() => { setActiveSegment("finance"); setFinanceTab(item.id); navDir.current = 'forward'; setActiveMenu(item.id); haptic.light(); }}
-                                        style={{
-                                            margin: 0, width: "100%", padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
-                                            background: "transparent", border: "none", borderBottom: i < arr.length - 1 ? `1px solid ${T.border.subtle}` : "none",
-                                            cursor: "pointer", textAlign: "left"
-                                        }}>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                                            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${item.color}20`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                                <item.icon size={16} color={item.color} />
-                                            </div>
-                                            <span style={{ fontSize: 16, fontWeight: 600, color: T.text.primary }}>{item.label}</span>
-                                        </div>
-                                        <ChevronRight size={18} color={T.text.muted} />
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
                         {/* Setup Progress — deferred onboarding items (auto-hide after 30 days or all done) */}
                         {(() => {
                             // Auto-hide: seed install date + check 30-day expiry
@@ -768,11 +791,11 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                             const daysSinceInstall = installTs ? (Date.now() - installTs) / 86400000 : 0;
                             const fc = financialConfig || {};
                             const steps = [
-                                { label: "Connect your income", done: !!(fc.paycheckStandard || fc.hourlyRateNet || fc.averagePaycheck), nav: "income" },
-                                { label: "Set weekly spending limit", done: !!fc.weeklySpendAllowance, nav: "income" },
-                                { label: "Set a minimum cash floor", done: !!fc.emergencyFloor, nav: "income" },
-                                { label: "Track your credit cards", done: (cards || []).length > 0, nav: null },
-                                { label: "Add recurring bills", done: (renewals || []).length > 0, nav: null },
+                                { label: "Connect your income", done: !!(fc.paycheckStandard || fc.hourlyRateNet || fc.averagePaycheck), nav: "input" },
+                                { label: "Set weekly spending limit", done: !!fc.weeklySpendAllowance, nav: "input" },
+                                { label: "Set a minimum cash floor", done: !!fc.emergencyFloor, nav: "input" },
+                                { label: "Track your credit cards", done: (cards || []).length > 0, nav: "cards" },
+                                { label: "Add recurring bills", done: (renewals || []).length > 0, nav: "renewals" },
                             ];
                             const done = steps.filter(s => s.done).length;
                             const total = steps.length;
@@ -811,7 +834,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                                 </div>
                                                 <span style={{ fontSize: 13, fontWeight: s.done ? 500 : 700, color: s.done ? T.text.dim : T.text.primary, textDecoration: s.done ? "line-through" : "none" }}>{s.label}</span>
                                             </div>
-                                            {!s.done && s.nav && <button onClick={() => { setActiveSegment("finance"); setFinanceTab(s.nav); navDir.current = 'forward'; setActiveMenu(s.nav); haptic.light(); }}
+                                            {!s.done && s.nav && <button onClick={() => { if (navTo) navTo(s.nav); haptic.light(); }}
                                                 style={{ fontSize: 11, fontWeight: 800, color: T.accent.primary, background: `${T.accent.primary}1A`, border: "none", cursor: "pointer", padding: "6px 12px", borderRadius: 999, transition: "background 0.2s" }}>Set up →</button>}
                                         </div>)}
                                     </div>
@@ -819,7 +842,8 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                             </div>;
                         })()}
                     </div>
-                )}
+                )
+                }
 
                 <div style={{ display: activeMenu && activeSegment === "app" ? "block" : "none" }}>
                     {/* ── AI Provider ─────────────────────────────────────── */}
@@ -988,6 +1012,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                             </button>
                             <div style={{ flex: 1, minWidth: "100%", position: "relative", marginTop: 4 }}>
                                 <input type="file" accept=".json,.enc,*/*" onChange={handleImport} disabled={restoreStatus === "restoring"}
+                                    aria-label="Restore backup file"
                                     style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", zIndex: 2 }} />
                                 <div style={{
                                     width: "100%", padding: "13px 0", borderRadius: T.radius.md,
@@ -1011,7 +1036,11 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                             <div style={{ display: "flex", gap: 8 }}>
                                 <button onClick={async () => {
                                     try {
-                                        const text = await getLogsAsText();
+                                        let text = await getLogsAsText();
+                                        const errors = await getErrorLog();
+                                        if (errors.length > 0) {
+                                            text = (text || "") + "\n\n═══ ERROR TELEMETRY ═══\n" + errors.map(e => `[${e.timestamp}] ${e.component}/${e.action}: ${e.message}`).join("\n");
+                                        }
                                         if (!text) { setStatusMsg("No logs to export."); return; }
                                         const blob = new Blob([text], { type: "text/plain" });
                                         const url = URL.createObjectURL(blob);
@@ -1042,6 +1071,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                 </button>
                                 <button onClick={async () => {
                                     await clearLogs();
+                                    await clearErrorLog();
                                     setStatusMsg("Debug log cleared.");
                                 }} style={{
                                     padding: "10px 14px", borderRadius: T.radius.md,
@@ -1109,6 +1139,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 12 }}>
                                             <span style={{ fontSize: 11, color: T.text.secondary }}>Auto-Backup Schedule</span>
                                             <select value={autoBackupInterval} onChange={e => { const v = e.target.value; setAutoBackupInterval(v); db.set("auto-backup-interval", v); }}
+                                                aria-label="Auto-backup schedule"
                                                 style={{ fontSize: 11, padding: "6px 10px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.glass, color: T.text.primary, fontFamily: T.font.mono, fontWeight: 600 }}>
                                                 <option value="daily">Daily</option>
                                                 <option value="weekly">Weekly</option>
@@ -1179,6 +1210,18 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                 </div>
                             </div>}
 
+                        {/* Clear Demo Data */}
+                        <button onClick={() => {
+                            if (window.confirm("Are you sure you want to exit demo mode and clear all sample data?")) {
+                                if (onClearDemoData) onClearDemoData();
+                            }
+                        }} style={{
+                            width: "100%", padding: 14, borderRadius: T.radius.md,
+                            border: `1px solid ${T.accent.primary}40`, background: T.accent.primaryDim,
+                            color: T.accent.primary, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                            marginBottom: 8
+                        }}>Clear Demo Data</button>
+
                         {/* Factory Reset */}
                         {!confirmFactoryReset ? <button onClick={() => setConfirmFactoryReset(true)} style={{
                             width: "100%", padding: 14, borderRadius: T.radius.md,
@@ -1217,6 +1260,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                 value={appPasscode || ""}
                                 onChange={handlePasscodeChange}
                                 placeholder="••••"
+                                aria-label="App passcode"
                                 autoComplete="new-password"
                                 style={{
                                     width: 60, padding: 8, borderRadius: T.radius.md, border: `1px solid ${T.border.default}`,
@@ -1249,6 +1293,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
                                         <p style={{ fontSize: 10, color: T.text.muted, marginTop: 2 }}>Time before requiring re-authentication</p>
                                     </div>
                                     <select value={lockTimeout} onChange={e => { const v = parseInt(e.target.value); setLockTimeout(v); db.set("lock-timeout", v); }}
+                                        aria-label="Relock timeout"
                                         style={{ fontSize: 12, padding: "8px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontWeight: 600 }}>
                                         <option value={0}>Immediately</option>
                                         <option value={60}>1 minute</option>
@@ -1304,900 +1349,19 @@ export default function SettingsTab({ onClear, onFactoryReset, onBack, onRestore
 
                     </Card>
 
-                    {/* ── Bank Connections (Plaid) ───────────────────────────────────────── */}
-                    {ENABLE_PLAID && (
-                        <Card style={{ borderLeft: `3px solid ${T.status.purple || "#8a2be2"}40`, display: appTab === "plaid" ? "block" : "none" }}>
-                            <Label>Bank Connections</Label>
-                            <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.6, marginBottom: 16 }}>
-                                Securely link your bank and credit card accounts to automatically fetch balances.
-                                Credentials are never stored on our servers.
-                            </p>
-
-                            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
-                                {plaidConnections.length === 0 ? (
-                                    <div style={{
-                                        padding: 16, borderRadius: T.radius.md, border: `1px dashed ${T.border.default}`,
-                                        textAlign: "center", color: T.text.muted, fontSize: 13, fontWeight: 600
-                                    }}>
-                                        No linked accounts yet.
-                                    </div>
-                                ) : (
-                                    plaidConnections.map(conn => (
-                                        <div key={conn.id} style={{
-                                            padding: "14px 16px", borderRadius: T.radius.md,
-                                            background: T.bg.elevated, border: `1px solid ${T.border.default}`,
-                                            display: "flex", justifyContent: "space-between", alignItems: "center"
-                                        }}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                                                <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                                                    {conn.institution_logo ? <img src={`data:image/png;base64,${conn.institution_logo}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Building2 size={16} color="#000" />}
-                                                </div>
-                                                <div>
-                                                    <span style={{ fontSize: 14, fontWeight: 700, color: T.text.primary, display: "block" }}>{conn.institution_name}</span>
-                                                    <span style={{ fontSize: 11, color: T.text.muted, marginTop: 2, display: "block" }}>{conn.accounts?.length || 0} Accounts Linked</span>
-                                                </div>
-                                            </div>
-                                            <button onClick={async () => {
-                                                if (!window.confirm(`Disconnect ${conn.institution_name}?`)) return;
-                                                await removeConnection(conn.id);
-                                                setPlaidConnections(await getConnections());
-                                                if (window.toast) window.toast.success("Connection removed");
-                                            }} style={{
-                                                width: 36, height: 36, borderRadius: T.radius.sm, border: "none",
-                                                background: T.status.redDim, color: T.status.red, cursor: "pointer",
-                                                display: "flex", alignItems: "center", justifyContent: "center"
-                                            }}>
-                                                <Unplug size={16} />
-                                            </button>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-
-                            <button onClick={async () => {
-                                if (isPlaidConnecting) return;
-                                setIsPlaidConnecting(true);
-                                try {
-                                    await connectBank(
-                                        async (connection) => {
-                                            try {
-                                                const { newCards, newBankAccounts } = autoMatchAccounts(connection, cards, bankAccounts, cardCatalog);
-                                                await saveConnectionLinks(connection);
-
-                                                const allCards = mergeUniqueById(cards, newCards);
-                                                const allBanks = mergeUniqueById(bankAccounts, newBankAccounts);
-                                                setCards(allCards);
-                                                setBankAccounts(allBanks);
-
-                                                try {
-                                                    const refreshed = await fetchBalances(connection.id);
-                                                    if (refreshed) {
-                                                        const syncData = applyBalanceSync(refreshed, allCards, allBanks);
-                                                        setCards(syncData.updatedCards);
-                                                        setBankAccounts(syncData.updatedBankAccounts);
-                                                        await saveConnectionLinks(refreshed);
-                                                    }
-                                                } catch {
-                                                    // Best effort only; connection succeeded.
-                                                }
-                                            } catch (err) {
-                                                console.error(err);
-                                            }
-                                            setPlaidConnections(await getConnections());
-                                            if (window.toast) window.toast.success("Bank linked successfully!");
-                                        },
-                                        (err) => {
-                                            console.error(err);
-                                            if (window.toast) window.toast.error("Failed to link bank");
-                                        }
-                                    );
-                                } catch (err) {
-                                    console.error(err);
-                                    if (window.toast) window.toast.error(err.message || "Failed to initialize Plaid");
-                                } finally {
-                                    setIsPlaidConnecting(false);
-                                }
-                            }} disabled={isPlaidConnecting} style={{
-                                width: "100%", padding: 14, borderRadius: T.radius.md,
-                                border: "none", background: T.accent.primary, color: "white",
-                                fontSize: 14, fontWeight: 700, cursor: isPlaidConnecting ? "not-allowed" : "pointer",
-                                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                                opacity: isPlaidConnecting ? 0.7 : 1, transition: "opacity .2s"
-                            }}>
-                                {isPlaidConnecting ? <Loader2 size={18} className="spin" /> : <Plus size={18} />}
-                                {isPlaidConnecting ? "Connecting..." : "Link New Bank"}
-                            </button>
-                        </Card>
+                    {ENABLE_PLAID && appTab === "plaid" && (
+                        <Suspense fallback={<Card><div style={{ padding: 20, textAlign: "center", color: T.text.muted }}>Loading...</div></Card>}>
+                            <LazyPlaidSection
+                                cards={cards} setCards={setCards}
+                                bankAccounts={bankAccounts} setBankAccounts={setBankAccounts}
+                                financialConfig={financialConfig} setFinancialConfig={setFinancialConfig}
+                                cardCatalog={cardCatalog}
+                            />
+                        </Suspense>
                     )}
                 </div>
 
-                {/* ── Financial Constants ────────────────────────────────────── */}
-                <div style={{ display: activeMenu && activeSegment === "finance" ? "block" : "none" }}>
-                    <div style={{ padding: "12px 16px 16px 16px", display: "flex", flexDirection: "column", gap: 16 }}>
-
-                        {/* Account Tracking Toggles */}
-                        <div style={{ display: financeTab === "income" ? "block" : "none" }}>
-                            <div style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${T.border.subtle}`, boxShadow: `0 4px 20px #00000010` }}>
-                                <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: T.text.primary }}>Account Tracking</h3>
-                                <p style={{ fontSize: 10, color: T.text.muted, marginBottom: 16, lineHeight: 1.4, borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 10 }}>Toggle which balances are included in the audit input form. Disabled accounts are hidden from the form and not required to run an audit.</p>
-                                {[
-                                    { key: "trackChecking", label: "Checking Account", desc: "Primary checking balance" },
-                                    { key: "trackSavings", label: "Savings (HYSA)", desc: "High-yield savings balance" },
-                                    { key: "trackPaycheck", label: "Paycheck Tracking", desc: "Auto-add paycheck to checking" },
-                                    { key: "trackCrypto", label: "Crypto Tracking", desc: "Include crypto in portfolio & audits" },
-                                ].map(({ key, label, desc }) => {
-                                    // Default to true (on) when not set — backward compatible
-                                    const isOn = financialConfig?.[key] !== false;
-                                    return (
-                                        <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-                                            <div>
-                                                <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block" }}>{label.toUpperCase()}</span>
-                                                <span style={{ fontSize: 10, color: T.text.muted }}>{desc}</span>
-                                            </div>
-                                            <button onClick={() => setFinancialConfig({ ...financialConfig, [key]: !isOn })} style={{
-                                                width: 56, height: 28, borderRadius: 999,
-                                                border: `1px solid ${isOn ? T.accent.primary : T.border.default}`,
-                                                background: isOn ? T.accent.primaryDim : T.bg.elevated,
-                                                position: "relative", cursor: "pointer", flexShrink: 0
-                                            }}>
-                                                <div style={{
-                                                    width: 22, height: 22, borderRadius: 999,
-                                                    background: isOn ? T.accent.primary : T.bg.card,
-                                                    position: "absolute", top: 2, left: isOn ? 30 : 4,
-                                                    transition: "all .2s"
-                                                }} />
-                                            </button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        {/* Income Profile */}
-                        <div style={{ display: financeTab === "income" ? "block" : "none" }}>
-                            <div style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${T.border.subtle}`, boxShadow: `0 4px 20px #00000010` }}>
-                                <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, color: T.text.primary, borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 6 }}>Income Profile</h3>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>PAY FREQUENCY</span>
-                                        <select value={financialConfig?.payFrequency || "weekly"} onChange={e => setFinancialConfig({ ...financialConfig, payFrequency: e.target.value })}
-                                            style={{ width: "100%", padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }}>
-                                            {["weekly", "bi-weekly", "semi-monthly", "monthly"].map(f => <option key={f} value={f}>{f.charAt(0).toUpperCase() + f.slice(1)}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>PAYDAY</span>
-                                        <select value={financialConfig?.payday || "Wednesday"} onChange={e => setFinancialConfig({ ...financialConfig, payday: e.target.value })}
-                                            style={{ width: "100%", padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }}>
-                                            {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map(d => <option key={d} value={d}>{d}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div style={{ marginBottom: 12 }}>
-                                    <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>INCOME TYPE</span>
-                                    <select value={financialConfig?.incomeType || "salary"} onChange={e => setFinancialConfig({ ...financialConfig, incomeType: e.target.value })}
-                                        style={{ width: "100%", padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }}>
-                                        {[{ v: "salary", l: "💼 Salary (Consistent Paychecks)" }, { v: "hourly", l: "⏱️ Hourly Wage" }, { v: "variable", l: "📈 Variable (Commission, Gig, Tips)" }].map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
-                                    </select>
-                                </div>
-
-                                {(!financialConfig?.incomeType || financialConfig.incomeType === "salary") && (
-                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                                        <div>
-                                            <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>STANDARD PAY</span>
-                                            <div style={{ position: "relative" }}>
-                                                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.paycheckStandard || ""} onChange={e => setFinancialConfig({ ...financialConfig, paycheckStandard: parseFloat(e.target.value) || 0 })}
-                                                    style={{ width: "100%", padding: "10px 10px 10px 22px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>1ST OF MONTH PAY</span>
-                                            <div style={{ position: "relative" }}>
-                                                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.paycheckFirstOfMonth || ""} onChange={e => setFinancialConfig({ ...financialConfig, paycheckFirstOfMonth: parseFloat(e.target.value) || 0 })}
-                                                    style={{ width: "100%", padding: "10px 10px 10px 22px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {financialConfig?.incomeType === "hourly" && (
-                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                                        <div>
-                                            <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>NET HOURLY ($)</span>
-                                            <div style={{ position: "relative" }}>
-                                                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.hourlyRateNet || ""} onChange={e => setFinancialConfig({ ...financialConfig, hourlyRateNet: parseFloat(e.target.value) || 0 })}
-                                                    style={{ width: "100%", padding: "10px 10px 10px 22px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>AVG HOURS</span>
-                                            <div style={{ position: "relative" }}>
-                                                <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.5" value={financialConfig?.typicalHours || ""} onChange={e => setFinancialConfig({ ...financialConfig, typicalHours: parseFloat(e.target.value) || 0 })}
-                                                    style={{ width: "100%", padding: "10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {financialConfig?.incomeType === "variable" && (
-                                    <div style={{ marginBottom: 12 }}>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>AVG PAYCHECK ($)</span>
-                                        <div style={{ position: "relative" }}>
-                                            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                            <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.averagePaycheck || ""} onChange={e => setFinancialConfig({ ...financialConfig, averagePaycheck: parseFloat(e.target.value) || 0 })}
-                                                style={{ width: "100%", padding: "10px 10px 10px 22px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
-                                        </div>
-                                    </div>
-                                )}
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>DEPOSIT TIME (EST)</span>
-                                        <input type="time" value={financialConfig?.paycheckTime || "06:00"} onChange={e => setFinancialConfig({ ...financialConfig, paycheckTime: e.target.value })}
-                                            style={{ width: "100%", padding: "10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
-                                    </div>
-                                </div>
-
-                                {/* Payday Reminder Notification */}
-                                {(() => {
-                                    const payday = financialConfig?.payday;
-                                    const pt = financialConfig?.paycheckTime;
-                                    const DAY_PREV = { Sunday: "Saturday", Monday: "Sunday", Tuesday: "Monday", Wednesday: "Tuesday", Thursday: "Wednesday", Friday: "Thursday", Saturday: "Friday" };
-                                    let notifyHour = 9, notifyMin = 0;
-                                    if (pt && /^\d{1,2}:\d{2}$/.test(pt)) {
-                                        const [h, m] = pt.split(":").map(Number);
-                                        const totalMins = h * 60 + m - 12 * 60;
-                                        notifyHour = Math.floor(((totalMins % (24 * 60)) + 24 * 60) % (24 * 60) / 60);
-                                        notifyMin = ((totalMins % 60) + 60) % 60;
-                                    }
-                                    const ampm = notifyHour >= 12 ? "PM" : "AM";
-                                    const h12 = notifyHour % 12 || 12;
-                                    const minStr = String(notifyMin).padStart(2, "0");
-                                    const notifyDayName = payday ? (DAY_PREV[payday] || "day before") : "day before";
-                                    const permDenied = notifPermission === "denied";
-                                    const hint = permDenied
-                                        ? "Enable notifications in iOS Settings → Catalyst Cash"
-                                        : payday ? `Notifies ${notifyDayName} at ${h12}:${minStr} ${ampm}` : "Set a payday to enable reminders";
-                                    const isOn = !permDenied && !!financialConfig?.paydayReminderEnabled;
-                                    return (
-                                        <div style={{ marginTop: 16, padding: "12px 14px", borderRadius: T.radius.md, background: isOn ? `${T.accent.primary}10` : T.bg.elevated, border: `1px solid ${isOn ? T.accent.primary + "40" : T.border.default}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, opacity: permDenied ? 0.5 : 1 }}>
-                                            <div style={{ flex: 1 }}>
-                                                <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary, display: "block" }}>Payday Reminder</span>
-                                                <span style={{ fontSize: 11, color: permDenied ? T.status.red : (isOn ? T.accent.primary : T.text.muted) }}>{hint}</span>
-                                            </div>
-                                            <button disabled={permDenied} onClick={() => !permDenied && setFinancialConfig({ ...financialConfig, paydayReminderEnabled: !financialConfig?.paydayReminderEnabled })} style={{
-                                                width: 44, height: 24, borderRadius: 999, flexShrink: 0,
-                                                border: `1px solid ${isOn ? T.accent.primary : T.border.default}`,
-                                                background: isOn ? T.accent.primaryDim : T.bg.card,
-                                                position: "relative", cursor: permDenied ? "not-allowed" : "pointer"
-                                            }}>
-                                                <div style={{ width: 18, height: 18, borderRadius: 999, background: isOn ? T.accent.primary : T.bg.elevated, position: "absolute", top: 2, left: isOn ? 22 : 4, transition: "all .2s" }} />
-                                            </button>
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-                        </div>
-
-                        {/* Income Sources (Combined with Income & Budget) */}
-                        <div style={{ display: financeTab === "income" ? "block" : "none" }}>
-                            <div style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${T.border.subtle}`, boxShadow: `0 4px 20px #00000010` }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 10, marginBottom: 16 }}>
-                                    <div style={{ flex: 1 }}>
-                                        <h3 style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 4 }}>Additional Income Sources</h3>
-                                        <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.4, margin: 0 }}>Track freelance, side-gig, or other income beyond your primary paycheck.</p>
-                                    </div>
-                                    {(financialConfig?.incomeSources || []).length > 0 && <button onClick={() => setEditingSection(editingSection === "income" ? null : "income")} style={{ padding: "5px 10px", borderRadius: T.radius.sm, border: `1px solid ${editingSection === "income" ? T.accent.primary : T.border.default}`, background: editingSection === "income" ? T.accent.primaryDim : "transparent", color: editingSection === "income" ? T.accent.primary : T.text.dim, fontSize: 10, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                                        {editingSection === "income" ? <><Check size={10} /> Done</> : <><Pencil size={10} /> Edit</>}
-                                    </button>}
-                                </div>
-                                {editingSection === "income" || (financialConfig?.incomeSources || []).length === 0 ? <>
-                                    {(financialConfig?.incomeSources || []).map((src, i) => (
-                                        <div key={i} style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
-                                            <input value={src.name || ""} onChange={e => { const arr = [...(financialConfig.incomeSources || [])]; arr[i] = { ...arr[i], name: e.target.value }; setFinancialConfig({ ...financialConfig, incomeSources: arr }); }}
-                                                placeholder="Source name" style={{ flex: 1, padding: "8px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 11 }} />
-                                            <div style={{ position: "relative", flex: 0.6 }}>
-                                                <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 11, fontWeight: 600 }}>$</span>
-                                                <input type="number" inputMode="decimal" pattern="[0-9]*" value={src.amount || ""} onChange={e => { const arr = [...(financialConfig.incomeSources || [])]; arr[i] = { ...arr[i], amount: parseFloat(e.target.value) || 0 }; setFinancialConfig({ ...financialConfig, incomeSources: arr }); }}
-                                                    placeholder="Amount" style={{ width: "100%", padding: "8px 8px 8px 20px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 11 }} />
-                                            </div>
-                                            <select value={src.frequency || "monthly"} onChange={e => { const arr = [...(financialConfig.incomeSources || [])]; arr[i] = { ...arr[i], frequency: e.target.value }; setFinancialConfig({ ...financialConfig, incomeSources: arr }); }}
-                                                style={{ flex: 0.5, padding: "8px 6px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 10 }}>
-                                                {["weekly", "bi-weekly", "monthly", "irregular"].map(f => <option key={f} value={f}>{f}</option>)}
-                                            </select>
-                                            <button onClick={() => { const arr = (financialConfig.incomeSources || []).filter((_, j) => j !== i); setFinancialConfig({ ...financialConfig, incomeSources: arr }); }}
-                                                style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>×</button>
-                                        </div>
-                                    ))}
-                                    <button onClick={() => { setEditingSection("income"); setFinancialConfig({ ...financialConfig, incomeSources: [...(financialConfig.incomeSources || []), { name: "", amount: 0, frequency: "monthly", type: "other" }] }); }}
-                                        style={{ padding: "8px 14px", borderRadius: T.radius.md, border: `1px dashed ${T.border.default}`, background: "transparent", color: T.accent.primary, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono, width: "100%" }}>+ ADD SOURCE</button>
-                                </> : <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                    {(financialConfig?.incomeSources || []).map((src, i) => (
-                                        <div key={i} style={{ padding: "10px 12px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1px solid ${T.border.default}` }}>
-                                            <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{src.name || "Unnamed"}</span>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                <span style={{ fontSize: 12, fontWeight: 700, color: T.accent.primary, fontFamily: T.font.mono }}>${(src.amount || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-                                                <span style={{ fontSize: 9, color: T.text.muted, fontFamily: T.font.mono, textTransform: "uppercase" }}>{src.frequency || "monthly"}</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>}
-                            </div>
-                        </div>
-
-                        {/* Budget Categories (Combined with Income & Budget) */}
-                        <div style={{ display: financeTab === "income" ? "block" : "none" }}>
-                            <div style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${T.border.subtle}`, boxShadow: `0 4px 20px #00000010` }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 10, marginBottom: 16 }}>
-                                    <div style={{ flex: 1 }}>
-                                        <h3 style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 4 }}>Monthly Budget Categories</h3>
-                                        <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.4, margin: 0 }}>Set monthly spending targets per category. The AI will track actual vs. target in audits.</p>
-                                    </div>
-                                    {(financialConfig?.budgetCategories || []).length > 0 && <button onClick={() => setEditingSection(editingSection === "budget" ? null : "budget")} style={{ padding: "5px 10px", borderRadius: T.radius.sm, border: `1px solid ${editingSection === "budget" ? T.accent.primary : T.border.default}`, background: editingSection === "budget" ? T.accent.primaryDim : "transparent", color: editingSection === "budget" ? T.accent.primary : T.text.dim, fontSize: 10, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                                        {editingSection === "budget" ? <><Check size={10} /> Done</> : <><Pencil size={10} /> Edit</>}
-                                    </button>}
-                                </div>
-                                {editingSection === "budget" || (financialConfig?.budgetCategories || []).length === 0 ? <>
-                                    {(financialConfig?.budgetCategories || []).map((cat, i) => (
-                                        <div key={i} style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
-                                            <input value={cat.name || ""} onChange={e => { const arr = [...(financialConfig.budgetCategories || [])]; arr[i] = { ...arr[i], name: e.target.value }; setFinancialConfig({ ...financialConfig, budgetCategories: arr }); }}
-                                                placeholder="Category (e.g. Groceries)" style={{ flex: 1, padding: "8px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 11 }} />
-                                            <div style={{ position: "relative", flex: 0.5 }}>
-                                                <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 11, fontWeight: 600 }}>$</span>
-                                                <input type="number" inputMode="decimal" pattern="[0-9]*" value={cat.monthlyTarget || ""} onChange={e => { const arr = [...(financialConfig.budgetCategories || [])]; arr[i] = { ...arr[i], monthlyTarget: parseFloat(e.target.value) || 0 }; setFinancialConfig({ ...financialConfig, budgetCategories: arr }); }}
-                                                    placeholder="/month" style={{ width: "100%", padding: "8px 8px 8px 20px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 11 }} />
-                                            </div>
-                                            <button onClick={() => { const arr = (financialConfig.budgetCategories || []).filter((_, j) => j !== i); setFinancialConfig({ ...financialConfig, budgetCategories: arr }); }}
-                                                style={{ width: 30, height: 30, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>×</button>
-                                        </div>
-                                    ))}
-                                    <button onClick={() => { setEditingSection("budget"); setFinancialConfig({ ...financialConfig, budgetCategories: [...(financialConfig.budgetCategories || []), { name: "", monthlyTarget: 0 }] }); }}
-                                        style={{ padding: "8px 14px", borderRadius: T.radius.md, border: `1px dashed ${T.border.default}`, background: "transparent", color: T.accent.primary, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono, width: "100%" }}>+ ADD CATEGORY</button>
-                                </> : <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                                    {(financialConfig?.budgetCategories || []).map((cat, i) => (
-                                        <div key={i} style={{ padding: "6px 12px", borderRadius: T.radius.pill || 20, background: T.bg.elevated, border: `1px solid ${T.border.default}`, display: "flex", alignItems: "center", gap: 6 }}>
-                                            <span style={{ fontSize: 11, fontWeight: 600, color: T.text.primary }}>{cat.name || "Unnamed"}</span>
-                                            <span style={{ fontSize: 10, fontWeight: 700, color: T.accent.primary, fontFamily: T.font.mono }}>${(cat.monthlyTarget || 0).toLocaleString()}/mo</span>
-                                        </div>
-                                    ))}
-                                </div>}
-                            </div>
-                        </div>
-
-                        {/* Non-Card Debts (Combined with Debts & Credit) */}
-                        <div style={{ display: financeTab === "debts" ? "block" : "none" }}>
-                            <div style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${T.border.subtle}`, boxShadow: `0 4px 20px #00000010` }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 10, marginBottom: 16 }}>
-                                    <div style={{ flex: 1 }}>
-                                        <h3 style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 4 }}>Non-Card Debts</h3>
-                                        <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.4, margin: 0 }}>Student loans, auto loans, personal loans, mortgages. The AI will include minimums in time-critical gates.</p>
-                                    </div>
-                                    {(financialConfig?.nonCardDebts || []).length > 0 && <button onClick={() => setEditingSection(editingSection === "debts" ? null : "debts")} style={{ padding: "5px 10px", borderRadius: T.radius.sm, border: `1px solid ${editingSection === "debts" ? T.accent.primary : T.border.default}`, background: editingSection === "debts" ? T.accent.primaryDim : "transparent", color: editingSection === "debts" ? T.accent.primary : T.text.dim, fontSize: 10, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                                        {editingSection === "debts" ? <><Check size={10} /> Done</> : <><Pencil size={10} /> Edit</>}
-                                    </button>}
-                                </div>
-                                {editingSection === "debts" || (financialConfig?.nonCardDebts || []).length === 0 ? <>
-                                    {(financialConfig?.nonCardDebts || []).map((debt, i) => (
-                                        <div key={i} style={{ background: T.bg.elevated, borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, padding: 10, marginBottom: 8 }}>
-                                            <div style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
-                                                <input value={debt.name || ""} onChange={e => { const arr = [...(financialConfig.nonCardDebts || [])]; arr[i] = { ...arr[i], name: e.target.value }; setFinancialConfig({ ...financialConfig, nonCardDebts: arr }); }}
-                                                    placeholder="Loan name" style={{ flex: 1, padding: "8px 10px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 11 }} />
-                                                <select value={debt.type || "other"} onChange={e => { const arr = [...(financialConfig.nonCardDebts || [])]; arr[i] = { ...arr[i], type: e.target.value }; setFinancialConfig({ ...financialConfig, nonCardDebts: arr }); }}
-                                                    style={{ flex: 0.5, padding: "8px 6px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 10 }}>
-                                                    {["student", "auto", "personal", "mortgage", "medical", "other"].map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-                                                </select>
-                                                <button onClick={() => { const arr = (financialConfig.nonCardDebts || []).filter((_, j) => j !== i); setFinancialConfig({ ...financialConfig, nonCardDebts: arr }); }}
-                                                    style={{ width: 28, height: 28, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>×</button>
-                                            </div>
-                                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 6 }}>
-                                                <div style={{ position: "relative" }}>
-                                                    <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 3 }}>BALANCE</span>
-                                                    <div style={{ position: "relative" }}>
-                                                        <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 11, fontWeight: 600 }}>$</span>
-                                                        <input type="number" inputMode="decimal" pattern="[0-9]*" value={debt.balance || ""} onChange={e => { const arr = [...(financialConfig.nonCardDebts || [])]; arr[i] = { ...arr[i], balance: parseFloat(e.target.value) || 0 }; setFinancialConfig({ ...financialConfig, nonCardDebts: arr }); }}
-                                                            placeholder="0.00" style={{ width: "100%", padding: "8px 8px 8px 20px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 12 }} />
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 3 }}>MIN PAYMENT</span>
-                                                    <div style={{ position: "relative" }}>
-                                                        <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 11, fontWeight: 600 }}>$</span>
-                                                        <input type="number" inputMode="decimal" pattern="[0-9]*" value={debt.minimum || ""} onChange={e => { const arr = [...(financialConfig.nonCardDebts || [])]; arr[i] = { ...arr[i], minimum: parseFloat(e.target.value) || 0 }; setFinancialConfig({ ...financialConfig, nonCardDebts: arr }); }}
-                                                            placeholder="0.00" style={{ width: "100%", padding: "8px 8px 8px 20px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 12 }} />
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 3 }}>APR %</span>
-                                                    <div style={{ position: "relative" }}>
-                                                        <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={debt.apr || ""} onChange={e => { const arr = [...(financialConfig.nonCardDebts || [])]; arr[i] = { ...arr[i], apr: parseFloat(e.target.value) || 0 }; setFinancialConfig({ ...financialConfig, nonCardDebts: arr }); }}
-                                                            placeholder="0.0" style={{ width: "100%", padding: "8px 20px 8px 8px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 12 }} />
-                                                        <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 11 }}>%</span>
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 3 }}>DUE DAY</span>
-                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" value={debt.dueDay || ""} onChange={e => { const arr = [...(financialConfig.nonCardDebts || [])]; arr[i] = { ...arr[i], dueDay: parseInt(e.target.value) || 0 }; setFinancialConfig({ ...financialConfig, nonCardDebts: arr }); }}
-                                                        placeholder="1" title="Due day of month" style={{ width: "100%", padding: "8px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 12, textAlign: "center" }} />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    <button onClick={() => { setEditingSection("debts"); setFinancialConfig({ ...financialConfig, nonCardDebts: [...(financialConfig.nonCardDebts || []), { name: "", type: "other", balance: 0, minimum: 0, apr: 0, dueDay: 1 }] }); }}
-                                        style={{ padding: "8px 14px", borderRadius: T.radius.md, border: `1px dashed ${T.border.default}`, background: "transparent", color: T.accent.primary, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono, width: "100%" }}>+ ADD DEBT</button>
-                                </> : <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                    {(financialConfig?.nonCardDebts || []).map((debt, i) => (
-                                        <div key={i} style={{ padding: "10px 12px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1px solid ${T.border.default}` }}>
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                                                <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{debt.name || "Unnamed"}</span>
-                                                <span style={{ fontSize: 9, color: T.text.muted, fontFamily: T.font.mono, textTransform: "uppercase", padding: "2px 6px", borderRadius: 4, background: `${T.border.subtle}60` }}>{debt.type || "other"}</span>
-                                            </div>
-                                            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                                                <span style={{ fontSize: 11, fontWeight: 700, color: T.status.red, fontFamily: T.font.mono }}>${(debt.balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-                                                <span style={{ fontSize: 9, color: T.text.muted, fontFamily: T.font.mono }}>min ${(debt.minimum || 0).toFixed(2)}</span>
-                                                <span style={{ fontSize: 9, color: T.text.muted, fontFamily: T.font.mono }}>{debt.apr || 0}% APR</span>
-                                                <span style={{ fontSize: 9, color: T.text.muted, fontFamily: T.font.mono }}>Due {debt.dueDay || "—"}</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>}
-                            </div>
-                        </div>
-
-                        {/* Credit Score (Combined with Debts & Credit) */}
-                        <div style={{ display: financeTab === "debts" ? "block" : "none" }}>
-                            <div style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${T.border.subtle}`, boxShadow: `0 4px 20px #00000010` }}>
-                                <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: T.text.primary }}>Credit Score & Utilization</h3>
-                                <p style={{ fontSize: 10, color: T.text.muted, marginBottom: 16, lineHeight: 1.4, borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 10 }}>Enter your latest score. The AI will factor utilization into debt paydown strategy.</p>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>SCORE</span>
-                                        <input type="number" inputMode="decimal" pattern="[0-9]*" value={financialConfig?.creditScore || ""} onChange={e => setFinancialConfig({ ...financialConfig, creditScore: parseInt(e.target.value) || null })}
-                                            placeholder="750" style={{ width: "100%", padding: "10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
-                                    </div>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>UTILIZATION</span>
-                                        <div style={{ position: "relative" }}>
-                                            <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.1" value={financialConfig?.creditUtilization || ""} onChange={e => setFinancialConfig({ ...financialConfig, creditUtilization: parseFloat(e.target.value) || null })}
-                                                placeholder="25" style={{ width: "100%", padding: "10px 22px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
-                                            <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>%</span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>AS OF</span>
-                                        <input type="date" value={financialConfig?.creditScoreDate || ""} onChange={e => setFinancialConfig({ ...financialConfig, creditScoreDate: e.target.value })}
-                                            style={{ width: "100%", padding: "10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
-                                    </div>
-                                </div>
-                                {
-                                    financialConfig?.creditScore && (
-                                        <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: T.radius.md, background: financialConfig.creditScore >= 740 ? T.status.greenDim : financialConfig.creditScore >= 670 ? T.status.amberDim : T.status.redDim, border: `1px solid ${financialConfig.creditScore >= 740 ? T.status.green : financialConfig.creditScore >= 670 ? T.status.amber : T.status.red}20` }}>
-                                            <span style={{ fontSize: 10, fontWeight: 700, color: financialConfig.creditScore >= 740 ? T.status.green : financialConfig.creditScore >= 670 ? T.status.amber : T.status.red, fontFamily: T.font.mono }}>
-                                                {financialConfig.creditScore >= 800 ? "EXCEPTIONAL" : financialConfig.creditScore >= 740 ? "VERY GOOD" : financialConfig.creditScore >= 670 ? "GOOD" : financialConfig.creditScore >= 580 ? "FAIR" : "POOR"} · {financialConfig.creditScore}
-                                            </span>
-                                        </div>
-                                    )
-                                }
-                            </div>
-                        </div>
-
-                        {/* Targets & Baselines (Combined with Targets & Limits) */}
-                        <div style={{ display: financeTab === "targets" ? "flex" : "none", flexDirection: "column", gap: 16 }}>
-                            <div style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${T.border.subtle}`, boxShadow: `0 4px 20px #00000010` }}>
-                                <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 16, color: T.text.primary, borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 10 }}>Targets & Baselines</h3>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>WEEKLY SPEND</span>
-                                        <div style={{ position: "relative" }}>
-                                            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                            <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.weeklySpendAllowance || ""} onChange={e => setFinancialConfig({ ...financialConfig, weeklySpendAllowance: parseFloat(e.target.value) || 0 })}
-                                                style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}><InlineTooltip term="Floor">CHECKING FLOOR</InlineTooltip></span>
-                                        <div style={{ position: "relative" }}>
-                                            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                            <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.emergencyFloor || ""} onChange={e => setFinancialConfig({ ...financialConfig, emergencyFloor: parseFloat(e.target.value) || 0 })}
-                                                style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                        </div>
-                                        <p style={{ fontSize: 10, color: T.text.muted, marginTop: 4, lineHeight: 1.3 }}>Goal: minimum checking balance to maintain.</p>
-                                    </div>
-                                </div>
-                                {/* Tax Bracket & Minimum Cash Floor */}
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>TAX BRACKET %</span>
-                                        <div style={{ position: "relative" }}>
-                                            <input type="number" inputMode="decimal" pattern="[0-9]*" step="1" min="0" max="50" value={financialConfig?.taxBracketPercent || ""} onChange={e => setFinancialConfig({ ...financialConfig, taxBracketPercent: parseFloat(e.target.value) || 0 })}
-                                                placeholder="e.g. 22" style={{ width: "100%", padding: "12px 24px 12px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                            <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>%</span>
-                                        </div>
-                                        <p style={{ fontSize: 10, color: T.text.muted, marginTop: 4, lineHeight: 1.3 }}>Federal bracket (post-tax paychecks already assumed).</p>
-                                    </div>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}><InlineTooltip term="Floor">MIN LIQUIDITY</InlineTooltip></span>
-                                        <div style={{ position: "relative" }}>
-                                            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                            <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.minCashFloor || ""} onChange={e => setFinancialConfig({ ...financialConfig, minCashFloor: parseFloat(e.target.value) || 0 })}
-                                                placeholder="e.g. 1000" style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                        </div>
-                                        <p style={{ fontSize: 10, color: T.text.muted, marginTop: 4, lineHeight: 1.3 }}>Hard floor: AI will never drop total liquid cash below this.</p>
-                                    </div>
-                                </div>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>GREEN TARGET</span>
-                                        <div style={{ position: "relative" }}>
-                                            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                            <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.greenStatusTarget || ""} onChange={e => setFinancialConfig({ ...financialConfig, greenStatusTarget: parseFloat(e.target.value) || 0 })}
-                                                style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>EMERGENCY FUND</span>
-                                        <div style={{ position: "relative" }}>
-                                            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                            <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.emergencyReserveTarget || ""} onChange={e => setFinancialConfig({ ...financialConfig, emergencyReserveTarget: parseFloat(e.target.value) || 0 })}
-                                                style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                        </div>
-                                    </div>
-                                </div>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>DEFAULT APR</span>
-                                        <div style={{ position: "relative" }}>
-                                            <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.defaultAPR || ""} onChange={e => setFinancialConfig({ ...financialConfig, defaultAPR: parseFloat(e.target.value) || 0 })}
-                                                style={{ width: "100%", padding: "12px 24px 12px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                            <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>%</span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>ARBITRAGE TARGET APR</span>
-                                        <div style={{ position: "relative" }}>
-                                            <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.arbitrageTargetAPR || ""} onChange={e => setFinancialConfig({ ...financialConfig, arbitrageTargetAPR: parseFloat(e.target.value) || 0 })}
-                                                style={{ width: "100%", padding: "12px 24px 12px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                            <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>%</span>
-                                        </div>
-                                        <div style={{ fontSize: 10, color: T.text.muted, marginTop: 4 }}>Surplus routed to investing if debt APR is below this</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Tax Withholding */}
-                            <div style={{ background: T.bg.card, borderRadius: T.radius.xl, padding: 20, border: `1px solid ${T.border.subtle}`, boxShadow: `0 4px 20px #00000010` }}>
-                                <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 16, color: T.text.primary, borderBottom: `1px dashed ${T.border.subtle}`, paddingBottom: 10 }}>Tax & Withholding</h3>
-                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block" }}>SELF-EMPLOYED / CONTRACTOR</span>
-                                        <span style={{ fontSize: 10, color: T.text.muted }}>Enable for quarterly tax estimates</span>
-                                    </div>
-                                    <button onClick={() => setFinancialConfig({ ...financialConfig, isContractor: !financialConfig?.isContractor })} style={{
-                                        width: 56, height: 28, borderRadius: 999,
-                                        border: `1px solid ${financialConfig?.isContractor ? T.accent.primary : T.border.default}`,
-                                        background: financialConfig?.isContractor ? T.accent.primaryDim : T.bg.elevated,
-                                        position: "relative", cursor: "pointer"
-                                    }}>
-                                        <div style={{
-                                            width: 22, height: 22, borderRadius: 999,
-                                            background: financialConfig?.isContractor ? T.accent.primary : T.bg.card,
-                                            position: "absolute", top: 2, left: financialConfig?.isContractor ? 30 : 4,
-                                            transition: "all .2s"
-                                        }} />
-                                    </button>
-                                </div>
-                                {
-                                    financialConfig?.isContractor && (
-                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                                            <div>
-                                                <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>WITHHOLDING RATE</span>
-                                                <div style={{ position: "relative" }}>
-                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.1" value={financialConfig?.taxWithholdingRate || ""} onChange={e => setFinancialConfig({ ...financialConfig, taxWithholdingRate: parseFloat(e.target.value) || 0 })}
-                                                        style={{ width: "100%", padding: "12px 24px 12px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                                    <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>%</span>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>QUARTERLY ESTIMATE</span>
-                                                <div style={{ position: "relative" }}>
-                                                    <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.quarterlyTaxEstimate || ""} onChange={e => setFinancialConfig({ ...financialConfig, quarterlyTaxEstimate: parseFloat(e.target.value) || 0 })}
-                                                        style={{ width: "100%", padding: "12px 12px 12px 24px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono }} />
-                                                </div>
-                                                <p style={{ fontSize: 10, color: T.text.muted, marginTop: 4 }}>Due: Apr 15, Jun 15, Sep 15, Jan 15</p>
-                                            </div>
-                                        </div>
-                                    )
-                                }
-                            </div>
-                        </div>
-                        {/* Personal Rules (Combined with Rules & Advanced) */}
-                        <div style={{ display: financeTab === "rules" ? "block" : "none" }}>
-                            <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, color: T.status.blue, borderBottom: `1px solid ${T.status.blue}30`, paddingBottom: 6 }}>Personal Rules (Private)</h3>
-                            <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.6, marginBottom: 10 }}>
-                                Optional: paste your private rules here. This is stored locally and appended to the AI system prompt.
-                                Clear this field before publishing or sharing the app.
-                            </p>
-                            <textarea
-                                value={personalRules || ""}
-                                onChange={e => setPersonalRules(e.target.value)}
-                                placeholder="Paste private rules here..."
-                                style={{
-                                    width: "100%", height: 140, padding: 12, borderRadius: T.radius.md,
-                                    border: `1px solid ${T.border.default}`, background: T.bg.elevated, boxSizing: "border-box",
-                                    color: T.text.primary, fontSize: 11, fontFamily: T.font.mono, resize: "none"
-                                }}
-                            />
-                            {
-                                personalRules && <button onClick={() => setPersonalRules("")} style={{
-                                    marginTop: 8, padding: "8px 12px", borderRadius: T.radius.md, width: "100%",
-                                    border: `1px solid ${T.border.default}`, background: "transparent",
-                                    color: T.text.secondary, fontSize: 11, fontWeight: 700, cursor: "pointer"
-                                }}>Clear Personal Rules</button>
-                            }
-                        </div>
-
-                        {/* AI Persona Picker */}
-                        <div style={{ display: financeTab === "rules" ? "block" : "none" }}>
-                            <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, color: T.accent.primary, borderBottom: `1px solid ${T.accent.primary}30`, paddingBottom: 6 }}>AI Personality</h3>
-                            <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.6, marginBottom: 12 }}>
-                                Choose how your financial advisor communicates. This adjusts the AI's tone — not its accuracy.
-                            </p>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                                {[
-                                    { id: null, emoji: "⚖️", name: "Default", sub: "Balanced & professional" },
-                                    { id: "coach", emoji: "🪖", name: "Strict Coach", sub: "Direct, no-nonsense" },
-                                    { id: "friend", emoji: "🤗", name: "Supportive", sub: "Warm & encouraging" },
-                                    { id: "nerd", emoji: "🤓", name: "Data Nerd", sub: "Stats & percentages" },
-                                ].map(p => {
-                                    const active = persona === p.id;
-                                    return <button key={p.name} onClick={() => { setPersona(p.id); db.set("ai-persona", p.id); }}
-                                        style={{
-                                            padding: "12px 10px", borderRadius: T.radius.md, cursor: "pointer",
-                                            border: `1.5px solid ${active ? T.accent.primary : T.border.default}`,
-                                            background: active ? `${T.accent.primary}12` : T.bg.elevated,
-                                            textAlign: "center", transition: "all 0.2s ease"
-                                        }}>
-                                        <div style={{ fontSize: 24, marginBottom: 4 }}>{p.emoji}</div>
-                                        <div style={{ fontSize: 12, fontWeight: 700, color: active ? T.accent.primary : T.text.primary }}>{p.name}</div>
-                                        <div style={{ fontSize: 10, color: T.text.dim, marginTop: 2 }}>{p.sub}</div>
-                                    </button>;
-                                })}
-                            </div>
-                        </div>
-
-                        {/* Big Bill Lookout Window (Combined with Rules & Advanced) */}
-                        <div style={{ display: financeTab === "rules" ? "block" : "none" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.status.amber}30`, paddingBottom: 6, marginBottom: financialConfig?.enableHeavyHorizon ? 12 : 0 }}>
-                                <div style={{ flex: 1, paddingRight: 12 }}>
-                                    <h3 style={{ fontSize: 13, fontWeight: 700, color: T.status.amber, marginBottom: 2 }}>Big Bill Lookout Window</h3>
-                                    <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.4, margin: 0 }}>If a large expense is coming soon, the AI will hold off on aggressive debt payoffs to protect your cash.</p>
-                                </div>
-                                <Toggle value={financialConfig?.enableHeavyHorizon} onChange={v => setFinancialConfig({ ...financialConfig, enableHeavyHorizon: v })} />
-                            </div>
-                            {
-                                financialConfig?.enableHeavyHorizon && (
-                                    <div style={{ marginTop: 12 }}>
-                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                                            <div>
-                                                <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>START DAY</span>
-                                                <input type="number" inputMode="decimal" pattern="[0-9]*" value={financialConfig?.heavyHorizonStart || ""} onChange={e => setFinancialConfig({ ...financialConfig, heavyHorizonStart: parseInt(e.target.value) || 0 })}
-                                                    style={{ width: "100%", padding: "10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
-                                            </div>
-                                            <div>
-                                                <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>END DAY</span>
-                                                <input type="number" inputMode="decimal" pattern="[0-9]*" value={financialConfig?.heavyHorizonEnd || ""} onChange={e => setFinancialConfig({ ...financialConfig, heavyHorizonEnd: parseInt(e.target.value) || 0 })}
-                                                    style={{ width: "100%", padding: "10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>DEFENSIVE SUM LIMIT</span>
-                                            <div style={{ position: "relative" }}>
-                                                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={financialConfig?.heavyHorizonThreshold || ""} onChange={e => setFinancialConfig({ ...financialConfig, heavyHorizonThreshold: parseFloat(e.target.value) || 0 })}
-                                                    style={{ width: "100%", padding: "10px 10px 10px 22px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
-                                            </div>
-                                            <p style={{ fontSize: 10, color: T.text.muted, marginTop: 4, lineHeight: 1.4 }}>If any expense exceeds this sum within the horizon, system will block aggressive debt payoffs.</p>
-                                        </div>
-                                    </div>
-                                )
-                            }
-                        </div>
-
-                        {/* Misc (Combined with Rules & Advanced) */}
-                        <div style={{ display: financeTab === "rules" ? "block" : "none" }}>
-
-                            {/* Insurance Deductibles */}
-                            <div style={{ marginBottom: 24 }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 6, marginBottom: financialConfig?.enableInsuranceTracking ? 12 : 0 }}>
-                                    <div style={{ flex: 1, paddingRight: 12 }}>
-                                        <h3 style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 2 }}>Insurance Deductibles</h3>
-                                        <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.4, margin: 0 }}>Factor active deductible reserves into your emergency planning.</p>
-                                    </div>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                        {financialConfig?.enableInsuranceTracking && (financialConfig?.insuranceDeductibles || []).length > 0 && <button onClick={() => setEditingSection(editingSection === "insurance" ? null : "insurance")} style={{ padding: "5px 10px", borderRadius: T.radius.sm, border: `1px solid ${editingSection === "insurance" ? T.accent.primary : T.border.default}`, background: editingSection === "insurance" ? T.accent.primaryDim : "transparent", color: editingSection === "insurance" ? T.accent.primary : T.text.dim, fontSize: 10, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                                            {editingSection === "insurance" ? <><Check size={10} /> Done</> : <><Pencil size={10} /> Edit</>}
-                                        </button>}
-                                        <Toggle value={financialConfig?.enableInsuranceTracking} onChange={v => setFinancialConfig({ ...financialConfig, enableInsuranceTracking: v })} />
-                                    </div>
-                                </div>
-                                {
-                                    financialConfig?.enableInsuranceTracking && (
-                                        <div style={{ marginTop: 12 }}>
-                                            {editingSection === "insurance" || (financialConfig?.insuranceDeductibles || []).length === 0 ? <>
-                                                {(financialConfig?.insuranceDeductibles || []).map((ins, i) => (
-                                                    <div key={i} style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
-                                                        <select value={ins.type || "health"} onChange={e => { const arr = [...(financialConfig.insuranceDeductibles || [])]; arr[i] = { ...arr[i], type: e.target.value }; setFinancialConfig({ ...financialConfig, insuranceDeductibles: arr }); }}
-                                                            style={{ flex: 0.5, padding: "8px 6px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 10 }}>
-                                                            {["health", "auto", "home", "renters", "life", "other"].map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-                                                        </select>
-                                                        <div style={{ position: "relative", flex: 0.5 }}>
-                                                            <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 10, fontWeight: 600 }}>$</span>
-                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" value={ins.deductible || ""} onChange={e => { const arr = [...(financialConfig.insuranceDeductibles || [])]; arr[i] = { ...arr[i], deductible: parseFloat(e.target.value) || 0 }; setFinancialConfig({ ...financialConfig, insuranceDeductibles: arr }); }}
-                                                                placeholder="Deductible" style={{ width: "100%", padding: "8px 6px 8px 16px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 10 }} />
-                                                        </div>
-                                                        <div style={{ position: "relative", flex: 0.5 }}>
-                                                            <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 10, fontWeight: 600 }}>$</span>
-                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" value={ins.annualPremium || ""} onChange={e => { const arr = [...(financialConfig.insuranceDeductibles || [])]; arr[i] = { ...arr[i], annualPremium: parseFloat(e.target.value) || 0 }; setFinancialConfig({ ...financialConfig, insuranceDeductibles: arr }); }}
-                                                                placeholder="Premium/yr" style={{ width: "100%", padding: "8px 6px 8px 16px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 10 }} />
-                                                        </div>
-                                                        <button onClick={() => { const arr = (financialConfig.insuranceDeductibles || []).filter((_, j) => j !== i); setFinancialConfig({ ...financialConfig, insuranceDeductibles: arr }); }}
-                                                            style={{ width: 28, height: 28, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>×</button>
-                                                    </div>
-                                                ))}
-                                                <button onClick={() => { setEditingSection("insurance"); setFinancialConfig({ ...financialConfig, insuranceDeductibles: [...(financialConfig.insuranceDeductibles || []), { type: "health", deductible: 0, annualPremium: 0 }] }); }}
-                                                    style={{ padding: "8px 14px", borderRadius: T.radius.md, border: `1px dashed ${T.border.default}`, background: "transparent", color: T.accent.primary, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono, width: "100%", marginBottom: 16 }}>+ ADD INSURANCE</button>
-                                            </> : <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
-                                                {(financialConfig?.insuranceDeductibles || []).map((ins, i) => (
-                                                    <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1px solid ${T.border.default}` }}>
-                                                        <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary, textTransform: "capitalize" }}>{ins.type || "Health"}</span>
-                                                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                                            <span style={{ fontSize: 10, color: T.text.muted, fontFamily: T.font.mono }}>Ded: ${(ins.deductible || 0).toLocaleString()}</span>
-                                                            <span style={{ fontSize: 10, color: T.text.muted, fontFamily: T.font.mono }}>${(ins.annualPremium || 0).toLocaleString()}/yr</span>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>}
-                                        </div>
-                                    )
-                                }
-                            </div>
-
-                            {/* Big Ticket Purchase Planner */}
-                            <div style={{ marginBottom: 24 }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 6, marginBottom: financialConfig?.enableBigTicketPlanner ? 12 : 0 }}>
-                                    <div style={{ flex: 1, paddingRight: 12 }}>
-                                        <h3 style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 2 }}>Big-Ticket Purchase Planner</h3>
-                                        <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.4, margin: 0 }}>Project readiness dates for major purchases into your timeline radar.</p>
-                                    </div>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                        {financialConfig?.enableBigTicketPlanner && (financialConfig?.bigTicketItems || []).length > 0 && <button onClick={() => setEditingSection(editingSection === "bigticket" ? null : "bigticket")} style={{ padding: "5px 10px", borderRadius: T.radius.sm, border: `1px solid ${editingSection === "bigticket" ? T.accent.primary : T.border.default}`, background: editingSection === "bigticket" ? T.accent.primaryDim : "transparent", color: editingSection === "bigticket" ? T.accent.primary : T.text.dim, fontSize: 10, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                                            {editingSection === "bigticket" ? <><Check size={10} /> Done</> : <><Pencil size={10} /> Edit</>}
-                                        </button>}
-                                        <Toggle value={financialConfig?.enableBigTicketPlanner} onChange={v => setFinancialConfig({ ...financialConfig, enableBigTicketPlanner: v })} />
-                                    </div>
-                                </div>
-                                {
-                                    financialConfig?.enableBigTicketPlanner && (
-                                        <div style={{ marginTop: 12 }}>
-                                            {editingSection === "bigticket" || (financialConfig?.bigTicketItems || []).length === 0 ? <>
-                                                {(financialConfig?.bigTicketItems || []).map((item, i) => (
-                                                    <div key={i} style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
-                                                        <input value={item.name || ""} onChange={e => { const arr = [...(financialConfig.bigTicketItems || [])]; arr[i] = { ...arr[i], name: e.target.value }; setFinancialConfig({ ...financialConfig, bigTicketItems: arr }); }}
-                                                            placeholder="Item name" style={{ flex: 1, padding: "8px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 11 }} />
-                                                        <div style={{ position: "relative", flex: 0.5 }}>
-                                                            <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 10, fontWeight: 600 }}>$</span>
-                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" value={item.cost || ""} onChange={e => { const arr = [...(financialConfig.bigTicketItems || [])]; arr[i] = { ...arr[i], cost: parseFloat(e.target.value) || 0 }; setFinancialConfig({ ...financialConfig, bigTicketItems: arr }); }}
-                                                                placeholder="Cost" style={{ width: "100%", padding: "8px 6px 8px 16px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 10 }} />
-                                                        </div>
-                                                        <input type="date" value={item.targetDate || ""} onChange={e => { const arr = [...(financialConfig.bigTicketItems || [])]; arr[i] = { ...arr[i], targetDate: e.target.value }; setFinancialConfig({ ...financialConfig, bigTicketItems: arr }); }}
-                                                            style={{ flex: 0.5, padding: "8px 6px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 10 }} />
-                                                        <select value={item.priority || "medium"} onChange={e => { const arr = [...(financialConfig.bigTicketItems || [])]; arr[i] = { ...arr[i], priority: e.target.value }; setFinancialConfig({ ...financialConfig, bigTicketItems: arr }); }}
-                                                            style={{ flex: 0.35, padding: "8px 4px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 11 }}>
-                                                            {["high", "medium", "low"].map(p => <option key={p} value={p}>{p}</option>)}
-                                                        </select>
-                                                        <button onClick={() => { const arr = (financialConfig.bigTicketItems || []).filter((_, j) => j !== i); setFinancialConfig({ ...financialConfig, bigTicketItems: arr }); }}
-                                                            style={{ width: 28, height: 28, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>×</button>
-                                                    </div>
-                                                ))}
-                                                <button onClick={() => { setEditingSection("bigticket"); setFinancialConfig({ ...financialConfig, bigTicketItems: [...(financialConfig.bigTicketItems || []), { name: "", cost: 0, targetDate: "", priority: "medium" }] }); }}
-                                                    style={{ padding: "8px 14px", borderRadius: T.radius.md, border: `1px dashed ${T.border.default}`, background: "transparent", color: T.accent.primary, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono, width: "100%", marginBottom: 16 }}>+ ADD ITEM</button>
-                                            </> : <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
-                                                {(financialConfig?.bigTicketItems || []).map((item, i) => {
-                                                    const pc = { high: T.status.red, medium: T.status.amber, low: T.text.dim };
-                                                    return <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1px solid ${T.border.default}` }}>
-                                                        <div>
-                                                            <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{item.name || "Unnamed"}</span>
-                                                            {item.targetDate && <span style={{ fontSize: 9, color: T.text.muted, fontFamily: T.font.mono, marginLeft: 8 }}>{item.targetDate}</span>}
-                                                        </div>
-                                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                            <span style={{ fontSize: 11, fontWeight: 700, color: T.accent.primary, fontFamily: T.font.mono }}>${(item.cost || 0).toLocaleString()}</span>
-                                                            <span style={{ fontSize: 8, fontWeight: 700, color: pc[item.priority] || T.text.dim, textTransform: "uppercase", fontFamily: T.font.mono, padding: "2px 5px", borderRadius: 3, background: `${pc[item.priority] || T.text.dim}15` }}>{item.priority || "medium"}</span>
-                                                        </div>
-                                                    </div>;
-                                                })}
-                                            </div>}
-                                        </div>
-                                    )
-                                }
-                            </div>
-
-                            {/* Habit Tracking Constraints */}
-                            <div>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border.subtle}`, paddingBottom: 6, marginBottom: financialConfig?.enableHabitTracking ? 12 : 0 }}>
-                                    <div style={{ flex: 1, paddingRight: 12 }}>
-                                        <h3 style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 2 }}>Habit Tracking Constraints</h3>
-                                        <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.4, margin: 0 }}>Track recurring consumable purchases to manage restock timing and burn rate.</p>
-                                    </div>
-                                    <Toggle value={financialConfig?.enableHabitTracking} onChange={v => setFinancialConfig({ ...financialConfig, enableHabitTracking: v })} />
-                                </div>
-                                {
-                                    financialConfig?.enableHabitTracking && (
-                                        <div style={{ marginTop: 12 }}>
-                                            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 12 }}>
-                                                <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                                                    <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 600, display: "block", marginBottom: 6 }}>TRACK HABIT</span>
-                                                    <div style={{
-                                                        display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px",
-                                                        borderRadius: T.radius.md, border: `1px solid ${financialConfig?.trackHabits !== false ? T.accent.primary : T.border.default}`,
-                                                        background: financialConfig?.trackHabits !== false ? T.accent.primaryDim : T.bg.elevated, cursor: "pointer"
-                                                    }} onClick={() => setFinancialConfig({ ...financialConfig, trackHabits: financialConfig?.trackHabits === false ? true : false })}>
-                                                        <span style={{ fontSize: 12, fontWeight: 600, color: financialConfig?.trackHabits !== false ? T.accent.primary : T.text.primary }}>
-                                                            {financialConfig?.trackHabits !== false ? "YES" : "NO"}
-                                                        </span>
-                                                        <div style={{
-                                                            width: 36, height: 20, borderRadius: 10, background: financialConfig?.trackHabits !== false ? T.accent.primary : T.bg.card,
-                                                            position: "relative", transition: "all 0.2s"
-                                                        }}>
-                                                            <div style={{
-                                                                width: 16, height: 16, borderRadius: 8, background: "#FFF", position: "absolute",
-                                                                top: 2, left: financialConfig?.trackHabits !== false ? 18 : 2, transition: "all 0.2s",
-                                                                boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
-                                                            }} />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {financialConfig?.trackHabits !== false && (
-                                                <div style={{ padding: 16, borderTop: `1px solid ${T.border.default}`, background: `${T.accent.primary}05` }}>
-                                                    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                                                        <div>
-                                                            <div style={{ display: "block", fontSize: 11, fontWeight: 700, color: T.text.secondary, marginBottom: 8 }}>Habit Name</div>
-                                                            <input type="text" value={financialConfig?.habitName || ""} onChange={e => setFinancialConfig({ ...financialConfig, habitName: e.target.value })}
-                                                                style={{ width: "100%", background: T.bg.elevated, color: T.text.primary, border: `1px solid ${T.border.default}`, borderRadius: T.radius.md, padding: "10px 12px", fontSize: 13 }} placeholder="e.g. Coffee Pods" />
-                                                        </div>
-                                                        <div>
-                                                            <div style={{ display: "block", fontSize: 11, fontWeight: 700, color: T.text.secondary, marginBottom: 8 }}>Restock Cost</div>
-                                                            <div style={{ position: "relative" }}>
-                                                                <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                                <input type="number" inputMode="decimal" pattern="[0-9]*" value={financialConfig?.habitRestockCost || ""} onChange={e => setFinancialConfig({ ...financialConfig, habitRestockCost: parseFloat(e.target.value) || 0 })}
-                                                                    style={{ width: "100%", background: T.bg.elevated, color: T.text.primary, border: `1px solid ${T.border.default}`, borderRadius: T.radius.md, padding: "10px 12px 10px 24px", fontSize: 13 }} placeholder="e.g. 25" />
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            <div style={{ display: "block", fontSize: 11, fontWeight: 700, color: T.text.secondary, marginBottom: 8 }}>Warning Threshold (Days/Units)</div>
-                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" value={financialConfig?.habitCheckThreshold || ""} onChange={e => setFinancialConfig({ ...financialConfig, habitCheckThreshold: parseInt(e.target.value) || 0 })}
-                                                                style={{ width: "100%", background: T.bg.elevated, color: T.text.primary, border: `1px solid ${T.border.default}`, borderRadius: T.radius.md, padding: "10px 12px", fontSize: 13 }} />
-                                                        </div>
-                                                        <div>
-                                                            <div style={{ display: "block", fontSize: 11, fontWeight: 700, color: T.status.red, marginBottom: 8 }}>Critical Threshold (Days/Units)</div>
-                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" value={financialConfig?.habitCriticalThreshold || ""} onChange={e => setFinancialConfig({ ...financialConfig, habitCriticalThreshold: parseInt(e.target.value) || 0 })}
-                                                                style={{ width: "100%", background: T.status.redDim, color: T.status.red, border: `1px solid ${T.status.red}40`, borderRadius: T.radius.md, padding: "10px 12px", fontSize: 13 }} />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )
-                                }
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div> {/* close animation wrapper */}
-    </div>;
+            </div >
+        </div > {/* close animation wrapper */}
+    </div >;
 }

@@ -21,6 +21,7 @@
 
 import { db } from "./utils.js";
 import { getIssuerCards } from "./issuerCards.js";
+import { fetchWithRetry } from "./fetchWithRetry.js";
 
 const PLAID_STORAGE_KEY = "plaid-connections";
 const API_BASE = "https://api.catalystcash.app";
@@ -52,7 +53,7 @@ export async function removeConnection(connectionId) {
     // Revoke access token on the server side
     if (conn?.accessToken) {
         try {
-            await fetch(`${API_BASE}/plaid/disconnect`, {
+            await fetchWithRetry(`${API_BASE}/plaid/disconnect`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ accessToken: conn.accessToken }),
@@ -70,7 +71,7 @@ export async function removeConnection(connectionId) {
  * The backend calls Plaid's /link/token/create endpoint.
  */
 export async function createLinkToken() {
-    const res = await fetch(`${API_BASE}/plaid/link-token`, {
+    const res = await fetchWithRetry(`${API_BASE}/plaid/link-token`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
@@ -122,7 +123,7 @@ export async function openPlaidLink() {
  * The backend calls Plaid's /item/public_token/exchange.
  */
 export async function exchangeToken(publicToken) {
-    const res = await fetch(`${API_BASE}/plaid/exchange`, {
+    const res = await fetchWithRetry(`${API_BASE}/plaid/exchange`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ publicToken }),
@@ -185,7 +186,7 @@ export async function fetchBalances(connectionId) {
     const conn = conns.find(c => c.id === connectionId);
     if (!conn) throw new Error("Connection not found");
 
-    const res = await fetch(`${API_BASE}/plaid/balances`, {
+    const res = await fetchWithRetry(`${API_BASE}/plaid/balances`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accessToken: conn.accessToken }),
@@ -244,7 +245,7 @@ export async function fetchLiabilities(connectionId) {
     const conn = conns.find(c => c.id === connectionId);
     if (!conn) throw new Error("Connection not found");
 
-    const res = await fetch(`${API_BASE}/plaid/liabilities`, {
+    const res = await fetchWithRetry(`${API_BASE}/plaid/liabilities`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accessToken: conn.accessToken }),
@@ -429,11 +430,12 @@ export function fuzzyMatchCardName(plaidName, catalogNames) {
     return bestMatch || plaidName;
 }
 
-export function autoMatchAccounts(connection, cards = [], bankAccounts = [], cardCatalog = null) {
+export function autoMatchAccounts(connection, cards = [], bankAccounts = [], cardCatalog = null, plaidInvestments = []) {
     const matched = [];
     const unmatched = [];
     const newCards = [];
     const newBankAccounts = [];
+    const newPlaidInvestments = [];
 
     const normalizedInst = normalizeInstitution(connection.institutionName);
 
@@ -496,6 +498,8 @@ export function autoMatchAccounts(connection, cards = [], bankAccounts = [], car
                     minPayment: null,
                     _plaidAccountId: acct.plaidAccountId,
                     _plaidConnectionId: connection.id,
+                    _plaidBalance: acct.balance?.current ?? null,
+                    _plaidAvailable: acct.balance?.available ?? null,
                 };
                 newCards.push(newCard);
                 linkedId = newCard.id;
@@ -530,11 +534,43 @@ export function autoMatchAccounts(connection, cards = [], bankAccounts = [], car
                     notes: `Auto-imported from Plaid (···${acct.mask || "?"})`,
                     _plaidAccountId: acct.plaidAccountId,
                     _plaidConnectionId: connection.id,
+                    _plaidBalance: acct.balance?.current ?? null,
+                    _plaidAvailable: acct.balance?.available ?? null,
                 };
                 newBankAccounts.push(newBank);
                 linkedId = newBank.id;
                 linkedType = "bank";
                 acct.linkedBankAccountId = newBank.id;
+            }
+        } else if (acct.type === "investment") {
+            // Try to match to existing plaid investment
+            const matchByPlaidId = plaidInvestments.find(i => i._plaidAccountId === acct.plaidAccountId);
+            if (matchByPlaidId) {
+                linkedId = matchByPlaidId.id;
+                linkedType = "investment";
+                acct.linkedInvestmentId = matchByPlaidId.id;
+            } else {
+                // Heuristic bucket classification
+                const n = normText(acct.officialName || acct.name);
+                let bucket = "brokerage";
+                if (n.includes("roth") || n.includes("ira") || n.includes("rollover")) bucket = "roth";
+                else if (n.includes("401k") || n.includes("401(k)")) bucket = "k401";
+                else if (n.includes("hsa") || n.includes("health savings")) bucket = "hsa";
+                else if (n.includes("crypto") || n.includes("bitcoin") || n.includes("coinbase")) bucket = "crypto";
+
+                const newInv = {
+                    id: `plaid_${acct.plaidAccountId}`,
+                    institution: normalizedInst || "Other",
+                    name: acct.officialName || acct.name,
+                    bucket, // roth, k401, brokerage, hsa, crypto
+                    _plaidBalance: acct.balance?.current || 0,
+                    _plaidAccountId: acct.plaidAccountId,
+                    _plaidConnectionId: connection.id,
+                };
+                newPlaidInvestments.push(newInv);
+                linkedId = newInv.id;
+                linkedType = "investment";
+                acct.linkedInvestmentId = newInv.id;
             }
         }
 
@@ -545,7 +581,7 @@ export function autoMatchAccounts(connection, cards = [], bankAccounts = [], car
         }
     }
 
-    return { matched, unmatched, newCards, newBankAccounts };
+    return { matched, unmatched, newCards, newBankAccounts, newPlaidInvestments };
 }
 
 /**
@@ -562,7 +598,8 @@ export async function saveConnectionLinks(connection) {
     const linkByAccountId = new Map(
         connection.accounts.map(a => [a.plaidAccountId, {
             linkedCardId: a.linkedCardId,
-            linkedBankAccountId: a.linkedBankAccountId
+            linkedBankAccountId: a.linkedBankAccountId,
+            linkedInvestmentId: a.linkedInvestmentId
         }])
     );
 
@@ -573,6 +610,7 @@ export async function saveConnectionLinks(connection) {
             ...acct,
             linkedCardId: patch.linkedCardId ?? acct.linkedCardId ?? null,
             linkedBankAccountId: patch.linkedBankAccountId ?? acct.linkedBankAccountId ?? null,
+            linkedInvestmentId: patch.linkedInvestmentId ?? acct.linkedInvestmentId ?? null,
         };
     });
 
@@ -588,9 +626,10 @@ export async function saveConnectionLinks(connection) {
  * @param {Array} bankAccounts - Current bank-accounts
  * @returns {{ updatedCards, updatedBankAccounts, balanceSummary }}
  */
-export function applyBalanceSync(connection, cards = [], bankAccounts = []) {
+export function applyBalanceSync(connection, cards = [], bankAccounts = [], plaidInvestments = []) {
     const updatedCards = [...cards];
     const updatedBankAccounts = [...bankAccounts];
+    const updatedPlaidInvestments = [...plaidInvestments];
     const balanceSummary = [];
 
     for (const acct of connection.accounts) {
@@ -676,9 +715,34 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = []) {
                 });
             }
         }
+
+        const fallbackInv = !acct.linkedInvestmentId
+            ? updatedPlaidInvestments.find(i => i._plaidAccountId === acct.plaidAccountId)
+            : null;
+        if (!acct.linkedInvestmentId && fallbackInv) acct.linkedInvestmentId = fallbackInv.id;
+
+        if (acct.linkedInvestmentId) {
+            const idx = updatedPlaidInvestments.findIndex(i => i.id === acct.linkedInvestmentId);
+            if (idx >= 0) {
+                const oldBal = updatedPlaidInvestments[idx]._plaidBalance;
+                updatedPlaidInvestments[idx] = {
+                    ...updatedPlaidInvestments[idx],
+                    _plaidBalance: acct.balance.current,
+                    _plaidLastSync: connection.lastSync,
+                    _plaidAccountId: acct.plaidAccountId,
+                    _plaidConnectionId: connection.id,
+                };
+                balanceSummary.push({
+                    name: updatedPlaidInvestments[idx].name,
+                    type: "investment",
+                    balance: acct.balance.current,
+                    previous: oldBal,
+                });
+            }
+        }
     }
 
-    return { updatedCards, updatedBankAccounts, balanceSummary };
+    return { updatedCards, updatedBankAccounts, updatedPlaidInvestments, balanceSummary };
 }
 
 // ─── InputForm Auto-Fill Engine ───────────────────────────────

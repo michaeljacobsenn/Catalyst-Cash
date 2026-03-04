@@ -5,13 +5,20 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
-    <title>Catalyst Cash — AI Financial Audit Engine</title>
+    <title>Catalyst Cash — Your AI-Powered Financial Coach</title>
     <meta name="description"
-        content="Your weekly financial command center. AI-powered audits that analyze checking, savings, debts, and investments — delivering actionable moves every week." />
+        content="Take control of your money with AI-powered weekly audits, automatic bank syncing via Plaid, and a personal financial coach — all while keeping your data private on your device." />
+    <meta property="og:title" content="Catalyst Cash — Your AI-Powered Financial Coach" />
+    <meta property="og:description"
+        content="Weekly AI audits, automatic bank sync, debt payoff tools, and a personal financial coach. Your data stays on your device." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://catalystcash.app" />
+    <meta property="og:image" content="https://catalystcash.app/icon-512.png" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.png" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@600;700&display=swap"
         rel="stylesheet" />
     <style>
         * {
@@ -21,15 +28,22 @@
         }
 
         html {
-            background: #04060A;
+            background: #0C121B;
+            scroll-behavior: smooth;
         }
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #04060A;
+            background: #0C121B;
             color: #E4E6F0;
             min-height: 100vh;
             overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        ::selection {
+            background: rgba(16, 185, 129, 0.3);
+            color: #fff;
         }
 
         /* Subtle grid */
@@ -40,249 +54,963 @@
             z-index: 0;
             pointer-events: none;
             background-image:
-                linear-gradient(rgba(123, 94, 167, 0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(123, 94, 167, 0.03) 1px, transparent 1px);
-            background-size: 48px 48px;
+                linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+            background-size: 64px 64px;
         }
 
-        /* Top accent line */
         .accent-bar {
             height: 3px;
-            background: linear-gradient(90deg, #7B5EA7, #2ECC71, #00E5FF);
+            width: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 100;
+            background: linear-gradient(90deg, #10B981, #3B82F6, #8B5CF6);
         }
 
-        .container {
-            position: relative;
-            z-index: 1;
-            max-width: 720px;
+        /* ── Navigation ── */
+        nav {
+            position: fixed;
+            top: 3px;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            background: rgba(12, 18, 27, 0.85);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .nav-inner {
+            max-width: 1000px;
             margin: 0 auto;
-            padding: 60px 24px 80px;
-            text-align: center;
-        }
-
-        .logo-icon {
-            width: 100px;
-            height: 100px;
-            border-radius: 22px;
-            margin: 0 auto 24px;
-            display: block;
-        }
-
-        h1 {
-            font-size: 42px;
-            font-weight: 900;
-            letter-spacing: -0.03em;
-            margin-bottom: 8px;
-            background: linear-gradient(135deg, #E4E6F0, #fff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .tagline {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 11px;
-            font-weight: 700;
-            color: #7B5EA7;
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-            margin-bottom: 32px;
-        }
-
-        .hero-text {
-            font-size: 18px;
-            line-height: 1.7;
-            color: #8890A6;
-            max-width: 540px;
-            margin: 0 auto 40px;
-        }
-
-        .hero-text strong {
-            color: #E4E6F0;
-        }
-
-        /* Feature grid */
-        .features {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 40px;
-            text-align: left;
-        }
-
-        @media (max-width: 480px) {
-            .features {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .feature {
-            background: #090C15;
-            border: 1px solid rgba(123, 94, 167, 0.12);
-            border-radius: 14px;
-            padding: 18px 16px;
-            transition: border-color 0.2s;
-        }
-
-        .feature:hover {
-            border-color: rgba(123, 94, 167, 0.3);
-        }
-
-        .feature .icon {
-            font-size: 20px;
-            margin-bottom: 8px;
-        }
-
-        .feature h3 {
-            font-size: 13px;
-            font-weight: 700;
-            color: #E4E6F0;
-            margin-bottom: 4px;
-        }
-
-        .feature p {
-            font-size: 11px;
-            color: #6B7280;
-            line-height: 1.5;
-        }
-
-        /* CTA */
-        .cta {
-            display: inline-flex;
+            padding: 14px 24px;
+            display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 14px 32px;
-            border-radius: 14px;
-            background: linear-gradient(135deg, #7B5EA7, #2ECC71);
-            color: #fff;
-            font-size: 15px;
+            justify-content: space-between;
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: #F8FAFC;
             font-weight: 800;
-            text-decoration: none;
-            box-shadow: 0 4px 20px rgba(123, 94, 167, 0.4);
-            transition: transform 0.2s, box-shadow 0.2s;
-            margin-bottom: 12px;
+            font-size: 16px;
+            letter-spacing: -0.02em;
         }
 
-        .cta:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 32px rgba(123, 94, 167, 0.5);
+        .nav-brand img {
+            width: 28px;
+            height: 28px;
+            border-radius: 7px;
         }
 
-        .cta-sub {
-            font-size: 12px;
-            color: #4A5068;
-            margin-bottom: 48px;
-        }
-
-        /* Privacy badges */
-        .badges {
-            display: flex;
-            justify-content: center;
-            gap: 16px;
-            margin-bottom: 48px;
-            flex-wrap: wrap;
-        }
-
-        .badge {
+        .nav-links {
             display: flex;
             align-items: center;
-            gap: 6px;
-            padding: 8px 14px;
-            background: rgba(46, 204, 113, 0.06);
-            border: 1px solid rgba(46, 204, 113, 0.15);
-            border-radius: 99px;
-            font-size: 11px;
-            font-weight: 700;
-            color: #2ECC71;
+            gap: 28px;
         }
 
-        /* Footer */
-        footer {
-            border-top: 1px solid rgba(123, 94, 167, 0.1);
-            padding-top: 24px;
-            display: flex;
-            justify-content: center;
-            gap: 24px;
-            flex-wrap: wrap;
-        }
-
-        footer a {
-            font-size: 12px;
-            color: #4A5068;
+        .nav-links a {
+            color: #94A3B8;
             text-decoration: none;
+            font-size: 13px;
             font-weight: 600;
             transition: color 0.2s;
         }
 
-        footer a:hover {
-            color: #7B5EA7;
+        .nav-links a:hover {
+            color: #F8FAFC;
+        }
+
+        .nav-cta {
+            background: linear-gradient(135deg, #10B981, #059669) !important;
+            color: #fff !important;
+            padding: 8px 18px;
+            border-radius: 10px;
+            font-weight: 700 !important;
+            font-size: 12px !important;
+            letter-spacing: 0.02em;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+            transition: all 0.2s;
+        }
+
+        .nav-cta:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+        }
+
+        /* ── Container ── */
+        .container {
+            position: relative;
+            z-index: 10;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* ── Hero ── */
+        .hero {
+            text-align: center;
+            padding: 140px 0 80px;
+            position: relative;
+        }
+
+        .hero-glow {
+            position: absolute;
+            top: 15%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(16, 185, 129, 0.08) 0%, rgba(123, 94, 167, 0.04) 40%, transparent 70%);
+            filter: blur(60px);
+            pointer-events: none;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #34D399;
+            background: rgba(16, 185, 129, 0.05);
+            padding: 6px 18px;
+            border-radius: 999px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 800;
+            margin-bottom: 24px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .pill::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: #10B981;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #10B981;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-8px);
+            }
+        }
+
+        .hero-icon {
+            width: 120px;
+            height: 120px;
+            border-radius: 28px;
+            margin: 0 auto 32px;
+            display: block;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(16, 185, 129, 0.15);
+            animation: float 4s ease-in-out infinite;
+        }
+
+        h1 {
+            font-size: 52px;
+            font-weight: 900;
+            letter-spacing: -2px;
+            margin-bottom: 16px;
+            line-height: 1.1;
+            background: linear-gradient(135deg, #FFFFFF 0%, #94A3B8 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-sub {
+            font-size: 18px;
+            line-height: 1.6;
+            color: #94A3B8;
+            max-width: 600px;
+            margin: 0 auto 40px;
+            font-weight: 500;
+        }
+
+        .hero-sub strong {
+            color: #F8FAFC;
+        }
+
+        .cta-group {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+        .cta-primary {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 16px 36px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #10B981, #059669);
+            color: #fff;
+            font-size: 15px;
+            font-weight: 800;
+            text-decoration: none;
+            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+            transition: all 0.2s;
+            border: 1px solid rgba(16, 185, 129, 0.5);
+        }
+
+        .cta-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 40px rgba(16, 185, 129, 0.4);
+        }
+
+        .cta-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 16px 36px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.04);
+            color: #E4E6F0;
+            font-size: 15px;
+            font-weight: 700;
+            text-decoration: none;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.2s;
+        }
+
+        .cta-secondary:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .cta-note {
+            font-size: 13px;
+            color: #64748B;
+        }
+
+        /* ── Trust Bar ── */
+        .trust-bar {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            padding: 40px 0 60px;
+            flex-wrap: wrap;
+        }
+
+        .trust-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            color: #64748B;
+            font-weight: 600;
+        }
+
+        .trust-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        /* ── Sections ── */
+        .section {
+            padding: 80px 0;
+        }
+
+        .section-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #10B981;
+            margin-bottom: 16px;
+        }
+
+        .section h2 {
+            font-size: 36px;
+            font-weight: 900;
+            letter-spacing: -1px;
+            color: #F8FAFC;
+            margin-bottom: 12px;
+        }
+
+        .section .section-desc {
+            font-size: 16px;
+            color: #94A3B8;
+            max-width: 600px;
+            line-height: 1.6;
+            margin-bottom: 48px;
+        }
+
+        /* ── Feature Grid ── */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 20px;
+            padding: 28px;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.04);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .feature-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+            font-size: 22px;
+        }
+
+        .feature-card h3 {
+            font-size: 17px;
+            font-weight: 700;
+            color: #F8FAFC;
+            margin-bottom: 8px;
+        }
+
+        .feature-card p {
+            font-size: 14px;
+            color: #94A3B8;
+            line-height: 1.6;
+        }
+
+        /* ── How It Works ── */
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+
+        .step {
+            text-align: center;
+            padding: 32px 24px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            transition: all 0.3s;
+        }
+
+        .step:hover {
+            border-color: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .step-num {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #10B981, #059669);
+            color: #fff;
+            font-size: 16px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .step h3 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #F8FAFC;
+            margin-bottom: 8px;
+        }
+
+        .step p {
+            font-size: 13px;
+            color: #94A3B8;
+            line-height: 1.6;
+        }
+
+        /* ── Pricing ── */
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .plan {
+            border-radius: 24px;
+            padding: 36px;
+            position: relative;
+        }
+
+        .plan-free {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .plan-pro {
+            background: linear-gradient(145deg, rgba(123, 94, 167, 0.12), rgba(0, 0, 0, 0.2));
+            border: 1px solid rgba(123, 94, 167, 0.4);
+            box-shadow: 0 12px 40px rgba(123, 94, 167, 0.15);
+        }
+
+        .plan-badge {
+            position: absolute;
+            top: -1px;
+            right: 24px;
+            background: linear-gradient(135deg, #8B5CF6, #7C3AED);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 800;
+            padding: 5px 14px;
+            border-radius: 0 0 10px 10px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .plan h3 {
+            font-size: 22px;
+            font-weight: 800;
+            color: #F8FAFC;
+            margin-bottom: 4px;
+        }
+
+        .plan .price {
+            font-size: 32px;
+            font-weight: 900;
+            color: #F8FAFC;
+            margin-bottom: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .plan .price-sub {
+            font-size: 13px;
+            color: #64748B;
+            margin-bottom: 24px;
+        }
+
+        .plan ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .plan li {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: #CBD5E1;
+            margin-bottom: 12px;
+        }
+
+        .plan li::before {
+            content: '✓';
+            color: #10B981;
+            font-weight: 900;
+            flex-shrink: 0;
+        }
+
+        .plan-pro li::before {
+            color: #D4C4FB;
+        }
+
+        .plan .plan-cta {
+            display: block;
+            text-align: center;
+            padding: 14px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 700;
+            text-decoration: none;
+            margin-top: 24px;
+            transition: all 0.2s;
+        }
+
+        .plan-free .plan-cta {
+            background: rgba(255, 255, 255, 0.06);
+            color: #E4E6F0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .plan-pro .plan-cta {
+            background: linear-gradient(135deg, #8B5CF6, #7C3AED);
+            color: #fff;
+            border: none;
+            box-shadow: 0 8px 24px rgba(139, 92, 246, 0.3);
+        }
+
+        .plan .plan-cta:hover {
+            transform: translateY(-1px);
+        }
+
+        .yearly-note {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #64748B;
+        }
+
+        .yearly-note strong {
+            color: #10B981;
+        }
+
+        /* ── Privacy Banner ── */
+        .privacy-banner {
+            text-align: center;
+            padding: 60px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .privacy-banner h2 {
+            font-size: 28px;
+            font-weight: 800;
+            color: #F8FAFC;
+            margin-bottom: 12px;
+        }
+
+        .privacy-banner p {
+            font-size: 15px;
+            color: #94A3B8;
+            max-width: 550px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        .privacy-badges {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-top: 24px;
+            flex-wrap: wrap;
+        }
+
+        .privacy-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border-radius: 12px;
+            background: rgba(16, 185, 129, 0.06);
+            border: 1px solid rgba(16, 185, 129, 0.15);
+            font-size: 13px;
+            font-weight: 600;
+            color: #34D399;
+        }
+
+        /* ── Footer ── */
+        footer {
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 40px 0;
+        }
+
+        .footer-inner {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 32px;
+        }
+
+        .footer-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 800;
+            font-size: 15px;
+            color: #F8FAFC;
+            margin-bottom: 8px;
+        }
+
+        .footer-brand img {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+        }
+
+        .footer-tagline {
+            font-size: 12px;
+            color: #475569;
+            max-width: 250px;
+            line-height: 1.5;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 32px;
+            flex-wrap: wrap;
+        }
+
+        .footer-col h4 {
+            font-size: 11px;
+            font-weight: 700;
+            color: #64748B;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+
+        .footer-col a {
+            display: block;
+            font-size: 13px;
+            color: #94A3B8;
+            text-decoration: none;
+            margin-bottom: 8px;
+            transition: color 0.2s;
+        }
+
+        .footer-col a:hover {
+            color: #F8FAFC;
+        }
+
+        .copyright {
+            width: 100%;
+            text-align: center;
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+            font-size: 11px;
+            color: #475569;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 700px) {
+            h1 {
+                font-size: 36px;
+            }
+
+            .hero {
+                padding: 120px 0 60px;
+            }
+
+            .features-grid,
+            .pricing-grid,
+            .steps {
+                grid-template-columns: 1fr;
+            }
+
+            .trust-bar {
+                gap: 20px;
+            }
+
+            .section h2 {
+                font-size: 28px;
+            }
+
+            .nav-links a:not(.nav-cta) {
+                display: none;
+            }
+
+            .footer-inner {
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+            }
+
+            .footer-links {
+                justify-content: center;
+            }
         }
     </style>
 </head>
 
 <body>
     <div class="accent-bar"></div>
+
+    <!-- Navigation -->
+    <nav>
+        <div class="nav-inner">
+            <a href="/" class="nav-brand">
+                <img src="/icon-192.png" alt="Catalyst Cash" />
+                Catalyst Cash
+            </a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#how-it-works">How It Works</a>
+                <a href="#pricing">Pricing</a>
+                <a href="/guide.html">Guide</a>
+                <a href="https://testflight.apple.com/join/3rpWQq49" class="nav-cta">Download Beta</a>
+            </div>
+        </div>
+    </nav>
+
     <div class="container">
-        <img src="/icon-512.png" alt="Catalyst Cash" class="logo-icon" />
+        <!-- Hero -->
+        <section class="hero">
+            <div class="hero-glow"></div>
+            <div class="pill">Now in Beta</div>
+            <img src="/icon-512.png?v=2" alt="Catalyst Cash" class="hero-icon" />
+            <h1>Your AI-Powered<br>Financial Coach</h1>
+            <p class="hero-sub">
+                Get a <strong>personalized financial checkup</strong> every week. Catalyst Cash connects to your bank
+                accounts, analyzes your spending, and gives you <strong>clear action steps</strong> to grow your
+                wealth — all while keeping your data <strong>private on your device</strong>.
+            </p>
+            <div class="cta-group">
+                <a href="https://testflight.apple.com/join/3rpWQq49" class="cta-primary">
+                    Download on TestFlight
+                </a>
+                <a href="#features" class="cta-secondary">
+                    See Features →
+                </a>
+            </div>
+            <p class="cta-note">Free to use · No credit card required · iOS</p>
+        </section>
 
-        <h1>Catalyst Cash</h1>
-        <div class="tagline">AI Financial Audit Engine</div>
-
-        <p class="hero-text">
-            Your <strong>weekly financial command center</strong>. Enter your numbers, get a full audit —
-            health score, action items, debt payoff projections, and cash flow forecasting.
-            <strong>Powered by AI. 100% private.</strong>
-        </p>
-
-        <div class="features">
-            <div class="feature">
-                <div class="icon">📊</div>
-                <h3>Health Score & Trend</h3>
-                <p>Track your financial health week over week with an AI-generated composite score.</p>
+        <!-- Trust Bar -->
+        <div class="trust-bar">
+            <div class="trust-item">
+                <div class="trust-icon">🔒</div>
+                <span>Your data stays on your device</span>
             </div>
-            <div class="feature">
-                <div class="icon">⚡</div>
-                <h3>Weekly Action Items</h3>
-                <p>Concrete, checkable moves tailored to your exact financial situation.</p>
+            <div class="trust-item">
+                <div class="trust-icon">🏦</div>
+                <span>12,000+ banks via Plaid</span>
             </div>
-            <div class="feature">
-                <div class="icon">📅</div>
-                <h3>35-Day Cash Flow</h3>
-                <p>See every bill, paycheck, and transfer on an interactive calendar horizon.</p>
-            </div>
-            <div class="feature">
-                <div class="icon">🎯</div>
-                <h3>Debt Payoff Simulator</h3>
-                <p>Monte Carlo projections to visualize your debt-free date with probability bands.</p>
-            </div>
-            <div class="feature">
-                <div class="icon">💳</div>
-                <h3>Card Portfolio</h3>
-                <p>Track credit cards, annual fees, rewards, and optimize your wallet.</p>
-            </div>
-            <div class="feature">
-                <div class="icon">🔒</div>
-                <h3>100% Private</h3>
-                <p>All data stays on your device. No accounts, no cloud, no tracking.</p>
+            <div class="trust-item">
+                <div class="trust-icon">🤖</div>
+                <span>Powered by leading AI models</span>
             </div>
         </div>
 
-        <a href="https://apps.apple.com/app/catalyst-cash/id0000000000" class="cta">
-            Download on the App Store
-        </a>
-        <div class="cta-sub">Available for iPhone · Free to use</div>
+        <!-- Features -->
+        <section class="section" id="features">
+            <div class="section-label">Features</div>
+            <h2>Everything you need to take control</h2>
+            <p class="section-desc">A complete financial toolkit that works for you — whether you're paying off debt,
+                building savings, or growing investments.</p>
 
-        <div class="badges">
-            <div class="badge">🔐 Zero Data Collection</div>
-            <div class="badge">🚫 No Accounts Required</div>
-            <div class="badge">✨ AI-Powered Insights</div>
-        </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon"
+                        style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2);">🏦</div>
+                    <h3>Connect Your Banks</h3>
+                    <p>Link checking, savings, and credit card accounts with Plaid for automatic balance updates. Your
+                        credentials never touch our servers.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"
+                        style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2);">📊</div>
+                    <h3>Weekly AI Audits</h3>
+                    <p>Get a comprehensive financial health check every week. Your AI coach analyzes spending, debt,
+                        and progress — then tells you exactly what to do next.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"
+                        style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.2);">💬</div>
+                    <h3>Ask Your AI Coach</h3>
+                    <p>Chat with an AI that understands your complete financial picture. Ask anything — from "Can I
+                        afford this?" to "How do I save $10k?" Chat history auto-deletes after 24 hours.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"
+                        style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2);">⚡</div>
+                    <h3>Pay Off Debt Faster</h3>
+                    <p>Our debt simulator finds the mathematically optimal payoff order — avalanche or snowball — to
+                        save you the most on interest and get you debt-free sooner.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"
+                        style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2);">📈</div>
+                    <h3>Track Investments</h3>
+                    <p>Monitor your 401(k), Roth IRA, brokerage, HSA, and crypto holdings with live market prices. See
+                        your complete net worth in one place.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"
+                        style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2);">📅</div>
+                    <h3>Cash Flow Calendar</h3>
+                    <p>See upcoming bills, subscriptions, and paychecks on a visual timeline so you're never surprised
+                        by a charge. Cancel what you don't need.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"
+                        style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.2);">💳</div>
+                    <h3>Card Portfolio Manager</h3>
+                    <p>Track every credit card — limits, APRs, annual fees, due dates, and promo rates. See your total
+                        utilization at a glance and optimize your credit health.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"
+                        style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2);">🏆</div>
+                    <h3>Challenges & Badges</h3>
+                    <p>Stay motivated with weekly challenges and achievement badges. Build healthy financial habits
+                        through gamification that actually works.</p>
+                </div>
+            </div>
+        </section>
 
-        <footer>
-            <a href="/privacy">Privacy Policy</a>
-            <a href="/terms">Terms of Service</a>
-            <a href="mailto:support@catalystcash.app">Contact</a>
-        </footer>
+        <!-- How It Works -->
+        <section class="section" id="how-it-works">
+            <div class="section-label">How It Works</div>
+            <h2>Three steps. Five minutes. Full clarity.</h2>
+            <p class="section-desc">Run a weekly check-in every Sunday to stay on top of your finances.</p>
+
+            <div class="steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <h3>Sync Your Accounts</h3>
+                    <p>Connect your banks with Plaid for automatic updates, or enter balances manually — whatever
+                        you're comfortable with.</p>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <h3>Run Your Audit</h3>
+                    <p>Tap one button. Your AI coach analyzes everything — checking, savings, debt, bills,
+                        investments — and generates your personalized action plan.</p>
+                </div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <h3>Follow Your Plan</h3>
+                    <p>Get clear, prioritized steps: pay this card first, move this to savings, cancel this
+                        subscription. Track your progress on the dashboard.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pricing -->
+        <section class="section" id="pricing">
+            <div style="text-align: center;">
+                <div class="section-label">Pricing</div>
+                <h2>Free forever. Upgrade when you're ready.</h2>
+                <p class="section-desc" style="margin: 0 auto 48px;">
+                    The free plan includes everything you need to take control. Pro unlocks premium AI models and
+                    removes all limits.
+                </p>
+            </div>
+
+            <div class="pricing-grid">
+                <div class="plan plan-free">
+                    <h3>Free</h3>
+                    <div class="price">$0</div>
+                    <div class="price-sub">Free forever</div>
+                    <ul>
+                        <li>2 AI audits per week</li>
+                        <li>10 AI chat messages per day</li>
+                        <li>Full dashboard & charts</li>
+                        <li>Plaid bank syncing</li>
+                        <li>Debt simulator</li>
+                        <li>Cash flow calendar</li>
+                        <li>Card portfolio manager</li>
+                        <li>Budget tracking</li>
+                        <li>Challenges & badges</li>
+                    </ul>
+                    <a href="https://testflight.apple.com/join/3rpWQq49" class="plan-cta">Get Started Free</a>
+                </div>
+
+                <div class="plan plan-pro">
+                    <div class="plan-badge">Most Popular</div>
+                    <h3>Pro</h3>
+                    <div class="price">$6.99<span style="font-size: 16px; font-weight: 600; color: #94A3B8;">/mo</span>
+                    </div>
+                    <div class="price-sub">Or $49.99/year (save 40%)</div>
+                    <ul>
+                        <li>Unlimited AI audits</li>
+                        <li>100 AI chat messages per day</li>
+                        <li>Premium AI models (Gemini Pro, o3-mini)</li>
+                        <li>Everything in Free</li>
+                        <li>CSV & PDF export</li>
+                        <li>Priority market data refresh</li>
+                        <li>Advanced trend alerts</li>
+                        <li>Share cards without branding</li>
+                        <li>Full audit history</li>
+                    </ul>
+                    <a href="https://testflight.apple.com/join/3rpWQq49" class="plan-cta">Start 7-Day Free Trial</a>
+                </div>
+            </div>
+            <p class="yearly-note">💡 <strong>Save 40%</strong> with the annual plan — just $4.17/month.</p>
+            <p class="yearly-note" style="margin-top: 8px; font-size: 12px;">Subscriptions auto-renew until cancelled.
+                Cancel anytime in your device's subscription settings.</p>
+        </section>
+
+        <!-- Privacy -->
+        <section class="privacy-banner">
+            <h2>🔒 Your Data, Your Device</h2>
+            <p>Catalyst Cash processes everything locally. We can't see your data — and we designed it that way. Bank
+                connections go directly through Plaid. AI requests go directly to your chosen provider. No middleman.
+                No servers storing your finances.</p>
+            <div class="privacy-badges">
+                <div class="privacy-badge">🛡️ On-device processing</div>
+                <div class="privacy-badge">🔐 AES-256 encryption</div>
+                <div class="privacy-badge">🚫 No data selling, ever</div>
+                <div class="privacy-badge">🗑️ Chat auto-deletes in 24h</div>
+            </div>
+        </section>
     </div>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-inner">
+            <div>
+                <div class="footer-brand">
+                    <img src="/icon-192.png" alt="" />
+                    Catalyst Cash
+                </div>
+                <p class="footer-tagline">Your AI-powered financial coach. Take control of your money with weekly
+                    audits and personalized guidance.</p>
+            </div>
+            <div class="footer-links">
+                <div class="footer-col">
+                    <h4>Product</h4>
+                    <a href="#features">Features</a>
+                    <a href="#pricing">Pricing</a>
+                    <a href="/guide.html">Guide</a>
+                </div>
+                <div class="footer-col">
+                    <h4>Legal</h4>
+                    <a href="/privacy.html">Privacy Policy</a>
+                    <a href="/terms.html">Terms of Service</a>
+                </div>
+                <div class="footer-col">
+                    <h4>Support</h4>
+                    <a href="mailto:support@catalystcash.app">Contact Us</a>
+                </div>
+            </div>
+            <div class="copyright">
+                <p style="max-width: 500px; margin: 0 auto 12px; line-height: 1.6; font-size: 10px; color: #475569;">
+                    Catalyst Cash provides AI-generated educational and informational content only. It is
+                    <strong>not</strong> professional financial, tax, legal, or investment advice. Always consult a
+                    licensed financial advisor before making financial decisions.</p>
+                © 2026 Catalyst Cash · All rights reserved
+            </div>
+        </div>
+    </footer>
 </body>
 
 </html>

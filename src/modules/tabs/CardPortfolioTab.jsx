@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, memo } from "react";
-import { Plus, X, ChevronDown, ChevronUp, CreditCard, Edit3, Check, DollarSign, Building2, Landmark, TrendingUp, AlertTriangle, RefreshCw, Target, Wallet, ArrowLeft, Link2, CheckCircle2 } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Plus, X, ChevronDown, ChevronUp, CreditCard, Edit3, Check, DollarSign, Building2, Landmark, TrendingUp, AlertTriangle, RefreshCw, Target, Wallet, ArrowLeft, Link2, CheckCircle2, Trash2 } from "lucide-react";
 import { T, ISSUER_COLORS } from "../constants.js";
 import { getIssuerCards, getPinnedForIssuer } from "../issuerCards.js";
 import { getBankNames, getBankProducts } from "../bankCatalog.js";
@@ -10,6 +11,8 @@ import { Mono, EmptyState } from "../components.jsx";
 import SearchableSelect from "../SearchableSelect.jsx";
 import { fetchMarketPrices, getTickerOptions } from "../marketData.js";
 import { connectBank, autoMatchAccounts, fetchBalancesAndLiabilities, fetchAllBalancesAndLiabilities, applyBalanceSync, saveConnectionLinks } from "../plaid.js";
+import { haptic } from "../haptics.js";
+import { getCurrentTier } from "../subscription.js";
 
 const ENABLE_PLAID = true;
 
@@ -57,30 +60,57 @@ export default memo(function CardPortfolioTab() {
         try {
             await connectBank(
                 async (connection) => {
-                    // Auto-match Plaid accounts to existing cards/bank accounts
-                    const { newCards, newBankAccounts } = autoMatchAccounts(connection, cards, bankAccounts, cardCatalog);
+                    const plaidInvestments = financialConfig.plaidInvestments || [];
+                    const { newCards, newBankAccounts, newPlaidInvestments } = autoMatchAccounts(connection, cards, bankAccounts, cardCatalog, plaidInvestments);
                     await saveConnectionLinks(connection);
 
                     // Build deterministic local snapshot so we do not drop new Plaid records.
                     const allCards = mergeUniqueById(cards, newCards);
                     const allBanks = mergeUniqueById(bankAccounts, newBankAccounts);
+                    const allInvests = mergeUniqueById(plaidInvestments, newPlaidInvestments);
                     setCards(allCards);
                     setBankAccounts(allBanks);
+                    if (newPlaidInvestments.length > 0) {
+                        setFinancialConfig({ type: 'SET_FIELD', field: 'plaidInvestments', value: allInvests });
+                    }
 
                     // Fetch live balances and apply them
                     try {
                         const refreshed = await fetchBalancesAndLiabilities(connection.id);
                         if (refreshed) {
-                            const { updatedCards, updatedBankAccounts } = applyBalanceSync(refreshed, allCards, allBanks);
+                            const { updatedCards, updatedBankAccounts, updatedPlaidInvestments } = applyBalanceSync(refreshed, allCards, allBanks, allInvests);
                             setCards(updatedCards);
                             setBankAccounts(updatedBankAccounts);
+                            if (updatedPlaidInvestments) {
+                                setFinancialConfig({ type: 'SET_FIELD', field: 'plaidInvestments', value: updatedPlaidInvestments });
+                            }
                             await saveConnectionLinks(refreshed);
                         }
                     } catch { /* balance fetch is best-effort */ }
 
                     setPlaidResult('success');
                     setCollapsedSections(p => ({ ...p, creditCards: false, bankAccounts: false }));
-                    setTimeout(closeSheet, 2200);
+
+                    // Count what was imported for the review alert
+                    const importedCount = newCards.length + newBankAccounts.length + newPlaidInvestments.length;
+
+                    setTimeout(() => {
+                        closeSheet();
+                        // Native iOS alert prompting user to review imported accounts
+                        if (importedCount > 0) {
+                            setTimeout(() => {
+                                window.alert(
+                                    `${importedCount} account${importedCount !== 1 ? "s" : ""} imported!\n\n` +
+                                    "Plaid may assign generic names like \"Credit Card\" instead of the actual product name.\n\n" +
+                                    "Please tap the ✏️ edit button on each imported account to verify and update:\n" +
+                                    "• Card name (e.g. Sapphire Preferred)\n" +
+                                    "• APR\n" +
+                                    "• Annual fee & due date\n" +
+                                    "• Statement close & payment due days"
+                                );
+                            }, 400);
+                        }
+                    }, 2200);
                 },
                 (err) => { if (err?.message !== 'cancelled') { setPlaidResult('error'); setPlaidError(err?.message || 'Connection failed'); } }
             );
@@ -88,23 +118,43 @@ export default memo(function CardPortfolioTab() {
     };
 
     const [plaidRefreshing, setPlaidRefreshing] = useState(false);
+    const REFRESH_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
     const handleRefreshPlaid = async () => {
+        // Tiered cooldown: Free = 60min, Pro = 5min
+        const tier = await getCurrentTier();
+        const cooldown = REFRESH_COOLDOWNS[tier.id] || REFRESH_COOLDOWNS.free;
+        const lastSync = cards.find(c => c._plaidLastSync)?._plaidLastSync
+            || bankAccounts.find(b => b._plaidLastSync)?._plaidLastSync;
+        if (lastSync && (Date.now() - new Date(lastSync).getTime()) < cooldown) {
+            const minsLeft = Math.ceil((cooldown - (Date.now() - new Date(lastSync).getTime())) / 60000);
+            if (window.toast) window.toast.info(`Next sync available in ${minsLeft} min${tier.id === "free" ? " (Pro: every 5 min)" : ""}`);
+            return;
+        }
         setPlaidRefreshing(true);
         try {
             const results = await fetchAllBalancesAndLiabilities();
             let allCards = [...cards];
             let allBanks = [...bankAccounts];
+            let allInvests = [...(financialConfig.plaidInvestments || [])];
+            let investmentsChanged = false;
             for (const res of results) {
                 if (!res._error) {
-                    const syncData = applyBalanceSync(res, allCards, allBanks);
+                    const syncData = applyBalanceSync(res, allCards, allBanks, allInvests);
                     allCards = syncData.updatedCards;
                     allBanks = syncData.updatedBankAccounts;
+                    if (syncData.updatedPlaidInvestments) {
+                        allInvests = syncData.updatedPlaidInvestments;
+                        investmentsChanged = true;
+                    }
                     await saveConnectionLinks(res);
                 }
             }
             setCards(allCards);
             setBankAccounts(allBanks);
-        } catch (e) { console.error(e); }
+            if (investmentsChanged) setFinancialConfig({ ...financialConfig, plaidInvestments: allInvests });
+            haptic.success();
+            if (window.toast) window.toast.success("Balances synced successfully");
+        } catch (e) { console.error(e); if (window.toast) window.toast.error("Failed to sync balances. Try again."); }
         finally { setPlaidRefreshing(false); }
     };
     const [addBankForm, setAddBankForm] = useState({ bank: "", accountType: "checking", productName: "", customName: "", apy: "", notes: "" });
@@ -153,6 +203,13 @@ export default memo(function CardPortfolioTab() {
         setCollapsedSections(p => ({ ...p, bankAccounts: false }));
     };
 
+    const removeBank = (bankId) => {
+        const b = bankAccounts.find(x => x.id === bankId);
+        if (!b) return;
+        if (b._plaidAccountId) { alert("This account is synced via Plaid. Please disconnect it from Settings instead."); return; }
+        setBankAccounts(bankAccounts.filter(x => x.id !== bankId));
+    };
+
     const grouped = useMemo(() => {
         const g = {};
         cards.forEach(c => { (g[c.institution] = g[c.institution] || []).push(c); });
@@ -196,8 +253,7 @@ export default memo(function CardPortfolioTab() {
     };
     const removeCard = (cardId) => {
         const card = cards.find(c => c.id === cardId);
-        const label = card ? (card.nickname || card.name) : "this card";
-        if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) return;
+        if (card?._plaidAccountId) { alert("This card is synced via Plaid. Please disconnect it from Settings instead."); return; }
         setCards(cards.filter(c => c.id !== cardId));
     };
 
@@ -265,7 +321,7 @@ export default memo(function CardPortfolioTab() {
         { key: "k401", label: "401(k)", enabled: !!financialConfig?.track401k, color: T.status.blue },
         { key: "brokerage", label: "Brokerage", enabled: !!financialConfig?.trackBrokerage, color: T.accent.emerald },
         { key: "hsa", label: "HSA", enabled: !!financialConfig?.trackHSA, color: "#06B6D4" },
-        { key: "crypto", label: "Crypto", enabled: financialConfig?.trackCrypto !== false, color: T.status.amber },
+        { key: "crypto", label: "Crypto", enabled: financialConfig?.trackCrypto !== false && holdings.crypto?.length > 0, color: T.status.amber },
     ];
     const enabledInvestments = investmentSections.filter(s => s.enabled || (holdings[s.key] || []).length > 0);
     const allHoldingSymbols = useMemo(() => {
@@ -320,19 +376,27 @@ export default memo(function CardPortfolioTab() {
             const p = investPrices[h?.symbol];
             if (p?.price) total += p.price * (h.shares || 0);
         });
+        (financialConfig?.plaidInvestments || []).forEach(pi => {
+            if (pi._plaidBalance) total += pi._plaidBalance;
+        });
         return total;
-    }, [holdings, investPrices]);
+    }, [holdings, investPrices, financialConfig?.plaidInvestments]);
 
     const nonCardDebts = financialConfig?.nonCardDebts || [];
     const totalDebtBalance = useMemo(() => nonCardDebts.reduce((s, d) => s + (d.balance || 0), 0), [nonCardDebts]);
-    const [collapsedDebts, setCollapsedDebts] = useState(false);
+    const [editingDebt, setEditingDebt] = useState(null);
+    const [editDebtForm, setEditDebtForm] = useState({});
+    const [addDebtForm, setAddDebtForm] = useState({ name: "", type: "personal", balance: "", apr: "", minPayment: "" });
+    const startEditDebt = (debt, i) => { setEditingDebt(i); setEditDebtForm({ name: debt.name || "", type: debt.type || "personal", balance: String(debt.balance || ""), apr: String(debt.apr || ""), minPayment: String(debt.minPayment || "") }); };
+    const saveEditDebt = (i) => { const arr = [...nonCardDebts]; arr[i] = { ...arr[i], name: editDebtForm.name, type: editDebtForm.type, balance: parseFloat(editDebtForm.balance) || 0, apr: parseFloat(editDebtForm.apr) || 0, minPayment: parseFloat(editDebtForm.minPayment) || 0 }; setFinancialConfig({ ...financialConfig, nonCardDebts: arr }); setEditingDebt(null); };
+    const removeDebt = (i) => { setFinancialConfig({ ...financialConfig, nonCardDebts: nonCardDebts.filter((_, j) => j !== i) }); };
 
     // ── SAVINGS GOALS ──
     const savingsGoals = financialConfig?.savingsGoals || [];
     const [editingGoals, setEditingGoals] = useState(false);
     const addGoal = () => setFinancialConfig({ ...financialConfig, savingsGoals: [...savingsGoals, { name: "", targetAmount: 0, currentAmount: 0, targetDate: "" }] });
     const updateGoal = (i, k, v) => { const arr = [...savingsGoals]; arr[i] = { ...arr[i], [k]: v }; setFinancialConfig({ ...financialConfig, savingsGoals: arr }); };
-    const removeGoal = (i) => { if (!window.confirm(`Delete "${savingsGoals[i]?.name || 'this goal'}"?`)) return; setFinancialConfig({ ...financialConfig, savingsGoals: savingsGoals.filter((_, j) => j !== i) }); };
+    const removeGoal = (i) => { setFinancialConfig({ ...financialConfig, savingsGoals: savingsGoals.filter((_, j) => j !== i) }); };
 
     // ── OTHER ASSETS ──
     const otherAssets = financialConfig?.otherAssets || [];
@@ -340,7 +404,7 @@ export default memo(function CardPortfolioTab() {
     const [editingAssets, setEditingAssets] = useState(false);
     const addAsset = () => setFinancialConfig({ ...financialConfig, otherAssets: [...otherAssets, { name: "", value: 0, liquid: false }] });
     const updateAsset = (i, k, v) => { const arr = [...otherAssets]; arr[i] = { ...arr[i], [k]: v }; setFinancialConfig({ ...financialConfig, otherAssets: arr }); };
-    const removeAsset = (i) => { if (!window.confirm(`Delete "${otherAssets[i]?.name || 'this asset'}"?`)) return; setFinancialConfig({ ...financialConfig, otherAssets: otherAssets.filter((_, j) => j !== i) }); };
+    const removeAsset = (i) => { setFinancialConfig({ ...financialConfig, otherAssets: otherAssets.filter((_, j) => j !== i) }); };
 
     const totalCash = useMemo(() => bankAccounts.reduce((s, b) => s + (b._plaidBalance != null ? b._plaidBalance : 0), 0) + savingsGoals.reduce((s, g) => s + (g.currentAmount || 0), 0), [bankAccounts, savingsGoals]);
     const netWorth = totalCash + (investTotalValue || 0) + totalOtherAssets - totalDebtBalance;
@@ -348,8 +412,11 @@ export default memo(function CardPortfolioTab() {
     const headerSection = <>
         <div style={{ paddingTop: 24, paddingBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
             <div>
-                <h1 style={{ fontSize: 26, fontWeight: 900, letterSpacing: "-0.02em" }}>Wealth Overview</h1>
-                <p style={{ fontSize: 13, color: T.text.dim, marginTop: 4, fontFamily: T.font.mono }}>{totalAccounts} connected entries</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <h1 style={{ fontSize: 26, fontWeight: 900, letterSpacing: "-0.02em" }}>Accounts</h1>
+                    <Badge variant="outline" style={{ fontSize: 11, padding: "2px 8px", color: T.text.secondary, borderColor: T.border.default, fontFamily: T.font.mono, letterSpacing: "0.02em" }}>{totalAccounts} Total</Badge>
+                </div>
+                <p style={{ fontSize: 13, color: T.text.secondary, marginTop: 4, fontFamily: T.font.mono }}>Manage your financial accounts</p>
             </div>
             {ENABLE_PLAID && (cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId)) && (<button onClick={handleRefreshPlaid} disabled={plaidRefreshing} className="hover-btn" style={{
                 display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 20,
@@ -363,56 +430,41 @@ export default memo(function CardPortfolioTab() {
             )}
         </div>
 
-        {/* Ultra-Premium Wealth Dashboard */}
-        <Card animate className="hover-card" style={{
-            position: "relative",
-            padding: 0,
-            overflow: "hidden",
-            background: `linear-gradient(145deg, ${T.bg.card}, ${T.bg.card} 40%, ${T.status.blue}0A)`,
-            borderColor: `${T.status.blue}1A`,
-            boxShadow: `${T.shadow.elevated}, 0 12px 32px ${T.status.blue}0F`
-        }}>
-            {/* Ambient Glow */}
-            <div style={{ position: "absolute", top: -50, right: -50, width: 150, height: 150, background: T.status.blue, filter: "blur(80px)", opacity: 0.15, borderRadius: "50%", pointerEvents: "none" }} />
-
-            <div style={{ padding: "28px 24px" }}>
-                <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.15em", color: T.text.dim, marginBottom: 8, fontFamily: T.font.mono, fontWeight: 700 }}>Net Worth</p>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                    <Mono size={38} weight={900} color={T.status.blue}>{fmt(netWorth)}</Mono>
-                </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderTop: `1px solid ${T.border.subtle}` }}>
-                <div style={{ padding: "16px 24px", borderRight: `1px solid ${T.border.subtle}` }}>
-                    <p style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, marginBottom: 4 }}>TOTAL LIMIT</p>
-                    <Mono size={16} weight={700} color={T.accent.primary}>{fmt(totalLimit)}</Mono>
-                </div>
-                <div style={{ padding: "16px 24px" }}>
-                    <p style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, marginBottom: 4 }}>INVESTMENTS</p>
-                    <Mono size={16} weight={700} color={T.accent.emerald}>{fmt(investTotalValue || 0)}</Mono>
-                </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderTop: `1px solid ${T.border.subtle}` }}>
-                <div style={{ padding: "16px 24px", borderRight: `1px solid ${T.border.subtle}` }}>
-                    <p style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, marginBottom: 4 }}>ANNUAL FEES</p>
-                    <Mono size={16} weight={700} color={totalAF > 0 ? T.status.amber : T.text.primary}>{fmt(totalAF)}</Mono>
-                </div>
-                <div style={{ padding: "16px 24px" }}>
-                    <p style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, marginBottom: 4 }}>DEBTS</p>
-                    <Mono size={16} weight={700} color={T.status.red}>{fmt(totalDebtBalance || 0)}</Mono>
-                </div>
+        {/* Account Summary Badges */}
+        <Card animate className="hover-card" style={{ padding: "16px 20px", marginTop: 4 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+                {cards.length > 0 && <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 99, background: `${T.accent.primary}10`, border: `1px solid ${T.accent.primary}20` }}>
+                    <CreditCard size={12} color={T.accent.primary} />
+                    <Mono size={11} weight={700} color={T.accent.primary}>{cards.length} Card{cards.length !== 1 ? "s" : ""}</Mono>
+                </div>}
+                {bankAccounts.length > 0 && <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 99, background: `${T.status.blue}10`, border: `1px solid ${T.status.blue}20` }}>
+                    <Landmark size={12} color={T.status.blue} />
+                    <Mono size={11} weight={700} color={T.status.blue}>{bankAccounts.length} Bank{bankAccounts.length !== 1 ? "s" : ""}</Mono>
+                </div>}
+                {enabledInvestments.length > 0 && <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 99, background: `${T.accent.emerald}10`, border: `1px solid ${T.accent.emerald}20` }}>
+                    <TrendingUp size={12} color={T.accent.emerald} />
+                    <Mono size={11} weight={700} color={T.accent.emerald}>{enabledInvestments.length} Investment{enabledInvestments.length !== 1 ? "s" : ""}</Mono>
+                </div>}
+                {nonCardDebts.length > 0 && <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 99, background: `${T.status.amber}10`, border: `1px solid ${T.status.amber}20` }}>
+                    <AlertTriangle size={12} color={T.status.amber} />
+                    <Mono size={11} weight={700} color={T.status.amber}>{nonCardDebts.length} Debt{nonCardDebts.length !== 1 ? "s" : ""}</Mono>
+                </div>}
+                {savingsGoals.length > 0 && <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 99, background: `${T.accent.primary}10`, border: `1px solid ${T.accent.primary}20` }}>
+                    <Target size={12} color={T.accent.primary} />
+                    <Mono size={11} weight={700} color={T.accent.primary}>{savingsGoals.length} Goal{savingsGoals.length !== 1 ? "s" : ""}</Mono>
+                </div>}
             </div>
         </Card>
 
         {/* Unified floating buttons — Add Account + optional Plaid */}
-        <div style={{ display: "flex", gap: 12, marginTop: 16, marginBottom: 8 }}>
+        <div style={{ display: "flex", gap: 16, marginTop: 24, marginBottom: 16 }}>
             <button onClick={() => openSheet()} className="hover-btn" style={{
                 flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 24,
                 border: "1px solid transparent", boxSizing: "border-box",
-                background: T.accent.gradient, color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer",
-                boxShadow: `0 6px 20px ${T.accent.primary}40`, letterSpacing: "0.03em"
+                background: T.accent.primary, color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer",
+                boxShadow: `inset 0 1px 1px rgba(255,255,255,0.15), 0 4px 12px ${T.accent.primary}30`, letterSpacing: "0.03em"
             }}><Plus size={16} />Add Account</button>
-            {ENABLE_PLAID && <button onClick={handlePlaidConnect} disabled={plaidLoading} className="hover-btn" style={{
+            {ENABLE_PLAID && <button onClick={(e) => { haptic.medium(); handlePlaidConnect(e); }} disabled={plaidLoading} className="hover-btn" style={{
                 flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 24,
                 border: "1px solid rgba(255,255,255,0.1)", boxSizing: "border-box", background: "#000000",
                 color: "#FFFFFF", fontSize: 13, fontWeight: 800, cursor: plaidLoading ? "wait" : "pointer",
@@ -422,15 +474,15 @@ export default memo(function CardPortfolioTab() {
         </div>
 
         {/* Info */}
-        <Card animate delay={50} style={{ padding: "12px 16px", borderLeft: `3px solid ${T.status.green}30` }}>
+        <Card animate delay={50} style={{ padding: "16px", borderLeft: `3px solid ${T.status.green}30` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <Check size={12} color={T.status.green} />
                 <span style={{ fontSize: 11, fontWeight: 600, color: T.text.secondary }}>Changes here update your audit snapshot & renewals</span>
             </div>
         </Card>
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 24, marginBottom: 4, padding: "0 4px" }}>
-            <span style={{ fontSize: 12, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.05em" }}>Categories</span>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 24, marginBottom: 4, padding: "0 4px" }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.06em", lineHeight: "44px" }}>Categories</span>
             <button onClick={() => {
                 const allCol = Object.values(collapsedSections).every(Boolean);
                 setCollapsedSections({ creditCards: !allCol, bankAccounts: !allCol, investments: !allCol, debts: !allCol, savingsGoals: !allCol, otherAssets: !allCol });
@@ -440,7 +492,7 @@ export default memo(function CardPortfolioTab() {
         </div>
     </>;
 
-    const creditCardsSection = <div>
+    const creditCardsSection = cards.length > 0 ? <div>
         <div
             onClick={() => setCollapsedSections(p => ({ ...p, creditCards: !p.creditCards }))}
             style={{
@@ -478,176 +530,173 @@ export default memo(function CardPortfolioTab() {
                         </div>
                         <ChevronDown size={14} color={T.text.dim} className="chevron-animated" data-open={String(!isCollapsed)} />
                     </div>
-                    <div className="collapse-section" data-collapsed={String(isCollapsed)}><div style={{ padding: "16px 18px" }}>
+                    <div className="collapse-section" data-collapsed={String(isCollapsed)}><div style={{ padding: 0 }}>
                         {cardsInCategory.map((card, i) => (
-                            <div key={card.id} style={{ borderBottom: i === cardsInCategory.length - 1 ? "none" : `1px solid ${T.border.subtle}`, padding: "14px 0" }}>
-                                {editingCard === card.id ?
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                                        {/* Institution & Card Name dropdowns for product changes */}
-                                        <div style={{ display: "flex", gap: 8 }}>
-                                            <SearchableSelect
-                                                value={editForm.institution}
-                                                onChange={v => setEditForm(p => ({ ...p, institution: v }))}
-                                                placeholder="Issuer"
-                                                options={INSTITUTIONS.map(i => ({ value: i, label: i }))}
-                                            />
-                                            <SearchableSelect
-                                                value={editForm.name}
-                                                onChange={v => setEditForm(p => ({ ...p, name: v }))}
-                                                placeholder="Select Card"
-                                                options={(() => {
-                                                    const list = getIssuerCards(editForm.institution, cardCatalog);
-                                                    const pinned = getPinnedForIssuer(editForm.institution, cardCatalog);
-                                                    const pinnedSet = new Set(pinned.map(p => p.toLowerCase()));
-                                                    const pinnedItems = list.filter(c => pinnedSet.has(c.name.toLowerCase()) && c.status !== "discontinued");
-                                                    const restActive = list.filter(c => !pinnedSet.has(c.name.toLowerCase()) && c.status !== "discontinued")
-                                                        .sort((a, b) => a.name.localeCompare(b.name));
-                                                    return [
-                                                        ...pinnedItems.map(c => ({ value: c.name, label: c.name, group: "Popular" })),
-                                                        ...restActive.map(c => ({ value: c.name, label: c.name, group: "All Cards" }))
-                                                    ];
-                                                })()}
-                                            />
-                                        </div>
-                                        <div style={{ display: "flex", gap: 8 }}>
-                                            <div style={{ flex: 1, position: "relative" }}>
-                                                <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600 }}>$</span>
-                                                <input type="number" inputMode="decimal" pattern="[0-9]*" value={editForm.limit} onChange={e => setEditForm(p => ({ ...p, limit: e.target.value }))}
-                                                    placeholder="Limit" style={{ paddingLeft: 28, fontFamily: T.font.mono, fontWeight: 600 }} />
+                            <div key={card.id} style={{ borderBottom: i === cardsInCategory.length - 1 ? "none" : `1px solid ${T.border.subtle}` }}>
+                                <div style={{ padding: "14px 18px" }}>
+                                    {editingCard === card.id ?
+                                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                            {/* Institution & Card Name dropdowns for product changes */}
+                                            <div style={{ display: "flex", gap: 8 }}>
+                                                <SearchableSelect
+                                                    value={editForm.institution}
+                                                    onChange={v => setEditForm(p => ({ ...p, institution: v }))}
+                                                    placeholder="Issuer"
+                                                    options={INSTITUTIONS.map(i => ({ value: i, label: i }))}
+                                                />
+                                                <SearchableSelect
+                                                    value={editForm.name}
+                                                    onChange={v => setEditForm(p => ({ ...p, name: v }))}
+                                                    placeholder="Select Card"
+                                                    options={(() => {
+                                                        const list = getIssuerCards(editForm.institution, cardCatalog);
+                                                        const pinned = getPinnedForIssuer(editForm.institution, cardCatalog);
+                                                        const pinnedSet = new Set(pinned.map(p => p.toLowerCase()));
+                                                        const pinnedItems = list.filter(c => pinnedSet.has(c.name.toLowerCase()) && c.status !== "discontinued");
+                                                        const restActive = list.filter(c => !pinnedSet.has(c.name.toLowerCase()) && c.status !== "discontinued")
+                                                            .sort((a, b) => a.name.localeCompare(b.name));
+                                                        return [
+                                                            ...pinnedItems.map(c => ({ value: c.name, label: c.name, group: "Popular" })),
+                                                            ...restActive.map(c => ({ value: c.name, label: c.name, group: "All Cards" }))
+                                                        ];
+                                                    })()}
+                                                />
                                             </div>
-                                            <div style={{ flex: 1 }}>
-                                                <input value={editForm.nickname} onChange={e => setEditForm(p => ({ ...p, nickname: e.target.value }))}
-                                                    placeholder="Nickname (e.g. 'Daily Driver')" style={{ width: "100%", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                            <div style={{ display: "flex", gap: 8 }}>
+                                                <div style={{ flex: 1, position: "relative" }}>
+                                                    <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600 }}>$</span>
+                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" value={editForm.limit} onChange={e => setEditForm(p => ({ ...p, limit: e.target.value }))}
+                                                        placeholder="Limit" aria-label="Credit limit" style={{ paddingLeft: 28, fontFamily: T.font.mono, fontWeight: 600 }} />
+                                                </div>
+                                                <div style={{ flex: 1 }}>
+                                                    <input value={editForm.nickname} onChange={e => setEditForm(p => ({ ...p, nickname: e.target.value }))}
+                                                        placeholder="Nickname (e.g. 'Daily Driver')" aria-label="Card nickname" style={{ width: "100%", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div style={{ display: "flex", gap: 8 }}>
-                                            <div style={{ flex: 0.5, position: "relative" }}>
-                                                <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                <input type="number" inputMode="decimal" pattern="[0-9]*" value={editForm.annualFee} onChange={e => setEditForm(p => ({ ...p, annualFee: e.target.value }))}
-                                                    placeholder="Annual Fee" style={{ paddingLeft: 28, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                            <div style={{ display: "flex", gap: 8 }}>
+                                                <div style={{ flex: 0.5, position: "relative" }}>
+                                                    <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 13, fontWeight: 600 }}>$</span>
+                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" value={editForm.annualFee} onChange={e => setEditForm(p => ({ ...p, annualFee: e.target.value }))}
+                                                        placeholder="Annual Fee" aria-label="Annual fee" style={{ paddingLeft: 28, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                                </div>
+                                                <div style={{ flex: 0.5, position: "relative" }}>
+                                                    <span style={{ position: "absolute", left: 10, top: "8px", color: T.text.dim, fontSize: 11, fontWeight: 700, pointerEvents: "none" }}>AF DUE</span>
+                                                    <input type="date" value={editForm.annualFeeDue} onChange={e => setEditForm(p => ({ ...p, annualFeeDue: e.target.value }))}
+                                                        aria-label="Annual fee due date" style={{ width: "100%", padding: "20px 10px 6px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, outline: "none", boxSizing: "border-box", height: "100%" }} />
+                                                </div>
                                             </div>
-                                            <div style={{ flex: 0.5, position: "relative" }}>
-                                                <span style={{ position: "absolute", left: 10, top: "8px", color: T.text.dim, fontSize: 11, fontWeight: 700, pointerEvents: "none" }}>AF DUE</span>
-                                                <input type="date" value={editForm.annualFeeDue} onChange={e => setEditForm(p => ({ ...p, annualFeeDue: e.target.value }))}
-                                                    style={{ width: "100%", padding: "20px 10px 6px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, outline: "none", boxSizing: "border-box", height: "100%" }} />
+                                            <div style={{ marginTop: -4, paddingLeft: 4 }}>
+                                                <WaivedCheckbox checked={editForm.annualFeeWaived} onChange={() => setEditForm(p => ({ ...p, annualFeeWaived: !p.annualFeeWaived }))} />
                                             </div>
-                                        </div>
-                                        <div style={{ marginTop: -4, paddingLeft: 4 }}>
-                                            <WaivedCheckbox checked={editForm.annualFeeWaived} onChange={() => setEditForm(p => ({ ...p, annualFeeWaived: !p.annualFeeWaived }))} />
-                                        </div>
-                                        <div style={{ display: "flex", gap: 8 }}>
-                                            <div style={{ flex: 1, position: "relative" }}>
-                                                <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 12 }}>%</span>
-                                                <input type="number" inputMode="decimal" pattern="[0-9]*" value={editForm.apr} onChange={e => setEditForm(p => ({ ...p, apr: e.target.value }))}
-                                                    placeholder="Standard APR (%)" style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                            <div style={{ display: "flex", gap: 8 }}>
+                                                <div style={{ flex: 1, position: "relative" }}>
+                                                    <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 12 }}>%</span>
+                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" value={editForm.apr} onChange={e => setEditForm(p => ({ ...p, apr: e.target.value }))}
+                                                        placeholder="Standard APR (%)" aria-label="Standard APR percentage" style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div style={{ marginTop: -4, paddingLeft: 4 }}>
-                                            <PromoCheckbox checked={editForm.hasPromoApr} onChange={() => setEditForm(p => ({ ...p, hasPromoApr: !p.hasPromoApr }))} />
-                                        </div>
-                                        {editForm.hasPromoApr && <div style={{ display: "flex", gap: 8, marginTop: -4 }}>
-                                            <div style={{ flex: 0.5, position: "relative" }}>
-                                                <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 12 }}>%</span>
-                                                <input type="number" inputMode="decimal" pattern="[0-9]*" value={editForm.promoAprAmount} onChange={e => setEditForm(p => ({ ...p, promoAprAmount: e.target.value }))}
-                                                    placeholder="Promo APR" style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                            <div style={{ marginTop: -4, paddingLeft: 4 }}>
+                                                <PromoCheckbox checked={editForm.hasPromoApr} onChange={() => setEditForm(p => ({ ...p, hasPromoApr: !p.hasPromoApr }))} />
                                             </div>
-                                            <div style={{ flex: 0.5, position: "relative" }}>
-                                                <span style={{ position: "absolute", left: 10, top: "8px", color: T.text.dim, fontSize: 11, fontWeight: 700, pointerEvents: "none" }}>PROMO EXP</span>
-                                                <input type="date" value={editForm.promoAprExp} onChange={e => setEditForm(p => ({ ...p, promoAprExp: e.target.value }))}
-                                                    style={{ width: "100%", padding: "20px 10px 6px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, outline: "none", boxSizing: "border-box", height: "100%" }} />
+                                            {editForm.hasPromoApr && <div style={{ display: "flex", gap: 8, marginTop: -4 }}>
+                                                <div style={{ flex: 0.5, position: "relative" }}>
+                                                    <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 12 }}>%</span>
+                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" value={editForm.promoAprAmount} onChange={e => setEditForm(p => ({ ...p, promoAprAmount: e.target.value }))}
+                                                        placeholder="Promo APR" aria-label="Promo APR percentage" style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                                </div>
+                                                <div style={{ flex: 0.5, position: "relative" }}>
+                                                    <span style={{ position: "absolute", left: 10, top: "8px", color: T.text.dim, fontSize: 11, fontWeight: 700, pointerEvents: "none" }}>PROMO EXP</span>
+                                                    <input type="date" value={editForm.promoAprExp} onChange={e => setEditForm(p => ({ ...p, promoAprExp: e.target.value }))}
+                                                        aria-label="Promo APR expiration date" style={{ width: "100%", padding: "20px 10px 6px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, outline: "none", boxSizing: "border-box", height: "100%" }} />
+                                                </div>
+                                            </div>}
+                                            <input value={editForm.notes} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))}
+                                                placeholder="Notes" aria-label="Card notes" style={{ width: "100%", fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box", marginTop: 2 }} />
+
+                                            {/* Payment tracking */}
+                                            <div style={{ paddingTop: 10, borderTop: `1px solid ${T.border.subtle}`, marginTop: 4 }}>
+                                                <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 700, display: "block", marginBottom: 6 }}>PAYMENT TRACKING</span>
+                                                <div style={{ display: "flex", gap: 6 }}>
+                                                    <div style={{ flex: 1 }}>
+                                                        <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, display: "block", marginBottom: 3 }}>STMT CLOSES</span>
+                                                        <input type="number" inputMode="decimal" pattern="[0-9]*" min="1" max="31" value={editForm.statementCloseDay} onChange={e => setEditForm(p => ({ ...p, statementCloseDay: e.target.value }))}
+                                                            placeholder="Day" aria-label="Statement close day" style={{ width: "100%", padding: "8px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+                                                    </div>
+                                                    <div style={{ flex: 1 }}>
+                                                        <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, display: "block", marginBottom: 3 }}>PMT DUE</span>
+                                                        <input type="number" inputMode="decimal" pattern="[0-9]*" min="1" max="31" value={editForm.paymentDueDay} onChange={e => setEditForm(p => ({ ...p, paymentDueDay: e.target.value }))}
+                                                            placeholder="Day" aria-label="Payment due day" style={{ width: "100%", padding: "8px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+                                                    </div>
+                                                    <div style={{ flex: 1, position: "relative" }}>
+                                                        <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, display: "block", marginBottom: 3 }}>MIN PMT</span>
+                                                        <span style={{ position: "absolute", left: 8, bottom: 9, color: T.text.dim, fontSize: 11, fontWeight: 600 }}>$</span>
+                                                        <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={editForm.minPayment} onChange={e => setEditForm(p => ({ ...p, minPayment: e.target.value }))}
+                                                            placeholder="35" aria-label="Minimum payment" style={{ width: "100%", padding: "8px 8px 8px 18px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                                                <button onClick={() => saveEdit(card.id)} style={{
+                                                    flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none",
+                                                    background: T.accent.primaryDim, color: T.accent.primary, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6
+                                                }}>
+                                                    <Check size={14} />Save</button>
+                                                <button onClick={() => { if (window.confirm(`Delete "${card.nickname || card.name}"?`)) removeCard(card.id); }} style={{
+                                                    flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6
+                                                }}>Delete</button>
+                                                <button onClick={() => setEditingCard(null)} style={{
+                                                    flex: 1, padding: 12, borderRadius: T.radius.sm,
+                                                    border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600
+                                                }}>Cancel</button>
+                                            </div>
+                                        </div> :
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{getCardLabel(cards, card).replace(inst + " ", "")}</span>
+                                                <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                                                    {card.annualFee > 0 && <Badge variant={card.annualFeeWaived ? "green" : "amber"} style={{ fontSize: 8, padding: "1px 5px" }}>
+                                                        {card.annualFeeWaived ? "WAIVED" : `AF ${fmt(card.annualFee)}`}{card.annualFeeDue && !card.annualFeeWaived ? ` · ${card.annualFeeDue}` : ""}
+                                                    </Badge>}
+                                                    {card.apr > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.secondary, borderColor: T.border.default }}>
+                                                        {card.apr}% APR
+                                                    </Badge>}
+                                                    {card.hasPromoApr && <Badge variant="green" style={{ fontSize: 8, padding: "1px 5px" }}>
+                                                        PROMO {card.promoAprAmount}%{card.promoAprExp ? ` till ${card.promoAprExp}` : ""}
+                                                    </Badge>}
+                                                    {card.paymentDueDay && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.dim, borderColor: T.border.default }}>
+                                                        Due day {card.paymentDueDay}{card.minPayment ? ` · min ${fmt(card.minPayment)}` : ""}
+                                                    </Badge>}
+                                                    {card.notes && <Mono size={10} color={T.text.dim}>{card.notes}</Mono>}
+                                                </div>
+                                            </div>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                                                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", marginRight: 2 }}>
+                                                    {card._plaidBalance != null && (
+                                                        <Mono size={14} weight={900} color={T.status.red}>{fmt(card._plaidBalance)}</Mono>
+                                                    )}
+                                                    <Mono size={card._plaidBalance != null ? 10 : 13} weight={700} color={card._plaidBalance != null ? T.text.dim : colors.text}>{card._plaidBalance != null ? "Limit " : ""}{fmt(card.limit)}</Mono>
+                                                </div>
+                                                <button onClick={() => startEdit(card)} style={{
+                                                    width: 36, height: 36, borderRadius: T.radius.md,
+                                                    border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim,
+                                                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
+                                                }}>
+                                                    <Edit3 size={11} /></button>
                                             </div>
                                         </div>}
-                                        <input value={editForm.notes} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))}
-                                            placeholder="Notes" style={{ width: "100%", fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box", marginTop: 2 }} />
-
-                                        {/* Payment tracking */}
-                                        <div style={{ paddingTop: 10, borderTop: `1px solid ${T.border.subtle}`, marginTop: 4 }}>
-                                            <span style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 700, display: "block", marginBottom: 6 }}>PAYMENT TRACKING</span>
-                                            <div style={{ display: "flex", gap: 6 }}>
-                                                <div style={{ flex: 1 }}>
-                                                    <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, display: "block", marginBottom: 3 }}>STMT CLOSES</span>
-                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" min="1" max="31" value={editForm.statementCloseDay} onChange={e => setEditForm(p => ({ ...p, statementCloseDay: e.target.value }))}
-                                                        placeholder="Day" style={{ width: "100%", padding: "8px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
-                                                </div>
-                                                <div style={{ flex: 1 }}>
-                                                    <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, display: "block", marginBottom: 3 }}>PMT DUE</span>
-                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" min="1" max="31" value={editForm.paymentDueDay} onChange={e => setEditForm(p => ({ ...p, paymentDueDay: e.target.value }))}
-                                                        placeholder="Day" style={{ width: "100%", padding: "8px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
-                                                </div>
-                                                <div style={{ flex: 1, position: "relative" }}>
-                                                    <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, display: "block", marginBottom: 3 }}>MIN PMT</span>
-                                                    <span style={{ position: "absolute", left: 8, bottom: 9, color: T.text.dim, fontSize: 11, fontWeight: 600 }}>$</span>
-                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={editForm.minPayment} onChange={e => setEditForm(p => ({ ...p, minPayment: e.target.value }))}
-                                                        placeholder="35" style={{ width: "100%", padding: "8px 8px 8px 18px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                                            <button onClick={() => saveEdit(card.id)} style={{
-                                                flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none",
-                                                background: T.accent.primaryDim, color: T.accent.primary, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6
-                                            }}>
-                                                <Check size={14} />Save</button>
-                                            <button onClick={() => setEditingCard(null)} style={{
-                                                flex: 1, padding: 12, borderRadius: T.radius.sm,
-                                                border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600
-                                            }}>Cancel</button>
-                                        </div>
-                                    </div> :
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{getCardLabel(cards, card).replace(inst + " ", "")}</span>
-                                            <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
-                                                {card.annualFee > 0 && <Badge variant={card.annualFeeWaived ? "green" : "amber"} style={{ fontSize: 8, padding: "1px 5px" }}>
-                                                    {card.annualFeeWaived ? "WAIVED" : `AF ${fmt(card.annualFee)}`}{card.annualFeeDue && !card.annualFeeWaived ? ` · ${card.annualFeeDue}` : ""}
-                                                </Badge>}
-                                                {card.apr > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.secondary, borderColor: T.border.default }}>
-                                                    {card.apr}% APR
-                                                </Badge>}
-                                                {card.hasPromoApr && <Badge variant="green" style={{ fontSize: 8, padding: "1px 5px" }}>
-                                                    PROMO {card.promoAprAmount}%{card.promoAprExp ? ` till ${card.promoAprExp}` : ""}
-                                                </Badge>}
-                                                {card.paymentDueDay && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.dim, borderColor: T.border.default }}>
-                                                    Due day {card.paymentDueDay}{card.minPayment ? ` · min ${fmt(card.minPayment)}` : ""}
-                                                </Badge>}
-                                                {card.notes && <Mono size={10} color={T.text.dim}>{card.notes}</Mono>}
-                                            </div>
-                                        </div>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", marginRight: 2 }}>
-                                                {card._plaidBalance != null && (
-                                                    <Mono size={14} weight={900} color={T.status.red}>{fmt(card._plaidBalance)}</Mono>
-                                                )}
-                                                <Mono size={card._plaidBalance != null ? 10 : 13} weight={700} color={card._plaidBalance != null ? T.text.dim : colors.text}>{card._plaidBalance != null ? "Limit " : ""}{fmt(card.limit)}</Mono>
-                                            </div>
-                                            <button onClick={() => startEdit(card)} style={{
-                                                width: 36, height: 36, borderRadius: T.radius.md,
-                                                border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim,
-                                                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
-                                            }}>
-                                                <Edit3 size={11} /></button>
-                                            {editingCard !== card.id && <button onClick={() => removeCard(card.id)} style={{
-                                                width: 36, height: 36, borderRadius: T.radius.md,
-                                                border: "none", background: T.status.redDim, color: T.status.red,
-                                                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
-                                            }}>
-                                                <X size={11} /></button>}
-                                        </div>
-                                    </div>}
+                                </div>
                             </div>
                         ))}
                     </div></div>
                 </Card>;
             })
         )}
-    </div>;
+    </div> : null;
 
     // ─── Bank Accounts Section ─────────────────────────────────────
 
     const removeBankAccount = (id) => {
-        const acct = bankAccounts.find(a => a.id === id);
-        if (!window.confirm(`Delete "${acct?.name}"? This cannot be undone.`)) return;
         setBankAccounts(bankAccounts.filter(a => a.id !== id));
     };
 
@@ -682,7 +731,7 @@ export default memo(function CardPortfolioTab() {
         return Object.entries(g).sort((a, b) => a[0].localeCompare(b[0]));
     }, [savingsAccounts]);
 
-    const bankSection = <div>
+    const bankSection = bankAccounts.length > 0 ? <div>
         {/* Premium Section Header: Bank Accounts */}
         <div
             onClick={() => setCollapsedSections(p => ({ ...p, bankAccounts: !p.bankAccounts }))}
@@ -728,41 +777,43 @@ export default memo(function CardPortfolioTab() {
                                 </div>
                                 <ChevronDown size={14} color={T.text.dim} className="chevron-animated" data-open={String(!isCollapsed)} />
                             </div>
-                            <div className="collapse-section" data-collapsed={String(isCollapsed)}><div style={{ padding: "12px 18px" }}>
+                            <div className="collapse-section" data-collapsed={String(isCollapsed)}><div style={{ padding: 0 }}>
                                 {accts.sort((a, b) => a.name.localeCompare(b.name)).map((acct, i) => (
-                                    <div key={acct.id} style={{ borderBottom: i === accts.length - 1 ? "none" : `1px solid ${T.border.subtle}`, padding: "12px 0" }}>
-                                        {editingBank === acct.id ?
-                                            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                                                <input value={editBankForm.name} onChange={e => setEditBankForm(p => ({ ...p, name: e.target.value }))} placeholder="Account name"
-                                                    style={{ width: "100%", fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
-                                                <div style={{ display: "flex", gap: 8 }}>
-                                                    <div style={{ flex: 0.4, position: "relative" }}>
-                                                        <input type="number" inputMode="decimal" step="0.01" value={editBankForm.apy} onChange={e => setEditBankForm(p => ({ ...p, apy: e.target.value }))} placeholder="APY"
-                                                            style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
-                                                        <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 12 }}>%</span>
+                                    <div key={acct.id} style={{ borderBottom: i === accts.length - 1 ? "none" : `1px solid ${T.border.subtle}` }}>
+                                        <div style={{ padding: "12px 18px" }}>
+                                            {editingBank === acct.id ?
+                                                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                                    <input value={editBankForm.name} onChange={e => setEditBankForm(p => ({ ...p, name: e.target.value }))} placeholder="Account name" aria-label="Account name"
+                                                        style={{ width: "100%", fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
+                                                    <div style={{ display: "flex", gap: 8 }}>
+                                                        <div style={{ flex: 0.4, position: "relative" }}>
+                                                            <input type="number" inputMode="decimal" step="0.01" value={editBankForm.apy} onChange={e => setEditBankForm(p => ({ ...p, apy: e.target.value }))} placeholder="APY" aria-label="APY percentage"
+                                                                style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                                            <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 12 }}>%</span>
+                                                        </div>
+                                                        <input value={editBankForm.notes} onChange={e => setEditBankForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notes" aria-label="Account notes"
+                                                            style={{ flex: 1, fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
                                                     </div>
-                                                    <input value={editBankForm.notes} onChange={e => setEditBankForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notes"
-                                                        style={{ flex: 1, fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
-                                                </div>
-                                                <div style={{ display: "flex", gap: 8 }}>
-                                                    <button onClick={() => saveEditBank(acct.id)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: `${T.status.blue}18`, color: T.status.blue, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Check size={14} />Save</button>
-                                                    <button onClick={() => setEditingBank(null)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
-                                                </div>
-                                            </div> :
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                                <div style={{ flex: 1, minWidth: 0 }}>
-                                                    <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{acct.name}</span>
-                                                    <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
-                                                        {acct.apy > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.status.blue, borderColor: `${T.status.blue}40` }}>{acct.apy}% APY</Badge>}
-                                                        {acct.notes && <Mono size={10} color={T.text.dim}>{acct.notes}</Mono>}
+                                                    <div style={{ display: "flex", gap: 8 }}>
+                                                        <button onClick={() => saveEditBank(acct.id)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: `${T.status.blue}18`, color: T.status.blue, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Check size={14} />Save</button>
+                                                        <button onClick={() => { if (window.confirm(`Delete "${acct.name}"?`)) removeBankAccount(acct.id); }} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>Delete</button>
+                                                        <button onClick={() => setEditingBank(null)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
                                                     </div>
-                                                </div>
-                                                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                                                    {acct._plaidBalance != null && <Mono size={14} weight={900} color={T.status.blue}>{fmt(acct._plaidBalance)}</Mono>}
-                                                    <button onClick={() => startEditBank(acct)} style={{ width: 36, height: 36, borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={13} /></button>
-                                                    <button onClick={() => removeBankAccount(acct.id)} style={{ width: 36, height: 36, borderRadius: T.radius.md, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
-                                                </div>
-                                            </div>}
+                                                </div> :
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{acct.name}</span>
+                                                        <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                                                            {acct.apy > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.status.blue, borderColor: `${T.status.blue}40` }}>{acct.apy}% APY</Badge>}
+                                                            {acct.notes && <Mono size={10} color={T.text.dim}>{acct.notes}</Mono>}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                                                        <Mono size={14} weight={900} color={acct._plaidBalance != null ? T.status.blue : T.text.muted}>{acct._plaidBalance != null ? fmt(acct._plaidBalance) : "\u2014"}</Mono>
+                                                        <button onClick={() => startEditBank(acct)} style={{ width: 36, height: 36, borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={13} /></button>
+                                                    </div>
+                                                </div>}
+                                        </div>
                                     </div>
                                 ))}
                             </div></div>
@@ -790,41 +841,43 @@ export default memo(function CardPortfolioTab() {
                                 </div>
                                 <ChevronDown size={14} color={T.text.dim} className="chevron-animated" data-open={String(!isCollapsed)} />
                             </div>
-                            <div className="collapse-section" data-collapsed={String(isCollapsed)}><div style={{ padding: "12px 18px" }}>
+                            <div className="collapse-section" data-collapsed={String(isCollapsed)}><div style={{ padding: 0 }}>
                                 {accts.sort((a, b) => a.name.localeCompare(b.name)).map((acct, i) => (
-                                    <div key={acct.id} style={{ borderBottom: i === accts.length - 1 ? "none" : `1px solid ${T.border.subtle}`, padding: "12px 0" }}>
-                                        {editingBank === acct.id ?
-                                            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                                                <input value={editBankForm.name} onChange={e => setEditBankForm(p => ({ ...p, name: e.target.value }))} placeholder="Account name"
-                                                    style={{ width: "100%", fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
-                                                <div style={{ display: "flex", gap: 8 }}>
-                                                    <div style={{ flex: 0.4, position: "relative" }}>
-                                                        <input type="number" inputMode="decimal" step="0.01" value={editBankForm.apy} onChange={e => setEditBankForm(p => ({ ...p, apy: e.target.value }))} placeholder="APY"
-                                                            style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
-                                                        <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 12 }}>%</span>
+                                    <div key={acct.id} style={{ borderBottom: i === accts.length - 1 ? "none" : `1px solid ${T.border.subtle}` }}>
+                                        <div style={{ padding: "12px 18px" }}>
+                                            {editingBank === acct.id ?
+                                                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                                    <input value={editBankForm.name} onChange={e => setEditBankForm(p => ({ ...p, name: e.target.value }))} placeholder="Account name" aria-label="Account name"
+                                                        style={{ width: "100%", fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
+                                                    <div style={{ display: "flex", gap: 8 }}>
+                                                        <div style={{ flex: 0.4, position: "relative" }}>
+                                                            <input type="number" inputMode="decimal" step="0.01" value={editBankForm.apy} onChange={e => setEditBankForm(p => ({ ...p, apy: e.target.value }))} placeholder="APY" aria-label="APY percentage"
+                                                                style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                                            <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 12 }}>%</span>
+                                                        </div>
+                                                        <input value={editBankForm.notes} onChange={e => setEditBankForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notes" aria-label="Account notes"
+                                                            style={{ flex: 1, fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
                                                     </div>
-                                                    <input value={editBankForm.notes} onChange={e => setEditBankForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notes"
-                                                        style={{ flex: 1, fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
-                                                </div>
-                                                <div style={{ display: "flex", gap: 8 }}>
-                                                    <button onClick={() => saveEditBank(acct.id)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: `${T.accent.emerald}18`, color: T.accent.emerald, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Check size={14} />Save</button>
-                                                    <button onClick={() => setEditingBank(null)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
-                                                </div>
-                                            </div> :
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                                <div style={{ flex: 1, minWidth: 0 }}>
-                                                    <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{acct.name}</span>
-                                                    <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
-                                                        {acct.apy > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>{acct.apy}% APY</Badge>}
-                                                        {acct.notes && <Mono size={10} color={T.text.dim}>{acct.notes}</Mono>}
+                                                    <div style={{ display: "flex", gap: 8 }}>
+                                                        <button onClick={() => saveEditBank(acct.id)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: `${T.accent.emerald}18`, color: T.accent.emerald, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Check size={14} />Save</button>
+                                                        <button onClick={() => { if (window.confirm(`Delete "${acct.name}"?`)) removeBankAccount(acct.id); }} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>Delete</button>
+                                                        <button onClick={() => setEditingBank(null)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
                                                     </div>
-                                                </div>
-                                                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                                                    {acct._plaidBalance != null && <Mono size={14} weight={900} color={T.accent.emerald}>{fmt(acct._plaidBalance)}</Mono>}
-                                                    <button onClick={() => startEditBank(acct)} style={{ width: 36, height: 36, borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={13} /></button>
-                                                    <button onClick={() => removeBankAccount(acct.id)} style={{ width: 36, height: 36, borderRadius: T.radius.md, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
-                                                </div>
-                                            </div>}
+                                                </div> :
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{acct.name}</span>
+                                                        <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                                                            {acct.apy > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>{acct.apy}% APY</Badge>}
+                                                            {acct.notes && <Mono size={10} color={T.text.dim}>{acct.notes}</Mono>}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                                                        <Mono size={14} weight={900} color={acct._plaidBalance != null ? T.accent.emerald : T.text.muted}>{acct._plaidBalance != null ? fmt(acct._plaidBalance) : "\u2014"}</Mono>
+                                                        <button onClick={() => startEditBank(acct)} style={{ width: 36, height: 36, borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={13} /></button>
+                                                    </div>
+                                                </div>}
+                                        </div>
                                     </div>
                                 ))}
                             </div></div>
@@ -832,7 +885,7 @@ export default memo(function CardPortfolioTab() {
                     })}
             </>
         )}
-    </div>;
+    </div> : null;
 
     // ─── Investment Accounts Section (JSX) ─────────────────────────────────
 
@@ -878,8 +931,14 @@ export default memo(function CardPortfolioTab() {
 
                 {enabledInvestments.map(({ key, label, color }) => {
                     const items = holdings[key] || [];
-                    const sectionValue = items.reduce((s, h) => s + ((investPrices[h.symbol]?.price || 0) * (h.shares || 0)), 0);
+                    const plaidItems = (financialConfig?.plaidInvestments || []).filter(pi => pi.bucket === key);
+
+                    const manualValue = items.reduce((s, h) => s + ((investPrices[h.symbol]?.price || 0) * (h.shares || 0)), 0);
+                    const plaidValue = plaidItems.reduce((s, pi) => s + (pi._plaidBalance || 0), 0);
+                    const sectionValue = manualValue + plaidValue;
+
                     const percentOfTotal = investTotalValue > 0 ? (sectionValue / investTotalValue) * 100 : 0;
+                    const totalCount = items.length + plaidItems.length;
                     const isCollapsed = collapsedInvest[key];
                     return <Card key={key} animate variant="glass" className="hover-lift" style={{ marginBottom: 16, padding: 0, overflow: "hidden", borderLeft: `4px solid ${color}`, position: "relative" }}>
                         <div style={{ position: "absolute", top: -40, right: -40, width: 80, height: 80, background: color, filter: "blur(40px)", opacity: 0.1, borderRadius: "50%", pointerEvents: "none" }} />
@@ -889,7 +948,7 @@ export default memo(function CardPortfolioTab() {
                                     <TrendingUp size={14} color={T.bg.card} strokeWidth={2.5} />
                                 </div>
                                 <span style={{ fontSize: 13, fontWeight: 800, color, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
-                                <Badge variant="outline" style={{ fontSize: 10, color, borderColor: `${color}40` }}>{items.length} holding{items.length !== 1 ? "s" : ""}</Badge>
+                                <Badge variant="outline" style={{ fontSize: 10, color, borderColor: `${color}40` }}>{totalCount} holding{totalCount !== 1 ? "s" : ""}</Badge>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                 {sectionValue > 0 && <Mono size={15} weight={800} color={color}>{fmt(sectionValue)}</Mono>}
@@ -901,47 +960,69 @@ export default memo(function CardPortfolioTab() {
                             </div>}
                         </div>
                         <div className="collapse-section" data-collapsed={String(isCollapsed)}><div style={{ padding: "12px 18px" }}>
-                            {items.length === 0 ?
+                            {totalCount === 0 ?
                                 <p style={{ fontSize: 11, color: T.text.muted, textAlign: "center", padding: "8px 0" }}>No holdings yet — add your first below.</p> :
-                                items.sort((a, b) => (a.symbol || "").localeCompare(b.symbol || "")).map((h, i) => {
-                                    const price = investPrices[h.symbol];
-                                    return <div key={`${h.symbol}-${i}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: i === items.length - 1 ? "none" : `1px solid ${T.border.subtle}` }}>
-                                        <div>
-                                            <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>{h.symbol?.replace("-USD", "")}</span>
-                                            <span style={{ fontSize: 10, color: T.text.dim, marginLeft: 6 }}>{key === "crypto" ? `${h.shares} units` : `${h.shares} shares`}</span>
-                                        </div>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                            <div style={{ textAlign: "right" }}>
-                                                {price ? <>
-                                                    <Mono size={12} weight={700} color={color}>{fmt(price.price * (h.shares || 0))}</Mono>
-                                                    {price.changePct != null && <span style={{ fontSize: 9, fontFamily: T.font.mono, fontWeight: 700, marginLeft: 4, color: price.changePct >= 0 ? T.status.green : T.status.red }}>
-                                                        {price.changePct >= 0 ? "+" : ""}{price.changePct.toFixed(2)}%
-                                                    </span>}
-                                                </> : <Mono size={11} color={T.text.muted}>—</Mono>}
+                                <>
+                                    {plaidItems.map((pi, i) => (
+                                        <div key={pi.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.border.subtle}` }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                                <div style={{ padding: 6, borderRadius: 6, background: `${color}15`, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${color}30` }}>
+                                                    <TrendingUp size={12} color={color} />
+                                                </div>
+                                                <div style={{ display: "flex", flexDirection: "column" }}>
+                                                    <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>{pi.name}</span>
+                                                    <span style={{ fontSize: 10, color: T.text.dim }}>{pi.institution}</span>
+                                                </div>
                                             </div>
-                                            {setFinancialConfig && <button onClick={() => {
-                                                if (!window.confirm(`Remove ${h.symbol?.replace("-USD", "")}?`)) return;
-                                                const cur = financialConfig?.holdings || {};
-                                                const updated = (cur[key] || []).filter((_, idx) => idx !== i);
-                                                setFinancialConfig({ ...financialConfig, holdings: { ...cur, [key]: updated } });
-                                            }} style={{ width: 24, height: 24, border: "none", background: `${T.status.red}15`, color: T.status.red, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                                <X size={12} />
-                                            </button>}
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                <Mono size={13} weight={800} color={color}>{fmt(pi._plaidBalance)}</Mono>
+                                                <div style={{ width: 6, height: 6, borderRadius: "50%", background: T.status.green, boxShadow: `0 0 6px ${T.status.green}`, marginRight: 4 }} title="Synced with Plaid" />
+                                            </div>
                                         </div>
-                                    </div>;
-                                })}
+                                    ))}
+                                    {items.sort((a, b) => (a.symbol || "").localeCompare(b.symbol || "")).map((h, i) => {
+                                        const price = investPrices[h.symbol];
+                                        return <div key={`${h.symbol}-${i}`} style={{ borderBottom: i === items.length - 1 ? "none" : `1px solid ${T.border.subtle}` }}>
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 18px" }}>
+                                                <div>
+                                                    <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>{h.symbol?.replace("-USD", "")}</span>
+                                                    <span style={{ fontSize: 10, color: T.text.dim, marginLeft: 6 }}>{key === "crypto" ? `${h.shares} units` : `${h.shares} shares`}</span>
+                                                </div>
+                                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                                    <div style={{ textAlign: "right" }}>
+                                                        {price ? <>
+                                                            <Mono size={12} weight={700} color={color}>{fmt(price.price * (h.shares || 0))}</Mono>
+                                                            {price.changePct != null && <span style={{ fontSize: 9, fontFamily: T.font.mono, fontWeight: 700, marginLeft: 4, color: price.changePct >= 0 ? T.status.green : T.status.red }}>
+                                                                {price.changePct >= 0 ? "+" : ""}{price.changePct.toFixed(2)}%
+                                                            </span>}
+                                                        </> : <Mono size={11} color={T.text.muted}>—</Mono>}
+                                                    </div>
+                                                    {setFinancialConfig && <button onClick={() => {
+                                                        if (window.confirm(`Delete ${h.symbol}?`)) {
+                                                            const cur = financialConfig?.holdings || {};
+                                                            const updated = (cur[key] || []).filter((_, idx) => idx !== i);
+                                                            setFinancialConfig({ ...financialConfig, holdings: { ...cur, [key]: updated } });
+                                                        }
+                                                    }} style={{ width: 28, height: 28, borderRadius: T.radius.md, border: "none", background: "transparent", color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginLeft: 4 }}>
+                                                        <Trash2 size={13} />
+                                                    </button>}
+                                                </div>
+                                            </div>
+                                        </div>;
+                                    })}
 
-                            {/* Inline Add Holding mapped to bottom sheet */}
-                            {setFinancialConfig && <div style={{ marginTop: items.length > 0 ? 12 : 0, paddingTop: items.length > 0 ? 12 : 0, borderTop: items.length > 0 ? `1px solid ${T.border.subtle}` : "none" }}>
-                                <button onClick={() => openSheet('invest')} className="hover-lift" style={{
-                                    width: "100%", padding: 12, borderRadius: T.radius.sm,
-                                    border: `1px dashed ${color}60`, background: `${color}05`,
-                                    color: color, fontSize: 12, fontWeight: 800, cursor: "pointer",
-                                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6
-                                }}>
-                                    <Plus size={14} /> Add to {label}
-                                </button>
-                            </div>}
+                                    {/* Inline Add Holding mapped to bottom sheet */}
+                                    {setFinancialConfig && <div style={{ marginTop: items.length > 0 ? 12 : 0, paddingTop: items.length > 0 ? 12 : 0, borderTop: items.length > 0 ? `1px solid ${T.border.subtle}` : "none" }}>
+                                        <button onClick={() => openSheet('invest')} className="hover-lift" style={{
+                                            width: "100%", padding: 12, borderRadius: T.radius.sm,
+                                            border: `1px dashed ${color}60`, background: `${color}05`,
+                                            color: color, fontSize: 12, fontWeight: 800, cursor: "pointer",
+                                            display: "flex", alignItems: "center", justifyContent: "center", gap: 6
+                                        }}>
+                                            <Plus size={14} /> Add to {label}
+                                        </button>
+                                    </div>}
+                                </>}
                         </div></div>
                     </Card>;
                 })}
@@ -951,7 +1032,7 @@ export default memo(function CardPortfolioTab() {
 
     // ─── Non-Card Debts Section (JSX) ──────────────────────────────────────
 
-    const debtsSection = nonCardDebts.length > 0 ? <div style={{ marginTop: 20 }}>
+    const debtsSection = nonCardDebts.length > 0 ? <div>
         {/* Premium Section Header: Debts */}
         <div
             onClick={() => setCollapsedSections(p => ({ ...p, debts: !p.debts }))}
@@ -976,48 +1057,77 @@ export default memo(function CardPortfolioTab() {
 
         {!collapsedSections.debts && (
             <>
-                {totalDebtBalance > 0 && <Card animate style={{
-                    textAlign: "center", padding: "18px 16px", marginBottom: 12,
-                    background: `linear-gradient(160deg,${T.bg.card},${T.status.amber}06)`, borderColor: `${T.status.amber}12`
-                }}>
-                    <Mono size={10} color={T.text.dim}>TOTAL OUTSTANDING</Mono>
-                    <br /><Mono size={26} weight={800} color={T.status.amber}>{fmt(totalDebtBalance)}</Mono>
+                {nonCardDebts.length > 0 && <Card animate variant="glass" className="hover-card" style={{ padding: 0, overflow: "hidden", marginBottom: 12, borderLeft: `4px solid ${T.status.amber}` }}>
+                    {nonCardDebts.sort((a, b) => (b.balance || 0) - (a.balance || 0)).map((debt, i) => (
+                        <div key={debt.id || i} style={{ borderBottom: i === nonCardDebts.length - 1 ? "none" : `1px solid ${T.border.subtle}` }}>
+                            <div style={{ padding: "12px 18px" }}>
+                                {editingDebt === i ? (
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                        <div style={{ display: "flex", gap: 8 }}>
+                                            <input value={editDebtForm.name} onChange={e => setEditDebtForm(p => ({ ...p, name: e.target.value }))} placeholder="Debt name" aria-label="Debt name"
+                                                style={{ flex: 1, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                            <select value={editDebtForm.type} onChange={e => setEditDebtForm(p => ({ ...p, type: e.target.value }))} aria-label="Debt type"
+                                                style={{ padding: "10px 8px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12, outline: "none" }}>
+                                                <option value="auto">Auto</option><option value="student">Student</option><option value="mortgage">Mortgage</option><option value="personal">Personal</option><option value="medical">Medical</option>
+                                            </select>
+                                        </div>
+                                        <div style={{ display: "flex", gap: 8 }}>
+                                            <div style={{ flex: 1, position: "relative" }}>
+                                                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 12, fontWeight: 600 }}>$</span>
+                                                <input type="number" inputMode="decimal" value={editDebtForm.balance} onChange={e => setEditDebtForm(p => ({ ...p, balance: e.target.value }))} placeholder="Balance"
+                                                    style={{ width: "100%", padding: "10px 10px 10px 22px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, boxSizing: "border-box", outline: "none" }} />
+                                            </div>
+                                            <div style={{ flex: 0.7, position: "relative" }}>
+                                                <input type="number" inputMode="decimal" value={editDebtForm.apr} onChange={e => setEditDebtForm(p => ({ ...p, apr: e.target.value }))} placeholder="APR"
+                                                    style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, boxSizing: "border-box", outline: "none" }} />
+                                                <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 12 }}>%</span>
+                                            </div>
+                                            <div style={{ flex: 1, position: "relative" }}>
+                                                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 11, fontWeight: 600 }}>$</span>
+                                                <input type="number" inputMode="decimal" value={editDebtForm.minPayment} onChange={e => setEditDebtForm(p => ({ ...p, minPayment: e.target.value }))} placeholder="Min Pmt"
+                                                    style={{ width: "100%", padding: "10px 10px 10px 22px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, boxSizing: "border-box", outline: "none" }} />
+                                            </div>
+                                        </div>
+                                        <div style={{ display: "flex", gap: 8 }}>
+                                            <button onClick={() => saveEditDebt(i)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: `${T.status.amber}18`, color: T.status.amber, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Check size={14} />Save</button>
+                                            <button onClick={() => { if (window.confirm(`Delete "${editDebtForm.name}"?`)) removeDebt(i); }} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>Delete</button>
+                                            <button onClick={() => setEditingDebt(null)} style={{ flex: 1, padding: 12, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{debt.name || "Unnamed Debt"}</span>
+                                            <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                                                {debt.type && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.status.amber, borderColor: `${T.status.amber}40` }}>{debt.type.toUpperCase()}</Badge>}
+                                                {debt.apr > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.secondary }}>{debt.apr}% APR</Badge>}
+                                                {debt.minPayment > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.dim }}>Min {fmt(debt.minPayment)}</Badge>}
+                                            </div>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                                            <Mono size={13} weight={700} color={T.status.amber}>{fmt(debt.balance)}</Mono>
+                                            <button onClick={() => startEditDebt(debt, i)} style={{ width: 36, height: 36, borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={11} /></button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
                 </Card>}
 
-                <Card animate variant="glass" style={{ padding: 0, overflow: "hidden", borderLeft: `4px solid ${T.status.amber}` }}>
-                    <div onClick={() => setCollapsedDebts(!collapsedDebts)} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", background: `${T.status.amber}08` }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <div style={{ padding: 5, borderRadius: 7, background: T.status.amber, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                <AlertTriangle size={12} color={T.bg.card} />
-                            </div>
-                            <span style={{ fontSize: 12, fontWeight: 800, color: T.status.amber, textTransform: "uppercase", letterSpacing: "0.05em" }}>ACTIVE DEBTS</span>
-                            <Badge variant="outline" style={{ fontSize: 10, color: T.status.amber, borderColor: `${T.status.amber}40` }}>{nonCardDebts.length}</Badge>
-                        </div>
-                        <ChevronDown size={14} color={T.text.dim} className="chevron-animated" data-open={String(!collapsedDebts)} />
-                    </div>
-                    <div className="collapse-section" data-collapsed={String(collapsedDebts)}><div style={{ padding: "12px 18px" }}>
-                        {nonCardDebts.sort((a, b) => (b.balance || 0) - (a.balance || 0)).map((debt, i) => (
-                            <div key={debt.id || i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: i === nonCardDebts.length - 1 ? "none" : `1px solid ${T.border.subtle}` }}>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{debt.name || "Unnamed Debt"}</span>
-                                    <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
-                                        {debt.type && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.status.amber, borderColor: `${T.status.amber}40` }}>{debt.type.toUpperCase()}</Badge>}
-                                        {debt.apr > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.secondary }}>{debt.apr}% APR</Badge>}
-                                        {debt.minPayment > 0 && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.dim }}>Min {fmt(debt.minPayment)}</Badge>}
-                                    </div>
-                                </div>
-                                <Mono size={13} weight={700} color={T.status.amber}>{fmt(debt.balance)}</Mono>
-                            </div>
-                        ))}
-                    </div></div>
-                </Card>
-                <p style={{ fontSize: 10, color: T.text.muted, textAlign: "center", fontFamily: T.font.mono, marginTop: 8 }}>Manage debts in Settings → Debts & Liabilities</p>
+                <button onClick={() => openSheet('debt')} className="hover-btn" style={{
+                    width: "100%", padding: "12px", borderRadius: T.radius.lg, marginTop: 12,
+                    border: `1px dashed ${T.status.amber}60`,
+                    background: `${T.status.amber}05`, color: T.status.amber,
+                    fontSize: 12, fontWeight: 800, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6
+                }}><Plus size={14} /> Add Debt</button>
             </>
         )}
     </div> : null;
 
     // ═══ SAVINGS GOALS SECTION ═══
-    const savingsGoalsSection = <div>
+    const savingsGoalsSection = savingsGoals.length > 0 ? <div>
         <div onClick={() => setCollapsedSections(s => ({ ...s, savingsGoals: !s.savingsGoals }))} className="hover-lift" style={{
             display: "flex", alignItems: "center", gap: 12, marginTop: 8, marginBottom: collapsedSections.savingsGoals ? 8 : 16,
             padding: "16px 20px", borderRadius: 24, cursor: "pointer", userSelect: "none",
@@ -1043,47 +1153,51 @@ export default memo(function CardPortfolioTab() {
                     {savingsGoals.map((goal, i) => {
                         const pct = goal.targetAmount > 0 ? Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100)) : 0;
                         const color = pct >= 100 ? T.status.green : pct >= 50 ? T.accent.primary : T.status.amber;
-                        return <div key={i} style={{ padding: "14px 16px", borderBottom: i < savingsGoals.length - 1 ? `1px solid ${T.border.subtle}` : "none" }}>
-                            {editingGoals ? (
-                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                                        <input value={goal.name || ""} onChange={e => updateGoal(i, "name", e.target.value)}
-                                            placeholder="Goal name" style={{ flex: 1, padding: "8px 10px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
-                                        <button onClick={() => removeGoal(i)} style={{ width: 28, height: 28, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>×</button>
-                                    </div>
-                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-                                        <div style={{ position: "relative" }}>
-                                            <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 10, fontWeight: 600 }}>$</span>
-                                            <input type="number" inputMode="decimal" value={goal.targetAmount || ""} onChange={e => updateGoal(i, "targetAmount", parseFloat(e.target.value) || 0)}
-                                                placeholder="Target" style={{ width: "100%", padding: "6px 6px 6px 16px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 10 }} />
+                        return <div key={i} style={{ borderBottom: i < savingsGoals.length - 1 ? `1px solid ${T.border.subtle}` : "none" }}>
+                            <div style={{ padding: "14px 16px" }}>
+                                {editingGoals ? (
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                            <input value={goal.name || ""} onChange={e => updateGoal(i, "name", e.target.value)}
+                                                placeholder="Goal name" style={{ flex: 1, padding: "8px 10px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
                                         </div>
-                                        <div style={{ position: "relative" }}>
-                                            <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 10, fontWeight: 600 }}>$</span>
-                                            <input type="number" inputMode="decimal" value={goal.currentAmount || ""} onChange={e => updateGoal(i, "currentAmount", parseFloat(e.target.value) || 0)}
-                                                placeholder="Current" style={{ width: "100%", padding: "6px 6px 6px 16px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 10 }} />
+                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                                            <div style={{ position: "relative" }}>
+                                                <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 10, fontWeight: 600 }}>$</span>
+                                                <input type="number" inputMode="decimal" value={goal.targetAmount || ""} onChange={e => updateGoal(i, "targetAmount", parseFloat(e.target.value) || 0)}
+                                                    placeholder="Target" style={{ width: "100%", padding: "6px 6px 6px 16px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 10 }} />
+                                            </div>
+                                            <div style={{ position: "relative" }}>
+                                                <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 10, fontWeight: 600 }}>$</span>
+                                                <input type="number" inputMode="decimal" value={goal.currentAmount || ""} onChange={e => updateGoal(i, "currentAmount", parseFloat(e.target.value) || 0)}
+                                                    placeholder="Current" style={{ width: "100%", padding: "6px 6px 6px 16px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 10 }} />
+                                            </div>
+                                            <input type="date" value={goal.targetDate || ""} onChange={e => updateGoal(i, "targetDate", e.target.value)}
+                                                style={{ width: "100%", padding: "6px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 10 }} />
                                         </div>
-                                        <input type="date" value={goal.targetDate || ""} onChange={e => updateGoal(i, "targetDate", e.target.value)}
-                                            style={{ width: "100%", padding: "6px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 10 }} />
-                                    </div>
-                                    <div style={{ fontSize: 8, color: T.text.muted, display: "flex", gap: 16 }}>
-                                        <span>Target $</span><span>Current $</span><span>Target Date</span>
-                                    </div>
-                                </div>
-                            ) : (
-                                <>
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                        <span style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>{goal.name || "Unnamed"}</span>
-                                        <Mono size={11} weight={700} color={color}>${(goal.currentAmount || 0).toLocaleString()} / ${(goal.targetAmount || 0).toLocaleString()}</Mono>
-                                    </div>
-                                    {goal.targetAmount > 0 && <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                        <div style={{ flex: 1, height: 6, borderRadius: 3, background: T.bg.surface, overflow: "hidden", boxShadow: "inset 0 1px 3px rgba(0,0,0,0.15)" }}>
-                                            <div style={{ height: "100%", borderRadius: 3, background: pct === 100 ? T.status.green : `linear-gradient(90deg, ${color}, ${T.accent.primary})`, width: `${pct}%`, transition: "width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)" }} />
+                                        <div style={{ fontSize: 8, color: T.text.muted, display: "flex", gap: 16 }}>
+                                            <span>Target $</span><span>Current $</span><span>Target Date</span>
                                         </div>
-                                        <Mono size={10} weight={700} color={color}>{pct}%</Mono>
-                                    </div>}
-                                    {goal.targetDate && <span style={{ fontSize: 9, color: T.text.muted, fontFamily: T.font.mono, marginTop: 4, display: "block" }}>Target: {goal.targetDate}</span>}
-                                </>
-                            )}
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                            <span style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>{goal.name || "Unnamed"}</span>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                <Mono size={11} weight={700} color={color}>${(goal.currentAmount || 0).toLocaleString()} / ${(goal.targetAmount || 0).toLocaleString()}</Mono>
+                                                {editingGoals && <button onClick={() => { if (window.confirm(`Delete "${goal.name}"?`)) removeGoal(i); }} style={{ width: 28, height: 28, borderRadius: T.radius.md, border: "none", background: "transparent", color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginLeft: 4 }}><Trash2 size={13} /></button>}
+                                            </div>
+                                        </div>
+                                        {goal.targetAmount > 0 && <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                            <div style={{ flex: 1, height: 6, borderRadius: 3, background: T.bg.surface, overflow: "hidden", boxShadow: "inset 0 1px 3px rgba(0,0,0,0.15)" }}>
+                                                <div style={{ height: "100%", borderRadius: 3, background: pct === 100 ? T.status.green : `linear-gradient(90deg, ${color}, ${T.accent.primary})`, width: `${pct}%`, transition: "width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)" }} />
+                                            </div>
+                                            <Mono size={10} weight={700} color={color}>{pct}%</Mono>
+                                        </div>}
+                                        {goal.targetDate && <span style={{ fontSize: 9, color: T.text.muted, fontFamily: T.font.mono, marginTop: 4, display: "block" }}>Target: {goal.targetDate}</span>}
+                                    </>
+                                )}
+                            </div>
                         </div>;
                     })}
                 </Card>}
@@ -1105,10 +1219,10 @@ export default memo(function CardPortfolioTab() {
                 </div>
             </>
         )}
-    </div>;
+    </div> : null;
 
     // ═══ OTHER ASSETS SECTION ═══
-    const otherAssetsSection = <div>
+    const otherAssetsSection = otherAssets.length > 0 ? <div>
         <div onClick={() => setCollapsedSections(s => ({ ...s, otherAssets: !s.otherAssets }))} className="hover-lift" style={{
             display: "flex", alignItems: "center", gap: 12, marginTop: 8, marginBottom: collapsedSections.otherAssets ? 8 : 16,
             padding: "16px 20px", borderRadius: 24, cursor: "pointer", userSelect: "none",
@@ -1132,35 +1246,39 @@ export default memo(function CardPortfolioTab() {
             <>
                 {otherAssets.length > 0 && <Card animate style={{ padding: 0, overflow: "hidden" }}>
                     {otherAssets.map((asset, i) => (
-                        <div key={i} style={{ padding: "14px 16px", borderBottom: i < otherAssets.length - 1 ? `1px solid ${T.border.subtle}` : "none" }}>
-                            {editingAssets ? (
-                                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                                    <input value={asset.name || ""} onChange={e => updateAsset(i, "name", e.target.value)}
-                                        placeholder="e.g. Vehicle, Property" style={{ flex: 1, padding: "8px 10px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
-                                    <div style={{ position: "relative", width: 100, flexShrink: 0 }}>
-                                        <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 11, fontWeight: 600 }}>$</span>
-                                        <input type="number" inputMode="decimal" value={asset.value || ""} onChange={e => updateAsset(i, "value", parseFloat(e.target.value) || 0)}
-                                            placeholder="Value" style={{ width: "100%", padding: "8px 8px 8px 20px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 11 }} />
+                        <div key={i} style={{ borderBottom: i < otherAssets.length - 1 ? `1px solid ${T.border.subtle}` : "none" }}>
+                            <div style={{ padding: "14px 16px" }}>
+                                {editingAssets ? (
+                                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                        <input value={asset.name || ""} onChange={e => updateAsset(i, "name", e.target.value)}
+                                            placeholder="e.g. Vehicle, Property" style={{ flex: 1, padding: "8px 10px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12 }} />
+                                        <div style={{ position: "relative", width: 100, flexShrink: 0 }}>
+                                            <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 11, fontWeight: 600 }}>$</span>
+                                            <input type="number" inputMode="decimal" value={asset.value || ""} onChange={e => updateAsset(i, "value", parseFloat(e.target.value) || 0)}
+                                                placeholder="Value" style={{ width: "100%", padding: "8px 8px 8px 20px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 11 }} />
+                                        </div>
+                                        <button onClick={() => updateAsset(i, "liquid", !asset.liquid)} title={asset.liquid ? "Liquid" : "Illiquid"} style={{
+                                            width: 32, height: 32, borderRadius: T.radius.sm, border: `1px solid ${asset.liquid ? T.accent.emerald : T.border.default}`,
+                                            background: asset.liquid ? `${T.accent.emerald}15` : T.bg.elevated,
+                                            color: asset.liquid ? T.accent.emerald : T.text.muted, cursor: "pointer",
+                                            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, flexShrink: 0
+                                        }}>{asset.liquid ? "💧" : "🔒"}</button>
                                     </div>
-                                    <button onClick={() => updateAsset(i, "liquid", !asset.liquid)} title={asset.liquid ? "Liquid" : "Illiquid"} style={{
-                                        width: 32, height: 32, borderRadius: T.radius.sm, border: `1px solid ${asset.liquid ? T.accent.emerald : T.border.default}`,
-                                        background: asset.liquid ? `${T.accent.emerald}15` : T.bg.elevated,
-                                        color: asset.liquid ? T.accent.emerald : T.text.muted, cursor: "pointer",
-                                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, flexShrink: 0
-                                    }}>{asset.liquid ? "💧" : "🔒"}</button>
-                                    <button onClick={() => removeAsset(i)} style={{ width: 28, height: 28, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>×</button>
-                                </div>
-                            ) : (
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                        <span style={{ fontSize: 13, fontWeight: 600, color: T.text.primary }}>{asset.name || "Unnamed"}</span>
-                                        <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: asset.liquid ? T.accent.emerald : T.text.dim, borderColor: asset.liquid ? `${T.accent.emerald}40` : T.border.default }}>
-                                            {asset.liquid ? "LIQUID" : "ILLIQUID"}
-                                        </Badge>
+                                ) : (
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                            <span style={{ fontSize: 13, fontWeight: 600, color: T.text.primary }}>{asset.name || "Unnamed"}</span>
+                                            <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: asset.liquid ? T.accent.emerald : T.text.dim, borderColor: asset.liquid ? `${T.accent.emerald}40` : T.border.default }}>
+                                                {asset.liquid ? "LIQUID" : "ILLIQUID"}
+                                            </Badge>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                            <Mono size={13} weight={700} color={T.accent.copper}>{fmt(asset.value || 0)}</Mono>
+                                            {editingAssets && <button onClick={() => { if (window.confirm(`Delete "${asset.name}"?`)) removeAsset(i); }} style={{ width: 28, height: 28, borderRadius: T.radius.md, border: "none", background: "transparent", color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginLeft: 4 }}><Trash2 size={13} /></button>}
+                                        </div>
                                     </div>
-                                    <Mono size={13} weight={700} color={T.accent.copper}>{fmt(asset.value || 0)}</Mono>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
                     ))}
                 </Card>}
@@ -1182,7 +1300,7 @@ export default memo(function CardPortfolioTab() {
                 </div>
             </>
         )}
-    </div>;
+    </div > : null;
 
     return <div className="page-body" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", gap: 0 }}>
         <style>{`
@@ -1213,7 +1331,7 @@ export default memo(function CardPortfolioTab() {
         {debtsSection}
 
         {/* ═══ UNIFIED ADD BOTTOM SHEET ═══ */}
-        {showAddSheet && (
+        {showAddSheet && createPortal(
             <>
                 {/* Backdrop */}
                 <div onClick={closeSheet} style={{
@@ -1254,8 +1372,8 @@ export default memo(function CardPortfolioTab() {
 
                                 {/* Plaid hero button */}
                                 {ENABLE_PLAID && (
-                                    <button onClick={handlePlaidConnect} disabled={plaidLoading} style={{
-                                        width: "100%", padding: "18px 20px", borderRadius: T.radius.lg, border: "none", cursor: plaidLoading ? "wait" : "pointer",
+                                    <button onClick={(e) => { haptic.medium(); handlePlaidConnect(e); }} disabled={plaidLoading} style={{
+                                        width: "100%", padding: "14px", borderRadius: T.radius.md, border: "none", cursor: plaidLoading ? "wait" : "pointer",
                                         background: plaidLoading ? T.bg.card : "linear-gradient(135deg, #1a7cda 0%, #12b886 100%)",
                                         position: "relative", overflow: "hidden",
                                         display: "flex", alignItems: "center", gap: 14, textAlign: "left",
@@ -1288,6 +1406,7 @@ export default memo(function CardPortfolioTab() {
                                     {[
                                         { id: "card", icon: CreditCard, label: "Credit Card", color: T.accent.primary },
                                         { id: "bank", icon: Landmark, label: "Bank Account", color: T.status.blue },
+                                        { id: "debt", icon: AlertTriangle, label: "Debt & Loan", color: T.status.amber },
                                         { id: "invest", icon: TrendingUp, label: "Investment", color: T.accent.emerald },
                                         { id: "goal", icon: Target, label: "Savings Goal", color: T.accent.primary },
                                         { id: "asset", icon: Wallet, label: "Other Asset", color: T.accent.copper },
@@ -1338,8 +1457,8 @@ export default memo(function CardPortfolioTab() {
                             const canAdd = !!(addBankForm.bank && (addBankForm.productName === "__other__" ? addBankForm.customName?.trim() : addBankForm.productName?.trim()));
                             return <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                                 <SearchableSelect value={addBankForm.bank} onChange={v => setAddBankForm(p => ({ ...p, bank: v, productName: "", customName: "" }))} placeholder="Bank / Institution" options={getBankNames().map(n => ({ value: n, label: n }))} />
-                                <div style={{ display: "flex", gap: 0, borderRadius: T.radius.md, overflow: "hidden", border: `1px solid ${T.border.default}` }}>
-                                    {["checking", "savings"].map(t => (<button key={t} onClick={() => setAddBankForm(p => ({ ...p, accountType: t, productName: "", customName: "" }))} style={{ flex: 1, padding: "11px", border: "none", background: addBankForm.accountType === t ? T.status.blue : T.bg.card, color: addBankForm.accountType === t ? "#fff" : T.text.secondary, fontSize: 13, fontWeight: 700, cursor: "pointer", textTransform: "capitalize" }}>{t}</button>))}
+                                <div style={{ display: "flex", background: T.bg.card, borderRadius: T.radius.sm, padding: 3, marginBottom: 16 }}>
+                                    {["checking", "savings"].map(t => (<button key={t} onClick={() => { haptic.selection(); setAddBankForm(p => ({ ...p, accountType: t, productName: "", customName: "" })); }} style={{ flex: 1, padding: "11px", border: "none", background: addBankForm.accountType === t ? T.status.blue : T.bg.card, color: addBankForm.accountType === t ? "#fff" : T.text.secondary, fontSize: 13, fontWeight: 700, cursor: "pointer", textTransform: "capitalize" }}>{t}</button>))}
                                 </div>
                                 {addBankForm.bank && bList.length > 0 && <SearchableSelect value={addBankForm.productName} onChange={v => setAddBankForm(p => ({ ...p, productName: v }))} placeholder="Select Account Product" options={[...bList.map(n => ({ value: n, label: n })), { value: "__other__", label: "Other…" }]} />}
                                 {(!addBankForm.bank || bList.length === 0 || addBankForm.productName === "__other__") && <input value={addBankForm.customName} onChange={e => setAddBankForm(p => ({ ...p, customName: e.target.value }))} placeholder="Account name" className="app-input" style={{ padding: "12px 14px", borderRadius: T.radius.md, border: `1.5px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, outline: "none", transition: "all 0.2s" }} onFocus={e => { e.target.style.borderColor = T.status.blue; e.target.style.boxShadow = `0 0 0 3px ${T.status.blue}30`; }} onBlur={e => { e.target.style.borderColor = T.border.default; e.target.style.boxShadow = "none"; }} />}
@@ -1399,6 +1518,37 @@ export default memo(function CardPortfolioTab() {
                             </div>
                         )}
 
+                        {/* ── DEBT FORM ── */}
+                        {addSheetStep === "debt" && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                                <input value={addDebtForm.name} onChange={e => setAddDebtForm(p => ({ ...p, name: e.target.value }))} placeholder="Debt name (e.g. Auto Loan)" className="app-input" style={{ padding: "12px 14px", borderRadius: T.radius.md, border: `1.5px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, outline: "none", transition: "all 0.2s" }} onFocus={e => { e.target.style.borderColor = T.status.amber; e.target.style.boxShadow = `0 0 0 3px ${T.status.amber}30`; }} onBlur={e => { e.target.style.borderColor = T.border.default; e.target.style.boxShadow = "none"; }} />
+                                <div style={{ display: "flex", gap: 8 }}>
+                                    {[
+                                        { key: "auto", label: "Auto" },
+                                        { key: "student", label: "Student" },
+                                        { key: "mortgage", label: "Mortgage" },
+                                        { key: "personal", label: "Personal" },
+                                        { key: "medical", label: "Medical" }
+                                    ].map(t => (
+                                        <button key={t.key} onClick={() => setAddDebtForm(p => ({ ...p, type: t.key }))} style={{ flex: 1, padding: "8px 0", borderRadius: T.radius.sm, border: `1px solid ${addDebtForm.type === t.key ? T.status.amber : T.border.default}`, background: addDebtForm.type === t.key ? `${T.status.amber}18` : T.bg.elevated, color: addDebtForm.type === t.key ? T.status.amber : T.text.secondary, fontSize: 11, fontWeight: 700, cursor: "pointer", boxSizing: "border-box" }}>{t.label}</button>
+                                    ))}
+                                </div>
+                                <div style={{ position: "relative" }}><span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.status.amber, fontSize: 14, fontWeight: 700 }}>$</span><input type="number" inputMode="decimal" value={addDebtForm.balance} onChange={e => setAddDebtForm(p => ({ ...p, balance: e.target.value }))} placeholder="Current Balance" className="app-input" style={{ width: "100%", padding: "12px 14px 12px 28px", borderRadius: T.radius.md, border: `1.5px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, boxSizing: "border-box", outline: "none", transition: "all 0.2s" }} onFocus={e => { e.target.style.borderColor = T.status.amber; e.target.style.boxShadow = `0 0 0 3px ${T.status.amber}30`; }} onBlur={e => { e.target.style.borderColor = T.border.default; e.target.style.boxShadow = "none"; }} /></div>
+                                <div style={{ display: "flex", gap: 8 }}>
+                                    <div style={{ flex: 1, position: "relative" }}><input type="number" inputMode="decimal" value={addDebtForm.apr} onChange={e => setAddDebtForm(p => ({ ...p, apr: e.target.value }))} placeholder="Interest APR" className="app-input" style={{ width: "100%", padding: "12px 28px 12px 14px", borderRadius: T.radius.md, border: `1.5px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, boxSizing: "border-box", outline: "none", transition: "all 0.2s" }} onFocus={e => { e.target.style.borderColor = T.status.amber; e.target.style.boxShadow = `0 0 0 3px ${T.status.amber}30`; }} onBlur={e => { e.target.style.borderColor = T.border.default; e.target.style.boxShadow = "none"; }} /><span style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", color: T.text.secondary, fontSize: 13, fontWeight: 700 }}>%</span></div>
+                                    <div style={{ flex: 1, position: "relative" }}><span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.secondary, fontSize: 12, fontWeight: 700 }}>Min $</span><input type="number" inputMode="decimal" value={addDebtForm.minPayment} onChange={e => setAddDebtForm(p => ({ ...p, minPayment: e.target.value }))} placeholder="0.00" className="app-input" style={{ width: "100%", padding: "12px 14px 12px 48px", borderRadius: T.radius.md, border: `1.5px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, boxSizing: "border-box", outline: "none", transition: "all 0.2s" }} onFocus={e => { e.target.style.borderColor = T.status.amber; e.target.style.boxShadow = `0 0 0 3px ${T.status.amber}30`; }} onBlur={e => { e.target.style.borderColor = T.border.default; e.target.style.boxShadow = "none"; }} /></div>
+                                </div>
+                                <button className="hover-btn" onClick={() => {
+                                    if (!addDebtForm.name.trim()) return;
+                                    haptic.success();
+                                    setFinancialConfig({ ...financialConfig, nonCardDebts: [...(financialConfig?.nonCardDebts || []), { id: "debt_" + Date.now(), name: addDebtForm.name.trim(), type: addDebtForm.type, balance: parseFloat(addDebtForm.balance) || 0, apr: parseFloat(addDebtForm.apr) || 0, minPayment: parseFloat(addDebtForm.minPayment) || 0 }] });
+                                    setCollapsedSections(p => ({ ...p, debts: false }));
+                                    setAddDebtForm({ name: "", type: "personal", balance: "", apr: "", minPayment: "" });
+                                    closeSheet();
+                                }} disabled={!addDebtForm.name.trim()} style={{ padding: "14px", borderRadius: T.radius.md, border: "none", background: !!addDebtForm.name.trim() ? `linear-gradient(135deg, ${T.status.amber}, #d35400)` : T.bg.card, color: !!addDebtForm.name.trim() ? "#fff" : T.text.muted, fontSize: 14, fontWeight: 800, cursor: !!addDebtForm.name.trim() ? "pointer" : "not-allowed", transition: "all .2s" }}>Add Debt</button>
+                            </div>
+                        )}
+
                         {/* ── OTHER ASSET FORM ── */}
                         {addSheetStep === "asset" && (
                             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -1419,6 +1569,6 @@ export default memo(function CardPortfolioTab() {
                     </div>
                 </div>
             </>
-        )}
+            , document.body)}
     </div>;
 })

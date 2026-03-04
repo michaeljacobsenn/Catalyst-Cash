@@ -1,4 +1,4 @@
-import { useState, useMemo, memo, useCallback } from "react";
+import { useState, useEffect, useMemo, memo, useCallback } from "react";
 import { ChevronDown, ChevronUp, AlertTriangle, X, Plus, Check } from "lucide-react";
 import { T, RENEWAL_CATEGORIES, formatInterval } from "../constants.js";
 import { fmt } from "../utils.js";
@@ -19,9 +19,18 @@ import { useAudit } from '../contexts/AuditContext.jsx';
 export default memo(function RenewalsTab() {
     const { current } = useAudit();
     const portfolioContext = usePortfolio();
-    const renewals = current?.isTest ? (current.demoPortfolio?.renewals || []) : portfolioContext.renewals;
-    const setRenewals = current?.isTest ? () => { } : portfolioContext.setRenewals;
-    const cards = current?.isTest ? (current.demoPortfolio?.cards || []) : portfolioContext.cards;
+    const isDemo = !!current?.isTest;
+
+    // Demo mode: use local state so cancel/restore/delete actually work
+    const [demoRenewals, setDemoRenewals] = useState(() => current?.demoPortfolio?.renewals || []);
+    // Reset demo renewals if the demo data changes
+    useEffect(() => {
+        if (isDemo) setDemoRenewals(current?.demoPortfolio?.renewals || []);
+    }, [isDemo, current?.demoPortfolio?.renewals]);
+
+    const renewals = isDemo ? demoRenewals : portfolioContext.renewals;
+    const setRenewals = isDemo ? setDemoRenewals : portfolioContext.setRenewals;
+    const cards = isDemo ? (current.demoPortfolio?.cards || []) : portfolioContext.cards;
     const { cardAnnualFees } = portfolioContext;
     const [editing, setEditing] = useState(null); // index within user renewals
     const [editVal, setEditVal] = useState({});
@@ -29,13 +38,29 @@ export default memo(function RenewalsTab() {
     const [addForm, setAddForm] = useState({ name: "", amount: "", interval: 1, intervalUnit: "months", source: "", chargedTo: "", chargedToId: "", category: "subs", nextDue: "" });
     const [sortBy, setSortBy] = useState("type");
 
+    // Auto-archive expired one-time items (runs as effect, not during render)
+    useEffect(() => {
+        if (!renewals?.length) return;
+        const now = new Date().toISOString().split("T")[0];
+        let changed = false;
+        const updated = renewals.map(r => {
+            const isExpired = r.intervalUnit === "one-time" && r.nextDue && r.nextDue < now && !r.isCancelled;
+            if (isExpired && !r.archivedAt) {
+                changed = true;
+                return { ...r, archivedAt: now };
+            }
+            return r;
+        });
+        if (changed) setRenewals(updated);
+    }, [renewals, setRenewals]);
+
     // Merge user renewals + auto-generated card annual fees
     const allItems = useMemo(() => {
         const now = new Date().toISOString().split("T")[0];
         const items = [...(renewals || [])].map((r, idx) => ({
             ...r,
             originalIndex: idx,
-            isExpired: r.intervalUnit === "one-time" && r.nextDue && r.nextDue < now
+            isExpired: r.intervalUnit === "one-time" && r.nextDue && r.nextDue < now && !r.isCancelled
         }));
         (cardAnnualFees || []).forEach(af => {
             const exists = items.some(r => (r.linkedCardId && af.linkedCardId && r.linkedCardId === af.linkedCardId) || r.name === af.name || r.linkedCardAF === af.cardName);
@@ -169,10 +194,19 @@ export default memo(function RenewalsTab() {
         setRenewals(prev => (prev || []).filter((_, idx) => idx !== renewalIndex));
     }, [setRenewals]);
 
-    const toggleCancel = useCallback((renewalIndex) => {
+    const toggleCancel = useCallback((renewalIndex, itemName) => {
         if (renewalIndex == null || renewalIndex < 0) return;
-        setRenewals(prev => (prev || []).map((r, idx) => idx === renewalIndex ? { ...r, isCancelled: !r.isCancelled } : r));
-    }, [setRenewals]);
+        const current = (renewals || [])[renewalIndex];
+        if (!current) return;
+        if (!current.isCancelled) {
+            // Cancelling — confirm first
+            if (!window.confirm(`Cancel "${itemName || current.name}"?\n\nThis will move it to Inactive & History. You can restore it later.`)) return;
+            setRenewals(prev => (prev || []).map((r, idx) => idx === renewalIndex ? { ...r, isCancelled: true, cancelledAt: new Date().toISOString().split('T')[0] } : r));
+        } else {
+            // Restoring
+            setRenewals(prev => (prev || []).map((r, idx) => idx === renewalIndex ? { ...r, isCancelled: false, cancelledAt: undefined } : r));
+        }
+    }, [renewals, setRenewals]);
 
     const addItem = () => {
         if (!addForm.name.trim() || !addForm.amount) return;
@@ -191,12 +225,12 @@ export default memo(function RenewalsTab() {
 
     const IntervalDropdown = ({ interval, unit, onChange }) => (
         <div style={{ display: "flex", gap: 6, flex: 1 }}>
-            <select value={interval} onChange={e => onChange({ interval: parseInt(e.target.value), unit })}
+            <select value={interval} onChange={e => onChange({ interval: parseInt(e.target.value), unit })} aria-label="Interval count"
                 style={{ flex: 0.4, padding: "10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, textOverflow: "ellipsis", whiteSpace: "nowrap", overflow: "hidden" }}>
                 {(unit === "days" ? DAY_OPTIONS : unit === "weeks" ? WEEK_OPTIONS : unit === "months" ? MONTH_OPTIONS : YEAR_OPTIONS).map(n =>
                     <option key={n} value={n}>{n}</option>)}
             </select>
-            <select value={unit} onChange={e => onChange({ interval, unit: e.target.value })}
+            <select value={unit} onChange={e => onChange({ interval, unit: e.target.value })} aria-label="Interval unit"
                 style={{ flex: 0.6, padding: "10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, textOverflow: "ellipsis", whiteSpace: "nowrap", overflow: "hidden" }}>
                 <option value="days">{interval === 1 ? "day" : "days"}</option>
                 <option value="weeks">{interval === 1 ? "week" : "weeks"}</option>
@@ -251,7 +285,7 @@ export default memo(function RenewalsTab() {
             </div>
 
             <div style={{ display: "flex", alignItems: "center", padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, marginTop: 4, minHeight: 36 }}>
-                <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ fontSize: 11, color: T.text.secondary, background: "transparent", border: "none", cursor: "pointer", fontFamily: T.font.mono, fontWeight: 800, padding: 0, outline: "none", textTransform: "uppercase" }}>
+                <select value={sortBy} onChange={e => setSortBy(e.target.value)} aria-label="Sort order" style={{ fontSize: 11, color: T.text.secondary, background: "transparent", border: "none", cursor: "pointer", fontFamily: T.font.mono, fontWeight: 800, padding: 0, outline: "none", textTransform: "uppercase" }}>
                     <option value="type">Sort: Type</option>
                     <option value="date">Sort: Soonest</option>
                     <option value="amount">Sort: Value</option>
@@ -266,7 +300,7 @@ export default memo(function RenewalsTab() {
             background: `linear-gradient(160deg,${T.bg.card},${T.accent.primary}06)`, borderColor: `${T.accent.primary}12`,
             boxShadow: `${T.shadow.elevated}, 0 0 24px ${T.accent.primaryDim}`
         }}>
-            <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.15em", color: T.text.dim, marginBottom: 6, fontFamily: T.font.mono, fontWeight: 700 }}>Monthly Burn Rate</p>
+            <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.15em", color: T.text.secondary, marginBottom: 6, fontFamily: T.font.mono, fontWeight: 700 }}>Monthly Burn Rate</p>
             <Mono size={30} weight={800} color={T.accent.primary}>{fmt(monthlyTotal)}</Mono>
             <Mono size={10} color={T.text.dim} style={{ display: "block", marginTop: 4 }}>{fmt(monthlyTotal / 4.33)}/wk · {fmt(monthlyTotal * 12)}/yr</Mono>
         </Card>
@@ -283,12 +317,12 @@ export default memo(function RenewalsTab() {
         {showAdd && <Card animate variant="accent" style={{ background: T.bg.card, border: `1px solid ${T.accent.primary}30` }}>
             <Label>New Bill / Subscription</Label>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <input value={addForm.name} onChange={e => setAddForm(p => ({ ...p, name: e.target.value }))} placeholder="Bill or subscription name (e.g., Netflix)"
+                <input value={addForm.name} onChange={e => setAddForm(p => ({ ...p, name: e.target.value }))} placeholder="Bill or subscription name (e.g., Netflix)" aria-label="Bill or subscription name"
                     style={{ width: "100%", padding: "10px 10px 10px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, boxSizing: "border-box" }} />
                 <div style={{ display: "flex", gap: 8 }}>
                     <div style={{ flex: 0.4, position: "relative" }}>
                         <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 12 }}>$</span>
-                        <input type="number" inputMode="decimal" pattern="[0-9]*" value={addForm.amount} onChange={e => setAddForm(p => ({ ...p, amount: e.target.value }))} placeholder="Amount per cycle"
+                        <input type="number" inputMode="decimal" pattern="[0-9]*" value={addForm.amount} onChange={e => setAddForm(p => ({ ...p, amount: e.target.value }))} placeholder="Amount per cycle" aria-label="Amount per billing cycle"
                             style={{ width: "100%", padding: "10px 10px 10px 28px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.mono, boxSizing: "border-box" }} />
                     </div>
                     <IntervalDropdown interval={addForm.interval} unit={addForm.intervalUnit}
@@ -310,11 +344,11 @@ export default memo(function RenewalsTab() {
                         }));
                     }} />
                 </div>
-                <input value={addForm.source} onChange={e => setAddForm(p => ({ ...p, source: e.target.value }))} placeholder="Notes (optional)"
+                <input value={addForm.source} onChange={e => setAddForm(p => ({ ...p, source: e.target.value }))} placeholder="Notes (optional)" aria-label="Notes"
                     style={{ width: "100%", padding: "10px 10px 10px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, boxSizing: "border-box" }} />
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: T.text.dim, fontFamily: T.font.mono, letterSpacing: "0.08em", textTransform: "uppercase" }}>Next Due Date</span>
-                    <input type="date" value={addForm.nextDue} onChange={e => setAddForm(p => ({ ...p, nextDue: e.target.value }))}
+                    <span style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary, fontFamily: T.font.mono, letterSpacing: "0.08em", textTransform: "uppercase" }}>Next Due Date</span>
+                    <input type="date" value={addForm.nextDue} onChange={e => setAddForm(p => ({ ...p, nextDue: e.target.value }))} aria-label="Next due date"
                         style={{ width: "100%", padding: "10px 10px 10px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, boxSizing: "border-box" }} />
                 </div>
                 <button onClick={addItem} disabled={!addForm.name.trim() || !addForm.amount} className="hover-btn" style={{
@@ -332,7 +366,7 @@ export default memo(function RenewalsTab() {
             grouped.map((cat, catIdx) => (
                 <Card key={cat.id} animate delay={Math.min(catIdx * 60, 300)} variant="glass" className="hover-card" style={{ marginBottom: 16, padding: 0, overflow: "hidden", borderLeft: `3px solid ${cat.color}` }}>
                     <div style={{ padding: "12px 14px", background: `${cat.color}08`, borderBottom: `1px solid ${T.border.subtle}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: cat.color, textTransform: "uppercase", letterSpacing: "0.05em" }}>{cat.label}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: cat.color, textTransform: "uppercase", letterSpacing: "0.08em" }}>{cat.label}</span>
                         <Mono size={10} color={T.text.dim}>{cat.items.length} items</Mono>
                     </div>
                     <div style={{ padding: "4px 14px" }}>
@@ -348,11 +382,11 @@ export default memo(function RenewalsTab() {
                                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                                         <div style={{ display: "flex", gap: 8 }}>
                                             <input value={editVal.name} onChange={e => setEditVal(p => ({ ...p, name: e.target.value }))}
-                                                placeholder="Name" style={{ flex: 1, fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
+                                                placeholder="Name" aria-label="Expense name" style={{ flex: 1, fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
                                             <div style={{ flex: 0.6, position: "relative" }}>
                                                 <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600 }}>$</span>
                                                 <input type="number" inputMode="decimal" pattern="[0-9]*" value={editVal.amount} onChange={e => setEditVal(p => ({ ...p, amount: e.target.value }))}
-                                                    placeholder="0.00" style={{ width: "100%", padding: "10px 12px 10px 28px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600, outline: "none", boxSizing: "border-box" }} />
+                                                    placeholder="0.00" aria-label="Amount" style={{ width: "100%", padding: "10px 12px 10px 28px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600, outline: "none", boxSizing: "border-box" }} />
                                             </div>
                                         </div>
                                         <div style={{ display: "flex", gap: 8 }}>
@@ -378,7 +412,7 @@ export default memo(function RenewalsTab() {
                                         <div style={{ display: "flex", gap: 8 }}>
                                             <div style={{ flex: 1, display: "flex", flexDirection: "column", background: T.bg.elevated, borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, padding: "4px 10px" }}>
                                                 <span style={{ fontSize: 11, color: T.text.dim, fontWeight: 600 }}>Next Due Date</span>
-                                                <input type="date" value={editVal.nextDue} onChange={e => setEditVal(p => ({ ...p, nextDue: e.target.value }))}
+                                                <input type="date" value={editVal.nextDue} onChange={e => setEditVal(p => ({ ...p, nextDue: e.target.value }))} aria-label="Next due date"
                                                     style={{ width: "100%", fontSize: 13, background: "transparent", border: "none", padding: "2px 0", color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
                                             </div>
                                         </div>
@@ -407,15 +441,19 @@ export default memo(function RenewalsTab() {
                                                 {item.nextDue && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.secondary, borderColor: T.border.default }}>
                                                     DUE {item.nextDue}
                                                 </Badge>}
+                                                {item.cancelledAt && <Mono size={9} color={T.text.muted}>Cancelled {item.cancelledAt}</Mono>}
+                                                {item.archivedAt && !item.cancelledAt && <Mono size={9} color={T.text.muted}>Archived {item.archivedAt}</Mono>}
                                                 {item.source && !item.chargedTo && <Mono size={10} color={T.text.muted}>{item.source}</Mono>}
                                             </div>
                                         </div>
                                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                                             <Mono size={13} weight={700} color={cat.color}>{fmt(item.amount)}</Mono>
                                             {!item.isCardAF && isUserRenewal && editing !== renewalIndex && <>
-                                                {!item.isExpired && <button onClick={() => toggleCancel(renewalIndex)} style={{
+                                                {!item.isExpired && <button onClick={() => toggleCancel(renewalIndex, item.name)} style={{
                                                     height: 36, padding: "0 12px", borderRadius: T.radius.md,
-                                                    border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, fontFamily: T.font.mono,
+                                                    border: `1px solid ${item.isCancelled ? T.status.green + '40' : T.border.default}`,
+                                                    background: item.isCancelled ? T.status.greenDim : T.bg.elevated,
+                                                    color: item.isCancelled ? T.status.green : T.text.dim, fontFamily: T.font.mono,
                                                     cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700
                                                 }}>{item.isCancelled ? "RESTORE" : "CANCEL"}</button>}
                                                 <button onClick={() => startEdit(item, renewalIndex)} style={{

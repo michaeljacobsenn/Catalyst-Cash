@@ -27,6 +27,15 @@ export const BADGE_DEFINITIONS = [
     { id: "budget_boss", emoji: "👑", name: "Budget Boss", desc: "4 consecutive weeks under budget", tier: "gold" },
     { id: "challenge_complete", emoji: "⚡", name: "Challenge Accepted", desc: "Completed a weekly micro-challenge", tier: "silver" },
     { id: "challenge_streak_4", emoji: "🎯", name: "Challenge Master", desc: "Completed 4 weekly challenges in a row", tier: "gold" },
+
+    // Extended milestones
+    { id: "savings_10k", emoji: "🏰", name: "Vault Legend", desc: "Saved $10,000+ in your vault", tier: "gold" },
+    { id: "investor", emoji: "📊", name: "Investor", desc: "Added your first investment holding", tier: "silver" },
+    { id: "debt_halved", emoji: "✂️", name: "Half Down", desc: "Reduced total debt by 50% or more", tier: "gold" },
+    { id: "year_one", emoji: "🗓️", name: "Year One", desc: "Completed 52+ audits — a full year", tier: "platinum" },
+    { id: "export_first", emoji: "📁", name: "Data Miner", desc: "Exported your first report", tier: "bronze" },
+    { id: "plaid_connected", emoji: "🔗", name: "Linked Up", desc: "Connected a bank account via Plaid", tier: "silver" },
+    { id: "night_owl", emoji: "🦉", name: "Night Owl", desc: "Submitted an audit after 9 PM", tier: "bronze" },
 ];
 
 const TIER_COLORS = {
@@ -105,6 +114,34 @@ export async function evaluateBadges({ history, streak, financialConfig, persona
     if (realAudits.length >= 4) {
         const last4 = realAudits.slice(0, 4);
         if (last4.every(a => a.parsed?.status === "GREEN")) check("budget_boss");
+    }
+
+    // ── Extended Badges ──────────────────────────────────────
+
+    // Savings $10K
+    if (vault >= 10000) check("savings_10k");
+
+    // Investor — first holding in any investment account
+    const holdings = financialConfig?.holdings || {};
+    const hasAnyHolding = Object.values(holdings).some(arr => Array.isArray(arr) && arr.length > 0);
+    if (hasAnyHolding) check("investor");
+
+    // Debt Halved — earliest audit total debt vs latest is ≥50% reduction
+    if (realAudits.length >= 4) {
+        const earliest = realAudits[realAudits.length - 1];
+        const latest = realAudits[0];
+        const earlyDebt = (earliest.form?.debts || []).reduce((s, d) => s + (parseFloat(d.balance) || 0), 0);
+        const latestDebt = (latest.form?.debts || []).reduce((s, d) => s + (parseFloat(d.balance) || 0), 0);
+        if (earlyDebt > 500 && latestDebt <= earlyDebt * 0.5) check("debt_halved");
+    }
+
+    // Year One — 52+ total real audits
+    if (realAudits.length >= 52) check("year_one");
+
+    // Night Owl — latest audit submitted after 9pm
+    if (current?.ts) {
+        const auditHour = new Date(current.ts).getHours();
+        if (auditHour >= 21) check("night_owl");
     }
 
     // Save updated badges

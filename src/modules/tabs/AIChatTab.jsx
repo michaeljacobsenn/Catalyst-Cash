@@ -24,9 +24,12 @@ import { useSecurity } from "../contexts/SecurityContext.jsx";
 // ═══════════════════════════════════════════════════════════════
 
 const CHAT_STORAGE_KEY = "ai-chat-history";
+const CHAT_SUMMARY_KEY = "ai-chat-summary";  // Cross-session conversation memory
 const MAX_MESSAGES = 50; // Rolling window — reduced for privacy
 const MAX_CONTEXT_MESSAGES = 12; // How many prior messages to send to the AI
+const CONTEXT_SUMMARIZE_THRESHOLD = 8; // When history exceeds this, summarize older messages
 const MESSAGE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours — auto-expire
+const SUMMARY_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — summary memory window
 
 // ── PII Scrubber — strips sensitive patterns before persisting ──
 const PII_PATTERNS = [
@@ -139,13 +142,19 @@ function renderInline(text) {
     });
 }
 
-// ── Typing indicator ──
+// ── Typing indicator (accessible) ──
 function TypingIndicator() {
-    return <div style={{
-        display: "flex", alignItems: "center", gap: 4, padding: "12px 16px",
-    }}>
+    return <div
+        role="status"
+        aria-live="polite"
+        aria-label="AI is typing a response"
+        style={{
+            display: "flex", alignItems: "center", gap: 4, padding: "12px 16px",
+        }}
+    >
+        <span className="sr-only">AI is typing...</span>
         {[0, 1, 2].map(i => (
-            <div key={i} style={{
+            <div key={i} aria-hidden="true" style={{
                 width: 7, height: 7, borderRadius: "50%",
                 background: T.accent.primary,
                 animation: `pulse 1.4s ease-in-out ${i * 0.16}s infinite`,
@@ -155,7 +164,7 @@ function TypingIndicator() {
     </div>;
 }
 
-export default memo(function AIChatTab({ proEnabled = false }) {
+export default memo(function AIChatTab({ proEnabled = false, initialPrompt = null, clearInitialPrompt = null }) {
     const { current, history } = useAudit();
     const { apiKey, aiProvider, aiModel, financialConfig, persona } = useSettings();
     const { cards, renewals } = usePortfolio();
@@ -168,25 +177,34 @@ export default memo(function AIChatTab({ proEnabled = false }) {
     const [showScrollDown, setShowScrollDown] = useState(false);
     const [chatQuota, setChatQuota] = useState({ allowed: true, remaining: Infinity, limit: Infinity, used: 0 });
     const [inputFocused, setInputFocused] = useState(false);
+    const [sessionSummary, setSessionSummary] = useState(null); // Prior session memory
 
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
     const abortRef = useRef(null);
     const isStreamingRef = useRef(false);
     const messagesEndRef = useRef(null);
+    const initialPromptSent = useRef(false);
+    const lastUserMsgRef = useRef(null); // Track last user message for safe retry
 
-    // ── Load messages from DB (prune expired on load) ──
+    // ── Load messages + session summary from DB ──
     useEffect(() => {
         (async () => {
-            if (privacyMode) return; // Don't load persisted data in privacy mode
+            if (privacyMode) return;
             const saved = await db.get(CHAT_STORAGE_KEY);
             if (saved?.length) {
                 const fresh = pruneExpired(saved);
                 setMessages(fresh);
-                // Re-persist pruned list if any expired
                 if (fresh.length !== saved.length) {
                     db.set(CHAT_STORAGE_KEY, fresh);
                 }
+            }
+            // Load prior session summary for cross-session memory
+            const summary = await db.get(CHAT_SUMMARY_KEY);
+            if (summary?.text && (Date.now() - (summary.ts || 0)) < SUMMARY_TTL_MS) {
+                setSessionSummary(summary.text);
+            } else if (summary) {
+                db.del(CHAT_SUMMARY_KEY); // Expired
             }
         })();
     }, []);
@@ -202,14 +220,25 @@ export default memo(function AIChatTab({ proEnabled = false }) {
 
     // ── Persist messages (with PII scrubbing + privacy guard) ──
     const persistMessages = useCallback((msgs) => {
-        if (privacyMode) return; // Never persist in privacy mode
+        if (privacyMode) return;
         const trimmed = msgs.slice(-MAX_MESSAGES);
-        // Scrub PII from stored copies (in-memory is untouched for UX)
         const scrubbed = trimmed.map(m => ({
             ...m,
             content: scrubPII(m.content)
         }));
         db.set(CHAT_STORAGE_KEY, scrubbed);
+
+        // Save session summary for cross-session memory (compact topic extraction)
+        if (trimmed.length >= CONTEXT_SUMMARIZE_THRESHOLD) {
+            const topics = trimmed
+                .filter(m => m.role === "user")
+                .slice(-6)
+                .map(m => m.content.length > 80 ? m.content.slice(0, 77) + "..." : m.content)
+                .join(" | ");
+            if (topics) {
+                db.set(CHAT_SUMMARY_KEY, { text: `Prior session topics: ${topics}`, ts: Date.now() });
+            }
+        }
     }, [privacyMode]);
 
     // ── Auto-scroll to bottom ──
@@ -230,13 +259,41 @@ export default memo(function AIChatTab({ proEnabled = false }) {
         setShowScrollDown(scrollHeight - scrollTop - clientHeight > 120);
     }, []);
 
-    // ── Build API messages for context ──
+    // ── Build API messages for context (with sliding window + summarization) ──
     const buildAPIMessages = useCallback((msgs) => {
-        // Take last N messages for context window, filtering out any with empty content
-        // (Gemini rejects parts with empty text — "required oneof field 'data' must have one initialized field")
-        const contextMsgs = msgs
-            .slice(-MAX_CONTEXT_MESSAGES)
-            .filter(m => m.content && m.content.trim().length > 0);
+        const allValid = msgs.filter(m => m.content && m.content.trim().length > 0);
+
+        // Prepend cross-session memory if available and this is a fresh conversation
+        let withMemory = allValid;
+        if (sessionSummary && allValid.length <= 2) {
+            withMemory = [
+                { role: "user", content: `[Context from prior sessions] ${sessionSummary}` },
+                { role: "assistant", content: "Got it — I remember our previous discussions. How can I help today?" },
+                ...allValid
+            ];
+        }
+
+        let contextMsgs;
+        if (withMemory.length > CONTEXT_SUMMARIZE_THRESHOLD) {
+            const oldMsgs = withMemory.slice(0, -CONTEXT_SUMMARIZE_THRESHOLD);
+            const recentMsgs = withMemory.slice(-CONTEXT_SUMMARIZE_THRESHOLD);
+
+            const summaryParts = [];
+            for (const m of oldMsgs) {
+                const role = m.role === "user" ? "User" : "CFO";
+                const content = m.content.length > 150 ? m.content.slice(0, 147) + "..." : m.content;
+                summaryParts.push(`${role}: ${content}`);
+            }
+            const summaryText = `[Earlier conversation summary — ${oldMsgs.length} messages]\n${summaryParts.join("\n")}`;
+
+            contextMsgs = [
+                { role: "user", content: summaryText },
+                { role: "assistant", content: "Understood, I have the conversation context. Continuing from where we left off." },
+                ...recentMsgs
+            ];
+        } else {
+            contextMsgs = withMemory.slice(-MAX_CONTEXT_MESSAGES);
+        }
 
         const isGemini = aiProvider === "gemini" || (aiProvider === "backend" && getBackendProvider(aiModel) === "gemini");
 
@@ -269,24 +326,26 @@ export default memo(function AIChatTab({ proEnabled = false }) {
     const sendMessage = useCallback(async (text) => {
         if (!text?.trim() || isStreamingRef.current) return;
 
+        // ── Quota gate — check BEFORE adding message to state ──
+        if (isGatingEnforced() && !chatQuota.allowed) {
+            setError("You've reached your daily AskAI limit. Upgrade to Pro for 100 messages/day.");
+            haptic.medium();
+            return;
+        }
+
         const userMsg = { role: "user", content: text.trim(), ts: Date.now() };
         // Guard: if the last message is already this user message (e.g. after a retry),
         // don't duplicate it — just resume from the existing state.
         const lastMsg = messages[messages.length - 1];
         const alreadyPresent = lastMsg?.role === "user" && lastMsg?.content === userMsg.content;
         const newMsgs = alreadyPresent ? [...messages] : [...messages, userMsg];
+        lastUserMsgRef.current = text.trim(); // Track for safe retry
         setMessages(newMsgs);
         setInput("");
         setError(null);
         setIsStreaming(true);
         isStreamingRef.current = true;
         haptic.light();
-
-        // ── Quota gate ──
-        if (isGatingEnforced() && !chatQuota.allowed) {
-            setError("You've reached your daily AskAI limit. Upgrade to Pro for 100 messages/day.");
-            return;
-        }
 
         // Map the string persona to the object expected by getChatSystemPrompt
         let personaObject = null;
@@ -397,6 +456,20 @@ export default memo(function AIChatTab({ proEnabled = false }) {
             handleSubmit();
         }
     };
+
+    // ── Auto-send initial prompt from "Discuss with CFO" bridge ──
+    useEffect(() => {
+        if (initialPrompt && !initialPromptSent.current && !isStreamingRef.current) {
+            initialPromptSent.current = true;
+            // Small delay to ensure component is mounted and ready
+            const timer = setTimeout(() => {
+                sendMessage(initialPrompt);
+                clearInitialPrompt?.();
+                initialPromptSent.current = false;
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [initialPrompt, sendMessage, clearInitialPrompt]);
 
     const suggestions = getWeeklySuggestions();
     const hasData = !!current?.parsed;
@@ -518,7 +591,7 @@ export default memo(function AIChatTab({ proEnabled = false }) {
                             <button
                                 key={i}
                                 onClick={() => sendMessage(s.text)}
-                                disabled={isStreaming}
+                                disabled={isStreaming || (isGatingEnforced() && !chatQuota.allowed)}
                                 style={{
                                     display: "flex", alignItems: "flex-start", gap: 8,
                                     padding: "10px 12px", borderRadius: T.radius.md,
@@ -600,7 +673,12 @@ export default memo(function AIChatTab({ proEnabled = false }) {
                                     <strong>Error</strong>
                                 </div>
                                 <p style={{ margin: 0, color: T.text.secondary, lineHeight: 1.5 }}>{error}</p>
-                                <button onClick={() => { setError(null); sendMessage(messages[messages.length - 1]?.content); }}
+                                <button onClick={() => {
+                                    setError(null);
+                                    // Retry the last USER message, not the last message (which may be assistant/error)
+                                    const retryText = lastUserMsgRef.current || messages.filter(m => m.role === "user").pop()?.content;
+                                    if (retryText) sendMessage(retryText);
+                                }}
                                     style={{
                                         marginTop: 8, padding: "6px 14px", borderRadius: T.radius.sm,
                                         border: `1px solid ${T.status.red}40`, background: "transparent",

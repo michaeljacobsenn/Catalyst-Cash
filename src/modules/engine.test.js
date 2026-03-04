@@ -188,4 +188,119 @@ describe('Engine Strategy Logic - generateStrategy', () => {
         expect(strategy.timeCriticalAmount).toBe(300);
         expect(strategy.debtStrategy.target).toBe('Car Loan');
     });
+
+    it('promo-sprint picks highest urgency among multiple expiring promos', () => {
+        const strategy = generateStrategy(baseConfig, {
+            snapshotDate: '2024-01-01',
+            checkingBalance: 8000,
+            cards: [
+                { name: 'Low Urgency', balance: 500, minPayment: 25, apr: 15, hasPromoApr: true, promoAprExp: '2024-03-01' }, // 60d, low balance
+                { name: 'High Urgency', balance: 3000, minPayment: 100, apr: 28, hasPromoApr: true, promoAprExp: '2024-01-15' } // 14d, high balance+APR
+            ]
+        });
+
+        // High Urgency has higher urgency score: (3000*2800)/14 >>> (500*1500)/60
+        expect(strategy.debtStrategy.target).toContain('High Urgency');
+        expect(strategy.debtStrategy.method).toBe('promo-sprint');
+    });
+
+    it('non-card debts participate in avalanche ordering', () => {
+        const strategy = generateStrategy({
+            ...baseConfig,
+            nonCardDebts: [
+                { name: 'Student Loan', balance: 15000, minimum: 200, apr: 12 }
+            ]
+        }, {
+            snapshotDate: '2024-01-01',
+            checkingBalance: 8000,
+            cards: [
+                { name: 'Low APR Card', balance: 8000, minPayment: 50, apr: 5 } // CFI ratio = 160, well above threshold
+            ]
+        });
+
+        // Student loan at 12% APR should beat card at 5% APR for avalanche
+        expect(strategy.debtStrategy.target).toBe('Student Loan');
+        expect(strategy.debtStrategy.method).toBe('avalanche');
+    });
+
+    it('zero-balance cards produce no debt strategy', () => {
+        const strategy = generateStrategy(baseConfig, {
+            snapshotDate: '2024-01-01',
+            checkingBalance: 3000,
+            cards: [
+                { name: 'Paid Off Card', balance: 0, minPayment: 0, apr: 24 },
+                { name: 'Another Paid Off', balance: 0, minPayment: 0, apr: 18 }
+            ]
+        });
+
+        expect(strategy.debtStrategy.target).toBeNull();
+        expect(strategy.debtStrategy.amount).toBe(0);
+        expect(strategy.debtStrategy.method).toBeNull();
+    });
+
+    it('required transfer is capped at savings total', () => {
+        const strategy = generateStrategy(baseConfig, {
+            snapshotDate: '2024-01-01',
+            checkingBalance: 500, // Well below floor of 1200
+            savingsTotal: 300, // Only $300 in savings
+            renewals: [
+                { name: 'Rent', amount: 2000, nextDue: '2024-01-03' } // Timecrit $2000
+            ]
+        });
+
+        // Shortfall is huge (1200 floor + 2000 rent - 500 checking = 2700) but only $300 available
+        expect(strategy.requiredTransfer).toBe(300);
+    });
+
+    it('empty portfolio returns clean zeroed strategy', () => {
+        const strategy = generateStrategy(baseConfig, {
+            snapshotDate: '2024-01-01',
+            checkingBalance: 2000,
+            savingsTotal: 1000,
+            cards: [],
+            renewals: []
+        });
+
+        expect(strategy.totalCheckingFloor).toBe(1200);
+        expect(strategy.timeCriticalAmount).toBe(0);
+        expect(strategy.timeCriticalItems).toEqual([]);
+        expect(strategy.requiredTransfer).toBe(0);
+        expect(strategy.isNegativeCashFlow).toBe(false);
+        expect(strategy.operationalSurplus).toBe(800);
+        expect(strategy.debtStrategy.target).toBeNull();
+        expect(strategy.debtStrategy.amount).toBe(0);
+        expect(strategy.debtStrategy.method).toBeNull();
+    });
+
+    it('CFI override does not promote zero-minimum debts', () => {
+        const strategy = generateStrategy(baseConfig, {
+            snapshotDate: '2024-01-01',
+            checkingBalance: 5000,
+            cards: [
+                { name: 'High APR Card', balance: 3000, minPayment: 100, apr: 29.99 },
+                { name: 'Zero Min Card', balance: 500, minPayment: 0, apr: 15 }
+            ]
+        });
+
+        // The High APR Card should be targeted — zero min cards should not win CFI
+        expect(strategy.debtStrategy.target).toBe('High APR Card');
+    });
+
+    it('semi-monthly pay frequency calculates valid next payday', () => {
+        const strategy = generateStrategy({
+            ...baseConfig,
+            payFrequency: 'semi-monthly',
+        }, {
+            snapshotDate: '2024-01-10',
+            checkingBalance: 3000,
+            cards: [
+                { name: 'Test Card', balance: 1000, minPayment: 50, apr: 20 }
+            ]
+        });
+
+        // Semi-monthly should find a near-future payday (1st or 15th)
+        expect(strategy.nextPayday).toBeTruthy();
+        const payday = new Date(strategy.nextPayday);
+        expect(payday.getTime()).toBeGreaterThan(new Date('2024-01-10').getTime());
+    });
 });

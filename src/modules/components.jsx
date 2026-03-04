@@ -234,14 +234,19 @@ export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel
         <div style={{ padding: "24px 16px", animation: "fadeIn .4s ease-out forwards" }}>
             <div style={{ textAlign: "center", marginBottom: isReceiving ? 16 : 32, transition: "margin .4s ease" }}>
                 <div style={{
-                    width: isReceiving ? 48 : 64, height: isReceiving ? 48 : 64, borderRadius: 20, margin: "0 auto 16px",
-                    background: isReceiving ? `${T.status.green}15` : T.accent.primaryDim,
-                    border: `1px solid ${isReceiving ? T.status.green : T.accent.primarySoft}`,
+                    width: isReceiving ? 48 : 64, height: isReceiving ? 48 : 64, borderRadius: isReceiving ? 16 : 22, margin: "0 auto 16px",
+                    background: isReceiving ? `${T.status.green}15` : "transparent",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    boxShadow: isReceiving ? `0 0 20px ${T.status.green}40` : T.shadow.glow,
-                    transition: "all .5s cubic-bezier(.16,1,.3,1)"
+                    boxShadow: isReceiving ? `0 0 20px ${T.status.green}40` : `0 0 30px ${T.accent.emerald}20`,
+                    transition: "all .5s cubic-bezier(.16,1,.3,1)", overflow: "hidden"
                 }}>
-                    <Loader2 size={isReceiving ? 20 : 28} color={isReceiving ? T.status.green : T.accent.primary} style={{ animation: "spin .8s linear infinite" }} />
+                    <img src="/icon-192.png" alt="Loading" style={{
+                        width: "100%", height: "100%", objectFit: "cover",
+                        animation: isReceiving ? "none" : "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                        opacity: isReceiving ? 0.9 : 1,
+                        mixBlendMode: "screen",
+                        borderRadius: "inherit"
+                    }} />
                 </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 8 }}>
                     <p style={{ fontSize: isReceiving ? 15 : 18, fontWeight: 800, transition: "font-size .4s ease" }}>Running Audit</p>

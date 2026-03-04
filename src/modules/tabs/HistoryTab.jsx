@@ -182,15 +182,15 @@ export default memo(function HistoryTab({ toast }) {
                             {a.form && (
                                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                                     {a.form.checking != null && <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                        <span style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase" }}>CHK</span>
+                                        <span style={{ fontSize: 9, fontWeight: 700, color: T.text.secondary, letterSpacing: "0.08em", textTransform: "uppercase" }}>CHK</span>
                                         <Mono size={11} weight={600} color={T.text.secondary}>{fmt(parseFloat(a.form.checking) || 0)}</Mono>
                                     </div>}
                                     {a.form.debts?.length > 0 && <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                        <span style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase" }}>DEBT</span>
+                                        <span style={{ fontSize: 9, fontWeight: 700, color: T.text.secondary, letterSpacing: "0.08em", textTransform: "uppercase" }}>DEBT</span>
                                         <Mono size={11} weight={600} color={T.status.red}>{fmt(a.form.debts.reduce((s, d) => s + (parseFloat(d.balance) || 0), 0))}</Mono>
                                     </div>}
                                     {a.form.savings != null && parseFloat(a.form.savings) > 0 && <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                        <span style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase" }}>SAV</span>
+                                        <span style={{ fontSize: 9, fontWeight: 700, color: T.text.secondary, letterSpacing: "0.08em", textTransform: "uppercase" }}>SAV</span>
                                         <Mono size={11} weight={600} color={T.status.green}>{fmt(parseFloat(a.form.savings) || 0)}</Mono>
                                     </div>}
                                 </div>

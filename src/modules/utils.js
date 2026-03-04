@@ -29,7 +29,12 @@ export const FaceId = {
 };
 export const PdfViewer = registerPlugin('PdfViewer');
 
+const _exportLocks = {};
+
 export async function nativeExport(filename, content, mimeType = "text/plain", isBase64 = false) {
+  if (_exportLocks[filename] && (Date.now() - _exportLocks[filename]) < 1500) return;
+  _exportLocks[filename] = Date.now();
+
   if (Capacitor.isNativePlatform()) {
     try {
       const opts = { path: filename, data: content, directory: Directory.Cache, recursive: true };
@@ -277,7 +282,7 @@ export function parseJSON(raw) {
     },
     // Map moves to actionable checkboxes
     moveItems: (j.weeklyMoves || []).map(m => ({ tag: null, text: m, done: false })),
-    paceData: [], // Replaced by native dashboardCard logic going forward, kept for backwards compat
+    paceData: Array.isArray(j.paceData) ? j.paceData : [], // Extracted from JSON if present, kept for backwards compat
     dashboardData: {
       checkingBalance: null, // Extracted from dashboardCard dynamically on demand
       savingsVaultTotal: null
@@ -427,8 +432,9 @@ export async function exportAudit(audit) {
     await nativeExport(`CatalystCash_CPA_TearSheet_${dateStr}.pdf`, pdfBase64, "application/pdf", true);
 
   } catch (err) {
-    if (!err.message?.toLowerCase().includes("cancel")) {
-      console.error("PDF generation failed:", err);
+    const isCancel = err.message?.toLowerCase().includes("cancel") || err.message?.toLowerCase().includes("user interaction");
+    if (!isCancel) {
+      console.error("PDF generation or Share sheet failed:", err);
       // Fallback
       const h = `<!DOCTYPE html><html><body>${container.innerHTML}</body></html>`;
       await nativeExport(`CatalystCash_Audit_${dateStr}.html`, h, "text/html");
