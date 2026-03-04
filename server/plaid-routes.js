@@ -73,7 +73,8 @@ export function registerPlaidRoutes(app, requireAuth) {
             const response = await plaid.linkTokenCreate({
                 user: { client_user_id: "catalyst-cash-user" },
                 client_name: "Catalyst Cash",
-                products: [Products.Transactions],
+                products: [Products.Transactions, Products.Balance],
+                optional_products: [Products.Liabilities, Products.Investments],
                 country_codes: [CountryCode.Us],
                 language: "en",
             });

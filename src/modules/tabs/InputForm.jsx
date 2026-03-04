@@ -67,6 +67,33 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
     const [holdingValues, setHoldingValues] = useState({ roth: 0, k401: 0, brokerage: 0, crypto: 0, hsa: 0 });
     const [overrideInvest, setOverrideInvest] = useState({ roth: false, brokerage: false, k401: false });
     const [overridePlaid, setOverridePlaid] = useState({ checking: false, vault: false, debts: {} });
+    // Re-sync Plaid balances when cards or bankAccounts update (e.g. after Plaid sync finishes)
+    useEffect(() => {
+        const freshPlaid = getPlaidAutoFill(cards || [], bankAccounts || []);
+        setForm(p => {
+            const updates = {};
+            // Only update checking/savings if user hasn't overridden
+            if (freshPlaid.checking !== null && !overridePlaid.checking) updates.checking = freshPlaid.checking;
+            if (freshPlaid.vault !== null && !overridePlaid.vault) updates.savings = freshPlaid.vault;
+            // Update debt balances for cards that have Plaid data and aren't overridden
+            if (freshPlaid.debts?.length > 0) {
+                const newDebts = (p.debts || []).map(d => {
+                    if (!d.cardId) return d;
+                    if (overridePlaid.debts[d.cardId]) return d;
+                    const pd = freshPlaid.debts.find(fd => fd.cardId === d.cardId);
+                    return pd ? { ...d, balance: pd.balance } : d;
+                });
+                // Add any new Plaid debts that aren't already in the form
+                const existingIds = new Set(newDebts.map(d => d.cardId).filter(Boolean));
+                const additions = freshPlaid.debts.filter(pd => pd.cardId && !existingIds.has(pd.cardId));
+                if (additions.length > 0 || newDebts.some((d, i) => d !== (p.debts || [])[i])) {
+                    updates.debts = [...newDebts, ...additions];
+                }
+            }
+            if (Object.keys(updates).length === 0) return p;
+            return { ...p, ...updates };
+        });
+    }, [cards, bankAccounts]);
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [showConfig, setShowConfig] = useState(false);
 

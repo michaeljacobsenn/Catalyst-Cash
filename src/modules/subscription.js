@@ -159,8 +159,8 @@ export const TIERS = {
 
 // ── IAP Product IDs (Apple App Store) ─────────────────────────
 export const IAP_PRODUCTS = {
-    monthly: "com.catalystcash.pro.monthly",   // $6.99/mo
-    yearly: "com.catalystcash.pro.yearly",     // $49.99/yr ($4.17/mo)
+    monthly: "com.catalystcash.pro.monthly.v2",   // $6.99/mo
+    yearly: "com.catalystcash.pro.yearly.v2",     // $49.99/yr ($4.17/mo)
 };
 
 // ── IAP Display Pricing (for UI — no StoreKit dependency) ─────
