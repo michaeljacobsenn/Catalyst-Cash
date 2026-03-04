@@ -91,7 +91,17 @@ export async function createLinkToken() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
     });
-    if (!res.ok) throw new Error(`Link token failed: ${res.status}`);
+    if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        console.error(`[Plaid] link-token response ${res.status}:`, errBody.substring(0, 500));
+        // Try to extract Plaid's specific error message
+        let detail = `HTTP ${res.status}`;
+        try {
+            const parsed = JSON.parse(errBody);
+            detail = parsed.error_message || parsed.error || detail;
+        } catch { /* not JSON */ }
+        throw new Error(`Link token failed: ${detail}`);
+    }
     const data = await res.json();
     return data.link_token;
 }
@@ -102,20 +112,37 @@ export async function createLinkToken() {
  * Returns the public_token and metadata from the Link session.
  */
 export async function openPlaidLink() {
+    console.warn("[Plaid] openPlaidLink() called");
     // Dynamically load Plaid Link SDK if not already loaded
     if (!window.Plaid) {
+        console.warn("[Plaid] Loading Plaid Link SDK from CDN...");
         await new Promise((resolve, reject) => {
             const script = document.createElement("script");
             script.src = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
-            script.onload = resolve;
-            script.onerror = () => reject(new Error("Failed to load Plaid Link SDK"));
+            script.onload = () => { console.warn("[Plaid] SDK script loaded"); resolve(); };
+            script.onerror = (e) => {
+                console.error("[Plaid] SDK script FAILED to load:", e);
+                reject(new Error("Failed to load Plaid Link SDK — check network connectivity"));
+            };
             document.head.appendChild(script);
         });
     }
+    if (!window.Plaid) {
+        throw new Error("Plaid Link SDK loaded but window.Plaid is undefined");
+    }
 
-    const linkToken = await createLinkToken();
+    console.warn("[Plaid] Creating link token...");
+    let linkToken;
+    try {
+        linkToken = await createLinkToken();
+        console.warn("[Plaid] Link token obtained:", linkToken ? "OK" : "EMPTY");
+    } catch (e) {
+        console.error("[Plaid] createLinkToken failed:", e);
+        throw e;
+    }
 
     return new Promise((resolve, reject) => {
+        console.warn("[Plaid] Creating Plaid.create handler...");
         const handler = window.Plaid.create({
             token: linkToken,
             onSuccess: (publicToken, metadata) => {
@@ -130,6 +157,7 @@ export async function openPlaidLink() {
             },
         });
         handler.open();
+        console.warn("[Plaid] handler.open() called");
     });
 }
 
@@ -178,10 +206,29 @@ export async function connectBank(onSuccess, onError) {
         };
 
         const conns = await getConnections();
-        // Replace existing connection for same item, or append
-        const idx = conns.findIndex(c => c.id === itemId);
-        if (idx >= 0) conns[idx] = connection;
-        else conns.push(connection);
+        // Replace existing connection for same item or same institution (prevents duplicates on reconnect)
+        let idx = conns.findIndex(c => c.id === itemId);
+        if (idx < 0 && connection.institutionId) {
+            idx = conns.findIndex(c => c.institutionId === connection.institutionId);
+        }
+        if (idx >= 0) {
+            // Migrate linked IDs from old connection's accounts so existing card/bank links carry forward
+            const oldAccounts = conns[idx].accounts || [];
+            for (const newAcct of connection.accounts) {
+                // Try to find matching old account by mask + type
+                const oldMatch = oldAccounts.find(oa =>
+                    oa.mask === newAcct.mask && oa.type === newAcct.type
+                );
+                if (oldMatch) {
+                    newAcct.linkedCardId = oldMatch.linkedCardId || null;
+                    newAcct.linkedBankAccountId = oldMatch.linkedBankAccountId || null;
+                    newAcct.linkedInvestmentId = oldMatch.linkedInvestmentId || null;
+                }
+            }
+            conns[idx] = connection;
+        } else {
+            conns.push(connection);
+        }
         await saveConnections(conns);
 
         if (onSuccess) onSuccess(connection);
@@ -325,9 +372,32 @@ export async function fetchBalancesAndLiabilities(connectionId) {
  * Fetch balances + liabilities for ALL connections in parallel.
  */
 export async function fetchAllBalancesAndLiabilities() {
-    const conns = await getConnections();
-    const results = [];
+    let conns = await getConnections();
+
+    // Deduplicate: if multiple connections share the same institutionId, keep only the latest
+    const seen = new Map();
     for (const conn of conns) {
+        const key = conn.institutionId || conn.id;
+        if (!seen.has(key)) { seen.set(key, conn); }
+        else {
+            // Keep the one with an accessToken; if both have one, keep the later entry
+            const prev = seen.get(key);
+            if (conn.accessToken && (!prev.accessToken || conns.indexOf(conn) > conns.indexOf(prev))) {
+                seen.set(key, conn);
+            }
+        }
+    }
+    if (seen.size < conns.length) {
+        const removed = conns.length - seen.size;
+        conns = Array.from(seen.values());
+        await saveConnections(conns);
+        console.warn(`[Plaid] Deduped connections: removed ${removed} duplicate(s), ${conns.length} remaining`);
+    }
+
+    const results = [];
+    for (let i = 0; i < conns.length; i++) {
+        const conn = conns[i];
+        if (window.toast) window.toast.info(`Syncing ${i + 1}/${conns.length}: ${conn.institutionName || 'Bank'}…`, { duration: 2000 });
         try {
             results.push(await fetchBalancesAndLiabilities(conn.id));
         } catch (e) {
@@ -659,10 +729,27 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
     for (const acct of connection.accounts) {
         if (!acct.balance && !acct.liability) continue;
 
-        // Self-healing fallback: recover link via plaid account id.
-        const fallbackCard = !acct.linkedCardId
+        // Self-healing fallback: recover link via plaid account id, then by institution + last4 mask.
+        let fallbackCard = !acct.linkedCardId
             ? updatedCards.find(c => c._plaidAccountId === acct.plaidAccountId)
             : null;
+        // Last-resort: match by institution + last4 when plaid IDs have changed (e.g. after reconnect)
+        if (!acct.linkedCardId && !fallbackCard && acct.type === "credit") {
+            const inst = normalizeInstitution(connection.institutionName);
+            const acctLast4 = normDigits(acct.mask).slice(-4) || null;
+            if (inst && acctLast4) {
+                fallbackCard = updatedCards.find(c =>
+                    sameInstitution(c.institution, inst) &&
+                    extractLast4(c) === acctLast4
+                );
+                if (fallbackCard) {
+                    console.warn(`[Plaid] applyBalanceSync: matched card "${fallbackCard.nickname || fallbackCard.name}" by institution+last4 (${inst} ···${acctLast4})`);
+                    // Repair the stale plaid account id for future syncs
+                    fallbackCard._plaidAccountId = acct.plaidAccountId;
+                    fallbackCard._plaidConnectionId = connection.id;
+                }
+            }
+        }
         if (!acct.linkedCardId && fallbackCard) acct.linkedCardId = fallbackCard.id;
 
         if (acct.linkedCardId) {
@@ -715,9 +802,31 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
             }
         }
 
-        const fallbackBank = !acct.linkedBankAccountId
+        let fallbackBank = !acct.linkedBankAccountId
             ? updatedBankAccounts.find(b => b._plaidAccountId === acct.plaidAccountId)
             : null;
+        // Last-resort: match by institution + name/subtype when plaid IDs have changed
+        if (!acct.linkedBankAccountId && !fallbackBank && acct.type === "depository") {
+            const inst = normalizeInstitution(connection.institutionName);
+            const acctLast4 = normDigits(acct.mask).slice(-4) || null;
+            if (inst) {
+                fallbackBank = updatedBankAccounts.find(b =>
+                    sameInstitution(b.bank, inst) &&
+                    (
+                        // Match by mask/last4 in notes (e.g. "Auto-imported from Plaid (···8744)")
+                        (acctLast4 && String(b.notes || "").includes(`···${acctLast4}`)) ||
+                        // Match by subtype (checking/savings) + institution when only 1 of that type at that bank
+                        (acct.subtype === b.accountType &&
+                            updatedBankAccounts.filter(bb => sameInstitution(bb.bank, inst) && bb.accountType === acct.subtype).length === 1)
+                    )
+                );
+                if (fallbackBank) {
+                    console.warn(`[Plaid] applyBalanceSync: matched bank "${fallbackBank.name}" by institution+mask/subtype (${inst})`);
+                    fallbackBank._plaidAccountId = acct.plaidAccountId;
+                    fallbackBank._plaidConnectionId = connection.id;
+                }
+            }
+        }
         if (!acct.linkedBankAccountId && fallbackBank) acct.linkedBankAccountId = fallbackBank.id;
 
         if (acct.linkedBankAccountId) {
@@ -726,8 +835,8 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
                 const oldBal = updatedBankAccounts[idx]._plaidBalance;
                 updatedBankAccounts[idx] = {
                     ...updatedBankAccounts[idx],
-                    _plaidBalance: acct.balance.current,
-                    _plaidAvailable: acct.balance.available,
+                    _plaidBalance: acct.balance?.current ?? updatedBankAccounts[idx]._plaidBalance,
+                    _plaidAvailable: acct.balance?.available ?? updatedBankAccounts[idx]._plaidAvailable,
                     _plaidLastSync: connection.lastSync,
                     _plaidAccountId: acct.plaidAccountId,
                     _plaidConnectionId: connection.id,
