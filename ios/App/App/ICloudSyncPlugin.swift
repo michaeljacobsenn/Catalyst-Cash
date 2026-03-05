@@ -2,14 +2,7 @@ import Foundation
 import Capacitor
 
 @objc(ICloudSyncPlugin)
-public class ICloudSyncPlugin: CAPPlugin, CAPBridgedPlugin {
-    public let identifier = "ICloudSync"
-    public let jsName = "ICloudSync"
-    public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "save", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "restore", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "isAvailable", returnType: CAPPluginReturnPromise)
-    ]
+public class ICloudSyncPlugin: CAPPlugin {
 
     private let containerID = "iCloud.com.jacobsen.portfoliopro"
     private let fileName = "CatalystCash_CloudSync.json"

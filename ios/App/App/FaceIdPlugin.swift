@@ -3,13 +3,7 @@ import Capacitor
 import LocalAuthentication
 
 @objc(FaceIdPlugin)
-public class FaceIdPlugin: CAPPlugin, CAPBridgedPlugin {
-    public let identifier = "FaceId"
-    public let jsName = "FaceId"
-    public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "isAvailable", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "authenticate", returnType: CAPPluginReturnPromise)
-    ]
+public class FaceIdPlugin: CAPPlugin {
 
     private let defaultAuthReason = "Authenticate to access Catalyst Cash"
     private let maxReasonLength = 120
