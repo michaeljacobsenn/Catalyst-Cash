@@ -663,15 +663,7 @@ function CatalystCash() {
   // Native iOS swipe-back is handled via WKWebView allowsBackForwardNavigationGestures
   // (set in capacitor.config.ts). The popstate listener (above) handles the navigation.
 
-  // ── Dismiss native splash once React loading screen is painted ──
-  useEffect(() => {
-    if (!ready) {
-      // Give React one frame to paint, then crossfade native splash away
-      requestAnimationFrame(() => {
-        SplashScreen.hide({ fadeOutDuration: 500 }).catch(() => { });
-      });
-    }
-  }, [ready]);
+  // Native splash auto-hides instantly (launchShowDuration: 0) — no manual dismiss needed
 
   // ── Haptic on load-complete (premium feel) ──
   const loadReadyRef = useRef(false);
