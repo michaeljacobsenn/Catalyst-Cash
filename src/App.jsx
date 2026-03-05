@@ -967,7 +967,7 @@ function CatalystCash() {
               onDemoAudit={handleDemoAudit}
               onViewTransactions={() => setShowTransactionFeed(true)}
               onDiscussWithCFO={(prompt) => { setChatInitialPrompt(prompt); navTo("chat"); }} /></ErrorBoundary>}
-            {renderTab === "results" && (loading ? <StreamingView streamText={streamText} elapsed={elapsed} isTest={isTest} modelName={getModel(aiProvider, aiModel).name} /> :
+            {renderTab === "results" && (loading ? <StreamingView streamText={streamText} elapsed={elapsed} isTest={isTest} modelName={getModel(aiProvider, aiModel).name} onCancel={handleCancelAudit} /> :
               !display ? (() => { setTimeout(() => navTo("dashboard"), 0); return null; })() :
                 <>
                   {(viewing || resultsBackTarget === "history") && <div style={{ padding: "8px 20px" }}>

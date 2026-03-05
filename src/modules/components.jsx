@@ -214,78 +214,164 @@ export const DI = ({ value, onChange, placeholder = "0.00", label = "Amount" }) 
 };
 
 // ═══════════════════════════════════════════════════════════════
-// STREAMING VIEW
+// STREAMING VIEW — Audit Processing Screen
 // ═══════════════════════════════════════════════════════════════
 export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel }) => {
     const isReceiving = !!streamText && streamText.length > 5;
-    const maxTime = 30; // 30s window — some providers take 20-30s before first token
-    const baseProgress = Math.min(((elapsed + 1) / maxTime) * 100, 95);
-    const progress = isReceiving ? 100 : baseProgress;
+    const streamScrollRef = useRef(null);
 
-    let currentMsg = "Bundling financial profile...";
-    if (isReceiving) currentMsg = "STREAMING AUDIT PAYLOAD...";
-    else if (elapsed > 4) currentMsg = "Generating tactical recommendations...";
-    else if (elapsed > 2) currentMsg = "Analyzing weekly transactions...";
-    else if (elapsed > 0) currentMsg = "Opening secure AI session...";
+    // Auto-scroll stream text to bottom
+    useEffect(() => {
+        if (streamScrollRef.current) {
+            streamScrollRef.current.scrollTop = streamScrollRef.current.scrollHeight;
+        }
+    }, [streamText]);
 
-    const showCancelProminent = elapsed >= 8 && !isReceiving;
+    // ── Multi-phase progress with smooth interpolation ──
+    // Phase 1 (0-3s):  0-15%  — Bundling
+    // Phase 2 (3-6s):  15-35% — Connecting
+    // Phase 3 (6-12s): 35-65% — Analyzing
+    // Phase 4 (12-25s): 65-92% — Generating
+    // Phase 5 (25s+):  92-95% — Capped (waiting)
+    // Receiving:       100%   — Complete
+    let baseProgress;
+    if (elapsed <= 3) baseProgress = (elapsed / 3) * 15;
+    else if (elapsed <= 6) baseProgress = 15 + ((elapsed - 3) / 3) * 20;
+    else if (elapsed <= 12) baseProgress = 35 + ((elapsed - 6) / 6) * 30;
+    else if (elapsed <= 25) baseProgress = 65 + ((elapsed - 12) / 13) * 27;
+    else baseProgress = 92 + Math.min((elapsed - 25) / 20, 1) * 3;
+    const progress = isReceiving ? 100 : Math.min(baseProgress, 95);
+
+    // ── Status messages with phases ──
+    let currentMsg, phase;
+    if (isReceiving) { currentMsg = "Streaming audit results..."; phase = "streaming"; }
+    else if (elapsed > 12) { currentMsg = "Generating tactical recommendations..."; phase = "generating"; }
+    else if (elapsed > 6) { currentMsg = "Analyzing transactions & balances..."; phase = "analyzing"; }
+    else if (elapsed > 3) { currentMsg = "Connecting to AI engine..."; phase = "connecting"; }
+    else if (elapsed > 0) { currentMsg = "Bundling financial profile..."; phase = "bundling"; }
+    else { currentMsg = "Preparing audit..."; phase = "init"; }
+
+    // ── Estimated time ──
+    const eta = isReceiving ? "< 5s" : elapsed < 5 ? "~15-20s" : elapsed < 12 ? "~10-15s" : elapsed < 20 ? "~5-10s" : "Almost done...";
+
+    const showCancel = elapsed >= 3 && !isReceiving;
+    const showCancelProminent = elapsed >= 10 && !isReceiving;
 
     return (
         <div style={{ padding: "24px 16px", animation: "fadeIn .4s ease-out forwards" }}>
-            <div style={{ textAlign: "center", marginBottom: isReceiving ? 16 : 32, transition: "margin .4s ease" }}>
+            <div style={{ textAlign: "center", marginBottom: isReceiving ? 16 : 28, transition: "margin .4s ease" }}>
+
+                {/* ── App Icon with ambient glow ── */}
                 <div style={{
-                    width: isReceiving ? 48 : 64, height: isReceiving ? 48 : 64, borderRadius: isReceiving ? 16 : 22, margin: "0 auto 16px",
-                    background: isReceiving ? `${T.status.green}15` : "transparent",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    boxShadow: isReceiving ? `0 0 20px ${T.status.green}40` : `0 0 30px ${T.accent.emerald}20`,
-                    transition: "all .5s cubic-bezier(.16,1,.3,1)", overflow: "hidden"
+                    position: "relative", width: isReceiving ? 52 : 72, height: isReceiving ? 52 : 72,
+                    margin: "0 auto 18px", transition: "all .5s cubic-bezier(.16,1,.3,1)"
                 }}>
-                    <img src="/icon-192.png" alt="Loading" style={{
-                        width: "100%", height: "100%", objectFit: "cover",
-                        animation: isReceiving ? "none" : "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-                        opacity: isReceiving ? 0.9 : 1,
-                        mixBlendMode: "screen",
-                        borderRadius: "inherit"
+                    {/* Animated glow ring */}
+                    {!isReceiving && <div style={{
+                        position: "absolute", inset: -8, borderRadius: "50%",
+                        background: `conic-gradient(from ${(elapsed * 30) % 360}deg, transparent 0%, ${T.accent.primary}40 20%, ${T.accent.emerald}30 40%, transparent 60%)`,
+                        animation: "spin 3s linear infinite", opacity: 0.6,
+                        mask: "radial-gradient(farthest-side, transparent calc(100% - 2px), #fff calc(100% - 1.5px))",
+                        WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 2px), #fff calc(100% - 1.5px))"
+                    }} />}
+                    {/* Static ring track */}
+                    <div style={{
+                        position: "absolute", inset: -8, borderRadius: "50%",
+                        border: `1px solid ${T.border.subtle}`, pointerEvents: "none"
                     }} />
+                    {/* Icon */}
+                    <div style={{
+                        width: "100%", height: "100%",
+                        borderRadius: isReceiving ? 16 : 22,
+                        background: isReceiving ? `${T.status.green}15` : "transparent",
+                        boxShadow: isReceiving ? `0 0 24px ${T.status.green}40` : `0 0 30px ${T.accent.emerald}15`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        overflow: "hidden", transition: "all .5s cubic-bezier(.16,1,.3,1)"
+                    }}>
+                        <img src="/icon-192.png" alt="" style={{
+                            width: "100%", height: "100%", objectFit: "cover",
+                            animation: isReceiving ? "none" : "pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                            borderRadius: "inherit"
+                        }} />
+                    </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 8 }}>
-                    <p style={{ fontSize: isReceiving ? 15 : 18, fontWeight: 800, transition: "font-size .4s ease" }}>Running Audit</p>
+
+                {/* ── Title + Status Badge ── */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 6 }}>
+                    <p style={{ fontSize: isReceiving ? 16 : 20, fontWeight: 800, transition: "font-size .4s ease", letterSpacing: "-0.02em" }}>Running Audit</p>
                     {isTest && <Badge variant="amber">TEST</Badge>}
                 </div>
-                <Mono size={11} color={T.text.dim} style={{ display: "block", marginBottom: 16 }}>
-                    {elapsed}s · {modelName || "AI"}{isTest ? " · NOT SAVED" : ""}
-                </Mono>
 
-                {/* Progress Bar Container */}
+                {/* ── Metadata line ── */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+                    <Mono size={11} color={T.text.dim}>
+                        {elapsed}s elapsed
+                    </Mono>
+                    <span style={{ width: 3, height: 3, borderRadius: "50%", background: T.text.dim, flexShrink: 0 }} />
+                    <Mono size={11} color={T.accent.primary}>
+                        {modelName || "AI"}
+                    </Mono>
+                    {isTest && <>
+                        <span style={{ width: 3, height: 3, borderRadius: "50%", background: T.text.dim, flexShrink: 0 }} />
+                        <Mono size={11} color={T.status.amber}>NOT SAVED</Mono>
+                    </>}
+                </div>
+
+                {/* ── Progress Bar ── */}
                 <div style={{ maxWidth: 320, margin: "0 auto", textAlign: "left" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.02em", color: isReceiving ? T.status.green : T.accent.primary, fontFamily: T.font.mono, transition: "color .4s ease" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <span style={{
+                            fontSize: 11, fontWeight: 700, letterSpacing: "0.02em",
+                            color: isReceiving ? T.status.green : T.accent.primary,
+                            fontFamily: T.font.mono, transition: "color .4s ease"
+                        }}>
                             {currentMsg}
                         </span>
                         <span style={{ fontSize: 11, fontWeight: 800, color: T.text.secondary, fontFamily: T.font.mono }}>
                             {Math.floor(progress)}%
                         </span>
                     </div>
-                    <div style={{ height: 6, background: T.bg.elevated, borderRadius: 6, overflow: "hidden", border: `1px solid ${T.border.subtle}` }}>
+                    <div
+                        role="progressbar"
+                        aria-valuenow={Math.floor(progress)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`Audit progress: ${Math.floor(progress)}%. ${currentMsg}`}
+                        style={{
+                            height: 6, background: T.bg.elevated, borderRadius: 6,
+                            overflow: "hidden", border: `1px solid ${T.border.subtle}`
+                        }}
+                    >
                         <div style={{
                             height: "100%", width: `${progress}%`,
-                            background: isReceiving ? `linear-gradient(90deg,${T.status.green}AA,${T.status.green})` : `linear-gradient(90deg,${T.accent.emerald}99,${T.accent.emerald})`,
-                            borderRadius: 6, transition: "width 1.2s cubic-bezier(.16,1,.3,1), background .5s ease"
+                            background: isReceiving
+                                ? `linear-gradient(90deg,${T.status.green}AA,${T.status.green})`
+                                : `linear-gradient(90deg,${T.accent.emerald}99,${T.accent.primary})`,
+                            borderRadius: 6,
+                            transition: "width 1.2s cubic-bezier(.16,1,.3,1), background .5s ease",
+                            boxShadow: isReceiving ? `0 0 8px ${T.status.green}60` : "none"
                         }} />
+                    </div>
+                    {/* Estimated time */}
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                        <Mono size={9} color={T.text.dim}>Est. {eta}</Mono>
+                        {isReceiving && <Mono size={9} color={T.status.green}>Receiving data</Mono>}
                     </div>
                 </div>
 
-                {/* Cancel button — subtle until 8s, then more prominent */}
-                {onCancel && !isReceiving && (
-                    <div style={{ marginTop: 20 }}>
+                {/* ── Cancel button — visible after 3s, prominent after 10s ── */}
+                {onCancel && showCancel && (
+                    <div style={{ marginTop: 18 }}>
                         <button
                             onClick={onCancel}
+                            aria-label="Cancel audit"
                             style={{
                                 padding: "10px 24px", borderRadius: 12,
                                 border: `1px solid ${showCancelProminent ? T.status.amber : T.border.default}`,
-                                background: showCancelProminent ? `${T.status.amber}15` : "transparent",
+                                background: showCancelProminent ? `${T.status.amber}12` : "transparent",
                                 color: showCancelProminent ? T.status.amber : T.text.muted,
                                 fontSize: 12, fontWeight: 700, cursor: "pointer",
+                                fontFamily: T.font.mono, letterSpacing: "0.02em",
                                 transition: "all 0.4s ease"
                             }}
                         >
@@ -295,22 +381,48 @@ export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel
                 )}
             </div>
 
+            {/* ── Stream Output or Skeleton ── */}
             {streamText ? (
                 <div className="slide-up">
-                    <Card style={{ maxHeight: "50vh", overflow: "auto", border: `1px solid ${T.status.blue}30`, background: T.bg.elevated, boxShadow: `inset 0 4px 24px ${T.bg.base}` }}>
-                        <pre style={{
-                            fontSize: 10, lineHeight: 1.6, color: T.text.secondary, whiteSpace: "pre-wrap", wordBreak: "break-word",
-                            fontFamily: T.font.mono, opacity: 0.9
-                        }}>{streamText}<span style={{
-                            display: "inline-block", width: 7, height: 14, background: T.status.green,
-                            animation: "pulse 1s ease infinite", verticalAlign: "text-bottom", borderRadius: 2, marginLeft: 3
-                        }} /></pre>
+                    <div style={{
+                        display: "flex", alignItems: "center", gap: 6, marginBottom: 8, paddingLeft: 2
+                    }}>
+                        <div style={{
+                            width: 6, height: 6, borderRadius: "50%", background: T.status.green,
+                            animation: "pulse 1s ease infinite", flexShrink: 0
+                        }} />
+                        <Mono size={10} color={T.text.dim}>Live stream from {modelName || "AI"}</Mono>
+                    </div>
+                    <Card style={{
+                        maxHeight: "45vh", overflow: "auto",
+                        border: `1px solid ${T.accent.primary}20`,
+                        background: T.bg.elevated,
+                        boxShadow: `inset 0 4px 24px ${T.bg.base}`
+                    }}>
+                        <div ref={streamScrollRef} style={{ maxHeight: "40vh", overflow: "auto" }}>
+                            <pre style={{
+                                fontSize: 10, lineHeight: 1.65, color: T.text.secondary,
+                                whiteSpace: "pre-wrap", wordBreak: "break-word",
+                                fontFamily: T.font.mono, opacity: 0.9, margin: 0
+                            }}>{streamText}<span style={{
+                                display: "inline-block", width: 7, height: 14,
+                                background: T.status.green, animation: "pulse 1s ease infinite",
+                                verticalAlign: "text-bottom", borderRadius: 2, marginLeft: 3
+                            }} /></pre>
+                        </div>
                     </Card>
                 </div>
             ) : (
-                <div style={{ transition: "opacity .3s ease", opacity: 0.8 }}>
-                    {[120, 80, 150].map((h, i) =>
-                        <div key={i} className="shimmer-bg" style={{ height: h, borderRadius: T.radius.lg, marginBottom: 12, animationDelay: `${i * .12}s`, opacity: 0.7 + (i * 0.1) }} />)}
+                <div style={{ transition: "opacity .3s ease", opacity: 0.6 }}>
+                    {/* Skeleton placeholders that hint at card structure */}
+                    <div className="shimmer-bg" style={{ height: 70, borderRadius: T.radius.lg, marginBottom: 10 }} />
+                    <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+                        <div className="shimmer-bg" style={{ height: 54, borderRadius: T.radius.md, flex: 1 }} />
+                        <div className="shimmer-bg" style={{ height: 54, borderRadius: T.radius.md, flex: 1 }} />
+                        <div className="shimmer-bg" style={{ height: 54, borderRadius: T.radius.md, flex: 1 }} />
+                    </div>
+                    <div className="shimmer-bg" style={{ height: 120, borderRadius: T.radius.lg, marginBottom: 10, animationDelay: "0.1s" }} />
+                    <div className="shimmer-bg" style={{ height: 80, borderRadius: T.radius.lg, animationDelay: "0.2s" }} />
                 </div>
             )}
         </div>
