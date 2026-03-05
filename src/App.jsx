@@ -173,7 +173,9 @@ function CatalystCash() {
   const [proEnabled, setProEnabled] = useState(true);
   useEffect(() => {
     initRevenueCat().then(() => {
-      if (getGatingMode() === "off") { setProEnabled(true); return; }
+      const mode = getGatingMode();
+      // "off" = no gating at all, "soft" = show Pro UI but don't block features
+      if (mode === "off" || mode === "soft") { setProEnabled(true); return; }
       isPro().then(setProEnabled).catch(() => setProEnabled(false));
     });
   }, []);
