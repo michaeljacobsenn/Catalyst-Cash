@@ -16,17 +16,18 @@ import { presentPaywall, restorePurchases } from "../revenuecat.js";
 const FEATURES = [
     { label: "AI Audits", free: "2 / week", pro: "60 / month", icon: "📊" },
     { label: "AskAI Chat", free: "10 / day", pro: "50 / day", icon: "💬" },
-    { label: "AI Quality", free: "Standard", pro: "Premium", icon: "🧠" },
-    { label: "Audit History", free: "Last 12", pro: "Unlimited", icon: "📜" },
+    { label: "AI Models", free: "Flash & Mini", pro: "Pro · o4 · Claude", icon: "🧠" },
+    { label: "Audit History", free: "Last 12", pro: "Full archive", icon: "📜" },
     { label: "Dashboard & Charts", free: "✓ Full", pro: "✓ Full", icon: "📈" },
     { label: "Debt Simulator", free: "✓ Full", pro: "✓ Full", icon: "⚠️" },
     { label: "Cash Flow Calendar", free: "✓ Full", pro: "✓ Full", icon: "📅" },
+    { label: "Bank Sync (Plaid)", free: "✓", pro: "✓", icon: "🏦" },
+    { label: "iCloud Backup", free: "✓", pro: "✓", icon: "☁️" },
+    { label: "Transaction Ledger", free: "—", pro: "✓ Full", icon: "📒" },
     { label: "Share Score Card", free: "Branded", pro: "Clean", icon: "🎴" },
     { label: "CSV / PDF Export", free: "—", pro: "✓", icon: "📤" },
     { label: "Advanced Insights", free: "—", pro: "✓", icon: "🔔" },
-    { label: "Market Refresh", free: "60 min", pro: "15 min", icon: "⚡" },
-    { label: "Bank Sync & Txns", free: "—", pro: "✓ Plaid", icon: "🏦" },
-    { label: "Transaction Ledger", free: "—", pro: "✓ Full", icon: "📒" },
+    { label: "Market Refresh", free: "60 min", pro: "5 min", icon: "⚡" },
 ];
 
 // ── Coming soon features (creates anticipation) ──────────────
