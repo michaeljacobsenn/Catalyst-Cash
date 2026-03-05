@@ -3,7 +3,7 @@
 // Shows feature comparison, pricing, and IAP placeholders.
 // Only visible when shouldShowGating() returns true.
 // ═══════════════════════════════════════════════════════════════
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { T } from "../constants.js";
 import { Card } from "../ui.jsx";
@@ -38,6 +38,42 @@ const COMING_SOON = [
 export default function ProPaywall({ onClose }) {
     const [plan, setPlan] = useState("yearly");
     const [purchasing, setPurchasing] = useState(false);
+    const [dragY, setDragY] = useState(0);
+    const [closing, setClosing] = useState(false);
+    const touchStart = useRef(null);
+    const sheetRef = useRef(null);
+
+    const handleClose = useCallback(() => {
+        setClosing(true);
+        setTimeout(onClose, 250);
+    }, [onClose]);
+
+    const onTouchStart = useCallback(e => {
+        // Only track if at the top of scroll
+        const el = sheetRef.current;
+        if (el && el.scrollTop > 5) return;
+        touchStart.current = e.touches[0].clientY;
+    }, []);
+
+    const onTouchMove = useCallback(e => {
+        if (touchStart.current === null) return;
+        const delta = e.touches[0].clientY - touchStart.current;
+        if (delta > 0) {
+            setDragY(delta);
+            e.preventDefault();
+        } else {
+            setDragY(0);
+        }
+    }, []);
+
+    const onTouchEnd = useCallback(() => {
+        if (dragY > 120) {
+            handleClose();
+        } else {
+            setDragY(0);
+        }
+        touchStart.current = null;
+    }, [dragY, handleClose]);
 
     const handlePurchase = async () => {
         haptic.medium();
@@ -76,19 +112,26 @@ export default function ProPaywall({ onClose }) {
         position: "fixed", inset: 0, zIndex: 99999,
         background: "rgba(0,0,0,0.7)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
         display: "flex", alignItems: "flex-end", justifyContent: "center",
-        animation: "fadeIn 0.2s ease", overscrollBehavior: "none"
-    }} onClick={onClose}>
+        animation: closing ? "fadeOut 0.25s ease forwards" : "fadeIn 0.2s ease", overscrollBehavior: "none"
+    }} onClick={handleClose}>
         <style>{`
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes ctaPulse { 0%, 100% { box-shadow: 0 4px 20px ${T.accent.primary}40; } 50% { box-shadow: 0 6px 28px ${T.accent.primary}60; } }
 @keyframes planGlow { 0%, 100% { box-shadow: 0 0 0 0 ${T.accent.primary}00, 0 0 12px ${T.accent.primary}20; } 50% { box-shadow: 0 0 0 3px ${T.accent.primary}18, 0 0 18px ${T.accent.primary}30; } }
+@keyframes fadeOut { to { opacity: 0; } }
+@keyframes slideDown { to { transform: translateY(100%); } }
         `}</style>
-        <div onClick={e => e.stopPropagation()} className="scroll-area" style={{
-            width: "100%", maxWidth: 440, maxHeight: "92vh", overflowY: "auto", pointerEvents: "auto",
-            background: T.bg.base, borderRadius: "24px 24px 0 0",
-            padding: "24px 20px calc(env(safe-area-inset-bottom, 24px) + 28px)",
-            animation: "slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
-        }}>
+        <div ref={sheetRef} onClick={e => e.stopPropagation()} className="scroll-area"
+            onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
+            style={{
+                width: "100%", maxWidth: 440, maxHeight: "92vh", overflowY: "auto", pointerEvents: "auto",
+                background: T.bg.base, borderRadius: "24px 24px 0 0",
+                padding: "24px 20px calc(env(safe-area-inset-bottom, 24px) + 28px)",
+                transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
+                transition: dragY > 0 ? "none" : "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+                animation: closing ? "slideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards" : "slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+                opacity: dragY > 0 ? Math.max(0.5, 1 - dragY / 400) : 1
+            }}>
             {/* Handle */}
             <div style={{ width: 36, height: 4, borderRadius: 2, background: T.text.muted, margin: "0 auto 20px", opacity: 0.4 }} />
 
@@ -225,7 +268,7 @@ export default function ProPaywall({ onClose }) {
                 </p>
             </div>
         </div>
-    </div>, document.body);
+    </div >, document.body);
 }
 
 /**

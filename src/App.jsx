@@ -118,6 +118,9 @@ function CatalystCash() {
   const handleSwipeTouchEnd = (e) => {
     if (!swipeStart.current) return;
     if (loading) { swipeStart.current = null; return; }
+    // Don't swipe tabs when a modal/popup is open (e.g. ProPaywall portal)
+    const hasModal = document.querySelector('[style*="z-index: 99999"], [style*="z-index:99999"]');
+    if (hasModal) { swipeStart.current = null; return; }
     const endX = e.changedTouches[0].clientX;
     const endY = e.changedTouches[0].clientY;
     const dx = endX - swipeStart.current.x;
