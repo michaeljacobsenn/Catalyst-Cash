@@ -58,3 +58,4 @@ scripts/assets_gen/
 ios/.gitignore 2
 ios/App/App/config [2-9].xml
 refactor_card_portfolio.py
+.agent/

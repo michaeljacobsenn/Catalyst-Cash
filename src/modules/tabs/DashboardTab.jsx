@@ -1,9 +1,10 @@
 import { useRef, useState, useEffect, memo } from "react";
 import Confetti from "react-confetti";
-import { Zap, ArrowUpRight, ArrowDownRight, Activity, TrendingUp, Download, Target, ExternalLink, RefreshCw, Plus, MessageCircle } from "lucide-react";
+import { Zap, ArrowUpRight, ArrowDownRight, Activity, TrendingUp, Download, Target, ExternalLink, RefreshCw, Plus, MessageCircle, CloudUpload, Shield } from "lucide-react";
 import { T } from "../constants.js";
 
 import { fmt, fmtDate, exportAudit, shareAudit, stripPaycheckParens, db } from "../utils.js";
+import { uploadToICloud } from "../cloudSync.js";
 import { Card, Label, Badge, ProgressBar, InlineTooltip } from "../ui.jsx";
 import { Mono, StatusDot, PaceBar, Md, CountUp, Section } from "../components.jsx";
 import { unlockBadge } from "../badges.js";
@@ -37,7 +38,7 @@ import EmptyDashboard from '../dashboard/EmptyDashboard.jsx';
 
 export default memo(function DashboardTab({ onRestore, proEnabled = false, onDemoAudit, onRefreshDashboard, onDiscussWithCFO }) {
     const { current, history } = useAudit();
-    const { financialConfig, setFinancialConfig } = useSettings();
+    const { financialConfig, setFinancialConfig, autoBackupInterval } = useSettings();
     const { cards, renewals, badges } = usePortfolio();
     const { navTo, setSetupReturnTab } = useNavigation();
     const [showPaywall, setShowPaywall] = useState(false);
@@ -104,6 +105,45 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
             })();
         }
     }, [streak]);
+
+    // ── Backup nudge logic ──
+    const [showBackupNudge, setShowBackupNudge] = useState(false);
+    const [backingUp, setBackingUp] = useState(false);
+    useEffect(() => {
+        if (autoBackupInterval && autoBackupInterval !== "off") return; // auto-backup is on, no nudge needed
+        (async () => {
+            const dismissed = await db.get("backup-nudge-dismissed");
+            if (dismissed && Date.now() - dismissed < 7 * 86400000) return; // dismissed within 7 days
+            const lastTs = await db.get("last-backup-ts");
+            if (!lastTs || Date.now() - lastTs > 7 * 86400000) {
+                setShowBackupNudge(true);
+            }
+        })();
+    }, [autoBackupInterval]);
+
+    const handleBackupNow = async () => {
+        setBackingUp(true);
+        try {
+            const backup = { app: "Catalyst Cash", version: "2.0", exportedAt: new Date().toISOString(), data: {} };
+            const keys = await db.keys();
+            for (const key of keys) {
+                const val = await db.get(key);
+                if (val !== null) backup.data[key] = val;
+            }
+            await uploadToICloud(backup, null);
+            await db.set("last-backup-ts", Date.now());
+            setShowBackupNudge(false);
+            if (window.toast) window.toast.success("✅ Backed up to iCloud");
+        } catch (e) {
+            if (window.toast) window.toast.error("Backup failed: " + (e.message || "Unknown error"));
+        }
+        setBackingUp(false);
+    };
+
+    const dismissBackupNudge = async () => {
+        await db.set("backup-nudge-dismissed", Date.now());
+        setShowBackupNudge(false);
+    };
 
     // ── Welcome-back greeting ──
     const greeting = (() => {
@@ -190,6 +230,33 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
         }}>
             <span style={{ fontSize: 12, color: T.text.secondary, fontWeight: 600 }}>{greeting}</span>
         </div>
+
+        {/* ═══ BACKUP NUDGE ═══ */}
+        {showBackupNudge && <Card style={{
+            borderLeft: `3px solid ${T.status.amber}`, background: `${T.status.amberDim}`,
+            padding: "10px 14px", marginBottom: 10, animation: "fadeInUp .4s ease-out"
+        }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <Shield size={14} color={T.status.amber} />
+                <span style={{ fontSize: 11, fontWeight: 800, color: T.status.amber, fontFamily: T.font.mono, letterSpacing: "0.04em" }}>BACKUP REMINDER</span>
+                <button onClick={dismissBackupNudge} style={{ marginLeft: "auto", background: "none", border: "none", color: T.text.dim, cursor: "pointer", fontSize: 16, padding: 4, lineHeight: 1 }}>×</button>
+            </div>
+            <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.4, margin: "0 0 8px" }}>Your data hasn't been backed up recently. Protect your financial data.</p>
+            <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={handleBackupNow} disabled={backingUp} className="hover-btn" style={{
+                    flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                    padding: "8px 12px", borderRadius: T.radius.md, border: "none",
+                    background: `linear-gradient(135deg, ${T.status.amber}, #D97706)`,
+                    color: "#fff", fontSize: 11, fontWeight: 800, cursor: "pointer", opacity: backingUp ? 0.6 : 1
+                }}><CloudUpload size={13} />{backingUp ? "Backing up..." : "Back Up Now"}</button>
+                <button onClick={() => { dismissBackupNudge(); navTo("settings"); }} className="hover-btn" style={{
+                    flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                    padding: "8px 12px", borderRadius: T.radius.md,
+                    border: `1px solid ${T.status.amber}40`, background: `${T.status.amber}10`,
+                    color: T.status.amber, fontSize: 11, fontWeight: 700, cursor: "pointer"
+                }}>Enable Auto-Backup</button>
+            </div>
+        </Card>}
 
         {/* Segmented View Toggle & Global Actions */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -325,7 +392,7 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                 </Card>}
 
                 {/* Pro Upgrade Banner */}
-                {shouldShowGating() && <ProBanner onUpgrade={() => setShowPaywall(true)} label="Upgrade to Pro" sublabel="150 audits/mo · Premium AI · Full history" />}
+                {shouldShowGating() && <ProBanner onUpgrade={() => setShowPaywall(true)} label="Upgrade to Pro" sublabel="60 audits/mo · Premium AI · Full history" />}
                 {showPaywall && <ProPaywall onClose={() => setShowPaywall(false)} />}
 
                 {/* ═══ COMMAND HEADER — Consolidated Hero ═══ */}

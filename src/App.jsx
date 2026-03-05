@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from "react";
 import { App as CapApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
+import { SplashScreen } from "@capacitor/splash-screen";
 import {
   History, Plus, RefreshCw, X, Eye, EyeOff,
   AlertTriangle, Loader2, CreditCard, Settings, Info, Home, Zap, Trash2, ClipboardPaste, LayoutDashboard, ReceiptText, Clock, MessageCircle
@@ -333,6 +334,20 @@ function CatalystCash() {
       ],
       investments: { balance: "$45,000.00", asOf: todayStr, gateStatus: "Open — accelerating contributions" },
       nextAction: "Execute the $500 Chase Sapphire payment to crush high-interest debt, then funnel your excess $1,000 into Vanguard to maximize your wealth snowball. After that, move $400 to Ally to close the gap on your $25K savings milestone — you're only $600 away.",
+      spendingAnalysis: {
+        totalSpent: "$847.23",
+        dailyAverage: "$121.03",
+        vsAllowance: "UNDER by $152.77",
+        topCategories: [
+          { category: "Groceries", amount: "$312.50", pctOfTotal: "37%" },
+          { category: "Dining", amount: "$187.40", pctOfTotal: "22%" },
+          { category: "Gas", amount: "$98.33", pctOfTotal: "12%" },
+          { category: "Shopping", amount: "$156.00", pctOfTotal: "18%" },
+          { category: "Entertainment", amount: "$93.00", pctOfTotal: "11%" }
+        ],
+        alerts: ["✅ Under weekly allowance — surplus available for debt acceleration"],
+        debtImpact: "At current spending, debt-free by Oct 2026. Cutting $50/week accelerates by 3 weeks."
+      },
       paceData: [
         { name: "Family Vacation", saved: 2100, target: 3500 },
         { name: "Emergency Fund", saved: 14400, target: 15000 },
@@ -636,35 +651,89 @@ function CatalystCash() {
   // Native iOS swipe-back is handled via WKWebView allowsBackForwardNavigationGestures
   // (set in capacitor.config.ts). The popstate listener (above) handles the navigation.
 
+  // ── Dismiss native splash once React loading screen is painted ──
+  useEffect(() => {
+    if (!ready) {
+      // Give React one frame to paint, then crossfade native splash away
+      requestAnimationFrame(() => {
+        SplashScreen.hide({ fadeOutDuration: 500 }).catch(() => { });
+      });
+    }
+  }, [ready]);
+
+  // ── Haptic on load-complete (premium feel) ──
+  const loadReadyRef = useRef(false);
+  useEffect(() => {
+    if (ready && !loadReadyRef.current) {
+      loadReadyRef.current = true;
+      haptic.light();
+    }
+  }, [ready]);
+
   if (!ready) return <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100dvh", background: T.bg.base, position: "relative", overflow: "hidden" }}>
     <GlobalStyles />
-    {/* Ambient gradient blobs */}
-    <div style={{ position: "absolute", top: "15%", left: "10%", width: 200, height: 200, background: T.accent.primary, filter: "blur(100px)", opacity: 0.06, borderRadius: "50%", pointerEvents: "none" }} />
-    <div style={{ position: "absolute", bottom: "20%", right: "10%", width: 160, height: 160, background: T.accent.emerald, filter: "blur(90px)", opacity: 0.05, borderRadius: "50%", pointerEvents: "none" }} />
+    <style>{`
+@keyframes loadFloat1 { 0%, 100% { transform: translate(0, 0) scale(1); } 33% { transform: translate(30px, -20px) scale(1.1); } 66% { transform: translate(-20px, 10px) scale(0.95); } }
+@keyframes loadFloat2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-35px, -25px) scale(1.15); } }
+@keyframes loadFloat3 { 0%, 100% { transform: translate(0, 0) scale(0.9); } 40% { transform: translate(25px, 15px) scale(1.05); } 80% { transform: translate(-15px, -10px) scale(1); } }
+@keyframes ringSweep { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@keyframes iconBloom { 0% { transform: scale(0.7); opacity: 0; filter: blur(8px); } 100% { transform: scale(1); opacity: 1; filter: blur(0); } }
+@keyframes iconPulse { 0%, 100% { box-shadow: 0 12px 48px rgba(0,0,0,0.4), 0 0 30px ${T.accent.primary}15; } 50% { box-shadow: 0 16px 56px rgba(0,0,0,0.5), 0 0 60px ${T.accent.primary}30, 0 0 100px ${T.accent.emerald}10; } }
+@keyframes glowPulse { 0%, 100% { opacity: 0.15; transform: scale(1); } 50% { opacity: 0.35; transform: scale(1.08); } }
+@keyframes particleDrift1 { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 0.6; } 90% { opacity: 0.6; } 100% { transform: translate(40px, -80px); opacity: 0; } }
+@keyframes particleDrift2 { 0% { transform: translate(0, 0); opacity: 0; } 15% { opacity: 0.5; } 85% { opacity: 0.5; } 100% { transform: translate(-50px, -70px); opacity: 0; } }
+@keyframes particleDrift3 { 0% { transform: translate(0, 0); opacity: 0; } 20% { opacity: 0.4; } 80% { opacity: 0.4; } 100% { transform: translate(30px, -90px); opacity: 0; } }
+@keyframes particleDrift4 { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 0.5; } 90% { opacity: 0.3; } 100% { transform: translate(-35px, -60px); opacity: 0; } }
+@keyframes loadBarFill { 0% { width: 0%; } 20% { width: 25%; } 50% { width: 55%; } 80% { width: 80%; } 100% { width: 95%; } }
+@keyframes textReveal { 0% { opacity: 0; transform: translateY(16px); filter: blur(6px); } 100% { opacity: 1; transform: translateY(0); filter: blur(0); } }
+@keyframes subtitlePulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+    `}</style>
 
-    {/* Icon + Orbits */}
-    <div style={{ position: "relative", width: 110, height: 110, marginBottom: 32 }}>
-      {/* Outer orbit */}
-      <div style={{ position: "absolute", inset: -18, borderRadius: "50%", border: `1px dashed ${T.border.focus}`, opacity: 0.2, animation: "spin 20s linear infinite" }}>
-        <div style={{ position: "absolute", top: -3, left: "50%", width: 6, height: 6, borderRadius: "50%", background: T.accent.primary, opacity: 0.5 }} />
+    {/* Ambient gradient blobs — slow floating motion */}
+    <div style={{ position: "absolute", top: "12%", left: "5%", width: 240, height: 240, background: `radial-gradient(circle, ${T.accent.primary}20, transparent 70%)`, filter: "blur(60px)", borderRadius: "50%", pointerEvents: "none", animation: "loadFloat1 8s ease-in-out infinite" }} />
+    <div style={{ position: "absolute", bottom: "15%", right: "5%", width: 200, height: 200, background: `radial-gradient(circle, ${T.accent.emerald}18, transparent 70%)`, filter: "blur(50px)", borderRadius: "50%", pointerEvents: "none", animation: "loadFloat2 10s ease-in-out infinite" }} />
+    <div style={{ position: "absolute", top: "50%", left: "55%", width: 180, height: 180, background: `radial-gradient(circle, #6C60FF12, transparent 70%)`, filter: "blur(55px)", borderRadius: "50%", pointerEvents: "none", animation: "loadFloat3 12s ease-in-out infinite" }} />
+
+    {/* Icon + Glow Ring */}
+    <div style={{ position: "relative", width: 120, height: 120, marginBottom: 36, animation: "iconBloom .8s cubic-bezier(0.16,1,0.3,1) both" }}>
+      {/* Pulsing glow behind icon */}
+      <div style={{ position: "absolute", inset: -20, borderRadius: "50%", background: `radial-gradient(circle, ${T.accent.primary}30, ${T.accent.emerald}10, transparent 70%)`, animation: "glowPulse 3s ease-in-out .6s infinite", pointerEvents: "none" }} />
+
+      {/* Sweeping ring — conic gradient arc */}
+      <div style={{ position: "absolute", inset: -8, borderRadius: "50%", animation: "ringSweep 2.5s linear .4s infinite", opacity: 0, animationFillMode: "forwards" }}>
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: `conic-gradient(from 0deg, transparent 0%, ${T.accent.primary}60 15%, ${T.accent.emerald}50 30%, transparent 45%)`, mask: "radial-gradient(farthest-side, transparent calc(100% - 2.5px), #fff calc(100% - 2px))", WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 2.5px), #fff calc(100% - 2px))" }} />
       </div>
-      {/* Inner orbit */}
-      <div style={{ position: "absolute", inset: -6, borderRadius: "50%", border: `1px dashed ${T.accent.emeraldSoft}`, opacity: 0.2, animation: "spin 12s linear infinite reverse" }}>
-        <div style={{ position: "absolute", bottom: -2, right: "15%", width: 4, height: 4, borderRadius: "50%", background: T.accent.emerald, opacity: 0.4 }} />
-      </div>
-      {/* Conic gradient spinner */}
-      <div style={{ position: "absolute", inset: -4, borderRadius: 30, background: `conic-gradient(from 0deg, transparent, ${T.accent.primary}40, transparent)`, animation: "spin 2s linear infinite" }} />
-      {/* App icon */}
-      <img src="/icon-512.png" alt="" style={{ position: "relative", width: "100%", height: "100%", borderRadius: 24, zIndex: 2, background: T.bg.base, boxShadow: `0 12px 48px rgba(0,0,0,0.4), 0 0 40px ${T.accent.primaryDim}` }} />
+
+      {/* Static subtle ring track */}
+      <div style={{ position: "absolute", inset: -8, borderRadius: "50%", border: `1px solid ${T.border.subtle}`, pointerEvents: "none", animation: "textReveal .5s ease-out .3s both" }} />
+
+      {/* Floating particles */}
+      <div style={{ position: "absolute", left: "15%", bottom: "10%", width: 4, height: 4, borderRadius: "50%", background: T.accent.primary, animation: "particleDrift1 3s ease-out .8s infinite" }} />
+      <div style={{ position: "absolute", right: "10%", bottom: "20%", width: 3, height: 3, borderRadius: "50%", background: T.accent.emerald, animation: "particleDrift2 3.5s ease-out 1.2s infinite" }} />
+      <div style={{ position: "absolute", left: "45%", bottom: "5%", width: 3, height: 3, borderRadius: "50%", background: "#6C60FF", animation: "particleDrift3 4s ease-out 1.5s infinite" }} />
+      <div style={{ position: "absolute", right: "30%", bottom: "15%", width: 2, height: 2, borderRadius: "50%", background: T.accent.primary, animation: "particleDrift4 3.2s ease-out 2s infinite" }} />
+
+      {/* App icon — blooms in, then pulses */}
+      <img src="/icon-512.png" alt="" style={{ position: "relative", width: "100%", height: "100%", borderRadius: 28, zIndex: 2, background: T.bg.base, animation: "iconPulse 3s ease-in-out .8s infinite" }} />
     </div>
 
-    <h1 style={{ fontSize: 28, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.04em", marginBottom: 8, animation: "fadeInUp .5s ease-out .1s both" }}>Catalyst Cash</h1>
-    <p style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, letterSpacing: "3px", fontWeight: 700, textTransform: "uppercase", marginBottom: 32, animation: "fadeInUp .5s ease-out .2s both" }}>INITIALIZING</p>
+    {/* App name — staggered reveal with gradient */}
+    <h1 style={{ fontSize: 30, fontWeight: 900, letterSpacing: "-0.04em", marginBottom: 6, animation: "textReveal .6s ease-out .4s both" }}>
+      <span style={{ background: `linear-gradient(135deg, ${T.text.primary}, ${T.accent.primary}90)`, WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>Catalyst Cash</span>
+    </h1>
 
-    {/* Shimmer progress bar */}
-    <div style={{ width: 140, height: 3, borderRadius: 2, background: T.border.default, overflow: "hidden", animation: "fadeInUp .5s ease-out .3s both" }}>
-      <div style={{ width: "40%", height: "100%", borderRadius: 2, background: T.accent.gradient, animation: "shimmer 2s ease-in-out infinite" }} />
+    {/* Tagline — warm, human */}
+    <p style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, letterSpacing: "2px", fontWeight: 600, textTransform: "uppercase", marginBottom: 36, animation: "textReveal .6s ease-out .6s both" }}>
+      <span style={{ animation: "subtitlePulse 2.5s ease-in-out infinite" }}>Preparing your dashboard</span>
+    </p>
+
+    {/* Progress bar — smooth fill */}
+    <div style={{ width: 160, height: 3, borderRadius: 3, background: T.border.default, overflow: "hidden", animation: "textReveal .6s ease-out .8s both", position: "relative" }}>
+      <div style={{ height: "100%", borderRadius: 3, background: T.accent.gradient, animation: "loadBarFill 3s ease-out forwards", boxShadow: `0 0 8px ${T.accent.primary}40` }} />
     </div>
+
+    {/* Version */}
+    <p style={{ fontSize: 9, color: T.text.muted, fontFamily: T.font.mono, marginTop: 20, animation: "textReveal .6s ease-out 1s both", opacity: 0.4 }}>v{APP_VERSION}</p>
   </div>;
 
   if (!onboardingComplete) return (
@@ -812,7 +881,7 @@ function CatalystCash() {
         const renderTab = tab === "settings" ? lastCenterTab.current : tab;
         return (
           <div key={`${renderTab}-${privacyMode}`} className={swipeAnimClass}>
-            {renderTab === "dashboard" && <ErrorBoundary><DashboardTab
+            {renderTab === "dashboard" && <ErrorBoundary name="Dashboard"><DashboardTab
               onRestore={handleRestoreFromHome} proEnabled={proEnabled}
               onRefreshDashboard={handleRefreshDashboard}
               onDemoAudit={handleDemoAudit}
@@ -826,10 +895,10 @@ function CatalystCash() {
                       background: T.bg.card, border: `1px solid ${T.border.default}`, borderRadius: T.radius.md,
                       padding: "8px 14px", color: T.text.secondary, fontSize: 11, fontWeight: 600, cursor: "pointer"
                     }}>← Back</button></div>}
-                  <ErrorBoundary><ResultsView audit={display} moveChecks={displayMoveChecks} onToggleMove={toggleMove} streak={trendContext?.length || 0} /></ErrorBoundary></>)}
-            {renderTab === "history" && <ErrorBoundary><Suspense fallback={<TabFallback />}><HistoryTab toast={toast} /></Suspense></ErrorBoundary>}
-            {renderTab === "renewals" && <ErrorBoundary><Suspense fallback={<TabFallback />}><RenewalsTab /></Suspense></ErrorBoundary>}
-            {renderTab === "cards" && <ErrorBoundary><Suspense fallback={<TabFallback />}><CardPortfolioTab /></Suspense></ErrorBoundary>}
+                  <ErrorBoundary name="Results"><ResultsView audit={display} moveChecks={displayMoveChecks} onToggleMove={toggleMove} streak={trendContext?.length || 0} /></ErrorBoundary></>)}
+            {renderTab === "history" && <ErrorBoundary name="History"><Suspense fallback={<TabFallback />}><HistoryTab toast={toast} /></Suspense></ErrorBoundary>}
+            {renderTab === "renewals" && <ErrorBoundary name="Expenses"><Suspense fallback={<TabFallback />}><RenewalsTab /></Suspense></ErrorBoundary>}
+            {renderTab === "cards" && <ErrorBoundary name="Accounts"><Suspense fallback={<TabFallback />}><CardPortfolioTab /></Suspense></ErrorBoundary>}
           </div>
         );
       })()}
@@ -851,12 +920,12 @@ function CatalystCash() {
           WebkitOverflowScrolling: "touch",
           paddingBottom: 24, // Clear the 14px Action button protrusion 
         }}>
-        <InputForm onSubmit={handleSubmit} isLoading={loading} lastAudit={current}
+        <ErrorBoundary name="InputForm"><InputForm onSubmit={handleSubmit} isLoading={loading} lastAudit={current}
           renewals={renewals} cardAnnualFees={cardAnnualFees} cards={cards} bankAccounts={bankAccounts}
           onManualImport={handleManualImport} toast={toast} financialConfig={financialConfig} setFinancialConfig={setFinancialConfig} aiProvider={aiProvider} personalRules={personalRules} setPersonalRules={setPersonalRules}
           persona={persona}
           instructionHash={instructionHash} setInstructionHash={setInstructionHash} db={db} proEnabled={proEnabled}
-          onBack={() => navTo("dashboard")} />
+          onBack={() => navTo("dashboard")} /></ErrorBoundary>
       </div>
     }
     {
@@ -868,11 +937,11 @@ function CatalystCash() {
           zIndex: 15, background: T.bg.base,
           width: "100%", boxSizing: "border-box"
         }}>
-        <Suspense fallback={<TabFallback />}><AIChatTab proEnabled={proEnabled} initialPrompt={chatInitialPrompt} clearInitialPrompt={() => setChatInitialPrompt(null)} /></Suspense>
+        <ErrorBoundary name="AI Chat"><Suspense fallback={<TabFallback />}><AIChatTab proEnabled={proEnabled} initialPrompt={chatInitialPrompt} clearInitialPrompt={() => setChatInitialPrompt(null)} /></Suspense></ErrorBoundary>
       </div>
     }
     {
-      tab === "settings" && <Suspense fallback={<TabFallback />}><SettingsTab
+      tab === "settings" && <ErrorBoundary name="Settings"><Suspense fallback={<TabFallback />}><SettingsTab
         apiKey={apiKey} setApiKey={setApiKey}
         aiProvider={aiProvider} setAiProvider={setAiProvider}
         aiModel={aiModel} setAiModel={setAiModel}
@@ -899,7 +968,7 @@ function CatalystCash() {
             navTo(lastCenterTab.current);
           }
           haptic.light();
-        }} onRestoreComplete={() => window.location.reload()} /></Suspense>
+        }} onRestoreComplete={() => window.location.reload()} /></Suspense></ErrorBoundary>
     }
 
     {/* ═══════ BOTTOM NAV ═══════ */}
@@ -953,7 +1022,7 @@ function CatalystCash() {
         background: loading ? "none" : `linear-gradient(90deg,transparent,${T.accent.primary}25,${T.accent.emerald}20,transparent)`
       }} />
 
-      <div style={{
+      <div role="tablist" aria-label="Main navigation tabs" style={{
         position: "relative",
         display: "flex", justifyContent: "space-evenly", alignItems: "flex-end",
         paddingTop: 6, paddingBottom: "calc(env(safe-area-inset-bottom, 10px) + 4px)"
@@ -982,6 +1051,9 @@ function CatalystCash() {
           };
 
           return <button key={n.id}
+            role="tab"
+            aria-selected={active}
+            aria-current={active ? "page" : undefined}
             onMouseDown={isCenter ? handlePressStart : undefined}
             onMouseUp={isCenter ? handlePressEnd : undefined}
             onMouseLeave={isCenter ? () => { if (longPressTimer.current) clearTimeout(longPressTimer.current); } : undefined}

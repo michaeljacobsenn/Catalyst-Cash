@@ -14,8 +14,8 @@ import { presentPaywall, restorePurchases } from "../revenuecat.js";
 
 // ── Feature comparison: generous Free vs premium Pro ──────────
 const FEATURES = [
-    { label: "AI Audits", free: "2 / week", pro: "150 / month", icon: "📊" },
-    { label: "AskAI Chat", free: "10 / day", pro: "100 / day", icon: "💬" },
+    { label: "AI Audits", free: "2 / week", pro: "60 / month", icon: "📊" },
+    { label: "AskAI Chat", free: "10 / day", pro: "50 / day", icon: "💬" },
     { label: "AI Quality", free: "Standard", pro: "Premium", icon: "🧠" },
     { label: "Audit History", free: "Last 12", pro: "Unlimited", icon: "📜" },
     { label: "Dashboard & Charts", free: "✓ Full", pro: "✓ Full", icon: "📈" },
@@ -25,6 +25,7 @@ const FEATURES = [
     { label: "CSV / PDF Export", free: "—", pro: "✓", icon: "📤" },
     { label: "Advanced Insights", free: "—", pro: "✓", icon: "🔔" },
     { label: "Market Refresh", free: "60 min", pro: "15 min", icon: "⚡" },
+    { label: "Bank Sync & Txns", free: "—", pro: "✓ Plaid", icon: "🏦" },
 ];
 
 // ── Coming soon features (creates anticipation) ──────────────
@@ -96,7 +97,7 @@ export default function ProPaywall({ onClose }) {
                 <div style={{ fontSize: 36, marginBottom: 8 }}>⚡</div>
                 <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 6px", color: T.text.primary }}>Upgrade to Pro</h2>
                 <p style={{ fontSize: 13, color: T.text.dim, margin: "0 0 10px", lineHeight: 1.4 }}>
-                    150 audits/month, premium AI models, and advanced financial tools.
+                    60 audits/month, premium AI models, and advanced financial tools.
                 </p>
                 {/* Social proof / positioning */}
                 <div style={{

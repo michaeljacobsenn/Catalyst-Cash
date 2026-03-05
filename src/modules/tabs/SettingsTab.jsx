@@ -7,15 +7,17 @@ import { getErrorLog, clearErrorLog } from "../errorReporter.js";
 import { Card, Label, InlineTooltip } from "../ui.jsx";
 import { Mono } from "../components.jsx";
 import { db, FaceId, nativeExport, fmt } from "../utils.js";
+import { exportBackup, importBackup, mergeUniqueById } from "../backup.js";
+import { generateBackupSpreadsheet } from "../spreadsheet.js";
+import { isSecuritySensitiveKey } from "../securityKeys.js";
 
-import { encrypt, decrypt, isEncrypted } from "../crypto.js";
+
 import { haptic } from "../haptics.js";
 import { SignInWithApple } from "@capacitor-community/apple-sign-in";
 import { Capacitor } from "@capacitor/core";
 import { uploadToICloud } from "../cloudSync.js";
-import { isSecuritySensitiveKey } from "../securityKeys.js";
-// xlsx is loaded dynamically in importBackup() to reduce initial bundle size
-import { generateBackupSpreadsheet } from "../spreadsheet.js";
+
+
 import { getConnections } from "../plaid.js";
 const LazyPlaidSection = lazy(() => import("../settings/PlaidSection.jsx"));
 import { shouldShowGating, checkAuditQuota, getRawTier } from "../subscription.js";
@@ -24,172 +26,6 @@ import { presentCustomerCenter } from "../revenuecat.js";
 
 const ENABLE_PLAID = true; // Toggle to false to hide, true to show Plaid integration
 
-function mergeUniqueById(existing = [], incoming = []) {
-    if (!incoming.length) return existing;
-    const map = new Map(existing.map(item => [item.id, item]));
-    for (const item of incoming) {
-        if (!map.has(item.id)) map.set(item.id, item);
-    }
-    return Array.from(map.values());
-}
-
-// Legacy key migration: if old "api-key" exists, treat as openai key
-async function migrateApiKey() {
-    const legacy = await db.get("api-key");
-    if (legacy) {
-        const existing = await db.get("api-key-openai");
-        if (!existing) await db.set("api-key-openai", legacy);
-    }
-}
-
-async function exportBackup(passphrase) {
-    await migrateApiKey();
-    const backup = { app: "Catalyst Cash", version: APP_VERSION, exportedAt: new Date().toISOString(), data: {} };
-
-    const keys = await db.keys();
-    for (const key of keys) {
-        if (isSecuritySensitiveKey(key)) continue;
-        const val = await db.get(key);
-        if (val !== null) backup.data[key] = val;
-    }
-    if (!("personal-rules" in backup.data)) {
-        const pr = await db.get("personal-rules");
-        backup.data["personal-rules"] = pr ?? "";
-    }
-
-    if (!passphrase) throw new Error("Backup cancelled — passphrase required");
-    const envelope = await encrypt(JSON.stringify(backup), passphrase);
-    const dateStr = new Date().toISOString().split("T")[0];
-    await nativeExport(`CatalystCash_Backup_${dateStr}.enc`, JSON.stringify(envelope), "application/octet-stream");
-    return Object.keys(backup.data).length;
-}
-
-async function importBackup(file, getPassphrase) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                let parsed;
-                try { parsed = JSON.parse(e.target.result); } catch { reject(new Error("Invalid backup file")); return; }
-
-                let backup;
-                if (isEncrypted(parsed)) {
-                    const passphrase = getPassphrase ? await getPassphrase() : null;
-                    if (!passphrase) { reject(new Error("Import cancelled — passphrase required")); return; }
-                    try {
-                        const plaintext = await decrypt(parsed, passphrase);
-                        backup = JSON.parse(plaintext);
-                    } catch (decErr) {
-                        reject(new Error(decErr.message || "Decryption failed — wrong passphrase?")); return;
-                    }
-                } else {
-                    backup = parsed;
-                }
-
-                if (backup && backup.type === "spreadsheet-backup") {
-                    const XLSX = await import("xlsx");
-                    const binary_string = window.atob(backup.base64);
-                    const len = binary_string.length;
-                    const bytes = new Uint8Array(len);
-                    for (let i = 0; i < len; i++) {
-                        bytes[i] = binary_string.charCodeAt(i);
-                    }
-                    const wb = XLSX.read(bytes.buffer, { type: "array" });
-                    const config = {};
-
-                    // Helper to get sheet data
-                    const getSheetRows = (sheetName) => {
-                        const name = wb.SheetNames.find(n => n.includes(sheetName));
-                        if (!name) return null;
-                        return XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: "" });
-                    };
-
-                    // 1. Parse Setup Data (Key/Value list)
-                    const setupRows = getSheetRows("Setup Data") || getSheetRows(wb.SheetNames[0]);
-                    if (setupRows) {
-                        for (const row of setupRows) {
-                            const key = String(row[0] || "").trim();
-                            const rawVal = String(row[2] ?? "").trim();
-                            if (!key || !rawVal || key === "field_key" || key.includes("DO NOT EDIT")) continue;
-                            const num = parseFloat(rawVal);
-                            config[key] = isNaN(num) ? (rawVal === "true" ? true : rawVal === "false" ? false : rawVal) : num;
-                        }
-                    }
-
-                    // Helper to parse array sheets
-                    const parseArraySheet = (sheetName, mapFn) => {
-                        const rows = getSheetRows(sheetName);
-                        if (!rows || rows.length <= 1) return undefined;
-                        const items = [];
-                        // Skip header row (index 0)
-                        for (let i = 1; i < rows.length; i++) {
-                            const row = rows[i];
-                            if (!row.some(cell => String(cell).trim() !== "")) continue;
-                            const item = mapFn(row);
-                            if (item) items.push(item);
-                        }
-                        return items.length > 0 ? items : undefined;
-                    };
-
-                    // 2. Parse Arrays
-                    config.incomeSources = parseArraySheet("Income Sources", (r) => ({
-                        id: String(r[0] || Date.now() + Math.random()).trim(),
-                        name: String(r[1] || "Unnamed Source").trim(),
-                        amount: parseFloat(r[2]) || 0,
-                        frequency: String(r[3] || "monthly").trim(),
-                        type: String(r[4] || "active").trim(),
-                        nextDate: String(r[5] || "").trim()
-                    })) || config.incomeSources;
-
-                    config.budgetCategories = parseArraySheet("Budget Categories", (r) => ({
-                        id: String(r[0] || Date.now() + Math.random()).trim(),
-                        name: String(r[1] || "Unnamed Category").trim(),
-                        allocated: parseFloat(r[2]) || 0,
-                        group: String(r[3] || "Expenses").trim()
-                    })) || config.budgetCategories;
-
-                    config.savingsGoals = parseArraySheet("Savings Goals", (r) => ({
-                        id: String(r[0] || Date.now() + Math.random()).trim(),
-                        name: String(r[1] || "Unnamed Goal").trim(),
-                        target: parseFloat(r[2]) || 0,
-                        saved: parseFloat(r[3]) || 0
-                    })) || config.savingsGoals;
-
-                    config.nonCardDebts = parseArraySheet("Non-Card Debts", (r) => ({
-                        id: String(r[0] || Date.now() + Math.random()).trim(),
-                        name: String(r[1] || "Unnamed Debt").trim(),
-                        balance: parseFloat(r[2]) || 0,
-                        minPayment: parseFloat(r[3]) || 0,
-                        apr: parseFloat(r[4]) || 0
-                    })) || config.nonCardDebts;
-
-                    config.otherAssets = parseArraySheet("Other Assets", (r) => ({
-                        id: String(r[0] || Date.now() + Math.random()).trim(),
-                        name: String(r[1] || "Unnamed Asset").trim(),
-                        value: parseFloat(r[2]) || 0
-                    })) || config.otherAssets;
-
-                    const existing = (await db.get("financial-config")) || {};
-                    await db.set("financial-config", { ...existing, ...config, _fromSetupWizard: true });
-                    resolve({ count: Object.keys(config).length, exportedAt: new Date().toISOString() });
-                    return;
-                }
-
-                if (!backup.data || (backup.app !== "Catalyst Cash" && backup.app !== "FinAudit Pro")) {
-                    reject(new Error("Invalid Catalyst Cash backup file")); return;
-                }
-                let count = 0;
-                for (const [key, val] of Object.entries(backup.data)) {
-                    if (isSecuritySensitiveKey(key)) continue;
-                    await db.set(key, val); count++;
-                }
-                resolve({ count, exportedAt: backup.exportedAt });
-            } catch (err) { reject(err); }
-        };
-        reader.onerror = () => reject(new Error("Failed to read file"));
-        reader.readAsText(file);
-    });
-}
 
 import { useAudit } from '../contexts/AuditContext.jsx';
 import { useSettings } from '../contexts/SettingsContext.jsx';
@@ -778,7 +614,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
                                     <ChevronRight size={18} color={T.accent.primary} />
                                 </button>
                             ) : (
-                                <ProBanner onUpgrade={() => setShowPaywall(true)} label="Upgrade to Pro" sublabel="150 audits/mo, all models, 15m market data" />
+                                <ProBanner onUpgrade={() => setShowPaywall(true)} label="Upgrade to Pro" sublabel="60 audits/mo, all models, 15m market data" />
                             )}
                         </div>}
 
