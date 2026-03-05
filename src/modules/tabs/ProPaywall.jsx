@@ -191,83 +191,132 @@ export default function ProPaywall({ onClose }) {
                 </div>
             </Card>
 
-            {/* Coming Soon — builds anticipation for Pro value */}
-            <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, fontFamily: T.font.mono, letterSpacing: "0.08em", marginBottom: 8 }}>COMING SOON FOR PRO</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8 }}>
+            {/* ── Coming Soon — premium teaser cards ── */}
+            <div style={{ marginBottom: 20 }}>
+                <div style={{
+                    fontSize: 10, fontWeight: 800, color: T.text.dim,
+                    fontFamily: T.font.mono, letterSpacing: "0.1em", marginBottom: 10,
+                    display: "flex", alignItems: "center", gap: 8
+                }}>
+                    <span>COMING SOON FOR PRO</span>
+                    <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${T.border.subtle}, transparent)` }} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
                     {COMING_SOON.map((f, i) => <div key={i} style={{
-                        padding: "10px 12px", borderRadius: T.radius.md,
-                        background: T.bg.elevated, border: `1px dashed ${T.border.default}`,
-                        opacity: 0.75, minWidth: 0,
-                        animation: `fadeInUp .3s ease-out ${(FEATURES.length + i) * 0.04}s both`
+                        padding: "14px 10px", borderRadius: T.radius.lg,
+                        background: `linear-gradient(160deg, ${T.bg.elevated}, ${T.bg.card})`,
+                        border: `1px solid ${T.border.subtle}`,
+                        textAlign: "center", minWidth: 0,
+                        animation: `fadeInUp .35s ease-out ${(FEATURES.length + i) * 0.04}s both`
                     }}>
-                        <div style={{ fontSize: 16, marginBottom: 4 }}>{f.icon}</div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: T.text.primary, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis" }}>{f.label}</div>
-                        <div style={{ fontSize: 9, color: T.text.muted, lineHeight: 1.3 }}>{f.desc}</div>
+                        <div style={{
+                            width: 32, height: 32, borderRadius: 10, margin: "0 auto 8px",
+                            background: `${T.accent.primary}10`, border: `1px solid ${T.accent.primary}15`,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 16
+                        }}>{f.icon}</div>
+                        <div style={{
+                            fontSize: 10, fontWeight: 700, color: T.text.primary,
+                            marginBottom: 3, lineHeight: 1.3
+                        }}>{f.label}</div>
+                        <div style={{ fontSize: 9, color: T.text.dim, lineHeight: 1.35 }}>{f.desc}</div>
                     </div>)}
                 </div>
             </div>
 
-            {/* Plan Selector */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-                {["yearly", "monthly"].map(p => {
+            {/* ── Plan Selector ── */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+                {["monthly", "yearly"].map(p => {
                     const pricing = IAP_PRICING[p];
                     const active = plan === p;
+                    const isYearly = p === "yearly";
                     return <button key={p} onClick={() => { setPlan(p); haptic.light(); }} style={{
-                        padding: "14px 12px", borderRadius: T.radius.lg, cursor: "pointer",
+                        padding: "20px 14px 16px", borderRadius: T.radius.lg, cursor: "pointer",
                         border: `2px solid ${active ? T.accent.primary : T.border.default}`,
-                        background: active ? `${T.accent.primary}10` : T.bg.elevated,
+                        background: active
+                            ? `linear-gradient(160deg, ${T.accent.primary}12, ${T.accent.primary}06)`
+                            : T.bg.elevated,
                         textAlign: "center", position: "relative", overflow: "visible",
+                        display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
                         animation: active ? "planGlow 2.5s ease-in-out infinite" : "none",
-                        transition: "border-color 0.2s ease, background 0.2s ease"
+                        transition: "all 0.25s ease"
                     }}>
-                        {p === "yearly" && <div style={{
-                            position: "absolute", top: -8, right: 10, fontSize: 9, fontWeight: 800,
-                            background: T.accent.primary, color: T.bg.base, padding: "2px 8px",
-                            borderRadius: 99, fontFamily: T.font.mono, zIndex: 2
+                        {/* Savings badge for yearly */}
+                        {isYearly && <div style={{
+                            position: "absolute", top: -9, left: "50%", transform: "translateX(-50%)",
+                            fontSize: 9, fontWeight: 800, whiteSpace: "nowrap",
+                            background: `linear-gradient(135deg, ${T.accent.primary}, ${T.status.green})`,
+                            color: "#fff", padding: "3px 10px",
+                            borderRadius: 99, fontFamily: T.font.mono,
+                            boxShadow: `0 2px 8px ${T.accent.primary}40`, zIndex: 2
                         }}>{pricing.savings}</div>}
-                        <Mono size={16} weight={800} color={active ? T.accent.primary : T.text.primary}>{pricing.price}</Mono>
-                        <div style={{ fontSize: 11, color: T.text.dim, marginTop: 2 }}>/{pricing.period}</div>
-                        {pricing.perMonth && <div style={{ fontSize: 10, color: T.accent.primary, marginTop: 4, fontWeight: 700 }}>{pricing.perMonth}/mo</div>}
-                        {pricing.trial && <div style={{ fontSize: 9, color: T.status.green, marginTop: 3, fontWeight: 700 }}>{pricing.trial}</div>}
+                        {/* Active indicator dot */}
+                        {active && <div style={{
+                            position: "absolute", top: 10, right: 10,
+                            width: 16, height: 16, borderRadius: "50%",
+                            background: T.status.green,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            boxShadow: `0 0 8px ${T.status.green}50`
+                        }}>
+                            <span style={{ fontSize: 10, color: "#fff", fontWeight: 800, lineHeight: 1 }}>✓</span>
+                        </div>}
+                        <Mono size={20} weight={800} color={active ? T.accent.primary : T.text.primary}>{pricing.price}</Mono>
+                        <div style={{ fontSize: 11, color: T.text.dim, fontWeight: 500 }}>per {pricing.period}</div>
+                        {pricing.perMonth && <div style={{
+                            fontSize: 10, color: active ? T.accent.primary : T.text.secondary,
+                            marginTop: 4, fontWeight: 700, fontFamily: T.font.mono
+                        }}>({pricing.perMonth}/mo)</div>}
+                        {pricing.trial && <div style={{
+                            fontSize: 9, color: T.status.green, marginTop: 4, fontWeight: 700,
+                            padding: "2px 8px", borderRadius: 99,
+                            background: `${T.status.green}10`
+                        }}>{pricing.trial}</div>}
                     </button>;
                 })}
             </div>
-            {/* Value Note */}
+
+            {/* Value Note — yearly only */}
             {plan === "yearly" && (
                 <div style={{
                     display: "flex", alignItems: "center", gap: 8, padding: "10px 14px",
-                    background: `${T.accent.emerald}08`, border: `1px solid ${T.accent.emerald}20`,
+                    background: `${T.accent.emerald}08`, border: `1px solid ${T.accent.emerald}18`,
                     borderRadius: T.radius.md, marginBottom: 14,
+                    animation: "fadeInUp .3s ease-out"
                 }}>
                     <span style={{ fontSize: 14, flexShrink: 0 }}>💡</span>
-                    <span style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.4 }}>
+                    <span style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>
                         Annual plan saves {IAP_PRICING.yearly.savings} — that's {IAP_PRICING.yearly.perMonth}/mo for CFO-level financial intelligence.
                     </span>
                 </div>
             )}
 
-            {/* Purchase Button */}
+            {/* ── Purchase CTA ── */}
             <button onClick={handlePurchase} disabled={purchasing} className="hover-btn" style={{
-                width: "100%", padding: "16px", borderRadius: T.radius.lg, border: "none",
-                background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`,
-                color: "white", fontSize: 16, fontWeight: 800, letterSpacing: "0.02em", cursor: purchasing ? "wait" : "pointer",
-                opacity: purchasing ? 0.6 : 1, marginBottom: 10,
-                boxShadow: `0 4px 20px ${T.accent.primary}40`,
-                animation: purchasing ? "none" : "ctaPulse 3s ease-in-out infinite"
+                width: "100%", padding: "16px 20px", borderRadius: T.radius.lg, border: "none",
+                background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF, ${T.accent.primary})`,
+                backgroundSize: "200% 100%",
+                color: "#fff", fontSize: 15, fontWeight: 800, letterSpacing: "0.02em",
+                cursor: purchasing ? "wait" : "pointer",
+                opacity: purchasing ? 0.6 : 1, marginBottom: 12,
+                boxShadow: `0 4px 24px ${T.accent.primary}45, 0 2px 8px rgba(0,0,0,0.2)`,
+                animation: purchasing ? "none" : "ctaPulse 3s ease-in-out infinite",
+                transition: "opacity 0.2s, transform 0.15s",
+                fontFamily: T.font.mono
             }}>
                 {purchasing ? "Processing..." : plan === "yearly"
                     ? `Start Free Trial — then ${IAP_PRICING.yearly.price}/yr`
                     : `Subscribe — ${IAP_PRICING.monthly.price}/mo`}
             </button>
 
-            {/* Restore + Terms */}
-            <div style={{ textAlign: "center" }}>
+            {/* ── Restore + Legal ── */}
+            <div style={{ textAlign: "center", paddingBottom: 4 }}>
                 <button onClick={handleRestore} style={{
                     background: "none", border: "none", color: T.accent.primary,
-                    fontSize: 13, fontWeight: 600, cursor: "pointer", padding: "12px 8px 8px"
+                    fontSize: 13, fontWeight: 600, cursor: "pointer",
+                    padding: "10px 16px", borderRadius: T.radius.md,
+                    transition: "opacity 0.2s", minHeight: 44
                 }}>Restore Purchases</button>
-                <p style={{ fontSize: 10, color: T.text.muted, margin: "8px 0 0", lineHeight: 1.5 }}>
+                <p style={{ fontSize: 10, color: T.text.muted, margin: "6px 16px 0", lineHeight: 1.5, letterSpacing: "0.01em" }}>
                     Payment charged to your Apple ID. Subscription auto-renews unless cancelled 24h before the end of the current period.
                     {plan === "yearly" && " Your 7-day free trial begins immediately. You won't be charged until the trial ends."}
                 </p>

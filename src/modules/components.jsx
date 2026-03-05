@@ -242,14 +242,14 @@ export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel
     else baseProgress = 92 + Math.min((elapsed - 25) / 20, 1) * 3;
     const progress = isReceiving ? 100 : Math.min(baseProgress, 95);
 
-    // ── Status messages with phases ──
-    let currentMsg, phase;
-    if (isReceiving) { currentMsg = "Streaming audit results..."; phase = "streaming"; }
-    else if (elapsed > 12) { currentMsg = "Generating tactical recommendations..."; phase = "generating"; }
-    else if (elapsed > 6) { currentMsg = "Analyzing transactions & balances..."; phase = "analyzing"; }
-    else if (elapsed > 3) { currentMsg = "Connecting to AI engine..."; phase = "connecting"; }
-    else if (elapsed > 0) { currentMsg = "Bundling financial profile..."; phase = "bundling"; }
-    else { currentMsg = "Preparing audit..."; phase = "init"; }
+    // ── Status messages ──
+    let currentMsg;
+    if (isReceiving) currentMsg = "Streaming audit results...";
+    else if (elapsed > 12) currentMsg = "Generating tactical recommendations...";
+    else if (elapsed > 6) currentMsg = "Analyzing transactions & balances...";
+    else if (elapsed > 3) currentMsg = "Connecting to AI engine...";
+    else if (elapsed > 0) currentMsg = "Bundling financial profile...";
+    else currentMsg = "Preparing audit...";
 
     // ── Estimated time ──
     const eta = isReceiving ? "< 5s" : elapsed < 5 ? "~15-20s" : elapsed < 12 ? "~10-15s" : elapsed < 20 ? "~5-10s" : "Almost done...";
