@@ -2,6 +2,8 @@ import { getSystemPrompt } from "./prompts.js";
 import { getBackendProvider } from "./providers.js";
 import { log } from "./logger.js";
 import { fetchWithRetry } from "./fetchWithRetry.js";
+import { APP_VERSION } from "./constants.js";
+import { isPro } from "./subscription.js";
 
 // ═══════════════════════════════════════════════════════════════
 // AI API MODULE — Catalyst Cash
@@ -33,11 +35,14 @@ function extractSSEText(parsed) {
 }
 
 async function* streamBackend(snapshot, model, sysText, history, deviceId, backendProvider, signal, responseFormat) {
+  const tier = (await isPro()) ? "pro" : "free";
   const res = await fetch(`${BACKEND_URL}/audit`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Device-ID": deviceId || "unknown",
+      "X-App-Version": APP_VERSION,
+      "X-Subscription-Tier": tier,
     },
     body: JSON.stringify({
       snapshot,
@@ -89,11 +94,14 @@ async function* streamBackend(snapshot, model, sysText, history, deviceId, backe
 }
 
 async function callBackend(snapshot, model, sysText, history, deviceId, backendProvider, responseFormat) {
+  const tier = (await isPro()) ? "pro" : "free";
   const res = await fetchWithRetry(`${BACKEND_URL}/audit`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Device-ID": deviceId || "unknown",
+      "X-App-Version": APP_VERSION,
+      "X-Subscription-Tier": tier,
     },
     body: JSON.stringify({
       snapshot,
@@ -360,3 +368,44 @@ export async function callAudit(apiKey, snapshot, providerId = "backend", model,
     default: return callBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), responseFormat);
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// REMOTE GATING CONFIG — Anti-downgrade protection
+// Fetches server-side gating mode + minimum app version.
+// When we flip to "live", ALL app versions get the memo instantly.
+// Old versions below minVersion are force-blocked server-side.
+// ═══════════════════════════════════════════════════════════════
+let _cachedConfig = null;
+let _configFetchedAt = 0;
+const CONFIG_TTL = 15 * 60 * 1000; // 15 minutes
+
+/**
+ * Fetch remote gating config from backend.
+ * Returns { gatingMode, minVersion } or null if unreachable.
+ * Caches for 15 minutes to avoid hammering.
+ */
+export async function fetchGatingConfig() {
+  if (_cachedConfig && Date.now() - _configFetchedAt < CONFIG_TTL) {
+    return _cachedConfig;
+  }
+  try {
+    const res = await fetch(`${BACKEND_URL}/config`, {
+      method: "GET",
+      headers: {
+        "X-App-Version": APP_VERSION,
+      },
+    });
+    if (!res.ok) return _cachedConfig;
+    const data = await res.json();
+    _cachedConfig = {
+      gatingMode: data.gatingMode || "soft",
+      minVersion: data.minVersion || "1.0.0",
+    };
+    _configFetchedAt = Date.now();
+    log.info("config", "Remote gating config fetched", _cachedConfig);
+    return _cachedConfig;
+  } catch {
+    return _cachedConfig; // Return stale cache on network error
+  }
+}
+

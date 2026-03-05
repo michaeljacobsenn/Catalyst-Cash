@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, memo } from "react";
 import Confetti from "react-confetti";
-import { Zap, ArrowUpRight, ArrowDownRight, Activity, TrendingUp, Download, Target, ExternalLink, RefreshCw, Plus, MessageCircle, CloudUpload, Shield } from "lucide-react";
+import { Zap, ArrowUpRight, ArrowDownRight, Activity, TrendingUp, Download, Target, ExternalLink, RefreshCw, Plus, MessageCircle, CloudUpload, Shield, ReceiptText } from "lucide-react";
 import { T } from "../constants.js";
 
 import { fmt, fmtDate, exportAudit, shareAudit, stripPaycheckParens, db } from "../utils.js";
@@ -18,6 +18,9 @@ import { haptic } from "../haptics.js";
 import { shouldShowGating } from "../subscription.js";
 import ProPaywall, { ProBanner } from "./ProPaywall.jsx";
 import ErrorBoundary from "../ErrorBoundary.jsx";
+import "./DashboardTab.css";
+import { useCoachmark, COACHMARKS } from "../coachmarks.js";
+import Coachmark from "../Coachmark.jsx";
 
 import { useAudit } from '../contexts/AuditContext.jsx';
 import { useSettings } from '../contexts/SettingsContext.jsx';
@@ -36,7 +39,7 @@ import BadgeStrip from '../dashboard/BadgeStrip.jsx';
 import DebtFreedomCard from '../dashboard/DebtFreedomCard.jsx';
 import EmptyDashboard from '../dashboard/EmptyDashboard.jsx';
 
-export default memo(function DashboardTab({ onRestore, proEnabled = false, onDemoAudit, onRefreshDashboard, onDiscussWithCFO }) {
+export default memo(function DashboardTab({ onRestore, proEnabled = false, onDemoAudit, onRefreshDashboard, onViewTransactions, onDiscussWithCFO }) {
     const { current, history } = useAudit();
     const { financialConfig, setFinancialConfig, autoBackupInterval } = useSettings();
     const { cards, renewals, badges } = usePortfolio();
@@ -198,25 +201,6 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
     ].filter(({ v }) => v != null);
 
     return <div className="page-body" aria-live="polite" style={{ paddingBottom: 0 }}>
-        <style>{`
-@keyframes pulseRing { 0% { stroke-width: 6; opacity: 0.1; } 100% { stroke-width: 12; opacity: 0.3; } }
-@keyframes pulseBorder { 0% { box-shadow: 0 0 10px ${T.accent.primary}10; } 100% { box-shadow: 0 0 30px ${T.accent.primary}40; } }
-@keyframes alertPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
-@keyframes slideInRight { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
-@keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes ambientGlow { 0%, 100% { background-position: 0% 0%; } 50% { background-position: 100% 100%; } }
-            .hover-lift { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)!important; cursor: default; }
-            .hover-lift:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08)!important; }
-            .chart-tab { padding: 5px 12px; border-radius: 20px; border: none; font-size: 10px; font-weight: 700; cursor: pointer; font-family: ${T.font.mono}; letter-spacing: 0.05em; text-transform: uppercase; transition: all .2s; white-space: normal; line-height: 1.2; }
-            .chart-tab:focus-visible { outline: 3px solid ${T.accent.primary}; outline-offset: 2px; }
-            .chart-tab-active { background: ${T.accent.primary}; color: #fff; box-shadow: 0 2px 8px ${T.accent.primary}40; }
-            .chart-tab-inactive { background: ${T.bg.elevated}; color: ${T.text.dim}; }
-            .alert-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 24px; white-space: nowrap; flex-shrink: 0; animation: slideInRight .4s ease-out both; }
-            .alert-strip::-webkit-scrollbar { display: none; }
-            .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-            .a11y-hit-target { position: relative; }
-            .a11y-hit-target::after { content: ""; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
-`}</style>
 
         {runConfetti && <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, pointerEvents: "none" }}>
             <Confetti width={windowSize.width} height={windowSize.height} recycle={false} numberOfPieces={400} gravity={0.15} />
@@ -469,7 +453,7 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                 </Card>
 
                 {/* ═══ AUDIT ACTION HUB ═══ */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
                     <button onClick={() => { haptic.medium(); onRunAudit(); }} className="hover-btn" style={{
                         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8,
                         padding: "14px 6px", borderRadius: T.radius.md, border: `1px solid ${T.accent.primary}30`,
@@ -500,6 +484,18 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                             <Activity size={16} color={T.text.secondary} strokeWidth={2.5} />
                         </div>
                         <span style={{ fontSize: 10, fontWeight: 800, fontFamily: T.font.mono, letterSpacing: "0.02em" }}>HISTORY</span>
+                    </button>
+                    <button onClick={() => { haptic.light(); if (proEnabled) { onViewTransactions?.(); } else { setShowPaywall(true); } }} className="hover-btn" style={{
+                        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8,
+                        padding: "14px 6px", borderRadius: T.radius.md, border: `1px solid ${T.border.subtle}`,
+                        background: T.bg.elevated, color: T.text.primary, cursor: "pointer", transition: "all .2s",
+                        position: "relative"
+                    }}>
+                        {!proEnabled && <div style={{ position: "absolute", top: 6, right: 6, fontSize: 8, fontWeight: 800, background: T.accent.primary, color: "#fff", padding: "1px 5px", borderRadius: 6, fontFamily: T.font.mono }}>PRO</div>}
+                        <div style={{ width: 32, height: 32, borderRadius: 16, background: `${T.accent.emerald}12`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <ReceiptText size={16} color={T.accent.emerald} strokeWidth={2.5} />
+                        </div>
+                        <span style={{ fontSize: 10, fontWeight: 800, fontFamily: T.font.mono, letterSpacing: "0.02em" }}>LEDGER</span>
                     </button>
                 </div>
 

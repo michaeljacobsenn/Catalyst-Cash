@@ -32,6 +32,7 @@ const AIChatTab = lazy(() => import("./modules/tabs/AIChatTab.jsx"));
 const SettingsTab = lazy(() => import("./modules/tabs/SettingsTab.jsx"));
 const CardPortfolioTab = lazy(() => import("./modules/tabs/CardPortfolioTab.jsx"));
 const RenewalsTab = lazy(() => import("./modules/tabs/RenewalsTab.jsx"));
+const TransactionFeed = lazy(() => import("./modules/tabs/TransactionFeed.jsx"));
 import GuideModal from "./modules/tabs/GuideModal.jsx";
 import LockScreen from "./modules/LockScreen.jsx";
 import SetupWizard from "./modules/tabs/SetupWizard.jsx";
@@ -40,11 +41,12 @@ import { SettingsProvider, useSettings } from "./modules/contexts/SettingsContex
 import { PortfolioProvider, usePortfolio } from "./modules/contexts/PortfolioContext.jsx";
 import { NavigationProvider, useNavigation } from "./modules/contexts/NavigationContext.jsx";
 import { AuditProvider, useAudit } from "./modules/contexts/AuditContext.jsx";
-import { uploadToICloud } from "./modules/cloudSync.js";
-import { isPro, getGatingMode } from "./modules/subscription.js";
+import { uploadToICloud, downloadFromICloud } from "./modules/cloudSync.js";
+import { isPro, getGatingMode, syncRemoteGatingMode } from "./modules/subscription.js";
 import { initRevenueCat } from "./modules/revenuecat.js";
 import { isSecuritySensitiveKey } from "./modules/securityKeys.js";
 import { evaluateBadges, unlockBadge, BADGE_DEFINITIONS } from "./modules/badges.js";
+import "./modules/tabs/DashboardTab.css"; // Global animations, skeleton loaders, utility classes
 
 function flattenSeedRenewals() {
   const items = [];
@@ -63,10 +65,16 @@ function useOnline() {
   }, []); return o;
 }
 
-// Suspense fallback for lazy-loaded tabs
+// Suspense fallback for lazy-loaded tabs — iOS-style skeleton loader
 const TabFallback = () => (
-  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 60, opacity: 0.4 }}>
-    <Loader2 size={24} style={{ animation: "spin 1s linear infinite" }} />
+  <div className="skeleton-loader" style={{ padding: "20px 16px" }}>
+    <div className="skeleton-block" style={{ height: 48, borderRadius: 14 }} />
+    <div className="skeleton-block" style={{ height: 120, borderRadius: 16 }} />
+    <div style={{ display: "flex", gap: 10 }}>
+      <div className="skeleton-block" style={{ height: 80, flex: 1, borderRadius: 14 }} />
+      <div className="skeleton-block" style={{ height: 80, flex: 1, borderRadius: 14 }} />
+    </div>
+    <div className="skeleton-block" style={{ height: 64, borderRadius: 14 }} />
   </div>
 );
 
@@ -97,6 +105,9 @@ function CatalystCash() {
   const online = useOnline();
   useGlobalHaptics(); // Auto-haptic on every button tap
 
+  // Sync remote gating config on boot (anti-downgrade protection)
+  useEffect(() => { syncRemoteGatingMode(); }, []);
+
   const { requireAuth, setRequireAuth, appPasscode, setAppPasscode, useFaceId, setUseFaceId, isLocked, setIsLocked, privacyMode, setPrivacyMode, lockTimeout, setLockTimeout, appleLinkedId, setAppleLinkedId, isSecurityReady } = useSecurity();
   const { apiKey, setApiKey, aiProvider, setAiProvider, aiModel, setAiModel, persona, setPersona, personalRules, setPersonalRules, autoBackupInterval, setAutoBackupInterval, notifPermission, aiConsent, setAiConsent, showAiConsent, setShowAiConsent, financialConfig, setFinancialConfig, isSettingsReady } = useSettings();
   const { cards, setCards, bankAccounts, setBankAccounts, renewals, setRenewals, cardCatalog, badges, cardAnnualFees, isPortfolioReady } = usePortfolio();
@@ -106,6 +117,7 @@ function CatalystCash() {
   const scrollRef = useRef(null);
   const bottomNavRef = useRef(null);
   const topBarRef = useRef(null);
+  const [showTransactionFeed, setShowTransactionFeed] = useState(false);
   const swipeStart = useRef(null);
   const longPressTimer = useRef(null);
   const touchStartTime = useRef(0);
@@ -171,9 +183,64 @@ function CatalystCash() {
   // Payday reminder scheduling is handled in SettingsContext.jsx — no duplicate here
 
   // ═══════════════════════════════════════════════════════════════
-  // ICLOUD AUTO-SYNC (via Filesystem / Documents directory)
-  // iOS syncs the Documents dir to iCloud when user enables the app
-  // under iOS Settings → Apple ID → iCloud → Apps Using iCloud.
+  // iCLOUD AUTO-RESTORE — On fresh install, restore from ubiquity
+  // container if backup exists. Runs once when data is empty.
+  // ═══════════════════════════════════════════════════════════════
+  const iCloudRestoreAttempted = useRef(false);
+  useEffect(() => {
+    if (!ready || iCloudRestoreAttempted.current) return;
+    // Only attempt restore if there's no local audit history (fresh install)
+    if (history && history.length > 0) return;
+
+    iCloudRestoreAttempted.current = true;
+    (async () => {
+      try {
+        const backup = await downloadFromICloud(null);
+        if (!backup?.data || typeof backup.data !== "object") return;
+
+        console.log("[iCloud] Found backup from", backup.exportedAt, "— restoring...");
+
+        // Restore all keys to local Preferences
+        const keys = Object.keys(backup.data);
+        for (const key of keys) {
+          if (isSecuritySensitiveKey(key)) continue;
+          await db.set(key, backup.data[key]);
+        }
+
+        // Check if backup had Plaid connections — access tokens won't survive reinstall
+        const plaidConnections = backup.data["plaid-connections"];
+        const hadPlaid = Array.isArray(plaidConnections) && plaidConnections.length > 0;
+
+        toast.success(`Restored from iCloud backup (${keys.length} items)`);
+
+        if (hadPlaid) {
+          // Clear stale Plaid access tokens but preserve account metadata
+          // so the user sees their previously linked accounts
+          const staleConnections = plaidConnections.map(conn => ({
+            ...conn,
+            accessToken: null, // Invalidate — requires re-link
+            _needsReconnect: true,
+          }));
+          await db.set("plaid-connections", staleConnections);
+
+          // Show persistent toast prompting reconnection
+          setTimeout(() => {
+            toast.warn("Your bank accounts need to be reconnected. Go to Settings → Plaid to re-link.", { duration: 12000 });
+          }, 2000);
+        }
+
+        // Reload to pick up all restored data
+        setTimeout(() => window.location.reload(), 1500);
+      } catch (e) {
+        console.error("[iCloud] Auto-restore error:", e);
+      }
+    })();
+  }, [ready, history]);
+
+  // ═══════════════════════════════════════════════════════════════
+  // iCLOUD AUTO-BACKUP — Syncs all user data to iCloud ubiquity
+  // container via native ICloudSyncPlugin. Survives app deletion
+  // and restores on new devices with the same Apple ID.
   // ═══════════════════════════════════════════════════════════════
   const iCloudSyncTimer = useRef(null);
   useEffect(() => {
@@ -193,7 +260,7 @@ function CatalystCash() {
         if (!("personal-rules" in backup.data)) {
           backup.data["personal-rules"] = personalRules ?? "";
         }
-        await uploadToICloud(backup, null); // Auto-sync unencrypted (iCloud is per-user scoped); manual exports still use passphrase
+        await uploadToICloud(backup, null);
       } catch (e) {
         console.error("iCloud auto-sync error:", e);
       }
@@ -792,6 +859,7 @@ function CatalystCash() {
 
     {showGuide && <GuideModal onClose={() => setShowGuide(false)} />}
     {isLocked && <LockScreen />}
+    {showTransactionFeed && <Suspense fallback={<TabFallback />}><TransactionFeed onClose={() => setShowTransactionFeed(false)} /></Suspense>}
     {/* Skip-to-content link for a11y */}
     <a href="#main-content" style={{
       position: 'absolute', top: -60, left: 16, zIndex: 100,
@@ -889,6 +957,7 @@ function CatalystCash() {
               onRestore={handleRestoreFromHome} proEnabled={proEnabled}
               onRefreshDashboard={handleRefreshDashboard}
               onDemoAudit={handleDemoAudit}
+              onViewTransactions={() => setShowTransactionFeed(true)}
               onDiscussWithCFO={(prompt) => { setChatInitialPrompt(prompt); navTo("chat"); }} /></ErrorBoundary>}
             {renderTab === "results" && (loading ? <StreamingView streamText={streamText} elapsed={elapsed} isTest={isTest} modelName={getModel(aiProvider, aiModel).name} /> :
               !display ? (() => { setTimeout(() => navTo("dashboard"), 0); return null; })() :
