@@ -133,76 +133,80 @@ export function SettingsProvider({ children }) {
 
     useEffect(() => {
         const initSettings = async () => {
-            // Notification permissions natively on launch
-            const notifGranted = await requestNotificationPermission().catch(() => false);
-            setNotifPermission(notifGranted ? "granted" : "denied");
+            try {
+                // Notification permissions natively on launch
+                const notifGranted = await requestNotificationPermission().catch(() => false);
+                setNotifPermission(notifGranted ? "granted" : "denied");
 
-            const [legacyKey, provId, modId, finConf, pr, consent, savedPersona, backupInterval, savedTheme] = await Promise.all([
-                db.get("api-key"),
-                db.get("ai-provider"),
-                db.get("ai-model"),
-                db.get("financial-config"),
-                db.get("personal-rules"),
-                db.get("ai-consent-accepted"),
-                db.get("ai-persona"),
-                db.get("auto-backup-interval"),
-                db.get("theme-mode")
-            ]);
+                const [legacyKey, provId, modId, finConf, pr, consent, savedPersona, backupInterval, savedTheme] = await Promise.all([
+                    db.get("api-key"),
+                    db.get("ai-provider"),
+                    db.get("ai-model"),
+                    db.get("financial-config"),
+                    db.get("personal-rules"),
+                    db.get("ai-consent-accepted"),
+                    db.get("ai-persona"),
+                    db.get("auto-backup-interval"),
+                    db.get("theme-mode")
+                ]);
 
-            const validProvider = getProvider(provId || DEFAULT_PROVIDER_ID);
-            const validModel = getModel(validProvider.id, modId || DEFAULT_MODEL_ID);
-            setAiProvider(validProvider.id);
-            setAiModel(validModel.id);
+                const validProvider = getProvider(provId || DEFAULT_PROVIDER_ID);
+                const validModel = getModel(validProvider.id, modId || DEFAULT_MODEL_ID);
+                setAiProvider(validProvider.id);
+                setAiModel(validModel.id);
 
-            const provConfig = validProvider;
-            const provKey = provConfig.keyStorageKey
-                ? await migrateToSecureItem(provConfig.keyStorageKey, legacyKey, () => db.del("api-key"))
-                : null;
+                const provConfig = validProvider;
+                const provKey = provConfig.keyStorageKey
+                    ? await migrateToSecureItem(provConfig.keyStorageKey, legacyKey, () => db.del("api-key"))
+                    : null;
 
-            if (provKey) {
-                setApiKey(provKey);
-            } else if (legacyKey) {
-                setApiKey(legacyKey);
-                await migrateToSecureItem("api-key-openai", legacyKey, () => db.del("api-key"));
-            }
-
-            if (pr) setPersonalRules(pr);
-            if (consent) setAiConsent(true);
-            if (savedPersona) setPersona(savedPersona);
-            if (backupInterval) setAutoBackupInterval(backupInterval);
-
-            // Apply saved theme
-            const resolvedTheme = savedTheme || "dark";
-            setThemeModeRaw(resolvedTheme);
-            const effectiveMode = resolvedTheme === "system"
-                ? (window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark")
-                : resolvedTheme;
-            applyTheme(effectiveMode);
-
-            if (finConf) {
-                const merged = { ...DEFAULT_FINANCIAL_CONFIG, ...finConf };
-                const currentYear = new Date().getFullYear();
-                const lastResetYear = await db.get("ytd-reset-year");
-
-                if (lastResetYear && lastResetYear < currentYear) {
-                    merged.rothContributedYTD = 0;
-                    merged.k401ContributedYTD = 0;
-                    db.set("ytd-reset-year", currentYear);
-                    db.set("financial-config", merged);
-                } else if (!lastResetYear) {
-                    db.set("ytd-reset-year", currentYear);
+                if (provKey) {
+                    setApiKey(provKey);
+                } else if (legacyKey) {
+                    setApiKey(legacyKey);
+                    await migrateToSecureItem("api-key-openai", legacyKey, () => db.del("api-key"));
                 }
 
-                if (merged.paydayReminderEnabled === undefined || merged.paydayReminderEnabled === null) {
-                    merged.paydayReminderEnabled = notifGranted;
-                } else if (!notifGranted) {
-                    merged.paydayReminderEnabled = false;
+                if (pr) setPersonalRules(pr);
+                if (consent) setAiConsent(true);
+                if (savedPersona) setPersona(savedPersona);
+                if (backupInterval) setAutoBackupInterval(backupInterval);
+
+                // Apply saved theme
+                const resolvedTheme = savedTheme || "dark";
+                setThemeModeRaw(resolvedTheme);
+                const effectiveMode = resolvedTheme === "system"
+                    ? (window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark")
+                    : resolvedTheme;
+                applyTheme(effectiveMode);
+
+                if (finConf) {
+                    const merged = { ...DEFAULT_FINANCIAL_CONFIG, ...finConf };
+                    const currentYear = new Date().getFullYear();
+                    const lastResetYear = await db.get("ytd-reset-year");
+
+                    if (lastResetYear && lastResetYear < currentYear) {
+                        merged.rothContributedYTD = 0;
+                        merged.k401ContributedYTD = 0;
+                        db.set("ytd-reset-year", currentYear);
+                        db.set("financial-config", merged);
+                    } else if (!lastResetYear) {
+                        db.set("ytd-reset-year", currentYear);
+                    }
+
+                    if (merged.paydayReminderEnabled === undefined || merged.paydayReminderEnabled === null) {
+                        merged.paydayReminderEnabled = notifGranted;
+                    } else if (!notifGranted) {
+                        merged.paydayReminderEnabled = false;
+                    }
+
+                    dispatchFinConfig({ type: 'REPLACE', payload: merged });
                 }
-
-                dispatchFinConfig({ type: 'REPLACE', payload: merged });
+            } catch (e) {
+                console.error('Settings init error:', e);
+            } finally {
+                setIsSettingsReady(true);
             }
-
-            setIsSettingsReady(true);
         };
 
         initSettings();
