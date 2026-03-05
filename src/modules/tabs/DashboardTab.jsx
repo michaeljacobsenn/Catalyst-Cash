@@ -384,7 +384,7 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                     borderLeft: `3px solid ${T.status.amber} `, background: `${T.status.amberDim} `,
                     padding: "10px 14px", marginBottom: 10
                 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                    <div data-no-swipe="true" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                         <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 10, fontWeight: 800, color: T.status.amber, fontFamily: T.font.mono, letterSpacing: "0.06em" }}>DEMO DATA</div>
                             <p style={{ fontSize: 10, color: T.text.secondary, lineHeight: 1.4, margin: 0 }}>Showing sample data from a demo audit</p>

@@ -121,13 +121,13 @@ function CatalystCash() {
     // Don't swipe tabs when a modal/popup is open (e.g. ProPaywall portal)
     const hasModal = document.querySelector('[style*="z-index: 99999"], [style*="z-index:99999"]');
     if (hasModal) { swipeStart.current = null; return; }
-    // Don't swipe tabs when touch started inside a horizontally scrollable container or interactive element
+    // Don't swipe tabs when touch started inside a horizontally scrollable container or no-swipe zone
     let el = swipeStart.current.target;
     while (el && el !== document.body) {
       const style = window.getComputedStyle(el);
       const overflowX = style.overflowX;
       if (overflowX === 'auto' || overflowX === 'scroll') { swipeStart.current = null; return; }
-      if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.dataset?.noSwipe) { swipeStart.current = null; return; }
+      if (el.dataset?.noSwipe) { swipeStart.current = null; return; }
       el = el.parentElement;
     }
     const endX = e.changedTouches[0].clientX;
