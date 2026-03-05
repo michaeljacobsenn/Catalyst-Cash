@@ -100,7 +100,7 @@ export default function ProPaywall({ onClose }) {
         const success = await restorePurchases();
         if (success === true) {
             if (window.toast) window.toast.success("Purchases restored successfully. Welcome to Pro!");
-            onClose();
+            handleClose();
         } else if (success === null) {
             if (window.toast) window.toast.info("In-App Purchases are only available in the iOS app.");
         } else {
@@ -136,7 +136,7 @@ export default function ProPaywall({ onClose }) {
             <div style={{ width: 36, height: 4, borderRadius: 2, background: T.text.muted, margin: "0 auto 20px", opacity: 0.4 }} />
 
             {/* Close X button */}
-            <button onClick={onClose} style={{
+            <button onClick={handleClose} style={{
                 position: "absolute", top: 16, right: 16, width: 32, height: 32, borderRadius: 16,
                 background: T.bg.elevated, border: `1px solid ${T.border.subtle}`,
                 color: T.text.secondary, cursor: "pointer",
@@ -276,7 +276,7 @@ export default function ProPaywall({ onClose }) {
  * Only renders when shouldShowGating() is true (controlled by parent).
  */
 export function ProBanner({ onUpgrade, label, sublabel }) {
-    return <button className="hover-btn" onClick={() => { haptic.light(); onUpgrade?.(); }} style={{
+    return <button data-no-swipe="true" className="hover-btn" onClick={() => { haptic.light(); onUpgrade?.(); }} style={{
         width: "100%", padding: "12px 16px", borderRadius: T.radius.lg,
         border: `1px solid ${T.accent.primaryDim}`,
         background: `linear-gradient(135deg, ${T.accent.primary}08, ${T.accent.primary}15)`,
