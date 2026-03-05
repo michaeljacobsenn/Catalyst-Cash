@@ -10,13 +10,14 @@ import { Card } from "../ui.jsx";
 import { Mono } from "../components.jsx";
 import { haptic } from "../haptics.js";
 import { IAP_PRICING, IAP_PRODUCTS } from "../subscription.js";
-import { presentPaywall, restorePurchases } from "../revenuecat.js";
+
+const loadRevenueCat = () => import("../revenuecat.js");
 
 // ── Feature comparison: generous Free vs premium Pro ──────────
 const FEATURES = [
     { label: "AI Audits", free: "2 / week", pro: "60 / month", icon: "📊" },
     { label: "AskAI Chat", free: "10 / day", pro: "50 / day", icon: "💬" },
-    { label: "AI Models", free: "Flash & Mini", pro: "Pro · o4 · Claude", icon: "🧠" },
+    { label: "AI Models", free: "Flash & Mini", pro: "Pro · o4", icon: "🧠" },
     { label: "Audit History", free: "Last 12", pro: "Full archive", icon: "📜" },
     { label: "Dashboard & Charts", free: "✓ Full", pro: "✓ Full", icon: "📈" },
     { label: "Debt Simulator", free: "✓ Full", pro: "✓ Full", icon: "⚠️" },
@@ -81,6 +82,7 @@ export default function ProPaywall({ onClose }) {
         haptic.medium();
         setPurchasing(true);
         try {
+            const { presentPaywall } = await loadRevenueCat();
             const result = await presentPaywall();
             if (result === true) {
                 // Success
@@ -99,6 +101,7 @@ export default function ProPaywall({ onClose }) {
 
     const handleRestore = async () => {
         haptic.light();
+        const { restorePurchases } = await loadRevenueCat();
         const success = await restorePurchases();
         if (success === true) {
             if (window.toast) window.toast.success("Purchases restored successfully. Welcome to Pro!");
@@ -271,27 +274,4 @@ export default function ProPaywall({ onClose }) {
             </div>
         </div>
     </div >, document.body);
-}
-
-/**
- * Compact upgrade banner for embedding in Dashboard/Settings/History.
- * Only renders when shouldShowGating() is true (controlled by parent).
- */
-export function ProBanner({ onUpgrade, label, sublabel }) {
-    return <button data-no-swipe="true" className="hover-btn" onClick={() => { haptic.light(); onUpgrade?.(); }} style={{
-        width: "100%", padding: "12px 16px", borderRadius: T.radius.lg,
-        border: `1px solid ${T.accent.primaryDim}`,
-        background: `linear-gradient(135deg, ${T.accent.primary}08, ${T.accent.primary}15)`,
-        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between",
-        marginBottom: 12
-    }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 18 }}>⚡</span>
-            <div style={{ textAlign: "left" }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: T.accent.primary }}>{label || "Upgrade to Pro"}</div>
-                {sublabel && <div style={{ fontSize: 11, color: T.text.dim, marginTop: 1 }}>{sublabel}</div>}
-            </div>
-        </div>
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.accent.primary, fontFamily: T.font.mono }}>→</div>
-    </button>;
 }

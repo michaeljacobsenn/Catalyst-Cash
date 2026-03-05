@@ -1,6 +1,6 @@
 # Catalyst Cash — Master Developer Manual
 
-> **v1.6.0** · React 18 + Vite 6 + Capacitor 7 · iOS-native personal finance app with AI-powered weekly audits
+> **v2.0.0** · React 18 + Vite 6 + Capacitor 7 · iOS-native personal finance app with AI-powered weekly audits
 
 ---
 
@@ -27,8 +27,8 @@
 Catalyst Cash is a **privacy-first iOS personal finance app** built with React 18, Vite, and Capacitor. Users input their weekly financial snapshot (checking balance, debts, savings) and the app runs it through a **native math engine** and then an **AI large-language model** to produce a structured weekly financial audit — health score, debt strategy, spending radar, and actionable weekly moves.
 
 **Core value props:**
-- All data stored **on-device** via Capacitor Preferences (never on our servers)
-- AI audit via backend proxy (no user API key required) **or** BYOK (Gemini / GPT / Claude)
+- All financial data stored **on-device**; passcodes and secrets use native secure storage when available
+- AI audit via backend proxy (no user API key required in the shipped app)
 - Mathematically optimal debt payoff (Avalanche + CFI override) computed natively before LLM
 - PII scrubbed from all AI prompts using entity anonymization
 
@@ -75,7 +75,7 @@ AuditContext.handleSubmit()
         │       Injects: computedStrategy + persona + personal rules
         │
         ├─ 4. api.js: streamAudit() / callAudit()
-        │       Routes to: backend proxy OR BYOK (Gemini/GPT/Claude)
+        │       Routes to: Catalyst Cash backend proxy
         │       Returns: SSE text stream
         │
         ├─ 5. scrubber.unscrub() — restores real names in real time
@@ -180,11 +180,11 @@ The production backend is at `https://api.catalystcash.app` (Cloudflare Worker).
 Create a `.env` file in the project root (never commit this):
 
 ```env
-# Only needed for BYOK developer mode — not required for backend mode
+# Optional only if you re-enable BYOK development paths locally
 VITE_DEFAULT_GEMINI_KEY=your-gemini-key-here
 ```
 
-All AI keys in production are user-supplied at runtime and stored on-device via `@capacitor/preferences`. They are **never** sent to our servers.
+The shipped app runs in backend mode and does not require any user API key.
 
 ---
 
@@ -324,14 +324,14 @@ Three persona variants are supported: `command` (analytical), `budget` (encourag
 
 ### `api.js` — AI Provider Router
 
-Handles both streaming (SSE) and non-streaming modes for all four providers:
+Handles both streaming (SSE) and non-streaming modes. The shipped app exposes the backend provider; direct-provider paths remain as development scaffolding:
 
 | Provider | Mode | Notes |
 |----------|------|-------|
 | `backend` | Default | Routes through `https://api.catalystcash.app` Worker proxy |
-| `gemini` | BYOK | Direct to `generativelanguage.googleapis.com` |
-| `openai` | BYOK | Direct to `api.openai.com` |
-| `claude` | BYOK | Direct to `api.anthropic.com` |
+| `gemini` | Dev scaffolding | Direct to `generativelanguage.googleapis.com` if BYOK is re-enabled |
+| `openai` | Dev scaffolding | Direct to `api.openai.com` if BYOK is re-enabled |
+| `claude` | Dev scaffolding | Direct to `api.anthropic.com` if BYOK is re-enabled |
 
 ### `scrubber.js` — PII Anonymizer
 
@@ -436,7 +436,7 @@ Key fields:
 
 ## Storage Layer
 
-All data is stored on-device using `@capacitor/preferences` under the group `CatalystCashStorage`.
+Most app data is stored on-device using `@capacitor/preferences` under the group `CatalystCashStorage`. Passcodes and API secrets are migrated into native secure storage when available, and manual backups intentionally exclude passcodes, API keys, device identifiers, and subscription metadata.
 
 | Storage Key | Type | Contents |
 |-------------|------|---------|
@@ -451,22 +451,23 @@ All data is stored on-device using `@capacitor/preferences` under the group `Cat
 | `ai-provider` | String | Selected AI provider ID |
 | `ai-model` | String | Selected model ID |
 | `ai-consent-accepted` | Boolean | GDPR-style consent flag |
-| `api-key-{provider}` | String | BYOK API key per provider |
+| `api-key-{provider}` | String | Optional BYOK API key (developer-only scaffolding) |
 | `theme-mode` | String | `"dark"` \| `"light"` \| `"system"` |
 | `require-auth` | Boolean | Passcode/Face ID enabled |
-| `app-passcode` | String | Hashed PIN |
+| `app-passcode` | String | 4-digit PIN stored in native secure storage when available |
 | `plaid-connections` | Array | Plaid access tokens + account metadata |
 
-**Keys that are NEVER exported or synced** (defined in `securityKeys.js`): `app-passcode`, `require-auth`, `use-face-id`, `apple-linked-id`, `plaid-connections`.
+**Keys that are NEVER exported or synced** (defined in `securityKeys.js`): `app-passcode`, `require-auth`, `use-face-id`, `apple-linked-id`, `device-id`, `subscription-state`, and provider API keys.
 
 ---
 
 ## Backend / Cloudflare Worker
 
-Located in `server/`. Exposes these endpoints at `https://api.catalystcash.app`:
+The production backend lives in `worker/src/index.js`. Exposes these endpoints at `https://api.catalystcash.app`:
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
+| `/config` | GET | Remote gating mode + minimum supported app version |
 | `/audit` | POST | Proxy AI calls with rate limiting (X-Device-ID) |
 | `/plaid/link-token` | POST | Create Plaid Link token |
 | `/plaid/exchange` | POST | Exchange public_token → access_token |
@@ -474,7 +475,9 @@ Located in `server/`. Exposes these endpoints at `https://api.catalystcash.app`:
 | `/plaid/disconnect` | POST | Revoke access token |
 | `/cards` | GET | Serve `cards.json` card catalog |
 
-**Rate limiting:** per device, tracked by `X-Device-ID` header. Returns `429` with `Retry-After` on limit breach.
+**Rate limiting:** per device, tracked by `X-Device-ID` header. Free plan: 2 audits/week and 10 chats/day. Pro plan: 60 audits/month and 50 chats/day. Returns `429` with `Retry-After` on limit breach.
+
+**Entitlement trust:** when RevenueCat credentials are configured on the worker, the app forwards its RevenueCat app user ID and the backend verifies Pro access server-side instead of trusting the client tier header alone.
 
 ---
 
@@ -531,7 +534,7 @@ Test files:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | (none required) | — | App runs fully in backend mode without any env vars |
-| `VITE_DEFAULT_GEMINI_KEY` | Dev only | Pre-fills Gemini BYOK key in dev for convenience |
+| `VITE_DEFAULT_GEMINI_KEY` | Dev only | Only relevant if you re-enable BYOK development paths locally |
 
 Server-side (Cloudflare Worker secrets — set via Wrangler):
 - `PLAID_CLIENT_ID`

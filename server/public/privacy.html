@@ -102,7 +102,7 @@
 <body>
   <div class="wrap">
     <h1>Catalyst Cash Privacy Policy</h1>
-    <div class="meta">Effective date: 2026-03-01 · Last updated: 2026-03-01</div>
+    <div class="meta">Effective date: 2026-03-05 · Last updated: 2026-03-05</div>
 
     <div class="card highlight">
       <p style="color: #F8FAFC; margin-bottom: 0;"><strong>🔒 Privacy-First Architecture</strong><br>
@@ -138,15 +138,16 @@
 
     <h2>3. Third-Party AI Providers</h2>
     <div class="card accent">
-      <p style="color: #F8FAFC; margin-bottom: 0;"><strong>🔥 Direct-to-Provider Architecture</strong><br>
-        When you use AI features, your data is sent <strong>directly from your device to your chosen AI
-          provider</strong>
-        (e.g., OpenAI, Google Gemini, Anthropic Claude). There are no Catalyst Cash servers in between. We never
-        intercept, log, store, or have access to these transmissions. Furthermore, API usage through major AI providers
-        is <strong>governed by their API terms which explicitly prohibit using your data to train models</strong>.
+      <p style="color: #F8FAFC; margin-bottom: 0;"><strong>🔥 Secure Backend Proxy</strong><br>
+        When you use AI features in the shipped app, your scrubbed prompt is sent from your device to the
+        <strong>Catalyst Cash backend proxy</strong>, which forwards the request to the selected AI model provider.
+        We do not store raw financial payloads or chat content on our servers. Sensitive names are scrubbed on-device
+        before transmission, and API usage remains subject to the upstream provider's terms. For paid subscriptions,
+        the app may also send a RevenueCat app user identifier to verify Pro entitlements without exposing your
+        financial data.
       </p>
     </div>
-    <p>You are responsible for reviewing the privacy policy and terms of service of your chosen AI provider:</p>
+    <p>Relevant upstream provider policies include:</p>
     <ul>
       <li><a href="https://openai.com/policies/api-data-usage-policies" target="_blank">OpenAI API Data Usage Policy</a>
       </li>
@@ -180,15 +181,16 @@
     <h2>6. iCloud Backup & Encrypted Sync</h2>
     <p>Optional cloud sync and backups are secured using <strong>AES-256-GCM encryption</strong>. If you set an app
       passcode, it serves as the encryption key. We cannot decrypt your data; only you hold the key. Apple may
-      sync app data to iCloud according to your device settings.</p>
+      sync app data to iCloud according to your device settings. Manual backups exclude passcodes, API keys, device
+      identifiers, and subscription state.</p>
 
     <h2>7. Data Sharing</h2>
     <ul>
       <li>We do <strong>not</strong> sell personal data</li>
       <li>We do <strong>not</strong> share data with third parties for advertising or marketing</li>
       <li>We do <strong>not</strong> monetize your financial information in any way</li>
-      <li>The only data transmission occurs when <strong>you</strong> initiate an AI audit or chat, which goes directly
-        to your chosen AI provider</li>
+      <li>The only data transmission occurs when <strong>you</strong> initiate an AI audit or chat, which is routed
+        through the Catalyst Cash backend proxy to the selected model provider</li>
     </ul>
 
     <h2>8. Children's Privacy (COPPA)</h2>
@@ -204,21 +206,22 @@
       <li><strong>Opt-out</strong> of the sale of personal information (we never sell personal data)</li>
       <li><strong>Non-discrimination</strong> for exercising privacy rights</li>
     </ul>
-    <p>Because all data is stored locally on your device and we have no access to it, you have full and
-      immediate control over your information at all times.</p>
+    <p>Because your core financial data is stored locally on your device and raw financial payloads are not retained on
+      our servers, you maintain direct control over your information at all times.</p>
 
     <h2>10. Data Security</h2>
     <ul>
-      <li>All sensitive data (API keys, tokens, passcodes) are stored securely using native device Keychain/Preferences
+      <li>All sensitive data (tokens, passcodes, optional developer credentials) are stored securely using native device Keychain/Preferences
       </li>
       <li>Optional backups use AES-256-GCM encryption</li>
-      <li>No plaintext financial data is ever transmitted to our servers (we don't have data servers)</li>
+      <li>Manual backups exclude passcodes, API keys, device identifiers, and subscription metadata</li>
+      <li>Raw financial payloads are not stored on our servers; AI requests are proxied onward to the selected model provider</li>
       <li>AI chat PII is automatically scrubbed before any local persistence</li>
     </ul>
 
     <h2>11. Your Choices & Controls</h2>
     <ul>
-      <li>Use free mode (manual copy/paste) with zero API connectivity</li>
+      <li>Use manual account entry without linking external institutions</li>
       <li>Clear audit history, chat history, or all data at any time</li>
       <li>Enable/disable privacy mode (prevents any local chat persistence)</li>
       <li>Disconnect bank accounts via Plaid at any time</li>

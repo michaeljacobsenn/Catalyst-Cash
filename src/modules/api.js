@@ -4,6 +4,7 @@ import { log } from "./logger.js";
 import { fetchWithRetry } from "./fetchWithRetry.js";
 import { APP_VERSION } from "./constants.js";
 import { isPro } from "./subscription.js";
+import { getRevenueCatAppUserId } from "./revenuecat.js";
 
 // ═══════════════════════════════════════════════════════════════
 // AI API MODULE — Catalyst Cash
@@ -34,16 +35,25 @@ function extractSSEText(parsed) {
   return "";
 }
 
-async function* streamBackend(snapshot, model, sysText, history, deviceId, backendProvider, signal, responseFormat) {
+async function buildBackendHeaders(deviceId) {
   const tier = (await isPro()) ? "pro" : "free";
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Device-ID": deviceId || "unknown",
+    "X-App-Version": APP_VERSION,
+    "X-Subscription-Tier": tier,
+  };
+  const revenueCatAppUserId = await getRevenueCatAppUserId().catch(() => null);
+  if (revenueCatAppUserId) {
+    headers["X-RC-App-User-ID"] = revenueCatAppUserId;
+  }
+  return headers;
+}
+
+async function* streamBackend(snapshot, model, sysText, history, deviceId, backendProvider, signal, responseFormat) {
   const res = await fetch(`${BACKEND_URL}/audit`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Device-ID": deviceId || "unknown",
-      "X-App-Version": APP_VERSION,
-      "X-Subscription-Tier": tier,
-    },
+    headers: await buildBackendHeaders(deviceId),
     body: JSON.stringify({
       snapshot,
       systemPrompt: sysText,
@@ -94,15 +104,9 @@ async function* streamBackend(snapshot, model, sysText, history, deviceId, backe
 }
 
 async function callBackend(snapshot, model, sysText, history, deviceId, backendProvider, responseFormat) {
-  const tier = (await isPro()) ? "pro" : "free";
   const res = await fetchWithRetry(`${BACKEND_URL}/audit`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Device-ID": deviceId || "unknown",
-      "X-App-Version": APP_VERSION,
-      "X-Subscription-Tier": tier,
-    },
+    headers: await buildBackendHeaders(deviceId),
     body: JSON.stringify({
       snapshot,
       systemPrompt: sysText,
@@ -408,4 +412,3 @@ export async function fetchGatingConfig() {
     return _cachedConfig; // Return stale cache on network error
   }
 }
-

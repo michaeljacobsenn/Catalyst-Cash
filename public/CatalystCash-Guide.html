@@ -708,8 +708,7 @@
                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                         </svg> Privacy-First</h3>
-                    <p>Your financial data never leaves your device. No accounts on our servers, no data mining — your
-                        money is your business.</p>
+                    <p>Your core financial data is stored locally on your device. AI requests are proxied securely only when you run audits or chat.</p>
                 </div>
                 <div class="feature-box">
                     <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7B5EA7" stroke-width="2"
@@ -733,8 +732,7 @@
                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                         </svg> Fast & Secure</h3>
-                    <p>AI requests go directly from your device to the AI provider — no middleman, no delays. Your API
-                        keys are encrypted locally on your iPhone.</p>
+                    <p>AI requests are routed through the Catalyst Cash backend proxy with PII scrubbing before reaching the selected model provider. Raw financial payloads are not retained on our servers.</p>
                 </div>
             </div>
         </div>
@@ -990,10 +988,9 @@
                     <ul>
                         <li><strong>60</strong> AI Check-Ins per month</li>
                         <li><strong>50</strong> AI Chat messages per day</li>
-                        <li>Upgrade to premium AI: <strong>Gemini 2.5 Pro</strong>, <strong>OpenAI o4-mini</strong>
-                            &amp;
-                            <strong>Claude Haiku</strong>
+                        <li>Upgrade to premium AI: <strong>Gemini 2.5 Pro</strong> and <strong>OpenAI o4-mini</strong>
                         </li>
+                        <li><strong>Claude Haiku 4.5</strong> coming soon</li>
                         <li>Transaction Ledger with search &amp; export</li>
                         <li>Advanced analytics &amp; trend charts</li>
                         <li>Faster AI responses &amp; deeper reasoning</li>
@@ -1040,14 +1037,16 @@
                             <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                         </svg> Encrypted Backup</h3>
                     <p>Create a password-protected <code>.enc</code> backup file. Store it in iCloud Drive, AirDrop it
-                        to a new phone, or save it anywhere you trust.</p>
+                        to a new phone, or save it anywhere you trust. Passcodes, API keys, device IDs, and
+                        subscription state are excluded automatically.</p>
                 </div>
             </div>
 
             <div class="cfo-rule">
                 <h4>Built with Your Trust in Mind</h4>
-                <p>Catalyst Cash is not a financial advisor. All AI insights are for informational purposes only. We
-                    never see, access, or store your financial data — everything stays on your device.</p>
+                <p>Catalyst Cash is not a financial advisor. All AI insights are for informational purposes only. We do
+                    not store raw financial payloads on our servers, and your core financial data remains stored locally
+                    on your device.</p>
             </div>
 
             <div class="feature-box danger-zone">
@@ -1060,7 +1059,7 @@
                     </div>
                     <div>
                         <h3 style="color: #F8FAFC; font-size: 14px; margin-bottom: 6px;">Factory Reset</h3>
-                        <p style="color: #64748B; font-size: 13px;">Permanently erases all data — accounts, API keys,
+                        <p style="color: #64748B; font-size: 13px;">Permanently erases all data — accounts, saved credentials,
                             history, and settings. The app resets to its first-launch state. <strong>Back up
                                 first.</strong></p>
                     </div>

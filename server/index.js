@@ -15,10 +15,17 @@ app.use(express.json({ limit: "2mb" }));
 // CORS for native Capacitor app
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "Content-Type, x-pp-secret, x-pp-user, x-pp-tier");
+  res.header("Access-Control-Allow-Headers", "Content-Type, X-Device-ID, X-App-Version, X-Subscription-Tier, X-RC-App-User-ID, x-pp-secret, x-pp-user, x-pp-tier");
   res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   return next();
+});
+app.get("/config", (_req, res) => {
+  res.json({
+    gatingMode: process.env.GATING_MODE || "live",
+    minVersion: process.env.MIN_VERSION || "2.0.0",
+    entitlementVerification: Boolean(process.env.REVENUECAT_SECRET_KEY)
+  });
 });
 app.get("/privacy", (_req, res) => {
   res.sendFile(path.join(__dirname, "public/privacy.html"));

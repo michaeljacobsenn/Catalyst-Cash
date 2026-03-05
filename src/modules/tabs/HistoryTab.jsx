@@ -1,4 +1,4 @@
-import { useState, memo } from "react";
+import { useState, memo, lazy, Suspense } from "react";
 import { Calendar, Download, CheckCircle, Trash2, Edit3, Plus } from "lucide-react";
 import { T } from "../constants.js";
 import { fmt, fmtDate, exportAudit, exportAllAudits, exportSelectedAudits, exportAuditCSV } from "../utils.js";
@@ -6,10 +6,12 @@ import { Card, Badge } from "../ui.jsx";
 import { Mono, StatusDot, EmptyState } from "../components.jsx";
 import { haptic } from "../haptics.js";
 import { shouldShowGating } from "../subscription.js";
-import ProPaywall, { ProBanner } from "./ProPaywall.jsx";
+import ProBanner from "./ProBanner.jsx";
 
 import { useAudit } from '../contexts/AuditContext.jsx';
 import { useNavigation } from '../contexts/NavigationContext.jsx';
+
+const LazyProPaywall = lazy(() => import("./ProPaywall.jsx"));
 
 export default memo(function HistoryTab({ toast }) {
     const { history: audits, deleteHistoryItem: onDelete, handleManualImport } = useAudit();
@@ -32,7 +34,7 @@ export default memo(function HistoryTab({ toast }) {
 
     return <div className="page-body" style={{ paddingBottom: 0 }}>
         {shouldShowGating() && <ProBanner onUpgrade={() => setShowPaywall(true)} label="Showing last 8 audits" sublabel="Upgrade to Pro for full history" />}
-        {showPaywall && <ProPaywall onClose={() => setShowPaywall(false)} />}
+        {showPaywall && <Suspense fallback={null}><LazyProPaywall onClose={() => setShowPaywall(false)} /></Suspense>}
         <div style={{ paddingTop: 6, paddingBottom: 8, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
             <div><h1 style={{ fontSize: 22, fontWeight: 800 }}>History</h1>
                 <Mono size={11} color={T.text.dim}>{audits.length} audits stored</Mono></div>

@@ -89,9 +89,18 @@ export function annualizeRenewalCents(item) {
     return Math.round((amountCents / interval) * 12);
 }
 
+function monthlyBudgetAmountCents(category) {
+    const rawMonthlyTarget = category?.monthlyTarget;
+    const normalizedValue =
+        rawMonthlyTarget == null || rawMonthlyTarget === ""
+            ? category?.allocated
+            : rawMonthlyTarget;
+    return Math.max(0, toCents(normalizedValue || 0));
+}
+
 function annualExpensesFromInputsCents(config = {}, renewals = [], cards = []) {
     const budgetMonthlyCents = (config?.budgetCategories || []).reduce((sum, cat) => (
-        sum + Math.max(0, toCents(cat?.monthlyTarget || 0))
+        sum + monthlyBudgetAmountCents(cat)
     ), 0);
     const annualBudgetCents = budgetMonthlyCents * 12;
     const annualAllowanceCents = Math.max(0, toCents(config?.weeklySpendAllowance || 0)) * 52;

@@ -47,6 +47,7 @@ import { initRevenueCat } from "./modules/revenuecat.js";
 import { isSecuritySensitiveKey } from "./modules/securityKeys.js";
 import { evaluateBadges, unlockBadge, BADGE_DEFINITIONS } from "./modules/badges.js";
 import "./modules/tabs/DashboardTab.css"; // Global animations, skeleton loaders, utility classes
+import { deleteSecureItem } from "./modules/secureStore.js";
 
 function flattenSeedRenewals() {
   const items = [];
@@ -675,7 +676,10 @@ function CatalystCash() {
       await db.set("card-portfolio", []);
       await db.set("bank-accounts", []);
       await db.set("personal-rules", "");
-      await db.del("app-passcode");
+      await deleteSecureItem("app-passcode");
+      await deleteSecureItem("apple-linked-id");
+      await deleteSecureItem("api-key");
+      await deleteSecureItem("api-key-openai");
       await db.del("onboarding-complete"); // Guarantee Setup Wizard on reload
 
       window.location.reload();

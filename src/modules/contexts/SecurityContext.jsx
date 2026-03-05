@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { db } from '../utils.js';
+import { deleteSecureItem, migrateToSecureItem, setSecureItem } from '../secureStore.js';
 
 const SecurityContext = createContext(null);
 
@@ -18,12 +19,16 @@ export function SecurityProvider({ children }) {
     useEffect(() => {
         const initSecurity = async () => {
             try {
-                const [ra, pin, uf, lt, appLinked] = await Promise.all([
+                const [ra, uf, lt, legacyPin, legacyAppleLinkedId] = await Promise.all([
                     db.get("require-auth"),
-                    db.get("app-passcode"),
                     db.get("use-face-id"),
                     db.get("lock-timeout"),
+                    db.get("app-passcode"),
                     db.get("apple-linked-id")
+                ]);
+                const [pin, appLinked] = await Promise.all([
+                    migrateToSecureItem("app-passcode", legacyPin, () => db.del("app-passcode")),
+                    migrateToSecureItem("apple-linked-id", legacyAppleLinkedId, () => db.del("apple-linked-id"))
                 ]);
 
                 if (ra) {
@@ -72,10 +77,18 @@ export function SecurityProvider({ children }) {
 
     // Sync state to DB on change (after initial load)
     useEffect(() => { if (isSecurityReady) db.set("require-auth", requireAuth); }, [requireAuth, isSecurityReady]);
-    useEffect(() => { if (isSecurityReady) db.set("app-passcode", appPasscode); }, [appPasscode, isSecurityReady]);
     useEffect(() => { if (isSecurityReady) db.set("use-face-id", useFaceId); }, [useFaceId, isSecurityReady]);
     useEffect(() => { if (isSecurityReady) db.set("lock-timeout", lockTimeout); }, [lockTimeout, isSecurityReady]);
-    useEffect(() => { if (isSecurityReady) db.set("apple-linked-id", appleLinkedId); }, [appleLinkedId, isSecurityReady]);
+    useEffect(() => {
+        if (!isSecurityReady) return;
+        if (appPasscode) void setSecureItem("app-passcode", appPasscode);
+        else void deleteSecureItem("app-passcode");
+    }, [appPasscode, isSecurityReady]);
+    useEffect(() => {
+        if (!isSecurityReady) return;
+        if (appleLinkedId) void setSecureItem("apple-linked-id", appleLinkedId);
+        else void deleteSecureItem("apple-linked-id");
+    }, [appleLinkedId, isSecurityReady]);
 
     const value = {
         requireAuth, setRequireAuth,
