@@ -2,7 +2,6 @@ import { Capacitor } from "@capacitor/core";
 import { registerPlugin } from "@capacitor/core";
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { encrypt, decrypt, isEncrypted } from "./crypto.js";
-import { fetchWithRetry } from "./fetchWithRetry.js";
 
 // ═══════════════════════════════════════════════════════════════
 // NATIVE iCLOUD SYNC PLUGIN
@@ -14,108 +13,6 @@ const ICloudSync = Capacitor.isNativePlatform()
     ? registerPlugin("ICloudSync")
     : null;
 
-// ═══════════════════════════════════════════════════════════════
-// GOOGLE DRIVE (App Data Folder) SYNC
-// ═══════════════════════════════════════════════════════════════
-
-const FILE_NAME = "CatalystCash_CloudSync.json";
-
-export async function uploadToGoogleDrive(accessToken, payload, passphrase = null) {
-    if (!accessToken) return false;
-    try {
-        const searchRes = await fetchWithRetry(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${FILE_NAME}'`, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        if (!searchRes.ok) {
-            const errBody = await searchRes.text().catch(() => "");
-            if (searchRes.status === 401) throw new Error("DRIVE_AUTH_EXPIRED");
-            if (searchRes.status === 403) throw new Error("DRIVE_API_DISABLED");
-            throw new Error(`Drive search failed (${searchRes.status}): ${errBody}`);
-        }
-        const searchData = await searchRes.json();
-
-        let fileContent = JSON.stringify(payload);
-        if (passphrase) {
-            const envelope = await encrypt(fileContent, passphrase);
-            fileContent = JSON.stringify(envelope);
-        }
-
-        const form = new FormData();
-        let uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
-        let method = 'POST';
-
-        if (searchData.files && searchData.files.length > 0) {
-            const fileId = searchData.files[0].id;
-            const patchMeta = { name: FILE_NAME, mimeType: 'application/json' };
-            form.append('metadata', new Blob([JSON.stringify(patchMeta)], { type: 'application/json' }));
-            uploadUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`;
-            method = 'PATCH';
-        } else {
-            const createMeta = { name: FILE_NAME, parents: ['appDataFolder'], mimeType: 'application/json' };
-            form.append('metadata', new Blob([JSON.stringify(createMeta)], { type: 'application/json' }));
-        }
-        form.append('file', new Blob([fileContent], { type: 'application/json' }));
-
-        const uploadRes = await fetchWithRetry(uploadUrl, {
-            method,
-            headers: { 'Authorization': `Bearer ${accessToken}` },
-            body: form
-        });
-
-        if (!uploadRes.ok) {
-            const errBody = await uploadRes.text().catch(() => "");
-            if (uploadRes.status === 401) throw new Error("DRIVE_AUTH_EXPIRED");
-            if (uploadRes.status === 403) throw new Error("DRIVE_API_DISABLED");
-            throw new Error(`Drive upload failed (${uploadRes.status}): ${errBody}`);
-        }
-        return true;
-    } catch (e) {
-        console.error("Google Drive Sync Error:", e?.message || e);
-        if (e?.message === "DRIVE_AUTH_EXPIRED" || e?.message === "DRIVE_API_DISABLED") throw e;
-        return false;
-    }
-}
-
-export async function downloadFromGoogleDrive(accessToken, passphrase = null) {
-    if (!accessToken) return null;
-    try {
-        const searchRes = await fetchWithRetry(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${FILE_NAME}'`, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        if (!searchRes.ok) {
-            const errBody = await searchRes.text().catch(() => "");
-            if (searchRes.status === 401) throw new Error("DRIVE_AUTH_EXPIRED");
-            if (searchRes.status === 403) throw new Error("DRIVE_API_DISABLED");
-            throw new Error(`Drive search failed (${searchRes.status}): ${errBody}`);
-        }
-        const searchData = await searchRes.json();
-
-        if (!searchData.files || searchData.files.length === 0) return null;
-
-        const fileId = searchData.files[0].id;
-        const dlRes = await fetchWithRetry(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-
-        if (!dlRes.ok) {
-            if (dlRes.status === 401) throw new Error("DRIVE_AUTH_EXPIRED");
-            if (dlRes.status === 403) throw new Error("DRIVE_API_DISABLED");
-            throw new Error(`Google Drive download failed (${dlRes.status})`);
-        }
-        const data = await dlRes.json();
-
-        if (isEncrypted(data)) {
-            if (!passphrase) throw new Error("Cloud data is encrypted — passphrase required");
-            const decrypted = await decrypt(data, passphrase);
-            return JSON.parse(decrypted);
-        }
-        return data;
-    } catch (e) {
-        console.error("Google Drive Download Error:", e?.message || e);
-        if (e?.message === "DRIVE_AUTH_EXPIRED" || e?.message === "DRIVE_API_DISABLED") throw e;
-        return null;
-    }
-}
 
 // ═══════════════════════════════════════════════════════════════
 // iCLOUD SYNC — Native ubiquity container (cross-device)
