@@ -130,6 +130,8 @@ function CatalystCash() {
   const handleSwipeTouchEnd = (e) => {
     if (!swipeStart.current) return;
     if (loading) { swipeStart.current = null; return; }
+    // Don't swipe tabs when a full-screen overlay is open (they have their own swipe-back)
+    if (showTransactionFeed || showGuide) { swipeStart.current = null; return; }
     // Don't swipe tabs when a modal/popup is open (e.g. ProPaywall portal)
     const hasModal = document.querySelector('[style*="z-index: 99999"], [style*="z-index:99999"]');
     if (hasModal) { swipeStart.current = null; return; }

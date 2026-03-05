@@ -98,8 +98,86 @@ export default function TransactionFeed({ onClose }) {
     const [showFilters, setShowFilters] = useState(false);
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [visibleCount, setVisibleCount] = useState(50);
+    const [slideOffset, setSlideOffset] = useState(0);
     const scrollRef = useRef(null);
     const searchRef = useRef(null);
+    const swipeRef = useRef(null);
+    const pullRef = useRef(null);
+    const [pullDistance, setPullDistance] = useState(0);
+    const [isPulling, setIsPulling] = useState(false);
+
+    // ── Swipe-from-edge-to-dismiss (iOS native feel) ──
+    const handleOverlayTouchStart = useCallback((e) => {
+        const x = e.touches[0].clientX;
+        if (x < 40) { // Left edge only
+            swipeRef.current = { x, y: e.touches[0].clientY, t: Date.now() };
+        } else {
+            swipeRef.current = null;
+        }
+    }, []);
+
+    const handleOverlayTouchMove = useCallback((e) => {
+        if (!swipeRef.current) {
+            // Pull-to-refresh logic
+            if (scrollRef.current && scrollRef.current.scrollTop <= 0 && !refreshing) {
+                const touch = e.touches[0];
+                if (!pullRef.current) {
+                    pullRef.current = { y: touch.clientY };
+                    setIsPulling(true);
+                }
+                const dy = Math.max(0, touch.clientY - pullRef.current.y);
+                setPullDistance(Math.min(dy * 0.5, 80));
+            }
+            return;
+        }
+        const dx = e.touches[0].clientX - swipeRef.current.x;
+        if (dx > 0) {
+            setSlideOffset(dx);
+            e.preventDefault();
+        }
+    }, [refreshing]);
+
+    const handleOverlayTouchEnd = useCallback((e) => {
+        // Pull-to-refresh release
+        if (pullRef.current) {
+            if (pullDistance >= 60 && !refreshing) {
+                handleRefreshFromPull();
+            }
+            pullRef.current = null;
+            setIsPulling(false);
+            setPullDistance(0);
+        }
+        // Swipe-back release
+        if (!swipeRef.current) { setSlideOffset(0); return; }
+        const dx = e.changedTouches[0].clientX - swipeRef.current.x;
+        const dt = Date.now() - swipeRef.current.t;
+        const velocity = dx / dt;
+        swipeRef.current = null;
+        if (dx > 100 || velocity > 0.5) {
+            setSlideOffset(window.innerWidth);
+            haptic.light();
+            setTimeout(() => onClose(), 200);
+        } else {
+            setSlideOffset(0);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pullDistance, refreshing, onClose]);
+
+    const handleRefreshFromPull = useCallback(async () => {
+        setRefreshing(true);
+        haptic.light();
+        try {
+            const result = await fetchAllTransactions(30);
+            setTransactions(result.data || []);
+            setFetchedAt(result.fetchedAt);
+            if (window.toast) window.toast.success(`Synced ${(result.data || []).length} transactions`);
+        } catch (e) {
+            console.warn("[TransactionFeed] Pull refresh failed:", e);
+            if (window.toast) window.toast.error("Failed to refresh transactions");
+        } finally {
+            setRefreshing(false);
+        }
+    }, []);
 
     // ── Load stored transactions on mount ──
     useEffect(() => {
@@ -236,11 +314,40 @@ export default function TransactionFeed({ onClose }) {
     // RENDER
     // ═══════════════════════════════════════════════════════════
     return (
-        <div style={{
-            position: "fixed", inset: 0, zIndex: 50,
-            background: T.bg.base, display: "flex", flexDirection: "column",
-            fontFamily: T.font.sans,
-        }}>
+        <div
+            onTouchStart={handleOverlayTouchStart}
+            onTouchMove={handleOverlayTouchMove}
+            onTouchEnd={handleOverlayTouchEnd}
+            style={{
+                position: "fixed", inset: 0, zIndex: 50,
+                background: T.bg.base, display: "flex", flexDirection: "column",
+                fontFamily: T.font.sans,
+                transform: slideOffset > 0 ? `translateX(${slideOffset}px)` : undefined,
+                transition: slideOffset === 0 ? "transform 0.25s ease-out" : "none",
+                willChange: slideOffset > 0 ? "transform" : undefined,
+            }}>
+
+            {/* ─── PULL-TO-REFRESH INDICATOR ─── */}
+            {(isPulling || refreshing) && (
+                <div style={{
+                    position: "absolute", top: `calc(env(safe-area-inset-top, 0px) + 56px)`,
+                    left: "50%", transform: `translate(-50%, ${Math.min(pullDistance, 60)}px)`,
+                    zIndex: 25, transition: isPulling ? "none" : "transform 0.3s ease-out, opacity 0.3s",
+                    opacity: pullDistance > 20 || refreshing ? 1 : pullDistance / 20,
+                }}>
+                    <div style={{
+                        width: 32, height: 32, borderRadius: 16,
+                        background: T.bg.elevated, border: `1px solid ${T.border.default}`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        boxShadow: T.shadow.card,
+                    }}>
+                        <RefreshCw size={16} color={T.accent.primary} style={{
+                            animation: refreshing ? "ringSweep 1s linear infinite" : `rotate(${pullDistance * 4}deg)`,
+                            transition: refreshing ? "none" : "transform 0.1s ease-out",
+                        }} />
+                    </div>
+                </div>
+            )}
 
             {/* ─── HEADER ─── */}
             <header style={{

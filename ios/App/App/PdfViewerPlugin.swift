@@ -4,12 +4,7 @@ import QuickLook
 import UIKit
 
 @objc(PdfViewerPlugin)
-public class PdfViewerPlugin: CAPPlugin, CAPBridgedPlugin, QLPreviewControllerDataSource, QLPreviewControllerDelegate {
-    public let identifier = "PdfViewer"
-    public let jsName = "PdfViewer"
-    public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "open", returnType: CAPPluginReturnPromise)
-    ]
+public class PdfViewerPlugin: CAPPlugin, QLPreviewControllerDataSource, QLPreviewControllerDelegate {
 
     private var previewFileURL: URL?
     private var downloadedFileURL: URL?
