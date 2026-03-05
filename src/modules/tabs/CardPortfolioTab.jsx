@@ -14,6 +14,7 @@ import { fetchMarketPrices, getTickerOptions } from "../marketData.js";
 import { connectBank, autoMatchAccounts, fetchBalancesAndLiabilities, fetchAllBalancesAndLiabilities, fetchAllTransactions, applyBalanceSync, saveConnectionLinks, purgeBrokenConnections, getConnections, getStoredTransactions } from "../plaid.js";
 import { haptic } from "../haptics.js";
 import { getCurrentTier, isGatingEnforced } from "../subscription.js";
+import { usePlaidSync } from "../usePlaidSync.js";
 
 const ENABLE_PLAID = true;
 const REFRESH_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
@@ -144,72 +145,13 @@ export default memo(function CardPortfolioTab() {
         } finally { setPlaidLoading(false); }
     };
 
-    const [plaidRefreshing, setPlaidRefreshing] = useState(false);
-    const handleRefreshPlaid = async () => {
-        if (plaidRefreshing) return; // Guard against double-tap
-
-        // Check if there are any Plaid connections to sync
-        const conns = await getConnections();
-        if (conns.length === 0) {
-            if (window.toast) window.toast.info("No bank connections — tap 'Connect with Plaid' to add one");
-            return;
-        }
-
-        // Tiered cooldown: Free = 60min, Pro = 5min
-        // Skip cooldown in soft gating mode (beta — don't block)
-        if (isGatingEnforced()) {
-            const tier = await getCurrentTier();
-            const cooldown = REFRESH_COOLDOWNS[tier.id] || REFRESH_COOLDOWNS.free;
-            const lastSync = cards.find(c => c._plaidLastSync)?._plaidLastSync
-                || bankAccounts.find(b => b._plaidLastSync)?._plaidLastSync;
-            if (lastSync && (Date.now() - new Date(lastSync).getTime()) < cooldown) {
-                const minsLeft = Math.ceil((cooldown - (Date.now() - new Date(lastSync).getTime())) / 60000);
-                if (window.toast) window.toast.info(`Next sync available in ${minsLeft} min${tier.id === "free" ? " (Pro: every 5 min)" : ""}`);
-                return;
-            }
-        }
-        setPlaidRefreshing(true);
-        try {
-            const results = await fetchAllBalancesAndLiabilities();
-            console.warn(`[Plaid] handleRefreshPlaid: ${results.length} results, errors: ${results.filter(r => r._error).map(r => r._error).join(', ') || 'none'}`);
-            let allCards = [...cards];
-            let allBanks = [...bankAccounts];
-            let allInvests = [...(financialConfig.plaidInvestments || [])];
-            let investmentsChanged = false;
-            let successCount = 0;
-            for (let i = 0; i < results.length; i++) {
-                const res = results[i];
-                if (!res._error) {
-                    const syncData = applyBalanceSync(res, allCards, allBanks, allInvests);
-                    console.warn(`[Plaid] applyBalanceSync for ${res.institutionName}: ${syncData.balanceSummary.length} accounts updated`, syncData.balanceSummary);
-                    allCards = syncData.updatedCards;
-                    allBanks = syncData.updatedBankAccounts;
-                    if (syncData.updatedPlaidInvestments) {
-                        allInvests = syncData.updatedPlaidInvestments;
-                        investmentsChanged = true;
-                    }
-                    await saveConnectionLinks(res);
-                    successCount++;
-                }
-            }
-            setCards(allCards);
-            setBankAccounts(allBanks);
-            if (investmentsChanged) setFinancialConfig({ ...financialConfig, plaidInvestments: allInvests });
-            if (successCount > 0) {
-                haptic.success();
-                if (window.toast) window.toast.success(`Synced ${successCount} bank${successCount !== 1 ? 's' : ''} successfully`);
-                // Auto-fetch transactions alongside balances (non-blocking)
-                fetchAllTransactions(30).then(r => {
-                    console.warn(`[Plaid] Auto-fetched ${r.data.length} transactions`);
-                }).catch(e => console.warn(`[Plaid] Transaction fetch skipped: ${e.message}`));
-            } else {
-                const firstErr = results.find(r => r._error)?._error || "No connections available";
-                console.warn(`[Plaid] ALL connections failed: ${firstErr}`);
-                if (window.toast) window.toast.error(`Sync failed: ${firstErr}`);
-            }
-        } catch (e) { console.error(e); if (window.toast) window.toast.error("Failed to sync balances. Try again."); }
-        finally { setPlaidRefreshing(false); }
-    };
+    // Plaid balance sync via shared hook
+    const { syncing: plaidRefreshing, sync: handleRefreshPlaid } = usePlaidSync({
+        cards, bankAccounts, financialConfig,
+        setCards, setBankAccounts, setFinancialConfig,
+        successMessage: "Synced balances successfully",
+        autoFetchTransactions: true,
+    });
     const [editingBank, setEditingBank] = useState(null);
     const [editBankForm, setEditBankForm] = useState({});
 

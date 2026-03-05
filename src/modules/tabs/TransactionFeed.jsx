@@ -118,15 +118,21 @@ export default function TransactionFeed({ onClose }) {
 
     const handleOverlayTouchMove = useCallback((e) => {
         if (!swipeRef.current) {
-            // Pull-to-refresh logic
-            if (scrollRef.current && scrollRef.current.scrollTop <= 0 && !refreshing) {
+            // Pull-to-refresh logic (tolerance for momentum scroll artifacts)
+            if (scrollRef.current && scrollRef.current.scrollTop <= 2 && !refreshing) {
                 const touch = e.touches[0];
                 if (!pullRef.current) {
-                    pullRef.current = { y: touch.clientY };
+                    pullRef.current = { y: touch.clientY, hapticFired: false };
                     setIsPulling(true);
                 }
                 const dy = Math.max(0, touch.clientY - pullRef.current.y);
-                setPullDistance(Math.min(dy * 0.5, 80));
+                const distance = Math.min(dy * 0.5, 80);
+                setPullDistance(distance);
+                // Haptic bump when crossing the refresh threshold
+                if (distance >= 60 && !pullRef.current.hapticFired) {
+                    pullRef.current.hapticFired = true;
+                    haptic.light();
+                }
             }
             return;
         }

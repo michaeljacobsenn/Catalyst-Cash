@@ -22,7 +22,7 @@ import { haptic } from "../haptics.js";
 import { shouldShowGating, getCurrentTier, isGatingEnforced } from "../subscription.js";
 import ProPaywall, { ProBanner } from "./ProPaywall.jsx";
 import ErrorBoundary from "../ErrorBoundary.jsx";
-import { fetchAllBalancesAndLiabilities, applyBalanceSync, getConnections, saveConnectionLinks } from "../plaid.js";
+import { usePlaidSync } from "../usePlaidSync.js";
 import "./DashboardTab.css";
 import { useCoachmark, COACHMARKS } from "../coachmarks.js";
 import Coachmark from "../Coachmark.jsx";
@@ -52,59 +52,13 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
     const { cards, setCards, bankAccounts, setBankAccounts, renewals, badges } = usePortfolio();
     const { navTo, setSetupReturnTab } = useNavigation();
     const [showPaywall, setShowPaywall] = useState(false);
-    const [syncing, setSyncing] = useState(false);
 
-    // ── Plaid Balance Sync (same logic as Accounts tab) ──
-    const handleSyncBalances = useCallback(async () => {
-        if (syncing) return;
-        const conns = await getConnections();
-        if (conns.length === 0) {
-            if (window.toast) window.toast.info("No bank connections — connect via Settings → Plaid");
-            return;
-        }
-        if (isGatingEnforced()) {
-            const tier = await getCurrentTier();
-            const cooldown = SYNC_COOLDOWNS[tier.id] || SYNC_COOLDOWNS.free;
-            const lastSync = cards.find(c => c._plaidLastSync)?._plaidLastSync
-                || bankAccounts.find(b => b._plaidLastSync)?._plaidLastSync;
-            if (lastSync && (Date.now() - new Date(lastSync).getTime()) < cooldown) {
-                const minsLeft = Math.ceil((cooldown - (Date.now() - new Date(lastSync).getTime())) / 60000);
-                if (window.toast) window.toast.info(`Next sync in ${minsLeft} min`);
-                return;
-            }
-        }
-        setSyncing(true);
-        try {
-            const results = await fetchAllBalancesAndLiabilities();
-            let allCards = [...cards];
-            let allBanks = [...bankAccounts];
-            let allInvests = [...(financialConfig.plaidInvestments || [])];
-            let investmentsChanged = false;
-            let successCount = 0;
-            for (const res of results) {
-                if (!res._error) {
-                    const syncData = applyBalanceSync(res, allCards, allBanks, allInvests);
-                    allCards = syncData.updatedCards;
-                    allBanks = syncData.updatedBankAccounts;
-                    if (syncData.updatedPlaidInvestments) { allInvests = syncData.updatedPlaidInvestments; investmentsChanged = true; }
-                    await saveConnectionLinks(res);
-                    successCount++;
-                }
-            }
-            setCards(allCards);
-            setBankAccounts(allBanks);
-            if (investmentsChanged) setFinancialConfig({ ...financialConfig, plaidInvestments: allInvests });
-            if (successCount > 0) {
-                haptic.success();
-                if (window.toast) window.toast.success("Balances synced — run a new audit to reflect updated numbers");
-            } else {
-                if (window.toast) window.toast.error("Sync failed — check your connection");
-            }
-        } catch (e) {
-            console.error("[Dashboard] Sync failed:", e);
-            if (window.toast) window.toast.error("Failed to sync balances");
-        } finally { setSyncing(false); }
-    }, [syncing, cards, bankAccounts, financialConfig, setCards, setBankAccounts, setFinancialConfig]);
+    // ── Plaid Balance Sync (shared hook) ──
+    const { syncing, sync: handleSyncBalances } = usePlaidSync({
+        cards, bankAccounts, financialConfig,
+        setCards, setBankAccounts, setFinancialConfig,
+        successMessage: "Balances synced — run a new audit to reflect updated numbers",
+    });
 
     const onRunAudit = () => navTo("input");
     const onViewResult = () => navTo("results", current);
