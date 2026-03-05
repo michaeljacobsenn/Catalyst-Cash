@@ -5,13 +5,27 @@ const EXACT_SECURITY_KEYS = new Set([
   "use-face-id",
   "lock-timeout",
   "apple-linked-id",
+  "device-id",
+  "subscription-state",
+  "cc-device-id",
+  "cc-audit-state",
 ]);
 
 const SAFE_IMPORT_KEY_RE = /^[a-z0-9-]+$/;
+const SECURE_PREFIX = "secure:";
+
+function normalizeSecurityKey(key = "") {
+  const lower = String(key).toLowerCase();
+  return lower.startsWith(SECURE_PREFIX) ? lower.slice(SECURE_PREFIX.length) : lower;
+}
 
 export function isSecuritySensitiveKey(key = "") {
-  const lower = key.toLowerCase();
-  return EXACT_SECURITY_KEYS.has(key) || lower.startsWith("api-key") || lower.startsWith("api_key");
+  const normalized = normalizeSecurityKey(key);
+  return (
+    EXACT_SECURITY_KEYS.has(normalized) ||
+    normalized.startsWith("api-key") ||
+    normalized.startsWith("api_key")
+  );
 }
 
 export function isSafeImportKey(key = "") {

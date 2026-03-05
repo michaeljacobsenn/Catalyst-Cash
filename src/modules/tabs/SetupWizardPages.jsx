@@ -93,12 +93,12 @@ export function PageWelcome({ onNext }) {
             </div>
 
             <p style={{ fontSize: 14, color: T.text.secondary, lineHeight: 1.7, marginBottom: 24, maxWidth: 300, margin: "0 auto 24px" }}>
-                AI-powered financial intelligence — weekly audits, contextual chat, and bank sync — all private, all on-device.
+                AI-powered financial intelligence — weekly audits, contextual chat, and bank sync — with local storage and a secure AI proxy.
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 20, textAlign: "left" }}>
                 {[
-                    ["🛡️", "Zero-Knowledge", "Data never touches our servers"],
+                    ["🛡️", "Private by Design", "Stored on-device, proxied only when needed"],
                     ["🧠", "Catalyst AI", "Weekly audits + contextual financial chat"],
                     ["🏦", "Bank Sync", "Auto-sync balances via Plaid integration"],
                     ["📊", "Full Ledger", "Cards, debts, income, budgets & renewals"],
@@ -514,10 +514,10 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }) {
                 </div>
                 <div>
                     <h4 style={{ margin: "0 0 4px 0", fontSize: 13, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
-                        Zero-Knowledge Architecture
+                        Private by Design
                     </h4>
                     <p style={{ margin: 0, fontSize: 12, color: T.text.secondary, lineHeight: 1.5 }}>
-                        Your financial footprint never touches our servers. Catalyst Cash runs entirely <strong style={{ color: T.status.green, fontWeight: 600 }}>on-device</strong>. Your data is encrypted locally and only syncs via your personal iCloud/Drive.
+                        Your core financial data stays stored <strong style={{ color: T.status.green, fontWeight: 600 }}>on-device</strong>. AI requests are routed through the Catalyst Cash backend proxy with PII scrubbing, and optional backups sync through your personal iCloud/Drive.
                     </p>
                 </div>
             </div>
@@ -702,7 +702,7 @@ export function PagePass3({ ai, security, spending, updateAi, updateSecurity, up
                             </div>
                         ) : (
                             <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 12px 0" }}>
-                                Instantly pull real-time balances from your checking, savings, and credit accounts. Your credentials never touch our servers — Plaid handles authentication directly.
+                                Instantly pull real-time balances from your checking, savings, and credit accounts. Plaid handles authentication directly and Catalyst Cash does not store your bank login credentials.
                             </p>
                         )}
                         <div style={{ display: "flex", gap: 8 }}>
@@ -865,7 +865,6 @@ export function PagePass3({ ai, security, spending, updateAi, updateSecurity, up
                             });
                             const userId = result.response.user;
                             if (setAppleLinkedId) setAppleLinkedId(userId);
-                            await db.set("apple-linked-id", userId);
                             if (window.toast) window.toast.success("Apple ID linked for iCloud backup.");
                         } catch {
                             if (window.toast) window.toast.error("Apple Sign-In cancelled or failed.");
@@ -941,4 +940,3 @@ export function PageDone({ onFinish }) {
         </div>
     );
 }
-

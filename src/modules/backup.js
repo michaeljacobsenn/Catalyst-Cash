@@ -5,8 +5,7 @@
 import { APP_VERSION } from "./constants.js";
 import { db, nativeExport } from "./utils.js";
 import { encrypt, decrypt, isEncrypted } from "./crypto.js";
-import { isSecuritySensitiveKey } from "./securityKeys.js";
-import { generateBackupSpreadsheet } from "./spreadsheet.js";
+import { isSafeImportKey, isSecuritySensitiveKey } from "./securityKeys.js";
 
 /**
  * Merge two arrays of objects with unique `id` fields, keeping existing entries.
@@ -180,7 +179,7 @@ export async function importBackup(file, getPassphrase) {
                 }
                 let count = 0;
                 for (const [key, val] of Object.entries(backup.data)) {
-                    if (isSecuritySensitiveKey(key)) continue;
+                    if (!isSafeImportKey(key)) continue;
                     await db.set(key, val); count++;
                 }
                 resolve({ count, exportedAt: backup.exportedAt });

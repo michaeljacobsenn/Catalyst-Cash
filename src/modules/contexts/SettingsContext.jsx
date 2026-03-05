@@ -3,6 +3,7 @@ import { db } from '../utils.js';
 import { applyTheme } from '../constants.js';
 import { DEFAULT_PROVIDER_ID, DEFAULT_MODEL_ID, getProvider, getModel } from "../providers.js";
 import { schedulePaydayReminder, cancelPaydayReminder, requestNotificationPermission } from "../notifications.js";
+import { migrateToSecureItem } from "../secureStore.js";
 
 const SettingsContext = createContext(null);
 
@@ -154,13 +155,15 @@ export function SettingsProvider({ children }) {
             setAiModel(validModel.id);
 
             const provConfig = validProvider;
-            const provKey = provConfig.keyStorageKey ? await db.get(provConfig.keyStorageKey) : null;
+            const provKey = provConfig.keyStorageKey
+                ? await migrateToSecureItem(provConfig.keyStorageKey, legacyKey, () => db.del("api-key"))
+                : null;
 
             if (provKey) {
                 setApiKey(provKey);
             } else if (legacyKey) {
                 setApiKey(legacyKey);
-                db.set("api-key-openai", legacyKey);
+                await migrateToSecureItem("api-key-openai", legacyKey, () => db.del("api-key"));
             }
 
             if (pr) setPersonalRules(pr);

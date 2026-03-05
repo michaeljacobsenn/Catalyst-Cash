@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback, memo } from "react";
+import { useRef, useState, useEffect, useCallback, memo, lazy, Suspense } from "react";
 import Confetti from "react-confetti";
 import {
     Zap, Plus, Target, Share2, Shield, CloudDownload, RefreshCw, Repeat,
@@ -20,7 +20,7 @@ import CreditScoreSimulator from "./CreditScoreSimulator.jsx";
 import BillNegotiationCard from "./BillNegotiationCard.jsx";
 import { haptic } from "../haptics.js";
 import { shouldShowGating, getCurrentTier, isGatingEnforced } from "../subscription.js";
-import ProPaywall, { ProBanner } from "./ProPaywall.jsx";
+import ProBanner from "./ProBanner.jsx";
 import ErrorBoundary from "../ErrorBoundary.jsx";
 import { usePlaidSync } from "../usePlaidSync.js";
 import "./DashboardTab.css";
@@ -45,6 +45,7 @@ import DebtFreedomCard from '../dashboard/DebtFreedomCard.jsx';
 import EmptyDashboard from '../dashboard/EmptyDashboard.jsx';
 
 const SYNC_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
+const LazyProPaywall = lazy(() => import("./ProPaywall.jsx"));
 
 export default memo(function DashboardTab({ onRestore, proEnabled = false, onDemoAudit, onRefreshDashboard, onViewTransactions, onDiscussWithCFO }) {
     const { current, history } = useAudit();
@@ -397,7 +398,7 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
 
                 {/* Pro Upgrade Banner */}
                 {shouldShowGating() && <ProBanner onUpgrade={() => setShowPaywall(true)} label="Upgrade to Pro" sublabel="60 audits/mo · Premium AI · Full history" />}
-                {showPaywall && <ProPaywall onClose={() => setShowPaywall(false)} />}
+                {showPaywall && <Suspense fallback={null}><LazyProPaywall onClose={() => setShowPaywall(false)} /></Suspense>}
 
                 {/* ═══ COMMAND HEADER — Consolidated Hero ═══ */}
                 <Card animate className="hover-card" style={{

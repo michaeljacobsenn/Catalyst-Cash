@@ -54,6 +54,7 @@ import { useSecurity } from '../contexts/SecurityContext.jsx';
 import { useNavigation } from '../contexts/NavigationContext.jsx';
 import { useSettings } from '../contexts/SettingsContext.jsx';
 import { useToast } from '../Toast.jsx';
+import { setSecureItem } from '../secureStore.js';
 
 export default function SetupWizard() {
     const { setAppleLinkedId, appleLinkedId } = useSecurity();
@@ -167,12 +168,12 @@ export default function SetupWizard() {
             await db.set("ai-model", ai.aiModel);
             if (ai.apiKey.trim()) {
                 const prov = AI_PROVIDERS.find(p => p.id === ai.aiProvider);
-                if (prov) await db.set(prov.keyStorageKey, ai.apiKey.trim());
+                if (prov?.keyStorageKey) await setSecureItem(prov.keyStorageKey, ai.apiKey.trim());
             }
 
             // Security — only write if user set a PIN
             if (security.pinEnabled && security.pin.length >= 4) {
-                await db.set("app-passcode", security.pin);
+                await setSecureItem("app-passcode", security.pin);
                 await db.set("require-auth", true);
                 if (security.useFaceId) await db.set("use-face-id", true);
             }

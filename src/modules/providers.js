@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // AI PROVIDER REGISTRY — Catalyst Cash
 // Default: Backend proxy (Gemini 2.5 Flash — free for all users)
-// Pro: Premium models via backend (Gemini 2.5 Pro, OpenAI o4-mini, Claude Haiku)
+// Pro: Premium models via backend (Gemini 2.5 Pro, OpenAI o4-mini; Claude coming soon)
 // ═══════════════════════════════════════════════════════════════
 
 export const AI_PROVIDERS = [
@@ -15,7 +15,7 @@ export const AI_PROVIDERS = [
             { id: "gpt-4o-mini", name: "GPT-4o mini", note: "OpenAI quality — included free", tier: "free", provider: "openai" },
             { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", note: "Advanced deep reasoning", tier: "pro", provider: "gemini" },
             { id: "o4-mini", name: "OpenAI o4-mini", note: "Latest OpenAI reasoning engine", tier: "pro", provider: "openai" },
-            { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", note: "Anthropic's fast & affordable model", tier: "pro", provider: "claude", comingSoon: true },
+            { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", note: "Anthropic's fast & affordable model", tier: "pro", provider: "claude", comingSoon: true, disabled: true },
         ],
         defaultModel: "gemini-2.5-flash",
         supportsStreaming: true,
@@ -31,9 +31,15 @@ export function getProvider(id) {
     return AI_PROVIDERS.find(p => p.id === id) || AI_PROVIDERS[0];
 }
 
+export function isModelSelectable(model) {
+    return Boolean(model) && !model.disabled && !model.comingSoon;
+}
+
 export function getModel(providerId, modelId) {
     const provider = getProvider(providerId);
-    return provider.models.find(m => m.id === modelId) || provider.models[0];
+    return provider.models.find(m => m.id === modelId && isModelSelectable(m))
+        || provider.models.find(isModelSelectable)
+        || provider.models[0];
 }
 
 /**

@@ -1,16 +1,61 @@
 import { Capacitor } from '@capacitor/core';
 import { Purchases, LOG_LEVEL } from '@revenuecat/purchases-capacitor';
-import { RevenueCatUI, PAYWALL_RESULT } from '@revenuecat/purchases-capacitor-ui';
+import { RevenueCatUI } from '@revenuecat/purchases-capacitor-ui';
 import { activatePro, deactivatePro } from './subscription.js';
 import { log } from './logger.js';
 
 const ENTITLEMENT_ID = "Catalyst Cash Pro";
+const RC_ENTITLEMENT_VERIFICATION_MODE = "INFORMATIONAL";
+const RC_VERIFICATION_FAILED = "FAILED";
 // ⚠️ IMPORTANT: Replace with your PRODUCTION RevenueCat API key before App Store submission.
 // Test Store keys will cause instant rejection during App Review.
 const API_KEY_APPLE = "appl_UFEFNlCGlZqaIPTiQzwObGdTdwG";
 
 // We keep a local cache of whether we are running on native iOS
 const isNative = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
+let cachedRevenueCatAppUserId = null;
+
+function getEntitlementInfo(customerInfo) {
+    return customerInfo?.entitlements?.active?.[ENTITLEMENT_ID];
+}
+
+function cacheRevenueCatIdentity(customerInfo) {
+    const appUserId = customerInfo?.originalAppUserId || null;
+    if (appUserId) cachedRevenueCatAppUserId = appUserId;
+}
+
+async function applyCustomerInfo(customerInfo) {
+    cacheRevenueCatIdentity(customerInfo);
+    const entitlement = getEntitlementInfo(customerInfo);
+    if (entitlement?.verification === RC_VERIFICATION_FAILED) {
+        log.warn("revenuecat", "Entitlement verification failed");
+    }
+
+    if (entitlement) {
+        await activatePro(entitlement.productIdentifier || "com.catalystcash.pro.rc", 3650);
+        return true;
+    }
+
+    await deactivatePro();
+    return false;
+}
+
+export async function getRevenueCatAppUserId() {
+    if (!isNative) return null;
+    if (cachedRevenueCatAppUserId) return cachedRevenueCatAppUserId;
+
+    try {
+        const { appUserID } = await Purchases.getAppUserID();
+        if (appUserID) {
+            cachedRevenueCatAppUserId = appUserID;
+            return appUserID;
+        }
+    } catch {
+        log.warn("revenuecat", "Could not fetch RevenueCat app user ID");
+    }
+
+    return cachedRevenueCatAppUserId;
+}
 
 /**
  * Sync local state with RevenueCat's latest entitlement status
@@ -20,16 +65,8 @@ export async function syncProStatus() {
 
     try {
         const customerInfo = await Purchases.getCustomerInfo();
-        const isPro = typeof customerInfo.entitlements.active[ENTITLEMENT_ID] !== "undefined";
-
-        if (isPro) {
-            // Activate Pro locally (grant generous lifetime access locally so checkAuditQuota passes)
-            await activatePro("com.catalystcash.pro.rc", 3650);
-        } else {
-            // They lost access (cancelled, expired, refunded) Keep it simple and deactivate.
-            await deactivatePro();
-        }
-        return isPro;
+        await getRevenueCatAppUserId();
+        return applyCustomerInfo(customerInfo);
     } catch (e) {
         log.error("revenuecat", "Error syncing Pro status");
         return false;
@@ -45,16 +82,15 @@ export async function initRevenueCat() {
 
     try {
         await Purchases.setLogLevel({ level: LOG_LEVEL.WARN });
-        await Purchases.configure({ apiKey: API_KEY_APPLE });
+        await Purchases.configure({
+            apiKey: API_KEY_APPLE,
+            entitlementVerificationMode: RC_ENTITLEMENT_VERIFICATION_MODE,
+        });
+        await getRevenueCatAppUserId();
 
         // Listen for real-time changes to the customer's purchase status
         Purchases.addCustomerInfoUpdateListener(async (customerInfo) => {
-            const isPro = typeof customerInfo.entitlements.active[ENTITLEMENT_ID] !== "undefined";
-            if (isPro) {
-                await activatePro("com.catalystcash.pro.rc", 3650);
-            } else {
-                await deactivatePro();
-            }
+            await applyCustomerInfo(customerInfo);
         });
 
         // Sync state on boot
@@ -97,14 +133,7 @@ export async function restorePurchases() {
 
     try {
         const customerInfo = await Purchases.restorePurchases();
-        const isPro = typeof customerInfo.entitlements.active[ENTITLEMENT_ID] !== "undefined";
-
-        if (isPro) {
-            await activatePro("com.catalystcash.pro.rc", 3650);
-        } else {
-            await deactivatePro();
-        }
-        return isPro;
+        return applyCustomerInfo(customerInfo);
     } catch {
         log.error("revenuecat", "Error restoring purchases");
         return false;

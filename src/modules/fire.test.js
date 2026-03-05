@@ -162,6 +162,24 @@ describe("FIRE projection math safety", () => {
         expect(projection.annualIncome).toBeLessThan(projection.annualIncomeGross);
     });
 
+    it("treats imported allocated budget categories as monthly expenses", () => {
+        const projection = computeFireProjection({
+            financialConfig: {
+                incomeSources: [{ name: "Salary", amount: 6000, frequency: "monthly" }],
+                budgetCategories: [{ name: "Core", allocated: 2500 }],
+                fireExpectedReturnPct: 7,
+                fireInflationPct: 2.5,
+                fireSafeWithdrawalPct: 4,
+                taxBracketPercent: 0
+            },
+            renewals: [],
+            cards: []
+        });
+
+        expect(projection.annualExpenses).toBe(30000);
+        expect(projection.targetPortfolio).toBe(750000);
+    });
+
     it("explicit taxBracketPercent overrides bracket model", () => {
         const withBrackets = computeFireProjection({
             financialConfig: {
@@ -192,4 +210,3 @@ describe("FIRE projection math safety", () => {
         }
     });
 });
-

@@ -10,7 +10,7 @@
 //   gpt-4o-mini       $0.15/$0.60/M  ≈ $0.002/audit  → Free
 //   gemini-2.5-pro    $1.25/$10.0/M  ≈ $0.024/audit  → Pro
 //   o4-mini           $1.10/$4.40/M  ≈ $0.012/audit  → Pro
-//   claude-haiku-4-5  $1.00/$5.00/M  ≈ $0.012/audit  → Pro
+//   claude-haiku-4-5  Coming soon (not in active Pro model list yet)
 //
 //   Free: 2 audits/wk on Flash  → ~$0.05/user/month
 //   Pro worst case: 60 audits/mo on Gemini Pro → $1.44/user/month
@@ -21,6 +21,7 @@ import { db } from "./utils.js";
 import { Capacitor } from "@capacitor/core";
 import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
 import { APP_VERSION } from "./constants.js";
+import { AI_PROVIDERS, isModelSelectable } from "./providers.js";
 
 // ── Gating Mode ─────────────────────────────────────────────
 // Controls whether subscription limits are enforced.
@@ -33,7 +34,7 @@ import { APP_VERSION } from "./constants.js";
 // returns gatingMode:"live" and ALL app versions enforce it —
 // even old builds that have "soft" hardcoded here.
 // ────────────────────────────────────────────────────────────
-const GATING_MODE_DEFAULT = "soft";
+const GATING_MODE_DEFAULT = "live";
 let _effectiveGatingMode = GATING_MODE_DEFAULT;
 
 /**
@@ -172,7 +173,6 @@ export const TIERS = {
             "gpt-4o-mini",                    // Standard AI (free)
             "gemini-2.5-pro",                 // Premium AI — deep reasoning
             "o4-mini",                        // Premium AI — latest OpenAI reasoning
-            "claude-haiku-4-5",               // Premium AI — Anthropic fast reasoning
         ],
         features: [
             // ── Everything in Free ──
@@ -248,38 +248,50 @@ const DEFAULT_STATE = {
     productId: null,        // Last purchased product ID
     purchaseDate: null,     // ISO string
     auditsThisWeek: 0,      // Reset every Monday
-    weekStartDate: null,    // ISO string of current week's Monday
+    weekStartDate: null,    // UTC ISO string of current week's Monday
     auditsThisMonth: 0,     // Reset on 1st of each month (Pro cap)
-    monthKey: null,         // e.g. "2026-03" for monthly reset tracking
+    monthKey: null,         // UTC month key, e.g. "2026-03"
     chatMessagesToday: 0,   // Reset daily at midnight
-    chatDayKey: null,       // e.g. "2026-03-01" for daily reset tracking
+    chatDayKey: null,       // UTC day key, e.g. "2026-03-01"
 };
 
 /**
- * Get the current week's Monday (ISO date string).
+ * Get a UTC ISO day key (YYYY-MM-DD).
  */
-function getCurrentWeekMonday() {
-    const d = new Date();
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    const monday = new Date(d);
-    monday.setDate(diff);
-    return monday.toISOString().split("T")[0];
+function getUtcDayKey(now = new Date()) {
+    return now.toISOString().slice(0, 10);
+}
+
+/**
+ * Get the current week's Monday using UTC boundaries.
+ */
+function getCurrentWeekMonday(now = new Date()) {
+    const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const dayNum = monday.getUTCDay() || 7;
+    monday.setUTCDate(monday.getUTCDate() + 1 - dayNum);
+    return monday.toISOString().slice(0, 10);
 }
 
 /**
  * Get current month key for monthly cap tracking (e.g. "2026-03").
  */
-function getCurrentMonthKey() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+function getCurrentMonthKey(now = new Date()) {
+    return now.toISOString().slice(0, 7);
 }
 
 /**
  * Get current day key for daily chat tracking (e.g. "2026-03-01").
  */
-function getCurrentDayKey() {
-    return new Date().toISOString().split("T")[0];
+function getCurrentDayKey(now = new Date()) {
+    return getUtcDayKey(now);
+}
+
+export function getUsageWindowKeys(now = new Date()) {
+    return {
+        weekStartDate: getCurrentWeekMonday(now),
+        monthKey: getCurrentMonthKey(now),
+        dayKey: getCurrentDayKey(now),
+    };
 }
 
 // ── Keychain Helpers (Anti-Abuse) ─────────────────────────────
@@ -435,7 +447,7 @@ export async function getSubscriptionState() {
  * When GATING_MODE is "off", always returns Pro tier.
  */
 export async function getCurrentTier() {
-    if (GATING_MODE_DEFAULT === "off" && _effectiveGatingMode === "off") return TIERS.pro;
+    if (_effectiveGatingMode === "off") return TIERS.pro;
     const state = await getSubscriptionState();
     return TIERS[state.tier] || TIERS.free;
 }
@@ -464,7 +476,10 @@ export async function hasFeature(featureId) {
  */
 export async function isModelAvailable(modelId) {
     const tier = await getCurrentTier();
-    return tier.models.includes(modelId);
+    const activeModels = new Set(
+        AI_PROVIDERS.flatMap(provider => provider.models.filter(isModelSelectable).map(model => model.id))
+    );
+    return tier.models.includes(modelId) && activeModels.has(modelId);
 }
 
 /**

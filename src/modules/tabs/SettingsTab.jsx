@@ -7,24 +7,26 @@ import { getErrorLog, clearErrorLog } from "../errorReporter.js";
 import { Card, Label, InlineTooltip } from "../ui.jsx";
 import { Mono } from "../components.jsx";
 import { db, FaceId, nativeExport, fmt } from "../utils.js";
-import { exportBackup, importBackup, mergeUniqueById } from "../backup.js";
-import { generateBackupSpreadsheet } from "../spreadsheet.js";
 import { isSecuritySensitiveKey } from "../securityKeys.js";
 
 
 import { haptic } from "../haptics.js";
-import { SignInWithApple } from "@capacitor-community/apple-sign-in";
 import { Capacitor } from "@capacitor/core";
-import { uploadToICloud } from "../cloudSync.js";
 
 
 import { getConnections } from "../plaid.js";
+import { deleteSecureItem, getSecureItem, setSecureItem } from "../secureStore.js";
 const LazyPlaidSection = lazy(() => import("../settings/PlaidSection.jsx"));
 import { shouldShowGating, checkAuditQuota, getRawTier } from "../subscription.js";
-import ProPaywall, { ProBanner } from "./ProPaywall.jsx";
-import { presentCustomerCenter } from "../revenuecat.js";
+import ProBanner from "./ProBanner.jsx";
 
 const ENABLE_PLAID = true; // Toggle to false to hide, true to show Plaid integration
+const LazyProPaywall = lazy(() => import("./ProPaywall.jsx"));
+const loadBackupModule = () => import("../backup.js");
+const loadSpreadsheetModule = () => import("../spreadsheet.js");
+const loadAppleSignIn = () => import("@capacitor-community/apple-sign-in");
+const loadCloudSync = () => import("../cloudSync.js");
+const loadRevenueCat = () => import("../revenuecat.js");
 
 
 import { useAudit } from '../contexts/AuditContext.jsx';
@@ -64,6 +66,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
 
         const checkAndBackup = async () => {
             try {
+                const { uploadToICloud } = await loadCloudSync();
                 const ts = await db.get("last-backup-ts");
                 const elapsed = Date.now() - (ts || 0);
                 if (elapsed >= intervalMs) {
@@ -106,6 +109,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
     const handleAppleSignIn = async () => {
         if (Capacitor.getPlatform() === 'web') return;
         try {
+            const { SignInWithApple } = await loadAppleSignIn();
             const result = await SignInWithApple.authorize({
                 clientId: 'com.jacobsen.portfoliopro',
                 redirectURI: 'https://api.catalystcash.app/auth/apple/callback',
@@ -114,7 +118,6 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
             // console.log("Apple Sign-In Success:", result);
             const userIdentifier = result.response.user;
             setAppleLinkedId(userIdentifier);
-            db.set("apple-linked-id", userIdentifier);
             if (window.toast) window.toast.success("Apple ID linked for App Unlocking.");
         } catch (error) {
             console.error(error);
@@ -123,7 +126,6 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
     };
 
     const unlinkApple = () => {
-        db.del("apple-linked-id");
         db.del("last-backup-ts");
         if (setAutoBackupInterval) {
             setAutoBackupInterval("off");
@@ -161,6 +163,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
     const forceICloudSync = async () => {
         setIsForceSyncing(true);
         try {
+            const { uploadToICloud } = await loadCloudSync();
             const backup = { app: "Catalyst Cash", version: APP_VERSION, exportedAt: new Date().toISOString(), data: {} };
             const keys = await db.keys();
             for (const key of keys) {
@@ -232,7 +235,6 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
     const handlePasscodeChange = (e) => {
         const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 4);
         setAppPasscode(val);
-        db.set("app-passcode", val);
         if (val.length < 4 && requireAuth) {
             setRequireAuth(false);
             db.set("require-auth", false);
@@ -328,6 +330,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
             const passphrase = await showPassphraseModal("export");
             if (!passphrase) { setBackupStatus(null); return; }
             setBackupStatus("exporting");
+            const { exportBackup } = await loadBackupModule();
             const count = await exportBackup(passphrase);
             setBackupStatus("done");
             setStatusMsg(`Backed up ${count} data keys to your device`);
@@ -340,6 +343,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
             const passphrase = await showPassphraseModal("export");
             if (!passphrase) { setBackupStatus(null); return; }
             setBackupStatus("exporting");
+            const { generateBackupSpreadsheet } = await loadSpreadsheetModule();
             await generateBackupSpreadsheet(passphrase);
             setBackupStatus("done");
             setStatusMsg("Exported encrypted spreadsheet backup.");
@@ -350,6 +354,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
         const file = e.target.files?.[0]; if (!file) return;
         e.target.value = ""; setBackupStatus(null); setStatusMsg("");
         try {
+            const { importBackup } = await loadBackupModule();
             const { count, exportedAt } = await importBackup(file, () => showPassphraseModal("import"));
             setRestoreStatus("done");
             const dateStr = exportedAt ? new Date(exportedAt).toLocaleDateString() : "unknown date";
@@ -367,7 +372,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
         setAiModel(prov.defaultModel);
         // Load that provider's stored key
         if (prov.keyStorageKey) {
-            db.get(prov.keyStorageKey).then(k => {
+            getSecureItem(prov.keyStorageKey).then(k => {
                 const nextKey = typeof k === "string" ? k.trim() : "";
                 setApiKey(nextKey);
                 setShowApiSetup(Boolean(nextKey));
@@ -382,9 +387,15 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
         const normalized = (val || "").trim();
         setApiKey(normalized);
         // Save to provider-specific slot immediately
-        if (currentProvider.keyStorageKey) db.set(currentProvider.keyStorageKey, normalized);
+        if (currentProvider.keyStorageKey) {
+            if (normalized) void setSecureItem(currentProvider.keyStorageKey, normalized);
+            else void deleteSecureItem(currentProvider.keyStorageKey);
+        }
         // Also mirror to legacy "api-key" for OpenAI backward compatibility
-        if (currentProvider.id === "openai") db.set("api-key", normalized);
+        if (currentProvider.id === "openai") {
+            if (normalized) db.set("api-key", normalized);
+            else db.del("api-key");
+        }
     };
 
     return <div className="slide-pane" style={{
@@ -603,7 +614,10 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
                         {shouldShowGating() && <div>
                             <span style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginLeft: 16, marginBottom: 8, display: "block", letterSpacing: "0.03em", textTransform: "uppercase" }}>Subscription</span>
                             {proEnabled ? (
-                                <button onClick={() => presentCustomerCenter()} style={{
+                                <button onClick={async () => {
+                                    const { presentCustomerCenter } = await loadRevenueCat();
+                                    await presentCustomerCenter();
+                                }} style={{
                                     width: "100%", padding: "14px 16px", borderRadius: T.radius.xl,
                                     border: `1px solid ${T.accent.primary}40`, background: `${T.accent.primary}10`,
                                     color: T.accent.primary, fontSize: 14, fontWeight: 700, cursor: "pointer",
@@ -614,7 +628,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
                                     <ChevronRight size={18} color={T.accent.primary} />
                                 </button>
                             ) : (
-                                <ProBanner onUpgrade={() => setShowPaywall(true)} label="Upgrade to Pro" sublabel="60 audits/mo, all models, 15m market data" />
+                                <ProBanner onUpgrade={() => setShowPaywall(true)} label="Upgrade to Pro" sublabel="60 audits/mo, premium models, 5m market data" />
                             )}
                         </div>}
 
@@ -693,14 +707,14 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
                                 <span style={{ fontSize: 10, fontWeight: 700, color: T.accent.primary, fontFamily: T.font.mono, background: T.accent.primaryDim, padding: "2px 8px", borderRadius: 99 }}>ACTIVE</span>
                             </div>
                             <p style={{ margin: 0, fontSize: 12, color: T.text.secondary, lineHeight: 1.5 }}>
-                                Your financial data is processed securely and never stored on our servers.
+                                Your scrubbed prompt is routed through our secure backend proxy and is not stored as a raw financial payload on our servers.
                             </p>
                             <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
                                 <span style={{ fontSize: 10, fontFamily: T.font.mono, color: T.text.dim }}>SSE Streaming</span>
                                 <span style={{ width: 3, height: 3, borderRadius: "50%", background: T.text.muted }} />
                                 <span style={{ fontSize: 10, fontFamily: T.font.mono, color: T.text.dim }}>Zero Config</span>
                                 <span style={{ width: 3, height: 3, borderRadius: "50%", background: T.text.muted }} />
-                                <span style={{ fontSize: 10, fontFamily: T.font.mono, color: T.text.dim }}>End-to-End Encrypted</span>
+                                <span style={{ fontSize: 10, fontFamily: T.font.mono, color: T.text.dim }}>PII Scrubbed</span>
                             </div>
                         </div>
 
@@ -710,7 +724,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
                             {currentProvider.models.map(m => {
                                 const active = aiModel === m.id;
                                 const isPro = m.tier === "pro";
-                                const locked = (isPro && !proEnabled) || m.disabled;
+                                const locked = (isPro && !proEnabled) || m.disabled || m.comingSoon;
                                 return <button key={m.id} onClick={() => { if (!locked) { setAiModel(m.id); setAiProvider("backend"); } }} style={{
                                     padding: "10px 14px", borderRadius: T.radius.md,
                                     border: `1.5px solid ${active ? T.accent.primary : T.border.default}`,
@@ -1176,9 +1190,9 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
                                     </p>
                                 </div>
                                 <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.5, marginTop: 4 }}>
-                                    🔒 Your data is processed locally on your device. We never see, access, or store your financial
-                                    information. AI chat conversations auto-expire after 24 hours with PII automatically scrubbed.
-                                    API requests go directly from your device to your chosen AI provider.
+                                    🔒 Your core financial data is stored locally on your device. AI requests are routed through the
+                                    Catalyst Cash backend proxy with PII scrubbing, and raw financial payloads are not retained on our servers.
+                                    Chat history auto-expires after 24 hours on-device.
                                 </p>
                             </div>
                         </div>
@@ -1199,5 +1213,6 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
 
             </div >
         </div > {/* close animation wrapper */}
+        {showPaywall && <Suspense fallback={null}><LazyProPaywall onClose={() => setShowPaywall(false)} /></Suspense>}
     </div >;
 }

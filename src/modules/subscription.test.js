@@ -20,6 +20,7 @@ import {
     checkAuditQuota, recordAuditUsage,
     getMarketRefreshTTL, getHistoryLimit,
     activatePro, deactivatePro, isPro,
+    getUsageWindowKeys,
 } from './subscription.js';
 
 // ── Helper: clear mock store between tests ────────────────────
@@ -44,9 +45,7 @@ describe('Tier Definitions', () => {
         expect(TIERS.pro.historyLimit).toBe(Infinity);
         expect(TIERS.pro.models).toContain('gemini-2.5-flash');
         expect(TIERS.pro.models).toContain('gemini-2.5-pro');
-        expect(TIERS.pro.models).toContain('o3-mini');
-        expect(TIERS.pro.models).toContain('o3-mini');
-        // claude-sonnet-4-6 is Coming Soon — not in active models list
+        expect(TIERS.pro.models).toContain('o4-mini');
     });
 });
 
@@ -67,18 +66,18 @@ describe('IAP Constants', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// GATING MODE (currently "soft" for beta)
+// GATING MODE
 // ═══════════════════════════════════════════════════════════════
 describe('Gating Mode', () => {
-    it('default gating mode is "soft"', () => {
-        expect(getGatingMode()).toBe('soft');
+    it('default gating mode is "live"', () => {
+        expect(getGatingMode()).toBe('live');
     });
 
-    it('isGatingEnforced returns false when soft', () => {
-        expect(isGatingEnforced()).toBe(false);
+    it('isGatingEnforced returns true when live', () => {
+        expect(isGatingEnforced()).toBe(true);
     });
 
-    it('shouldShowGating returns true when soft', () => {
+    it('shouldShowGating returns true when live', () => {
         expect(shouldShowGating()).toBe(true);
     });
 });
@@ -132,18 +131,16 @@ describe('Model Gating (raw tier, not affected by GATING_MODE)', () => {
 
     it('free user cannot access pro models', async () => {
         expect(await isModelAvailable('gemini-2.5-pro')).toBe(false);
-        expect(await isModelAvailable('o3-mini')).toBe(false);
-        expect(await isModelAvailable('o3-mini')).toBe(false);
-        // claude-sonnet-4-6 is Coming Soon — removed from tier models
+        expect(await isModelAvailable('o4-mini')).toBe(false);
+        expect(await isModelAvailable('claude-haiku-4-5')).toBe(false);
     });
 
     it('pro user can access all models', async () => {
         await activatePro('com.catalystcash.pro.monthly', 30);
         expect(await isModelAvailable('gemini-2.5-flash')).toBe(true);
         expect(await isModelAvailable('gemini-2.5-pro')).toBe(true);
-        expect(await isModelAvailable('o3-mini')).toBe(true);
-        expect(await isModelAvailable('o3-mini')).toBe(true);
-        // claude-sonnet-4-6 is Coming Soon — not yet available
+        expect(await isModelAvailable('o4-mini')).toBe(true);
+        expect(await isModelAvailable('claude-haiku-4-5')).toBe(false);
     });
 });
 
@@ -190,6 +187,13 @@ describe('Subscription State', () => {
         };
         const state = await getSubscriptionState();
         expect(state.tier).toBe('free');
+    });
+
+    it('uses UTC day, week, and month windows to match the backend', () => {
+        const keys = getUsageWindowKeys(new Date('2026-03-01T23:30:00-05:00'));
+        expect(keys.dayKey).toBe('2026-03-02');
+        expect(keys.weekStartDate).toBe('2026-03-02');
+        expect(keys.monthKey).toBe('2026-03');
     });
 });
 
