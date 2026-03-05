@@ -1,6 +1,9 @@
-import { useRef, useState, useEffect, memo } from "react";
+import { useRef, useState, useEffect, useCallback, memo } from "react";
 import Confetti from "react-confetti";
-import { Zap, ArrowUpRight, ArrowDownRight, Activity, TrendingUp, Download, Target, ExternalLink, RefreshCw, Plus, MessageCircle, CloudUpload, Shield, ReceiptText } from "lucide-react";
+import {
+    Zap, Plus, Target, Share2, Shield, CloudDownload, RefreshCw, Repeat,
+    Activity, ReceiptText, ExternalLink, MessageCircle, CloudUpload
+} from "lucide-react";
 import { T } from "../constants.js";
 
 import { fmt, fmtDate, exportAudit, shareAudit, stripPaycheckParens, db } from "../utils.js";
@@ -15,9 +18,10 @@ import BudgetTab from "./BudgetTab.jsx";
 import CreditScoreSimulator from "./CreditScoreSimulator.jsx";
 import BillNegotiationCard from "./BillNegotiationCard.jsx";
 import { haptic } from "../haptics.js";
-import { shouldShowGating } from "../subscription.js";
+import { shouldShowGating, getCurrentTier, isGatingEnforced } from "../subscription.js";
 import ProPaywall, { ProBanner } from "./ProPaywall.jsx";
 import ErrorBoundary from "../ErrorBoundary.jsx";
+import { fetchAllBalancesAndLiabilities, applyBalanceSync, getConnections, saveConnectionLinks } from "../plaid.js";
 import "./DashboardTab.css";
 import { useCoachmark, COACHMARKS } from "../coachmarks.js";
 import Coachmark from "../Coachmark.jsx";
@@ -39,12 +43,67 @@ import BadgeStrip from '../dashboard/BadgeStrip.jsx';
 import DebtFreedomCard from '../dashboard/DebtFreedomCard.jsx';
 import EmptyDashboard from '../dashboard/EmptyDashboard.jsx';
 
+const SYNC_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
+
 export default memo(function DashboardTab({ onRestore, proEnabled = false, onDemoAudit, onRefreshDashboard, onViewTransactions, onDiscussWithCFO }) {
     const { current, history } = useAudit();
     const { financialConfig, setFinancialConfig, autoBackupInterval } = useSettings();
-    const { cards, renewals, badges } = usePortfolio();
+    const { cards, setCards, bankAccounts, setBankAccounts, renewals, badges } = usePortfolio();
     const { navTo, setSetupReturnTab } = useNavigation();
     const [showPaywall, setShowPaywall] = useState(false);
+    const [syncing, setSyncing] = useState(false);
+
+    // ── Plaid Balance Sync (same logic as Accounts tab) ──
+    const handleSyncBalances = useCallback(async () => {
+        if (syncing) return;
+        const conns = await getConnections();
+        if (conns.length === 0) {
+            if (window.toast) window.toast.info("No bank connections — connect via Settings → Plaid");
+            return;
+        }
+        if (isGatingEnforced()) {
+            const tier = await getCurrentTier();
+            const cooldown = SYNC_COOLDOWNS[tier.id] || SYNC_COOLDOWNS.free;
+            const lastSync = cards.find(c => c._plaidLastSync)?._plaidLastSync
+                || bankAccounts.find(b => b._plaidLastSync)?._plaidLastSync;
+            if (lastSync && (Date.now() - new Date(lastSync).getTime()) < cooldown) {
+                const minsLeft = Math.ceil((cooldown - (Date.now() - new Date(lastSync).getTime())) / 60000);
+                if (window.toast) window.toast.info(`Next sync in ${minsLeft} min`);
+                return;
+            }
+        }
+        setSyncing(true);
+        try {
+            const results = await fetchAllBalancesAndLiabilities();
+            let allCards = [...cards];
+            let allBanks = [...bankAccounts];
+            let allInvests = [...(financialConfig.plaidInvestments || [])];
+            let investmentsChanged = false;
+            let successCount = 0;
+            for (const res of results) {
+                if (!res._error) {
+                    const syncData = applyBalanceSync(res, allCards, allBanks, allInvests);
+                    allCards = syncData.updatedCards;
+                    allBanks = syncData.updatedBankAccounts;
+                    if (syncData.updatedPlaidInvestments) { allInvests = syncData.updatedPlaidInvestments; investmentsChanged = true; }
+                    await saveConnectionLinks(res);
+                    successCount++;
+                }
+            }
+            setCards(allCards);
+            setBankAccounts(allBanks);
+            if (investmentsChanged) setFinancialConfig({ ...financialConfig, plaidInvestments: allInvests });
+            if (successCount > 0) {
+                haptic.success();
+                if (window.toast) window.toast.success("Balances synced — run a new audit to reflect updated numbers");
+            } else {
+                if (window.toast) window.toast.error("Sync failed — check your connection");
+            }
+        } catch (e) {
+            console.error("[Dashboard] Sync failed:", e);
+            if (window.toast) window.toast.error("Failed to sync balances");
+        } finally { setSyncing(false); }
+    }, [syncing, cards, bankAccounts, financialConfig, setCards, setBankAccounts, setFinancialConfig]);
 
     const onRunAudit = () => navTo("input");
     const onViewResult = () => navTo("results", current);
@@ -451,6 +510,31 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                     {/* Metrics strip */}
                     <MetricsBar quickMetrics={quickMetrics} />
                 </Card>
+
+                {/* ═══ SYNC BALANCES BAR ═══ */}
+                {(cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId)) && (
+                    <button onClick={() => { haptic.medium(); handleSyncBalances(); }} disabled={syncing} className="hover-btn" style={{
+                        width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                        padding: "10px 16px", borderRadius: T.radius.md, marginBottom: 10,
+                        border: `1px solid ${T.status.blue}20`, background: `linear-gradient(135deg, ${T.bg.elevated}, ${T.status.blue}08)`,
+                        color: T.status.blue, cursor: syncing ? "wait" : "pointer", transition: "all .2s",
+                        opacity: syncing ? 0.7 : 1
+                    }}>
+                        <RefreshCw size={14} strokeWidth={2.5} style={{ animation: syncing ? "ringSweep 1s linear infinite" : "none" }} />
+                        <span style={{ fontSize: 11, fontWeight: 800, fontFamily: T.font.mono, letterSpacing: "0.02em" }}>
+                            {syncing ? "SYNCING…" : "SYNC BALANCES"}
+                        </span>
+                        {(() => {
+                            const lastSync = cards.find(c => c._plaidLastSync)?._plaidLastSync
+                                || bankAccounts.find(b => b._plaidLastSync)?._plaidLastSync;
+                            if (!lastSync) return null;
+                            const ago = Math.round((Date.now() - new Date(lastSync).getTime()) / 60000);
+                            return <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono }}>
+                                {ago < 1 ? "just now" : ago < 60 ? `${ago}m ago` : `${Math.round(ago / 60)}h ago`}
+                            </span>;
+                        })()}
+                    </button>
+                )}
 
                 {/* ═══ AUDIT ACTION HUB ═══ */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
