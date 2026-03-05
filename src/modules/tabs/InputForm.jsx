@@ -213,7 +213,8 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
 
 
     return <div className="page-body" style={{
-        display: "flex", flexDirection: "column", minHeight: "100%"
+        display: "flex", flexDirection: "column", minHeight: "100%",
+        flexShrink: 0,
     }}>
         {/* ── HERO SECTION ── */}
         <div style={{ position: "relative", padding: "16px 0 12px", display: "flex", alignItems: "center", gap: 12 }}>

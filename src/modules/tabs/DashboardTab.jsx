@@ -2,7 +2,8 @@ import { useRef, useState, useEffect, useCallback, memo } from "react";
 import Confetti from "react-confetti";
 import {
     Zap, Plus, Target, Share2, Shield, CloudDownload, RefreshCw, Repeat,
-    Activity, ReceiptText, ExternalLink, MessageCircle, CloudUpload
+    Activity, ReceiptText, ExternalLink, MessageCircle, CloudUpload,
+    ArrowUpRight, ArrowDownRight, Download, TrendingUp
 } from "lucide-react";
 import { T } from "../constants.js";
 
@@ -512,7 +513,7 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                 </Card>
 
                 {/* ═══ SYNC BALANCES BAR ═══ */}
-                {(cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId)) && (
+                {!current?.isTest && (cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId)) && (
                     <button onClick={() => { haptic.medium(); handleSyncBalances(); }} disabled={syncing} className="hover-btn" style={{
                         width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                         padding: "10px 16px", borderRadius: T.radius.md, marginBottom: 10,
