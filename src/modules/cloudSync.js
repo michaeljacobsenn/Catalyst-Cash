@@ -1,7 +1,18 @@
 import { Capacitor } from "@capacitor/core";
+import { registerPlugin } from "@capacitor/core";
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { encrypt, decrypt, isEncrypted } from "./crypto.js";
 import { fetchWithRetry } from "./fetchWithRetry.js";
+
+// ═══════════════════════════════════════════════════════════════
+// NATIVE iCLOUD SYNC PLUGIN
+// Uses the iCloud ubiquity container for true cross-device backup.
+// Falls back to Capacitor Filesystem on non-native platforms.
+// ═══════════════════════════════════════════════════════════════
+
+const ICloudSync = Capacitor.isNativePlatform()
+    ? registerPlugin("ICloudSync")
+    : null;
 
 // ═══════════════════════════════════════════════════════════════
 // GOOGLE DRIVE (App Data Folder) SYNC
@@ -34,14 +45,12 @@ export async function uploadToGoogleDrive(accessToken, payload, passphrase = nul
         let method = 'POST';
 
         if (searchData.files && searchData.files.length > 0) {
-            // PATCH: do NOT include 'parents' — Google Drive rejects it with a 400 fieldViolation
             const fileId = searchData.files[0].id;
             const patchMeta = { name: FILE_NAME, mimeType: 'application/json' };
             form.append('metadata', new Blob([JSON.stringify(patchMeta)], { type: 'application/json' }));
             uploadUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`;
             method = 'PATCH';
         } else {
-            // POST (create): include 'parents' to place in appDataFolder
             const createMeta = { name: FILE_NAME, parents: ['appDataFolder'], mimeType: 'application/json' };
             form.append('metadata', new Blob([JSON.stringify(createMeta)], { type: 'application/json' }));
         }
@@ -62,7 +71,7 @@ export async function uploadToGoogleDrive(accessToken, payload, passphrase = nul
         return true;
     } catch (e) {
         console.error("Google Drive Sync Error:", e?.message || e);
-        if (e?.message === "DRIVE_AUTH_EXPIRED" || e?.message === "DRIVE_API_DISABLED") throw e; // re-throw so caller can trigger UI
+        if (e?.message === "DRIVE_AUTH_EXPIRED" || e?.message === "DRIVE_API_DISABLED") throw e;
         return false;
     }
 }
@@ -109,18 +118,29 @@ export async function downloadFromGoogleDrive(accessToken, passphrase = null) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ICLOUD (Filesystem / Documents) SYNC
-// iOS automatically syncs the app's Documents directory to the
-// user's iCloud Drive when "Catalyst Cash" is enabled under
-// iOS Settings → [Apple ID] → iCloud → Apps Using iCloud.
-// No extra entitlements or CloudKit code is needed beyond the
-// standard Capacitor Filesystem plugin.
+// iCLOUD SYNC — Native ubiquity container (cross-device)
+//
+// On iOS: Uses the native ICloudSyncPlugin which writes to the
+// real iCloud ubiquity container. Survives app deletion,
+// restores on new devices with the same Apple ID.
+//
+// On Web: Falls back to Capacitor Filesystem (local only).
 // ═══════════════════════════════════════════════════════════════
 
-export async function uploadToICloud(payload, passphrase = null) {
-    if (Capacitor.getPlatform() !== 'ios') {
-        console.warn("iCloud sync natively relies on iOS Documents directory. Attempting graceful Capacitor Filesystem fallback for Web/Mac testing.");
+/**
+ * Check if iCloud is available on this device.
+ * @returns {Promise<{ available: boolean, reason: string }>}
+ */
+export async function isICloudAvailable() {
+    if (!ICloudSync) return { available: false, reason: "not native" };
+    try {
+        return await ICloudSync.isAvailable();
+    } catch (e) {
+        return { available: false, reason: e?.message || "unknown error" };
     }
+}
+
+export async function uploadToICloud(payload, passphrase = null) {
     try {
         let data = JSON.stringify(payload);
         if (passphrase) {
@@ -128,6 +148,21 @@ export async function uploadToICloud(payload, passphrase = null) {
             data = JSON.stringify(envelope);
         }
 
+        // Native iOS — use ubiquity container
+        if (ICloudSync) {
+            const result = await ICloudSync.save({ data });
+            if (result?.success) {
+                console.log("[iCloud] Backup saved to ubiquity container:", result.path);
+                return true;
+            }
+            console.warn("[iCloud] Save returned without success:", result);
+            return false;
+        }
+
+        // Web fallback — local Capacitor Filesystem
+        if (Capacitor.getPlatform() !== 'ios') {
+            console.warn("iCloud sync is only available on iOS. Using local fallback.");
+        }
         await Filesystem.writeFile({
             path: FILE_NAME,
             data,
@@ -142,40 +177,59 @@ export async function uploadToICloud(payload, passphrase = null) {
 }
 
 export async function downloadFromICloud(passphrase = null) {
-    if (Capacitor.getPlatform() !== 'ios') {
-        console.warn("iCloud sync natively relies on iOS Documents directory. Attempting graceful Capacitor Filesystem fallback for Web/Mac testing.");
-    }
-
-    // Step 1: Read the file from the Documents directory
-    let result;
     try {
-        result = await Filesystem.readFile({
-            path: FILE_NAME,
-            directory: Directory.Documents,
-            encoding: Encoding.UTF8,
-        });
-    } catch (e) {
-        // File doesn't exist yet — expected on first launch, not an error
-        const msg = e?.message || String(e);
-        if (msg.includes("not exist") || msg.includes("ENOENT") || msg.includes("File does not exist") || msg.includes("NOT_FOUND")) {
+        let rawData;
+
+        // Native iOS — use ubiquity container
+        if (ICloudSync) {
+            const result = await ICloudSync.restore();
+
+            if (result?.reason === "downloading") {
+                // File exists in iCloud but is still downloading to device
+                // Wait 2 seconds and retry once
+                console.log("[iCloud] Backup is downloading from iCloud, retrying in 2s...");
+                await new Promise(r => setTimeout(r, 2000));
+                const retry = await ICloudSync.restore();
+                if (!retry?.data) {
+                    console.log("[iCloud] Backup still downloading. Will restore on next app launch.");
+                    return null;
+                }
+                rawData = retry.data;
+            } else if (!result?.data) {
+                console.log("[iCloud] No backup found:", result?.reason);
+                return null;
+            } else {
+                rawData = result.data;
+            }
+        } else {
+            // Web fallback
+            try {
+                const result = await Filesystem.readFile({
+                    path: FILE_NAME,
+                    directory: Directory.Documents,
+                    encoding: Encoding.UTF8,
+                });
+                rawData = result.data;
+            } catch (e) {
+                const msg = e?.message || String(e);
+                if (msg.includes("not exist") || msg.includes("ENOENT") || msg.includes("NOT_FOUND")) {
+                    return null;
+                }
+                console.error("iCloud Sync Read Error:", e);
+                return null;
+            }
+        }
+
+        // Parse the data
+        let data;
+        try {
+            data = JSON.parse(rawData);
+        } catch (e) {
+            console.error("iCloud Sync Parse Error: Backup contains invalid JSON.", e);
             return null;
         }
-        // Actual filesystem read error — log and return null
-        console.error("iCloud Sync Read Error: Failed to read backup file from Documents directory.", e);
-        return null;
-    }
 
-    // Step 2: Parse the JSON content
-    let data;
-    try {
-        data = JSON.parse(result.data);
-    } catch (e) {
-        console.error("iCloud Sync Parse Error: Backup file exists but contains invalid JSON. File may be corrupted.", e);
-        return null;
-    }
-
-    // Step 3: Decrypt if needed and return
-    try {
+        // Decrypt if needed
         if (isEncrypted(data)) {
             if (!passphrase) throw new Error("iCloud data is encrypted — passphrase required");
             const decrypted = await decrypt(data, passphrase);
@@ -183,7 +237,7 @@ export async function downloadFromICloud(passphrase = null) {
         }
         return data;
     } catch (e) {
-        console.error("iCloud Sync Decrypt Error: Failed to decrypt or parse backup data.", e);
+        console.error("iCloud Sync Error:", e?.message || e);
         return null;
     }
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addDays, daysBetween, getNextDateForDayOfMonth, getNextPayday, generateStrategy } from './engine.js';
+import { addDays, daysBetween, getNextDateForDayOfMonth, getNextPayday, generateStrategy, projectDebtPayoff } from './engine.js';
 
 describe('Engine Date Math', () => {
     it('daysBetween handles dates correctly', () => {
@@ -302,5 +302,162 @@ describe('Engine Strategy Logic - generateStrategy', () => {
         expect(strategy.nextPayday).toBeTruthy();
         const payday = new Date(strategy.nextPayday);
         expect(payday.getTime()).toBeGreaterThan(new Date('2024-01-10').getTime());
+    });
+
+    it('includes compound-interest debtPayoff projection in output', () => {
+        const strategy = generateStrategy(baseConfig, {
+            snapshotDate: '2024-01-01',
+            checkingBalance: 5000,
+            cards: [
+                { name: 'High APR Card', balance: 3000, minPayment: 100, apr: 24 }
+            ]
+        });
+
+        expect(strategy.debtPayoff).not.toBeNull();
+        expect(strategy.debtPayoff.minimumsOnly.totalMonths).toBeGreaterThan(0);
+        expect(strategy.debtPayoff.minimumsOnly.totalInterestPaid).toBeGreaterThan(0);
+        expect(strategy.debtPayoff.minimumsOnly.debtFreeDate).toBeTruthy();
+        expect(strategy.debtPayoff.withExtraPayment.totalMonths).toBeLessThanOrEqual(strategy.debtPayoff.minimumsOnly.totalMonths);
+        expect(strategy.debtPayoff.withExtraPayment.interestSaved).toBeGreaterThanOrEqual(0);
+        expect(strategy.debtPayoff.perDebt.length).toBe(1);
+    });
+});
+
+describe('projectDebtPayoff — Compound Interest Amortization', () => {
+    it('single debt with compound interest accrues correctly', () => {
+        const result = projectDebtPayoff(
+            [{ name: 'Card A', balance: 1000, apr: 24, minPayment: 50 }],
+            0,
+            '2024-01-01'
+        );
+
+        expect(result.totalMonths).toBeGreaterThan(0);
+        expect(result.totalInterestPaid).toBeGreaterThan(0);
+        expect(result.debtFreeDate).toBeTruthy();
+        expect(result.perDebt.length).toBe(1);
+        expect(result.perDebt[0].name).toBe('Card A');
+
+        // With 24% APR, $1000 balance, $50/mo minimum: interest accrues ~$20/mo initially
+        // So it should take roughly 24+ months (more than 20 without interest)
+        expect(result.totalMonths).toBeGreaterThan(20);
+    });
+
+    it('extra monthly payment reduces payoff time and interest', () => {
+        const minOnly = projectDebtPayoff(
+            [{ name: 'Card', balance: 5000, apr: 20, minPayment: 100 }],
+            0, '2024-01-01'
+        );
+        const withExtra = projectDebtPayoff(
+            [{ name: 'Card', balance: 5000, apr: 20, minPayment: 100 }],
+            200, '2024-01-01'
+        );
+
+        expect(withExtra.totalMonths).toBeLessThan(minOnly.totalMonths);
+        expect(withExtra.totalInterestPaid).toBeLessThan(minOnly.totalInterestPaid);
+    });
+
+    it('avalanche ordering pays highest APR first with extra', () => {
+        const result = projectDebtPayoff(
+            [
+                { name: 'Low APR', balance: 2000, apr: 5, minPayment: 50 },
+                { name: 'High APR', balance: 2000, apr: 25, minPayment: 50 }
+            ],
+            300, '2024-01-01'
+        );
+
+        // High APR debt should be paid off first
+        const highApr = result.perDebt.find(d => d.name === 'High APR');
+        const lowApr = result.perDebt.find(d => d.name === 'Low APR');
+        expect(highApr.months).toBeLessThan(lowApr.months);
+    });
+
+    it('filters out zero-balance debts', () => {
+        const result = projectDebtPayoff(
+            [
+                { name: 'Paid Off', balance: 0, apr: 20, minPayment: 50 },
+                { name: 'Active', balance: 1000, apr: 20, minPayment: 50 }
+            ],
+            0, '2024-01-01'
+        );
+
+        expect(result.perDebt.length).toBe(1);
+        expect(result.perDebt[0].name).toBe('Active');
+    });
+
+    it('handles promo APR expiration mid-timeline', () => {
+        // Debt starts with 0% promo APR that expires in 2 months
+        const withPromo = projectDebtPayoff(
+            [{ name: 'Promo Card', balance: 5000, apr: 24, minPayment: 100, hasPromoApr: true, promoAprExp: '2024-03-01' }],
+            0, '2024-01-01'
+        );
+
+        // No promo — starts accruing immediately
+        const noPromo = projectDebtPayoff(
+            [{ name: 'Regular Card', balance: 5000, apr: 24, minPayment: 100 }],
+            0, '2024-01-01'
+        );
+
+        // With promo, total interest should be less (0% for first ~2 months)
+        expect(withPromo.totalInterestPaid).toBeLessThan(noPromo.totalInterestPaid);
+    });
+
+    it('snowballs freed minimums after a debt is paid off', () => {
+        // Two debts: small high-APR that should be killed first,
+        // then its minimum snowballs to the second
+        const result = projectDebtPayoff(
+            [
+                { name: 'Small High', balance: 200, apr: 28, minPayment: 50 },
+                { name: 'Large Low', balance: 3000, apr: 15, minPayment: 80 }
+            ],
+            100, '2024-01-01'
+        );
+
+        // Small debt should be paid off in just a few months
+        const small = result.perDebt.find(d => d.name === 'Small High');
+        expect(small.months).toBeLessThanOrEqual(3);
+
+        // Large debt benefits from snowballed extra
+        expect(result.totalMonths).toBeGreaterThan(small.months);
+    });
+
+    it('returns null months/date for unpayable debt (min < interest)', () => {
+        // $100,000 at 30% APR with only $10/mo minimum = never pays off
+        const result = projectDebtPayoff(
+            [{ name: 'Unpayable', balance: 100000, apr: 30, minPayment: 10 }],
+            0, '2024-01-01'
+        );
+
+        expect(result.totalMonths).toBeNull();
+        expect(result.debtFreeDate).toBeNull();
+    });
+
+    it('empty debts array returns zero projection', () => {
+        const result = projectDebtPayoff([], 500, '2024-01-01');
+        expect(result.totalMonths).toBe(0);
+        expect(result.totalInterestPaid).toBe(0);
+        expect(result.debtFreeDate).toBeNull();
+        expect(result.perDebt).toEqual([]);
+    });
+
+    it('applies defaultAPR when debt has no APR set', () => {
+        const result = projectDebtPayoff(
+            [{ name: 'No APR', balance: 1000, apr: 0, minPayment: 50 }],
+            0, '2024-01-01', 20  // default 20% APR
+        );
+
+        // Should accrue interest at 20%
+        expect(result.totalInterestPaid).toBeGreaterThan(0);
+        expect(result.totalMonths).toBeGreaterThan(20); // More than balance/min
+    });
+
+    it('debt-free date is a valid ISO date string', () => {
+        const result = projectDebtPayoff(
+            [{ name: 'Test', balance: 500, apr: 15, minPayment: 50 }],
+            0, '2024-06-15'
+        );
+
+        expect(result.debtFreeDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        const d = new Date(result.debtFreeDate);
+        expect(d.getTime()).toBeGreaterThan(new Date('2024-06-15').getTime());
     });
 });

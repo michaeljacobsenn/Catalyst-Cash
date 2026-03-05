@@ -26,6 +26,7 @@ const FEATURES = [
     { label: "Advanced Insights", free: "—", pro: "✓", icon: "🔔" },
     { label: "Market Refresh", free: "60 min", pro: "15 min", icon: "⚡" },
     { label: "Bank Sync & Txns", free: "—", pro: "✓ Plaid", icon: "🏦" },
+    { label: "Transaction Ledger", free: "—", pro: "✓ Full", icon: "📒" },
 ];
 
 // ── Coming soon features (creates anticipation) ──────────────

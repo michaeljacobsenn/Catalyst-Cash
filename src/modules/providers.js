@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // AI PROVIDER REGISTRY — Catalyst Cash
 // Default: Backend proxy (Gemini 2.5 Flash — free for all users)
-// Pro: Premium models via backend (Gemini 2.5 Pro, OpenAI o3, Claude Sonnet)
+// Pro: Premium models via backend (Gemini 2.5 Pro, OpenAI o4-mini, Claude Haiku)
 // ═══════════════════════════════════════════════════════════════
 
 export const AI_PROVIDERS = [
@@ -14,8 +14,8 @@ export const AI_PROVIDERS = [
             { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", note: "Fast reasoning — included free", tier: "free", provider: "gemini" },
             { id: "gpt-4o-mini", name: "GPT-4o mini", note: "OpenAI quality — included free", tier: "free", provider: "openai" },
             { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", note: "Advanced deep reasoning", tier: "pro", provider: "gemini" },
-            { id: "o3-mini", name: "OpenAI o3-mini", note: "OpenAI reasoning engine", tier: "pro", provider: "openai" },
-            { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", note: "Anthropic's latest reasoning model", tier: "pro", provider: "claude", disabled: true, comingSoon: true },
+            { id: "o4-mini", name: "OpenAI o4-mini", note: "Latest OpenAI reasoning engine", tier: "pro", provider: "openai" },
+            { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", note: "Anthropic's fast & affordable model", tier: "pro", provider: "claude", comingSoon: true },
         ],
         defaultModel: "gemini-2.5-flash",
         supportsStreaming: true,
@@ -38,7 +38,7 @@ export function getModel(providerId, modelId) {
 
 /**
  * For backend provider, resolve which Worker provider to route to.
- * e.g. "gemini-2.5-flash" → "gemini", "o3-mini" → "openai", "claude-sonnet-4-..." → "claude"
+ * e.g. "gemini-2.5-flash" → "gemini", "o4-mini" → "openai", "claude-haiku-..." → "claude"
  */
 export function getBackendProvider(modelId) {
     const backend = getProvider("backend");

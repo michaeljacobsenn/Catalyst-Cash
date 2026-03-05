@@ -4,7 +4,7 @@
  * natively to ensure reliable calculations without relying on LLM hallucinations.
  */
 
-import { cmpString, fromCents, toBps, toCents } from "./moneyMath.js";
+import { cmpString, fromCents, monthlyInterestCents, toBps, toCents } from "./moneyMath.js";
 
 // Helper: Add days to a date string (YYYY-MM-DD)
 export function addDays(dateStr, days) {
@@ -170,6 +170,175 @@ export function mergeSnapshotDebts(cards = [], snapshotDebts = [], defaultApr = 
     ));
 }
 
+// ═══════════════════════════════════════════════════════════════
+// COMPOUND INTEREST DEBT PAYOFF PROJECTION
+// Month-by-month amortization using integer-cent arithmetic.
+// Uses avalanche ordering (highest APR first) for extra payments.
+// Handles promo APR expiration mid-timeline.
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Project debt payoff timeline with compound interest.
+ * @param {Array} debts - Array of { name, balance, apr, minPayment, hasPromoApr?, promoAprExp?, promoApr? }
+ * @param {number} extraMonthlyPayment - Additional monthly amount beyond minimums (in dollars)
+ * @param {string} [startDate] - ISO date string (YYYY-MM-DD), defaults to today
+ * @param {number} [defaultAPR=0] - Default APR if a debt has none specified
+ * @returns {{ totalMonths, totalInterestPaid, debtFreeDate, perDebt: [{ name, months, interestPaid, paidOffDate }] }}
+ */
+export function projectDebtPayoff(debts = [], extraMonthlyPayment = 0, startDate, defaultAPR = 0) {
+    if (!debts || debts.length === 0) {
+        return { totalMonths: 0, totalInterestPaid: 0, debtFreeDate: null, perDebt: [] };
+    }
+
+    const today = startDate || new Date().toISOString().split("T")[0];
+    const defaultAprBps = toBps(defaultAPR);
+    const extraCents = Math.max(0, toCents(extraMonthlyPayment));
+
+    // Build working copies in cents
+    const working = debts
+        .map((d, idx) => {
+            const balanceCents = toCents(d?.balance || 0);
+            if (balanceCents <= 0) return null;
+
+            const rawAprBps = Math.max(0, toBps(d?.apr || 0));
+            const aprBps = rawAprBps > 0 ? rawAprBps : defaultAprBps;
+            const minimumCents = Math.max(0, toCents(d?.minPayment || d?.minimum || 0));
+
+            // Promo APR: use 0 bps during promo, then revert to full APR
+            let promoMonthsLeft = 0;
+            const postPromoAprBps = aprBps;
+            if (d?.hasPromoApr && d?.promoAprExp) {
+                const daysToExp = daysBetween(today, d.promoAprExp);
+                if (daysToExp > 0) {
+                    promoMonthsLeft = Math.ceil(daysToExp / 30.44);
+                }
+            }
+
+            return {
+                idx,
+                name: normalizeName(d?.name, "Debt"),
+                balanceCents,
+                aprBps: promoMonthsLeft > 0 ? 0 : aprBps,
+                postPromoAprBps,
+                promoMonthsLeft,
+                minimumCents,
+                totalInterestCents: 0,
+                paidOff: false,
+                paidOffMonth: 0
+            };
+        })
+        .filter(Boolean);
+
+    if (working.length === 0) {
+        return { totalMonths: 0, totalInterestPaid: 0, debtFreeDate: null, perDebt: [] };
+    }
+
+    const MAX_MONTHS = 600; // 50-year safety cap
+    let month = 0;
+
+    while (month < MAX_MONTHS) {
+        // Check if all debts paid off
+        const activeDebts = working.filter(w => !w.paidOff);
+        if (activeDebts.length === 0) break;
+
+        month++;
+
+        // Step 1: Accrue interest on all active debts
+        for (const w of activeDebts) {
+            // Handle promo APR expiration
+            if (w.promoMonthsLeft > 0) {
+                w.promoMonthsLeft--;
+                if (w.promoMonthsLeft <= 0) {
+                    w.aprBps = w.postPromoAprBps;
+                }
+            }
+
+            const interest = monthlyInterestCents(w.balanceCents, w.aprBps);
+            w.balanceCents += interest;
+            w.totalInterestCents += interest;
+        }
+
+        // Step 2: Apply minimum payments to all active debts
+        for (const w of activeDebts) {
+            if (w.balanceCents <= 0) { w.paidOff = true; w.paidOffMonth = month; continue; }
+
+            // Minimum payment: at least the minimum, but never more than the balance
+            const payment = Math.min(w.minimumCents, w.balanceCents);
+            w.balanceCents -= payment;
+
+            if (w.balanceCents <= 0) {
+                w.balanceCents = 0;
+                w.paidOff = true;
+                w.paidOffMonth = month;
+            }
+        }
+
+        // Step 3: Distribute extra payment using avalanche (highest APR first)
+        let extraRemaining = extraCents;
+        if (extraRemaining > 0) {
+            // Sort active (still unpaid) debts by APR descending, then balance ascending
+            const stillActive = working
+                .filter(w => !w.paidOff)
+                .sort((a, b) => {
+                    if (a.aprBps !== b.aprBps) return b.aprBps - a.aprBps;
+                    if (a.balanceCents !== b.balanceCents) return a.balanceCents - b.balanceCents;
+                    return cmpString(a.name, b.name);
+                });
+
+            for (const w of stillActive) {
+                if (extraRemaining <= 0) break;
+                const payment = Math.min(extraRemaining, w.balanceCents);
+                w.balanceCents -= payment;
+                extraRemaining -= payment;
+
+                if (w.balanceCents <= 0) {
+                    w.balanceCents = 0;
+                    w.paidOff = true;
+                    w.paidOffMonth = month;
+                    // Snowball freed minimums into extra for subsequent debts
+                    extraRemaining += w.minimumCents;
+                }
+            }
+        }
+    }
+
+    // Calculate debt-free date
+    const startD = new Date(`${today}T00:00:00Z`);
+    const anyUnpaid = working.some(w => !w.paidOff);
+    const maxMonth = Math.max(...working.map(w => w.paidOffMonth));
+    const totalMonths = anyUnpaid ? null : maxMonth;
+
+    const debtFreeDate = totalMonths != null ? (() => {
+        const d = new Date(Date.UTC(
+            startD.getUTCFullYear(),
+            startD.getUTCMonth() + totalMonths,
+            startD.getUTCDate()
+        ));
+        return d.toISOString().split("T")[0];
+    })() : null;
+
+    const totalInterestCents = working.reduce((s, w) => s + w.totalInterestCents, 0);
+
+    return {
+        totalMonths,
+        totalInterestPaid: fromCents(totalInterestCents),
+        debtFreeDate,
+        perDebt: working.map(w => ({
+            name: w.name,
+            months: w.paidOff ? w.paidOffMonth : null,
+            interestPaid: fromCents(w.totalInterestCents),
+            paidOffDate: w.paidOff ? (() => {
+                const d = new Date(Date.UTC(
+                    startD.getUTCFullYear(),
+                    startD.getUTCMonth() + w.paidOffMonth,
+                    startD.getUTCDate()
+                ));
+                return d.toISOString().split("T")[0];
+            })() : null
+        }))
+    };
+}
+
 export function generateStrategy(config, snapshot) {
     const {
         checkingBalance = 0,
@@ -330,6 +499,43 @@ export function generateStrategy(config, snapshot) {
         }
     }
 
+    // 6. Compute compound-interest debt payoff projection
+    let debtPayoff = null;
+    if (debtEntries.length > 0 && debtEntries.some(d => d.balanceCents > 0)) {
+        const payoffDebts = debtEntries.filter(d => d.balanceCents > 0).map(d => ({
+            name: d.name,
+            balance: fromCents(d.balanceCents),
+            apr: d.aprBps / 100,
+            minPayment: fromCents(d.minimumCents),
+            hasPromoApr: d.hasPromoApr,
+            promoAprExp: d.promoAprExp
+        }));
+
+        const minimumsOnly = projectDebtPayoff(payoffDebts, 0, snapshotDate, config?.defaultAPR || 0);
+        const withExtra = operationalSurplusCents > 0
+            ? projectDebtPayoff(payoffDebts, fromCents(operationalSurplusCents), snapshotDate, config?.defaultAPR || 0)
+            : minimumsOnly;
+
+        debtPayoff = {
+            minimumsOnly: {
+                totalMonths: minimumsOnly.totalMonths,
+                totalInterestPaid: minimumsOnly.totalInterestPaid,
+                debtFreeDate: minimumsOnly.debtFreeDate
+            },
+            withExtraPayment: {
+                extraMonthly: fromCents(Math.max(0, operationalSurplusCents)),
+                totalMonths: withExtra.totalMonths,
+                totalInterestPaid: withExtra.totalInterestPaid,
+                debtFreeDate: withExtra.debtFreeDate,
+                interestSaved: Math.round((minimumsOnly.totalInterestPaid - withExtra.totalInterestPaid) * 100) / 100,
+                monthsSaved: minimumsOnly.totalMonths != null && withExtra.totalMonths != null
+                    ? minimumsOnly.totalMonths - withExtra.totalMonths
+                    : null
+            },
+            perDebt: withExtra.perDebt
+        };
+    }
+
     return {
         snapshotDate,
         nextPayday,
@@ -343,6 +549,7 @@ export function generateStrategy(config, snapshot) {
             target: recommendedDebtTarget,
             amount: fromCents(recommendedDebtPaymentCents),
             method: strategyMethod
-        }
+        },
+        debtPayoff
     };
 }

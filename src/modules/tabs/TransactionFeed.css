@@ -1,0 +1,140 @@
+/* TransactionFeed — Animations & Utilities */
+
+@keyframes txnFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes txnSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes txnPulse {
+
+    0%,
+    100% {
+        opacity: 0.6;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+@keyframes txnShimmer {
+    0% {
+        background-position: -300% 0;
+    }
+
+    100% {
+        background-position: 300% 0;
+    }
+}
+
+.txn-row {
+    animation: txnFadeIn 0.3s ease-out both;
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.txn-row:active {
+    transform: scale(0.985);
+    background: rgba(123, 94, 167, 0.06) !important;
+}
+
+.txn-date-header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    backdrop-filter: blur(20px) saturate(1.6);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    animation: txnSlideDown 0.25s ease-out both;
+}
+
+.txn-filter-pill {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+    letter-spacing: 0.02em;
+    border: 1px solid transparent;
+}
+
+.txn-filter-pill:active {
+    transform: scale(0.95);
+}
+
+.txn-search-input {
+    width: 100%;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 500;
+    color: inherit;
+    font-family: inherit;
+}
+
+.txn-search-input::placeholder {
+    opacity: 0.5;
+}
+
+.txn-empty-shimmer {
+    background: linear-gradient(90deg,
+            rgba(255, 255, 255, 0.02) 25%,
+            rgba(255, 255, 255, 0.05) 50%,
+            rgba(255, 255, 255, 0.02) 75%);
+    background-size: 300% 100%;
+    animation: txnShimmer 2s ease-in-out infinite;
+}
+
+.txn-pending-badge {
+    animation: txnPulse 2s ease-in-out infinite;
+}
+
+.txn-export-btn {
+    transition: all 0.2s ease;
+}
+
+.txn-export-btn:active {
+    transform: scale(0.95);
+}
+
+.txn-filter-strip {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 0 16px 8px;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.txn-filter-strip::-webkit-scrollbar {
+    display: none;
+}
+
+.txn-amount-credit {
+    font-variant-numeric: tabular-nums;
+}
+
+.txn-amount-debit {
+    font-variant-numeric: tabular-nums;
+}

@@ -40,7 +40,8 @@ export async function nativeExport(filename, content, mimeType = "text/plain", i
       const opts = { path: filename, data: content, directory: Directory.Cache, recursive: true };
       if (!isBase64) opts.encoding = 'utf8';
       const res = await Filesystem.writeFile(opts);
-      await Share.share({ title: filename, url: res.uri, files: [res.uri], dialogTitle: 'Export File' });
+      // Only pass `files` — passing both `url` and `files` causes iOS to show 2 items
+      await Share.share({ files: [res.uri], dialogTitle: 'Export File' });
     } catch (e) {
       console.error("Native export failed:", e);
       if (window.toast) window.toast.error("Export failed. Please check permissions.");

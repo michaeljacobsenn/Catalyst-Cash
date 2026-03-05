@@ -6,37 +6,42 @@
 // integrated, this module becomes the bridge to the native IAP API.
 //
 // ─── AI MODEL COST MATRIX (per audit, ~3K tokens in / ~2K out) ──
-//   gemini-2.5-flash  ≈ $0.0003   → Free tier default (negligible)
-//   gemini-2.5-pro    ≈ $0.005    → Pro only
-//   claude-sonnet     ≈ $0.015    → Pro only
-//   o3-mini           ≈ $0.008    → Pro only
+//   gemini-2.5-flash  $0.30/$2.50/M  ≈ $0.006/audit  → Free default
+//   gpt-4o-mini       $0.15/$0.60/M  ≈ $0.002/audit  → Free
+//   gemini-2.5-pro    $1.25/$10.0/M  ≈ $0.024/audit  → Pro
+//   o4-mini           $1.10/$4.40/M  ≈ $0.012/audit  → Pro
+//   claude-haiku-4-5  $1.00/$5.00/M  ≈ $0.012/audit  → Pro
 //
-//   At 2 audits/week (free) on Flash:  ~$0.003/user/month
-//   At 60 audits/month (Pro) on Flash: ~$1.20/user/month max
-//   Pro @ $6.99/mo (after Apple 15%):  $5.94 net → $4.74 profit/user
+//   Free: 2 audits/wk on Flash  → ~$0.05/user/month
+//   Pro worst case: 60 audits/mo on Gemini Pro → $1.44/user/month
+//   Pro @ $6.99/mo (after Apple 15%): $5.94 net → $4.50+ profit/user
 // ═══════════════════════════════════════════════════════════════
 
 import { db } from "./utils.js";
 import { Capacitor } from "@capacitor/core";
 import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
+import { APP_VERSION } from "./constants.js";
 
-// ── Gating Mode ───────────────────────────────────────────────
+// ── Gating Mode ─────────────────────────────────────────────
 // Controls whether subscription limits are enforced.
 //   "off"  → Everyone gets Pro-level access (development / beta)
 //   "soft" → Show limits in UI (banners, counters) but don't block
 //   "live" → Full enforcement (activate for App Store release)
 //
-// BETA NOTE: Keep "off" until IAP is wired with StoreKit 2 or
-// RevenueCat. Flip to "soft" for soft launch, "live" for GA.
-// ──────────────────────────────────────────────────────────────
-const GATING_MODE = "soft";  // "off" = dev | "soft" = beta (banners, no hard-block) | "live" = GA
+// SECURITY: This hardcoded default can be overridden by the remote
+// config from fetchGatingConfig(). When we go live, the backend
+// returns gatingMode:"live" and ALL app versions enforce it —
+// even old builds that have "soft" hardcoded here.
+// ────────────────────────────────────────────────────────────
+const GATING_MODE_DEFAULT = "soft";
+let _effectiveGatingMode = GATING_MODE_DEFAULT;
 
 /**
- * Get the current gating mode.
+ * Get the current gating mode (may be overridden by remote config).
  * Consumers can check this to decide whether to show/enforce limits.
  */
 export function getGatingMode() {
-    return GATING_MODE;
+    return _effectiveGatingMode;
 }
 
 /**
@@ -44,14 +49,59 @@ export function getGatingMode() {
  * "off" = no enforcement, "soft" = show but don't block, "live" = enforce.
  */
 export function isGatingEnforced() {
-    return GATING_MODE === "live";
+    return _effectiveGatingMode === "live";
 }
 
 /**
  * Returns true if gating UI should be shown (soft or live mode).
  */
 export function shouldShowGating() {
-    return GATING_MODE === "soft" || GATING_MODE === "live";
+    return _effectiveGatingMode === "soft" || _effectiveGatingMode === "live";
+}
+
+/**
+ * Compare semver strings. Returns -1, 0, or 1.
+ */
+function compareVersions(a, b) {
+    const pa = a.split(".").map(Number);
+    const pb = b.split(".").map(Number);
+    for (let i = 0; i < 3; i++) {
+        const diff = (pa[i] || 0) - (pb[i] || 0);
+        if (diff !== 0) return diff > 0 ? 1 : -1;
+    }
+    return 0;
+}
+
+/**
+ * Sync gating mode from remote config.
+ * Call on app boot. If the backend says "live" or a newer minVersion,
+ * the client respects it — even if the hardcoded default is "soft".
+ * This is the anti-downgrade mechanism: old app versions with "soft"
+ * hardcoded will still get overridden to "live" when we flip the switch.
+ */
+export async function syncRemoteGatingMode() {
+    try {
+        const { fetchGatingConfig } = await import("./api.js");
+        const config = await fetchGatingConfig();
+        if (!config) return;
+
+        // Remote gating mode always wins if it's more restrictive
+        const modes = ["off", "soft", "live"];
+        const localIdx = modes.indexOf(_effectiveGatingMode);
+        const remoteIdx = modes.indexOf(config.gatingMode);
+        if (remoteIdx > localIdx) {
+            _effectiveGatingMode = config.gatingMode;
+        }
+
+        // Check minimum version — if below, force live mode
+        if (config.minVersion && compareVersions(APP_VERSION, config.minVersion) < 0) {
+            _effectiveGatingMode = "live";
+            console.warn(`[Gating] App version ${APP_VERSION} below minimum ${config.minVersion} — forcing live mode`);
+        }
+    } catch (e) {
+        // Fail silently — keep hardcoded default
+        console.warn("[Gating] Remote config sync failed:", e?.message);
+    }
 }
 
 // ── Tier Definitions ──────────────────────────────────────────
@@ -118,10 +168,11 @@ export const TIERS = {
         marketRefreshMs: 5 * 60 * 1000,      // 5 minutes
         historyLimit: Infinity,               // All history
         models: [
-            "gemini-2.5-flash",               // Standard AI
-            "gemini-2.5-pro",                 // Premium AI — deeper analysis
-            "o3-mini",                        // Premium AI — reasoning
-            // "claude-sonnet-4-6",              // Coming Soon — re-enable when Anthropic API is wired
+            "gemini-2.5-flash",               // Standard AI (free)
+            "gpt-4o-mini",                    // Standard AI (free)
+            "gemini-2.5-pro",                 // Premium AI — deep reasoning
+            "o4-mini",                        // Premium AI — latest OpenAI reasoning
+            "claude-haiku-4-5",               // Premium AI — Anthropic fast reasoning
         ],
         features: [
             // ── Everything in Free ──
@@ -384,7 +435,7 @@ export async function getSubscriptionState() {
  * When GATING_MODE is "off", always returns Pro tier.
  */
 export async function getCurrentTier() {
-    if (GATING_MODE === "off") return TIERS.pro;
+    if (GATING_MODE_DEFAULT === "off" && _effectiveGatingMode === "off") return TIERS.pro;
     const state = await getSubscriptionState();
     return TIERS[state.tier] || TIERS.free;
 }
@@ -408,11 +459,11 @@ export async function hasFeature(featureId) {
 
 /**
  * Check if a model is available on the current tier.
- * NOTE: Model gating always uses the RAW tier (respects actual sub status),
- * NOT the effective tier. This keeps pro models locked even when GATING_MODE is "off".
+ * Uses getCurrentTier() so models are unlocked in "off" and "soft" modes,
+ * and properly gated in "live" mode.
  */
 export async function isModelAvailable(modelId) {
-    const tier = await getRawTier();
+    const tier = await getCurrentTier();
     return tier.models.includes(modelId);
 }
 
@@ -422,7 +473,7 @@ export async function isModelAvailable(modelId) {
  * When GATING_MODE is "off", always returns unlimited.
  */
 export async function checkAuditQuota() {
-    if (GATING_MODE === "off") {
+    if (_effectiveGatingMode === "off") {
         return { allowed: true, remaining: Infinity, limit: Infinity, used: 0, monthlyUsed: 0, monthlyCap: Infinity };
     }
 
@@ -448,7 +499,7 @@ export async function checkAuditQuota() {
     }
 
     // In "soft" mode, show limits but don't block
-    if (GATING_MODE === "soft") {
+    if (_effectiveGatingMode === "soft") {
         result.allowed = true;
         result.softBlocked = remaining <= 0 && limit !== Infinity;
     }
@@ -484,7 +535,7 @@ export async function recordAuditUsage() {
  * When GATING_MODE is "off", always returns unlimited.
  */
 export async function checkChatQuota() {
-    if (GATING_MODE === "off") {
+    if (_effectiveGatingMode === "off") {
         return { allowed: true, remaining: Infinity, limit: Infinity, used: 0 };
     }
 
@@ -508,7 +559,7 @@ export async function checkChatQuota() {
     }
 
     // In "soft" mode, show limits but don't block
-    if (GATING_MODE === "soft") {
+    if (_effectiveGatingMode === "soft") {
         result.allowed = true;
         result.softBlocked = remaining <= 0 && limit !== Infinity;
     }
