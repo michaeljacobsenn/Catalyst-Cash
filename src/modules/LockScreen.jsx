@@ -185,8 +185,6 @@ export default function LockScreen() {
     }, [useFaceId]);
 
     const busy = status === "authenticating" || status === "bypassing" || status === "unlocked";
-    // Hide branding when Face ID auto-triggers to avoid double-splash after native splash screen
-    const hideBranding = useFaceId && (status === "authenticating" || status === "locked");
 
     // Keyboard support: allow PIN entry via physical keyboard
     useEffect(() => {
@@ -219,8 +217,8 @@ export default function LockScreen() {
 @keyframes breathe { 0%, 100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.08); } }
 @keyframes ambientBreathe { 0% { opacity: 0.5; transform: translate(-50%, -50%) scale(0.9); } 100% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } }
             `}</style>
-            {/* App Icon — hidden during FaceID auto-auth to prevent double splash */}
-            {!hideBranding && <div style={{
+            {/* App Icon */}
+            <div style={{
                 width: 80, height: 80, borderRadius: 22, overflow: "hidden",
                 boxShadow: "0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08)",
                 marginBottom: 20,
@@ -235,14 +233,14 @@ export default function LockScreen() {
                         </div>
                         : <img src="/icon-192.png" alt="Catalyst Cash" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 }
-            </div>}
+            </div>
 
-            {!hideBranding && <h1 style={{
+            <h1 style={{
                 fontSize: 28, fontWeight: 900,
                 background: "linear-gradient(135deg, #FFF 30%, #A0AEC0 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
                 margin: 0, marginBottom: 8, letterSpacing: "-0.02em"
-            }}>Catalyst Cash</h1>}
-            {!hideBranding && <p style={{
+            }}>Catalyst Cash</h1>
+            <p style={{
                 fontSize: 13, fontFamily: T.font.mono, letterSpacing: "0.06em",
                 color: failed ? T.status.red : T.text.muted, marginBottom: 40, marginTop: 0
             }}>
@@ -252,7 +250,7 @@ export default function LockScreen() {
                             status === "unlocked" ? "UNLOCKED" :
                                 failed ? errorMsg.toUpperCase() :
                                     "APP IS LOCKED"}
-            </p>}
+            </p>
 
             {showPinPad ? (
                 <div style={{ width: "100%", maxWidth: 280, display: "flex", flexDirection: "column", alignItems: "center" }}>
