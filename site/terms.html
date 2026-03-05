@@ -5,272 +5,641 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#07111d" />
   <title>Catalyst Cash Terms of Service</title>
   <meta name="description"
-    content="Catalyst Cash Terms of Service — understand your rights, responsibilities, and our commitment to your data privacy." />
+    content="Read the Catalyst Cash Terms of Service, including subscription terms, AI limitations, legal disclaimers, and dispute terms." />
   <meta property="og:title" content="Catalyst Cash Terms of Service" />
-  <meta property="og:description" content="Terms of Service for Catalyst Cash — your AI-powered financial coach." />
+  <meta property="og:description"
+    content="Terms for Catalyst Cash covering educational use, AI limitations, subscriptions, privacy, and dispute resolution." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://catalystcash.app/terms.html" />
-  <link rel="icon" href="/favicon.png" type="image/png" />
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta property="og:image" content="https://catalystcash.app/icon-512.png" />
+  <link rel="icon" href="favicon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap"
+    rel="stylesheet" />
   <style>
+    :root {
+      --bg: #07111d;
+      --bg-elevated: rgba(12, 24, 39, 0.88);
+      --bg-panel: rgba(16, 31, 50, 0.84);
+      --line: rgba(197, 219, 241, 0.12);
+      --line-strong: rgba(197, 219, 241, 0.22);
+      --text: #eef6ff;
+      --muted: #9cb2c8;
+      --dim: #6f879f;
+      --green: #8df06d;
+      --amber: #ffcd6b;
+      --red: #ff8c8c;
+      --blue: #7fc4ff;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+      --radius-xl: 30px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+      --max: 1120px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     html {
-      background: #04060A;
+      scroll-behavior: smooth;
+      background:
+        radial-gradient(circle at top left, rgba(127, 196, 255, 0.08), transparent 28%),
+        radial-gradient(circle at top right, rgba(141, 240, 109, 0.08), transparent 24%),
+        linear-gradient(180deg, #07111d 0%, #081522 100%);
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      margin: 0;
-      background: #04060A;
-      color: #F8FAFC;
+      font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text);
+      background: transparent;
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
     }
 
-    .wrap {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 32px 20px 60px;
-    }
-
-    h1 {
-      font-size: 28px;
-      margin: 0 0 10px;
-      color: #FFFFFF;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-    }
-
-    h2 {
-      font-size: 18px;
-      margin: 24px 0 8px;
-      color: #E4E6F0;
-      font-weight: 700;
-    }
-
-    p,
-    li {
-      line-height: 1.7;
-      color: #94A3B8;
-      font-size: 14px;
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 72px 72px;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.95), transparent 92%);
     }
 
     a {
-      color: #00E5FF;
+      color: inherit;
       text-decoration: none;
-      transition: color 0.2s;
     }
 
-    a:hover {
-      color: #9D72EA;
+    ::selection {
+      background: rgba(141, 240, 109, 0.32);
+      color: #00110a;
     }
 
+    .page {
+      position: relative;
+      z-index: 1;
+    }
+
+    .accent-line {
+      position: fixed;
+      inset: 0 0 auto;
+      height: 4px;
+      z-index: 100;
+      background: linear-gradient(90deg, #8df06d 0%, #7fc4ff 45%, #ffcd6b 100%);
+    }
+
+    .shell {
+      width: min(calc(100% - 32px), var(--max));
+      margin: 0 auto;
+    }
+
+    .eyebrow,
+    .micro-label,
     .meta {
-      font-size: 12px;
-      color: #475569;
-      margin-bottom: 16px;
-      font-variant-numeric: tabular-nums;
+      font-family: "IBM Plex Mono", monospace;
     }
 
-    .card {
-      background: #090C15;
-      border: 1px solid rgba(157, 114, 234, 0.15);
-      border-radius: 12px;
-      padding: 16px 18px;
-      margin: 16px 0;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 205, 107, 0.22);
+      background: rgba(255, 205, 107, 0.08);
+      color: var(--amber);
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
     }
 
-    .warning {
-      border-color: #F59E0B;
-      background: rgba(245, 158, 11, 0.03);
+    .eyebrow::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--amber);
+      box-shadow: 0 0 12px rgba(255, 205, 107, 0.8);
     }
 
-    strong {
-      color: #E2E8F0;
+    nav {
+      position: sticky;
+      top: 4px;
+      z-index: 80;
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      background: rgba(7, 17, 29, 0.76);
+      border-bottom: 1px solid rgba(197, 219, 241, 0.08);
     }
 
-    ul {
-      padding-left: 20px;
-    }
-
-    .back-nav {
+    .nav-inner {
+      width: min(calc(100% - 32px), var(--max));
+      margin: 0 auto;
+      min-height: 76px;
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 32px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      justify-content: space-between;
+      gap: 18px;
     }
 
-    .back-nav a {
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    .brand img {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .nav-links a {
       font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    .nav-links a:hover,
+    .nav-links a:focus-visible {
+      color: var(--text);
+    }
+
+    .nav-cta,
+    .button-primary,
+    .button-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border-radius: 999px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .nav-cta,
+    .button-primary {
+      background: linear-gradient(135deg, #8df06d 0%, #4ecf9b 100%);
+      color: #07111d;
+      font-weight: 700;
+      box-shadow: 0 14px 34px rgba(141, 240, 109, 0.22);
+    }
+
+    .nav-cta {
+      padding: 12px 18px;
+      font-size: 12px;
+    }
+
+    .button-primary,
+    .button-secondary {
+      padding: 15px 23px;
+      font-size: 15px;
+    }
+
+    .button-secondary {
+      border: 1px solid var(--line-strong);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text);
       font-weight: 600;
     }
 
-    .back-nav span {
-      color: #475569;
-      font-size: 13px;
+    .hero {
+      padding: 88px 0 34px;
+    }
+
+    h1 {
+      font-size: clamp(3rem, 6.6vw, 5rem);
+      line-height: 0.96;
+      letter-spacing: -0.08em;
+      max-width: 11ch;
+      margin: 22px 0 16px;
+    }
+
+    .hero p,
+    .section-head p,
+    .term-card p,
+    .term-card li,
+    .summary-card p,
+    footer p {
+      color: var(--muted);
+      line-height: 1.78;
+    }
+
+    .meta {
+      color: var(--dim);
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-top: 18px;
+    }
+
+    .summary-grid,
+    .term-grid,
+    .actions {
+      display: grid;
+      gap: 18px;
+    }
+
+    .summary-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 26px;
+    }
+
+    .term-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .summary-card,
+    .term-card,
+    .cta-band {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background:
+        linear-gradient(180deg, rgba(18, 33, 53, 0.94), rgba(10, 21, 35, 0.92)),
+        radial-gradient(circle at top, rgba(127, 196, 255, 0.08), transparent 42%);
+      box-shadow: var(--shadow);
+    }
+
+    .summary-card,
+    .term-card {
+      padding: 22px;
+    }
+
+    .summary-card span,
+    .term-card span {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+
+    .summary-card span {
+      color: var(--amber);
+      background: rgba(255, 205, 107, 0.1);
+      border: 1px solid rgba(255, 205, 107, 0.22);
+    }
+
+    .term-card span {
+      color: var(--blue);
+      background: rgba(127, 196, 255, 0.1);
+      border: 1px solid rgba(127, 196, 255, 0.22);
+    }
+
+    .summary-card h2,
+    .term-card h2 {
+      font-size: 1.32rem;
+      letter-spacing: -0.04em;
+      margin-bottom: 10px;
+    }
+
+    .term-card ul {
+      list-style: none;
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .term-card li {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .term-card li::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      flex: 0 0 8px;
+      margin-top: 9px;
+      border-radius: 999px;
+      background: var(--amber);
+      box-shadow: 0 0 12px rgba(255, 205, 107, 0.4);
+    }
+
+    .section {
+      padding: 28px 0;
+    }
+
+    .section-head {
+      max-width: 48rem;
+      margin-bottom: 20px;
+    }
+
+    .micro-label {
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--blue);
+      margin-bottom: 12px;
+    }
+
+    .section-head h2 {
+      font-size: clamp(2rem, 4.5vw, 3rem);
+      line-height: 1;
+      letter-spacing: -0.06em;
+      margin-bottom: 12px;
+    }
+
+    .term-card a,
+    footer a {
+      color: var(--blue);
+    }
+
+    .term-card a:hover,
+    footer a:hover {
+      color: var(--text);
+    }
+
+    .cta-band {
+      padding: 24px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: center;
+    }
+
+    .cta-band h2 {
+      font-size: clamp(1.9rem, 4vw, 2.8rem);
+      letter-spacing: -0.05em;
+      margin-bottom: 10px;
+    }
+
+    .actions {
+      grid-auto-flow: column;
+      align-items: center;
+    }
+
+    footer {
+      padding: 34px 0 52px;
+    }
+
+    .footer-grid {
+      display: grid;
+      gap: 18px;
+      border-top: 1px solid rgba(197, 219, 241, 0.08);
+      padding-top: 24px;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px 24px;
+    }
+
+    @media (max-width: 940px) {
+      .summary-grid,
+      .term-grid,
+      .cta-band,
+      .actions {
+        grid-template-columns: 1fr;
+        grid-auto-flow: row;
+      }
+    }
+
+    @media (max-width: 760px) {
+      nav {
+        position: static;
+      }
+
+      .nav-inner {
+        padding: 16px 0;
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .nav-links {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .summary-card,
+      .term-card,
+      .cta-band {
+        padding: 20px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      * {
+        transition: none !important;
+      }
     }
   </style>
 </head>
 
 <body>
-  <div class="wrap">
-    <div class="back-nav">
-      <a href="/">← Catalyst Cash</a>
-      <span>/</span>
-      <span style="color: #94A3B8;">Terms of Service</span>
-    </div>
-    <h1>Catalyst Cash Terms of Service</h1>
-    <div class="meta">Effective date: 2026-03-01 · Last updated: 2026-03-01</div>
+  <div class="accent-line"></div>
 
-    <div class="card">
-      <p>Welcome to Catalyst Cash ("the Application", "the App"). By downloading, accessing, or using the Application,
-        you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, you may not use
-        the Application.</p>
-    </div>
+  <div class="page">
+    <nav>
+      <div class="nav-inner">
+        <a href="/" class="brand">
+          <img src="icon-192.png" alt="Catalyst Cash" />
+          Catalyst Cash
+        </a>
+        <div class="nav-links">
+          <a href="/">Home</a>
+          <a href="guide.html">Guide</a>
+          <a href="privacy.html">Privacy</a>
+          <a href="mailto:support@catalystcash.app">Support</a>
+          <a href="https://testflight.apple.com/join/3rpWQq49" class="nav-cta">Join TestFlight</a>
+        </div>
+      </div>
+    </nav>
 
-    <h2>1. Eligibility</h2>
-    <p>You must be at least 18 years old and able to lawfully enter into and form contracts under applicable law to
-      use the Application. The Application is intended for residents of the United States and is governed by U.S. law.
-      By using the Application, you represent that you meet these eligibility requirements.</p>
+    <main class="shell">
+      <section class="hero">
+        <div class="eyebrow">Terms of service</div>
+        <h1>Use the product as software, not as licensed financial advice.</h1>
+        <p>
+          Catalyst Cash is personal finance software that uses local calculations, optional integrations, and
+          AI-generated educational output. By using the app, you agree to the terms below, including the limits of what
+          the product is and is not.
+        </p>
+        <div class="meta">Effective date: 2026-03-05 | Last updated: 2026-03-05</div>
 
-    <h2>2. Description of Service</h2>
-    <p>Catalyst Cash is a personal financial management tool designed to help you organize, track, and analyze your
-      finances. The Application routes AI audit and chat requests through the Catalyst Cash backend proxy to selected
-      third-party model providers for analysis. You control what data is entered and when AI features are used.</p>
+        <div class="summary-grid">
+          <div class="summary-card">
+            <span>Educational only</span>
+            <h2>No fiduciary or advisory relationship</h2>
+            <p>The app does not provide licensed investment, legal, tax, or accounting advice.</p>
+          </div>
+          <div class="summary-card">
+            <span>AI limits</span>
+            <h2>Outputs can be wrong</h2>
+            <p>Model-generated results may contain reasoning or arithmetic errors and must be independently checked.</p>
+          </div>
+          <div class="summary-card">
+            <span>Subscriptions</span>
+            <h2>Apple manages billing</h2>
+            <p>Subscription purchases, renewals, and refund handling are governed through Apple's systems.</p>
+          </div>
+        </div>
+      </section>
 
-    <h2>3. Not Professional Financial Advice — No Fiduciary Relationship</h2>
-    <div class="card warning">
-      <p style="color: #F8FAFC; margin-bottom: 0;"><strong>⚠️ IMPORTANT FINANCIAL DISCLAIMER</strong><br><br>
-        Catalyst Cash and its creators are <strong>NOT</strong> registered investment advisors, broker-dealers,
-        certified
-        financial planners, tax advisors, or fiduciaries. We do not provide personalized investment advice and
-        <strong>do not act in a fiduciary capacity</strong>.<br><br>
-        All insights, analyses, health scores, recommendations, and AI-generated outputs are for
-        <strong>informational and educational purposes only</strong>. They are not tailored to your individual financial
-        situation, risk tolerance, or investment objectives beyond the data you manually provide.<br><br>
-        <strong>You should always consult with a qualified, licensed financial professional before making any
-          significant financial decisions.</strong> All investment strategies and investments involve risk of loss.
-        Past performance is not indicative of future results.
-      </p>
-    </div>
+      <section class="section">
+        <div class="section-head">
+          <div class="micro-label">Key Terms</div>
+          <h2>The legal version in plain language.</h2>
+        </div>
 
-    <h2>4. AI-Generated Content & Limitations</h2>
-    <p>The Application utilizes third-party AI models (such as OpenAI GPT, Google Gemini, and Anthropic Claude) to
-      generate financial analyses and conversational responses. You acknowledge that:</p>
-    <ul>
-      <li><strong>AI outputs may be inaccurate.</strong> Large Language Models can and do make arithmetic mistakes,
-        generate "hallucinations," or produce misleading content. You agree to independently verify any calculations,
-        advice, or recommendations.</li>
-      <li><strong>AI lacks judgment.</strong> AI-generated responses lack human judgment, personal context, and
-        professional expertise. They are not a substitute for qualified financial advice.</li>
-      <li><strong>No guarantee of accuracy.</strong> We make no warranties as to the accuracy, reliability,
-        completeness,
-        or timeliness of any AI-generated output.</li>
-      <li><strong>Your responsibility.</strong> You are solely responsible for how you use AI outputs and for any
-        financial decisions you make based on them.</li>
-    </ul>
+        <div class="term-grid">
+          <div class="term-card">
+            <span>1</span>
+            <h2>Eligibility</h2>
+            <p>You must be at least 18 years old and able to enter into legally binding agreements to use the app.</p>
+          </div>
+          <div class="term-card">
+            <span>2</span>
+            <h2>Service description</h2>
+            <p>
+              Catalyst Cash helps you organize financial information, run weekly audits, evaluate debt and cash flow,
+              and ask follow-up questions using selected AI models.
+            </p>
+          </div>
+          <div class="term-card">
+            <span>3</span>
+            <h2>Not professional advice</h2>
+            <ul>
+              <li>The app and its creators are not acting as your fiduciary, broker, tax advisor, accountant, or attorney.</li>
+              <li>All outputs are for educational and informational use only.</li>
+              <li>You remain responsible for any financial decisions you make.</li>
+            </ul>
+          </div>
+          <div class="term-card">
+            <span>4</span>
+            <h2>AI-generated content can be inaccurate</h2>
+            <ul>
+              <li>AI outputs may contain factual, arithmetic, or reasoning errors.</li>
+              <li>You should verify calculations, dates, and recommendations before acting on them.</li>
+              <li>The product does not guarantee completeness, correctness, or fitness for a particular purpose.</li>
+            </ul>
+          </div>
+          <div class="term-card">
+            <span>5</span>
+            <h2>Third-party services</h2>
+            <ul>
+              <li>Plaid connections are optional and governed by Plaid's own terms and privacy policy.</li>
+              <li>AI requests may be routed to providers such as OpenAI or Google through the Catalyst Cash backend proxy.</li>
+              <li>Availability and behavior of third-party services may change without notice.</li>
+            </ul>
+          </div>
+          <div class="term-card">
+            <span>6</span>
+            <h2>Subscriptions and billing</h2>
+            <ul>
+              <li>Free and Pro tiers may include usage limits such as audit and chat quotas.</li>
+              <li>Apple manages billing, renewals, cancellations, and refund flows.</li>
+              <li>RevenueCat may be used to validate subscription entitlements.</li>
+            </ul>
+          </div>
+          <div class="term-card">
+            <span>7</span>
+            <h2>Acceptable use</h2>
+            <ul>
+              <li>Do not abuse rate limits, entitlement checks, or access controls.</li>
+              <li>Do not reverse engineer, tamper with, or redistribute the app without permission.</li>
+              <li>Do not use the product to provide professional financial services to others.</li>
+            </ul>
+          </div>
+          <div class="term-card">
+            <span>8</span>
+            <h2>Intellectual property</h2>
+            <p>The app, brand, code, design, and content remain the property of Catalyst Cash and its licensors.</p>
+          </div>
+          <div class="term-card">
+            <span>9</span>
+            <h2>Privacy</h2>
+            <p>Your use of the app is also governed by the <a href="privacy.html">Privacy Policy</a>.</p>
+          </div>
+          <div class="term-card">
+            <span>10</span>
+            <h2>Disclaimer and limitation of liability</h2>
+            <ul>
+              <li>The app is provided on an "as is" and "as available" basis.</li>
+              <li>To the maximum extent permitted by law, Catalyst Cash is not liable for indirect, incidental, or consequential damages arising from use of the app.</li>
+              <li>This includes losses caused by incorrect AI output, bad input data, service interruptions, or third-party failures.</li>
+            </ul>
+          </div>
+          <div class="term-card">
+            <span>11</span>
+            <h2>Indemnification</h2>
+            <p>You agree to indemnify and hold Catalyst Cash harmless for claims arising from your misuse of the app or violation of these terms.</p>
+          </div>
+          <div class="term-card">
+            <span>12</span>
+            <h2>Disputes and governing law</h2>
+            <ul>
+              <li>These terms are governed by the laws of the State of Delaware.</li>
+              <li>Disputes are subject to binding arbitration except where injunctive relief is available by law.</li>
+              <li>Class actions and jury trials are waived to the extent allowed by law.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
 
-    <h2>5. Third-Party AI Providers</h2>
-    <p>When you use AI features (audits, chat), relevant request data is routed through the Catalyst Cash backend proxy
-      to the selected model provider. <strong>You are responsible for complying with the terms of any third-party
-        provider that powers those features</strong>. Catalyst Cash is not affiliated with, endorsed by, or sponsored by
-      any AI provider.</p>
+      <section class="section">
+        <div class="cta-band">
+          <div>
+            <div class="micro-label">Questions</div>
+            <h2>Read the guide and privacy page alongside this.</h2>
+            <p>
+              The terms define the legal frame. The guide explains how the product is meant to be used. The privacy
+              page explains where your data lives and how requests move through the system.
+            </p>
+          </div>
+          <div class="actions">
+            <a href="guide.html" class="button-secondary">Read the Guide</a>
+            <a href="privacy.html" class="button-primary">View Privacy</a>
+          </div>
+        </div>
+      </section>
+    </main>
 
-    <h2>6. Third-Party Integrations (Plaid)</h2>
-    <p>If you choose to connect bank accounts via Plaid, you authorize Plaid to access your financial account
-      information
-      in accordance with <a href="https://plaid.com/legal" target="_blank">Plaid's Terms of Service</a> and
-      <a href="https://plaid.com/legal/#end-user-privacy-policy" target="_blank">End User Privacy Policy</a>.
-      Catalyst Cash does not store your bank login credentials. We are not responsible for the accuracy or availability
-      of data retrieved from third-party financial institutions via Plaid.
-    </p>
-
-    <h2>7. Subscriptions, Payments & Refunds</h2>
-    <p>Catalyst Cash may offer subscription tiers ("Free" and "Pro"). All subscriptions are managed through Apple's
-      App Store and are subject to Apple's terms and refund policies. Subscription fees are charged in U.S. Dollars.
-      You may cancel your subscription at any time through your device's subscription settings. Free and Pro tiers may
-      include reasonable usage limits designed to prevent abuse and maintain service quality.</p>
-
-    <h2>8. User Conduct</h2>
-    <p>You agree not to:</p>
-    <ul>
-      <li>Decompile, reverse engineer, disassemble, or modify the Application</li>
-      <li>Use the Application for any illegal, fraudulent, or unauthorized purpose</li>
-      <li>Attempt to circumvent subscription limits, rate limits, or access controls</li>
-      <li>Distribute, sublicense, or commercially exploit the Application without written consent</li>
-      <li>Use the Application to generate financial advice for others in a professional capacity</li>
-    </ul>
-
-    <h2>9. Intellectual Property</h2>
-    <p>The Application, including its design, code, and content, is the property of its creators and is protected by
-      copyright, trademark, and other intellectual property laws. You are granted a limited, revocable, non-exclusive,
-      non-transferable license to use the Application for personal, non-commercial use.</p>
-
-    <h2>10. Data & Privacy</h2>
-    <p>Your use of the Application is also governed by our <a href="privacy.html">Privacy Policy</a>. Your data is
-      stored locally on your device. We do not maintain servers that process or retain your personal financial
-      information. You are solely responsible for maintaining the security of your device and any data stored on it.</p>
-
-    <h2>11. Limitation of Liability</h2>
-    <p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL CATALYST CASH, ITS CREATORS, AFFILIATES,
-      DIRECTORS, OFFICERS, EMPLOYEES, AGENTS, OR LICENSORS BE LIABLE FOR ANY INDIRECT, PUNITIVE, INCIDENTAL, SPECIAL,
-      CONSEQUENTIAL, OR EXEMPLARY DAMAGES, INCLUDING WITHOUT LIMITATION DAMAGES FOR LOSS OF PROFITS, GOODWILL, USE,
-      DATA, OR OTHER INTANGIBLE LOSSES, ARISING OUT OF OR IN CONNECTION WITH YOUR USE OF, OR INABILITY TO USE, THE
-      APPLICATION OR ITS CONTENT.</p>
-    <p><strong>Under no circumstances will Catalyst Cash be responsible for any damage, loss, or injury resulting
-        from:</strong></p>
-    <ul>
-      <li>Inaccurate AI-generated financial advice, calculations, or recommendations</li>
-      <li>Errors in data you enter into the Application</li>
-      <li>Unauthorized access to your device or account</li>
-      <li>Data loss due to device failure, software updates, or user error</li>
-      <li>Financial losses resulting from decisions made using the Application's outputs</li>
-      <li>Unavailability or changes to third-party AI providers or financial data services</li>
-    </ul>
-
-    <h2>12. Indemnification</h2>
-    <p>You agree to indemnify, defend, and hold harmless Catalyst Cash and its creators, affiliates, directors,
-      officers,
-      employees, and agents from and against any and all claims, damages, obligations, losses, liabilities, costs, or
-      debt arising from: (a) your use of the Application; (b) your violation of these Terms; (c) your violation of any
-      third-party right, including any intellectual property or privacy right; or (d) any claim that your use of the
-      Application caused damage to a third party.</p>
-
-    <h2>13. Disclaimer of Warranties</h2>
-    <p>THE APPLICATION AND ALL CONTENT ARE PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER
-      EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
-      PURPOSE, TITLE, AND NON-INFRINGEMENT. WE DO NOT WARRANT THAT THE APPLICATION WILL BE UNINTERRUPTED, ERROR-FREE,
-      OR FREE OF HARMFUL COMPONENTS.</p>
-
-    <h2>14. Dispute Resolution</h2>
-    <p>Any disputes arising from or relating to these Terms shall be resolved through binding arbitration in accordance
-      with the rules of the American Arbitration Association (AAA), rather than in court, except that either party may
-      seek injunctive relief in court for intellectual property matters. THE PARTIES WAIVE THEIR RIGHT TO A JURY TRIAL
-      AND TO PARTICIPATE IN A CLASS ACTION.</p>
-
-    <h2>15. Governing Law</h2>
-    <p>These Terms shall be governed by and construed in accordance with the laws of the State of Delaware, without
-      regard to conflict of law principles.</p>
-
-    <h2>16. Severability</h2>
-    <p>If any provision of these Terms is found to be unenforceable, the remaining provisions shall continue in full
-      force and effect.</p>
-
-    <h2>17. Changes to Terms</h2>
-    <p>Catalyst Cash is continuously evolving. We reserve the right to modify these Terms at any time. If we make
-      material changes, we will notify you within the Application or by updating the Effective Date. Your continued use
-      of the Application following such updates constitutes acceptance of the revised Terms.</p>
-
-    <h2>18. Termination</h2>
-    <p>We reserve the right to suspend or terminate your access to the Application at any time, with or without cause,
-      and with or without notice. Upon termination, your right to use the Application ceases immediately. Provisions
-      that by their nature should survive termination (including limitations of liability, indemnification, and
-      dispute resolution) shall survive.</p>
-
-    <h2>Contact</h2>
-    <p>If you have any questions about these Terms, please contact us at: <strong>support@catalystcash.app</strong></p>
+    <footer class="shell">
+      <div class="footer-grid">
+        <p>Catalyst Cash provides AI-generated educational information only and is not tax, legal, investment, or financial advice.</p>
+        <div class="footer-links">
+          <a href="/">Home</a>
+          <a href="guide.html">Guide</a>
+          <a href="privacy.html">Privacy</a>
+          <a href="mailto:support@catalystcash.app">support@catalystcash.app</a>
+        </div>
+      </div>
+    </footer>
   </div>
 </body>
 

@@ -17,7 +17,7 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9D0E1F2A3B4C5D6E7F8090A1 /* PdfViewerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D0E1F2A3B4C5D6E7F8090A2 /* PdfViewerPlugin.swift */; };
 		BD7A70D8AD9E3571FF47167D /* Pods_App.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E358EC908CA2DFCD439393A4 /* Pods_App.framework */; };
-		D4C0B2815E6C6A388FF53D5B /* GoogleService-Info.plist in Sources */ = {isa = PBXBuildFile; fileRef = 85B04E51BA2A95C7508E29C4 /* GoogleService-Info.plist */; };
+		D4C0B2815E6C6A388FF53D5B /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 85B04E51BA2A95C7508E29C4 /* GoogleService-Info.plist */; };
 		A2B3C4D5E6F7A8B9C0D1E2F3 /* ICloudSyncPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B3C4D5E6F7A8B9C0D1E2F4 /* ICloudSyncPlugin.swift */; };
 		A2B3C4D5E6F7A8B9C0D1E2F5 /* ICloudSyncPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = A2B3C4D5E6F7A8B9C0D1E2F6 /* ICloudSyncPlugin.m */; };
 /* End PBXBuildFile section */
@@ -178,6 +178,7 @@
 				504EC30F1FED79650016851F /* Assets.xcassets in Resources */,
 				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
 				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
+				D4C0B2815E6C6A388FF53D5B /* GoogleService-Info.plist in Resources */,
 				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -234,7 +235,6 @@
 				9D0E1F2A3B4C5D6E7F8090A1 /* PdfViewerPlugin.swift in Sources */,
 				A2B3C4D5E6F7A8B9C0D1E2F3 /* ICloudSyncPlugin.swift in Sources */,
 				A2B3C4D5E6F7A8B9C0D1E2F5 /* ICloudSyncPlugin.m in Sources */,
-				D4C0B2815E6C6A388FF53D5B /* GoogleService-Info.plist in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

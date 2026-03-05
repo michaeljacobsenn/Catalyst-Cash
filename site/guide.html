@@ -1,1020 +1,970 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Catalyst Cash Guide — Complete User Reference</title>
-    <meta name="description"
-        content="Learn how to use Catalyst Cash — your AI-powered financial coach. Complete guide with features, tips, and getting started instructions." />
-    <meta property="og:title" content="Catalyst Cash Guide" />
-    <meta property="og:description"
-        content="Your complete reference for Catalyst Cash — AI-powered weekly audits, automatic bank syncing, and personalized financial guidance." />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://catalystcash.app/guide.html" />
-    <meta property="og:image" content="https://catalystcash.app/icon-512.png" />
-    <link rel="icon" href="/favicon.png" type="image/png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@600;700;800&display=swap');
-
-        @page {
-            margin: 0;
-            size: A4 portrait;
-        }
-
-        html,
-        body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #07090F;
-            /* Deepest black/blue */
-            color: #94A3B8;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-            scroll-behavior: smooth;
-        }
-
-        *,
-        *::before,
-        *::after {
-            box-sizing: border-box;
-        }
-
-        .page {
-            position: relative;
-            box-sizing: border-box;
-            padding: 0 40px;
-            background-color: #07090F;
-            max-width: 900px;
-            margin: 0 auto;
-        }
-
-
-        /* Animations */
-        @keyframes fadeUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .animate-fade-up {
-            animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-            opacity: 0;
-        }
-
-        .delay-1 {
-            animation-delay: 0.1s;
-        }
-
-        .delay-2 {
-            animation-delay: 0.2s;
-        }
-
-        .delay-3 {
-            animation-delay: 0.3s;
-        }
-
-        .delay-4 {
-            animation-delay: 0.4s;
-        }
-
-        .delay-5 {
-            animation-delay: 0.5s;
-        }
-
-        /* Nav Back Button */
-        .nav-back-button {
-            position: absolute;
-            top: 40px;
-            left: 40px;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 16px;
-            border-radius: 100px;
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: #E2E8F0;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            z-index: 100;
-        }
-
-        .nav-back-button:hover {
-            background: rgba(255, 255, 255, 0.1);
-            transform: translateX(-4px);
-            border-color: rgba(255, 255, 255, 0.2);
-            color: #fff;
-        }
-
-        .nav-back-button svg {
-            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        .nav-back-button:hover svg {
-            transform: translateX(-2px);
-        }
-
-        /* Typography */
-        h1,
-        h2,
-        h3,
-        h4,
-        p,
-        ul,
-        li {
-            margin: 0;
-            padding: 0;
-        }
-
-        ::selection {
-            background: rgba(0, 229, 255, 0.3);
-            color: #fff;
-        }
-
-        .header-wrapper {
-            text-align: center;
-            margin-top: 60px;
-            margin-bottom: 70px;
-            height: calc(100vh - 80px);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-        }
-
-        /* Ambient background glow for hero */
-        .header-wrapper::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 300px;
-            height: 300px;
-            background: radial-gradient(circle, rgba(123, 94, 167, 0.25) 0%, rgba(0, 0, 0, 0) 70%);
-            z-index: -1;
-            filter: blur(40px);
-        }
-
-        .splash-logo {
-            width: 200px;
-            height: 200px;
-            margin-bottom: 30px;
-            object-fit: contain;
-            filter: drop-shadow(0 0 50px rgba(123, 94, 167, 0.3));
-            border-radius: 40px;
-        }
-
-        .label-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            border: 1px solid rgba(123, 94, 167, 0.4);
-            color: #D4C4FB;
-            background: rgba(123, 94, 167, 0.1);
-            padding: 6px 18px;
-            border-radius: 999px;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            font-weight: 800;
-            margin-bottom: 24px;
-            font-family: 'JetBrains Mono', monospace;
-            box-shadow: 0 0 20px rgba(123, 94, 167, 0.2);
-        }
-
-        .label-pill::before {
-            content: '';
-            width: 6px;
-            height: 6px;
-            background: #2ECC71;
-            border-radius: 50%;
-            box-shadow: 0 0 8px #2ECC71;
-        }
-
-        h1 {
-            color: #FFFFFF;
-            font-size: 64px;
-            font-weight: 900;
-            letter-spacing: -2.5px;
-            line-height: 1.05;
-            background: linear-gradient(135deg, #FFFFFF 0%, #A1A1AA 100%);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .subtitle {
-            color: #64748B;
-            font-size: 18px;
-            margin-top: 20px;
-            font-weight: 500;
-            letter-spacing: -0.2px;
-            max-width: 500px;
-            line-height: 1.5;
-        }
-
-        .scroll-indicator {
-            position: absolute;
-            bottom: 40px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-            color: #475569;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 10px;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-        }
-
-        .scroll-line {
-            width: 1px;
-            height: 40px;
-            background: linear-gradient(to bottom, #475569, transparent);
-        }
-
-        /* Section Containers */
-        .section-card {
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 24px;
-            padding: 40px;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
-            margin-bottom: 32px;
-            position: relative;
-            overflow: hidden;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-        }
-
-        .section-card::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
-        }
-
-        .section-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .section-number {
-            color: rgba(123, 94, 167, 0.6);
-            font-size: 24px;
-            font-family: 'JetBrains Mono', monospace;
-            font-weight: 800;
-            margin-right: 16px;
-        }
-
-        .section-title {
-            color: #F8FAFC;
-            font-size: 26px;
-            font-weight: 800;
-            letter-spacing: -0.5px;
-        }
-
-        /* Content Elements */
-        p.lead {
-            color: #CBD5E1;
-            font-size: 15px;
-            line-height: 1.6;
-            margin-bottom: 28px;
-            font-weight: 500;
-        }
-
-        p {
-            color: #94A3B8;
-            font-size: 14px;
-            line-height: 1.6;
-            margin-bottom: 14px;
-        }
-
-        ul {
-            padding-left: 20px;
-            margin-bottom: 16px;
-        }
-
-        li {
-            color: #94A3B8;
-            font-size: 14px;
-            line-height: 1.6;
-            margin-bottom: 10px;
-        }
-
-        li strong {
-            color: #F1F5F9;
-            font-weight: 700;
-        }
-
-        code {
-            background: rgba(123, 94, 167, 0.15);
-            padding: 3px 6px;
-            border-radius: 6px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 12px;
-            color: #D4C4FB;
-            font-weight: 600;
-            border: 1px solid rgba(123, 94, 167, 0.2);
-        }
-
-        /* Grid Layouts for specific sections */
-        .grid-3 {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 24px;
-        }
-
-        .grid-2 {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 24px;
-        }
-
-        .feature-box {
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 16px;
-            padding: 24px;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .feature-box:hover {
-            transform: translateY(-2px);
-            border-color: rgba(255, 255, 255, 0.1);
-            background: rgba(255, 255, 255, 0.02);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-        }
-
-        .feature-box h3 {
-            color: #F8FAFC;
-            font-size: 16px;
-            font-weight: 700;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .feature-box p {
-            font-size: 13px;
-            color: #64748B;
-            margin-bottom: 0;
-        }
-
-        .insight-box {
-            margin-top: 30px;
-            border-radius: 16px;
-            border: 1px solid rgba(16, 185, 129, 0.25);
-            background: rgba(16, 185, 129, 0.05);
-            padding: 24px 30px;
-            position: relative;
-            overflow: hidden;
-            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.05);
-        }
-
-        .insight-box::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 4px;
-            height: 100%;
-            background: #2ECC71;
-            box-shadow: 0 0 10px #2ECC71;
-        }
-
-        .insight-header {
-            color: #34D399;
-            font-size: 11px;
-            font-family: 'JetBrains Mono', monospace;
-            font-weight: 800;
-            letter-spacing: 1.5px;
-            text-transform: uppercase;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .insight-box p {
-            color: #E2E8F0;
-            margin: 0;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-
-        /* Pro vs Free Section */
-        .tier-box {
-            border-radius: 20px;
-            padding: 30px;
-            position: relative;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .tier-free {
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-        }
-
-        .tier-pro {
-            background: linear-gradient(145deg, rgba(123, 94, 167, 0.1), rgba(0, 0, 0, 0.2));
-            border: 1px solid rgba(123, 94, 167, 0.4);
-            box-shadow: 0 10px 40px rgba(123, 94, 167, 0.15);
-        }
-
-        .tier-pro::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            border-radius: 20px;
-            padding: 1px;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), transparent);
-            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-            -webkit-mask-composite: xor;
-            mask-composite: exclude;
-            pointer-events: none;
-        }
-
-        .tier-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        .tier-pro .tier-header {
-            border-bottom-color: rgba(123, 94, 167, 0.3);
-        }
-
-        .tier-box ul {
-            padding-left: 0;
-            list-style: none;
-            margin-bottom: auto;
-        }
-
-        .tier-box li {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            margin-bottom: 14px;
-            color: #CBD5E1;
-            font-size: 14px;
-        }
-
-        .tier-box li::before {
-            content: '✓';
-            color: #2ECC71;
-            font-weight: 900;
-        }
-
-        .tier-pro li::before {
-            color: #D4C4FB;
-        }
-
-        .step-list {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 24px;
-            list-style: none;
-            padding: 0;
-        }
-
-        .step-item {
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
-            padding: 30px;
-            position: relative;
-            margin-bottom: 0;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .step-item:hover {
-            border-color: rgba(255, 255, 255, 0.1);
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        .step-circle {
-            width: 32px;
-            height: 32px;
-            border-radius: 16px;
-            background: #D4C4FB;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #07090F;
-            font-size: 14px;
-            font-weight: 800;
-            font-family: 'JetBrains Mono', monospace;
-            position: absolute;
-            top: 24px;
-            left: 24px;
-            box-shadow: 0 0 15px rgba(123, 94, 167, 0.4);
-        }
-
-        .step-content {
-            margin-top: 40px;
-        }
-
-        .step-content h3 {
-            color: #F8FAFC;
-            font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 10px;
-        }
-
-        .step-content p {
-            font-size: 14px;
-            color: #64748B;
-            line-height: 1.6;
-        }
-
-        .danger-zone {
-            border-color: rgba(239, 68, 68, 0.3);
-            background: rgba(239, 68, 68, 0.04);
-            margin-top: 40px;
-        }
-
-        .danger-header {
-            color: #EF4444;
-            font-size: 11px;
-            font-family: 'JetBrains Mono', monospace;
-            font-weight: 800;
-            letter-spacing: 1.5px;
-            margin-bottom: 20px;
-            text-transform: uppercase;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .danger-header::before {
-            content: '⚠️';
-            font-size: 14px;
-        }
-
-        .footer-meta {
-            text-align: center;
-            color: rgba(255, 255, 255, 0.3);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 12px;
-            padding-top: 50px;
-            padding-bottom: 50px;
-            border-top: 1px dashed rgba(255, 255, 255, 0.1);
-            margin-top: 40px;
-            letter-spacing: 1px;
-        }
-
-        .cfo-rule {
-            background: linear-gradient(to right, rgba(0, 229, 255, 0.08), rgba(0, 0, 0, 0));
-            border-left: 4px solid #2ECC71;
-            padding: 24px;
-            border-radius: 0 12px 12px 0;
-            margin: 20px 0;
-        }
-
-        .cfo-rule h4 {
-            color: #2ECC71;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 8px;
-        }
-
-        .cfo-rule p {
-            color: #F8FAFC;
-            font-size: 15px;
-            font-weight: 500;
-            margin-bottom: 0;
-        }
-
-        /* ── Mobile Optimization ── */
-        @media screen and (max-width: 768px) {
-            .page {
-                padding: 0 20px;
-            }
-
-            .header-wrapper {
-                margin-top: 40px;
-                margin-bottom: 40px;
-                height: 85vh;
-            }
-
-            h1 {
-                font-size: 42px;
-                letter-spacing: -1.5px;
-            }
-
-            .subtitle {
-                font-size: 15px;
-            }
-
-            .grid-3,
-            .grid-2,
-            .step-list {
-                grid-template-columns: 1fr;
-                gap: 16px;
-            }
-
-            .section-card {
-                padding: 24px;
-            }
-
-            .section-title {
-                font-size: 22px;
-            }
-
-            .feature-box,
-            .step-item {
-                padding: 20px;
-            }
-
-            .step-circle {
-                top: 20px;
-                left: 20px;
-            }
-
-            .splash-logo {
-                width: 120px;
-                height: 120px;
-                margin-bottom: 24px;
-            }
-
-            .step-content {
-                margin-top: 36px;
-            }
-
-            .nav-back-button {
-                position: relative;
-                top: 0;
-                left: 0;
-                display: inline-flex;
-                margin: 20px 0 0 20px;
-            }
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#07111d" />
+  <title>Catalyst Cash Guide | Your Weekly Money Audit</title>
+  <meta name="description"
+    content="Learn how to set up Catalyst Cash, run your weekly money audit, understand free vs Pro, and use the app without losing privacy." />
+  <meta property="og:title" content="Catalyst Cash Guide" />
+  <meta property="og:description"
+    content="The complete guide for Catalyst Cash: setup, weekly audits, plans, privacy, and the fastest way to get value from the app." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://catalystcash.app/guide.html" />
+  <meta property="og:image" content="https://catalystcash.app/icon-512.png" />
+  <link rel="icon" href="favicon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap"
+    rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #07111d;
+      --bg-elevated: rgba(12, 24, 39, 0.88);
+      --bg-panel: rgba(16, 31, 50, 0.84);
+      --line: rgba(197, 219, 241, 0.12);
+      --line-strong: rgba(197, 219, 241, 0.22);
+      --text: #eef6ff;
+      --muted: #9cb2c8;
+      --dim: #6f879f;
+      --green: #8df06d;
+      --amber: #ffcd6b;
+      --red: #ff8c8c;
+      --blue: #7fc4ff;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+      --radius-xl: 30px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+      --radius-sm: 12px;
+      --max: 1180px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      background:
+        radial-gradient(circle at top left, rgba(127, 196, 255, 0.08), transparent 28%),
+        radial-gradient(circle at top right, rgba(141, 240, 109, 0.08), transparent 24%),
+        linear-gradient(180deg, #07111d 0%, #081522 100%);
+    }
+
+    body {
+      font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text);
+      background: transparent;
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 72px 72px;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.95), transparent 92%);
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    img {
+      display: block;
+      max-width: 100%;
+    }
+
+    ::selection {
+      background: rgba(141, 240, 109, 0.32);
+      color: #00110a;
+    }
+
+    .page {
+      position: relative;
+      z-index: 1;
+    }
+
+    .accent-line {
+      position: fixed;
+      inset: 0 0 auto;
+      height: 4px;
+      z-index: 100;
+      background: linear-gradient(90deg, #8df06d 0%, #7fc4ff 45%, #ffcd6b 100%);
+    }
+
+    .shell {
+      width: min(calc(100% - 32px), var(--max));
+      margin: 0 auto;
+    }
+
+    .mono,
+    .eyebrow,
+    .micro-label {
+      font-family: "IBM Plex Mono", monospace;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(141, 240, 109, 0.22);
+      background: rgba(141, 240, 109, 0.08);
+      color: var(--green);
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--green);
+      box-shadow: 0 0 12px rgba(141, 240, 109, 0.8);
+    }
+
+    nav {
+      position: sticky;
+      top: 4px;
+      z-index: 80;
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      background: rgba(7, 17, 29, 0.76);
+      border-bottom: 1px solid rgba(197, 219, 241, 0.08);
+    }
+
+    .nav-inner {
+      width: min(calc(100% - 32px), var(--max));
+      margin: 0 auto;
+      min-height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    .brand img {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .nav-links a {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      transition: color 0.2s ease, transform 0.2s ease;
+    }
+
+    .nav-links a:hover,
+    .nav-links a:focus-visible {
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+
+    .nav-cta,
+    .button-primary,
+    .button-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border-radius: 999px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .nav-cta,
+    .button-primary {
+      background: linear-gradient(135deg, #8df06d 0%, #4ecf9b 100%);
+      color: #07111d;
+      font-weight: 700;
+      box-shadow: 0 14px 34px rgba(141, 240, 109, 0.22);
+    }
+
+    .nav-cta {
+      padding: 12px 18px;
+      font-size: 12px;
+    }
+
+    .button-primary {
+      padding: 16px 24px;
+      font-size: 15px;
+    }
+
+    .button-secondary {
+      padding: 15px 23px;
+      font-size: 15px;
+      border: 1px solid var(--line-strong);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .nav-cta:hover,
+    .nav-cta:focus-visible,
+    .button-primary:hover,
+    .button-primary:focus-visible,
+    .button-secondary:hover,
+    .button-secondary:focus-visible {
+      transform: translateY(-2px);
+    }
+
+    .button-secondary:hover,
+    .button-secondary:focus-visible {
+      border-color: rgba(127, 196, 255, 0.32);
+      background: rgba(127, 196, 255, 0.08);
+    }
+
+    .hero {
+      padding: 88px 0 36px;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+      gap: 32px;
+      align-items: stretch;
+    }
+
+    h1 {
+      font-size: clamp(3rem, 7vw, 5.3rem);
+      line-height: 0.95;
+      letter-spacing: -0.08em;
+      max-width: 11ch;
+      margin: 22px 0 18px;
+    }
+
+    .hero-copy p {
+      max-width: 40rem;
+      font-size: 1.06rem;
+      line-height: 1.8;
+      color: var(--muted);
+      margin-bottom: 26px;
+    }
+
+    .hero-copy strong,
+    .section-head strong,
+    .card strong,
+    .step-card strong,
+    .faq-card strong {
+      color: var(--text);
+    }
+
+    .button-stack {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .hero-card,
+    .card,
+    .step-card,
+    .faq-card,
+    .plan-card,
+    .summary-card,
+    .toc-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background:
+        linear-gradient(180deg, rgba(18, 33, 53, 0.94), rgba(10, 21, 35, 0.92)),
+        radial-gradient(circle at top, rgba(127, 196, 255, 0.08), transparent 42%);
+      box-shadow: var(--shadow);
+    }
+
+    .hero-card {
+      padding: 24px;
+    }
+
+    .hero-card h2 {
+      font-size: 1.8rem;
+      letter-spacing: -0.05em;
+      margin-bottom: 12px;
+    }
+
+    .hero-card p {
+      color: var(--muted);
+      line-height: 1.7;
+      margin-bottom: 18px;
+    }
+
+    .hero-list,
+    .card ul,
+    .plan-card ul {
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+
+    .hero-list li,
+    .card li,
+    .plan-card li {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .hero-list li::before,
+    .card li::before,
+    .plan-card li::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      flex: 0 0 8px;
+      margin-top: 9px;
+      border-radius: 999px;
+      background: var(--green);
+      box-shadow: 0 0 12px rgba(141, 240, 109, 0.4);
+    }
+
+    .section {
+      padding: 28px 0;
+    }
+
+    .section-head {
+      max-width: 44rem;
+      margin-bottom: 22px;
+    }
+
+    .micro-label {
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--blue);
+      margin-bottom: 12px;
+    }
+
+    .section-head h2 {
+      font-size: clamp(2rem, 4.5vw, 3rem);
+      line-height: 1;
+      letter-spacing: -0.06em;
+      margin-bottom: 12px;
+    }
+
+    .section-head p {
+      color: var(--muted);
+      line-height: 1.75;
+      font-size: 1.02rem;
+    }
+
+    .toc-card {
+      padding: 20px;
+    }
+
+    .toc-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .toc-grid a {
+      padding: 12px 16px;
+      border-radius: 999px;
+      border: 1px solid var(--line-strong);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .grid-2,
+    .grid-3 {
+      display: grid;
+      gap: 18px;
+    }
+
+    .grid-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card,
+    .step-card,
+    .faq-card,
+    .plan-card,
+    .summary-card {
+      padding: 22px;
+    }
+
+    .summary-card span,
+    .plan-card span,
+    .step-index {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+
+    .summary-card span {
+      color: var(--green);
+      background: rgba(141, 240, 109, 0.1);
+      border: 1px solid rgba(141, 240, 109, 0.22);
+    }
+
+    .plan-card.free span {
+      color: var(--blue);
+      background: rgba(127, 196, 255, 0.1);
+      border: 1px solid rgba(127, 196, 255, 0.22);
+    }
+
+    .plan-card.pro span {
+      color: var(--amber);
+      background: rgba(255, 205, 107, 0.1);
+      border: 1px solid rgba(255, 205, 107, 0.22);
+    }
+
+    .step-index {
+      color: var(--green);
+      background: rgba(141, 240, 109, 0.1);
+      border: 1px solid rgba(141, 240, 109, 0.22);
+    }
+
+    .card h3,
+    .step-card h3,
+    .faq-card h3,
+    .plan-card h3,
+    .summary-card h3 {
+      font-size: 1.28rem;
+      letter-spacing: -0.04em;
+      margin-bottom: 10px;
+    }
+
+    .card p,
+    .step-card p,
+    .faq-card p,
+    .plan-card p,
+    .summary-card p {
+      color: var(--muted);
+      line-height: 1.75;
+    }
+
+    .plan-price {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin: 10px 0 14px;
+    }
+
+    .plan-price strong {
+      font-size: 2.4rem;
+      letter-spacing: -0.06em;
+    }
+
+    .plan-price small {
+      color: var(--dim);
+      font-size: 0.95rem;
+    }
+
+    .support-band {
+      padding: 24px;
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--line);
+      background:
+        linear-gradient(135deg, rgba(141, 240, 109, 0.12), rgba(127, 196, 255, 0.12)),
+        rgba(255, 255, 255, 0.03);
+      box-shadow: var(--shadow);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 20px;
+      align-items: center;
+    }
+
+    .support-band h2 {
+      font-size: clamp(1.9rem, 4vw, 2.8rem);
+      letter-spacing: -0.05em;
+      margin-bottom: 10px;
+    }
+
+    .support-band p {
+      color: var(--muted);
+      line-height: 1.75;
+      max-width: 42rem;
+    }
+
+    footer {
+      padding: 34px 0 52px;
+    }
+
+    .footer-grid {
+      display: grid;
+      gap: 20px;
+      border-top: 1px solid rgba(197, 219, 241, 0.08);
+      padding-top: 24px;
+    }
+
+    .footer-brandline {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 10px;
+    }
+
+    .footer-brandline img {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+    }
+
+    .footer-brand p,
+    .disclaimer {
+      color: var(--dim);
+      line-height: 1.7;
+      max-width: 44rem;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px 28px;
+    }
+
+    .footer-links a {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 940px) {
+      .hero-grid,
+      .grid-2,
+      .grid-3,
+      .support-band {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      nav {
+        position: static;
+      }
+
+      .nav-inner {
+        padding: 16px 0;
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .nav-links {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .hero {
+        padding-top: 56px;
+      }
+
+      h1 {
+        max-width: 100%;
+      }
+
+      .hero-card,
+      .card,
+      .step-card,
+      .faq-card,
+      .plan-card,
+      .summary-card,
+      .toc-card,
+      .support-band {
+        padding: 20px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      * {
+        transition: none !important;
+      }
+    }
+  </style>
 </head>
 
 <body>
+  <div class="accent-line"></div>
 
-    <div class="page">
-        <a href="/" class="nav-back-button">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <line x1="19" y1="12" x2="5" y2="12"></line>
-                <polyline points="12 19 5 12 12 5"></polyline>
-            </svg>
-            <span>Back to Homepage</span>
+  <div class="page">
+    <nav>
+      <div class="nav-inner">
+        <a href="/" class="brand">
+          <img src="icon-192.png" alt="Catalyst Cash" />
+          Catalyst Cash
         </a>
-
-        <div class="header-wrapper animate-fade-up">
-            <img src="./icon-512.png" alt="Catalyst Cash Logo" class="splash-logo" />
-            <div class="label-pill">Complete User Guide</div>
-            <h1 style="margin-top: 0px;">Catalyst Cash</h1>
-            <div class="subtitle">Your AI-Powered Financial Coach — Guide & Reference</div>
-
-            <div class="scroll-indicator">
-                <span>SCROLL</span>
-                <div class="scroll-line"></div>
-            </div>
+        <div class="nav-links">
+          <a href="/">Home</a>
+          <a href="#setup">Setup</a>
+          <a href="#plans">Plans</a>
+          <a href="privacy.html">Privacy</a>
+          <a href="terms.html">Terms</a>
+          <a href="https://testflight.apple.com/join/3rpWQq49" class="nav-cta">Join TestFlight</a>
         </div>
+      </div>
+    </nav>
 
-        <div class="section-card animate-fade-up delay-1">
-            <div class="section-header">
-                <span class="section-number">01 /</span>
-                <h2 class="section-title">How Catalyst Cash Works</h2>
-            </div>
-            <p class="lead">Catalyst Cash is more than a budgeting app. It's a <strong>complete financial
-                    toolkit</strong> designed to help you take full control of your money, grow your
-                wealth, and build lasting financial health.</p>
-
-            <div class="grid-3">
-                <div class="feature-box">
-                    <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2ECC71" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                        </svg> Private by Design</h3>
-                    <p>Your core financial data is stored locally on your device. Balances, accounts, and personal details remain on-device, while AI requests are proxied securely only when you use audit or chat features.</p>
-                </div>
-                <div class="feature-box">
-                    <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7B5EA7" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
-                            <rect x="9" y="9" width="6" height="6"></rect>
-                            <line x1="9" y1="1" x2="9" y2="4"></line>
-                            <line x1="15" y1="1" x2="15" y2="4"></line>
-                            <line x1="9" y1="20" x2="9" y2="23"></line>
-                            <line x1="15" y1="20" x2="15" y2="23"></line>
-                            <line x1="20" y1="9" x2="23" y2="9"></line>
-                            <line x1="20" y1="14" x2="23" y2="14"></line>
-                            <line x1="1" y1="9" x2="4" y2="9"></line>
-                            <line x1="1" y1="14" x2="4" y2="14"></line>
-                        </svg> AI Financial Coach</h3>
-                    <p>Your personal AI coach understands your complete financial picture — every account, every
-                        balance,
-                        every bill — and gives you clear, prioritized guidance.</p>
-                </div>
-                <div class="feature-box">
-                    <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2ECC71" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                        </svg> Secure Proxy Routing</h3>
-                    <p>AI requests are routed through the Catalyst Cash backend proxy with PII scrubbing before reaching the selected model provider. Raw financial payloads are not retained on our servers.</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="section-card animate-fade-up delay-1">
-            <div class="section-header">
-                <span class="section-number">02 /</span>
-                <h2 class="section-title">Your Complete Financial Picture</h2>
-            </div>
-            <p class="lead">The more your AI coach knows about your finances, the better advice it can give.
-                Catalyst Cash tracks all your accounts in one place.</p>
-
-            <ul style="margin-bottom: 24px;">
-                <li><strong>Checking & Savings:</strong> Connect your bank accounts via Plaid for automatic balance
-                    updates, or enter them manually.</li>
-                <li><strong>Investment Accounts:</strong> Sync your brokerage, Roth IRA, 401(k), and HSA
-                    accounts via Plaid. Track holdings with live market prices.</li>
-                <li><strong>Credit Cards:</strong> Add your cards with limits, APRs, annual fees, and due dates.
-                    See your total utilization and upcoming payments at a glance.</li>
-                <li><strong>Debts & Savings Goals:</strong> Track non-card debts (mortgage, auto, student loans) and
-                    set savings targets — all in the Accounts tab.</li>
-                <li><strong>Crypto & Other Assets:</strong> Add crypto holdings with live market prices
-                    and track other assets like real estate or vehicles.</li>
-            </ul>
-
-            <div class="cfo-rule">
-                <h4>Smart Rule: Emergency Floor</h4>
-                <p>Set a minimum checking balance you never want to go below. If upcoming bills would
-                    push you below this safety net, Catalyst highlights the risk and suggests adjustments.</p>
-            </div>
-
-            <div class="cfo-rule">
-                <h4>Smart Rule: Debt Payoff Optimizer</h4>
-                <p>The Debt Simulator ranks all your debts and finds the fastest payoff order — avalanche
-                    (highest interest first) or snowball (smallest balance first) — so you save the most money.</p>
-            </div>
-        </div>
-
-        <div class="section-card animate-fade-up delay-1">
-            <div class="section-header">
-                <span class="section-number">03 /</span>
-                <h2 class="section-title">Beautiful, Intuitive Design</h2>
-            </div>
-            <p class="lead">Catalyst Cash is designed to feel <strong>premium and effortless</strong> — a clean
-                interface
-                that makes complex financial data easy to understand at a glance.</p>
-
-            <div class="grid-2">
-                <div class="feature-box">
-                    <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7B5EA7" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                        </svg> Dark & Light Modes</h3>
-                    <p>Switch between a sleek Dark Mode and a clean Light Mode. Both are designed for
-                        comfortable reading and clear data visualization.</p>
-                </div>
-                <div class="feature-box">
-                    <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2ECC71" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <polygon
-                                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2">
-                            </polygon>
-                        </svg> Smooth & Responsive</h3>
-                    <p>Every interaction feels natural with smooth animations, haptic feedback, and a layered
-                        glass design that makes navigation intuitive.</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="section-card animate-fade-up delay-1">
-            <div class="section-header">
-                <span class="section-number">04 /</span>
-                <h2 class="section-title">Your Weekly Check-In</h2>
-            </div>
-            <p class="lead">Spend 5 minutes every Sunday running through these steps to stay on top of your finances
-                and catch problems before they grow.</p>
-
-            <div class="step-list">
-                <div class="step-item">
-                    <div class="step-circle">1</div>
-                    <div class="step-content">
-                        <h3>Sync Your Accounts</h3>
-                        <p>Tap "Sync latest" to pull live balances from Plaid, or update your manual accounts
-                            with this week's numbers.</p>
-                    </div>
-                </div>
-                <div class="step-item">
-                    <div class="step-circle">2</div>
-                    <div class="step-content">
-                        <h3>Run Your Audit</h3>
-                        <p>Tap one button and your AI coach analyzes everything — spending, debts, bills,
-                            and investments — to generate your personalized action plan.</p>
-                    </div>
-                </div>
-                <div class="step-item">
-                    <div class="step-circle">3</div>
-                    <div class="step-content">
-                        <h3>Review Your Dashboard</h3>
-                        <p>Your dashboard updates instantly with charts, health scores, net worth trends,
-                            and a clear breakdown of where your money is going.</p>
-                    </div>
-                </div>
-                <div class="step-item">
-                    <div class="step-circle">4</div>
-                    <div class="step-content">
-                        <h3>Ask Follow-Up Questions</h3>
-                        <p>Need more detail? Open Ask AI and chat with your coach. It knows your full financial
-                            picture and can answer anything from "Can I afford this?" to "How do I save more?"</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="insight-box">
-                <div class="insight-header">Your Privacy Is Protected</div>
-                <p><strong>All chat messages automatically delete after 24 hours.</strong> Before anything is saved
-                    locally,
-                    sensitive information like account numbers is automatically masked for your
-                    protection.</p>
-            </div>
-        </div>
-
-        <div class="section-card animate-fade-up delay-1">
-            <div class="section-header">
-                <span class="section-number">05 /</span>
-                <h2 class="section-title">Free vs Pro Plans</h2>
-            </div>
-            <p class="lead">The free plan includes everything you need. Pro expands your limits, unlocks premium AI models, and adds advanced tools.</p>
-
-            <div class="grid-2">
-                <div class="tier-box tier-free">
-                    <div class="tier-header">
-                        <h3 style="margin:0; color:#F8FAFC; font-size:22px; font-weight:800;">Free Plan</h3>
-                        <span
-                            style="font-size:12px; font-weight:700; background:rgba(255,255,255,0.1); padding:4px 10px; border-radius:99px;">$0
-                            / mo</span>
-                    </div>
-                    <ul>
-                        <li><strong style="color:white">2</strong> AI audits per week</li>
-                        <li><strong style="color:white">10</strong> AI chat messages per day</li>
-                        <li>AI powered by Gemini 2.5 Flash & GPT-4o mini</li>
-                        <li>Full Plaid bank syncing</li>
-                        <li>iCloud cross-device backup & restore</li>
-                        <li>All dashboard features & charts</li>
-                    </ul>
-                </div>
-                <div class="tier-box tier-pro">
-                    <div class="tier-header">
-                        <h3 style="margin:0; color:#fff; font-size:22px; font-weight:800;">Catalyst Pro</h3>
-                        <span
-                            style="font-size:12px; font-weight:800; color:#D4C4FB; background:rgba(123, 94, 167, 0.2); border: 1px solid rgba(123, 94, 167, 0.5); padding:4px 10px; border-radius:99px;">$6.99
-                            / mo</span>
-                    </div>
-                    <ul>
-                        <li><strong>60</strong> AI audits per month</li>
-                        <li><strong>50</strong> AI chat messages per day</li>
-                        <li>Upgrade to premium AI: <strong>Gemini 2.5 Pro</strong> and <strong>OpenAI o4-mini</strong>
-                        </li>
-                        <li><strong>Claude Haiku 4.5</strong> coming soon</li>
-                        <li>Transaction Ledger with search & export</li>
-                        <li>Advanced analytics & trend charts</li>
-                        <li>Faster AI responses & deeper reasoning</li>
-                        <li>Priority market data refresh (5 min)</li>
-                    </ul>
-                </div>
-            </div>
-
-
-        </div>
-
-        <div class="section-card animate-fade-up delay-1">
-            <div class="section-header">
-                <span class="section-number">06 /</span>
-                <h2 class="section-title">Data Privacy & Backup</h2>
-            </div>
-            <p class="lead">You have complete control over your data. Catalyst Cash provides secure
-                backup and export tools so your information is always safe.</p>
-
-            <div class="grid-3" style="margin-bottom: 30px;">
-                <div class="feature-box">
-                    <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2ECC71" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                        </svg> Transparent & Honest</h3>
-                    <p>No hidden fees, no dark patterns, no misleading claims. Our pricing is clear,
-                        and we never guarantee investment returns.</p>
-                </div>
-                <div class="feature-box">
-                    <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2ECC71" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                        </svg> iCloud Cross-Device Backup</h3>
-                    <p>Your data is automatically backed up to your private iCloud container. Get a new phone? Just sign
-                        in with your Apple ID and everything restores automatically.</p>
-                </div>
-                <div class="feature-box">
-                    <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2ECC71" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="12" y1="20" x2="12" y2="10"></line>
-                            <line x1="18" y1="20" x2="18" y2="4"></line>
-                            <line x1="6" y1="20" x2="6" y2="16"></line>
-                        </svg> Export Your Data</h3>
-                    <p>Download your financial data as CSV or PDF reports. Your data belongs to you — take it
-                        anywhere, anytime.</p>
-                </div>
-                <div class="feature-box">
-                    <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7B5EA7" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                        </svg> Encrypted Backups</h3>
-                    <p>Create AES-256 encrypted backups of your data. Store them in iCloud or anywhere
-                        you choose — only you can decrypt them with your passcode. Passcodes, API keys, device IDs,
-                        and subscription state are excluded automatically.</p>
-                </div>
-            </div>
-
-            <div class="feature-box danger-zone">
-                <div class="danger-header">Danger Zone — Data Deletion</div>
-                <div class="grid-2">
-                    <div>
-                        <h3 style="color: #F8FAFC; font-size: 14px; margin-bottom: 6px;">Clear Audit History</h3>
-                        <p style="color: #64748B; font-size: 13px;">Deletes all past audit results while keeping your
-                            accounts, settings, and portfolio intact.</p>
-                    </div>
-                    <div>
-                        <h3 style="color: #F8FAFC; font-size: 14px; margin-bottom: 6px;">Factory Reset</h3>
-                        <p style="color: #64748B; font-size: 13px;">Completely erases all data — accounts, settings,
-                            saved credentials, and history. Returns the app to a fresh install state.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="footer-meta">
-            <p
-                style="max-width: 500px; margin: 0 auto 14px; font-size: 10px; line-height: 1.6; color: rgba(255,255,255,0.25); font-family: -apple-system, sans-serif; letter-spacing: 0;">
-                ⚠️ Catalyst Cash provides AI-generated educational and informational content only. It is
-                <strong>not</strong> professional financial, tax, legal, or investment advice. Always consult a
-                licensed financial advisor before making financial decisions.
+    <main class="shell">
+      <section class="hero">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <div class="eyebrow">Guide | setup | weekly workflow</div>
+            <h1>Use the app like a weekly CFO pass.</h1>
+            <p>
+              Catalyst Cash works best when you treat it like a short weekly money review, not an app you stare at all
+              day. Bring in your balances, tell it your floor and paycheck rhythm, then use the audit to decide what is
+              safe, what is risky, and what should happen next.
             </p>
-            © 2026 Catalyst Cash · Local-first financial clarity
+            <div class="button-stack">
+              <a href="#setup" class="button-primary">Start the Guide</a>
+              <a href="https://testflight.apple.com/join/3rpWQq49" class="button-secondary">Download the Beta</a>
+            </div>
+          </div>
+
+          <div class="hero-card">
+            <h2>The fastest path to value</h2>
+            <p>You do not need perfect data. You need enough data for the app to judge the next 7 to 14 days well.</p>
+            <ul class="hero-list">
+              <li>Start with checking, savings, debt balances, paycheck schedule, and recurring bills.</li>
+              <li>Set a realistic checking floor so the audit has a real safety line to protect.</li>
+              <li>Run one audit each week and only rerun when your numbers change materially.</li>
+              <li>Use AskAI for follow-up questions, not as a substitute for the main audit.</li>
+            </ul>
+          </div>
         </div>
-    </div>
+      </section>
 
-    <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        entry.target.style.animationPlayState = 'running';
-                        entry.target.style.opacity = '1';
-                        observer.unobserve(entry.target);
-                    }
-                });
-            }, {
-                threshold: 0.1
-            });
+      <section class="section">
+        <div class="toc-card">
+          <div class="micro-label">On This Page</div>
+          <div class="toc-grid">
+            <a href="#setup">Setup</a>
+            <a href="#audit">Weekly Audit</a>
+            <a href="#tools">Core Tools</a>
+            <a href="#plans">Free vs Pro</a>
+            <a href="#privacy">Privacy</a>
+            <a href="#faq">FAQ</a>
+          </div>
+        </div>
+      </section>
 
-            // Initial setup to pause animations until scrolled into view
-            document.querySelectorAll('.animate-fade-up').forEach((el, index) => {
-                if (index > 0) { // Keep header playing instantly
-                    el.style.animationPlayState = 'paused';
-                }
-                observer.observe(el);
-            });
-        });
-    </script>
+      <section class="section" id="setup">
+        <div class="section-head">
+          <div class="micro-label">Setup</div>
+          <h2>Set the app up around your real week.</h2>
+          <p>
+            The app is strongest when it understands your cash timing. That means paycheck day, recurring bills, debt
+            due dates, and the minimum cash cushion you do not want to cross.
+          </p>
+        </div>
+
+        <div class="grid-3">
+          <div class="step-card">
+            <div class="step-index">01</div>
+            <h3>Bring in your numbers</h3>
+            <p>
+              Link accounts with Plaid or enter everything manually. You only need enough detail to reflect checking,
+              savings, debt, bills, and the accounts you actually use.
+            </p>
+          </div>
+          <div class="step-card">
+            <div class="step-index">02</div>
+            <h3>Set your floor and pay rhythm</h3>
+            <p>
+              Add your payday, paycheck amount, weekly allowance, and emergency floor. This is the logic that helps the
+              audit tell you whether the week is green, yellow, or red.
+            </p>
+          </div>
+          <div class="step-card">
+            <div class="step-index">03</div>
+            <h3>Load debt and renewals</h3>
+            <p>
+              Add APRs, limits, promo dates, annual fees, and recurring charges. That gives the app enough structure to
+              prioritize the right move instead of just showing balances.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="audit">
+        <div class="section-head">
+          <div class="micro-label">Weekly Audit</div>
+          <h2>What the audit actually looks at.</h2>
+          <p>
+            The audit is not one score pulled from thin air. It blends local money math, your timing rules, and AI
+            reasoning to turn a messy financial picture into a short action list.
+          </p>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>Safety and timing</h3>
+            <ul>
+              <li>Checking runway until the next paycheck or known cash inflow.</li>
+              <li>Whether upcoming bills or renewals threaten your floor.</li>
+              <li>How much room is actually safe for debt payoff, savings, or discretionary spend.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Debt and allocation logic</h3>
+            <ul>
+              <li>Which card or loan is the smartest target based on APR, promo windows, and cash safety.</li>
+              <li>Where cash should go first when multiple priorities are competing.</li>
+              <li>What to wait on so one aggressive move does not create next-week damage.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Context from the rest of the app</h3>
+            <ul>
+              <li>Budget targets and actual spend behavior.</li>
+              <li>Net worth, cash, debt, and market-position trends over time.</li>
+              <li>Renewal timing, annual fees, and cash flow calendar pressure points.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>How to use the result</h3>
+            <ul>
+              <li>Read the headline first: green, yellow, or red week.</li>
+              <li>Do the first one or two recommended moves before chasing optimization.</li>
+              <li>Use AskAI for follow-ups like "what happens if I pay this card Friday?"</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="tools">
+        <div class="section-head">
+          <div class="micro-label">Core Tools</div>
+          <h2>Use the whole app as one system.</h2>
+          <p>
+            The weekly audit is the headline feature, but it gets better when the surrounding tools are filled out and
+            kept current.
+          </p>
+        </div>
+
+        <div class="grid-3">
+          <div class="summary-card">
+            <span>Dashboard</span>
+            <h3>Trends without guesswork</h3>
+            <p>Check net worth, debt, savings, and spend direction before you rerun an audit.</p>
+          </div>
+          <div class="summary-card">
+            <span>Debt</span>
+            <h3>See payoff paths</h3>
+            <p>Use the simulator to compare plans before moving a large amount of cash.</p>
+          </div>
+          <div class="summary-card">
+            <span>Calendar</span>
+            <h3>Know what is about to hit</h3>
+            <p>Use the cash flow view to catch clusters of bills, renewals, and card due dates early.</p>
+          </div>
+          <div class="summary-card">
+            <span>Cards</span>
+            <h3>Track the details that matter</h3>
+            <p>Promo APR deadlines, annual fees, utilization, and limits all influence the next best move.</p>
+          </div>
+          <div class="summary-card">
+            <span>Budgets</span>
+            <h3>Use guardrails, not guilt</h3>
+            <p>Budget targets give the audit a better sense of which overspending is noise and which is a real problem.</p>
+          </div>
+          <div class="summary-card">
+            <span>Alerts</span>
+            <h3>Catch drift earlier</h3>
+            <p>Use local notifications to keep the app on a weekly rhythm instead of forgetting it for a month.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="plans">
+        <div class="section-head">
+          <div class="micro-label">Plans</div>
+          <h2>Free is usable. Pro is for heavier users.</h2>
+          <p>
+            The product is intentionally generous on free. Pro is for people who want more audits, more AskAI room, and
+            deeper model access, not for people being locked out of the core app.
+          </p>
+        </div>
+
+        <div class="grid-2">
+          <div class="plan-card free">
+            <span>Free</span>
+            <h3>Build the habit and trust the system</h3>
+            <div class="plan-price">
+              <strong>$0</strong>
+              <small>forever</small>
+            </div>
+            <ul>
+              <li>2 weekly audits.</li>
+              <li>10 AskAI chats per day.</li>
+              <li>Gemini 2.5 Flash and GPT-4o mini.</li>
+              <li>Dashboard, debt simulator, cash flow calendar, budgets, cards, renewals, and Plaid support.</li>
+              <li>Face ID or passcode lock and encrypted backup tools.</li>
+            </ul>
+          </div>
+
+          <div class="plan-card pro">
+            <span>Pro</span>
+            <h3>More room, better models, cleaner power workflow</h3>
+            <div class="plan-price">
+              <strong>$6.99</strong>
+              <small>per month or $49.99 yearly</small>
+            </div>
+            <ul>
+              <li>60 audits per month.</li>
+              <li>50 AskAI chats per day.</li>
+              <li>Gemini 2.5 Pro and OpenAI o4-mini.</li>
+              <li>Export tools, unbranded sharing, full history, and faster market refresh.</li>
+              <li>Claude Haiku 4.5 is listed as coming soon, not active yet.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="privacy">
+        <div class="section-head">
+          <div class="micro-label">Privacy</div>
+          <h2>Use it without handing over your whole financial life.</h2>
+          <p>
+            Your core financial data lives on your device. When you use shipped AI features, the app sends scrubbed
+            prompts through the Catalyst Cash backend proxy to the selected model provider. Raw financial payloads are
+            not retained on our servers.
+          </p>
+        </div>
+
+        <div class="grid-3">
+          <div class="summary-card">
+            <span>Local-first</span>
+            <h3>Core data stays on-device</h3>
+            <p>Accounts, debts, renewals, settings, and history are stored locally by default.</p>
+          </div>
+          <div class="summary-card">
+            <span>Secure proxy</span>
+            <h3>AI requests are scrubbed first</h3>
+            <p>Sensitive patterns are cleaned before prompts are sent through the backend to the chosen model.</p>
+          </div>
+          <div class="summary-card">
+            <span>Backups</span>
+            <h3>Manual exports leave secrets out</h3>
+            <p>Passcodes, API keys, device IDs, and subscription state are excluded from manual backups.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="faq">
+        <div class="section-head">
+          <div class="micro-label">FAQ</div>
+          <h2>Common questions before people commit.</h2>
+        </div>
+
+        <div class="grid-2">
+          <div class="faq-card">
+            <h3>Do I need Plaid?</h3>
+            <p>No. Plaid is optional. Manual entry is fully supported and the core weekly audit still works.</p>
+          </div>
+          <div class="faq-card">
+            <h3>Should I rerun the audit every day?</h3>
+            <p>No. Weekly is the default rhythm. Rerun it when balances, bills, paychecks, or plans materially change.</p>
+          </div>
+          <div class="faq-card">
+            <h3>Is this financial advice?</h3>
+            <p>No. It is educational software and AI-generated analysis, not fiduciary or professional financial advice.</p>
+          </div>
+          <div class="faq-card">
+            <h3>What is the best first setup?</h3>
+            <p>Checking, savings, debt balances, recurring bills, payday, and a real floor. That is enough to get useful output quickly.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="support-band">
+          <div>
+            <div class="micro-label">Need Help</div>
+            <h2>Use the app weekly, not constantly.</h2>
+            <p>
+              The product is at its best when it gives you one clear weekly answer and a short list of next moves. For
+              support, TestFlight access, or product questions, use the links here.
+            </p>
+          </div>
+          <div class="button-stack">
+            <a href="mailto:support@catalystcash.app" class="button-secondary">Email Support</a>
+            <a href="https://testflight.apple.com/join/3rpWQq49" class="button-primary">Join TestFlight</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="shell">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="footer-brandline">
+            <img src="icon-192.png" alt="Catalyst Cash" />
+            Catalyst Cash
+          </div>
+          <p>Your weekly money audit for clear next moves, not more dashboard wallpaper.</p>
+        </div>
+
+        <div class="footer-links">
+          <a href="/">Home</a>
+          <a href="guide.html">Guide</a>
+          <a href="privacy.html">Privacy Policy</a>
+          <a href="terms.html">Terms of Service</a>
+          <a href="mailto:support@catalystcash.app">support@catalystcash.app</a>
+        </div>
+
+        <div class="disclaimer">
+          Catalyst Cash provides AI-generated educational information only and is not tax, legal, investment, or
+          financial advice. Copyright 2026 Catalyst Cash.
+        </div>
+      </div>
+    </footer>
+  </div>
 </body>
-
 
 </html>

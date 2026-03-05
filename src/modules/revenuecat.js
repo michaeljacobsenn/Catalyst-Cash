@@ -1,6 +1,5 @@
 import { Capacitor } from '@capacitor/core';
 import { Purchases, LOG_LEVEL } from '@revenuecat/purchases-capacitor';
-import { RevenueCatUI } from '@revenuecat/purchases-capacitor-ui';
 import { activatePro, deactivatePro } from './subscription.js';
 import { log } from './logger.js';
 
@@ -14,6 +13,16 @@ const API_KEY_APPLE = "appl_UFEFNlCGlZqaIPTiQzwObGdTdwG";
 // We keep a local cache of whether we are running on native iOS
 const isNative = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
 let cachedRevenueCatAppUserId = null;
+let revenueCatUiPromise = null;
+
+async function getRevenueCatUI() {
+    if (!revenueCatUiPromise) {
+        revenueCatUiPromise = import('@revenuecat/purchases-capacitor-ui')
+            .then(mod => mod.RevenueCatUI)
+            .catch(() => null);
+    }
+    return revenueCatUiPromise;
+}
 
 function getEntitlementInfo(customerInfo) {
     return customerInfo?.entitlements?.active?.[ENTITLEMENT_ID];
@@ -111,6 +120,10 @@ export async function presentPaywall() {
     }
 
     try {
+        const RevenueCatUI = await getRevenueCatUI();
+        if (!RevenueCatUI) {
+            throw new Error("RevenueCat UI module unavailable");
+        }
         const { isPresenting } = await RevenueCatUI.presentPaywallIfNeeded({
             requiredEntitlementIdentifier: ENTITLEMENT_ID
         });
@@ -119,8 +132,9 @@ export async function presentPaywall() {
         await new Promise(r => setTimeout(r, 500));
 
         return await syncProStatus();
-    } catch {
+    } catch (e) {
         log.error("revenuecat", "Error presenting paywall");
+        if (window.toast) window.toast.error("Purchases are not configured yet. Check RevenueCat offerings.");
         return false;
     }
 }
@@ -152,6 +166,10 @@ export async function presentCustomerCenter() {
     }
 
     try {
+        const RevenueCatUI = await getRevenueCatUI();
+        if (!RevenueCatUI) {
+            throw new Error("RevenueCat UI module unavailable");
+        }
         // According to RevenueCat UI SDK docs, this method will automatically show the Customer Center.
         // It relies on the app having configured the Customer Center in the RevenueCat Dashboard.
         await RevenueCatUI.presentCustomerCenter();
