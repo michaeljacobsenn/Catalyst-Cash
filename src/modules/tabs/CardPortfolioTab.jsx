@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
 import AddAccountSheet from "./AddAccountSheet.jsx";
-import { Plus, X, ChevronDown, ChevronUp, CreditCard, Edit3, Check, DollarSign, Building2, Landmark, TrendingUp, AlertTriangle, RefreshCw, Target, Wallet, ArrowLeft, Link2, CheckCircle2, Trash2 } from "lucide-react";
+import { Plus, X, ChevronDown, ChevronUp, CreditCard, Edit3, Check, DollarSign, Building2, Landmark, TrendingUp, AlertTriangle, RefreshCw, Target, Wallet, ArrowLeft, Link2, CheckCircle2, Trash2, ReceiptText } from "lucide-react";
 import { T, ISSUER_COLORS } from "../constants.js";
 import { getIssuerCards, getPinnedForIssuer } from "../issuerCards.js";
 import { getBankNames, getBankProducts } from "../bankCatalog.js";
@@ -41,7 +41,7 @@ import { usePortfolio } from '../contexts/PortfolioContext.jsx';
 import { useSettings } from '../contexts/SettingsContext.jsx';
 import { useAudit } from '../contexts/AuditContext.jsx';
 
-export default memo(function CardPortfolioTab() {
+export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled = false }) {
     const { current } = useAudit();
     const portfolioContext = usePortfolio();
     const cards = current?.isTest ? (current.demoPortfolio?.cards || []) : portfolioContext.cards;
@@ -363,16 +363,26 @@ export default memo(function CardPortfolioTab() {
                     <h1 style={{ fontSize: 24, fontWeight: 900, letterSpacing: "-0.02em" }}>Accounts</h1>
                     <Badge variant="outline" style={{ fontSize: 10, padding: "2px 7px", color: T.text.secondary, borderColor: T.border.default, fontFamily: T.font.mono }}>{totalAccounts}</Badge>
                 </div>
-                {ENABLE_PLAID && (cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId)) && (<button onClick={handleRefreshPlaid} disabled={plaidRefreshing} className="hover-btn" style={{
-                    display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 16,
-                    border: `1px solid ${T.status.blue}25`, background: `${T.status.blue}08`,
-                    color: T.status.blue, fontSize: 10, fontWeight: 700, cursor: plaidRefreshing ? "wait" : "pointer",
-                    transition: "all .2s"
-                }}>
-                    <RefreshCw size={10} className={plaidRefreshing ? "spin" : ""} />
-                    {plaidRefreshing ? "Syncing…" : "Sync"}
-                </button>
-                )}
+                {ENABLE_PLAID && (cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId)) && (<>
+                    {onViewTransactions && <button onClick={() => { haptic.light(); onViewTransactions(); }} className="hover-btn" style={{
+                        display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 16,
+                        border: `1px solid ${T.accent.emerald}25`, background: `${T.accent.emerald}08`,
+                        color: T.accent.emerald, fontSize: 10, fontWeight: 700, cursor: "pointer",
+                        transition: "all .2s"
+                    }}>
+                        <ReceiptText size={10} />
+                        Ledger
+                    </button>}
+                    <button onClick={handleRefreshPlaid} disabled={plaidRefreshing} className="hover-btn" style={{
+                        display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 16,
+                        border: `1px solid ${T.status.blue}25`, background: `${T.status.blue}08`,
+                        color: T.status.blue, fontSize: 10, fontWeight: 700, cursor: plaidRefreshing ? "wait" : "pointer",
+                        transition: "all .2s"
+                    }}>
+                        <RefreshCw size={10} className={plaidRefreshing ? "spin" : ""} />
+                        {plaidRefreshing ? "Syncing…" : "Sync"}
+                    </button>
+                </>)}
             </div>
 
             {/* Inline badges */}

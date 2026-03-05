@@ -975,7 +975,7 @@ function CatalystCash() {
                   <ErrorBoundary name="Results"><ResultsView audit={display} moveChecks={displayMoveChecks} onToggleMove={toggleMove} streak={trendContext?.length || 0} /></ErrorBoundary></>)}
             {renderTab === "history" && <ErrorBoundary name="History"><Suspense fallback={<TabFallback />}><HistoryTab toast={toast} /></Suspense></ErrorBoundary>}
             {renderTab === "renewals" && <ErrorBoundary name="Expenses"><Suspense fallback={<TabFallback />}><RenewalsTab /></Suspense></ErrorBoundary>}
-            {renderTab === "cards" && <ErrorBoundary name="Accounts"><Suspense fallback={<TabFallback />}><CardPortfolioTab /></Suspense></ErrorBoundary>}
+            {renderTab === "cards" && <ErrorBoundary name="Accounts"><Suspense fallback={<TabFallback />}><CardPortfolioTab onViewTransactions={() => setShowTransactionFeed(true)} proEnabled={proEnabled} /></Suspense></ErrorBoundary>}
           </div>
         );
       })()}
