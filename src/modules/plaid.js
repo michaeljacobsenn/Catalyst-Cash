@@ -408,6 +408,108 @@ export async function fetchAllBalancesAndLiabilities() {
     return results;
 }
 
+// ─── Transaction Fetching ─────────────────────────────────────
+
+const TRANSACTIONS_STORAGE_KEY = "plaid-transactions";
+
+/**
+ * Format a Date as YYYY-MM-DD for Plaid API.
+ */
+function toDateStr(d) {
+    return d.toISOString().split("T")[0];
+}
+
+/**
+ * Fetch transactions for a single connection from Plaid.
+ * @param {string} connectionId
+ * @param {number} [days=30] - How many days back to fetch
+ * @returns {Array} Normalized transaction array
+ */
+export async function fetchTransactions(connectionId, days = 30) {
+    const conns = await getConnections();
+    const conn = conns.find(c => c.id === connectionId);
+    if (!conn) throw new Error(`Connection ${connectionId} not found`);
+    if (!conn.accessToken) throw new Error(`No access token for ${conn.institutionName}`);
+
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const res = await fetchWithRetry(`${API_BASE}/plaid/transactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            accessToken: conn.accessToken,
+            startDate: toDateStr(startDate),
+            endDate: toDateStr(endDate),
+        }),
+    });
+
+    if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        console.warn(`[Plaid] fetchTransactions FAILED for ${conn.institutionName}: HTTP ${res.status} — ${errBody.substring(0, 200)}`);
+        throw new Error(`Transaction fetch failed: ${res.status}`);
+    }
+
+    const data = await res.json();
+    const raw = data.transactions || [];
+
+    // Normalize Plaid transaction format → app format
+    return raw.map(t => ({
+        id: t.transaction_id,
+        date: t.date,
+        amount: Math.abs(t.amount),      // Plaid: positive = debit, negative = credit
+        isCredit: t.amount < 0,          // Refunds, deposits
+        description: t.merchant_name || t.name || "Unknown",
+        category: (t.personal_finance_category?.primary || t.category?.[0] || "").replace(/_/g, " "),
+        subcategory: t.personal_finance_category?.detailed || t.category?.[1] || "",
+        institution: conn.institutionName,
+        accountName: (conn.accounts.find(a => a.plaidAccountId === t.account_id) || {}).name || "",
+        accountType: (conn.accounts.find(a => a.plaidAccountId === t.account_id) || {}).subtype || "",
+        pending: t.pending || false,
+    }));
+}
+
+/**
+ * Fetch transactions for ALL connections and store locally.
+ * @param {number} [days=30] - How many days back
+ * @returns {{ transactions: Array, fetchedAt: string }}
+ */
+export async function fetchAllTransactions(days = 30) {
+    const conns = await getConnections();
+    let all = [];
+
+    for (const conn of conns) {
+        try {
+            const txns = await fetchTransactions(conn.id, days);
+            all = all.concat(txns);
+            console.warn(`[Plaid] Fetched ${txns.length} transactions from ${conn.institutionName}`);
+        } catch (e) {
+            console.warn(`[Plaid] Transaction fetch skipped for ${conn.institutionName}: ${e.message}`);
+        }
+    }
+
+    // Sort newest first, deduplicate by transaction ID
+    const seen = new Set();
+    all = all.filter(t => {
+        if (seen.has(t.id)) return false;
+        seen.add(t.id);
+        return true;
+    }).sort((a, b) => b.date.localeCompare(a.date));
+
+    const stored = { data: all, fetchedAt: new Date().toISOString() };
+    await db.set(TRANSACTIONS_STORAGE_KEY, stored);
+    return stored;
+}
+
+/**
+ * Get locally stored transactions (no network call).
+ * @returns {{ data: Array, fetchedAt: string } | null}
+ */
+export async function getStoredTransactions() {
+    return await db.get(TRANSACTIONS_STORAGE_KEY);
+}
+
 // ─── Auto-Matching Engine ─────────────────────────────────────
 
 /**

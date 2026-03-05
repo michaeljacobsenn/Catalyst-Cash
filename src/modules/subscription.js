@@ -12,8 +12,8 @@
 //   o3-mini           ≈ $0.008    → Pro only
 //
 //   At 2 audits/week (free) on Flash:  ~$0.003/user/month
-//   At 7 audits/week (Pro) on Sonnet:  ~$0.42/user/month
-//   Pro @ $6.99/mo (after Apple 15%):  $5.94 net → $5.52 profit/user
+//   At 60 audits/month (Pro) on Flash: ~$1.20/user/month max
+//   Pro @ $6.99/mo (after Apple 15%):  $5.94 net → $4.74 profit/user
 // ═══════════════════════════════════════════════════════════════
 
 import { db } from "./utils.js";
@@ -79,8 +79,8 @@ export function shouldShowGating() {
 //   ~hour during waking hours. Pro upgrades feel like removing a
 //   ceiling, not getting unlocked from a cage.
 // ──────────────────────────────────────────────────────────────
-export const PRO_MONTHLY_AUDIT_CAP = 150; // ~5/day, generous but prevents abuse
-export const PRO_DAILY_CHAT_CAP = 100;    // ~4/hr, generous but prevents abuse
+export const PRO_MONTHLY_AUDIT_CAP = 60;  // ~2/day, $1.20/mo max API cost at $0.02/audit
+export const PRO_DAILY_CHAT_CAP = 50;     // ~2/hr, prevents abuse while feeling generous
 
 export const TIERS = {
     free: {
@@ -131,7 +131,7 @@ export const TIERS = {
             "weekly_challenges", "share_card_branded", "basic_alerts",
 
             // ── Pro Exclusives ──
-            "unlimited_audits",        // No weekly cap (150/mo monthly safety cap)
+            "unlimited_audits",        // No weekly cap (60/mo monthly safety cap)
             "premium_models",          // Access to Pro/Sonnet/o3
             "unlimited_history",       // Full audit archive
             "share_card_clean",        // Share without branding
@@ -139,7 +139,7 @@ export const TIERS = {
             "export_pdf",              // PDF report export
             "advanced_alerts",         // Score change drivers, trend warnings
             "priority_refresh",        // 15-min market data
-            "unlimited_chat",          // 100/day AskAI messages (vs 15/day free)
+            "unlimited_chat",          // 50/day AskAI messages (vs 10/day free)
 
             // ── Future Pro Features (roadmap) ──
             // "ai_followup_chat",     // Ask follow-up questions after audit

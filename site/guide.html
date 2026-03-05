@@ -81,6 +81,43 @@
             animation-delay: 0.5s;
         }
 
+        /* Nav Back Button */
+        .nav-back-button {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: 100px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #E2E8F0;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 100;
+        }
+
+        .nav-back-button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(-4px);
+            border-color: rgba(255, 255, 255, 0.2);
+            color: #fff;
+        }
+
+        .nav-back-button svg {
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .nav-back-button:hover svg {
+            transform: translateX(-2px);
+        }
+
         /* Typography */
         h1,
         h2,
@@ -621,6 +658,14 @@
             .step-content {
                 margin-top: 36px;
             }
+
+            .nav-back-button {
+                position: relative;
+                top: 0;
+                left: 0;
+                display: inline-flex;
+                margin: 20px 0 0 20px;
+            }
         }
     </style>
 </head>
@@ -628,6 +673,15 @@
 <body>
 
     <div class="page">
+        <a href="/" class="nav-back-button">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            <span>Back to Homepage</span>
+        </a>
+
         <div class="header-wrapper animate-fade-up">
             <img src="./icon-512.png" alt="Catalyst Cash Logo" class="splash-logo" />
             <div class="label-pill">Complete User Guide</div>
@@ -838,7 +892,7 @@
                     </div>
                     <ul>
                         <li><strong>Unlimited</strong> AI audits</li>
-                        <li><strong>100</strong> AI chat messages per day</li>
+                        <li><strong>50</strong> AI chat messages per day</li>
                         <li>Premium models: <strong>Gemini Pro</strong> & <strong>o3-mini</strong>
                         </li>
                         <li>CSV & PDF export</li>
@@ -913,6 +967,12 @@
         </div>
 
         <div class="footer-meta">
+            <p
+                style="max-width: 500px; margin: 0 auto 14px; font-size: 10px; line-height: 1.6; color: rgba(255,255,255,0.25); font-family: -apple-system, sans-serif; letter-spacing: 0;">
+                ⚠️ Catalyst Cash provides AI-generated educational and informational content only. It is
+                <strong>not</strong> professional financial, tax, legal, or investment advice. Always consult a
+                licensed financial advisor before making financial decisions.
+            </p>
             © 2026 Catalyst Cash · Your data stays on your device
         </div>
     </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, memo, useCallback } from "react";
-import { ChevronDown, ChevronUp, AlertTriangle, X, Plus, Check } from "lucide-react";
+import { ChevronDown, ChevronUp, AlertTriangle, X, Plus, Check, CheckCircle2 } from "lucide-react";
 import { T, RENEWAL_CATEGORIES, formatInterval } from "../constants.js";
 import { fmt } from "../utils.js";
 import { resolveCardLabel } from "../cards.js";
@@ -37,6 +37,7 @@ export default memo(function RenewalsTab() {
     const [showAdd, setShowAdd] = useState(false);
     const [addForm, setAddForm] = useState({ name: "", amount: "", interval: 1, intervalUnit: "months", source: "", chargedTo: "", chargedToId: "", category: "subs", nextDue: "" });
     const [sortBy, setSortBy] = useState("type");
+    const [editStep, setEditStep] = useState(0);
 
     // Auto-archive expired one-time items (runs as effect, not during render)
     useEffect(() => {
@@ -158,6 +159,7 @@ export default memo(function RenewalsTab() {
     const startEdit = useCallback((item, renewalIndex) => {
         if (renewalIndex == null || renewalIndex < 0) return;
         setEditing(renewalIndex);
+        setEditStep(0);
         // If chargedTo is missing but source contains a card reference, try to pre-populate
         let chargedTo = item.chargedTo || "";
         let chargedToId = item.chargedToId || "";
@@ -267,30 +269,39 @@ export default memo(function RenewalsTab() {
     ];
 
     return <div className="page-body" style={{ paddingBottom: 0 }}>
-        <div style={{ paddingTop: 16, paddingBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ paddingTop: 16, paddingBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
                 <h1 style={{ fontSize: 22, fontWeight: 800 }}>Expenses</h1>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                    <p style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, whiteSpace: "nowrap" }}>{allItems.length} items</p>
-                    <div style={{ width: 1, height: 10, background: T.border.default }} />
-                    <button onClick={() => setShowAdd(!showAdd)} className="hover-btn" style={{
-                        display: "flex", alignItems: "center", gap: 5, padding: "6px 12px",
-                        borderRadius: T.radius.md, border: `1px solid ${showAdd ? T.status.amber : T.accent.primary}30`,
-                        background: showAdd ? T.status.amberDim : T.accent.primaryDim, color: showAdd ? T.status.amber : T.accent.primary,
-                        fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono, minHeight: 36
-                    }}>
-                        {showAdd ? <><X size={12} />CANCEL</> : <><Plus size={12} />ADD</>}
-                    </button>
-                </div>
+                <p style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, marginTop: 2 }}>{allItems.length} items</p>
             </div>
-
-            <div style={{ display: "flex", alignItems: "center", padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, marginTop: 4, minHeight: 36 }}>
-                <select value={sortBy} onChange={e => setSortBy(e.target.value)} aria-label="Sort order" style={{ fontSize: 11, color: T.text.secondary, background: "transparent", border: "none", cursor: "pointer", fontFamily: T.font.mono, fontWeight: 800, padding: 0, outline: "none", textTransform: "uppercase" }}>
-                    <option value="type">Sort: Type</option>
-                    <option value="date">Sort: Soonest</option>
-                    <option value="amount">Sort: Value</option>
-                    <option value="name">Sort: A-Z</option>
-                </select>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button onClick={() => setShowAdd(!showAdd)} className="hover-btn" style={{
+                    display: "flex", alignItems: "center", gap: 5, padding: "8px 14px",
+                    borderRadius: T.radius.md, border: "none",
+                    background: showAdd ? `linear-gradient(135deg,${T.status.amber}20,${T.status.amber}10)` : `linear-gradient(135deg,${T.accent.primary}20,${T.accent.primary}10)`,
+                    color: showAdd ? T.status.amber : T.accent.primary,
+                    fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono,
+                    height: 36, boxShadow: `0 0 0 1px ${showAdd ? T.status.amber : T.accent.primary}25`
+                }}>
+                    {showAdd ? <><X size={11} />Cancel</> : <><Plus size={11} />Add</>}
+                </button>
+                <div style={{
+                    display: "flex", alignItems: "center", height: 36, borderRadius: T.radius.md,
+                    background: `${T.bg.elevated}`, border: `1px solid ${T.border.default}`,
+                    padding: "0 12px", cursor: "pointer"
+                }}>
+                    <select value={sortBy} onChange={e => setSortBy(e.target.value)} aria-label="Sort order" style={{
+                        fontSize: 11, color: T.text.secondary, background: "transparent", border: "none",
+                        cursor: "pointer", fontFamily: T.font.mono, fontWeight: 700, padding: 0,
+                        outline: "none", textTransform: "uppercase", WebkitAppearance: "none", appearance: "none"
+                    }}>
+                        <option value="type">Sort: Type</option>
+                        <option value="date">Sort: Date</option>
+                        <option value="amount">Sort: $</option>
+                        <option value="name">Sort: A-Z</option>
+                    </select>
+                    <ChevronDown size={10} color={T.text.dim} style={{ marginLeft: 4, pointerEvents: "none" }} />
+                </div>
             </div>
         </div>
 
@@ -409,27 +420,74 @@ export default memo(function RenewalsTab() {
 
                             return <div key={itemKey} style={{ borderBottom: i === cat.items.length - 1 ? "none" : `1px solid ${T.border.subtle}`, padding: "12px 0", animation: `fadeInUp .3s ease-out ${Math.min(i * 0.04, 0.4)}s both` }}>
                                 {editing === renewalIndex ?
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                                        <div style={{ display: "flex", gap: 8 }}>
-                                            <input value={editVal.name} onChange={e => setEditVal(p => ({ ...p, name: e.target.value }))}
-                                                placeholder="Name" aria-label="Expense name" style={{ flex: 1, fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
-                                            <div style={{ flex: 0.6, position: "relative" }}>
-                                                <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600 }}>$</span>
-                                                <input type="number" inputMode="decimal" pattern="[0-9]*" value={editVal.amount} onChange={e => setEditVal(p => ({ ...p, amount: e.target.value }))}
-                                                    placeholder="0.00" aria-label="Amount" style={{ width: "100%", padding: "10px 12px 10px 28px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600, outline: "none", boxSizing: "border-box" }} />
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                        {/* ── iOS Segmented Control ── */}
+                                        {(() => {
+                                            const tabs = [
+                                                { label: "Details", filled: !!(editVal.name || editVal.amount || editVal.category) },
+                                                { label: "Schedule", filled: !!(editVal.intervalUnit || editVal.nextDue) },
+                                                { label: "Payment", filled: !!(editVal.chargedTo || editVal.chargedToId) }
+                                            ];
+                                            return (
+                                                <div style={{ display: "flex", borderRadius: T.radius.md, background: `${T.bg.elevated}`, border: `1px solid ${T.border.default}`, padding: 2, position: "relative" }}>
+                                                    {/* Sliding pill */}
+                                                    <div style={{
+                                                        position: "absolute", top: 2, left: `calc(${editStep * 33.33}% + 2px)`,
+                                                        width: "calc(33.33% - 4px)", height: "calc(100% - 4px)",
+                                                        borderRadius: T.radius.sm, background: T.accent.primaryDim,
+                                                        transition: "left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                                                        zIndex: 0
+                                                    }} />
+                                                    {tabs.map((tab, idx) => (
+                                                        <button key={idx} onClick={() => { if (typeof haptic !== "undefined") haptic.selection(); setEditStep(idx); }} style={{
+                                                            flex: 1, padding: "7px 0", border: "none", background: "transparent",
+                                                            color: editStep === idx ? T.accent.primary : T.text.dim,
+                                                            fontSize: 10, fontWeight: editStep === idx ? 800 : 600, cursor: "pointer",
+                                                            fontFamily: T.font.mono, position: "relative", zIndex: 1,
+                                                            transition: "color 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 4
+                                                        }}>
+                                                            {tab.filled && editStep !== idx && <CheckCircle2 size={9} style={{ opacity: 0.6 }} />}
+                                                            {tab.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* ── Page 0: Details ── */}
+                                        {editStep === 0 && <>
+                                            <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 700, letterSpacing: 0.5 }}>NAME & AMOUNT</span>
+                                            <div style={{ display: "flex", gap: 8 }}>
+                                                <input value={editVal.name} onChange={e => setEditVal(p => ({ ...p, name: e.target.value }))}
+                                                    placeholder="Name" aria-label="Expense name" style={{ flex: 1, fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
+                                                <div style={{ flex: 0.5, position: "relative" }}>
+                                                    <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600 }}>$</span>
+                                                    <input type="number" inputMode="decimal" pattern="[0-9]*" value={editVal.amount} onChange={e => setEditVal(p => ({ ...p, amount: e.target.value }))}
+                                                        placeholder="0.00" aria-label="Amount" style={{ width: "100%", padding: "10px 12px 10px 28px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600, outline: "none", boxSizing: "border-box" }} />
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div style={{ display: "flex", gap: 8 }}>
-                                            <IntervalDropdown interval={editVal.interval} unit={editVal.intervalUnit}
-                                                onChange={({ interval, unit }) => setEditVal(p => ({ ...p, interval, intervalUnit: unit }))} />
-                                        </div>
-                                        <div style={{ display: "flex", gap: 8 }}>
+                                            <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 700, letterSpacing: 0.5 }}>CATEGORY</span>
                                             <SearchableSelect
                                                 value={editVal.category || "subs"}
                                                 onChange={v => setEditVal(p => ({ ...p, category: v }))}
                                                 placeholder="Category"
                                                 options={categoryOptions.map(c => ({ value: c.id, label: c.label }))}
                                             />
+                                        </>}
+
+                                        {/* ── Page 1: Schedule ── */}
+                                        {editStep === 1 && <>
+                                            <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 700, letterSpacing: 0.5 }}>BILLING CYCLE</span>
+                                            <IntervalDropdown interval={editVal.interval} unit={editVal.intervalUnit}
+                                                onChange={({ interval, unit }) => setEditVal(p => ({ ...p, interval, intervalUnit: unit }))} />
+                                            <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 700, letterSpacing: 0.5 }}>NEXT DUE DATE</span>
+                                            <input type="date" value={editVal.nextDue} onChange={e => setEditVal(p => ({ ...p, nextDue: e.target.value }))} aria-label="Next due date"
+                                                style={{ width: "100%", fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
+                                        </>}
+
+                                        {/* ── Page 2: Payment ── */}
+                                        {editStep === 2 && <>
+                                            <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 700, letterSpacing: 0.5 }}>PAYMENT METHOD</span>
                                             <CardSelector value={editVal.chargedToId || editVal.chargedTo} onChange={v => {
                                                 const card = (cards || []).find(c => c.id === v);
                                                 setEditVal(p => ({
@@ -438,24 +496,36 @@ export default memo(function RenewalsTab() {
                                                     chargedTo: card ? resolveCardLabel(cards || [], card.id, card.name) : v
                                                 }));
                                             }} />
-                                        </div>
-                                        <div style={{ display: "flex", gap: 8 }}>
-                                            <div style={{ flex: 1, display: "flex", flexDirection: "column", background: T.bg.elevated, borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, padding: "4px 10px" }}>
-                                                <span style={{ fontSize: 11, color: T.text.dim, fontWeight: 600 }}>Next Due Date</span>
-                                                <input type="date" value={editVal.nextDue} onChange={e => setEditVal(p => ({ ...p, nextDue: e.target.value }))} aria-label="Next due date"
-                                                    style={{ width: "100%", fontSize: 13, background: "transparent", border: "none", padding: "2px 0", color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
-                                            </div>
-                                        </div>
-                                        <div style={{ display: "flex", gap: 8 }}>
-                                            <button onClick={() => saveEdit(renewalIndex, item.name)} className="hover-btn" style={{
-                                                flex: 1, padding: 14, borderRadius: T.radius.md,
-                                                border: "none", background: T.accent.primaryDim, color: T.accent.primary, fontSize: 12, fontWeight: 700, cursor: "pointer"
-                                            }}>Save</button>
-                                            <button onClick={() => setEditing(null)} className="hover-btn" style={{
-                                                flex: 1, padding: 14, borderRadius: T.radius.md,
-                                                border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 12, cursor: "pointer"
+                                            <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 700, letterSpacing: 0.5 }}>NOTES</span>
+                                            <input value={editVal.source || ""} onChange={e => setEditVal(p => ({ ...p, source: e.target.value }))} placeholder="Notes (optional)" aria-label="Notes"
+                                                style={{ width: "100%", fontSize: 13, padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
+                                        </>}
+
+                                        {/* ── Actions — always visible ── */}
+                                        <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+                                            {editStep > 0 && (
+                                                <button onClick={() => { if (typeof haptic !== "undefined") haptic.selection(); setEditStep(s => s - 1); }} aria-label="Previous page" style={{
+                                                    flex: 0.6, padding: 10, borderRadius: T.radius.sm,
+                                                    border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600
+                                                }}>← Back</button>
+                                            )}
+                                            <button onClick={() => { saveEdit(renewalIndex, item.name); setEditStep(0); }} style={{
+                                                flex: 1, padding: 10, borderRadius: T.radius.sm, border: "none",
+                                                background: T.accent.primaryDim, color: T.accent.primary, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6
+                                            }}>
+                                                <Check size={12} />Save</button>
+                                            {editStep < 2 && (
+                                                <button onClick={() => { if (typeof haptic !== "undefined") haptic.selection(); setEditStep(s => s + 1); }} aria-label="Next page" style={{
+                                                    flex: 0.6, padding: 10, borderRadius: T.radius.sm,
+                                                    border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.primary, fontSize: 11, fontWeight: 700, cursor: "pointer"
+                                                }}>Next →</button>
+                                            )}
+                                            <button onClick={() => { setEditing(null); setEditStep(0); }} style={{
+                                                flex: 0.5, padding: 10, borderRadius: T.radius.sm,
+                                                border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600
                                             }}>Cancel</button>
-                                        </div></div> :
+                                        </div>
+                                    </div> :
                                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 30 }}>
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

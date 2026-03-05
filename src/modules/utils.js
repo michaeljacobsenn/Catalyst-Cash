@@ -248,6 +248,7 @@ export function parseJSON(raw) {
     if (j.weekly_moves) j.weeklyMoves = j.weekly_moves;
     if (j.long_range_radar) j.longRangeRadar = j.long_range_radar;
     if (j.next_action) j.nextAction = j.next_action;
+    if (j.spending_analysis) j.spendingAnalysis = j.spending_analysis;
     if (j.milestones) j.milestones = j.milestones; // already camelCase
     if (j.investments) j.investments = j.investments; // already camelCase
   }

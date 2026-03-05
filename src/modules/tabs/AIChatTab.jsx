@@ -328,7 +328,7 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
 
         // ── Quota gate — check BEFORE adding message to state ──
         if (isGatingEnforced() && !chatQuota.allowed) {
-            setError("You've reached your daily AskAI limit. Upgrade to Pro for 100 messages/day.");
+            setError("You've reached your daily AskAI limit. Upgrade to Pro for 50 messages/day.");
             haptic.medium();
             return;
         }

@@ -292,6 +292,16 @@ export default {
                         secret: env.PLAID_SECRET,
                         access_token: reqBody.accessToken
                     };
+                } else if (url.pathname === "/plaid/transactions") {
+                    plaidEndpoint = "/transactions/get";
+                    plaidBody = {
+                        client_id: env.PLAID_CLIENT_ID,
+                        secret: env.PLAID_SECRET,
+                        access_token: reqBody.accessToken,
+                        start_date: reqBody.startDate,
+                        end_date: reqBody.endDate,
+                        options: { count: 500, offset: 0 }
+                    };
                 } else {
                     return new Response(JSON.stringify({ error: "Unknown Plaid endpoint" }), {
                         status: 404, headers: { ...cors, "Content-Type": "application/json" }
