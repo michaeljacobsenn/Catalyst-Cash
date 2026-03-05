@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // AES-256-GCM ENCRYPTION — Web Crypto API (Zero Dependencies)
-// Used for: encrypted backup exports and Google Drive cloud sync
+// Used for: encrypted backup exports and iCloud cloud sync
 // ═══════════════════════════════════════════════════════════════
 
 const PBKDF2_ITERATIONS = 310_000; // OWASP recommended minimum for PBKDF2-SHA256
