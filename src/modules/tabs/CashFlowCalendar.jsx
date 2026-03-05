@@ -230,7 +230,7 @@ export default function CashFlowCalendar({ config, cards, renewals, checkingBala
     );
 }
 
-const COLLAPSED_COUNT = 7;
+const COLLAPSED_COUNT = 5;
 
 function CashFlowTimeline({ events }) {
     const [expanded, setExpanded] = useState(false);
@@ -295,7 +295,7 @@ function CashFlowTimeline({ events }) {
                         transition: "all .2s ease"
                     }}
                 >
-                    {expanded ? "Show less ▲" : `Show all ${events.length} days ▼`}
+                    {expanded ? "Show less ▲" : `Show all 30 days ▼`}
                 </button>
             )}
         </>
