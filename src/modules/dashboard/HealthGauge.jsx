@@ -1,8 +1,9 @@
+import { useState, useEffect, useRef } from "react";
 import { T } from "../constants.js";
 
 /**
  * HealthGauge — SVG arc gauge showing financial health score, grade, and percentile.
- * Pure presentational component — no hooks, no side effects.
+ * Features animated count-up when score changes.
  */
 export default function HealthGauge({ score, grade, scoreColor, percentile }) {
     const radius = 40;
@@ -10,6 +11,29 @@ export default function HealthGauge({ score, grade, scoreColor, percentile }) {
     const arcLength = (score / 100) * circumference * 0.75;
     const healthGaugeLabel = `Health score gauge showing ${score} out of 100, grade ${grade}.`;
     const healthGaugeHint = "The circular gauge summarizes current financial health. A higher score indicates better overall financial stability.";
+
+    // Animated count-up
+    const [displayScore, setDisplayScore] = useState(0);
+    const prevScoreRef = useRef(0);
+    useEffect(() => {
+        const from = prevScoreRef.current;
+        const to = score;
+        if (from === to) return;
+        prevScoreRef.current = to;
+        const duration = 800;
+        const start = performance.now();
+        let raf;
+        const tick = (now) => {
+            const elapsed = now - start;
+            const progress = Math.min(elapsed / duration, 1);
+            // Ease-out cubic
+            const eased = 1 - Math.pow(1 - progress, 3);
+            setDisplayScore(Math.round(from + (to - from) * eased));
+            if (progress < 1) raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+    }, [score]);
 
     return (
         <div
@@ -36,7 +60,7 @@ export default function HealthGauge({ score, grade, scoreColor, percentile }) {
             </svg>
             <div style={{ position: "absolute", top: "46%", left: "50%", transform: "translate(-50%,-50%)", textAlign: "center" }}>
                 <div style={{ fontSize: 24, fontWeight: 900, color: scoreColor, fontFamily: T.font.sans, lineHeight: 1 }}>{grade}</div>
-                <div style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, fontFamily: T.font.mono, marginTop: 1 }}>{score}/100</div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, fontFamily: T.font.mono, marginTop: 1 }}>{displayScore}/100</div>
             </div>
             {percentile > 0 && <div style={{
                 position: "absolute", bottom: -2, left: "50%", transform: "translateX(-50%)",
@@ -48,3 +72,4 @@ export default function HealthGauge({ score, grade, scoreColor, percentile }) {
         </div>
     );
 }
+

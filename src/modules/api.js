@@ -8,9 +8,7 @@ import { getRevenueCatAppUserId } from "./revenuecat.js";
 
 // ═══════════════════════════════════════════════════════════════
 // AI API MODULE — Catalyst Cash
-// Supports two modes:
-//   1. Backend (default) — routes through Cloudflare Worker proxy
-//   2. BYOK (developer mode) — direct-to-provider with user's API key
+// Routes all AI requests through the Cloudflare Worker proxy.
 // ═══════════════════════════════════════════════════════════════
 
 const BACKEND_URL = "https://api.catalystcash.app";
@@ -18,17 +16,18 @@ const BACKEND_URL = "https://api.catalystcash.app";
 // ═══════════════════════════════════════════════════════════════
 // BACKEND MODE — Cloudflare Worker Proxy
 // ═══════════════════════════════════════════════════════════════
-// Extract text from any provider's SSE chunk
+
+/**
+ * Extract text from any provider's SSE chunk.
+ * The worker may forward chunks from Claude, OpenAI, or Gemini.
+ */
 function extractSSEText(parsed) {
-  // Claude: content_block_delta
   if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
     return parsed.delta.text || "";
   }
-  // OpenAI: choices[0].delta.content
   if (parsed.choices?.[0]?.delta?.content) {
     return parsed.choices[0].delta.content;
   }
-  // Gemini: candidates[0].content.parts[0].text
   if (parsed.candidates?.[0]?.content?.parts?.[0]?.text) {
     return parsed.candidates[0].content.parts[0].text;
   }
@@ -135,242 +134,21 @@ async function callBackend(snapshot, model, sysText, history, deviceId, backendP
 }
 
 // ═══════════════════════════════════════════════════════════════
-// OPENAI / ChatGPT (BYOK Developer Mode)
+// PUBLIC API — Backend-only router
 // ═══════════════════════════════════════════════════════════════
-function buildBodyOpenAI(snapshot, stream, model, sysText, history = [], isChat = false) {
-  const m = model || "o1";
-  const isReasoning = m.startsWith("o");
-  const body = {
-    model: m,
-    stream: stream || false,
-    messages: [
-      { role: "system", content: sysText },
-      ...(history || []),
-      { role: "user", content: snapshot }
-    ]
-  };
 
-  if (isReasoning) {
-    body.max_completion_tokens = 12000;
-  } else {
-    body.max_tokens = 12000;
-    body.temperature = 0.1;
-    body.top_p = 0.95;
-    // Only force JSON output for audits — chat needs natural language
-    if (!isChat) {
-      body.response_format = { type: "json_object" };
-    }
-  }
-
-  return JSON.stringify(body);
-}
-
-async function* streamOpenAI(apiKey, snapshot, model, sysText, history, baseUrl = "https://api.openai.com/v1/chat/completions", signal, isChat = false) {
-  const res = await fetch(baseUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-    body: buildBodyOpenAI(snapshot, true, model, sysText, history, isChat),
-    signal,
-  });
-  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
-  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
-  while (true) {
-    const { done, value } = await reader.read(); if (done) break;
-    buf += dec.decode(value, { stream: true }); const lines = buf.split("\n"); buf = lines.pop() || "";
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue; const d = line.slice(6).trim();
-      if (d === "[DONE]") return; try {
-        const e = JSON.parse(d);
-        const text = e.choices?.[0]?.delta?.content;
-        if (text) yield text;
-      } catch { log.warn("api", "OpenAI SSE parse error"); }
-    }
-  }
-}
-
-async function callOpenAI(apiKey, snapshot, model, sysText, history, baseUrl = "https://api.openai.com/v1/chat/completions", isChat = false) {
-  const res = await fetch(baseUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-    body: buildBodyOpenAI(snapshot, false, model, sysText, history, isChat)
-  });
-  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content || "";
-}
-
-// ═══════════════════════════════════════════════════════════════
-// GOOGLE / GEMINI (BYOK Developer Mode)
-// ═══════════════════════════════════════════════════════════════
-function buildBodyGemini(snapshot, sysText, history = [], isChat = false) {
-  const genConfig = {
-    maxOutputTokens: 12000,
-    temperature: 0.1,
-    topP: 0.95,
-  };
-  // Only force JSON output for audits — chat needs natural language
-  if (!isChat) {
-    genConfig.responseMimeType = "application/json";
-  }
-  return JSON.stringify({
-    contents: [
-      ...(history || []).filter(h => h.parts && h.parts.some(p => p.text && p.text.trim().length > 0)),
-      { parts: [{ text: snapshot }], role: "user" }
-    ],
-    systemInstruction: { parts: [{ text: sysText }] },
-    generationConfig: genConfig
-  });
-}
-
-async function* streamGemini(apiKey, snapshot, model, sysText, history, signal, isChat = false) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model || "gemini-2.5-flash"}:streamGenerateContent?alt=sse&key=${apiKey}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: buildBodyGemini(snapshot, sysText, history, isChat),
-    signal,
-  });
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({}));
-    const msg = e.error?.message || e[0]?.error?.message || `HTTP ${res.status}`;
-    if (res.status === 429 || msg.toLowerCase().includes("retry in")) {
-      throw new Error(`Gemini Rate Limit Exceeded: ${msg}. Please wait a moment and try again.`);
-    }
-    if (msg.toLowerCase().includes("exhausted") || msg.toLowerCase().includes("quota")) {
-      throw new Error(`Gemini Quota Exceeded: ${msg}. If limit is 0, Google's Free Tier is restricted in your region (UK/EU). Try a VPN or OpenAI.`);
-    }
-    throw new Error(`Gemini Error: ${msg}`);
-  }
-  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
-  while (true) {
-    const { done, value } = await reader.read(); if (done) break;
-    buf += dec.decode(value, { stream: true });
-    const lines = buf.split("\n"); buf = lines.pop() || "";
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      const d = line.slice(6).trim();
-      if (!d || d === "[DONE]") continue;
-      try {
-        const parsed = JSON.parse(d);
-        const text = parsed.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") || "";
-        if (text) yield text;
-      } catch { log.warn("api", "Gemini SSE parse error"); }
-    }
-  }
-}
-
-async function callGemini(apiKey, snapshot, model, sysText, history, isChat = false) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model || "gemini-2.5-flash"}:generateContent?key=${apiKey}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: buildBodyGemini(snapshot, sysText, history, isChat)
-  });
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({}));
-    const msg = e.error?.message || e[0]?.error?.message || `HTTP ${res.status}`;
-    if (res.status === 429 || msg.toLowerCase().includes("retry in")) {
-      throw new Error(`Gemini Rate Limit Exceeded: ${msg}. Please wait a moment and try again.`);
-    }
-    if (msg.toLowerCase().includes("exhausted") || msg.toLowerCase().includes("quota")) {
-      throw new Error(`Gemini Quota Exceeded: ${msg}. If limit is 0, Google's Free Tier is restricted in your region (UK/EU). Try a VPN or OpenAI.`);
-    }
-    throw new Error(`Gemini Error: ${msg}`);
-  }
-  const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.map(p => p.text).join("") || "";
-}
-
-// ═══════════════════════════════════════════════════════════════
-// ANTHROPIC / CLAUDE (BYOK Developer Mode)
-// ═══════════════════════════════════════════════════════════════
-function buildHeadersClaude(apiKey) {
-  return {
-    "Content-Type": "application/json",
-    "x-api-key": apiKey,
-    "anthropic-version": "2023-06-01",
-    "anthropic-dangerous-direct-browser-access": "true"
-  };
-}
-
-function buildBodyClaude(snapshot, stream, model, sysText, history = []) {
-  return JSON.stringify({
-    model: model || "claude-sonnet-4-6",
-    max_tokens: 12000,
-    temperature: 0.1,
-    stream: stream || false,
-    system: sysText,
-    messages: [
-      ...(history || []),
-      { role: "user", content: snapshot }
-    ]
-  });
-}
-
-async function* streamClaude(apiKey, snapshot, model, sysText, history, signal, isChat = false) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: buildHeadersClaude(apiKey),
-    body: buildBodyClaude(snapshot, true, model, sysText, history),
-    signal,
-  });
-  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
-  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
-  while (true) {
-    const { done, value } = await reader.read(); if (done) break;
-    buf += dec.decode(value, { stream: true });
-    const lines = buf.split("\n"); buf = lines.pop() || "";
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      const d = line.slice(6).trim();
-      if (!d || d === "[DONE]") continue;
-      try {
-        const parsed = JSON.parse(d);
-        if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
-          if (parsed.delta.text) yield parsed.delta.text;
-        }
-      } catch { log.warn("api", "Claude SSE parse error"); }
-    }
-  }
-}
-
-async function callClaude(apiKey, snapshot, model, sysText, history, isChat = false) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: buildHeadersClaude(apiKey),
-    body: buildBodyClaude(snapshot, false, model, sysText, history)
-  });
-  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
-  const data = await res.json();
-  return data.content?.[0]?.text || "";
-}
-
-// ═══════════════════════════════════════════════════════════════
-// PUBLIC API — provider-aware router
-// Supports "backend" mode (no API key needed) + BYOK fallback
-// ═══════════════════════════════════════════════════════════════
+/** Stream an audit or chat response through the backend proxy. */
 export async function* streamAudit(apiKey, snapshot, providerId = "backend", model, sysText, history = [], deviceId, signal, isChat = false) {
   const responseFormat = isChat ? "text" : "json";
-  log.info("audit", "Audit started", { provider: providerId, model, streaming: true, isChat });
-  switch (providerId) {
-    case "backend": yield* streamBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), signal, responseFormat); break;
-    case "openai": yield* streamOpenAI(apiKey, snapshot, model, sysText, history, undefined, signal, isChat); break;
-    case "gemini": yield* streamGemini(apiKey, snapshot, model, sysText, history, signal, isChat); break;
-    case "claude": yield* streamClaude(apiKey, snapshot, model, sysText, history, signal, isChat); break;
-    default: yield* streamBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), signal, responseFormat); break;
-  }
+  log.info("audit", "Audit started", { provider: "backend", model, streaming: true, isChat });
+  yield* streamBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), signal, responseFormat);
 }
 
+/** Call the backend proxy for a non-streaming audit or chat response. */
 export async function callAudit(apiKey, snapshot, providerId = "backend", model, sysText, history = [], deviceId, isChat = false) {
   const responseFormat = isChat ? "text" : "json";
-  log.info("audit", "Audit started", { provider: providerId, model, streaming: false, isChat });
-  switch (providerId) {
-    case "backend": return callBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), responseFormat);
-    case "openai": return callOpenAI(apiKey, snapshot, model, sysText, history, undefined, isChat);
-    case "gemini": return callGemini(apiKey, snapshot, model, sysText, history, isChat);
-    case "claude": return callClaude(apiKey, snapshot, model, sysText, history, isChat);
-    default: return callBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), responseFormat);
-  }
+  log.info("audit", "Audit started", { provider: "backend", model, streaming: false, isChat });
+  return callBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), responseFormat);
 }
 
 // ═══════════════════════════════════════════════════════════════

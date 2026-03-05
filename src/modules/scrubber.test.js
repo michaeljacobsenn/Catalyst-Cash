@@ -161,4 +161,51 @@ describe('PII Scrubber — buildScrubber', () => {
         // scrub should not throw either — result may or may not scrub depending on regex escaping
         expect(() => scrub(text)).not.toThrow();
     });
+
+    it('handles overlapping name substrings correctly', () => {
+        // "Chase" is a substring of "Chase Sapphire" — longer name must be replaced first
+        const cards = [
+            { name: 'Chase Sapphire', institution: 'Chase' },
+            { name: 'Chase', institution: 'Chase' },
+        ];
+        const { scrub } = buildScrubber(cards);
+        const text = 'Chase Sapphire has a higher limit than Chase.';
+        const scrubbed = scrub(text);
+        // "Chase Sapphire" should not be partially scrubbed
+        expect(scrubbed).not.toContain('Chase Sapphire');
+        expect(scrubbed).not.toContain('Chase');
+    });
+
+    it('handles very long card names', () => {
+        const longName = 'A'.repeat(120);
+        const cards = [{ name: longName }];
+        const { scrub } = buildScrubber(cards);
+        const text = `Your ${longName} payment is due.`;
+        const scrubbed = scrub(text);
+        expect(scrubbed).not.toContain(longName);
+    });
+
+    it('handles card names containing emoji', () => {
+        const cards = [{ name: 'My Card 💳 Premium' }];
+        const { scrub, unscrub } = buildScrubber(cards);
+        const text = 'Pay My Card 💳 Premium balance.';
+        const scrubbed = scrub(text);
+        expect(scrubbed).not.toContain('My Card 💳 Premium');
+        const restored = unscrub(scrubbed);
+        expect(restored).toContain('My Card 💳 Premium');
+    });
+
+    it('multiple scrub/unscrub cycles are idempotent', () => {
+        const cards = [{ name: 'Amex Gold', institution: 'Amex' }];
+        const { scrub, unscrub } = buildScrubber(cards);
+        const original = 'Pay Amex Gold $200.';
+        // Cycle 1
+        const s1 = scrub(original);
+        const u1 = unscrub(s1);
+        expect(u1).toBe(original);
+        // Cycle 2 (scrub the restored text again)
+        const s2 = scrub(u1);
+        const u2 = unscrub(s2);
+        expect(u2).toBe(original);
+    });
 });

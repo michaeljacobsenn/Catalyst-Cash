@@ -62,6 +62,49 @@ describe('validateSnapshot', () => {
         const result = validateSnapshot({ date: '2026-03-01', debts: [] });
         expect(result.valid).toBe(true);
     });
+
+    it('handles XSS-style strings in debt names gracefully', () => {
+        const result = validateSnapshot({
+            date: '2026-03-01',
+            debts: [{ name: '<script>alert(1)</script>', balance: '1000', apr: '20' }]
+        });
+        // Should still validate — XSS is a rendering concern, not validation
+        expect(result.errors.find(e => e.field === 'date')).toBeFalsy();
+    });
+
+    it('handles extremely large balance values', () => {
+        const result = validateSnapshot({
+            date: '2026-03-01',
+            debts: [{ name: 'Mega Card', balance: '999999999', apr: '20' }]
+        });
+        expect(result.valid).toBe(true);
+    });
+
+    it('handles unicode characters in debt names', () => {
+        const result = validateSnapshot({
+            date: '2026-03-01',
+            debts: [{ name: 'Carte de Crédit 🇫🇷', balance: '500', apr: '15' }]
+        });
+        expect(result.valid).toBe(true);
+    });
+
+    it('accepts APR at boundary 0%', () => {
+        const result = validateSnapshot({
+            date: '2026-03-01',
+            debts: [{ name: 'Promo Card', balance: '1000', apr: '0' }]
+        });
+        expect(result.valid).toBe(true);
+    });
+
+    it('accepts APR at boundary 99.99%', () => {
+        const result = validateSnapshot({
+            date: '2026-03-01',
+            debts: [{ name: 'High APR Card', balance: '1000', apr: '99.99' }]
+        });
+        // Should be valid and NOT trigger the >100% warning
+        const aprWarning = result.errors.find(e => e.field?.includes('apr') && e.severity === 'warning');
+        expect(aprWarning).toBeFalsy();
+    });
 });
 
 describe('validateCard', () => {
@@ -87,6 +130,16 @@ describe('validateCard', () => {
 
     it('accepts card with nickname only', () => {
         const result = validateCard({ nickname: 'My Card' });
+        expect(result.valid).toBe(true);
+    });
+
+    it('handles empty string name', () => {
+        const result = validateCard({ name: '', limit: 5000 });
+        expect(result.valid).toBe(false);
+    });
+
+    it('accepts APR exactly 0', () => {
+        const result = validateCard({ name: 'Promo Card', apr: 0 });
         expect(result.valid).toBe(true);
     });
 });
