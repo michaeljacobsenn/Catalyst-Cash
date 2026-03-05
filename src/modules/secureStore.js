@@ -19,9 +19,12 @@ function deserialize(value) {
 
 async function getPlugin() {
   if (securePluginPromise) return securePluginPromise;
-  securePluginPromise = import("capacitor-secure-storage-plugin")
-    .then(mod => mod.SecureStoragePlugin || mod.default?.SecureStoragePlugin || mod.default || null)
-    .catch(() => null);
+  securePluginPromise = Promise.race([
+    import("capacitor-secure-storage-plugin")
+      .then(mod => mod.SecureStoragePlugin || mod.default?.SecureStoragePlugin || mod.default || null)
+      .catch(() => null),
+    new Promise(resolve => setTimeout(() => resolve(null), 3000)) // 3s timeout — never hang
+  ]);
   return securePluginPromise;
 }
 

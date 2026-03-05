@@ -169,6 +169,10 @@ function CatalystCash() {
   };
 
   const ready = isSecurityReady && isSettingsReady && isPortfolioReady && isAuditReady;
+  // DEBUG: trace which context is blocking the loading screen
+  useEffect(() => {
+    console.log('[BOOT DEBUG] Context readiness:', { isSecurityReady, isSettingsReady, isPortfolioReady, isAuditReady, ready: isSecurityReady && isSettingsReady && isPortfolioReady && isAuditReady });
+  }, [isSecurityReady, isSettingsReady, isPortfolioReady, isAuditReady]);
 
   // Pro subscription state — resolved async on mount
   const [proEnabled, setProEnabled] = useState(true);
