@@ -343,7 +343,13 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                                 <Activity size={14} color={T.text.secondary} />
                                 <span style={{ fontSize: 12, fontWeight: 700, color: T.text.secondary }}>Dashboard Summary</span>
                             </div>
-                            <Md text={typeof p.sections.dashboard === "string" ? p.sections.dashboard.slice(0, 500) : ""} />
+                            <div style={{
+                                display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical",
+                                overflow: "hidden", textOverflow: "ellipsis", position: "relative"
+                            }}>
+                                <Md text={typeof p.sections.dashboard === "string" ? p.sections.dashboard.slice(0, 500) : ""} />
+                                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "1.5em", background: `linear-gradient(transparent, ${T.bg.card})`, pointerEvents: "none" }} />
+                            </div>
                         </Card>}
                     </>
                 ) : (
@@ -513,7 +519,13 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                         <div style={{ width: 28, height: 28, borderRadius: 8, background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 12px ${T.accent.primary}60` }}>
                             <Zap size={15} color="#fff" strokeWidth={2.5} /></div>
                         <span style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Prioritized Next Action</span></div>
-                    <Md text={stripPaycheckParens(p.sections.nextAction)} />
+                    <div style={{
+                        display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical",
+                        overflow: "hidden", textOverflow: "ellipsis", position: "relative"
+                    }}>
+                        <Md text={stripPaycheckParens(p.sections.nextAction)} />
+                        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "1.5em", background: `linear-gradient(transparent, ${T.bg.card})`, pointerEvents: "none" }} />
+                    </div>
                 </Card>}
 
                 {/* ═══ DISCUSS WITH CFO ═══ */}

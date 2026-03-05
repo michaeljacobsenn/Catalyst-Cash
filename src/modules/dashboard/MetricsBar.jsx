@@ -1,9 +1,24 @@
 import { T } from "../constants.js";
-import { CountUp } from "../components.jsx";
 import { InlineTooltip } from "../ui.jsx";
+import { Mono } from "../components.jsx";
 
 /**
- * MetricsBar — Horizontal split metrics display inside the command header card.
+ * Compact formatter: $1,234 → $1.2K, $12,345 → $12.3K, $123,456 → $123K
+ * Values under $10K stay as full integers: $8,450
+ */
+function fmtCompact(v) {
+    if (v == null) return "—";
+    const abs = Math.abs(v);
+    const sign = v < 0 ? "-" : "";
+    if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+    if (abs >= 100_000) return `${sign}$${Math.round(abs / 1000)}K`;
+    if (abs >= 10_000) return `${sign}$${(abs / 1000).toFixed(1)}K`;
+    if (abs >= 1_000) return `${sign}$${Math.round(abs).toLocaleString()}`;
+    return `${sign}$${abs.toFixed(0)}`;
+}
+
+/**
+ * MetricsBar — Horizontal scrollable pill strip inside the command header card.
  * Props: quickMetrics — array of { l, v, c, icon }
  */
 export default function MetricsBar({ quickMetrics }) {
@@ -11,21 +26,37 @@ export default function MetricsBar({ quickMetrics }) {
 
     return (
         <div style={{
-            display: "flex", borderTop: `1px solid ${T.border.subtle} `,
-            background: `${T.bg.base} 60`
+            display: "flex", overflowX: "auto", WebkitOverflowScrolling: "touch",
+            borderTop: `1px solid ${T.border.subtle}`,
+            background: `${T.bg.base}60`,
+            scrollbarWidth: "none", msOverflowStyle: "none",
         }}>
-            {quickMetrics.map(({ l, v, c, icon }, i) => <div key={l} style={{
-                flex: 1, padding: "16px 4px", textAlign: "center", minWidth: 0, overflow: "hidden",
-                borderRight: i < quickMetrics.length - 1 ? `1px solid ${T.border.subtle}` : "none",
-                animation: `fadeInUp .4s ease-out ${i * 0.06}s both`
+            <style>{`.metrics-strip::-webkit-scrollbar { display: none; }`}</style>
+            <div className="metrics-strip" style={{
+                display: "flex", minWidth: "100%",
             }}>
-                <div style={{ fontSize: 8, fontWeight: 800, color: T.text.secondary, fontFamily: T.font.mono, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 3, lineHeight: 1.2, overflowWrap: "anywhere" }}>
-                    {l === "Available" ? <InlineTooltip>{l}</InlineTooltip> : l}
-                </div>
-                <div style={{ fontVariantNumeric: "tabular-nums", overflowWrap: "anywhere", lineHeight: 1.2 }}>
-                    <CountUp value={v ?? 0} size={11} weight={800} color={c} />
-                </div>
-            </div>)}
+                {quickMetrics.map(({ l, v, c, icon }, i) => (
+                    <div key={l} style={{
+                        flex: "0 0 auto",
+                        minWidth: `${100 / Math.min(quickMetrics.length, 4)}%`,
+                        padding: "10px 6px", textAlign: "center",
+                        borderRight: i < quickMetrics.length - 1 ? `1px solid ${T.border.subtle}` : "none",
+                        animation: `fadeInUp .4s ease-out ${i * 0.06}s both`
+                    }}>
+                        <div style={{
+                            fontSize: 8, fontWeight: 800, color: T.text.secondary,
+                            fontFamily: T.font.mono, letterSpacing: "0.06em",
+                            textTransform: "uppercase", marginBottom: 3,
+                            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
+                        }}>
+                            {l === "Available" ? <InlineTooltip>{l}</InlineTooltip> : l}
+                        </div>
+                        <Mono size={12} weight={800} color={c} style={{ whiteSpace: "nowrap" }}>
+                            {fmtCompact(v)}
+                        </Mono>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }

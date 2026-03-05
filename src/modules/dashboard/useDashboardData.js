@@ -119,9 +119,9 @@ export default function useDashboardData() {
     // Chart data
     const chartData = useMemo(() =>
         history.filter(a => a.parsed?.netWorth != null).slice(0, 12).reverse().map(a => {
-            const [y, m] = (a.date || "").split("-");
+            const [, m, d] = (a.date || "").split("-");
             const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-            return { date: m ? `${months[parseInt(m, 10) - 1] || m} ${(y || "").slice(2)} ` : "?", nw: a.parsed.netWorth };
+            return { date: m ? `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}` : "?", nw: a.parsed.netWorth };
         }), [history]);
 
     const scoreData = useMemo(() =>

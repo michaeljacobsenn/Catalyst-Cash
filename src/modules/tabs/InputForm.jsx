@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { AlertCircle, Zap, ChevronDown, ChevronUp, Loader2, BookOpen, Trash2, Plus, Minus, CheckCircle, RefreshCw, TrendingUp, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, Zap, ChevronDown, ChevronUp, Loader2, BookOpen, Trash2, Plus, Minus, CheckCircle, RefreshCw, TrendingUp, X } from "lucide-react";
 import { T } from "../constants.js";
 import { validateSnapshot } from "../validation.js";
 import { Card, Label, Badge } from "../ui.jsx";
@@ -521,7 +521,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                             <span style={{ fontSize: 14, fontWeight: 800, fontFamily: T.font.mono, color: T.status.amber }}>{fmt(holdingValues.crypto)}</span>
                         </div>
                         <div style={{ fontSize: 10, color: T.text.muted, marginTop: 4, fontFamily: T.font.mono }}>
-                            {(financialConfig.holdings.crypto || []).map(h => h.symbol.replace("-USD", "")).join(" · ")} · Live
+                            {(financialConfig.holdings.crypto || []).map(h => (h.symbol || "").replace("-USD", "")).join(" · ")} · Live
                         </div>
                     </Card>
                 )}
@@ -565,7 +565,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                                     <option value="">Card (optional)</option>
                                     {Object.entries((cards || []).reduce((g, c) => { (g[c.institution] = g[c.institution] || []).push(c); return g; }, {}))
                                         .map(([inst, instCards]) => <optgroup key={inst} label={inst}>{instCards.map(c =>
-                                            <option key={c.id} value={c.id}>{getShortCardLabel(cards || [], c).replace(inst + " ", "")}</option>)}</optgroup>)}
+                                            <option key={c.id} value={c.id}>{(getShortCardLabel(cards || [], c) || "").replace((inst || "") + " ", "")}</option>)}</optgroup>)}
                                 </select>
                                 <div style={{ flex: "0 0 100px" }}><DI value={charge.amount} onChange={e => setForm(p => ({ ...p, pendingCharges: p.pendingCharges.map((ch, j) => j === ci ? { ...ch, amount: sanitizeDollar(e.target.value), confirmed: false } : ch) }))} /></div>
                                 {(form.pendingCharges || []).length > 1 && <button onClick={() => { if (window.confirm("Delete this pending charge?")) { haptic.light(); s("pendingCharges", (form.pendingCharges || []).filter((_, j) => j !== ci)); } }} style={{ width: 38, height: 38, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Trash2 size={13} /></button>}

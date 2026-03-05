@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, Label } from "../ui.jsx";
 import { T } from "../constants.js";
 import { addDays, daysBetween, getNextPayday, getNextDateForDayOfMonth } from "../engine.js";
@@ -15,13 +15,13 @@ export default function CashFlowCalendar({ config, cards, renewals, checkingBala
         // Guard: config not loaded yet or tracking disabled
         if (!config || config.trackChecking === false) return null;
         const today = snapshotDate || new Date().toISOString().split('T')[0];
-        const daysAhead = 35; // Look ahead 5 weeks
+        const daysAhead = 30; // Look ahead 30 days (~4.5 weeks)
         let currentBalance = checkingBalance || 0;
 
-        // Build a map of the next 35 days
+        // Build a map of the next 30 days
         const days = [];
 
-        // We need to know the dates of all paydays in the next 35 days
+        // We need to know the dates of all paydays in the next 30 days
         const paydays = [];
         if (config.payday) {
             let nextP = getNextPayday(today, config.payday);
@@ -201,7 +201,7 @@ export default function CashFlowCalendar({ config, cards, renewals, checkingBala
 
     return (
         <Card animate>
-            <Label>Cash Flow Horizon (35 Days)</Label>
+            <Label>Cash Flow Horizon (30 Days)</Label>
 
             {/* Radar Summary Alert */}
             <div style={{
@@ -225,10 +225,24 @@ export default function CashFlowCalendar({ config, cards, renewals, checkingBala
             </div>
 
             {/* Timeline */}
+            <CashFlowTimeline events={timeline.events} />
+        </Card>
+    );
+}
+
+const COLLAPSED_COUNT = 7;
+
+function CashFlowTimeline({ events }) {
+    const [expanded, setExpanded] = useState(false);
+    const visibleEvents = expanded ? events : events.slice(0, COLLAPSED_COUNT);
+    const hasMore = events.length > COLLAPSED_COUNT;
+
+    return (
+        <>
             <div style={{ display: "flex", flexDirection: "column", gap: 12, position: "relative" }}>
                 <div style={{ position: "absolute", left: 15, top: 10, bottom: 10, width: 2, background: T.border.default, zIndex: 0 }} />
 
-                {timeline.events.map((day, i) => (
+                {visibleEvents.map((day, i) => (
                     <div key={i} style={{ display: "flex", gap: 12, position: "relative", zIndex: 1, animation: `fadeInUp .35s ease-out ${Math.min(i * 0.04, 0.6)}s both` }}>
                         <div style={{
                             width: 32, height: 32, borderRadius: 16, background: T.bg.elevated,
@@ -269,6 +283,21 @@ export default function CashFlowCalendar({ config, cards, renewals, checkingBala
                     </div>
                 ))}
             </div>
-        </Card>
+            {hasMore && (
+                <button
+                    onClick={() => setExpanded(!expanded)}
+                    style={{
+                        width: "100%", marginTop: 12, padding: "10px 16px",
+                        borderRadius: T.radius.md, border: `1px solid ${T.border.subtle}`,
+                        background: T.bg.elevated, color: T.text.secondary,
+                        fontSize: 12, fontWeight: 700, cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        transition: "all .2s ease"
+                    }}
+                >
+                    {expanded ? "Show less ▲" : `Show all ${events.length} days ▼`}
+                </button>
+            )}
+        </>
     );
 }

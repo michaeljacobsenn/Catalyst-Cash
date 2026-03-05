@@ -76,7 +76,7 @@ export default function ProPaywall({ onClose }) {
         position: "fixed", inset: 0, zIndex: 99999,
         background: "rgba(0,0,0,0.7)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
         display: "flex", alignItems: "flex-end", justifyContent: "center",
-        animation: "fadeIn 0.2s ease", overscrollBehavior: "none", touchAction: "none"
+        animation: "fadeIn 0.2s ease", overscrollBehavior: "none"
     }} onClick={onClose}>
         <style>{`
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
@@ -91,6 +91,15 @@ export default function ProPaywall({ onClose }) {
         }}>
             {/* Handle */}
             <div style={{ width: 36, height: 4, borderRadius: 2, background: T.text.muted, margin: "0 auto 20px", opacity: 0.4 }} />
+
+            {/* Close X button */}
+            <button onClick={onClose} style={{
+                position: "absolute", top: 16, right: 16, width: 32, height: 32, borderRadius: 16,
+                background: T.bg.elevated, border: `1px solid ${T.border.subtle}`,
+                color: T.text.secondary, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                zIndex: 2, fontSize: 18, lineHeight: 1, fontWeight: 300
+            }} aria-label="Close">&times;</button>
 
             {/* Hero */}
             <div style={{ textAlign: "center", marginBottom: 20 }}>
