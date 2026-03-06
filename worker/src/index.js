@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 const ANTHROPIC_VERSION = "2023-06-01";
-const MAX_BODY_SIZE = 100_000; // 100KB max request body
+const MAX_BODY_SIZE = 512_000; // 512KB max request body (system prompt alone is ~110KB)
 const VALID_PROVIDERS = ["gemini", "openai", "claude"];
 const PLAID_ENV = "production"; // "sandbox", "development", or "production"
 const FREE_AUDITS_PER_WEEK = 2;
@@ -680,7 +680,7 @@ export default {
         try {
             const rawBody = await request.text();
             if (rawBody.length > MAX_BODY_SIZE) {
-                return new Response(JSON.stringify({ error: "Request body too large (max 100KB)" }), {
+                return new Response(JSON.stringify({ error: "Request body too large (max 512KB)" }), {
                     status: 413,
                     headers: buildHeaders(cors, { "Content-Type": "application/json" }),
                 });

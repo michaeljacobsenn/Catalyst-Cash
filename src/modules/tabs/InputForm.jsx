@@ -381,23 +381,23 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
 
 
         {/* ── Pending Charges ── */}
-        <Card variant="glass" style={{ padding: "14px 16px", position: "relative", overflow: "hidden" }}>
+        <Card variant="glass" style={{ padding: "12px 14px", position: "relative", overflow: "hidden" }}>
             <div style={{ position: "absolute", right: -20, bottom: -20, width: 60, height: 60, background: T.status.amber, filter: "blur(40px)", opacity: 0.06, borderRadius: "50%", pointerEvents: "none" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <Label style={{ marginBottom: 0, fontWeight: 800 }}>Pending Charges</Label>
                 <button onClick={() => {
                     haptic.medium();
                     s("pendingCharges", [...(form.pendingCharges || []), { amount: "", cardId: "", description: "", confirmed: false }]);
                 }} style={{
-                    display: "flex", alignItems: "center", gap: 4, padding: "6px 12px", borderRadius: T.radius.sm,
+                    display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: T.radius.sm,
                     border: `1px solid ${T.status.amber}40`, background: `${T.status.amber}0A`, color: T.status.amber,
                     fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono
                 }}><Plus size={11} />ADD</button>
             </div>
             {(form.pendingCharges || []).map((charge, ci) => (
-                <div key={ci} style={{ marginBottom: 12, background: T.bg.elevated, borderRadius: T.radius.md, padding: "12px", border: `1px solid ${charge.confirmed ? T.status.green + "40" : T.border.default}`, transition: "border-color .2s" }}>
+                <div key={ci} style={{ marginBottom: 6, background: T.bg.elevated, borderRadius: T.radius.md, padding: "8px 10px", border: `1px solid ${charge.confirmed ? T.status.green + "40" : T.border.default}`, transition: "border-color .2s" }}>
                     {/* Row 1: card picker + amount + remove */}
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
                         <select
                             aria-label={`Pending charge card ${ci + 1}`}
                             value={charge.cardId || ""}
@@ -411,51 +411,48 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                                 haptic.light();
                             }}
                             style={{
-                                flex: 1, fontSize: 12, padding: "10px 10px", background: T.bg.card, color: !charge.cardId ? T.text.muted : T.text.primary,
-                                border: `1.5px solid ${T.border.default}`, borderRadius: T.radius.md, fontFamily: T.font.sans,
+                                flex: 1, fontSize: 11, padding: "8px 8px", background: T.bg.card, color: !charge.cardId ? T.text.muted : T.text.primary,
+                                border: `1px solid ${T.border.default}`, borderRadius: T.radius.md, fontFamily: T.font.sans,
                                 WebkitAppearance: "none", appearance: "none", textOverflow: "ellipsis", minWidth: 0,
                                 backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23484F58' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
-                                backgroundRepeat: "no-repeat", backgroundPosition: "right 10px center"
+                                backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center"
                             }}
                         >
-                            <option value="">Card (optional)</option>
+                            <option value="">Card...</option>
                             {Object.entries((cards || []).reduce((g, c) => { (g[c.institution] = g[c.institution] || []).push(c); return g; }, {}))
                                 .map(([inst, instCards]) => <optgroup key={inst} label={inst}>{instCards.map(c =>
                                     <option key={c.id} value={c.id}>{(getShortCardLabel(cards || [], c) || "").replace((inst || "") + " ", "")}</option>)}</optgroup>)}
                         </select>
-                        <div style={{ flex: "0 0 100px" }}><DI value={charge.amount} onChange={e => setForm(p => ({ ...p, pendingCharges: p.pendingCharges.map((ch, j) => j === ci ? { ...ch, amount: sanitizeDollar(e.target.value), confirmed: false } : ch) }))} /></div>
-                        {(form.pendingCharges || []).length > 1 && <button onClick={() => { if (window.confirm("Delete this pending charge?")) { haptic.light(); s("pendingCharges", (form.pendingCharges || []).filter((_, j) => j !== ci)); } }} style={{ width: 38, height: 38, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Trash2 size={13} /></button>}
+                        <div style={{ flex: "0 0 90px" }}><DI value={charge.amount} onChange={e => setForm(p => ({ ...p, pendingCharges: p.pendingCharges.map((ch, j) => j === ci ? { ...ch, amount: sanitizeDollar(e.target.value), confirmed: false } : ch) }))} /></div>
+                        {(form.pendingCharges || []).length > 1 && <button onClick={() => { if (window.confirm("Delete this pending charge?")) { haptic.light(); s("pendingCharges", (form.pendingCharges || []).filter((_, j) => j !== ci)); } }} style={{ width: 34, height: 34, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Trash2 size={12} /></button>}
                     </div>
-                    {/* Row 2: description */}
-                    <input
-                        type="text"
-                        aria-label={`Pending charge description ${ci + 1}`}
-                        value={charge.description || ""}
-                        onChange={e => setForm(p => ({ ...p, pendingCharges: p.pendingCharges.map((ch, j) => j === ci ? { ...ch, description: e.target.value } : ch) }))}
-                        placeholder="Description (optional)"
-                        style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 12, marginBottom: 8 }}
-                    />
-                    {/* Row 3: confirm toggle */}
-                    <button onClick={() => { setForm(p => ({ ...p, pendingCharges: p.pendingCharges.map((ch, j) => j === ci ? { ...ch, confirmed: !ch.confirmed } : ch) })); haptic.medium(); }} style={{
-                        width: "100%", padding: "10px 14px", borderRadius: T.radius.md, cursor: "pointer", fontSize: 11, fontWeight: 800,
-                        fontFamily: T.font.mono, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                        border: charge.confirmed ? `1.5px solid ${T.status.green}30` : `1.5px solid ${T.status.amber}40`,
-                        background: charge.confirmed ? T.status.greenDim : T.status.amberDim,
-                        color: charge.confirmed ? T.status.green : T.status.amber,
-                    }}>
-                        {charge.confirmed
-                            ? <><CheckCircle size={13} />CONFIRMED ${charge.amount || "0.00"}</>
-                            : <><AlertTriangle size={13} />TAP TO CONFIRM</>}
-                    </button>
+                    {/* Row 2: description + confirm */}
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input
+                            type="text"
+                            aria-label={`Pending charge description ${ci + 1}`}
+                            value={charge.description || ""}
+                            onChange={e => setForm(p => ({ ...p, pendingCharges: p.pendingCharges.map((ch, j) => j === ci ? { ...ch, description: e.target.value } : ch) }))}
+                            placeholder="Description..."
+                            style={{ flex: 1, boxSizing: "border-box", padding: "7px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 11 }}
+                        />
+                        <button onClick={() => { setForm(p => ({ ...p, pendingCharges: p.pendingCharges.map((ch, j) => j === ci ? { ...ch, confirmed: !ch.confirmed } : ch) })); haptic.medium(); }} style={{
+                            padding: "7px 12px", borderRadius: T.radius.md, cursor: "pointer", fontSize: 10, fontWeight: 800,
+                            fontFamily: T.font.mono, display: "flex", alignItems: "center", gap: 4, flexShrink: 0, whiteSpace: "nowrap",
+                            border: charge.confirmed ? `1px solid ${T.status.green}30` : `1px solid ${T.status.amber}40`,
+                            background: charge.confirmed ? T.status.greenDim : T.status.amberDim,
+                            color: charge.confirmed ? T.status.green : T.status.amber,
+                        }}>
+                            {charge.confirmed ? <><CheckCircle size={11} />OK</> : <><AlertTriangle size={11} />CONFIRM</>}
+                        </button>
+                    </div>
                 </div>
             ))}
             {(form.pendingCharges || []).filter(c => parseFloat(c.amount) > 0).length > 1 && (
-                <div style={{ fontSize: 11, fontFamily: T.font.mono, color: T.text.secondary, textAlign: "right", marginTop: -4, paddingRight: 2 }}>
+                <div style={{ fontSize: 10, fontFamily: T.font.mono, color: T.text.secondary, textAlign: "right", marginTop: 2 }}>
                     TOTAL: ${(form.pendingCharges || []).reduce((s, c) => s + (parseFloat(c.amount) || 0), 0).toFixed(2)}
                 </div>
             )}
-            <p style={{ fontSize: 11, color: T.text.muted, marginTop: 10, lineHeight: 1.5, textAlign: "center" }}>
-                Confirm each charge before submitting.</p>
         </Card>
 
         {/* ── Notes for this Week (always visible — critical for AI context) ── */}
