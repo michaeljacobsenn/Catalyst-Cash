@@ -11,6 +11,7 @@ import { getProvider, getModel } from '../providers.js';
 import { getSystemPrompt } from '../prompts.js';
 import { log } from '../logger.js';
 import { getHistoryLimit, getOrCreateDeviceId, recordAuditUsage } from '../subscription.js';
+import { loadMemory, extractAuditMilestones, addMilestones, getMemoryBlock } from '../memory.js';
 import { useSettings } from './SettingsContext.jsx';
 import { usePortfolio } from './PortfolioContext.jsx';
 import { useNavigation } from './NavigationContext.jsx';
@@ -210,8 +211,12 @@ export function AuditProvider({ children }) {
         // Initialize PII Scrubber
         const scrubber = buildScrubber(cards, promptRenewals, financialConfig, formData);
 
+        // Load persistent AI memory for injection
+        const memory = await loadMemory().catch(() => ({ facts: [], milestones: [] }));
+        const memBlock = getMemoryBlock(memory);
+
         // Scrub the system prompt
-        const rawLivePrompt = getSystemPrompt(aiProvider || "gemini", financialConfig, cards, promptRenewals, personalRules || "", trendContext, persona, computedStrategy, chatContext);
+        const rawLivePrompt = getSystemPrompt(aiProvider || "gemini", financialConfig, cards, promptRenewals, personalRules || "", trendContext, persona, computedStrategy, chatContext, memBlock);
         const livePrompt = scrubber.scrub(rawLivePrompt);
         const liveHash = cyrb53(livePrompt).toString();
         const histKey = `api-history-${aiProvider || "gemini"}`;
@@ -280,10 +285,17 @@ export function AuditProvider({ children }) {
           status: parsed.status || "UNKNOWN"
         };
         setTrendContext(prev => {
-          const next = [...prev, trendEntry].slice(-8);
+          const next = [...prev, trendEntry].slice(-12);
           db.set("trend-context", next);
           return next;
         });
+
+        // Extract and persist audit milestones
+        const newMilestones = extractAuditMilestones(parsed, history);
+        if (newMilestones.length > 0) {
+          addMilestones(newMilestones).catch(() => { });
+        }
+
         await Promise.all([db.set("current-audit", audit), db.set("move-states", {}), db.set("audit-history", nh)]);
 
         // Persist debt snapshot for cross-component access (DebtSimulator fallback)

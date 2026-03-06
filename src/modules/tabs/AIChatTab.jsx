@@ -11,6 +11,7 @@ import { db } from "../utils.js";
 import { log } from "../logger.js";
 import { encryptAtRest, decryptAtRest, isEncrypted } from "../crypto.js";
 import { checkChatQuota, recordChatUsage, shouldShowGating, isGatingEnforced } from "../subscription.js";
+import { loadMemory, extractMemoryTags, addFacts, getMemoryBlock } from "../memory.js";
 
 import { useAudit } from "../contexts/AuditContext.jsx";
 import { useSettings } from "../contexts/SettingsContext.jsx";
@@ -166,8 +167,8 @@ function TypingIndicator() {
 }
 
 export default memo(function AIChatTab({ proEnabled = false, initialPrompt = null, clearInitialPrompt = null }) {
-    const { current, history } = useAudit();
-    const { apiKey, aiProvider, aiModel, financialConfig, persona } = useSettings();
+    const { current, history, trendContext } = useAudit();
+    const { apiKey, aiProvider, aiModel, financialConfig, persona, personalRules } = useSettings();
     const { cards, renewals } = usePortfolio();
     const { privacyMode } = useSecurity();
 
@@ -179,6 +180,7 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
     const [chatQuota, setChatQuota] = useState({ allowed: true, remaining: Infinity, limit: Infinity, used: 0 });
     const [inputFocused, setInputFocused] = useState(false);
     const [sessionSummary, setSessionSummary] = useState(null); // Prior session memory
+    const [memoryData, setMemoryData] = useState(null); // Persistent AI memory
 
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
@@ -217,6 +219,8 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
             } else if (summary) {
                 db.del(CHAT_SUMMARY_KEY); // Expired
             }
+            // Load persistent AI memory
+            loadMemory().then(m => setMemoryData(m)).catch(() => { });
         })();
     }, []);
 
@@ -370,9 +374,10 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
             personaObject = { name: "Catalyst AI", style: "You are an absolute data nerd. Focus heavily on stats, percentages, compounding math, and optimization strategies. Explain the math clearly." };
         }
 
-        // Build system prompt with full financial context
+        // Build system prompt with full financial context + persistent memory
+        const memBlock = memoryData ? getMemoryBlock(memoryData) : "";
         const sysPrompt = getChatSystemPrompt(
-            current, financialConfig, cards, renewals, history, personaObject
+            current, financialConfig, cards, renewals, history, personaObject, personalRules || "", null, trendContext, aiProvider, memBlock
         );
 
         // Build conversation history for the API
@@ -411,9 +416,16 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
 
             // Finalize
             if (accumulated.trim()) {
-                const finalMsgs = [...newMsgs, { ...assistantMsg, content: accumulated }];
+                // Extract REMEMBER tags before persisting/displaying
+                const { cleanText, newFacts } = extractMemoryTags(accumulated);
+                const displayText = cleanText || accumulated;
+                const finalMsgs = [...newMsgs, { ...assistantMsg, content: displayText }];
                 setMessages(finalMsgs);
                 persistMessages(finalMsgs);
+                // Persist any new facts the AI learned
+                if (newFacts.length > 0) {
+                    addFacts(newFacts).then(m => { if (m) setMemoryData(m); }).catch(() => { });
+                }
                 // Record usage after successful response
                 recordChatUsage().catch(() => { });
                 const q = await checkChatQuota();
@@ -439,7 +451,7 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
             isStreamingRef.current = false;
             abortRef.current = null;
         }
-    }, [messages, current, financialConfig, cards, renewals, history, persona, apiKey, aiProvider, aiModel, buildAPIMessages, persistMessages, chatQuota]);
+    }, [messages, current, financialConfig, cards, renewals, history, persona, personalRules, trendContext, memoryData, apiKey, aiProvider, aiModel, buildAPIMessages, persistMessages, chatQuota]);
 
     // ── Cancel streaming ──
     const cancelStream = useCallback(() => {

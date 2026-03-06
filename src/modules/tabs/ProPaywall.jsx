@@ -17,7 +17,7 @@ const loadRevenueCat = () => import("../revenuecat.js");
 const FEATURES = [
     { label: "AI Audits", free: "2 / week", pro: "60 / month", icon: "📊" },
     { label: "AskAI Chat", free: "10 / day", pro: "50 / day", icon: "💬" },
-    { label: "AI Models", free: "Flash & Mini", pro: "Pro · o4", icon: "🧠" },
+    { label: "AI Models", free: "Catalyst AI", pro: "Pro · Reasoning", icon: "🧠" },
     { label: "Audit History", free: "Last 12", pro: "Full archive", icon: "📜" },
     { label: "Dashboard & Charts", free: "✓ Full", pro: "✓ Full", icon: "📈" },
     { label: "Debt & Tax Simulator", free: "✓ Full", pro: "✓ Full", icon: "⚠️" },

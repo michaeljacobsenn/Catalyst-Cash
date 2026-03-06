@@ -83,6 +83,7 @@ export const DEFAULT_FINANCIAL_CONFIG = {
     plaidInvestments: [],
     currencyCode: "USD",
     stateCode: "",
+    birthYear: null,
 };
 
 function financialConfigReducer(state, action) {
