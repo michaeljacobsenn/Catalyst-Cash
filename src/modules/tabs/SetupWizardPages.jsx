@@ -46,10 +46,14 @@ export const WizBtn = ({ children, onClick, variant = "primary", disabled = fals
 };
 
 export const WizField = ({ label, hint, children }) => (
-    <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</div>
-        {hint && <div style={{ fontSize: 11, color: T.text.dim, marginBottom: 6, lineHeight: 1.4 }}>{hint}</div>}
-        {children}
+    <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", height: "100%" }}>
+        <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</div>
+            {hint && <div style={{ fontSize: 11, color: T.text.dim, marginBottom: 6, lineHeight: 1.4 }}>{hint}</div>}
+        </div>
+        <div style={{ marginTop: "auto", width: "100%" }}>
+            {children}
+        </div>
     </div>
 );
 
@@ -153,7 +157,7 @@ export function PageWelcome({ onNext }) {
                 overflow: "hidden", border: `1px solid ${T.border.subtle}`,
             }}>
                 {[
-                    { icon: "🧠", stat: "5", label: "AI models" },
+                    { icon: "🧠", stat: "3", label: "AI models" },
                     { icon: "🛡️", stat: "100%", label: "On-device" },
                     { icon: "🎁", stat: "Free", label: "Core features" },
                 ].map((s, i) => (
@@ -550,7 +554,7 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }) {
                 </p>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 24 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 24 }}>
                 <WizField label="Currency" hint="All amounts displayed in this currency">
                     <WizSelect value={data.currencyCode || "USD"} onChange={v => onChange("currencyCode", v)}
                         options={CURRENCIES.map(c => ({ value: c.code, label: `${c.flag} ${c.code} — ${c.symbol}` }))} />
@@ -558,6 +562,9 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }) {
                 <WizField label="State" hint="🟢 = No state income tax">
                     <WizSelect value={data.stateCode || ""} onChange={v => onChange("stateCode", v)}
                         options={US_STATES.map(s => ({ value: s.code, label: s.label }))} />
+                </WizField>
+                <WizField label="Birth Year" hint="For retirement account access timing">
+                    <WizInput type="number" inputMode="numeric" pattern="[0-9]*" value={data.birthYear || ""} onChange={v => onChange("birthYear", v ? Number(v) : null)} placeholder="e.g. 1995" aria-label="Birth year" />
                 </WizField>
             </div>
 

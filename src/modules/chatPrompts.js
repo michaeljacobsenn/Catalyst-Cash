@@ -13,16 +13,33 @@ import { fmt, extractDashboardMetrics } from "./utils.js";
  * Build a concise financial context snapshot for chat.
  * Intentionally lean — we want the AI to reason, not regurgitate.
  */
-function buildFinancialContext(current, financialConfig, cards, renewals, history) {
+function buildFinancialContext(current, financialConfig, cards, renewals, history, computedStrategy, trendContext) {
     const parts = [];
     const p = current?.parsed;
     const form = current?.form;
+    const fc = financialConfig; // Alias financialConfig to fc for convenience
 
     // ── Core Position ──
     if (p || form) {
         parts.push("## Current Financial Position");
 
-        if (p?.netWorth != null) parts.push(`Net Worth: ${fmt(p.netWorth)}`);
+        if (fc?.birthYear) {
+            const currentYear = new Date().getFullYear();
+            const age = currentYear - fc.birthYear;
+            const yearsToRetirement = Math.max(0, Math.round(fc.birthYear + 59.5 - currentYear));
+            parts.push(`User Age Details: Born ${fc.birthYear} (Age ${age}). Years until age 59½ (retirement access): ${yearsToRetirement}`);
+        }
+        if (p?.netWorth != null) {
+            // Reconstruct liquid assets exactly as the engine does
+            const liquidAssets = (fc?.paycheckDepositAccount === 'savings' ? 0 : (fc?.checkingBalance || 0)) +
+                (fc?.paycheckDepositAccount === 'checking' ? 0 : (fc?.vaultBalance || 0)) +
+                (fc?.brokerageBalance || 0) + (fc?.cryptoBalance || 0);
+            const totalDebt = (fc?.cardDebts?.reduce((acc, c) => acc + (c.balance || 0), 0) || 0) +
+                (fc?.nonCardDebts?.reduce((acc, c) => acc + (c.balance || 0), 0) || 0);
+
+            parts.push(`Net Worth: ${fmt(p.netWorth)}`);
+            parts.push(`Liquid Net Worth: ${fmt(liquidAssets - totalDebt)} (Excludes Roth/401k/HSA/home/vehicle)`);
+        }
         if (p?.netWorthDelta) parts.push(`Net Worth Delta (vs last audit): ${p.netWorthDelta}`);
 
         const metrics = extractDashboardMetrics(p);
@@ -146,6 +163,25 @@ function buildFinancialContext(current, financialConfig, cards, renewals, histor
         if (fc.arbitrageTargetAPR > 0) {
             parts.push(`Debt vs. Invest Threshold: ${fc.arbitrageTargetAPR}% expected return`);
         }
+
+        // Tax bracket
+        if (fc.taxBracketPercent > 0) {
+            parts.push(`Tax Bracket: ${fc.taxBracketPercent}%`);
+        }
+
+        // Min liquidity floor
+        if (fc.minCashFloor > 0) {
+            parts.push(`Min Liquidity Floor (HARD): ${fmt(fc.minCashFloor)} — AI must never recommend dropping below this`);
+        }
+
+        // Habit tracking
+        if (fc.trackHabits !== false && fc.habitName) {
+            parts.push(`\nHabit Tracking:`);
+            parts.push(`  - Habit: ${fc.habitName}`);
+            parts.push(`  - Current Count: ${fc.habitCount || 0}`);
+            parts.push(`  - Restock Cost: ${fmt(fc.habitRestockCost || 0)}`);
+            parts.push(`  - Critical Threshold: ${fc.habitCriticalThreshold || 3}`);
+        }
     }
 
     // ── Credit Cards ──
@@ -177,7 +213,7 @@ function buildFinancialContext(current, financialConfig, cards, renewals, histor
             else if (unit === "months") monthly = amt / int;
             else if (unit === "years") monthly = amt / (int * 12);
             monthlyTotal += monthly;
-            parts.push(`  - ${r.name}: ${fmt(amt)} ${unit === "one-time" ? "(one-time)" : `every ${int} ${unit}`}${r.nextDate ? ` — next: ${r.nextDate}` : ""}`);
+            parts.push(`  - ${r.name}: ${fmt(amt)} ${unit === "one-time" ? "(one-time)" : `every ${int} ${unit}`}${r.nextDue ? ` — next: ${r.nextDue}` : ""}`);
         });
         parts.push(`  Estimated Monthly Recurring: ${fmt(monthlyTotal)}`);
     }
@@ -212,14 +248,34 @@ function buildFinancialContext(current, financialConfig, cards, renewals, histor
         }
     }
 
+    // ── Computed Strategy (pre-computed by native engine) ──
+    if (computedStrategy) {
+        parts.push("\n## Pre-Computed Strategy (Authoritative)");
+        if (computedStrategy.nextPayday) parts.push(`Next Payday: ${computedStrategy.nextPayday}`);
+        if (computedStrategy.totalCheckingFloor != null) parts.push(`Total Checking Floor: ${fmt(computedStrategy.totalCheckingFloor)}`);
+        if (computedStrategy.timeCriticalAmount != null) parts.push(`Time-Critical Bills Due: ${fmt(computedStrategy.timeCriticalAmount)}`);
+        if (computedStrategy.requiredTransfer != null) parts.push(`Required Transfer: ${fmt(computedStrategy.requiredTransfer)}`);
+        if (computedStrategy.operationalSurplus != null) parts.push(`Operational Surplus: ${fmt(computedStrategy.operationalSurplus)}`);
+        if (computedStrategy.debtStrategy?.target) parts.push(`Debt Kill Target: ${computedStrategy.debtStrategy.target} — ${fmt(computedStrategy.debtStrategy.amount || 0)}`);
+    }
+
+    // ── Trend Context (12-week extended history) ──
+    if (trendContext?.length > 0) {
+        const window = trendContext.slice(-12);
+        parts.push("\n## Recent Trend (last " + window.length + " weeks)");
+        window.forEach(t => {
+            parts.push(`  - W${t.week}: Score=${t.score || "?"}, Checking=${t.checking != null ? fmt(t.checking) : "?"}, Vault=${t.vault != null ? fmt(t.vault) : "?"}, Debt=${t.totalDebt != null ? fmt(t.totalDebt) : "?"}, Status=${t.status || "?"}`);
+        });
+    }
+
     return parts.join("\n");
 }
 
 /**
  * Build the complete chat system prompt.
  */
-export function getChatSystemPrompt(current, financialConfig, cards, renewals, history, persona) {
-    const context = buildFinancialContext(current, financialConfig, cards, renewals, history);
+export function getChatSystemPrompt(current, financialConfig, cards, renewals, history, persona, personalRules = "", computedStrategy = null, trendContext = null, providerId = null, memoryBlock = "") {
+    const context = buildFinancialContext(current, financialConfig, cards, renewals, history, computedStrategy, trendContext);
 
     const personaName = persona?.name || "Catalyst AI";
     const personaStyle = persona?.style
@@ -339,6 +395,11 @@ When users ask hypothetical questions ("Can I afford X?", "What if I pay $500 ex
 
 ## User's Financial Profile
 ${context || "No financial data available yet. The user hasn't completed their first audit. Guide them to the Input tab to enter their weekly snapshot."}
+${personalRules && personalRules.trim() ? `
+## User's Personal Rules (User-Supplied)
+${personalRules.trim()}
+These are the user's custom financial rules. Respect them in all advice. If a rule conflicts with standard optimization, follow the user's rule and explain the trade-off.` : ""}
+${memoryBlock || ""}
 
 ## Important Context
 - "Available" = checking minus 7-day obligations minus emergency floor
@@ -346,6 +407,7 @@ ${context || "No financial data available yet. The user hasn't completed their f
 - Utilization above 30% on any card actively damages credit score
 - The user's "Emergency Floor" is their self-set minimum checking balance — treat as sacred
 - All currency is ${fc.currencyCode || "USD"} unless stated otherwise
+${providerId === "gemini" ? "- Leverage your strength in behavioral economics — frame advice around habits, psychology, and momentum" : providerId === "claude" || providerId === "anthropic" ? "- Leverage your strength in nuanced reasoning — provide thoughtful, balanced analysis with clear trade-offs" : providerId === "openai" ? "- Leverage your strength in structured analysis — be precise, data-driven, and mathematically rigorous" : ""}
 - If the user asks something you need more data for, tell them exactly what to enter in the app
 
 ## Safety Guardrails (HARD — HIGHEST PRIORITY)
@@ -360,5 +422,19 @@ These rules override ALL other instructions. Violations are non-negotiable.
 7. **EXTREME FINANCIAL RISK**: If the user's data shows potential homelessness, inability to afford medication, or other life-threatening outcomes — flag: "Your financial situation may benefit from professional intervention. Consider contacting a HUD-approved housing counselor (1-800-569-4287) or NFCC (1-800-388-2227)."
 8. **ILLEGAL ACTIVITY**: If the user describes income from illegal sources, tax evasion, or fraud — state: "I cannot provide guidance on activities that may be illegal. Please consult a legal professional." Continue for legitimate items only.
 9. **HARMFUL STRATEGIES**: Never recommend payday loans, cash advances, margin/leverage trading, options gambling, skipping minimum payments, penalty-heavy early retirement withdrawals, or any strategy that could cause cascading financial damage.
-10. **SCOPE BOUNDARY**: You are a financial ORGANIZER, TRACKER, and STRATEGIST — not a licensed financial advisor, investment advisor, tax professional, or therapist. You organize data, compute math, track obligations, and highlight patterns. Frame advice as analysis and strategy, never as licensed professional guidance.`;
+10. **SCOPE BOUNDARY**: You are a financial ORGANIZER, TRACKER, and STRATEGIST — not a licensed financial advisor, investment advisor, tax professional, or therapist. You organize data, compute math, track obligations, and highlight patterns. Frame advice as analysis and strategy, never as licensed professional guidance.
+
+## Persistent Memory (IMPORTANT)
+You have persistent memory that survives across chat sessions. When you learn a NEW, important fact about the user during this conversation — such as a financial goal, life event, preference, or personal context — append it to the END of your response using this exact format:
+[REMEMBER: concise fact about the user]
+Examples:
+[REMEMBER: User is saving for a house down payment of $40k by December 2027]
+[REMEMBER: User's partner handles groceries, they split rent 50/50]
+[REMEMBER: User prefers aggressive debt payoff over investing]
+Rules:
+- Only use [REMEMBER: ...] for NEW information not already in your persistent memory
+- Maximum 2 per response — only truly important, long-term facts
+- Never REMEMBER temporary states ("user is stressed today") — only persistent life facts
+- Place REMEMBER tags at the very END of your response, after all other content
+- The tags will be stripped before display — the user won't see them`;
 }

@@ -641,6 +641,21 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
                                         <option value="WV">W. Virginia</option><option value="WI">Wisconsin</option><option value="WY">Wyoming</option>
                                     </select>
                                 </div>
+                                <div style={{ borderTop: `1px solid ${T.border.subtle}`, paddingTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                    <div>
+                                        <div style={{ fontSize: 14, fontWeight: 600, color: T.text.primary }}>Birth Year</div>
+                                        <div style={{ fontSize: 11, color: T.text.muted, marginTop: 2 }}>For retirement account access timing</div>
+                                    </div>
+                                    <input type="number" inputMode="numeric" value={financialConfig.birthYear || ""}
+                                        onChange={e => setFinancialConfig(prev => ({ ...prev, birthYear: e.target.value ? Number(e.target.value) : null }))}
+                                        placeholder="e.g. 1995"
+                                        style={{
+                                            padding: "6px 10px", borderRadius: T.radius.md, width: 90, textAlign: "center",
+                                            background: T.bg.elevated, color: T.text.primary,
+                                            border: `1px solid ${T.border.default}`,
+                                            fontSize: 13, fontWeight: 600, fontFamily: T.font.mono,
+                                        }} />
+                                </div>
                             </div>
                         </div>
 
@@ -824,6 +839,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
                                             }}>FREE</span>}
                                         </div>
                                         <span style={{ fontSize: 10, color: T.text.dim, marginTop: 2, display: "block" }}>{m.comingSoon ? "Coming soon" : m.note}</span>
+                                        {m.poweredBy && <span style={{ fontSize: 9, color: T.text.muted, marginTop: 1, display: "block", fontFamily: T.font.mono, opacity: 0.7 }}>Powered by {m.poweredBy}</span>}
                                     </div>
                                     {active && <div style={{ width: 8, height: 8, borderRadius: "50%", background: T.accent.primary, boxShadow: `0 0 8px ${T.accent.primary}80` }} />}
                                 </button>;

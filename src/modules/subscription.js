@@ -6,11 +6,9 @@
 // integrated, this module becomes the bridge to the native IAP API.
 //
 // ─── AI MODEL COST MATRIX (per audit, ~3K tokens in / ~2K out) ──
-//   gemini-2.5-flash  $0.30/$2.50/M  ≈ $0.006/audit  → Free default
-//   gpt-4o-mini       $0.15/$0.60/M  ≈ $0.002/audit  → Free
-//   gemini-2.5-pro    $1.25/$10.0/M  ≈ $0.024/audit  → Pro
-//   o4-mini           $1.10/$4.40/M  ≈ $0.012/audit  → Pro
-//   claude-haiku-4-5  Coming soon (not in active Pro model list yet)
+//   gemini-2.5-flash  $0.30/$2.50/M  ≈ $0.006/audit  → Free (Catalyst AI)
+//   gemini-2.5-pro    $1.25/$10.0/M  ≈ $0.024/audit  → Pro  (Catalyst AI Pro)
+//   o4-mini           $1.10/$4.40/M  ≈ $0.012/audit  → Pro  (Catalyst AI Reasoning)
 //
 //   Free: 2 audits/wk on Flash  → ~$0.05/user/month
 //   Pro worst case: 60 audits/mo on Gemini Pro → $1.44/user/month
@@ -141,7 +139,7 @@ export const TIERS = {
         chatMessagesPerDay: 10,              // ~1/hr waking hours, hooks users
         marketRefreshMs: 60 * 60 * 1000,     // 60 minutes
         historyLimit: 12,                     // ~3 months of trends (quarterly)
-        models: ["gemini-2.5-flash", "gpt-4o-mini"],  // Standard AI — low cost, fast
+        models: ["gemini-2.5-flash"],  // Catalyst AI — fast, free
         features: [
             "basic_audit",          // Core AI audit
             "health_score",         // Financial health scoring
@@ -169,10 +167,9 @@ export const TIERS = {
         marketRefreshMs: 5 * 60 * 1000,      // 5 minutes
         historyLimit: Infinity,               // All history
         models: [
-            "gemini-2.5-flash",               // Standard AI (free)
-            "gpt-4o-mini",                    // Standard AI (free)
-            "gemini-2.5-pro",                 // Premium AI — deep reasoning
-            "o4-mini",                        // Premium AI — latest OpenAI reasoning
+            "gemini-2.5-flash",               // Catalyst AI (free)
+            "gemini-2.5-pro",                 // Catalyst AI Pro
+            "o4-mini",                        // Catalyst AI Reasoning
         ],
         features: [
             // ── Everything in Free ──

@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // AI PROVIDER REGISTRY — Catalyst Cash
-// Default: Backend proxy (Gemini 2.5 Flash — free for all users)
-// Pro: Premium models via backend (Gemini 2.5 Pro, OpenAI o4-mini; Claude coming soon)
+// 3 models, branded: Catalyst AI (Free) | Catalyst AI Pro | Catalyst AI Reasoning
+// Backend models: Gemini 2.5 Flash | Gemini 2.5 Pro | OpenAI o4-mini
 // ═══════════════════════════════════════════════════════════════
 
 export const AI_PROVIDERS = [
@@ -11,11 +11,9 @@ export const AI_PROVIDERS = [
         company: "Catalyst Cash",
         badge: "✨ Default",
         models: [
-            { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", note: "Fast reasoning — included free", tier: "free", provider: "gemini" },
-            { id: "gpt-4o-mini", name: "GPT-4o mini", note: "OpenAI quality — included free", tier: "free", provider: "openai" },
-            { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", note: "Advanced deep reasoning", tier: "pro", provider: "gemini" },
-            { id: "o4-mini", name: "OpenAI o4-mini", note: "Latest OpenAI reasoning engine", tier: "pro", provider: "openai" },
-            { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", note: "Anthropic's fast & affordable model", tier: "pro", provider: "claude", comingSoon: true, disabled: true },
+            { id: "gemini-2.5-flash", name: "Catalyst AI", note: "Fast, intelligent analysis — included free", tier: "free", provider: "gemini", poweredBy: "Gemini 2.5 Flash" },
+            { id: "gemini-2.5-pro", name: "Catalyst AI Pro", note: "Advanced deep reasoning for complex financial analysis", tier: "pro", provider: "gemini", poweredBy: "Gemini 2.5 Pro" },
+            { id: "o4-mini", name: "Catalyst AI Reasoning", note: "Chain-of-thought reasoning engine for precision math", tier: "pro", provider: "openai", poweredBy: "OpenAI o4-mini" },
         ],
         defaultModel: "gemini-2.5-flash",
         supportsStreaming: true,
@@ -44,7 +42,7 @@ export function getModel(providerId, modelId) {
 
 /**
  * For backend provider, resolve which Worker provider to route to.
- * e.g. "gemini-2.5-flash" → "gemini", "o4-mini" → "openai", "claude-haiku-..." → "claude"
+ * e.g. "gemini-2.5-flash" → "gemini", "o4-mini" → "openai"
  */
 export function getBackendProvider(modelId) {
     const backend = getProvider("backend");

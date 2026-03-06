@@ -36,7 +36,7 @@ describe('Tier Definitions', () => {
         expect(TIERS.free.auditsPerWeek).toBe(2);
         expect(TIERS.free.marketRefreshMs).toBe(60 * 60 * 1000); // 60 min
         expect(TIERS.free.historyLimit).toBe(12);
-        expect(TIERS.free.models).toEqual(['gemini-2.5-flash', 'gpt-4o-mini']);
+        expect(TIERS.free.models).toEqual(['gemini-2.5-flash']);
     });
 
     it('pro tier has unlimited access', () => {
@@ -132,7 +132,6 @@ describe('Model Gating (raw tier, not affected by GATING_MODE)', () => {
     it('free user cannot access pro models', async () => {
         expect(await isModelAvailable('gemini-2.5-pro')).toBe(false);
         expect(await isModelAvailable('o4-mini')).toBe(false);
-        expect(await isModelAvailable('claude-haiku-4-5')).toBe(false);
     });
 
     it('pro user can access all models', async () => {
@@ -140,7 +139,6 @@ describe('Model Gating (raw tier, not affected by GATING_MODE)', () => {
         expect(await isModelAvailable('gemini-2.5-flash')).toBe(true);
         expect(await isModelAvailable('gemini-2.5-pro')).toBe(true);
         expect(await isModelAvailable('o4-mini')).toBe(true);
-        expect(await isModelAvailable('claude-haiku-4-5')).toBe(false);
     });
 });
 
