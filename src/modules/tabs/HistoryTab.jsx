@@ -42,6 +42,22 @@ const getAuditColor = (a) => {
     return m ? m[1].toUpperCase() : rawStatus.toUpperCase().includes("GREEN") ? "GREEN" : rawStatus.toUpperCase().includes("YELLOW") ? "YELLOW" : rawStatus.toUpperCase().includes("RED") ? "RED" : "UNKNOWN";
 };
 
+const getGradeLetter = (score) => {
+    if (score == null) return null;
+    if (score >= 97) return "A+";
+    if (score >= 93) return "A";
+    if (score >= 90) return "A-";
+    if (score >= 87) return "B+";
+    if (score >= 83) return "B";
+    if (score >= 80) return "B-";
+    if (score >= 77) return "C+";
+    if (score >= 73) return "C";
+    if (score >= 70) return "C-";
+    if (score >= 67) return "D+";
+    if (score >= 60) return "D";
+    return "F";
+};
+
 export default memo(function HistoryTab({ toast }) {
     const { history: audits, deleteHistoryItem: onDelete, handleManualImport } = useAudit();
     const { navTo } = useNavigation();
@@ -141,6 +157,9 @@ export default memo(function HistoryTab({ toast }) {
             audits.length === 0 ? <EmptyState icon={Calendar} title="No History Yet" message="Perform a financial audit to see your history and trends right here." /> :
                 (() => {
                     let lastMonth = null; return filteredAudits.map((a, i) => {
+                        const monthKey = getMonthKey(a.date || a.ts);
+                        const showMonthHeader = monthKey !== lastMonth;
+                        lastMonth = monthKey;
                         const isConfirming = confirmDelete === i;
                         const rawStatus = a.parsed?.status || "UNKNOWN";
                         let sColor = "UNKNOWN";
@@ -156,125 +175,145 @@ export default memo(function HistoryTab({ toast }) {
 
                         const cHex = sColor === "GREEN" ? T.status.green : sColor === "YELLOW" ? T.status.amber : sColor === "RED" ? T.status.red : T.text.muted;
 
-                        return <Card key={a.ts || i} animate delay={Math.min(i * 40, 400)}
-                            onClick={selMode ? () => toggle(i) : isConfirming ? undefined : () => onSelect(a)}
-                            style={{
-                                padding: "16px",
-                                position: "relative",
-                                overflow: "hidden",
-                                ...(sel.has(i) ? { borderColor: `${T.accent.primary}35`, background: `${T.accent.primary}08` } : {}),
-                                ...(isConfirming ? { borderColor: `${T.status.red}30`, background: `${T.status.red}06` } : {}),
+                        return <div key={a.ts || i}>
+                            {showMonthHeader && <div style={{
+                                padding: "6px 0 8px", marginBottom: 4, marginTop: i > 0 ? 10 : 0,
+                                display: "flex", alignItems: "center", gap: 10
                             }}>
-                            <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: cHex, opacity: 0.8 }} />
-                            <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 60, background: `linear-gradient(90deg, ${cHex}15, transparent)`, pointerEvents: "none" }} />
-                            {isConfirming ? (
-                                <div>
-                                    <p style={{ fontSize: 12, color: T.status.red, fontWeight: 600, marginBottom: 10 }}>Delete audit from {fmtDate(a.date)}?</p>
-                                    <div style={{ display: "flex", gap: 8 }}>
-                                        <button onClick={(e) => { e.stopPropagation(); onDelete(a); setConfirmDelete(null); }} style={{
-                                            flex: 1, padding: 10, borderRadius: T.radius.md, border: "none",
-                                            background: T.status.red, color: "white", fontSize: 12, fontWeight: 700, cursor: "pointer"
-                                        }}>Delete</button>
-                                        <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(null); }} style={{
-                                            flex: 1, padding: 10, borderRadius: T.radius.md,
-                                            border: `1px solid ${T.border.default}`, background: "transparent",
-                                            color: T.text.secondary, fontSize: 12, cursor: "pointer"
-                                        }}>Cancel</button>
+                                <span style={{ fontSize: 11, fontWeight: 800, color: T.text.secondary, fontFamily: T.font.mono, letterSpacing: "0.04em", textTransform: "uppercase" }}>{monthKey}</span>
+                                <div style={{ flex: 1, height: 1, background: T.border.subtle }} />
+                            </div>}
+                            <Card animate delay={Math.min(i * 40, 400)}
+                                onClick={selMode ? () => toggle(i) : isConfirming ? undefined : () => onSelect(a)}
+                                style={{
+                                    padding: "16px",
+                                    position: "relative",
+                                    overflow: "hidden",
+                                    ...(sel.has(i) ? { borderColor: `${T.accent.primary}35`, background: `${T.accent.primary}08` } : {}),
+                                    ...(isConfirming ? { borderColor: `${T.status.red}30`, background: `${T.status.red}06` } : {}),
+                                }}>
+                                <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: cHex, opacity: 0.8 }} />
+                                <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 60, background: `linear-gradient(90deg, ${cHex}15, transparent)`, pointerEvents: "none" }} />
+                                {isConfirming ? (
+                                    <div>
+                                        <p style={{ fontSize: 12, color: T.status.red, fontWeight: 600, marginBottom: 10 }}>Delete audit from {fmtDate(a.date)}?</p>
+                                        <div style={{ display: "flex", gap: 8 }}>
+                                            <button onClick={(e) => { e.stopPropagation(); onDelete(a); setConfirmDelete(null); }} style={{
+                                                flex: 1, padding: 10, borderRadius: T.radius.md, border: "none",
+                                                background: T.status.red, color: "white", fontSize: 12, fontWeight: 700, cursor: "pointer"
+                                            }}>Delete</button>
+                                            <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(null); }} style={{
+                                                flex: 1, padding: 10, borderRadius: T.radius.md,
+                                                border: `1px solid ${T.border.default}`, background: "transparent",
+                                                color: T.text.secondary, fontSize: 12, cursor: "pointer"
+                                            }}>Cancel</button>
+                                        </div>
                                     </div>
-                                </div>
-                            ) : (
-                                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                                    {/* Top Row: Date & Actions */}
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                                            {selMode && <div style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, border: `2px solid ${sel.has(i) ? "transparent" : T.text.dim}`, background: sel.has(i) ? T.accent.primary : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>
-                                                {sel.has(i) && <CheckCircle size={12} color={T.bg.base} strokeWidth={3} />}</div>}
-                                            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                    <span style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
-                                                        {fmtDate(a.date)}
-                                                    </span>
-                                                    <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono }}>{relativeTime(a.date || a.ts)}</span>
-                                                    {a.isTest && <Badge variant="amber" style={{ padding: "3px 6px" }}>TEST</Badge>}
-                                                </div>
-                                                {a.parsed?.netWorth != null && (
-                                                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-                                                        <Mono size={14} weight={700} color={T.accent.primary}>{fmt(a.parsed.netWorth)}</Mono>
-                                                        <span style={{ fontSize: 10, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em" }}>NET WORTH</span>
+                                ) : (
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                                        {/* Top Row: Date & Actions */}
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                                {selMode && <div style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, border: `2px solid ${sel.has(i) ? "transparent" : T.text.dim}`, background: sel.has(i) ? T.accent.primary : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>
+                                                    {sel.has(i) && <CheckCircle size={12} color={T.bg.base} strokeWidth={3} />}</div>}
+                                                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                        <span style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
+                                                            {fmtDate(a.date)}
+                                                        </span>
+                                                        <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono }}>{relativeTime(a.date || a.ts)}</span>
+                                                        {a.isTest && <Badge variant="amber" style={{ padding: "3px 6px" }}>TEST</Badge>}
                                                     </div>
-                                                )}
+                                                    {a.parsed?.netWorth != null && (
+                                                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                                                            <Mono size={14} weight={700} color={T.accent.primary}>{fmt(a.parsed.netWorth)}</Mono>
+                                                            <span style={{ fontSize: 10, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em" }}>NET WORTH</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: "flex", gap: 6, position: "relative", zIndex: 2 }}>
+                                                {!selMode && <button onClick={e => { e.stopPropagation(); exportAudit(a); }} style={{ width: 32, height: 32, borderRadius: T.radius.md, border: `1px solid ${T.border.subtle}`, background: T.bg.elevated, color: T.text.secondary, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>
+                                                    <Download size={14} strokeWidth={2.5} /></button>}
+                                                {!selMode && <button onClick={e => { e.stopPropagation(); setConfirmDelete(i); haptic.warning(); }} style={{ width: 32, height: 32, borderRadius: T.radius.md, border: `1px solid ${T.status.red}20`, background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>
+                                                    <Trash2 size={14} strokeWidth={2.5} /></button>}
                                             </div>
                                         </div>
 
-                                        <div style={{ display: "flex", gap: 6, position: "relative", zIndex: 2 }}>
-                                            {!selMode && <button onClick={e => { e.stopPropagation(); exportAudit(a); }} style={{ width: 32, height: 32, borderRadius: T.radius.md, border: `1px solid ${T.border.subtle}`, background: T.bg.elevated, color: T.text.secondary, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>
-                                                <Download size={14} strokeWidth={2.5} /></button>}
-                                            {!selMode && <button onClick={e => { e.stopPropagation(); setConfirmDelete(i); haptic.warning(); }} style={{ width: 32, height: 32, borderRadius: T.radius.md, border: `1px solid ${T.status.red}20`, background: T.status.redDim, color: T.status.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>
-                                                <Trash2 size={14} strokeWidth={2.5} /></button>}
-                                        </div>
-                                    </div>
+                                        {/* Health Score + Model Badge Row */}
+                                        {(a.parsed?.healthScore?.score != null || a.model) && (
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                                {a.parsed?.healthScore?.score != null && (() => {
+                                                    const score = a.parsed.healthScore.score;
+                                                    const grade = getGradeLetter(score);
+                                                    const scoreColor = score >= 80 ? T.status.green : score >= 60 ? T.status.amber : T.status.red;
+                                                    const circumference = 2 * Math.PI * 11;
+                                                    const offset = circumference - (circumference * score / 100);
+                                                    return <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                                        <svg viewBox="0 0 28 28" width={24} height={24} style={{ flexShrink: 0 }}>
+                                                            <circle cx="14" cy="14" r="11" fill="none" stroke={`${T.border.default}`} strokeWidth="2.5" />
+                                                            <circle cx="14" cy="14" r="11" fill="none" stroke={scoreColor} strokeWidth="2.5"
+                                                                strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={offset}
+                                                                transform="rotate(-90 14 14)" style={{ transition: "stroke-dashoffset 0.8s ease" }} />
+                                                        </svg>
+                                                        <span style={{
+                                                            fontSize: 10, fontWeight: 800, color: scoreColor,
+                                                            background: `${scoreColor}15`, border: `1px solid ${scoreColor}30`,
+                                                            padding: "2px 8px", borderRadius: 99, fontFamily: T.font.mono,
+                                                            letterSpacing: "0.04em",
+                                                        }}>{score} · {grade}</span>
+                                                    </div>;
+                                                })()}
+                                                {a.model && <span style={{
+                                                    fontSize: 9, fontWeight: 700, color: T.text.dim,
+                                                    background: `${T.text.dim}12`, border: `1px solid ${T.text.dim}20`,
+                                                    padding: "2px 7px", borderRadius: 99, fontFamily: T.font.mono,
+                                                    letterSpacing: "0.03em", textTransform: "uppercase",
+                                                }}>{a.model}</span>}
+                                            </div>
+                                        )}
 
-                                    {/* Health Score + Model Badge Row */}
-                                    {(a.parsed?.healthScore?.score != null || a.model) && (
-                                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                                            {a.parsed?.healthScore?.score != null && (() => {
-                                                const score = a.parsed.healthScore.score;
-                                                const scoreColor = score >= 80 ? T.status.green : score >= 60 ? T.status.amber : T.status.red;
-                                                return <span style={{
-                                                    fontSize: 10, fontWeight: 800, color: scoreColor,
-                                                    background: `${scoreColor}15`, border: `1px solid ${scoreColor}30`,
-                                                    padding: "2px 8px", borderRadius: 99, fontFamily: T.font.mono,
-                                                    letterSpacing: "0.04em",
-                                                }}>SCORE: {score}</span>;
-                                            })()}
-                                            {a.model && <span style={{
-                                                fontSize: 9, fontWeight: 700, color: T.text.dim,
-                                                background: `${T.text.dim}12`, border: `1px solid ${T.text.dim}20`,
-                                                padding: "2px 7px", borderRadius: 99, fontFamily: T.font.mono,
-                                                letterSpacing: "0.03em", textTransform: "uppercase",
-                                            }}>{a.model}</span>}
-                                        </div>
-                                    )}
+                                        {/* Key Metrics Row */}
+                                        {a.form && (
+                                            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                                                {a.form.checking != null && <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                                    <span style={{ fontSize: 9, fontWeight: 700, color: T.text.secondary, letterSpacing: "0.08em", textTransform: "uppercase" }}>CHK</span>
+                                                    <Mono size={11} weight={600} color={T.text.secondary}>{fmt(parseFloat(a.form.checking) || 0)}</Mono>
+                                                </div>}
+                                                {a.form.debts?.length > 0 && <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                                    <span style={{ fontSize: 9, fontWeight: 700, color: T.text.secondary, letterSpacing: "0.08em", textTransform: "uppercase" }}>DEBT</span>
+                                                    <Mono size={11} weight={600} color={T.status.red}>{fmt(a.form.debts.reduce((s, d) => s + (parseFloat(d.balance) || 0), 0))}</Mono>
+                                                </div>}
+                                                {a.form.savings != null && parseFloat(a.form.savings) > 0 && <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                                    <span style={{ fontSize: 9, fontWeight: 700, color: T.text.secondary, letterSpacing: "0.08em", textTransform: "uppercase" }}>SAV</span>
+                                                    <Mono size={11} weight={600} color={T.status.green}>{fmt(parseFloat(a.form.savings) || 0)}</Mono>
+                                                </div>}
+                                            </div>
+                                        )}
 
-                                    {/* Key Metrics Row */}
-                                    {a.form && (
-                                        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                                            {a.form.checking != null && <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                                <span style={{ fontSize: 9, fontWeight: 700, color: T.text.secondary, letterSpacing: "0.08em", textTransform: "uppercase" }}>CHK</span>
-                                                <Mono size={11} weight={600} color={T.text.secondary}>{fmt(parseFloat(a.form.checking) || 0)}</Mono>
-                                            </div>}
-                                            {a.form.debts?.length > 0 && <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                                <span style={{ fontSize: 9, fontWeight: 700, color: T.text.secondary, letterSpacing: "0.08em", textTransform: "uppercase" }}>DEBT</span>
-                                                <Mono size={11} weight={600} color={T.status.red}>{fmt(a.form.debts.reduce((s, d) => s + (parseFloat(d.balance) || 0), 0))}</Mono>
-                                            </div>}
-                                            {a.form.savings != null && parseFloat(a.form.savings) > 0 && <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                                <span style={{ fontSize: 9, fontWeight: 700, color: T.text.secondary, letterSpacing: "0.08em", textTransform: "uppercase" }}>SAV</span>
-                                                <Mono size={11} weight={600} color={T.status.green}>{fmt(parseFloat(a.form.savings) || 0)}</Mono>
-                                            </div>}
-                                        </div>
-                                    )}
-
-                                    {/* Status Pill */}
-                                    <div style={{
-                                        display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px",
-                                        background: `linear-gradient(135deg, ${cHex}15, ${cHex}05)`,
-                                        borderRadius: T.radius.md, border: `1px solid ${cHex}30`
-                                    }}>
-                                        <div style={{ width: 10, height: 10, borderRadius: "50%", background: cHex, boxShadow: `0 0 12px ${cHex}80`, flexShrink: 0, marginTop: 3 }} />
-                                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                                            <span style={{ fontSize: 11, fontWeight: 800, color: cHex, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                                                {sColor}
-                                            </span>
-                                            {sText && (
-                                                <span style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.4, opacity: 0.9 }}>
-                                                    {sText}
+                                        {/* Status Pill */}
+                                        <div style={{
+                                            display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px",
+                                            background: `linear-gradient(135deg, ${cHex}15, ${cHex}05)`,
+                                            borderRadius: T.radius.md, border: `1px solid ${cHex}30`
+                                        }}>
+                                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: cHex, boxShadow: `0 0 12px ${cHex}80`, flexShrink: 0, marginTop: 3 }} />
+                                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                                <span style={{ fontSize: 11, fontWeight: 800, color: cHex, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                                                    {sColor}
                                                 </span>
-                                            )}
+                                                {(sText || a.parsed?.healthScore?.summary) && (
+                                                    <span style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.4, opacity: 0.9 }}>
+                                                        {sText || a.parsed?.healthScore?.summary}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            )}
-                        </Card>;
+                                )}
+                            </Card>
+                        </div>;
                     });
                 })()
         }

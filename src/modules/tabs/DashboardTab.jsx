@@ -86,7 +86,7 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
     } = useDashboardData();
 
     // Main Segmented View Toggle
-    const [viewMode, setViewMode] = useState("command"); // 'command' | 'budget' | 'results'
+    const [viewMode, setViewMode] = useState("command"); // 'command' | 'budget'
 
     // Confetti
     const [runConfetti, setRunConfetti] = useState(false);
@@ -273,7 +273,7 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
         {/* Segmented View Toggle & Global Actions */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
             <div style={{ flex: 1, display: "flex", background: T.bg.elevated, padding: 3, borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle} ` }}>
-                {[{ id: "command", label: "Command Center" }, { id: "budget", label: "Weekly Budget" }, { id: "results", label: "Results" }].map(v => (
+                {[{ id: "command", label: "Command Center" }, { id: "budget", label: "Weekly Budget" }].map(v => (
                     <button key={v.id} className="a11y-hit-target hover-btn" onClick={() => { haptic.selection(); setViewMode(v.id); }} style={{
                         flex: 1, padding: "6px 12px", border: "none", borderRadius: T.radius.md,
                         background: viewMode === v.id ? T.bg.card : "transparent",
@@ -283,6 +283,13 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                         transition: "all .2s ease"
                     }}>{v.label}</button>
                 ))}
+                <button className="a11y-hit-target hover-btn" onClick={() => { haptic.selection(); navTo("history"); }} style={{
+                    flex: 1, padding: "6px 12px", border: "none", borderRadius: T.radius.md,
+                    background: "transparent",
+                    color: T.text.dim,
+                    fontSize: 12, fontWeight: 700, cursor: "pointer", lineHeight: 1.3,
+                    transition: "all .2s ease"
+                }}>Results</button>
             </div>
 
             {/* Action buttons (Export / Share) */}
@@ -307,88 +314,6 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                 setFinancialConfig={setFinancialConfig}
                 incomeSources={financialConfig?.incomeSources || []}
             />
-        ) : viewMode === "results" ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {current ? (
-                    <>
-                        <Card animate variant="glass" className="hover-card" style={{
-                            padding: 0, overflow: "hidden",
-                            border: `1px solid ${scoreColor}25`
-                        }}>
-                            <div style={{ padding: "20px", display: "flex", alignItems: "center", gap: 16 }}>
-                                <div style={{ position: "relative", width: 56, height: 56, flexShrink: 0 }}>
-                                    <svg viewBox="0 0 120 120" width={56} height={56}>
-                                        <circle cx="60" cy="60" r="48" fill="none" stroke={`${T.border.default}`} strokeWidth="6" />
-                                        <circle cx="60" cy="60" r="48" fill="none" stroke={scoreColor} strokeWidth="6"
-                                            strokeDasharray={`${2 * Math.PI * 48}`}
-                                            strokeDashoffset={`${2 * Math.PI * 48 * (1 - (score || 0) / 100)}`}
-                                            strokeLinecap="round" transform="rotate(-90 60 60)"
-                                            style={{ transition: "stroke-dashoffset 1s ease" }} />
-                                        <text x="60" y="60" textAnchor="middle" dominantBaseline="central"
-                                            style={{ fontSize: 24, fontWeight: 900, fill: scoreColor, fontFamily: T.font.mono }}>
-                                            {score || "\u2014"}
-                                        </text>
-                                    </svg>
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, marginBottom: 4 }}>Latest Audit</div>
-                                    <div style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono }}>{current.date ? fmtDate(current.date) : "Today"}</div>
-                                    {rawStatus && <Badge variant={rawStatus.includes("GREEN") ? "green" : rawStatus.includes("RED") ? "red" : "amber"} style={{ marginTop: 6, fontSize: 9 }}>{rawStatus}</Badge>}
-                                </div>
-                            </div>
-                            <div style={{ display: "flex", borderTop: `1px solid ${T.border.subtle}` }}>
-                                <button onClick={onViewResult} className="hover-btn" style={{
-                                    flex: 1, padding: "14px", border: "none", borderRight: `1px solid ${T.border.subtle}`,
-                                    background: "transparent", color: T.accent.primary, fontSize: 13, fontWeight: 700,
-                                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6
-                                }}><Target size={14} /> View Full Results</button>
-                                <button onClick={onRunAudit} className="hover-btn" style={{
-                                    flex: 1, padding: "14px", border: "none",
-                                    background: "transparent", color: T.accent.emerald, fontSize: 13, fontWeight: 700,
-                                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6
-                                }}><Zap size={14} /> New Audit</button>
-                            </div>
-                        </Card>
-
-                        {p?.sections?.dashboard && <Card animate delay={50}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                                <Activity size={14} color={T.text.secondary} />
-                                <span style={{ fontSize: 12, fontWeight: 700, color: T.text.secondary }}>Dashboard Summary</span>
-                            </div>
-                            <div style={{
-                                display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical",
-                                overflow: "hidden", textOverflow: "ellipsis", position: "relative"
-                            }}>
-                                <Md text={typeof p.sections.dashboard === "string" ? p.sections.dashboard.slice(0, 500) : ""} />
-                                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "1.5em", background: `linear-gradient(transparent, ${T.bg.card})`, pointerEvents: "none" }} />
-                            </div>
-                        </Card>}
-                    </>
-                ) : (
-                    <Card animate style={{ textAlign: "center", padding: 32 }}>
-                        <div style={{ fontSize: 32, marginBottom: 12 }}>📊</div>
-                        <p style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>No Audit Results Yet</p>
-                        <p style={{ fontSize: 12, color: T.text.secondary, marginBottom: 16 }}>Run your first audit to see results here</p>
-                        <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-                            <button onClick={onRunAudit} className="hover-btn" style={{
-                                padding: "12px 20px", borderRadius: T.radius.md, border: "none",
-                                background: T.accent.gradient, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer"
-                            }}>Start Audit</button>
-                            <button onClick={onDemoAudit} className="hover-btn" style={{
-                                padding: "12px 20px", borderRadius: T.radius.md, border: `1px solid ${T.accent.emerald}40`,
-                                background: `${T.accent.emerald}10`, color: T.accent.emerald, fontSize: 13, fontWeight: 700, cursor: "pointer"
-                            }}>Try Demo ✨</button>
-                        </div>
-                    </Card>
-                )}
-
-                <button onClick={() => { haptic.light(); navTo("history"); }} className="hover-btn" style={{
-                    width: "100%", padding: "16px", borderRadius: T.radius.lg,
-                    border: `1px solid ${T.border.subtle}`, background: T.bg.elevated,
-                    color: T.text.primary, fontSize: 14, fontWeight: 700, cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8
-                }}><Activity size={16} /> View Audit History</button>
-            </div>
         ) : (
             <>
                 {/* Demo Banner */}
