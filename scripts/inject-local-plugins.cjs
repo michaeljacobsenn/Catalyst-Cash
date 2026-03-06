@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 
 const CONFIG_PATH = path.join(__dirname, '..', 'ios', 'App', 'App', 'capacitor.config.json');
-const LOCAL_PLUGINS = ['FaceIdPlugin', 'PdfViewerPlugin']; // ObjC runtime names of local plugins
+const LOCAL_PLUGINS = ['FaceIdPlugin', 'PdfViewerPlugin', 'ICloudSyncPlugin']; // ObjC runtime names of local plugins
 
 try {
     const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
