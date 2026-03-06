@@ -21,7 +21,7 @@
     href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap"
     rel="stylesheet" />
   <meta name="robots" content="index, follow" />
-  <link rel="stylesheet" href="/style.css?v=2.5" />
+  <link rel="stylesheet" href="/style.css?v=2.6" />
 </head>
 
 <body>
@@ -52,17 +52,21 @@
     </nav>
 
     <main class="shell legal-content" id="main-content">
-      <section class="section" style="padding-top: 60px;">
-        <div class="eyebrow">Privacy policy</div>
+      <div class="header-wrapper animate-fade-up"
+        style="height: auto; margin-top: 40px; margin-bottom: 40px; text-align: left;">
+        <div class="label-pill" style="margin: 0 0 20px 0;">Privacy policy</div>
         <h1>Your core financial data stays close to you.</h1>
-        <p>
+        <p class="subtitle" style="text-align: left; max-width: 800px; margin-bottom: 24px;">
           Catalyst Cash is built around local-first storage. The app keeps your core financial records on your device.
           When you use shipped AI features, the app sends scrubbed prompts through the Catalyst Cash backend proxy to
           the selected model provider. Raw financial payloads are not retained on our servers.
         </p>
         <div class="meta">Effective date: 2026-03-05 | Last updated: 2026-03-05</div>
+      </div>
 
-        <div class="summary-grid">
+      <section class="section">
+
+        <div class="summary-grid animate-fade-up delay-1">
           <div class="summary-card">
             <span>Stored locally</span>
             <h2>Accounts, debts, renewals, history</h2>
@@ -87,7 +91,7 @@
           <h2>What data exists, where it lives, and why.</h2>
         </div>
 
-        <div class="policy-grid">
+        <div class="policy-grid animate-fade-up delay-2">
           <div class="policy-card">
             <span>1</span>
             <h2>Information stored on your device</h2>
@@ -188,7 +192,7 @@
         </div>
       </section>
 
-      <section class="section">
+      <section class="section animate-fade-up delay-3">
         <div class="cta-band">
           <div>
             <div class="micro-label">Related Pages</div>
