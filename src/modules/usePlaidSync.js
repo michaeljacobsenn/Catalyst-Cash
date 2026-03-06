@@ -84,7 +84,7 @@ export function usePlaidSync({
                 if (window.toast) window.toast.success(successMessage);
                 // Optionally auto-fetch transactions alongside balances
                 if (autoFetchTransactions) {
-                    fetchAllTransactions(30).catch(() => { });
+                    await fetchAllTransactions(30).catch(() => { });
                 }
             } else {
                 const firstErr = results.find(r => r._error)?._error || "No connections available";

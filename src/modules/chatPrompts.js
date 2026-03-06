@@ -63,7 +63,10 @@ function buildFinancialContext(current, financialConfig, cards, renewals, histor
         if (fc.greenStatusTarget > 0) parts.push(`Green Status Target: ${fmt(fc.greenStatusTarget)}`);
         if (fc.emergencyReserveTarget > 0) parts.push(`Emergency Reserve Target: ${fmt(fc.emergencyReserveTarget)}`);
 
-        // Contractor / Tax info
+        // Contractor / Tax / State info
+        if (fc.stateCode) {
+            parts.push(`\nUS State for Tax Modeling: ${fc.stateCode}`);
+        }
         if (fc.isContractor) {
             parts.push(`\nTax Status: Self-Employed / Contractor`);
             if (fc.taxWithholdingRate > 0) parts.push(`Tax Withholding Rate: ${fc.taxWithholdingRate}%`);
@@ -342,7 +345,7 @@ ${context || "No financial data available yet. The user hasn't completed their f
 - Negative "Available" = projected floor breach — this is a red alert
 - Utilization above 30% on any card actively damages credit score
 - The user's "Emergency Floor" is their self-set minimum checking balance — treat as sacred
-- All currency is USD unless stated otherwise
+- All currency is ${fc.currencyCode || "USD"} unless stated otherwise
 - If the user asks something you need more data for, tell them exactly what to enter in the app
 
 ## Safety Guardrails (HARD — HIGHEST PRIORITY)
