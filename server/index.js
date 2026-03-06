@@ -12,9 +12,19 @@ const app = express();
 app.use(helmet());
 app.use(express.json({ limit: "2mb" }));
 
-// CORS for native Capacitor app
+// CORS for native Capacitor app — locked to known origins
+const ALLOWED_ORIGINS = [
+  "capacitor://localhost",     // iOS WKWebView
+  "https://catalystcash.app",  // production website
+  "http://localhost:5173",     // Vite dev server
+];
+
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+    res.header("Vary", "Origin");
+  }
   res.header("Access-Control-Allow-Headers", "Content-Type, X-Device-ID, X-App-Version, X-Subscription-Tier, X-RC-App-User-ID, x-pp-secret, x-pp-user, x-pp-tier");
   res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   if (req.method === "OPTIONS") return res.sendStatus(204);

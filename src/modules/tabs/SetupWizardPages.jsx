@@ -491,7 +491,6 @@ export function PageImport({ onNext, toast, onComplete }) {
     );
 }
 
-// ─── PAGE 2: Pass 1 (Minimum Viable Audit) ────────────────────────────────────────────────
 export function PagePass1({ data, onChange, onNext, onBack, onSkip }) {
     return (
         <div>
@@ -522,7 +521,14 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }) {
                 </div>
             </div>
 
-            <WizField label="Pay Frequency">
+            <div style={{ marginBottom: 24 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, margin: "0 0 6px 0", letterSpacing: "-0.01em" }}>Phase 1: Your Income Story</h3>
+                <p style={{ fontSize: 13, color: T.text.secondary, margin: 0, lineHeight: 1.5 }}>
+                    Let's start with the fun part—when you get paid! This framing helps Catalyst build your customized weekly projections.
+                </p>
+            </div>
+
+            <WizField label="How often do you get paid?">
                 <WizSelect value={data.payFrequency} onChange={v => onChange("payFrequency", v)} options={[
                     { value: "weekly", label: "📅 Weekly" },
                     { value: "bi-weekly", label: "📅 Bi-Weekly (every 2 weeks)" },
@@ -530,11 +536,20 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }) {
                     { value: "monthly", label: "📅 Monthly" },
                 ]} />
             </WizField>
-            <WizField label="Payday" hint="Which day of the week do you usually get paid?">
-                <WizSelect value={data.payday} onChange={v => onChange("payday", v)} options={["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]} />
-            </WizField>
 
-            <WizField label="Income Type">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <WizField label="Payday" hint="Typical day of arrival">
+                    <WizSelect value={data.payday} onChange={v => onChange("payday", v)} options={["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]} />
+                </WizField>
+                <WizField label="Deposit Into" hint="Where the funds land">
+                    <WizSelect value={data.paycheckDepositAccount} onChange={v => onChange("paycheckDepositAccount", v)} options={[
+                        { value: "checking", label: "🏦 Checking" },
+                        { value: "savings", label: "🏦 Vault/Savings" }
+                    ]} />
+                </WizField>
+            </div>
+
+            <WizField label="Income Type" hint="Determines how we calculate your runway">
                 <WizSelect value={data.incomeType || "salary"} onChange={v => onChange("incomeType", v)} options={[
                     { value: "salary", label: "💼 Salary (Consistent Paychecks)" },
                     { value: "hourly", label: "⏱️ Hourly Wage" },
@@ -544,10 +559,10 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }) {
 
             {(!data.incomeType || data.incomeType === "salary") && (
                 <>
-                    <WizField label="Standard Paycheck ($)" hint="Your typical take-home pay per paycheck after taxes">
+                    <WizField label="Standard Paycheck ($)" hint="Your exact net take-home pay per check (after taxes & deductions)">
                         <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={data.paycheckStandard} onChange={v => onChange("paycheckStandard", v)} placeholder="e.g. 2400" />
                     </WizField>
-                    <WizField label="First-of-Month Paycheck ($)" hint="If your 1st paycheck of the month differs (e.g. benefits deducted) — leave blank if same">
+                    <WizField label="First-of-Month Paycheck ($)" hint="If your first check is lower due to benefits/insurance (Leave blank if same)">
                         <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={data.paycheckFirstOfMonth} onChange={v => onChange("paycheckFirstOfMonth", v)} placeholder="Leave blank if same as above" />
                     </WizField>
                 </>
@@ -565,20 +580,26 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }) {
             )}
 
             {data.incomeType === "variable" && (
-                <WizField label="Average Paycheck ($)" hint="Your estimated average take-home pay per paycheck">
+                <WizField label="Average Paycheck ($)" hint="Be conservative here. What is a reliable average net pay per check?">
                     <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={data.averagePaycheck} onChange={v => onChange("averagePaycheck", v)} placeholder="e.g. 1500" />
                 </WizField>
             )}
 
-            <div style={{ margin: "24px 0 12px", borderTop: `1px solid ${T.border.subtle}`, paddingTop: 20 }}>
-                <h3 style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, margin: "0 0 4px 0" }}>Spending Targets</h3>
-                <p style={{ fontSize: 11, color: T.text.muted, margin: "0 0 16px 0" }}>Establish your operational baselines.</p>
+            <div style={{ margin: "32px 0 16px", borderTop: `1px solid ${T.border.subtle}`, paddingTop: 24 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: T.text.primary, margin: "0 0 6px 0" }}>Fun Money & Spending</h3>
+                <p style={{ fontSize: 12, color: T.text.muted, margin: "0 0 16px 0", lineHeight: 1.5 }}>
+                    This is your "Spend Allowance"—the cash you plan to spend every week on variable costs like groceries, coffee, or dining out. It does <strong>not</strong> include your fixed bills.
+                </p>
             </div>
 
-            <WizField label="Weekly Spend Allowance ($)" hint="Your target max spending per week (excluding bills & fixed costs)">
+            <WizField label="Weekly Spend Allowance ($)" hint="The maximum you allow yourself to spend per week on everyday fun/needs.">
                 <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={data.weeklySpendAllowance} onChange={v => onChange("weeklySpendAllowance", v)} placeholder="e.g. 300" />
             </WizField>
-            <WizField label="Default APR (%)" hint="Used to estimate interest on unpaid card balances">
+            <p style={{ fontSize: 11, color: T.text.muted, fontStyle: "italic", marginTop: -6, marginBottom: 16 }}>
+                💡 Tip: Be totally honest here! If you usually spend $400/wk, put $400. We'll automatically optimize your savings around this number.
+            </p>
+
+            <WizField label="Default APR (%)" hint="Used to estimate interest penalties on any newly added, unpaid card balances.">
                 <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={data.defaultAPR} onChange={v => onChange("defaultAPR", v)} placeholder="e.g. 24.99" />
             </WizField>
 
@@ -591,31 +612,48 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }) {
 export function PagePass2({ data, onChange, onNext, onBack, onSkip }) {
     return (
         <div>
-            <WizField label={<InlineTooltip term="Floor">Checking Floor ($)</InlineTooltip>} hint="Goal: the minimum checking balance you want to maintain at all times">
-                <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={data.emergencyFloor} onChange={v => onChange("emergencyFloor", v)} placeholder="e.g. 500" />
-            </WizField>
-            <WizField label="Green Status Target ($)" hint="Checking balance that means you're in great shape">
-                <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={data.greenStatusTarget} onChange={v => onChange("greenStatusTarget", v)} placeholder="e.g. 2000" />
-            </WizField>
-            <WizField label={<InlineTooltip term="Emergency reserve">Emergency Reserve Target ($)</InlineTooltip>} hint="Savings goal for your emergency fund">
-                <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={data.emergencyReserveTarget} onChange={v => onChange("emergencyReserveTarget", v)} placeholder="e.g. 10000" />
-            </WizField>
-
-            <div style={{ margin: "24px 0 12px", borderTop: `1px solid ${T.border.subtle}`, paddingTop: 20 }}>
-                <h3 style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, margin: "0 0 4px 0" }}>Tax Optimization</h3>
-                <p style={{ fontSize: 11, color: T.text.muted, margin: "0 0 16px 0" }}>Boost accuracy of surplus paths.</p>
+            <div style={{ marginBottom: 24 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, margin: "0 0 6px 0", letterSpacing: "-0.01em" }}>Phase 2: Wealth Targets</h3>
+                <p style={{ fontSize: 13, color: T.text.secondary, margin: 0, lineHeight: 1.5 }}>
+                    Let's set up some guardrails. This helps the AI know when to save extra cash versus when it's safe to invest or pay down debt.
+                </p>
             </div>
 
-            <WizField label="Marginal Tax Bracket (%)" hint="Your highest federal + state tax bracket (used for optimizations)">
+            <WizField label={<InlineTooltip term="Floor">Checking Floor ($)</InlineTooltip>} hint="The absolute minimum balance you want your checking account to hold at all times.">
+                <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={data.emergencyFloor} onChange={v => onChange("emergencyFloor", v)} placeholder="e.g. 1000" />
+            </WizField>
+            <p style={{ fontSize: 11, color: T.text.muted, fontStyle: "italic", marginTop: -6, marginBottom: 16 }}>
+                💡 Tip: We recommend setting this to roughly half your monthly expenses so you never overdraft.
+            </p>
+
+            <WizField label="Optimal Reserve Target ($)" hint="The ideal balance indicating your checking is fully healthy.">
+                <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={data.greenStatusTarget} onChange={v => onChange("greenStatusTarget", v)} placeholder="e.g. 3000" />
+            </WizField>
+
+            <WizField label={<InlineTooltip term="Emergency reserve">Vault / Emergency Target ($)</InlineTooltip>} hint="The total savings goal for your standalone emergency fund.">
+                <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={data.emergencyReserveTarget} onChange={v => onChange("emergencyReserveTarget", v)} placeholder="e.g. 15000" />
+            </WizField>
+            <p style={{ fontSize: 11, color: T.text.muted, fontStyle: "italic", marginTop: -6, marginBottom: 16 }}>
+                💡 Tip: A 3-6 month runway is the gold standard for bulletproof security.
+            </p>
+
+            <div style={{ margin: "32px 0 16px", borderTop: `1px solid ${T.border.subtle}`, paddingTop: 24 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: T.text.primary, margin: "0 0 6px 0" }}>Taxes (The boring but important stuff)</h3>
+                <p style={{ fontSize: 12, color: T.text.muted, margin: "0 0 16px 0", lineHeight: 1.5 }}>This helps Catalyst calculate the true ROI of your debt payoff and investments.</p>
+            </div>
+
+            <WizField label="Marginal Tax Bracket (%)" hint="Your highest combined federal + state income tax bracket.">
                 <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={data.taxBracketPercent} onChange={v => onChange("taxBracketPercent", v)} placeholder="e.g. 24" />
             </WizField>
-            <WizToggle label="I'm a contractor / self-employed" sub="Enables quarterly tax estimate tracking" checked={data.isContractor} onChange={v => onChange("isContractor", v)} />
+
+            <WizToggle label="1099 / Self-Employed" sub="Enables tracking for estimated quarterly tax payments." checked={data.isContractor} onChange={v => onChange("isContractor", v)} />
+
             <NavRow onBack={onBack} onNext={onNext} onSkip={onSkip} />
         </div>
     );
 }
 
-// ─── PAGE 4: Pass 3 (Advanced Settings) ────────────────────────────────────────
+// ─── PAGE 4: Phase 3 (Integrations) ────────────────────────────────────────
 export function PagePass3({ ai, security, spending, updateAi, updateSecurity, updateSpending, themeMode, setThemeMode, onNext, onBack, onSkip, saving, appleLinkedId, setAppleLinkedId }) {
     const provider = AI_PROVIDERS[0];
     const [confirm, setConfirm] = useState("");
@@ -666,62 +704,71 @@ export function PagePass3({ ai, security, spending, updateAi, updateSecurity, up
     return (
         <div>
             {/* PLAID BANK CONNECTION */}
-            {ENABLE_PLAID && (
-                <>
-                    <div style={{
-                        padding: "16px", marginBottom: 20,
-                        background: `linear-gradient(145deg, ${T.bg.elevated}, ${T.bg.base})`,
-                        border: `1px solid ${T.border.default}`,
-                        borderRadius: T.radius.lg,
-                        boxShadow: `0 4px 24px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.05)`,
-                    }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                            <div style={{
-                                width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-                                background: `linear-gradient(135deg, #0A85D120, #6C63FF15)`,
-                                border: `1px solid #0A85D130`,
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                                fontSize: 18,
-                            }}>🏦</div>
-                            <div>
-                                <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: T.text.primary }}>Connect Your Bank</h4>
-                                <p style={{ margin: 0, fontSize: 11, color: T.text.dim }}>Auto-sync balances securely via Plaid</p>
-                            </div>
-                        </div>
-                        {plaidCount > 0 ? (
-                            <div style={{
-                                display: "flex", alignItems: "center", gap: 8,
-                                padding: "10px 14px", borderRadius: T.radius.md,
-                                background: `${T.status.green}10`, border: `1px solid ${T.status.green}25`,
-                                marginBottom: 8,
-                            }}>
-                                <span style={{ fontSize: 14 }}>✅</span>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: T.status.green }}>
-                                    {plaidCount} bank{plaidCount > 1 ? "s" : ""} connected
-                                </span>
-                            </div>
-                        ) : (
-                            <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 12px 0" }}>
-                                Instantly pull real-time balances from your checking, savings, and credit accounts. Plaid handles authentication directly and Catalyst Cash does not store your bank login credentials.
+            {
+                ENABLE_PLAID && (
+                    <>
+                        <div style={{ marginBottom: 24 }}>
+                            <h3 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, margin: "0 0 6px 0", letterSpacing: "-0.01em" }}>Phase 3: Connect Your Accounts</h3>
+                            <p style={{ fontSize: 13, color: T.text.secondary, margin: 0, lineHeight: 1.5 }}>
+                                Let's link the plumbing. We need secure access to your live data to provide real-time optimization and catch expensive renewals.
                             </p>
-                        )}
-                        <div style={{ display: "flex", gap: 8 }}>
-                            <button onClick={(e) => { haptic.medium(); handlePlaidConnect(e); }} disabled={plaidConnecting} style={{
-                                flex: 1, padding: "14px", borderRadius: T.radius.md, border: "none",
-                                background: T.accent.primary, color: "#fff", fontSize: 13, fontWeight: 700,
-                                cursor: plaidConnecting ? "not-allowed" : "pointer", opacity: plaidConnecting ? 0.6 : 1,
-                                boxShadow: `inset 0 1px 1px rgba(255,255,255,0.15), 0 4px 12px ${T.accent.primary}30`,
-                                transition: "all 0.2s",
-                            }}>
-                                {plaidConnecting ? "Connecting…" : plaidCount > 0 ? "+ Link Another Bank" : "🔗 Link via Plaid"}
-                            </button>
                         </div>
-                        <p style={{ fontSize: 10, color: T.text.dim, marginTop: 8, textAlign: "center", margin: "8px 0 0 0" }}>
-                            You can also skip this and enter balances manually.
-                        </p>
-                    </div>
-                </>
-            )}
+
+                        <div style={{
+                            padding: "16px", marginBottom: 20,
+                            background: `linear-gradient(145deg, ${T.bg.elevated}, ${T.bg.base})`,
+                            border: `1px solid ${T.border.default}`,
+                            borderRadius: T.radius.lg,
+                            boxShadow: `0 4px 24px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.05)`,
+                        }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                                <div style={{
+                                    width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                                    background: `linear-gradient(135deg, #0A85D120, #6C63FF15)`,
+                                    border: `1px solid #0A85D130`,
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    fontSize: 18,
+                                }}>🏦</div>
+                                <div>
+                                    <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: T.text.primary }}>Connect Your Bank</h4>
+                                    <p style={{ margin: 0, fontSize: 11, color: T.text.dim }}>Auto-sync balances securely via Plaid</p>
+                                </div>
+                            </div>
+                            {plaidCount > 0 ? (
+                                <div style={{
+                                    display: "flex", alignItems: "center", gap: 8,
+                                    padding: "10px 14px", borderRadius: T.radius.md,
+                                    background: `${T.status.green}10`, border: `1px solid ${T.status.green}25`,
+                                    marginBottom: 8,
+                                }}>
+                                    <span style={{ fontSize: 14 }}>✅</span>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: T.status.green }}>
+                                        {plaidCount} bank{plaidCount > 1 ? "s" : ""} connected
+                                    </span>
+                                </div>
+                            ) : (
+                                <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 12px 0" }}>
+                                    Instantly pull real-time balances from your checking, savings, and credit accounts. Plaid handles authentication directly and Catalyst Cash never stores your bank login credentials.
+                                </p>
+                            )}
+                            <div style={{ display: "flex", gap: 8 }}>
+                                <button onClick={(e) => { haptic.medium(); handlePlaidConnect(e); }} disabled={plaidConnecting} style={{
+                                    flex: 1, padding: "14px", borderRadius: T.radius.md, border: "none",
+                                    background: T.accent.primary, color: "#fff", fontSize: 13, fontWeight: 700,
+                                    cursor: plaidConnecting ? "not-allowed" : "pointer", opacity: plaidConnecting ? 0.6 : 1,
+                                    boxShadow: `inset 0 1px 1px rgba(255,255,255,0.15), 0 4px 12px ${T.accent.primary}30`,
+                                    transition: "all 0.2s",
+                                }}>
+                                    {plaidConnecting ? "Connecting…" : plaidCount > 0 ? "+ Link Another Bank" : "🔗 Link via Plaid"}
+                                </button>
+                            </div>
+                            <p style={{ fontSize: 10, color: T.text.dim, marginTop: 8, textAlign: "center", margin: "8px 0 0 0" }}>
+                                You can also skip this and enter individual balances manually later.
+                            </p>
+                        </div>
+                    </>
+                )
+            }
 
             {/* RETIREMENT TRACKING */}
             <div style={{ margin: "12px 0", borderTop: `1px solid ${T.border.subtle}`, paddingTop: 16 }}>
@@ -730,28 +777,32 @@ export function PagePass3({ ai, security, spending, updateAi, updateSecurity, up
             </div>
 
             <WizToggle label="Track Roth IRA" sub="The AI will direct extra cash here after debts" checked={spending.trackRothContributions} onChange={v => updateSpending("trackRothContributions", v)} />
-            {spending.trackRothContributions && (
-                <WizField label="Roth Annual Limit ($)" hint="IRS limit for this year">
-                    <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={spending.rothAnnualLimit} onChange={v => updateSpending("rothAnnualLimit", v)} placeholder="e.g. 7000" />
-                </WizField>
-            )}
+            {
+                spending.trackRothContributions && (
+                    <WizField label="Roth Annual Limit ($)" hint="IRS limit for this year">
+                        <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={spending.rothAnnualLimit} onChange={v => updateSpending("rothAnnualLimit", v)} placeholder="e.g. 7000" />
+                    </WizField>
+                )
+            }
 
             <WizToggle label="Track 401k" sub="Factor in employer matches and tax deductions" checked={spending.track401k} onChange={v => updateSpending("track401k", v)} />
-            {spending.track401k && (
-                <>
-                    <WizField label="401k Annual Limit ($)" hint="IRS limit for this year">
-                        <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={spending.k401AnnualLimit} onChange={v => updateSpending("k401AnnualLimit", v)} placeholder="e.g. 23000" />
-                    </WizField>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                        <WizField label="Employer Match (%)" hint="e.g. 100 for dollar-for-dollar">
-                            <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={spending.k401EmployerMatchPct} onChange={v => updateSpending("k401EmployerMatchPct", v)} placeholder="e.g. 100" />
+            {
+                spending.track401k && (
+                    <>
+                        <WizField label="401k Annual Limit ($)" hint="IRS limit for this year">
+                            <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={spending.k401AnnualLimit} onChange={v => updateSpending("k401AnnualLimit", v)} placeholder="e.g. 23000" />
                         </WizField>
-                        <WizField label="Match Ceiling (%)" hint="Up to % of your salary">
-                            <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={spending.k401EmployerMatchLimit} onChange={v => updateSpending("k401EmployerMatchLimit", v)} placeholder="e.g. 5" />
-                        </WizField>
-                    </div>
-                </>
-            )}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                            <WizField label="Employer Match (%)" hint="e.g. 100 for dollar-for-dollar">
+                                <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={spending.k401EmployerMatchPct} onChange={v => updateSpending("k401EmployerMatchPct", v)} placeholder="e.g. 100" />
+                            </WizField>
+                            <WizField label="Match Ceiling (%)" hint="Up to % of your salary">
+                                <WizInput type="number" inputMode="decimal" pattern="[0-9]*" value={spending.k401EmployerMatchLimit} onChange={v => updateSpending("k401EmployerMatchLimit", v)} placeholder="e.g. 5" />
+                            </WizField>
+                        </div>
+                    </>
+                )
+            }
 
             <WizToggle label="Track HSA" sub="Triple tax-advantaged health savings" checked={spending.trackHSA} onChange={v => updateSpending("trackHSA", v)} />
             <WizToggle label="Track Crypto" sub="Monitor your digital assets" checked={spending.trackCrypto !== false} onChange={v => updateSpending("trackCrypto", v)} />
@@ -824,22 +875,24 @@ export function PagePass3({ ai, security, spending, updateAi, updateSecurity, up
             </div>
 
             <WizToggle label="Enable PIN lock" sub="Require a PIN to open the app" checked={security.pinEnabled} onChange={v => updateSecurity("pinEnabled", v)} />
-            {security.pinEnabled && (
-                <>
-                    <WizField label="Set PIN (4–8 digits)" hint="Numbers only">
-                        <WizInput type="tel" inputMode="numeric" pattern="[0-9]*" value={security.pin} onChange={v => updateSecurity("pin", v.replace(/\D/g, "").slice(0, 8))} placeholder="e.g. 1234" />
-                    </WizField>
-                    <WizField label="Confirm PIN">
-                        <WizInput type="tel" inputMode="numeric" pattern="[0-9]*" value={confirm} onChange={v => setConfirm(v.replace(/\D/g, "").slice(0, 8))} placeholder="Re-enter PIN" style={{ borderColor: pinMismatch ? T.status.red : undefined }} />
-                        {pinMismatch && <div style={{ fontSize: 12, color: T.status.red, marginTop: 4 }}>⚠️ PINs don't match</div>}
-                    </WizField>
-                    {isNative && (
-                        <div style={{ marginTop: 8, marginBottom: 16 }}>
-                            <WizToggle label="Enable Face ID / Touch ID" sub="Use biometrics for faster unlocking" checked={security.useFaceId} onChange={handleFaceIdToggle} />
-                        </div>
-                    )}
-                </>
-            )}
+            {
+                security.pinEnabled && (
+                    <>
+                        <WizField label="Set PIN (4–8 digits)" hint="Numbers only">
+                            <WizInput type="tel" inputMode="numeric" pattern="[0-9]*" value={security.pin} onChange={v => updateSecurity("pin", v.replace(/\D/g, "").slice(0, 8))} placeholder="e.g. 1234" />
+                        </WizField>
+                        <WizField label="Confirm PIN">
+                            <WizInput type="tel" inputMode="numeric" pattern="[0-9]*" value={confirm} onChange={v => setConfirm(v.replace(/\D/g, "").slice(0, 8))} placeholder="Re-enter PIN" style={{ borderColor: pinMismatch ? T.status.red : undefined }} />
+                            {pinMismatch && <div style={{ fontSize: 12, color: T.status.red, marginTop: 4 }}>⚠️ PINs don't match</div>}
+                        </WizField>
+                        {isNative && (
+                            <div style={{ marginTop: 8, marginBottom: 16 }}>
+                                <WizToggle label="Enable Face ID / Touch ID" sub="Use biometrics for faster unlocking" checked={security.useFaceId} onChange={handleFaceIdToggle} />
+                            </div>
+                        )}
+                    </>
+                )
+            }
             <WizField label="Auto-Lock After" hint="How long before the app locks when backgrounded">
                 <WizSelect value={security.lockTimeout} onChange={v => updateSecurity("lockTimeout", Number(v))} options={[
                     { value: 0, label: "⚡ Immediately" },
@@ -852,48 +905,52 @@ export function PagePass3({ ai, security, spending, updateAi, updateSecurity, up
             </WizField>
 
             {/* Apple Sign-In for iCloud Backup */}
-            {Capacitor.getPlatform() !== 'web' && !appleLinkedId && (
-                <div style={{ marginTop: 8, marginBottom: 16, padding: "14px 16px", background: T.bg.elevated, borderRadius: T.radius.md, border: `1px solid ${T.border.default}` }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: T.text.primary, marginBottom: 4 }}>☁️ iCloud Auto-Backup</div>
-                    <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 10px 0" }}>Link your Apple ID to enable automatic iCloud backups. Your data continuously syncs to your private iCloud Drive.</p>
-                    <button onClick={async () => {
-                        try {
-                            const result = await SignInWithApple.authorize({
-                                clientId: 'com.jacobsen.portfoliopro',
-                                redirectURI: 'https://api.catalystcash.app/auth/apple/callback',
-                                scopes: 'email name'
-                            });
-                            const userId = result.response.user;
-                            if (setAppleLinkedId) setAppleLinkedId(userId);
-                            if (window.toast) window.toast.success("Apple ID linked for iCloud backup.");
-                        } catch {
-                            if (window.toast) window.toast.error("Apple Sign-In cancelled or failed.");
-                        }
-                    }} style={{
-                        width: "100%", padding: "11px 16px", borderRadius: T.radius.md, border: "none",
-                        background: "#000", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
-                        display: "flex", alignItems: "center", justifyContent: "center", gap: 8
-                    }}>
-                        Sign in with Apple
-                    </button>
-                </div>
-            )}
+            {
+                Capacitor.getPlatform() !== 'web' && !appleLinkedId && (
+                    <div style={{ marginTop: 8, marginBottom: 16, padding: "14px 16px", background: T.bg.elevated, borderRadius: T.radius.md, border: `1px solid ${T.border.default}` }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: T.text.primary, marginBottom: 4 }}>☁️ iCloud Auto-Backup</div>
+                        <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 10px 0" }}>Link your Apple ID to enable automatic iCloud backups. Your data continuously syncs to your private iCloud Drive.</p>
+                        <button onClick={async () => {
+                            try {
+                                const result = await SignInWithApple.authorize({
+                                    clientId: 'com.jacobsen.portfoliopro',
+                                    redirectURI: 'https://api.catalystcash.app/auth/apple/callback',
+                                    scopes: 'email name'
+                                });
+                                const userId = result.response.user;
+                                if (setAppleLinkedId) setAppleLinkedId(userId);
+                                if (window.toast) window.toast.success("Apple ID linked for iCloud backup.");
+                            } catch {
+                                if (window.toast) window.toast.error("Apple Sign-In cancelled or failed.");
+                            }
+                        }} style={{
+                            width: "100%", padding: "11px 16px", borderRadius: T.radius.md, border: "none",
+                            background: "#000", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center", gap: 8
+                        }}>
+                            Sign in with Apple
+                        </button>
+                    </div>
+                )
+            }
 
-            {Capacitor.getPlatform() !== 'web' && appleLinkedId && (
-                <div style={{ marginTop: 8, marginBottom: 16 }}>
-                    <WizField label="iCloud Backup Interval" hint={<>How often your data syncs securely to iCloud Drive.<br /><span style={{ opacity: 0.8 }}>Files App → iCloud Drive → Catalyst Cash</span></>}>
-                        <WizSelect value={security.autoBackupInterval || "weekly"} onChange={v => updateSecurity("autoBackupInterval", v)} options={[
-                            { value: "daily", label: "🗓 Daily" },
-                            { value: "weekly", label: "📅 Weekly" },
-                            { value: "monthly", label: "🗓️ Monthly" },
-                            { value: "off", label: "🚫 Off" },
-                        ]} />
-                    </WizField>
-                </div>
-            )}
+            {
+                Capacitor.getPlatform() !== 'web' && appleLinkedId && (
+                    <div style={{ marginTop: 8, marginBottom: 16 }}>
+                        <WizField label="iCloud Backup Interval" hint={<>How often your data syncs securely to iCloud Drive.<br /><span style={{ opacity: 0.8 }}>Files App → iCloud Drive → Catalyst Cash</span></>}>
+                            <WizSelect value={security.autoBackupInterval || "weekly"} onChange={v => updateSecurity("autoBackupInterval", v)} options={[
+                                { value: "daily", label: "🗓 Daily" },
+                                { value: "weekly", label: "📅 Weekly" },
+                                { value: "monthly", label: "🗓️ Monthly" },
+                                { value: "off", label: "🚫 Off" },
+                            ]} />
+                        </WizField>
+                    </div>
+                )
+            }
 
             <NavRow onBack={onBack} onNext={onNext} onSkip={onSkip} nextLabel="Save & Finish →" nextDisabled={!canProceed} />
-        </div>
+        </div >
     );
 }
 

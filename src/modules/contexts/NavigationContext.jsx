@@ -26,9 +26,12 @@ export function NavigationProvider({ children }) {
     useEffect(() => {
         const initOnboarding = async () => {
             const obComplete = await db.get("onboarding-complete");
-            const finConf = await db.get("financial-config");
+            const history = await db.get("audit-history");
 
-            if (obComplete || (finConf && !finConf._fromSetupWizard && Object.keys(finConf).length > 5)) {
+            // Backward compatibility for existing users: if they already have audit history, they're onboarded
+            const hasHistory = Array.isArray(history) && history.length > 0 && !history[0]?.isDemoHistory;
+
+            if (obComplete || hasHistory) {
                 setOnboardingComplete(true);
                 if (!obComplete) db.set("onboarding-complete", true);
             } else {

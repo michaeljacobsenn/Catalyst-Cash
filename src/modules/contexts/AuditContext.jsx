@@ -195,11 +195,23 @@ export function AuditProvider({ children }) {
           snapshotDate: formData.date
         });
 
+        // Fetch AskAI Chat Context
+        const [chatSummary, chatHistory] = await Promise.all([
+          db.get("ai-chat-summary"),
+          db.get("ai-chat-history")
+        ]);
+        let chatContext = null;
+        if (chatSummary?.text || chatHistory?.length) {
+          // Only include messages from the last 24 hours to keep context fresh
+          const recent = (chatHistory || []).filter(m => (Date.now() - (m.ts || 0)) < 24 * 60 * 60 * 1000).slice(-10);
+          chatContext = { summary: chatSummary?.text, recent };
+        }
+
         // Initialize PII Scrubber
         const scrubber = buildScrubber(cards, promptRenewals, financialConfig, formData);
 
         // Scrub the system prompt
-        const rawLivePrompt = getSystemPrompt(aiProvider || "gemini", financialConfig, cards, promptRenewals, personalRules || "", trendContext, persona, computedStrategy);
+        const rawLivePrompt = getSystemPrompt(aiProvider || "gemini", financialConfig, cards, promptRenewals, personalRules || "", trendContext, persona, computedStrategy, chatContext);
         const livePrompt = scrubber.scrub(rawLivePrompt);
         const liveHash = cyrb53(livePrompt).toString();
         const histKey = `api-history-${aiProvider || "gemini"}`;

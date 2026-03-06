@@ -641,7 +641,11 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
 
                 {/* ═══ BILL NEGOTIATION ═══ */}
                 <ErrorBoundary name="Bill Negotiation">
-                    <BillNegotiationCard cards={cards} financialConfig={financialConfig} />
+                    <BillNegotiationCard
+                        cards={cards}
+                        financialConfig={financialConfig}
+                        negotiationTargets={p?.negotiationTargets || []}
+                    />
                 </ErrorBoundary>
 
                 {/* ═══ SINKING FUNDS ═══ */}

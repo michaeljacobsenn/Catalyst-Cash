@@ -24,6 +24,8 @@
     <link
         href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap"
         rel="stylesheet" />
+    <meta name="robots" content="index, follow" />
+    <link rel="stylesheet" href="style.css" />
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -41,1207 +43,11 @@
       }
     }
     </script>
-    <style>
-        :root {
-            --bg: #07111d;
-            --bg-elevated: rgba(12, 24, 39, 0.88);
-            --bg-panel: rgba(16, 31, 50, 0.84);
-            --line: rgba(197, 219, 241, 0.12);
-            --line-strong: rgba(197, 219, 241, 0.22);
-            --text: #eef6ff;
-            --muted: #9cb2c8;
-            --dim: #6f879f;
-            --green: #8df06d;
-            --green-deep: #183a22;
-            --amber: #ffcd6b;
-            --amber-deep: #443315;
-            --red: #ff8c8c;
-            --red-deep: #452227;
-            --blue: #7fc4ff;
-            --blue-deep: #17344a;
-            --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
-            --radius-xl: 30px;
-            --radius-lg: 22px;
-            --radius-md: 16px;
-            --radius-sm: 12px;
-            --max: 1180px;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        html {
-            scroll-behavior: smooth;
-            background:
-                radial-gradient(circle at top left, rgba(127, 196, 255, 0.08), transparent 28%),
-                radial-gradient(circle at top right, rgba(141, 240, 109, 0.08), transparent 24%),
-                linear-gradient(180deg, #07111d 0%, #081522 100%);
-        }
-
-        body {
-            font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, sans-serif;
-            color: var(--text);
-            background: transparent;
-            min-height: 100vh;
-            overflow-x: hidden;
-            -webkit-font-smoothing: antialiased;
-        }
-
-        body::before {
-            content: "";
-            position: fixed;
-            inset: 0;
-            pointer-events: none;
-            z-index: 0;
-            background-image:
-                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-            background-size: 72px 72px;
-            mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.95), transparent 92%);
-        }
-
-        img {
-            display: block;
-            max-width: 100%;
-        }
-
-        a {
-            color: inherit;
-            text-decoration: none;
-        }
-
-        ::selection {
-            background: rgba(141, 240, 109, 0.32);
-            color: #00110a;
-        }
-
-        .page {
-            position: relative;
-            z-index: 1;
-        }
-
-        .shell {
-            width: min(calc(100% - 32px), var(--max));
-            margin: 0 auto;
-        }
-
-        .eyebrow,
-        .micro-label,
-        .mono {
-            font-family: "IBM Plex Mono", monospace;
-        }
-
-        .eyebrow {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 16px;
-            border-radius: 999px;
-            border: 1px solid rgba(141, 240, 109, 0.22);
-            background: rgba(141, 240, 109, 0.08);
-            color: var(--green);
-            font-size: 11px;
-            letter-spacing: 0.18em;
-            text-transform: uppercase;
-        }
-
-        .eyebrow::before {
-            content: "";
-            width: 7px;
-            height: 7px;
-            border-radius: 999px;
-            background: var(--green);
-            box-shadow: 0 0 12px rgba(141, 240, 109, 0.8);
-        }
-
-        .accent-line {
-            position: fixed;
-            inset: 0 0 auto;
-            height: 4px;
-            z-index: 100;
-            background: linear-gradient(90deg, #8df06d 0%, #7fc4ff 45%, #ffcd6b 100%);
-        }
-
-        nav {
-            position: sticky;
-            top: 4px;
-            z-index: 80;
-            backdrop-filter: blur(18px);
-            -webkit-backdrop-filter: blur(18px);
-            background: rgba(7, 17, 29, 0.76);
-            border-bottom: 1px solid rgba(197, 219, 241, 0.08);
-        }
-
-        .nav-inner {
-            width: min(calc(100% - 32px), var(--max));
-            margin: 0 auto;
-            min-height: 76px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 18px;
-        }
-
-        .brand {
-            display: inline-flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 15px;
-            font-weight: 700;
-            color: var(--text);
-            letter-spacing: -0.03em;
-        }
-
-        .brand img {
-            width: 34px;
-            height: 34px;
-            border-radius: 10px;
-            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
-        }
-
-        .nav-links {
-            display: flex;
-            align-items: center;
-            gap: 26px;
-        }
-
-        .hamburger {
-            display: none;
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 8px;
-            z-index: 90;
-        }
-
-        .hamburger span {
-            display: block;
-            width: 22px;
-            height: 2px;
-            background: var(--text);
-            margin: 5px 0;
-            border-radius: 2px;
-            transition: transform 0.3s ease, opacity 0.3s ease;
-        }
-
-        .hamburger.active span:nth-child(1) {
-            transform: rotate(45deg) translate(5px, 5px);
-        }
-
-        .hamburger.active span:nth-child(2) {
-            opacity: 0;
-        }
-
-        .hamburger.active span:nth-child(3) {
-            transform: rotate(-45deg) translate(5px, -5px);
-        }
-
-        .nav-links a {
-            font-size: 13px;
-            font-weight: 500;
-            color: var(--muted);
-            transition: color 0.2s ease, transform 0.2s ease;
-        }
-
-        .nav-links a:hover {
-            color: var(--text);
-            transform: translateY(-1px);
-        }
-
-        .nav-cta,
-        .button-primary,
-        .button-secondary {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            border-radius: 999px;
-            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
-        }
-
-        .nav-cta,
-        .button-primary {
-            background: linear-gradient(135deg, #8df06d 0%, #4ecf9b 100%);
-            color: #07111d;
-            font-weight: 700;
-            box-shadow: 0 14px 34px rgba(141, 240, 109, 0.22);
-        }
-
-        .nav-cta {
-            padding: 12px 18px;
-            font-size: 12px;
-        }
-
-        .button-primary {
-            padding: 16px 24px;
-            font-size: 15px;
-        }
-
-        .button-secondary {
-            padding: 15px 23px;
-            font-size: 15px;
-            border: 1px solid var(--line-strong);
-            background: rgba(255, 255, 255, 0.03);
-            color: var(--text);
-            font-weight: 600;
-        }
-
-        .nav-cta:hover,
-        .button-primary:hover,
-        .button-secondary:hover {
-            transform: translateY(-2px);
-        }
-
-        .button-secondary:hover {
-            border-color: rgba(127, 196, 255, 0.32);
-            background: rgba(127, 196, 255, 0.08);
-        }
-
-        .button-stack {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            flex-wrap: wrap;
-        }
-
-        .hero {
-            padding: 92px 0 42px;
-        }
-
-        .hero-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
-            gap: 36px;
-            align-items: center;
-        }
-
-        .hero-copy {
-            position: relative;
-        }
-
-        .hero-copy::before {
-            content: "";
-            position: absolute;
-            top: -50px;
-            left: -30px;
-            width: 220px;
-            height: 220px;
-            border-radius: 999px;
-            background: radial-gradient(circle, rgba(127, 196, 255, 0.14), transparent 68%);
-            filter: blur(6px);
-            z-index: -1;
-        }
-
-        h1 {
-            font-size: clamp(3rem, 7vw, 5.7rem);
-            line-height: 0.94;
-            letter-spacing: -0.08em;
-            max-width: 11ch;
-            margin: 22px 0 20px;
-        }
-
-        .hero-sub {
-            max-width: 36rem;
-            font-size: 1.12rem;
-            line-height: 1.75;
-            color: var(--muted);
-            margin-bottom: 28px;
-        }
-
-        .hero-sub strong {
-            color: var(--text);
-        }
-
-        .hero-note {
-            margin-top: 16px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 14px 22px;
-            font-size: 13px;
-            color: var(--dim);
-        }
-
-        .hero-note span {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .hero-note span::before {
-            content: "+";
-            color: var(--green);
-        }
-
-        .hero-preview {
-            position: relative;
-        }
-
-        .hero-preview::before,
-        .hero-preview::after {
-            content: "";
-            position: absolute;
-            border-radius: 999px;
-            z-index: -1;
-            filter: blur(12px);
-        }
-
-        .hero-preview::before {
-            inset: auto auto 18px -10px;
-            width: 180px;
-            height: 180px;
-            background: radial-gradient(circle, rgba(255, 205, 107, 0.14), transparent 68%);
-        }
-
-        .hero-preview::after {
-            inset: -10px -15px auto auto;
-            width: 220px;
-            height: 220px;
-            background: radial-gradient(circle, rgba(127, 196, 255, 0.12), transparent 72%);
-        }
-
-        .audit-frame {
-            position: relative;
-            padding: 24px;
-            border-radius: var(--radius-xl);
-            border: 1px solid var(--line);
-            background:
-                linear-gradient(180deg, rgba(18, 33, 53, 0.94), rgba(10, 21, 35, 0.92)),
-                radial-gradient(circle at top, rgba(127, 196, 255, 0.08), transparent 42%);
-            box-shadow: var(--shadow);
-            overflow: hidden;
-        }
-
-        .audit-frame::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background:
-                linear-gradient(120deg, rgba(255, 255, 255, 0.04), transparent 32%),
-                linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.22));
-            pointer-events: none;
-        }
-
-        .audit-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-
-        .status-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 9px 14px;
-            border-radius: 999px;
-            font-size: 11px;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-            font-family: "IBM Plex Mono", monospace;
-            font-weight: 700;
-        }
-
-        .status-pill.yellow {
-            color: var(--amber);
-            background: rgba(255, 205, 107, 0.1);
-            border: 1px solid rgba(255, 205, 107, 0.22);
-        }
-
-        .status-pill.green {
-            color: var(--green);
-            background: rgba(141, 240, 109, 0.1);
-            border: 1px solid rgba(141, 240, 109, 0.22);
-        }
-
-        .audit-title {
-            font-size: 11px;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-            color: var(--dim);
-        }
-
-        .audit-frame h2 {
-            font-size: clamp(1.85rem, 4vw, 2.6rem);
-            line-height: 1.05;
-            letter-spacing: -0.06em;
-            max-width: 10ch;
-            margin-bottom: 12px;
-        }
-
-        .audit-summary {
-            color: var(--muted);
-            line-height: 1.65;
-            margin-bottom: 24px;
-            max-width: 40ch;
-        }
-
-        .signal-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 14px;
-            margin-bottom: 18px;
-        }
-
-        .signal-card {
-            padding: 14px;
-            border-radius: var(--radius-md);
-            border: 1px solid var(--line);
-            background: rgba(255, 255, 255, 0.03);
-        }
-
-        .signal-card span {
-            display: block;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-            color: var(--dim);
-            margin-bottom: 8px;
-            font-family: "IBM Plex Mono", monospace;
-        }
-
-        .signal-card strong {
-            display: block;
-            font-size: 1.2rem;
-            letter-spacing: -0.05em;
-            margin-bottom: 6px;
-        }
-
-        .signal-safe strong {
-            color: var(--green);
-        }
-
-        .signal-focus strong {
-            color: var(--amber);
-        }
-
-        .signal-risk strong {
-            color: var(--blue);
-        }
-
-        .signal-card small {
-            color: var(--muted);
-            line-height: 1.45;
-        }
-
-        .action-list {
-            display: grid;
-            gap: 12px;
-            margin-bottom: 18px;
-        }
-
-        .action-row {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            padding: 13px 14px;
-            border-radius: var(--radius-md);
-            background: rgba(255, 255, 255, 0.028);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .action-step {
-            width: 26px;
-            height: 26px;
-            flex: 0 0 26px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 999px;
-            background: rgba(141, 240, 109, 0.1);
-            color: var(--green);
-            font-size: 12px;
-            font-family: "IBM Plex Mono", monospace;
-            font-weight: 700;
-        }
-
-        .action-copy strong {
-            display: block;
-            font-size: 14px;
-            margin-bottom: 3px;
-        }
-
-        .action-copy p {
-            font-size: 13px;
-            line-height: 1.55;
-            color: var(--muted);
-        }
-
-        .audit-foot {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            padding-top: 16px;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
-            font-size: 12px;
-            color: var(--dim);
-        }
-
-        .mini-proof {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .mini-proof span {
-            padding: 7px 10px;
-            border-radius: 999px;
-            background: rgba(127, 196, 255, 0.08);
-            border: 1px solid rgba(127, 196, 255, 0.16);
-        }
-
-        .proof-rail {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 16px;
-            margin: 34px 0 0;
-        }
-
-        .proof-card {
-            padding: 18px;
-            border-radius: var(--radius-md);
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--line);
-        }
-
-        .proof-card strong {
-            display: block;
-            font-size: 14px;
-            margin-bottom: 6px;
-        }
-
-        .proof-card p {
-            font-size: 13px;
-            line-height: 1.55;
-            color: var(--muted);
-        }
-
-        .section {
-            padding: 88px 0;
-        }
-
-        .section-head {
-            margin-bottom: 34px;
-            max-width: 720px;
-        }
-
-        .micro-label {
-            color: var(--blue);
-            text-transform: uppercase;
-            letter-spacing: 0.16em;
-            font-size: 11px;
-            margin-bottom: 14px;
-        }
-
-        .section-head h2 {
-            font-size: clamp(2rem, 5vw, 3.4rem);
-            letter-spacing: -0.06em;
-            line-height: 1.02;
-            margin-bottom: 12px;
-        }
-
-        .section-head p {
-            font-size: 1.02rem;
-            line-height: 1.72;
-            color: var(--muted);
-        }
-
-        .difference-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-            gap: 22px;
-        }
-
-        .panel,
-        .tracker-table,
-        .price-card,
-        .faq-card,
-        .final-cta {
-            border-radius: var(--radius-xl);
-            border: 1px solid var(--line);
-            background: var(--bg-panel);
-            box-shadow: var(--shadow);
-        }
-
-        .panel {
-            padding: 28px;
-        }
-
-        .panel h3,
-        .tracker-table h3,
-        .price-card h3,
-        .faq-card h3 {
-            font-size: 1.35rem;
-            letter-spacing: -0.04em;
-            margin-bottom: 12px;
-        }
-
-        .panel p,
-        .tracker-table p,
-        .price-card p,
-        .faq-card p {
-            color: var(--muted);
-            line-height: 1.68;
-        }
-
-        .outcome-stack {
-            display: grid;
-            gap: 18px;
-        }
-
-        .outcome-card {
-            padding: 20px;
-            border-radius: var(--radius-lg);
-            border: 1px solid var(--line);
-            background: rgba(255, 255, 255, 0.025);
-        }
-
-        .outcome-card .tone {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 14px;
-            padding: 8px 11px;
-            border-radius: 999px;
-            font-size: 11px;
-            font-family: "IBM Plex Mono", monospace;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-        }
-
-        .tone.green {
-            background: rgba(141, 240, 109, 0.1);
-            border: 1px solid rgba(141, 240, 109, 0.18);
-            color: var(--green);
-        }
-
-        .tone.yellow {
-            background: rgba(255, 205, 107, 0.1);
-            border: 1px solid rgba(255, 205, 107, 0.18);
-            color: var(--amber);
-        }
-
-        .tone.blue {
-            background: rgba(127, 196, 255, 0.1);
-            border: 1px solid rgba(127, 196, 255, 0.18);
-            color: var(--blue);
-        }
-
-        .outcome-card strong {
-            display: block;
-            font-size: 1.05rem;
-            margin-bottom: 8px;
-        }
-
-        .tracker-table {
-            padding: 28px;
-        }
-
-        .compare-grid {
-            display: grid;
-            gap: 12px;
-            margin-top: 20px;
-        }
-
-        .compare-row {
-            display: grid;
-            grid-template-columns: 1.15fr 0.9fr 0.9fr;
-            gap: 12px;
-            align-items: center;
-            padding: 14px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-        }
-
-        .compare-row:last-child {
-            border-bottom: none;
-        }
-
-        .compare-grid strong {
-            font-size: 13px;
-            color: var(--text);
-        }
-
-        .compare-head {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 11px;
-            letter-spacing: 0.16em;
-            text-transform: uppercase;
-            color: var(--dim);
-        }
-
-        .compare-good,
-        .compare-bad {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 13px;
-            color: var(--muted);
-        }
-
-        .compare-good::before {
-            content: "+";
-            color: var(--green);
-            font-weight: 700;
-        }
-
-        .compare-bad::before {
-            content: "-";
-            color: var(--dim);
-            font-weight: 700;
-        }
-
-        .steps {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 18px;
-        }
-
-        .step-card {
-            padding: 24px;
-            border-radius: var(--radius-lg);
-            border: 1px solid var(--line);
-            background: rgba(255, 255, 255, 0.03);
-        }
-
-        .step-index {
-            width: 38px;
-            height: 38px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 12px;
-            margin-bottom: 16px;
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 13px;
-            background: rgba(127, 196, 255, 0.12);
-            color: var(--blue);
-        }
-
-        .step-card h3 {
-            font-size: 1.05rem;
-            margin-bottom: 10px;
-        }
-
-        .step-card p {
-            color: var(--muted);
-            line-height: 1.66;
-            font-size: 0.95rem;
-        }
-
-        .feature-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 18px;
-        }
-
-        .feature-box {
-            padding: 22px;
-            border-radius: var(--radius-lg);
-            border: 1px solid var(--line);
-            background: rgba(255, 255, 255, 0.03);
-        }
-
-        .feature-box .icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 14px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 16px;
-            font-size: 20px;
-        }
-
-        .feature-box h3 {
-            font-size: 1.03rem;
-            margin-bottom: 8px;
-        }
-
-        .feature-box p {
-            color: var(--muted);
-            line-height: 1.62;
-            font-size: 0.95rem;
-        }
-
-        .pricing {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 22px;
-        }
-
-        .price-card {
-            padding: 30px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .price-card.free {
-            background: rgba(255, 255, 255, 0.03);
-        }
-
-        .price-card.pro {
-            background:
-                radial-gradient(circle at top right, rgba(141, 240, 109, 0.12), transparent 34%),
-                linear-gradient(180deg, rgba(16, 31, 50, 0.96), rgba(11, 24, 38, 0.94));
-            border-color: rgba(141, 240, 109, 0.22);
-        }
-
-        .price-badge {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            padding: 8px 12px;
-            border-radius: 999px;
-            background: rgba(141, 240, 109, 0.12);
-            border: 1px solid rgba(141, 240, 109, 0.22);
-            color: var(--green);
-            font-size: 11px;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-            font-family: "IBM Plex Mono", monospace;
-        }
-
-        .price-amount {
-            display: flex;
-            align-items: baseline;
-            gap: 10px;
-            margin: 16px 0 8px;
-        }
-
-        .price-amount strong {
-            font-size: clamp(2.5rem, 5vw, 3.5rem);
-            letter-spacing: -0.08em;
-        }
-
-        .price-amount span {
-            color: var(--dim);
-            font-size: 0.95rem;
-        }
-
-        .price-card ul {
-            list-style: none;
-            display: grid;
-            gap: 12px;
-            margin: 22px 0 24px;
-        }
-
-        .price-card li {
-            display: flex;
-            gap: 10px;
-            color: var(--muted);
-            line-height: 1.56;
-            font-size: 0.95rem;
-        }
-
-        .price-card li::before {
-            content: "+";
-            color: var(--green);
-            font-weight: 700;
-            flex: 0 0 auto;
-        }
-
-        .price-foot {
-            color: var(--dim);
-            font-size: 13px;
-            line-height: 1.6;
-        }
-
-        .faq {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 18px;
-        }
-
-        .faq-card {
-            padding: 24px;
-            background: rgba(255, 255, 255, 0.03);
-        }
-
-        .faq-card h3 {
-            font-size: 1.05rem;
-        }
-
-        .final-cta {
-            padding: 34px;
-            display: grid;
-            grid-template-columns: minmax(0, 1.1fr) auto;
-            gap: 24px;
-            align-items: center;
-            background:
-                radial-gradient(circle at top left, rgba(127, 196, 255, 0.1), transparent 32%),
-                radial-gradient(circle at bottom right, rgba(141, 240, 109, 0.1), transparent 34%),
-                linear-gradient(180deg, rgba(13, 26, 41, 0.98), rgba(8, 18, 31, 0.98));
-        }
-
-        .final-cta h2 {
-            font-size: clamp(1.9rem, 4vw, 3rem);
-            letter-spacing: -0.06em;
-            margin-bottom: 10px;
-        }
-
-        .final-cta p {
-            color: var(--muted);
-            line-height: 1.72;
-            max-width: 46ch;
-        }
-
-        .trust-footer {
-            margin-top: 16px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .trust-footer span {
-            padding: 8px 11px;
-            border-radius: 999px;
-            border: 1px solid var(--line);
-            background: rgba(255, 255, 255, 0.035);
-            color: var(--muted);
-            font-size: 12px;
-        }
-
-        footer {
-            padding: 46px 0 58px;
-        }
-
-        .footer-grid {
-            display: flex;
-            justify-content: space-between;
-            gap: 26px;
-            padding-top: 30px;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
-            flex-wrap: wrap;
-        }
-
-        .footer-brand {
-            max-width: 320px;
-        }
-
-        .footer-brandline {
-            display: inline-flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 15px;
-            font-weight: 700;
-            margin-bottom: 10px;
-        }
-
-        .footer-brandline img {
-            width: 30px;
-            height: 30px;
-            border-radius: 10px;
-        }
-
-        .footer-brand p,
-        .footer-links a,
-        .disclaimer {
-            color: var(--dim);
-            line-height: 1.7;
-            font-size: 13px;
-        }
-
-        .footer-links {
-            display: flex;
-            gap: 26px;
-            flex-wrap: wrap;
-        }
-
-        .footer-col h4 {
-            color: var(--text);
-            font-size: 13px;
-            margin-bottom: 10px;
-        }
-
-        .footer-col a {
-            display: block;
-            margin-bottom: 8px;
-            transition: color 0.2s ease;
-        }
-
-        .footer-col a:hover {
-            color: var(--text);
-        }
-
-        .disclaimer {
-            width: 100%;
-            margin-top: 24px;
-            padding-top: 20px;
-            border-top: 1px solid rgba(255, 255, 255, 0.06);
-        }
-
-        .fade-up {
-            opacity: 0;
-            transform: translateY(22px);
-            animation: fadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-
-        .delay-1 {
-            animation-delay: 0.08s;
-        }
-
-        .delay-2 {
-            animation-delay: 0.16s;
-        }
-
-        .delay-3 {
-            animation-delay: 0.24s;
-        }
-
-        .delay-4 {
-            animation-delay: 0.32s;
-        }
-
-        @keyframes fadeUp {
-            from {
-                opacity: 0;
-                transform: translateY(22px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @media (max-width: 980px) {
-
-            .hero-grid,
-            .difference-grid,
-            .pricing,
-            .faq,
-            .final-cta,
-            .feature-grid,
-            .steps,
-            .proof-rail {
-                grid-template-columns: 1fr;
-            }
-
-            .hero {
-                padding-top: 74px;
-            }
-
-            h1 {
-                max-width: 12ch;
-            }
-
-            .compare-row {
-                grid-template-columns: 1fr;
-                gap: 6px;
-            }
-
-            .compare-head {
-                margin-bottom: 4px;
-            }
-        }
-
-        @media (max-width: 760px) {
-            nav {
-                top: 0;
-            }
-
-            .nav-inner {
-                min-height: 70px;
-            }
-
-            .hamburger {
-                display: block;
-            }
-
-            .nav-links {
-                position: fixed;
-                top: 0;
-                right: -100%;
-                width: 280px;
-                height: 100vh;
-                flex-direction: column;
-                align-items: flex-start;
-                padding: 80px 28px 40px;
-                gap: 18px;
-                background: rgba(7, 17, 29, 0.96);
-                backdrop-filter: blur(24px);
-                -webkit-backdrop-filter: blur(24px);
-                border-left: 1px solid var(--line);
-                transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-                z-index: 85;
-            }
-
-            .nav-links.open {
-                right: 0;
-            }
-
-            .nav-links a {
-                font-size: 18px;
-                font-weight: 600;
-                display: block;
-                padding: 10px 0;
-            }
-
-            .nav-links .nav-cta {
-                font-size: 14px;
-                padding: 14px 22px;
-                margin-top: 12px;
-            }
-
-            .mobile-overlay {
-                display: none;
-                position: fixed;
-                inset: 0;
-                background: rgba(0, 0, 0, 0.5);
-                z-index: 84;
-            }
-
-            .mobile-overlay.active {
-                display: block;
-            }
-
-            .shell {
-                width: min(calc(100% - 22px), var(--max));
-            }
-
-            .hero,
-            .section {
-                padding: 68px 0;
-            }
-
-            .hero-note,
-            .button-stack,
-            .audit-foot,
-            .footer-grid {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .signal-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .panel,
-            .tracker-table,
-            .price-card,
-            .faq-card,
-            .final-cta,
-            .audit-frame {
-                padding: 22px;
-            }
-
-            .button-primary,
-            .button-secondary {
-                min-height: 48px;
-                font-size: 16px;
-                width: 100%;
-            }
-        }
-    </style>
 </head>
 
 <body>
     <a href="#main-content" class="skip-link"
-        style="position:absolute;top:-100%;left:16px;padding:12px 20px;background:var(--green);color:#07111d;font-weight:700;border-radius:8px;z-index:200;font-size:14px;transition:top 0.2s;"
+        style="position:absolute;top:-100%;left:16px;padding:12px 20px;background:var(--green);color:#0C121B;font-weight:700;border-radius:8px;z-index:200;font-size:14px;transition:top 0.2s;"
         onfocus="this.style.top='12px'" onblur="this.style.top='-100%'">Skip to content</a>
     <div class="accent-line"></div>
     <div id="mobile-overlay" class="mobile-overlay"></div>
@@ -1270,12 +76,14 @@
             <section class="hero" aria-label="Hero">
                 <div class="hero-grid">
                     <div class="hero-copy fade-up">
+                        <div class="hero-animated-logo">
+                            <img src="/icon-192.png" alt="Catalyst Cash Logo" />
+                        </div>
                         <div class="eyebrow">iOS beta | privacy-first | weekly audit</div>
                         <h1>Know if this week is green, yellow, or red.</h1>
                         <p class="hero-sub">
-                            Catalyst Cash turns messy finances into a <strong>weekly money audit</strong>. Link your
-                            accounts or enter balances manually, then get a clear answer: what is safe, what is risky,
-                            and <strong>what to do next</strong>.
+                            Stop tracking the past. Start directing the future. Know exactly what to pay, what to pause,
+                            and what's safe to spend this week.
                         </p>
                         <div class="button-stack">
                             <a href="https://testflight.apple.com/join/3rpWQq49" class="button-primary">Download the
@@ -1292,64 +100,80 @@
                     <div class="hero-preview fade-up delay-1" id="sample-audit">
                         <div class="audit-frame">
                             <div class="audit-top">
-                                <div class="status-pill yellow">Yellow week</div>
+                                <div class="status-pill green">Green week</div>
                                 <div class="audit-title">Weekly money audit</div>
                             </div>
-                            <h2>$312 of safe move room before next payday.</h2>
+                            <h2>$1,240 safe move room before your next payday.</h2>
                             <p class="audit-summary">
-                                You are on track, but this is not a spend-freely week. Keep checking above your floor,
-                                hit the promo APR target first, and push one subscription decision into next week.
+                                You are holding safely above your $500 checking floor. Pay off the remaining $300 on the
+                                Chase card today to kill the high APR, and let Catalyst Cash negotiate your upcoming
+                                Verizon renewal.
                             </p>
 
                             <div class="signal-grid">
                                 <div class="signal-card signal-safe">
-                                    <span>Checking Floor</span>
-                                    <strong>$100</strong>
-                                    <small>Still safe after bills and planned spending.</small>
+                                    <span>Runway</span>
+                                    <strong>14 days</strong>
+                                    <small>Covered through 2 pay cycles.</small>
+                                </div>
+                                <div class="signal-card signal-risk">
+                                    <span>Next Bill</span>
+                                    <strong>$85 (AT&T)</strong>
+                                    <small>Due in 3 days. Fully funded.</small>
                                 </div>
                                 <div class="signal-card signal-focus">
                                     <span>Debt Focus</span>
-                                    <strong>Barclays</strong>
-                                    <small>Best payoff move this week based on APR and timing.</small>
-                                </div>
-                                <div class="signal-card signal-risk">
-                                    <span>Runway</span>
-                                    <strong>12 days</strong>
-                                    <small>Comfortable if you hold the weekly allowance line.</small>
+                                    <strong>Chase Slate</strong>
+                                    <small>Highest active APR (24.99%).</small>
                                 </div>
                             </div>
 
                             <div class="action-list">
                                 <div class="action-row">
-                                    <div class="action-step">1</div>
+                                    <div class="action-step">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <path
+                                                d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+                                        </svg>
+                                    </div>
                                     <div class="action-copy">
-                                        <strong>Pay the promo-rate card first</strong>
-                                        <p>It protects the cheapest path out of debt and keeps interest leakage down.
-                                        </p>
+                                        <strong>Verizon Wireless (Auto-Renewal)</strong>
+                                        <div class="action-pill-row" style="margin-bottom: 8px;">
+                                            <span class="action-pill pill-strategy">Loyalty Discount</span>
+                                            <span class="action-pill pill-savings">Est. $240/yr</span>
+                                        </div>
+                                        <p>This auto-renews in 4 days. Request an unadvertised loyalty rate or threaten
+                                            to switch carriers before it bills.</p>
                                     </div>
                                 </div>
                                 <div class="action-row">
-                                    <div class="action-step">2</div>
-                                    <div class="action-copy">
-                                        <strong>Keep discretionary spend under $200</strong>
-                                        <p>This keeps your checking floor intact and avoids a yellow week turning red.
-                                        </p>
+                                    <div class="action-step">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <path
+                                                d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+                                        </svg>
                                     </div>
-                                </div>
-                                <div class="action-row">
-                                    <div class="action-step">3</div>
                                     <div class="action-copy">
-                                        <strong>Delay one low-priority renewal decision</strong>
-                                        <p>Not urgent today. Re-check it after the next paycheck lands.</p>
+                                        <strong>Chase Slate (Credit Card)</strong>
+                                        <div class="action-pill-row" style="margin-bottom: 8px;">
+                                            <span class="action-pill pill-strategy">APR Reduction</span>
+                                            <span class="action-pill pill-savings">Est. $110/yr</span>
+                                        </div>
+                                        <p>12 months of perfect payments. Request a 3% APR reduction or threaten a
+                                            balance transfer to a competitor.</p>
                                     </div>
                                 </div>
                             </div>
 
                             <div class="audit-foot">
-                                <span>Scrubbed AI + native money math + local-first storage</span>
+                                <span>Powered by native money math and reasoning AI.</span>
                                 <div class="mini-proof">
                                     <span>Private by default</span>
-                                    <span>Plain-English output</span>
+                                    <span>No cloud storage</span>
                                 </div>
                             </div>
                         </div>
@@ -1448,8 +272,8 @@
                 <div class="section-head">
                     <div class="micro-label">How It Works</div>
                     <h2>Three steps to a clearer week.</h2>
-                    <p>You do not need a weekend budgeting ritual. You need one fast review that tells you what to do
-                        next.</p>
+                    <p>No spreadsheets, no tracking categories. Just link your accounts and let the AI find your next
+                        best move.</p>
                 </div>
 
                 <div class="steps">
@@ -1478,13 +302,13 @@
                 <div class="section-head">
                     <div class="micro-label">Built For Real Life</div>
                     <h2>Power tools when your finances are not neat.</h2>
-                    <p>Catalyst Cash is strongest when life is a little messy: multiple cards, multiple accounts, promo
-                        APRs, recurring charges, and goals competing at the same time.</p>
+                    <p>Built for the reality of modern finances—multiple cards, overlapping subscriptions, and competing
+                        goals.</p>
                 </div>
 
                 <div class="feature-grid">
                     <div class="feature-box fade-up">
-                        <div class="icon" style="background: rgba(141, 240, 109, 0.12); color: var(--green);">AI</div>
+                        <div class="icon" style="background: rgba(46, 204, 113, 0.12); color: var(--green);">AI</div>
                         <h3>Weekly AI audits</h3>
                         <p>Run a recurring check-in that turns balances, debts, and renewals into a simple decision
                             packet.</p>
@@ -1496,17 +320,17 @@
                             position.</p>
                     </div>
                     <div class="feature-box fade-up delay-2">
-                        <div class="icon" style="background: rgba(127, 196, 255, 0.12); color: var(--blue);">CAL</div>
+                        <div class="icon" style="background: rgba(123, 94, 167, 0.12); color: var(--blue);">CAL</div>
                         <h3>Cash flow calendar</h3>
                         <p>Spot upcoming bills, renewals, and paychecks before they surprise you.</p>
                     </div>
                     <div class="feature-box fade-up">
-                        <div class="icon" style="background: rgba(127, 196, 255, 0.12); color: var(--blue);">SYNC</div>
+                        <div class="icon" style="background: rgba(123, 94, 167, 0.12); color: var(--blue);">SYNC</div>
                         <h3>Plaid sync or manual mode</h3>
                         <p>Choose convenience or keep everything manual. The core weekly audit works either way.</p>
                     </div>
                     <div class="feature-box fade-up delay-1">
-                        <div class="icon" style="background: rgba(141, 240, 109, 0.12); color: var(--green);">CARD</div>
+                        <div class="icon" style="background: rgba(46, 204, 113, 0.12); color: var(--green);">CARD</div>
                         <h3>Card portfolio control</h3>
                         <p>Track APRs, limits, utilization, annual fees, promo windows, and due dates in one place.</p>
                     </div>
@@ -1662,6 +486,31 @@
         </footer>
     </div>
 
+    <script>
+        (function () {
+            var btn = document.getElementById('hamburger-btn');
+            var nav = document.getElementById('nav-links');
+            var overlay = document.getElementById('mobile-overlay');
+            if (!btn || !nav) return;
+            function toggle() {
+                var open = nav.classList.toggle('open');
+                btn.classList.toggle('active');
+                btn.setAttribute('aria-expanded', String(open));
+                if (overlay) overlay.classList.toggle('active', open);
+            }
+            function close() {
+                nav.classList.remove('open');
+                btn.classList.remove('active');
+                btn.setAttribute('aria-expanded', 'false');
+                if (overlay) overlay.classList.remove('active');
+            }
+            btn.addEventListener('click', toggle);
+            if (overlay) overlay.addEventListener('click', close);
+            nav.querySelectorAll('a').forEach(function (a) {
+                a.addEventListener('click', close);
+            });
+        })();
+    </script>
     <script>
         (function () {
             var btn = document.getElementById('hamburger-btn');

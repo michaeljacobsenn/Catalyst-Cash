@@ -252,6 +252,7 @@ export function parseJSON(raw) {
     if (j.spending_analysis) j.spendingAnalysis = j.spending_analysis;
     if (j.milestones) j.milestones = j.milestones; // already camelCase
     if (j.investments) j.investments = j.investments; // already camelCase
+    if (j.negotiation_targets) j.negotiationTargets = j.negotiation_targets;
   }
 
   // Schema Validation (Lightweight)
@@ -285,6 +286,7 @@ export function parseJSON(raw) {
     // Map moves to actionable checkboxes
     moveItems: (j.weeklyMoves || []).map(m => ({ tag: null, text: m, done: false })),
     paceData: Array.isArray(j.paceData) ? j.paceData : [], // Extracted from JSON if present, kept for backwards compat
+    negotiationTargets: Array.isArray(j.negotiationTargets) ? j.negotiationTargets : [],
     dashboardData: {
       checkingBalance: null, // Extracted from dashboardCard dynamically on demand
       savingsVaultTotal: null

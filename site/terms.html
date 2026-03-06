@@ -20,457 +20,28 @@
   <link
     href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap"
     rel="stylesheet" />
-  <style>
-    :root {
-      --bg: #07111d;
-      --bg-elevated: rgba(12, 24, 39, 0.88);
-      --bg-panel: rgba(16, 31, 50, 0.84);
-      --line: rgba(197, 219, 241, 0.12);
-      --line-strong: rgba(197, 219, 241, 0.22);
-      --text: #eef6ff;
-      --muted: #9cb2c8;
-      --dim: #6f879f;
-      --green: #8df06d;
-      --amber: #ffcd6b;
-      --red: #ff8c8c;
-      --blue: #7fc4ff;
-      --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
-      --radius-xl: 30px;
-      --radius-lg: 22px;
-      --radius-md: 16px;
-      --max: 1120px;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html {
-      scroll-behavior: smooth;
-      background:
-        radial-gradient(circle at top left, rgba(127, 196, 255, 0.08), transparent 28%),
-        radial-gradient(circle at top right, rgba(141, 240, 109, 0.08), transparent 24%),
-        linear-gradient(180deg, #07111d 0%, #081522 100%);
-    }
-
-    body {
-      font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, sans-serif;
-      color: var(--text);
-      background: transparent;
-      min-height: 100vh;
-      overflow-x: hidden;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    body::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 0;
-      background-image:
-        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-      background-size: 72px 72px;
-      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.95), transparent 92%);
-    }
-
-    a {
-      color: inherit;
-      text-decoration: none;
-    }
-
-    ::selection {
-      background: rgba(141, 240, 109, 0.32);
-      color: #00110a;
-    }
-
-    .page {
-      position: relative;
-      z-index: 1;
-    }
-
-    .accent-line {
-      position: fixed;
-      inset: 0 0 auto;
-      height: 4px;
-      z-index: 100;
-      background: linear-gradient(90deg, #8df06d 0%, #7fc4ff 45%, #ffcd6b 100%);
-    }
-
-    .shell {
-      width: min(calc(100% - 32px), var(--max));
-      margin: 0 auto;
-    }
-
-    .eyebrow,
-    .micro-label,
-    .meta {
-      font-family: "IBM Plex Mono", monospace;
-    }
-
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 16px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 205, 107, 0.22);
-      background: rgba(255, 205, 107, 0.08);
-      color: var(--amber);
-      font-size: 11px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-    }
-
-    .eyebrow::before {
-      content: "";
-      width: 7px;
-      height: 7px;
-      border-radius: 999px;
-      background: var(--amber);
-      box-shadow: 0 0 12px rgba(255, 205, 107, 0.8);
-    }
-
-    nav {
-      position: sticky;
-      top: 4px;
-      z-index: 80;
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-      background: rgba(7, 17, 29, 0.76);
-      border-bottom: 1px solid rgba(197, 219, 241, 0.08);
-    }
-
-    .nav-inner {
-      width: min(calc(100% - 32px), var(--max));
-      margin: 0 auto;
-      min-height: 76px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 18px;
-    }
-
-    .brand {
-      display: inline-flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 15px;
-      font-weight: 700;
-      letter-spacing: -0.03em;
-    }
-
-    .brand img {
-      width: 34px;
-      height: 34px;
-      border-radius: 10px;
-      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
-    }
-
-    .nav-links {
-      display: flex;
-      align-items: center;
-      gap: 24px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
-
-    .nav-links a {
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--muted);
-    }
-
-    .nav-links a:hover,
-    .nav-links a:focus-visible {
-      color: var(--text);
-    }
-
-    .nav-cta,
-    .button-primary,
-    .button-secondary {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      border-radius: 999px;
-      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
-    }
-
-    .nav-cta,
-    .button-primary {
-      background: linear-gradient(135deg, #8df06d 0%, #4ecf9b 100%);
-      color: #07111d;
-      font-weight: 700;
-      box-shadow: 0 14px 34px rgba(141, 240, 109, 0.22);
-    }
-
-    .nav-cta {
-      padding: 12px 18px;
-      font-size: 12px;
-    }
-
-    .button-primary,
-    .button-secondary {
-      padding: 15px 23px;
-      font-size: 15px;
-    }
-
-    .button-secondary {
-      border: 1px solid var(--line-strong);
-      background: rgba(255, 255, 255, 0.03);
-      color: var(--text);
-      font-weight: 600;
-    }
-
-    .hero {
-      padding: 88px 0 34px;
-    }
-
-    h1 {
-      font-size: clamp(3rem, 6.6vw, 5rem);
-      line-height: 0.96;
-      letter-spacing: -0.08em;
-      max-width: 11ch;
-      margin: 22px 0 16px;
-    }
-
-    .hero p,
-    .section-head p,
-    .term-card p,
-    .term-card li,
-    .summary-card p,
-    footer p {
-      color: var(--muted);
-      line-height: 1.78;
-    }
-
-    .meta {
-      color: var(--dim);
-      font-size: 11px;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      margin-top: 18px;
-    }
-
-    .summary-grid,
-    .term-grid,
-    .actions {
-      display: grid;
-      gap: 18px;
-    }
-
-    .summary-grid {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      margin-top: 26px;
-    }
-
-    .term-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .summary-card,
-    .term-card,
-    .cta-band {
-      border: 1px solid var(--line);
-      border-radius: var(--radius-lg);
-      background:
-        linear-gradient(180deg, rgba(18, 33, 53, 0.94), rgba(10, 21, 35, 0.92)),
-        radial-gradient(circle at top, rgba(127, 196, 255, 0.08), transparent 42%);
-      box-shadow: var(--shadow);
-    }
-
-    .summary-card,
-    .term-card {
-      padding: 22px;
-    }
-
-    .summary-card span,
-    .term-card span {
-      display: inline-flex;
-      align-items: center;
-      padding: 8px 12px;
-      border-radius: 999px;
-      font-size: 11px;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      font-family: "IBM Plex Mono", monospace;
-      font-weight: 700;
-      margin-bottom: 14px;
-    }
-
-    .summary-card span {
-      color: var(--amber);
-      background: rgba(255, 205, 107, 0.1);
-      border: 1px solid rgba(255, 205, 107, 0.22);
-    }
-
-    .term-card span {
-      color: var(--blue);
-      background: rgba(127, 196, 255, 0.1);
-      border: 1px solid rgba(127, 196, 255, 0.22);
-    }
-
-    .summary-card h2,
-    .term-card h2 {
-      font-size: 1.32rem;
-      letter-spacing: -0.04em;
-      margin-bottom: 10px;
-    }
-
-    .term-card ul {
-      list-style: none;
-      display: grid;
-      gap: 10px;
-      margin-top: 12px;
-    }
-
-    .term-card li {
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-    }
-
-    .term-card li::before {
-      content: "";
-      width: 8px;
-      height: 8px;
-      flex: 0 0 8px;
-      margin-top: 9px;
-      border-radius: 999px;
-      background: var(--amber);
-      box-shadow: 0 0 12px rgba(255, 205, 107, 0.4);
-    }
-
-    .section {
-      padding: 28px 0;
-    }
-
-    .section-head {
-      max-width: 48rem;
-      margin-bottom: 20px;
-    }
-
-    .micro-label {
-      font-size: 11px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: var(--blue);
-      margin-bottom: 12px;
-    }
-
-    .section-head h2 {
-      font-size: clamp(2rem, 4.5vw, 3rem);
-      line-height: 1;
-      letter-spacing: -0.06em;
-      margin-bottom: 12px;
-    }
-
-    .term-card a,
-    footer a {
-      color: var(--blue);
-    }
-
-    .term-card a:hover,
-    footer a:hover {
-      color: var(--text);
-    }
-
-    .cta-band {
-      padding: 24px;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 18px;
-      align-items: center;
-    }
-
-    .cta-band h2 {
-      font-size: clamp(1.9rem, 4vw, 2.8rem);
-      letter-spacing: -0.05em;
-      margin-bottom: 10px;
-    }
-
-    .actions {
-      grid-auto-flow: column;
-      align-items: center;
-    }
-
-    footer {
-      padding: 34px 0 52px;
-    }
-
-    .footer-grid {
-      display: grid;
-      gap: 18px;
-      border-top: 1px solid rgba(197, 219, 241, 0.08);
-      padding-top: 24px;
-    }
-
-    .footer-links {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 14px 24px;
-    }
-
-    @media (max-width: 940px) {
-      .summary-grid,
-      .term-grid,
-      .cta-band,
-      .actions {
-        grid-template-columns: 1fr;
-        grid-auto-flow: row;
-      }
-    }
-
-    @media (max-width: 760px) {
-      nav {
-        position: static;
-      }
-
-      .nav-inner {
-        padding: 16px 0;
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
-      .nav-links {
-        width: 100%;
-        justify-content: flex-start;
-      }
-
-      .summary-card,
-      .term-card,
-      .cta-band {
-        padding: 20px;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      html {
-        scroll-behavior: auto;
-      }
-
-      * {
-        transition: none !important;
-      }
-    }
-  </style>
+  <meta name="robots" content="index, follow" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
+  <a href="#main-content" class="skip-link"
+    style="position:absolute;top:-100%;left:16px;padding:12px 20px;background:var(--green);color:#07111d;font-weight:700;border-radius:8px;z-index:200;font-size:14px;transition:top 0.2s;"
+    onfocus="this.style.top='12px'" onblur="this.style.top='-100%'">Skip to content</a>
   <div class="accent-line"></div>
+  <div id="mobile-overlay" class="mobile-overlay"></div>
 
   <div class="page">
-    <nav>
+    <nav role="navigation" aria-label="Main navigation">
       <div class="nav-inner">
         <a href="/" class="brand">
           <img src="icon-192.png" alt="Catalyst Cash" />
           Catalyst Cash
         </a>
-        <div class="nav-links">
+        <button class="hamburger" id="hamburger-btn" aria-label="Toggle navigation menu" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links" id="nav-links">
           <a href="/">Home</a>
           <a href="guide.html">Guide</a>
           <a href="privacy.html">Privacy</a>
@@ -480,7 +51,7 @@
       </div>
     </nav>
 
-    <main class="shell">
+    <main class="shell" id="main-content">
       <section class="hero">
         <div class="eyebrow">Terms of service</div>
         <h1>Use the product as software, not as licensed financial advice.</h1>
@@ -534,7 +105,8 @@
             <span>3</span>
             <h2>Not professional advice</h2>
             <ul>
-              <li>The app and its creators are not acting as your fiduciary, broker, tax advisor, accountant, or attorney.</li>
+              <li>The app and its creators are not acting as your fiduciary, broker, tax advisor, accountant, or
+                attorney.</li>
               <li>All outputs are for educational and informational use only.</li>
               <li>You remain responsible for any financial decisions you make.</li>
             </ul>
@@ -553,7 +125,8 @@
             <h2>Third-party services</h2>
             <ul>
               <li>Plaid connections are optional and governed by Plaid's own terms and privacy policy.</li>
-              <li>AI requests may be routed to providers such as OpenAI or Google through the Catalyst Cash backend proxy.</li>
+              <li>AI requests may be routed to providers such as OpenAI or Google through the Catalyst Cash backend
+                proxy.</li>
               <li>Availability and behavior of third-party services may change without notice.</li>
             </ul>
           </div>
@@ -590,14 +163,17 @@
             <h2>Disclaimer and limitation of liability</h2>
             <ul>
               <li>The app is provided on an "as is" and "as available" basis.</li>
-              <li>To the maximum extent permitted by law, Catalyst Cash is not liable for indirect, incidental, or consequential damages arising from use of the app.</li>
-              <li>This includes losses caused by incorrect AI output, bad input data, service interruptions, or third-party failures.</li>
+              <li>To the maximum extent permitted by law, Catalyst Cash is not liable for indirect, incidental, or
+                consequential damages arising from use of the app.</li>
+              <li>This includes losses caused by incorrect AI output, bad input data, service interruptions, or
+                third-party failures.</li>
             </ul>
           </div>
           <div class="term-card">
             <span>11</span>
             <h2>Indemnification</h2>
-            <p>You agree to indemnify and hold Catalyst Cash harmless for claims arising from your misuse of the app or violation of these terms.</p>
+            <p>You agree to indemnify and hold Catalyst Cash harmless for claims arising from your misuse of the app or
+              violation of these terms.</p>
           </div>
           <div class="term-card">
             <span>12</span>
@@ -631,16 +207,66 @@
 
     <footer class="shell">
       <div class="footer-grid">
-        <p>Catalyst Cash provides AI-generated educational information only and is not tax, legal, investment, or financial advice.</p>
+        <div class="footer-brand">
+          <div class="footer-brandline">
+            <img src="/icon-192.png" alt="Catalyst Cash" />
+            Catalyst Cash
+          </div>
+          <p>Your weekly money audit for clear next moves, not more dashboard wallpaper.</p>
+        </div>
+
         <div class="footer-links">
-          <a href="/">Home</a>
-          <a href="guide.html">Guide</a>
-          <a href="privacy.html">Privacy</a>
-          <a href="mailto:support@catalystcash.app">support@catalystcash.app</a>
+          <div class="footer-col">
+            <h4>Product</h4>
+            <a href="/#sample-audit">Sample Audit</a>
+            <a href="/#difference">Why It Wins</a>
+            <a href="/#pricing">Pricing</a>
+          </div>
+          <div class="footer-col">
+            <h4>Resources</h4>
+            <a href="/guide.html">Guide</a>
+            <a href="/privacy.html">Privacy Policy</a>
+            <a href="/terms.html">Terms of Service</a>
+          </div>
+          <div class="footer-col">
+            <h4>Support</h4>
+            <a href="mailto:support@catalystcash.app">support@catalystcash.app</a>
+            <a href="https://testflight.apple.com/join/3rpWQq49">TestFlight Beta</a>
+          </div>
+        </div>
+
+        <div class="disclaimer">
+          Catalyst Cash provides AI-generated educational information only and is not tax, legal, investment,
+          or financial advice. Copyright 2026 Catalyst Cash. All rights reserved.
         </div>
       </div>
     </footer>
   </div>
+  <script>
+    (function () {
+      var btn = document.getElementById('hamburger-btn');
+      var nav = document.getElementById('nav-links');
+      var overlay = document.getElementById('mobile-overlay');
+      if (!btn || !nav) return;
+      function toggle() {
+        var open = nav.classList.toggle('open');
+        btn.classList.toggle('active');
+        btn.setAttribute('aria-expanded', String(open));
+        if (overlay) overlay.classList.toggle('active', open);
+      }
+      function close() {
+        nav.classList.remove('open');
+        btn.classList.remove('active');
+        btn.setAttribute('aria-expanded', 'false');
+        if (overlay) overlay.classList.remove('active');
+      }
+      btn.addEventListener('click', toggle);
+      if (overlay) overlay.addEventListener('click', close);
+      nav.querySelectorAll('a').forEach(function (a) {
+        a.addEventListener('click', close);
+      });
+    })();
+  </script>
 </body>
 
 </html>

@@ -10,9 +10,9 @@ import {
 const PAGES = [
     { id: "welcome", emoji: "👋", title: "Welcome", subtitle: "AI-powered financial intelligence." },
     { id: "import", emoji: "📥", title: "Import Data", subtitle: "Already have a backup? Skip manual entry." },
-    { id: "pass1", emoji: "⚡️", title: "Pass 1: Core Profile", subtitle: "Income, pay schedule, and spending allowances." },
-    { id: "pass2", emoji: "🎯", title: "Pass 2: Safety Targets", subtitle: "Floor limits, reserves, and tax optimization." },
-    { id: "pass3", emoji: "⚙️", title: "Pass 3: Power Features", subtitle: "Bank sync, retirement, AI engine, and security." },
+    { id: "pass1", emoji: "⚡️", title: "Phase 1: Cash Flow", subtitle: "Income, pay schedule, and spending baselines." },
+    { id: "pass2", emoji: "🎯", title: "Phase 2: Wealth Targets", subtitle: "Floor limits, reserves, and tax optimization." },
+    { id: "pass3", emoji: "⚙️", title: "Phase 3: Integrations", subtitle: "Bank sync, retirement, AI engine, and security." },
     { id: "done", emoji: "🎉", title: "All Set!", subtitle: "" },
 ];
 const TOTAL = PAGES.length;
@@ -95,7 +95,7 @@ export default function SetupWizard() {
         payFrequency: "bi-weekly", payday: "Friday",
         incomeType: "salary", hourlyRateNet: "", typicalHours: "", averagePaycheck: "",
         paycheckStandard: "", paycheckFirstOfMonth: "", isContractor: false,
-        taxBracketPercent: "",
+        taxBracketPercent: "", paycheckDepositAccount: "checking"
     });
     const [spending, setSpending] = useState({
         weeklySpendAllowance: "", emergencyFloor: "", checkingBuffer: "",
@@ -143,6 +143,7 @@ export default function SetupWizard() {
                 averagePaycheck: parseFloat(income.averagePaycheck) || existing.averagePaycheck || 0,
                 paycheckStandard: parseFloat(income.paycheckStandard) || existing.paycheckStandard || 0,
                 paycheckFirstOfMonth: parseFloat(income.paycheckFirstOfMonth) || existing.paycheckFirstOfMonth || 0,
+                paycheckDepositAccount: income.paycheckDepositAccount || existing.paycheckDepositAccount || "checking",
                 isContractor: income.isContractor,
                 taxBracketPercent: parseFloat(income.taxBracketPercent) || existing.taxBracketPercent || 0,
                 weeklySpendAllowance: parseFloat(spending.weeklySpendAllowance) || existing.weeklySpendAllowance || 0,

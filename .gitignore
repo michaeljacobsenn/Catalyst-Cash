@@ -34,6 +34,10 @@ decrypt_backup.mjs
 update_backup.mjs
 
 # ── Stale Scripts & Output ──
+apply-theme.cjs
+apply-theme.js
+port-css.cjs
+port-html.cjs
 claude_out.txt
 gemini_out.txt
 extract_pdf.swift
