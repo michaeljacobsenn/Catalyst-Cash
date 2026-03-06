@@ -458,41 +458,21 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                 Confirm each charge before submitting.</p>
         </Card>
 
-        {/* ── Paycheck Plan-Ahead ── */}
-        {activeConfig.trackPaycheck !== false && <Card>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg.elevated, borderRadius: T.radius.md, padding: "10px 12px", border: `1px solid ${T.border.default}` }}>
-                    <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary, fontFamily: T.font.mono }}>PLAN-AHEAD PAYCHECK</div>
-                        <div style={{ fontSize: 11, color: T.text.muted, marginTop: 2 }}>Include upcoming paycheck not yet deposited</div>
-                    </div>
-                    <button onClick={() => { haptic.light(); s("autoPaycheckAdd", !form.autoPaycheckAdd); }} style={{
-                        width: 44, height: 24, borderRadius: 999,
-                        border: `1px solid ${form.autoPaycheckAdd ? T.accent.primary : T.border.default}`,
-                        background: form.autoPaycheckAdd ? T.accent.primaryDim : T.bg.elevated,
-                        position: "relative", cursor: "pointer"
-                    }}>
-                        <div style={{
-                            width: 18, height: 18, borderRadius: 999,
-                            background: form.autoPaycheckAdd ? T.accent.primary : T.bg.card,
-                            position: "absolute", top: 2, left: form.autoPaycheckAdd ? 22 : 2,
-                            transition: "all .2s box-shadow .2s",
-                            boxShadow: form.autoPaycheckAdd ? `0 0 6px ${T.accent.primary}60` : "0 1px 2px rgba(0,0,0,0.2)"
-                        }} />
-                    </button>
-                </div>
-                <div style={{ background: T.bg.elevated, borderRadius: T.radius.md, padding: "10px 12px", border: `1px solid ${T.border.default}` }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary, fontFamily: T.font.mono, marginBottom: 8 }}>
-                        {activeConfig.incomeType === "hourly" ? "HOURS WORKED" : activeConfig.incomeType === "variable" ? "PAYCHECK AMOUNT" : "PAYCHECK OVERRIDE"}
-                    </div>
-                    <input type="number" inputMode="decimal" pattern="[0-9]*" step={activeConfig.incomeType === "hourly" ? "0.5" : "0.01"}
-                        aria-label={activeConfig.incomeType === "hourly" ? "Hours worked" : activeConfig.incomeType === "variable" ? "Paycheck amount" : "Paycheck override"}
-                        value={form.paycheckAddOverride} onChange={e => s("paycheckAddOverride", e.target.value)}
-                        placeholder={`Use config ${activeConfig.incomeType === "hourly" ? "hrs" : "$"}`}
-                        style={{ width: "100%", padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 14 }} />
-                </div>
-            </div>
-        </Card>}
+        {/* ── Notes for this Week (always visible — critical for AI context) ── */}
+        <Card variant="glass" style={{ position: "relative", overflow: "hidden" }}>
+            <div style={{ position: "absolute", left: -15, top: -15, width: 50, height: 50, background: T.accent.emerald, filter: "blur(35px)", opacity: 0.06, borderRadius: "50%", pointerEvents: "none" }} />
+            <Label style={{ fontWeight: 800, marginBottom: 6 }}>Notes for this Week</Label>
+            <p style={{ fontSize: 10, color: T.text.muted, marginBottom: 8, lineHeight: 1.4 }}>
+                Tell the AI anything it needs to know — e.g. "I already paid rent", "expecting a reimbursement", "skip gas budget this week".
+            </p>
+            <textarea aria-label="Notes for this week" value={form.notes} onChange={e => s("notes", e.target.value)}
+                placeholder="e.g. Already paid credit card statement, expecting $200 reimbursement, skip gym budget..."
+                style={{ width: "100%", minHeight: 70, padding: "12px", borderRadius: T.radius.md, border: `1.5px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, fontFamily: T.font.sans, resize: "vertical", boxSizing: "border-box", outline: "none", lineHeight: 1.5 }}
+                className="app-input"
+                onFocus={e => { e.target.style.borderColor = T.accent.primary; e.target.style.boxShadow = `0 0 0 3px ${T.accent.primary}30`; }}
+                onBlur={e => { e.target.style.borderColor = T.border.default; e.target.style.boxShadow = "none"; }}
+            />
+        </Card>
 
         {/* ── ADVANCED DETAILS TOGGLE ── */}
         <div style={{ marginTop: 8, marginBottom: 8, borderTop: `1px solid ${T.border.subtle}`, paddingTop: 10 }}>
@@ -520,6 +500,41 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
         {/* ── ADVANCED PAYLOAD ── */}
         {showAdvanced && (
             <div style={{ animation: "fadeInUp 0.4s ease-out both" }}>
+                {/* ── Paycheck Plan-Ahead (moved inside Advanced) ── */}
+                {activeConfig.trackPaycheck !== false && <Card style={{ marginBottom: 10 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg.elevated, borderRadius: T.radius.md, padding: "10px 12px", border: `1px solid ${T.border.default}` }}>
+                            <div>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary, fontFamily: T.font.mono }}>PLAN-AHEAD PAYCHECK</div>
+                                <div style={{ fontSize: 11, color: T.text.muted, marginTop: 2 }}>Include upcoming paycheck not yet deposited</div>
+                            </div>
+                            <button onClick={() => { haptic.light(); s("autoPaycheckAdd", !form.autoPaycheckAdd); }} style={{
+                                width: 44, height: 24, borderRadius: 999,
+                                border: `1px solid ${form.autoPaycheckAdd ? T.accent.primary : T.border.default}`,
+                                background: form.autoPaycheckAdd ? T.accent.primaryDim : T.bg.elevated,
+                                position: "relative", cursor: "pointer"
+                            }}>
+                                <div style={{
+                                    width: 18, height: 18, borderRadius: 999,
+                                    background: form.autoPaycheckAdd ? T.accent.primary : T.bg.card,
+                                    position: "absolute", top: 2, left: form.autoPaycheckAdd ? 22 : 2,
+                                    transition: "all .2s box-shadow .2s",
+                                    boxShadow: form.autoPaycheckAdd ? `0 0 6px ${T.accent.primary}60` : "0 1px 2px rgba(0,0,0,0.2)"
+                                }} />
+                            </button>
+                        </div>
+                        <div style={{ background: T.bg.elevated, borderRadius: T.radius.md, padding: "10px 12px", border: `1px solid ${T.border.default}` }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary, fontFamily: T.font.mono, marginBottom: 8 }}>
+                                {activeConfig.incomeType === "hourly" ? "HOURS WORKED" : activeConfig.incomeType === "variable" ? "PAYCHECK AMOUNT" : "PAYCHECK OVERRIDE"}
+                            </div>
+                            <input type="number" inputMode="decimal" pattern="[0-9]*" step={activeConfig.incomeType === "hourly" ? "0.5" : "0.01"}
+                                aria-label={activeConfig.incomeType === "hourly" ? "Hours worked" : activeConfig.incomeType === "variable" ? "Paycheck amount" : "Paycheck override"}
+                                value={form.paycheckAddOverride} onChange={e => s("paycheckAddOverride", e.target.value)}
+                                placeholder={`Use config ${activeConfig.incomeType === "hourly" ? "hrs" : "$"}`}
+                                style={{ width: "100%", padding: "10px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.card, color: T.text.primary, fontSize: 14 }} />
+                        </div>
+                    </div>
+                </Card>}
                 {/* Investment auto-tracking section */}
                 {(activeConfig.trackRoth || activeConfig.trackBrokerage || activeConfig.track401k) && (
                     <Card variant="glass" style={{ marginBottom: 10, position: "relative", overflow: "hidden" }}>
@@ -653,7 +668,7 @@ export default function InputForm({ onSubmit, isLoading, lastAudit, renewals, ca
                 )}
 
 
-                <Card variant="glass"><Label>Notes for this week</Label><textarea aria-label="Notes for this week" value={form.notes} onChange={e => s("notes", e.target.value)} placeholder="Examples: reimbursements, changes, or 'none'" /></Card>
+                {/* Notes moved to always-visible section above */}
             </div>
         )}
 
