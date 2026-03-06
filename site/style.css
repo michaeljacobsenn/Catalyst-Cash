@@ -397,11 +397,6 @@
             padding: 2px;
             background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.05));
             border-radius: 32px;
-            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-            -webkit-mask-composite: xor;
-            mask-composite: exclude;
-            pointer-events: none;
         }
 
         .hero-preview::before,
@@ -461,7 +456,6 @@
             padding: 1px;
             background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 40%, rgba(255, 255, 255, 0) 60%, rgba(123, 94, 167, 0.4) 100%);
             -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
             -webkit-mask-composite: xor;
             mask-composite: exclude;
             pointer-events: none;
@@ -1392,12 +1386,12 @@
         }
 
         /* Typography */
-        h1,
-        h2,
-        h3,
-        h4,
-        p,
-        ul,
+        .guide-content h1,
+        .guide-content h2,
+        .guide-content h3,
+        .guide-content h4,
+        .guide-content p,
+        .guide-content ul,
         .guide-content li {
             margin: 0;
             padding: 0;
@@ -1775,7 +1769,6 @@
             padding: 2px;
             background: linear-gradient(135deg, rgba(168, 85, 247, 0.6), transparent, rgba(59, 130, 246, 0.6));
             -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
             -webkit-mask-composite: xor;
             mask-composite: exclude;
             pointer-events: none;
