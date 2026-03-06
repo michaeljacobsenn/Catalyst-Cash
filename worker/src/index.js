@@ -311,6 +311,11 @@ async function callOpenAI(apiKey, { snapshot, systemPrompt, history, model, stre
 
     if (isReasoning) {
         body.max_completion_tokens = 12000;
+        // Reasoning models don't support response_format — inject explicit JSON instruction
+        if (responseFormat !== "text") {
+            const jsonSuffix = "\n\nCRITICAL: You MUST respond with RAW JSON only. No markdown, no code fences, no prose, no explanation. Your entire response must be a single valid JSON object starting with { and ending with }.";
+            body.messages[0].content += jsonSuffix;
+        }
     } else {
         body.max_tokens = 12000;
         body.temperature = 0.1;

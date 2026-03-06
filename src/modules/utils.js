@@ -236,19 +236,20 @@ export function parseJSON(raw) {
     return null; // Stream hasn't finished accumulating enough valid JSON
   }
 
-  // Handle snake_case keys from Gemini (header_card → headerCard)
-  if (j && !j.headerCard && j.header_card) {
-    j.headerCard = j.header_card;
-    if (j.health_score) j.healthScore = j.health_score;
-    if (j.alerts_card) j.alertsCard = j.alerts_card;
-    if (j.dashboard_card) j.dashboardCard = j.dashboard_card;
-    if (j.weekly_moves) j.weeklyMoves = j.weekly_moves;
-    if (j.long_range_radar) j.longRangeRadar = j.long_range_radar;
-    if (j.next_action) j.nextAction = j.next_action;
-    if (j.spending_analysis) j.spendingAnalysis = j.spending_analysis;
-    if (j.milestones) j.milestones = j.milestones; // already camelCase
-    if (j.investments) j.investments = j.investments; // already camelCase
-    if (j.negotiation_targets) j.negotiationTargets = j.negotiation_targets;
+  // Normalize ALL snake_case keys to camelCase recursively (top level)
+  if (j && typeof j === "object") {
+    const camelCase = (s) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    for (const key of Object.keys(j)) {
+      const cc = camelCase(key);
+      if (cc !== key && !(cc in j)) {
+        j[cc] = j[key];
+      }
+    }
+  }
+
+  // Fallback: try common alternative key names for headerCard
+  if (j && !j.headerCard) {
+    j.headerCard = j.header || j.auditHeader || j.statusHeader || j.summary_header || j.summaryHeader || null;
   }
 
   // Schema Validation (Lightweight)
