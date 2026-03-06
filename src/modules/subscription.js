@@ -651,10 +651,12 @@ export async function deactivatePro() {
 
 /**
  * Check if the user is currently Pro.
- * NOTE: This checks the RAW subscription status, not the gating mode.
- * Use this for IAP status checks and model gating.
+ * In "soft" or "off" gating modes, always returns true so the
+ * worker receives X-Subscription-Tier: "pro" and applies pro limits.
+ * In "live" mode, checks the actual RevenueCat subscription.
  */
 export async function isPro() {
+    if (!isGatingEnforced()) return true;
     const state = await getSubscriptionState();
     return state.tier === "pro";
 }
