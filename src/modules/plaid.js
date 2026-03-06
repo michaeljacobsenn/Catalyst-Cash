@@ -455,19 +455,24 @@ export async function fetchTransactions(connectionId, days = 30) {
     const raw = data.transactions || [];
 
     // Normalize Plaid transaction format → app format
-    return raw.map(t => ({
-        id: t.transaction_id,
-        date: t.date,
-        amount: Math.abs(t.amount),      // Plaid: positive = debit, negative = credit
-        isCredit: t.amount < 0,          // Refunds, deposits
-        description: t.merchant_name || t.name || "Unknown",
-        category: (t.personal_finance_category?.primary || t.category?.[0] || "").replace(/_/g, " "),
-        subcategory: t.personal_finance_category?.detailed || t.category?.[1] || "",
-        institution: conn.institutionName,
-        accountName: (conn.accounts.find(a => a.plaidAccountId === t.account_id) || {}).name || "",
-        accountType: (conn.accounts.find(a => a.plaidAccountId === t.account_id) || {}).subtype || "",
-        pending: t.pending || false,
-    }));
+    return raw.map(t => {
+        // Plaid v2 returns FOOD_AND_DRINK (upper snake_case) → "food and drink"
+        const rawCat = t.personal_finance_category?.primary || t.category?.[0] || "";
+        const rawSub = t.personal_finance_category?.detailed || t.category?.[1] || "";
+        return {
+            id: t.transaction_id,
+            date: t.date,
+            amount: Math.abs(t.amount),      // Plaid: positive = debit, negative = credit
+            isCredit: t.amount < 0,          // Refunds, deposits
+            description: t.merchant_name || t.name || "Unknown",
+            category: rawCat.replace(/_/g, " ").toLowerCase().trim(),
+            subcategory: rawSub.replace(/_/g, " ").toLowerCase().trim(),
+            institution: conn.institutionName,
+            accountName: (conn.accounts.find(a => a.plaidAccountId === t.account_id) || {}).name || "",
+            accountType: (conn.accounts.find(a => a.plaidAccountId === t.account_id) || {}).subtype || "",
+            pending: t.pending || false,
+        };
+    });
 }
 
 /**

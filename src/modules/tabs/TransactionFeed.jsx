@@ -10,7 +10,8 @@ import {
     ShoppingCart, Utensils, Car, Home, Zap, Briefcase, Heart, Plane,
     GraduationCap, Gamepad2, Wifi, CreditCard, Building2, Banknote,
     HelpCircle, Clock, FileText, FileSpreadsheet, ChevronDown, RefreshCw,
-    TrendingUp, TrendingDown, AlertCircle
+    TrendingUp, TrendingDown, AlertCircle, Landmark, Stethoscope, Wrench,
+    PiggyBank, Gift, Baby, Dumbbell
 } from "lucide-react";
 import { T } from "../constants.js";
 import { Card } from "../ui.jsx";
@@ -19,30 +20,53 @@ import { getStoredTransactions, fetchAllTransactions } from "../plaid.js";
 import { haptic } from "../haptics.js";
 import "./TransactionFeed.css";
 
-// ── Category → Icon + Color Mapping ──────────────────────────
+// ── Category → Icon + Color Mapping (full Plaid v2 coverage) ──
 const CATEGORY_MAP = {
+    // Food & Drink
     "food and drink": { icon: Utensils, color: "#F59E0B", bg: "rgba(245,158,11,0.10)" },
+    "groceries": { icon: ShoppingCart, color: "#F59E0B", bg: "rgba(245,158,11,0.10)" },
+    "restaurants": { icon: Utensils, color: "#F59E0B", bg: "rgba(245,158,11,0.10)" },
+    // Shopping
     "shops": { icon: ShoppingCart, color: "#8B5CF6", bg: "rgba(139,92,246,0.10)" },
+    "general merchandise": { icon: ShoppingCart, color: "#8B5CF6", bg: "rgba(139,92,246,0.10)" },
+    // Travel & Transportation
     "travel": { icon: Plane, color: "#3B82F6", bg: "rgba(59,130,246,0.10)" },
     "transportation": { icon: Car, color: "#6366F1", bg: "rgba(99,102,241,0.10)" },
+    "automotive": { icon: Car, color: "#6366F1", bg: "rgba(99,102,241,0.10)" },
+    // Transfers & Payments
     "transfer": { icon: ArrowUpRight, color: "#6B7280", bg: "rgba(107,114,128,0.10)" },
+    "transfer in": { icon: ArrowDownLeft, color: "#2ECC71", bg: "rgba(46,204,113,0.10)" },
+    "transfer out": { icon: ArrowUpRight, color: "#6B7280", bg: "rgba(107,114,128,0.10)" },
     "payment": { icon: CreditCard, color: "#7B5EA7", bg: "rgba(123,94,167,0.10)" },
-    "recreation": { icon: Gamepad2, color: "#EC4899", bg: "rgba(236,72,153,0.10)" },
-    "service": { icon: Briefcase, color: "#14B8A6", bg: "rgba(20,184,166,0.10)" },
-    "community": { icon: Heart, color: "#F43F5E", bg: "rgba(244,63,94,0.10)" },
-    "healthcare": { icon: Heart, color: "#EF4444", bg: "rgba(239,68,68,0.10)" },
-    "rent and utilities": { icon: Home, color: "#0EA5E9", bg: "rgba(14,165,233,0.10)" },
-    "general merchandise": { icon: ShoppingCart, color: "#8B5CF6", bg: "rgba(139,92,246,0.10)" },
-    "general services": { icon: Briefcase, color: "#14B8A6", bg: "rgba(20,184,166,0.10)" },
-    "personal care": { icon: Heart, color: "#EC4899", bg: "rgba(236,72,153,0.10)" },
-    "entertainment": { icon: Gamepad2, color: "#EC4899", bg: "rgba(236,72,153,0.10)" },
-    "education": { icon: GraduationCap, color: "#2563EB", bg: "rgba(37,99,235,0.10)" },
-    "home improvement": { icon: Home, color: "#0EA5E9", bg: "rgba(14,165,233,0.10)" },
-    "income": { icon: Banknote, color: "#2ECC71", bg: "rgba(46,204,113,0.10)" },
     "loan payments": { icon: Building2, color: "#F97316", bg: "rgba(249,115,22,0.10)" },
-    "bank fees": { icon: Building2, color: "#EF4444", bg: "rgba(239,68,68,0.10)" },
+    // Housing & Utilities
+    "rent and utilities": { icon: Home, color: "#0EA5E9", bg: "rgba(14,165,233,0.10)" },
     "utilities": { icon: Zap, color: "#0EA5E9", bg: "rgba(14,165,233,0.10)" },
+    "home improvement": { icon: Wrench, color: "#0EA5E9", bg: "rgba(14,165,233,0.10)" },
+    // Services
+    "service": { icon: Briefcase, color: "#14B8A6", bg: "rgba(20,184,166,0.10)" },
+    "general services": { icon: Briefcase, color: "#14B8A6", bg: "rgba(20,184,166,0.10)" },
     "subscription": { icon: Wifi, color: "#A855F7", bg: "rgba(168,85,247,0.10)" },
+    // Health & Personal
+    "healthcare": { icon: Stethoscope, color: "#EF4444", bg: "rgba(239,68,68,0.10)" },
+    "medical": { icon: Stethoscope, color: "#EF4444", bg: "rgba(239,68,68,0.10)" },
+    "personal care": { icon: Heart, color: "#EC4899", bg: "rgba(236,72,153,0.10)" },
+    "fitness": { icon: Dumbbell, color: "#10B981", bg: "rgba(16,185,129,0.10)" },
+    // Entertainment & Recreation
+    "recreation": { icon: Gamepad2, color: "#EC4899", bg: "rgba(236,72,153,0.10)" },
+    "entertainment": { icon: Gamepad2, color: "#EC4899", bg: "rgba(236,72,153,0.10)" },
+    // Education
+    "education": { icon: GraduationCap, color: "#2563EB", bg: "rgba(37,99,235,0.10)" },
+    // Community & Giving
+    "community": { icon: Heart, color: "#F43F5E", bg: "rgba(244,63,94,0.10)" },
+    "gifts and donations": { icon: Gift, color: "#F43F5E", bg: "rgba(244,63,94,0.10)" },
+    "government and non profit": { icon: Landmark, color: "#3B82F6", bg: "rgba(59,130,246,0.10)" },
+    // Income & Banking
+    "income": { icon: Banknote, color: "#2ECC71", bg: "rgba(46,204,113,0.10)" },
+    "bank fees": { icon: Building2, color: "#EF4444", bg: "rgba(239,68,68,0.10)" },
+    "interest": { icon: PiggyBank, color: "#2ECC71", bg: "rgba(46,204,113,0.10)" },
+    // Children
+    "childcare": { icon: Baby, color: "#F59E0B", bg: "rgba(245,158,11,0.10)" },
 };
 
 function getCategoryMeta(category) {
@@ -99,6 +123,7 @@ export default function TransactionFeed({ onClose }) {
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [visibleCount, setVisibleCount] = useState(50);
     const [slideOffset, setSlideOffset] = useState(0);
+    const [showBreakdown, setShowBreakdown] = useState(false);
     const scrollRef = useRef(null);
     const searchRef = useRef(null);
     const swipeRef = useRef(null);
@@ -271,6 +296,26 @@ export default function TransactionFeed({ onClose }) {
         const totalSpent = filtered.filter(t => !t.isCredit).reduce((s, t) => s + t.amount, 0);
         const totalReceived = filtered.filter(t => t.isCredit).reduce((s, t) => s + t.amount, 0);
         return { totalSpent, totalReceived, count: filtered.length };
+    }, [filtered]);
+
+    // ── Spending breakdown by category ──
+    const categoryBreakdown = useMemo(() => {
+        const map = new Map();
+        for (const t of filtered) {
+            if (t.isCredit) continue; // Only count spending
+            const cat = (t.category || "Other").toLowerCase().trim();
+            map.set(cat, (map.get(cat) || 0) + t.amount);
+        }
+        const total = [...map.values()].reduce((s, v) => s + v, 0);
+        return [...map.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 8)
+            .map(([cat, amount]) => ({
+                category: cat,
+                amount,
+                pct: total > 0 ? (amount / total) * 100 : 0,
+                meta: getCategoryMeta(cat),
+            }));
     }, [filtered]);
 
     // ── Infinite scroll ──
@@ -455,6 +500,82 @@ export default function TransactionFeed({ onClose }) {
                             {stats.totalReceived.toLocaleString("en-US", { style: "currency", currency: "USD" })}
                         </span>
                     </div>
+                </div>
+            )}
+
+            {/* ─── SPENDING BREAKDOWN ─── */}
+            {!loading && transactions.length > 0 && categoryBreakdown.length > 0 && (
+                <div style={{
+                    borderBottom: `1px solid ${T.border.subtle}`,
+                    background: T.bg.card, flexShrink: 0,
+                }}>
+                    <button
+                        onClick={() => { haptic.light(); setShowBreakdown(!showBreakdown); }}
+                        style={{
+                            width: "100%", display: "flex", alignItems: "center",
+                            justifyContent: "space-between", padding: "10px 16px",
+                            background: "none", border: "none", cursor: "pointer",
+                            color: T.text.secondary, fontSize: 11, fontWeight: 700,
+                            letterSpacing: "0.04em", fontFamily: T.font.mono,
+                        }}
+                    >
+                        <span>SPENDING BREAKDOWN</span>
+                        <ChevronDown size={14} style={{
+                            transform: showBreakdown ? "rotate(180deg)" : "rotate(0deg)",
+                            transition: "transform 0.2s ease",
+                        }} />
+                    </button>
+                    {showBreakdown && (
+                        <div style={{
+                            padding: "0 16px 12px",
+                            display: "flex", flexDirection: "column", gap: 8,
+                            animation: "txnSlideDown 0.2s ease-out",
+                        }}>
+                            {categoryBreakdown.map(({ category, amount, pct, meta }) => {
+                                const Icon = meta.icon;
+                                return (
+                                    <div key={category} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                        <div style={{
+                                            width: 28, height: 28, borderRadius: 8,
+                                            background: meta.bg, display: "flex",
+                                            alignItems: "center", justifyContent: "center", flexShrink: 0,
+                                        }}>
+                                            <Icon size={14} color={meta.color} strokeWidth={2} />
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{
+                                                display: "flex", justifyContent: "space-between",
+                                                alignItems: "baseline", marginBottom: 3,
+                                            }}>
+                                                <span style={{
+                                                    fontSize: 11, fontWeight: 700, color: T.text.primary,
+                                                    textTransform: "capitalize",
+                                                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                                                }}>{category}</span>
+                                                <span style={{
+                                                    fontSize: 11, fontWeight: 700, color: T.text.dim,
+                                                    fontVariantNumeric: "tabular-nums", flexShrink: 0, marginLeft: 8,
+                                                }}>
+                                                    {amount.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                                                    <span style={{ opacity: 0.5, marginLeft: 4 }}>{pct.toFixed(0)}%</span>
+                                                </span>
+                                            </div>
+                                            <div style={{
+                                                height: 4, borderRadius: 2, background: T.bg.surface,
+                                                overflow: "hidden",
+                                            }}>
+                                                <div style={{
+                                                    width: `${pct}%`, height: "100%", borderRadius: 2,
+                                                    background: meta.color,
+                                                    transition: "width 0.5s ease-out",
+                                                }} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             )}
 

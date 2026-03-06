@@ -451,6 +451,7 @@ export default {
 
                 if (url.pathname === "/plaid/link-token") {
                     plaidEndpoint = "/link/token/create";
+                    const webhookUrl = env.PLAID_WEBHOOK_URL || `${url.origin}/plaid/webhook`;
                     plaidBody = {
                         client_id: env.PLAID_CLIENT_ID,
                         secret: env.PLAID_SECRET,
@@ -459,7 +460,8 @@ export default {
                         language: "en",
                         user: { client_user_id: reqBody.userId || "catalyst-user" },
                         products: ["transactions"],
-                        optional_products: ["liabilities", "investments"]
+                        optional_products: ["liabilities", "investments"],
+                        webhook: webhookUrl,
                     };
                 } else if (url.pathname === "/plaid/exchange") {
                     plaidEndpoint = "/item/public_token/exchange";
@@ -502,6 +504,34 @@ export default {
                         end_date: reqBody.endDate,
                         options: { count: 500, offset: 0 }
                     };
+                } else if (url.pathname === "/plaid/webhook") {
+                    // ── Plaid Webhook Receiver ────────────────────────
+                    // Plaid sends POST requests here when transactions update,
+                    // items need attention, or holdings change. Since the app is
+                    // client-driven (data lives on-device), we simply acknowledge
+                    // receipt. The next manual sync picks up fresh data.
+                    const webhookType = reqBody.webhook_type || "UNKNOWN";
+                    const webhookCode = reqBody.webhook_code || "UNKNOWN";
+                    const itemId = reqBody.item_id || "";
+
+                    console.log(`[Plaid Webhook] ${webhookType}.${webhookCode} for item ${itemId}`);
+
+                    // Log notable events for observability
+                    if (webhookType === "ITEM" && webhookCode === "ERROR") {
+                        console.warn(`[Plaid Webhook] ITEM ERROR for ${itemId}:`, JSON.stringify(reqBody.error || {}));
+                    }
+                    if (webhookType === "ITEM" && webhookCode === "PENDING_EXPIRATION") {
+                        console.warn(`[Plaid Webhook] Item ${itemId} credentials expiring — user should re-authenticate`);
+                    }
+
+                    return new Response(JSON.stringify({
+                        received: true,
+                        webhook_type: webhookType,
+                        webhook_code: webhookCode,
+                    }), {
+                        status: 200,
+                        headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+                    });
                 } else {
                     return new Response(JSON.stringify({ error: "Unknown Plaid endpoint" }), {
                         status: 404, headers: buildHeaders(cors, { "Content-Type": "application/json" })
