@@ -13,6 +13,7 @@ const PRO_AUDITS_PER_MONTH = 60;
 const FREE_CHATS_PER_DAY = 10;
 const PRO_CHATS_PER_DAY = 50;
 const PROVIDER_TIMEOUT_MS = 45_000;
+const REASONING_TIMEOUT_MS = 180_000; // 3 min — reasoning models (o4-mini) need time to think
 const PLAID_TIMEOUT_MS = 15_000;
 const MARKET_TIMEOUT_MS = 10_000;
 const REVENUECAT_TIMEOUT_MS = 8_000;
@@ -328,7 +329,7 @@ async function callOpenAI(apiKey, { snapshot, systemPrompt, history, model, stre
             "Authorization": `Bearer ${apiKey}`,
         },
         body: JSON.stringify(body),
-    }, PROVIDER_TIMEOUT_MS);
+    }, isReasoning ? REASONING_TIMEOUT_MS : PROVIDER_TIMEOUT_MS);
 
     if (!res.ok) {
         const e = await res.json().catch(() => ({}));
