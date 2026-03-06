@@ -59,12 +59,12 @@ export const WizField = ({ label, hint, children }) => (
 
 export const WizInput = ({ value, onChange, placeholder, type = "text", style = {}, "aria-label": ariaLabel }) => (
     <input className="wiz-input" type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} aria-label={ariaLabel || placeholder}
-        style={{ width: "100%", padding: "11px 14px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1px solid ${T.border.default}`, color: T.text.primary, fontSize: 14, outline: "none", fontFamily: T.font.sans, boxSizing: "border-box", transition: "all 0.2s", ...style }} />
+        style={{ width: "100%", height: 44, padding: "0 14px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1px solid ${T.border.default}`, color: T.text.primary, fontSize: 14, outline: "none", fontFamily: T.font.sans, boxSizing: "border-box", transition: "all 0.2s", ...style }} />
 );
 
 export const WizSelect = ({ value, onChange, options, "aria-label": ariaLabel }) => (
     <select className="wiz-input" value={value} onChange={e => onChange(e.target.value)} aria-label={ariaLabel}
-        style={{ width: "100%", padding: "11px 14px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1px solid ${T.border.default}`, color: T.text.primary, fontSize: 14, outline: "none", fontFamily: T.font.sans, boxSizing: "border-box", transition: "all 0.2s" }}>
+        style={{ width: "100%", height: 44, padding: "0 14px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1px solid ${T.border.default}`, color: T.text.primary, fontSize: 14, outline: "none", fontFamily: T.font.sans, boxSizing: "border-box", transition: "all 0.2s", appearance: "none", WebkitAppearance: "none", backgroundImage: `url('data:image/svg+xml;utf8,<svg fill="%238E8E93" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>')`, backgroundRepeat: "no-repeat", backgroundPositionX: "calc(100% - 8px)", backgroundPositionY: "center" }}>
         {options.map(o => <option key={o.value ?? o} value={o.value ?? o} style={{ background: T.bg.elevated }}>{o.label ?? o}</option>)}
     </select>
 );
@@ -81,10 +81,10 @@ export const WizToggle = ({ label, sub, checked, onChange }) => (
     </div>
 );
 
-// ─── NavRow: Back / Skip / Next ───────────────────────────────────────────────
-export const NavRow = ({ onBack, onNext, onSkip, nextLabel = "Next →", nextDisabled = false, showBack = true }) => (
+// ─── NavRow: Back / Next ──────────────────────────────────────────────────────
+export const NavRow = ({ onBack, onNext, nextLabel = "Next →", nextDisabled = false, showBack = true }) => (
     <div style={{
-        display: "flex", alignItems: "center", gap: 8,
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
         marginTop: 20, paddingTop: 16, paddingBottom: 16,
         position: "sticky", bottom: -40, zIndex: 10,
         background: `linear-gradient(to top, ${T.bg.base} 80%, ${T.bg.base}00 100%)`,
@@ -92,8 +92,7 @@ export const NavRow = ({ onBack, onNext, onSkip, nextLabel = "Next →", nextDis
         {showBack
             ? <WizBtn variant="ghost" onClick={onBack} style={{ flex: "0 0 auto", minWidth: 80 }}>← Back</WizBtn>
             : <div style={{ flex: "0 0 80px" }} />}
-        {onSkip && <WizBtn variant="skip" onClick={onSkip} style={{ flex: 1, textAlign: "center" }}>Skip</WizBtn>}
-        <WizBtn onClick={onNext} disabled={nextDisabled} style={{ flex: onSkip ? "0 0 auto" : 1, minWidth: 100 }}>{nextLabel}</WizBtn>
+        <WizBtn onClick={onNext} disabled={nextDisabled} style={{ flex: 1, minWidth: 100, maxWidth: 200 }}>{nextLabel}</WizBtn>
     </div>
 );
 
