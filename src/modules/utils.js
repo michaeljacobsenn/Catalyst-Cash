@@ -261,7 +261,7 @@ export function parseJSON(raw) {
   // Map to the internal structure expected by ResultsView/Dashboard
   return {
     raw,
-    status: j.headerCard?.status || "UNKNOWN",
+    status: j.headerCard?.status || j.status || j.headerCard?.headline || "UNKNOWN",
     mode: "FULL", // Implicit in the new architecture unless overridden
     netWorth: parseCurrency(j.netWorth) ?? parseCurrency(j.investments?.netWorth) ?? parseCurrency(j.investments?.balance),
     netWorthDelta: j.netWorthDelta ?? j.investments?.netWorthDelta ?? null,
@@ -269,7 +269,7 @@ export function parseJSON(raw) {
     structured: j,
     sections: {
       header: `**${new Date().toISOString().split("T")[0]}** · FULL · ${j.headerCard?.status || "UNKNOWN"}`,
-      alerts: (j.alertsCard || []).map(a => `⚠️ ${a}`).join("\n"),
+      alerts: (j.alertsCard || []).map(a => `⚠️ ${String(a).replace(/^[\u26A0\uFE0F\u2757\u203C\s⚠️!]+/u, "").trim()}`).join("\n"),
       dashboard: (j.dashboardCard || []).map(d => `**${d.category}:** ${d.amount} ${d.status ? `(${d.status})` : ""}`).join("\n"),
       moves: (j.weeklyMoves || []).join("\n"),
       radar: (j.radar || []).map(r => `**${r.date}** ${r.item} ${r.amount}`).join("\n"),

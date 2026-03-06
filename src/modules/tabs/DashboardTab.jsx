@@ -45,6 +45,7 @@ import DebtFreedomCard from '../dashboard/DebtFreedomCard.jsx';
 import EmptyDashboard from '../dashboard/EmptyDashboard.jsx';
 
 const SYNC_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
+let _autoSyncDone = false; // Survives component remounts — only auto-sync once per app session
 const LazyProPaywall = lazy(() => import("./ProPaywall.jsx"));
 
 export default memo(function DashboardTab({ onRestore, proEnabled = false, onDemoAudit, onRefreshDashboard, onViewTransactions, onDiscussWithCFO }) {
@@ -62,12 +63,12 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
     });
 
     // ── Auto-sync Plaid on app launch ──
-    const autoSyncTriggered = useRef(false);
+    // Module-level flag survives component remounts (tab switches)
     useEffect(() => {
-        if (autoSyncTriggered.current) return;
+        if (_autoSyncDone) return;
         const hasPlaid = cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId);
         if (!hasPlaid) return;
-        autoSyncTriggered.current = true;
+        _autoSyncDone = true;
         // Delay 3s to let UI settle, then silently sync
         const timer = setTimeout(() => handleSyncBalances(), 3000);
         return () => clearTimeout(timer);
@@ -486,10 +487,10 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                         padding: "10px 16px", borderRadius: T.radius.md, marginBottom: 10,
                         border: `1px solid ${T.status.blue}20`, background: `linear-gradient(135deg, ${T.bg.elevated}, ${T.status.blue}08)`,
                         color: T.status.blue, cursor: syncing ? "wait" : "pointer", transition: "all .2s",
-                        opacity: syncing ? 0.7 : 1
+                        opacity: syncing ? 0.7 : 1, overflow: "hidden"
                     }}>
-                        <RefreshCw size={14} strokeWidth={2.5} style={{ animation: syncing ? "ringSweep 1s linear infinite" : "none" }} />
-                        <span style={{ fontSize: 11, fontWeight: 800, fontFamily: T.font.mono, letterSpacing: "0.02em" }}>
+                        <RefreshCw size={14} strokeWidth={2.5} style={{ flexShrink: 0, animation: syncing ? "ringSweep 1s linear infinite" : "none" }} />
+                        <span style={{ fontSize: 11, fontWeight: 800, fontFamily: T.font.mono, letterSpacing: "0.02em", whiteSpace: "nowrap", flexShrink: 0 }}>
                             {syncing ? "SYNCING…" : "SYNC BALANCES"}
                         </span>
                         {(() => {
@@ -497,7 +498,7 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
                                 || bankAccounts.find(b => b._plaidLastSync)?._plaidLastSync;
                             if (!lastSync) return null;
                             const ago = Math.round((Date.now() - new Date(lastSync).getTime()) / 60000);
-                            return <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono }}>
+                            return <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono, whiteSpace: "nowrap", flexShrink: 0 }}>
                                 {ago < 1 ? "just now" : ago < 60 ? `${ago}m ago` : `${Math.round(ago / 60)}h ago`}
                             </span>;
                         })()}
