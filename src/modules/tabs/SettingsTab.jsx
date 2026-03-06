@@ -646,8 +646,8 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
                                         <div style={{ fontSize: 14, fontWeight: 600, color: T.text.primary }}>Birth Year</div>
                                         <div style={{ fontSize: 11, color: T.text.muted, marginTop: 2 }}>For retirement account access timing</div>
                                     </div>
-                                    <input type="number" inputMode="numeric" value={financialConfig.birthYear || ""}
-                                        onChange={e => setFinancialConfig(prev => ({ ...prev, birthYear: e.target.value ? Number(e.target.value) : null }))}
+                                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={financialConfig.birthYear || ""}
+                                        onChange={e => setFinancialConfig(prev => ({ ...prev, birthYear: e.target.value ? Number(e.target.value.replace(/[^0-9]/g, '')) : null }))}
                                         placeholder="e.g. 1995"
                                         style={{
                                             padding: "6px 10px", borderRadius: T.radius.md, width: 90, textAlign: "center",

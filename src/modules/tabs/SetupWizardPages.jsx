@@ -57,8 +57,8 @@ export const WizField = ({ label, hint, children }) => (
     </div>
 );
 
-export const WizInput = ({ value, onChange, placeholder, type = "text", style = {}, "aria-label": ariaLabel }) => (
-    <input className="wiz-input" type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} aria-label={ariaLabel || placeholder}
+export const WizInput = ({ value, onChange, placeholder, type = "text", style = {}, "aria-label": ariaLabel, inputMode, pattern }) => (
+    <input className="wiz-input" type={type} inputMode={inputMode || (type === "number" ? "decimal" : undefined)} pattern={pattern || (type === "number" ? "[0-9]*" : undefined)} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} aria-label={ariaLabel || placeholder}
         style={{ width: "100%", height: 44, padding: "0 14px", borderRadius: T.radius.md, background: T.bg.elevated, border: `1px solid ${T.border.default}`, color: T.text.primary, fontSize: 14, outline: "none", fontFamily: T.font.sans, boxSizing: "border-box", transition: "all 0.2s", ...style }} />
 );
 
