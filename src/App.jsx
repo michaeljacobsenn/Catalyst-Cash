@@ -136,6 +136,14 @@ function CatalystCash() {
     // Don't swipe tabs when a modal/popup is open (e.g. ProPaywall portal)
     const hasModal = document.querySelector('[style*="z-index: 99999"], [style*="z-index:99999"]');
     if (hasModal) { swipeStart.current = null; return; }
+    // Don't swipe when touch started on a text-editable element (input, textarea, contenteditable)
+    const startTag = swipeStart.current.target?.tagName?.toLowerCase();
+    if (startTag === 'input' || startTag === 'textarea' || swipeStart.current.target?.isContentEditable) {
+      swipeStart.current = null; return;
+    }
+    // Don't swipe when there's an active text selection (user is dragging to select text)
+    const sel = window.getSelection?.();
+    if (sel && sel.toString().length > 0) { swipeStart.current = null; return; }
     // Don't swipe tabs when touch started inside a horizontally scrollable container or no-swipe zone
     let el = swipeStart.current.target;
     while (el && el !== document.body) {
@@ -927,7 +935,7 @@ function CatalystCash() {
     }
 
     <main id="main-content" role="main" ref={scrollRef} className="scroll-area safe-scroll-body"
-      onTouchMove={() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); }}
+      onTouchMove={() => { const ae = document.activeElement; if (ae && ae !== document.body && ae.tagName !== 'INPUT' && ae.tagName !== 'TEXTAREA' && !ae.isContentEditable) ae.blur(); }}
       onTouchStart={handleSwipeTouchStart}
       onTouchEnd={handleSwipeTouchEnd}
       style={{
@@ -988,7 +996,7 @@ function CatalystCash() {
     {/* ═══════ OVERLAY PANELS — rendered OUTSIDE main scroll but INSIDE flex flow ═══════ */}
     {
       inputMounted && <div className="slide-pane"
-        onTouchMove={() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); }}
+        onTouchMove={() => { const ae = document.activeElement; if (ae && ae !== document.body && ae.tagName !== 'INPUT' && ae.tagName !== 'TEXTAREA' && !ae.isContentEditable) ae.blur(); }}
         onTouchStart={handleSwipeTouchStart}
         onTouchEnd={handleSwipeTouchEnd}
         style={{
