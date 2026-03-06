@@ -1,7 +1,7 @@
 import { useState, memo } from "react";
-import { TrendingUp, AlertTriangle, Clock, ChevronDown, ChevronUp, Activity, RefreshCw, CheckSquare, Target, Zap, CheckCircle } from "lucide-react";
+import { TrendingUp, AlertTriangle, Clock, ChevronDown, ChevronUp, Activity, RefreshCw, CheckSquare, Target, Zap, CheckCircle, Share2 } from "lucide-react";
 import { T } from "../constants.js";
-import { fmtDate, stripPaycheckParens } from "../utils.js";
+import { fmtDate, stripPaycheckParens, exportAudit } from "../utils.js";
 import { Card, Badge, InlineTooltip } from "../ui.jsx";
 import { Mono, Section, MoveRow, Md } from "../components.jsx";
 import { haptic } from "../haptics.js";
@@ -97,17 +97,27 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
     };
 
     return <div className="page-body" style={{ paddingBottom: 0 }}>
-        <button onClick={handleExitResults} style={{
-            display: "flex", alignItems: "center", gap: 6, padding: "8px 0", marginBottom: 8,
-            background: "none", border: "none", color: T.accent.primary, fontSize: 13, fontWeight: 700, cursor: "pointer"
-        }}>← Back to Dashboard</button>
         <div style={{ padding: "14px 0 12px", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-            <div><h1 style={{ fontSize: 22, fontWeight: 800 }}>Full Results</h1>
+            <div>
+                <button onClick={handleExitResults} style={{
+                    display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", marginBottom: 10,
+                    background: T.bg.elevated, border: `1px solid ${T.border.default}`, borderRadius: 99,
+                    color: T.accent.primary, fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "all .2s ease"
+                }}>← Back</button>
+                <h1 style={{ fontSize: 22, fontWeight: 800 }}>Full Results</h1>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
                     <Mono size={11} color={T.text.dim}>{fmtDate(audit.date)}</Mono>
                 </div>
             </div>
-            {audit.isTest && <Badge variant="amber" style={{ marginTop: 4 }}>TEST · NOT SAVED</Badge>}
+            <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                {audit.isTest && <Badge variant="amber">TEST · NOT SAVED</Badge>}
+                <button onClick={() => exportAudit(audit)} title="Export Audit" style={{
+                    width: 36, height: 36, borderRadius: T.radius.md,
+                    border: `1px solid ${T.border.default}`, background: T.bg.elevated,
+                    color: T.text.secondary, cursor: "pointer", display: "flex",
+                    alignItems: "center", justifyContent: "center", transition: "all .2s"
+                }}><Share2 size={15} strokeWidth={2.5} /></button>
+            </div>
         </div>
 
         {/* Completion Progress Ring */}
@@ -194,7 +204,10 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
 
             {(() => {
                 const realAudits = history.filter(a => !a.isTest && a.form);
-                if (realAudits.length < 2) return <p style={{ fontSize: 11, color: T.text.dim }}>Complete more audits to see your momentum and projections.</p>;
+                if (realAudits.length < 2) return <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "12px 0" }}>
+                    <div style={{ fontSize: 28 }}>🌱</div>
+                    <p style={{ fontSize: 12, color: T.text.dim, textAlign: "center", lineHeight: 1.5 }}>Complete <strong style={{ color: T.text.secondary }}>2+ weekly audits</strong> to unlock your Freedom Journey — tracking momentum, projected debt-free dates, and net worth trajectory.</p>
+                </div>;
 
                 const latest = realAudits[0];
                 const prev = realAudits[1];
