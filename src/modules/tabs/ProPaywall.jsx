@@ -20,15 +20,17 @@ const FEATURES = [
     { label: "AI Models", free: "Flash & Mini", pro: "Pro · o4", icon: "🧠" },
     { label: "Audit History", free: "Last 12", pro: "Full archive", icon: "📜" },
     { label: "Dashboard & Charts", free: "✓ Full", pro: "✓ Full", icon: "📈" },
-    { label: "Debt Simulator", free: "✓ Full", pro: "✓ Full", icon: "⚠️" },
+    { label: "Debt & Tax Simulator", free: "✓ Full", pro: "✓ Full", icon: "⚠️" },
     { label: "Cash Flow Calendar", free: "✓ Full", pro: "✓ Full", icon: "📅" },
     { label: "Bank Sync (Plaid)", free: "✓", pro: "✓", icon: "🏦" },
-    { label: "iCloud Backup", free: "✓", pro: "✓", icon: "☁️" },
     { label: "Transaction Ledger", free: "—", pro: "✓ Full", icon: "📒" },
+    { label: "Categories & Rules", free: "✓", pro: "✓", icon: "🏷️" },
+    { label: "Multi-Currency (28)", free: "✓", pro: "✓", icon: "🌍" },
     { label: "Share Score Card", free: "Branded", pro: "Clean", icon: "🎴" },
     { label: "CSV / PDF Export", free: "—", pro: "✓", icon: "📤" },
     { label: "Advanced Insights", free: "—", pro: "✓", icon: "🔔" },
     { label: "Market Refresh", free: "60 min", pro: "5 min", icon: "⚡" },
+    { label: "Encrypted Backup, CCPA", free: "✓", pro: "✓", icon: "🛡️" },
 ];
 
 // ── Coming soon features (creates anticipation) ──────────────

@@ -447,7 +447,7 @@ export function PageImport({ onNext, toast, onComplete }) {
             <div style={{ display: "flex", alignItems: "flex-start", gap: 8, background: `${T.accent.primary}12`, border: `1px solid ${T.accent.primary}30`, borderRadius: T.radius.md, padding: "10px 13px", marginBottom: 14 }}>
                 <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>ℹ️</span>
                 <p style={{ fontSize: 12, color: T.text.secondary, margin: 0, lineHeight: 1.5 }}>
-                    Importing <strong style={{ color: T.text.primary }}>overwrites</strong> any existing data for the same fields. Your API keys and PIN are never touched.
+                    Importing <strong style={{ color: T.text.primary }}>overwrites</strong> any existing data for the same fields. Your PIN and encrypted chats are never touched.
                 </p>
             </div>
 
