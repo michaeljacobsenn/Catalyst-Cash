@@ -24,7 +24,7 @@ const SECURITY_HEADERS = {
 };
 const MODEL_ALLOWLIST = {
     free: new Set(["gemini-2.5-flash", "gpt-4o-mini"]),
-    pro: new Set(["gemini-2.5-flash", "gpt-4o-mini", "gemini-2.5-pro", "o4-mini"]),
+    pro: new Set(["gemini-2.5-flash", "gpt-4o-mini", "gemini-2.5-pro", "o4-mini", "claude-sonnet-4-20250514", "claude-haiku-4-5"]),
 };
 
 // Model defaults per provider
