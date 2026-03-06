@@ -364,14 +364,15 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
                     <Badge variant="outline" style={{ fontSize: 10, padding: "2px 7px", color: T.text.secondary, borderColor: T.border.default, fontFamily: T.font.mono }}>{totalAccounts}</Badge>
                 </div>
                 {ENABLE_PLAID && (cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId)) && (<div style={{ display: "flex", gap: 6 }}>
-                    {onViewTransactions && <button onClick={() => { haptic.light(); onViewTransactions(); }} className="hover-btn" style={{
+                    {onViewTransactions && <button onClick={() => { haptic.light(); if (proEnabled) { onViewTransactions(); } else { toast?.("Ledger requires Catalyst Cash Pro", "info"); } }} className="hover-btn" style={{
                         display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 16,
                         border: `1px solid ${T.accent.emerald}25`, background: `${T.accent.emerald}08`,
                         color: T.accent.emerald, fontSize: 10, fontWeight: 700, cursor: "pointer",
-                        transition: "all .2s"
+                        transition: "all .2s", position: "relative"
                     }}>
                         <ReceiptText size={10} />
                         Ledger
+                        {!proEnabled && <div style={{ position: "absolute", top: -4, right: -4, fontSize: 7, fontWeight: 800, background: T.accent.primary, color: "#fff", padding: "1px 4px", borderRadius: 4, fontFamily: T.font.mono }}>PRO</div>}
                     </button>}
                     <button onClick={handleRefreshPlaid} disabled={plaidRefreshing} className="hover-btn" style={{
                         display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 16,

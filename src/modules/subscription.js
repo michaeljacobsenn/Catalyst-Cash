@@ -34,7 +34,7 @@ import { AI_PROVIDERS, isModelSelectable } from "./providers.js";
 // returns gatingMode:"live" and ALL app versions enforce it —
 // even old builds that have "soft" hardcoded here.
 // ────────────────────────────────────────────────────────────
-const GATING_MODE_DEFAULT = "live";
+const GATING_MODE_DEFAULT = "soft";
 let _effectiveGatingMode = GATING_MODE_DEFAULT;
 
 /**
