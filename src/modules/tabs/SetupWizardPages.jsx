@@ -9,6 +9,7 @@ import { Capacitor } from "@capacitor/core";
 import { SignInWithApple } from "@capacitor-community/apple-sign-in";
 import { InlineTooltip } from "../ui.jsx";
 import { connectBank, getConnections, autoMatchAccounts, saveConnectionLinks, fetchBalancesAndLiabilities, applyBalanceSync } from "../plaid.js";
+import { haptic } from "../haptics.js";
 import { CURRENCIES } from "../currency.js";
 
 const ENABLE_PLAID = true;
