@@ -699,6 +699,7 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
                             <span style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginLeft: 16, marginBottom: 8, display: "block", letterSpacing: "0.03em", textTransform: "uppercase" }}>Subscription</span>
                             {proEnabled ? (
                                 <button onClick={async () => {
+                                    haptic.medium();
                                     const { presentCustomerCenter } = await loadRevenueCat();
                                     await presentCustomerCenter();
                                 }} style={{

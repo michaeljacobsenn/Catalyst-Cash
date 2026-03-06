@@ -174,7 +174,12 @@ export async function presentCustomerCenter() {
         // It relies on the app having configured the Customer Center in the RevenueCat Dashboard.
         await RevenueCatUI.presentCustomerCenter();
     } catch {
-        log.error("revenuecat", "Error opening Customer Center");
-        if (window.toast) window.toast.error("Could not load Customer Center.");
+        log.error("revenuecat", "Error opening Customer Center, falling back to Apple Subscriptions URL");
+        try {
+            const { Browser } = await import('@capacitor/browser');
+            await Browser.open({ url: 'https://apps.apple.com/account/subscriptions' });
+        } catch (e) {
+            if (window.toast) window.toast.error("Could not load subscriptions. Go to iOS Settings > Apple ID > Subscriptions.");
+        }
     }
 }
