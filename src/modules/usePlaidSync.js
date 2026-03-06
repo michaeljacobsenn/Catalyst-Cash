@@ -1,13 +1,23 @@
 /**
  * usePlaidSync — shared Plaid balance sync logic
+ * Uses module-level state so sync status persists across tab switches.
  * Used by DashboardTab and CardPortfolioTab to avoid code duplication.
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { fetchAllBalancesAndLiabilities, applyBalanceSync, getConnections, saveConnectionLinks, fetchAllTransactions } from "./plaid.js";
 import { getCurrentTier, isGatingEnforced } from "./subscription.js";
 import { haptic } from "./haptics.js";
 
 const SYNC_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
+
+// ── Module-level sync state ──────────────────────────────────
+// This ensures the sync spinner persists even when the user
+// switches tabs (component unmount/remount). All mounted
+// instances of usePlaidSync share the same underlying state.
+let _isSyncing = false;
+const _subscribers = new Set();
+function _notifySubs() { _subscribers.forEach(fn => fn(_isSyncing)); }
+function _setSyncing(v) { _isSyncing = v; _notifySubs(); }
 
 /**
  * @param {Object} opts
@@ -26,10 +36,19 @@ export function usePlaidSync({
     successMessage = "Balances synced successfully",
     autoFetchTransactions = false,
 }) {
-    const [syncing, setSyncing] = useState(false);
+    const [syncing, setSyncing] = useState(_isSyncing);
+
+    // Subscribe to module-level sync state changes
+    useEffect(() => {
+        const handler = (v) => setSyncing(v);
+        _subscribers.add(handler);
+        // Re-sync on mount in case state changed while unmounted
+        setSyncing(_isSyncing);
+        return () => _subscribers.delete(handler);
+    }, []);
 
     const sync = useCallback(async () => {
-        if (syncing) return;
+        if (_isSyncing) return;
 
         // 1. Check for existing connections
         const conns = await getConnections();
@@ -52,7 +71,7 @@ export function usePlaidSync({
         }
 
         // 3. Fetch and apply balances
-        setSyncing(true);
+        _setSyncing(true);
         try {
             const results = await fetchAllBalancesAndLiabilities();
             let allCards = [...cards];
@@ -94,9 +113,9 @@ export function usePlaidSync({
             console.error("[PlaidSync] Failed:", e);
             if (window.toast) window.toast.error("Failed to sync balances");
         } finally {
-            setSyncing(false);
+            _setSyncing(false);
         }
-    }, [syncing, cards, bankAccounts, financialConfig, setCards, setBankAccounts, setFinancialConfig, successMessage, autoFetchTransactions]);
+    }, [cards, bankAccounts, financialConfig, setCards, setBankAccounts, setFinancialConfig, successMessage, autoFetchTransactions]);
 
     return { syncing, sync };
 }

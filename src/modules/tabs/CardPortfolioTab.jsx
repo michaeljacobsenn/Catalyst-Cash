@@ -363,7 +363,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
                     <h1 style={{ fontSize: 24, fontWeight: 900, letterSpacing: "-0.02em" }}>Accounts</h1>
                     <Badge variant="outline" style={{ fontSize: 10, padding: "2px 7px", color: T.text.secondary, borderColor: T.border.default, fontFamily: T.font.mono }}>{totalAccounts}</Badge>
                 </div>
-                {ENABLE_PLAID && (cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId)) && (<>
+                {ENABLE_PLAID && (cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId)) && (<div style={{ display: "flex", gap: 6 }}>
                     {onViewTransactions && <button onClick={() => { haptic.light(); onViewTransactions(); }} className="hover-btn" style={{
                         display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 16,
                         border: `1px solid ${T.accent.emerald}25`, background: `${T.accent.emerald}08`,
@@ -382,7 +382,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
                         <RefreshCw size={10} className={plaidRefreshing ? "spin" : ""} />
                         {plaidRefreshing ? "Syncing…" : "Sync"}
                     </button>
-                </>)}
+                </div>)}
             </div>
 
             {/* Inline badges */}

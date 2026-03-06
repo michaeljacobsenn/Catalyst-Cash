@@ -61,6 +61,18 @@ export default memo(function DashboardTab({ onRestore, proEnabled = false, onDem
         successMessage: "Balances synced — run a new audit to reflect updated numbers",
     });
 
+    // ── Auto-sync Plaid on app launch ──
+    const autoSyncTriggered = useRef(false);
+    useEffect(() => {
+        if (autoSyncTriggered.current) return;
+        const hasPlaid = cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId);
+        if (!hasPlaid) return;
+        autoSyncTriggered.current = true;
+        // Delay 3s to let UI settle, then silently sync
+        const timer = setTimeout(() => handleSyncBalances(), 3000);
+        return () => clearTimeout(timer);
+    }, [cards, bankAccounts, handleSyncBalances]);
+
     const onRunAudit = () => navTo("input");
     const onViewResult = () => navTo("results", current);
     const onGoSettings = () => { setSetupReturnTab("dashboard"); navTo("settings"); };
