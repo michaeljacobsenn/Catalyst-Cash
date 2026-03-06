@@ -2,19 +2,23 @@ import { T } from "../constants.js";
 import { InlineTooltip } from "../ui.jsx";
 import { Mono } from "../components.jsx";
 
+import { getActiveCurrencyCode, getCurrency } from "../currency.js";
+
 /**
  * Compact formatter: $1,234 → $1.2K, $12,345 → $12.3K, $123,456 → $123K
  * Values under $10K stay as full integers: $8,450
  */
 function fmtCompact(v) {
     if (v == null) return "—";
+    const code = getActiveCurrencyCode();
+    const prefix = getCurrency(code).symbol;
     const abs = Math.abs(v);
     const sign = v < 0 ? "-" : "";
-    if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
-    if (abs >= 100_000) return `${sign}$${Math.round(abs / 1000)}K`;
-    if (abs >= 10_000) return `${sign}$${(abs / 1000).toFixed(1)}K`;
-    if (abs >= 1_000) return `${sign}$${Math.round(abs).toLocaleString()}`;
-    return `${sign}$${abs.toFixed(0)}`;
+    if (abs >= 1_000_000) return `${sign}${prefix}${(abs / 1_000_000).toFixed(1)}M`;
+    if (abs >= 100_000) return `${sign}${prefix}${Math.round(abs / 1000)}K`;
+    if (abs >= 10_000) return `${sign}${prefix}${(abs / 1000).toFixed(1)}K`;
+    if (abs >= 1_000) return `${sign}${prefix}${Math.round(abs).toLocaleString()}`;
+    return `${sign}${prefix}${abs.toFixed(0)}`;
 }
 
 /**

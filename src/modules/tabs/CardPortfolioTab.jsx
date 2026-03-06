@@ -944,8 +944,8 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
             </div>
             <h2 style={{ fontSize: 15, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Investments</h2>
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-                <button onClick={(e) => { e.stopPropagation(); handleRefreshPrices(); }} disabled={refreshingPrices} title="Refresh prices" style={{ width: 28, height: 28, borderRadius: 8, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: refreshingPrices ? T.text.muted : T.accent.emerald, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", opacity: refreshingPrices ? 0.6 : 1 }}>
-                    <RefreshCw size={11} className={refreshingPrices ? "spin" : ""} />
+                <button onClick={(e) => { e.stopPropagation(); handleRefreshPrices(); }} disabled={refreshingPrices} title="Refresh prices" className="hover-btn" style={{ background: "transparent", border: "none", color: refreshingPrices ? T.text.muted : T.accent.emerald, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 4, opacity: refreshingPrices ? 0.5 : 0.8, transition: "opacity 0.2s" }}>
+                    <RefreshCw size={13} strokeWidth={2.5} className={refreshingPrices ? "spin" : ""} />
                 </button>
                 {investTotalValue > 0 && <Badge variant="outline" style={{ fontSize: 9, color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}>
                     {fmt(Math.round(investTotalValue))}
