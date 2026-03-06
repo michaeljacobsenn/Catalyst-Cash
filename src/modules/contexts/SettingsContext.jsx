@@ -4,6 +4,7 @@ import { applyTheme } from '../constants.js';
 import { DEFAULT_PROVIDER_ID, DEFAULT_MODEL_ID, getProvider, getModel } from "../providers.js";
 import { schedulePaydayReminder, cancelPaydayReminder, requestNotificationPermission } from "../notifications.js";
 import { migrateToSecureItem } from "../secureStore.js";
+import { setActiveCurrencyCode } from "../currency.js";
 
 const SettingsContext = createContext(null);
 
@@ -79,7 +80,9 @@ export const DEFAULT_FINANCIAL_CONFIG = {
     otherAssetsLabel: "",
     insuranceDeductibles: [],
     bigTicketItems: [],
-    plaidInvestments: []
+    plaidInvestments: [],
+    currencyCode: "USD",
+    stateCode: "",
 };
 
 function financialConfigReducer(state, action) {
@@ -201,6 +204,8 @@ export function SettingsProvider({ children }) {
                     }
 
                     dispatchFinConfig({ type: 'REPLACE', payload: merged });
+                    // Set active currency globally for fmt()
+                    setActiveCurrencyCode(merged.currencyCode || "USD");
                 }
             } catch (e) {
                 console.error('Settings init error:', e);
@@ -215,7 +220,12 @@ export function SettingsProvider({ children }) {
     // Sync state to DB on change
     useEffect(() => { if (isSettingsReady) db.set("ai-provider", aiProvider); }, [aiProvider, isSettingsReady]);
     useEffect(() => { if (isSettingsReady) db.set("ai-model", aiModel); }, [aiModel, isSettingsReady]);
-    useEffect(() => { if (isSettingsReady) db.set("financial-config", financialConfig); }, [financialConfig, isSettingsReady]);
+    useEffect(() => {
+        if (isSettingsReady) {
+            db.set("financial-config", financialConfig);
+            setActiveCurrencyCode(financialConfig.currencyCode || "USD");
+        }
+    }, [financialConfig, isSettingsReady]);
     useEffect(() => { if (isSettingsReady) db.set("personal-rules", personalRules); }, [personalRules, isSettingsReady]);
     useEffect(() => { if (isSettingsReady) db.set("ai-consent-accepted", aiConsent); }, [aiConsent, isSettingsReady]);
     useEffect(() => { if (isSettingsReady) db.set("ai-persona", persona); }, [persona, isSettingsReady]);

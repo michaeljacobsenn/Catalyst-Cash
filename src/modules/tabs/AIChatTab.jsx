@@ -9,6 +9,7 @@ import { getBackendProvider } from "../providers.js";
 import { haptic } from "../haptics.js";
 import { db } from "../utils.js";
 import { log } from "../logger.js";
+import { encryptAtRest, decryptAtRest, isEncrypted } from "../crypto.js";
 import { checkChatQuota, recordChatUsage, shouldShowGating, isGatingEnforced } from "../subscription.js";
 
 import { useAudit } from "../contexts/AuditContext.jsx";
@@ -191,12 +192,22 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
     useEffect(() => {
         (async () => {
             if (privacyMode) return;
-            const saved = await db.get(CHAT_STORAGE_KEY);
+            let saved = await db.get(CHAT_STORAGE_KEY);
+            // Decrypt if stored encrypted
+            if (isEncrypted(saved)) {
+                try {
+                    saved = await decryptAtRest(saved, db);
+                } catch {
+                    saved = null; // Decryption failed — start fresh
+                }
+            }
             if (saved?.length) {
                 const fresh = pruneExpired(saved);
                 setMessages(fresh);
                 if (fresh.length !== saved.length) {
-                    db.set(CHAT_STORAGE_KEY, fresh);
+                    // Re-encrypt pruned messages
+                    const encrypted = await encryptAtRest(fresh, db).catch(() => fresh);
+                    db.set(CHAT_STORAGE_KEY, encrypted);
                 }
             }
             // Load prior session summary for cross-session memory
@@ -218,15 +229,17 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
         refreshQuota();
     }, [messages.length]);
 
-    // ── Persist messages (with PII scrubbing + privacy guard) ──
-    const persistMessages = useCallback((msgs) => {
+    // ── Persist messages (with PII scrubbing + encryption + privacy guard) ──
+    const persistMessages = useCallback(async (msgs) => {
         if (privacyMode) return;
         const trimmed = msgs.slice(-MAX_MESSAGES);
         const scrubbed = trimmed.map(m => ({
             ...m,
             content: scrubPII(m.content)
         }));
-        db.set(CHAT_STORAGE_KEY, scrubbed);
+        // Encrypt at rest before storing
+        const payload = await encryptAtRest(scrubbed, db).catch(() => scrubbed);
+        db.set(CHAT_STORAGE_KEY, payload);
 
         // Save session summary for cross-session memory (compact topic extraction)
         if (trimmed.length >= CONTEXT_SUMMARIZE_THRESHOLD) {

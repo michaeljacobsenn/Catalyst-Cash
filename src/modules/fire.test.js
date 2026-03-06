@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeFireProjection, estimateEffectiveTaxRate, annualizeRenewalCents } from "./fire.js";
+import { computeFireProjection, estimateEffectiveTaxRate, estimateStateTax, annualizeRenewalCents } from "./fire.js";
 import { toCents } from "./moneyMath.js";
 
 describe("estimateEffectiveTaxRate", () => {
@@ -208,5 +208,62 @@ describe("FIRE projection math safety", () => {
         if (withBrackets.projectedYearsToFire != null && withExplicit.projectedYearsToFire != null) {
             expect(withExplicit.projectedYearsToFire).toBeGreaterThan(withBrackets.projectedYearsToFire);
         }
+    });
+});
+
+describe("estimateStateTax", () => {
+    it("returns 0 for no-income-tax states", () => {
+        for (const st of ["TX", "FL", "WA", "NV", "AK", "SD", "WY", "TN", "NH"]) {
+            const result = estimateStateTax(toCents(100000), st);
+            expect(result.stateTaxCents).toBe(0);
+            expect(result.stateRateBps).toBe(0);
+        }
+    });
+
+    it("calculates California state tax at 11.3%", () => {
+        const result = estimateStateTax(toCents(100000), "CA");
+        expect(result.stateRateBps).toBe(1130);
+        expect(result.stateTaxCents).toBe(toCents(11300)); // $100K × 11.3%
+    });
+
+    it("returns 0 for invalid or missing state code", () => {
+        expect(estimateStateTax(toCents(100000), "").stateTaxCents).toBe(0);
+        expect(estimateStateTax(toCents(100000), "ZZ").stateTaxCents).toBe(0);
+        expect(estimateStateTax(0, "CA").stateTaxCents).toBe(0);
+    });
+
+    it("state tax increases total tax in FIRE projection", () => {
+        const base = {
+            financialConfig: {
+                incomeSources: [{ name: "Salary", amount: 7500, frequency: "monthly" }],
+                budgetCategories: [{ name: "Core", monthlyTarget: 2000 }],
+                fireSafeWithdrawalPct: 4,
+            },
+            renewals: [],
+            cards: [],
+        };
+
+        const noState = computeFireProjection(base);
+        const withCA = computeFireProjection({
+            ...base,
+            financialConfig: { ...base.financialConfig, stateCode: "CA" },
+        });
+        const withTX = computeFireProjection({
+            ...base,
+            financialConfig: { ...base.financialConfig, stateCode: "TX" },
+        });
+
+        // California should have higher total tax than no state
+        expect(withCA.annualTax).toBeGreaterThan(noState.annualTax);
+        // Texas (no state tax) should equal no-state result
+        expect(withTX.annualTax).toBe(noState.annualTax);
+        // CA should have more years to FIRE than TX
+        if (withCA.projectedYearsToFire && withTX.projectedYearsToFire) {
+            expect(withCA.projectedYearsToFire).toBeGreaterThan(withTX.projectedYearsToFire);
+        }
+        // State tax metadata should be present
+        expect(withCA.stateTaxPct).toBe(11.3);
+        expect(withCA.stateCode).toBe("CA");
+        expect(withTX.stateTaxPct).toBe(0);
     });
 });

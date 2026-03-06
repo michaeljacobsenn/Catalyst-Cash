@@ -9,8 +9,30 @@ import { Capacitor } from "@capacitor/core";
 import { SignInWithApple } from "@capacitor-community/apple-sign-in";
 import { InlineTooltip } from "../ui.jsx";
 import { connectBank, getConnections } from "../plaid.js";
+import { CURRENCIES } from "../currency.js";
 
 const ENABLE_PLAID = true;
+
+const US_STATES = [
+    { code: "", label: "— Not in the US —" },
+    { code: "AL", label: "Alabama" }, { code: "AK", label: "Alaska 🟢" }, { code: "AZ", label: "Arizona" },
+    { code: "AR", label: "Arkansas" }, { code: "CA", label: "California" }, { code: "CO", label: "Colorado" },
+    { code: "CT", label: "Connecticut" }, { code: "DE", label: "Delaware" }, { code: "DC", label: "District of Columbia" },
+    { code: "FL", label: "Florida 🟢" }, { code: "GA", label: "Georgia" }, { code: "HI", label: "Hawaii" },
+    { code: "ID", label: "Idaho" }, { code: "IL", label: "Illinois" }, { code: "IN", label: "Indiana" },
+    { code: "IA", label: "Iowa" }, { code: "KS", label: "Kansas" }, { code: "KY", label: "Kentucky" },
+    { code: "LA", label: "Louisiana" }, { code: "ME", label: "Maine" }, { code: "MD", label: "Maryland" },
+    { code: "MA", label: "Massachusetts" }, { code: "MI", label: "Michigan" }, { code: "MN", label: "Minnesota" },
+    { code: "MS", label: "Mississippi" }, { code: "MO", label: "Missouri" }, { code: "MT", label: "Montana" },
+    { code: "NE", label: "Nebraska" }, { code: "NV", label: "Nevada 🟢" }, { code: "NH", label: "New Hampshire 🟢" },
+    { code: "NJ", label: "New Jersey" }, { code: "NM", label: "New Mexico" }, { code: "NY", label: "New York" },
+    { code: "NC", label: "North Carolina" }, { code: "ND", label: "North Dakota" }, { code: "OH", label: "Ohio" },
+    { code: "OK", label: "Oklahoma" }, { code: "OR", label: "Oregon" }, { code: "PA", label: "Pennsylvania" },
+    { code: "RI", label: "Rhode Island" }, { code: "SC", label: "South Carolina" }, { code: "SD", label: "South Dakota 🟢" },
+    { code: "TN", label: "Tennessee 🟢" }, { code: "TX", label: "Texas 🟢" }, { code: "UT", label: "Utah" },
+    { code: "VT", label: "Vermont" }, { code: "VA", label: "Virginia" }, { code: "WA", label: "Washington 🟢" },
+    { code: "WV", label: "West Virginia" }, { code: "WI", label: "Wisconsin" }, { code: "WY", label: "Wyoming 🟢" },
+];
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
 export const WizBtn = ({ children, onClick, variant = "primary", disabled = false, style = {} }) => {
@@ -519,6 +541,24 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }) {
                         Your core financial data stays stored <strong style={{ color: T.status.green, fontWeight: 600 }}>on-device</strong>. AI requests are routed through the Catalyst Cash backend proxy with PII scrubbing, and optional backups sync through your personal iCloud/Drive.
                     </p>
                 </div>
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, margin: "0 0 6px 0", letterSpacing: "-0.01em" }}>Region & Currency</h3>
+                <p style={{ fontSize: 13, color: T.text.secondary, margin: "0 0 16px 0", lineHeight: 1.5 }}>
+                    Choose your local currency and state (for tax modeling in FIRE projections).
+                </p>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 24 }}>
+                <WizField label="Currency" hint="All amounts displayed in this currency">
+                    <WizSelect value={data.currencyCode || "USD"} onChange={v => onChange("currencyCode", v)}
+                        options={CURRENCIES.map(c => ({ value: c.code, label: `${c.flag} ${c.code} — ${c.symbol}` }))} />
+                </WizField>
+                <WizField label="State" hint="🟢 = No state income tax">
+                    <WizSelect value={data.stateCode || ""} onChange={v => onChange("stateCode", v)}
+                        options={US_STATES.map(s => ({ value: s.code, label: s.label }))} />
+                </WizField>
             </div>
 
             <div style={{ marginBottom: 24 }}>

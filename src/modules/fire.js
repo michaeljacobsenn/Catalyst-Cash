@@ -215,6 +215,48 @@ export function estimateEffectiveTaxRate(annualIncomeCents, filingStatus = "sing
     return { effectiveRateBps, totalTaxCents, taxableIncomeCents };
 }
 
+// ═══════════════════════════════════════════════════════════════
+// STATE INCOME TAX MODEL
+// Flat effective-rate approximations (bps) for all 50 states + DC.
+// Derived from each state's top marginal bracket as a conservative
+// estimate. Users with lower income will pay less; this errs toward
+// slightly overestimating tax to produce safer FIRE timelines.
+// ═══════════════════════════════════════════════════════════════
+
+const STATE_TAX_RATES = {
+    // No income tax (9 states)
+    AK: 0, FL: 0, NV: 0, NH: 0, SD: 0, TN: 0, TX: 0, WA: 0, WY: 0,
+    // Flat-tax states
+    AZ: 250, CO: 440, GA: 550, ID: 580, IL: 495, IN: 305,
+    KY: 400, MA: 500, MI: 425, MS: 500, NC: 460, ND: 195,
+    PA: 307, UT: 465,
+    // Progressive states (top-bracket effective approximation)
+    AL: 500, AR: 440, CA: 1130, CT: 699, DE: 660, DC: 1075,
+    HI: 1100, IA: 600, KS: 570, LA: 425, ME: 715, MD: 575,
+    MN: 985, MO: 480, MT: 675, NE: 664, NJ: 1075, NM: 590,
+    NY: 1082, OH: 399, OK: 475, OR: 990, RI: 599, SC: 640,
+    VT: 875, VA: 575, WV: 650, WI: 765,
+};
+
+/**
+ * Estimate state income tax for a given annual income.
+ * @param {number} annualIncomeCents - Gross annual income in cents
+ * @param {string} stateCode - Two-letter state abbreviation (e.g. "CA", "TX")
+ * @returns {{ stateTaxCents: number, stateRateBps: number }}
+ */
+export function estimateStateTax(annualIncomeCents, stateCode) {
+    if (!Number.isFinite(annualIncomeCents) || annualIncomeCents <= 0 || !stateCode) {
+        return { stateTaxCents: 0, stateRateBps: 0 };
+    }
+    const code = String(stateCode).toUpperCase().trim();
+    const rateBps = STATE_TAX_RATES[code];
+    if (rateBps == null || rateBps <= 0) {
+        return { stateTaxCents: 0, stateRateBps: 0 };
+    }
+    const stateTaxCents = Math.round((annualIncomeCents * rateBps) / BPS_SCALE);
+    return { stateTaxCents, stateRateBps: rateBps };
+}
+
 function buildUnreachableProjection(base, reason) {
     return {
         ...base,
@@ -240,6 +282,10 @@ export function computeFireProjection({
     const filingStatus = String(financialConfig?.filingStatus || "single").toLowerCase();
     const taxResult = estimateEffectiveTaxRate(annualIncomeGrossCents, filingStatus);
 
+    // State tax — deducted alongside federal when stateCode is configured
+    const stateCode = financialConfig?.stateCode || "";
+    const stateResult = estimateStateTax(annualIncomeGrossCents, stateCode);
+
     // If user provided an explicit tax bracket percentage, use that instead
     const explicitTaxPct = financialConfig?.taxBracketPercent;
     let annualTaxCents;
@@ -248,8 +294,8 @@ export function computeFireProjection({
         effectiveTaxRateBps = Math.round(Number(explicitTaxPct) * 100);
         annualTaxCents = Math.round((annualIncomeGrossCents * effectiveTaxRateBps) / BPS_SCALE);
     } else {
-        effectiveTaxRateBps = taxResult.effectiveRateBps;
-        annualTaxCents = taxResult.totalTaxCents;
+        effectiveTaxRateBps = taxResult.effectiveRateBps + stateResult.stateRateBps;
+        annualTaxCents = taxResult.totalTaxCents + stateResult.stateTaxCents;
     }
 
     const annualIncomePostTaxCents = annualIncomeGrossCents - annualTaxCents;
@@ -305,6 +351,9 @@ export function computeFireProjection({
     const targetPortfolio = targetPortfolioCents / 100;
 
     base.realReturnPct = fromBps(realReturnBps);
+    base.stateTaxPct = fromBps(stateResult.stateRateBps);
+    base.stateTaxAnnual = fromCents(stateResult.stateTaxCents);
+    base.stateCode = stateCode || null;
 
     if (annualIncomePostTaxCents <= 0 && annualSavingsCents <= 0) {
         return buildUnreachableProjection(base, "zero-income-negative-savings");

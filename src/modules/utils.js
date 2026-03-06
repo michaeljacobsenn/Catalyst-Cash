@@ -107,13 +107,9 @@ export const db = {
   }
 };
 
-export const fmt = n => {
-  if (n == null || isNaN(n)) return "—";
-  if (window.__privacyMode) return "$••••••";
-  const neg = n < 0, abs = Math.abs(n);
-  const s = abs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return neg ? `-$${s}` : `$${s}`;
-};
+import { formatCurrency } from './currency.js';
+
+export const fmt = n => formatCurrency(n);
 
 export const fmtDate = d => {
   if (!d) return "—";

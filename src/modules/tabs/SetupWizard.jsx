@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { T } from "../constants.js";
 import { AI_PROVIDERS } from "../providers.js";
 import { db } from "../utils.js";
+import { setActiveCurrencyCode } from "../currency.js";
 import {
     PageWelcome, PageImport, PagePass1,
     PagePass2, PagePass3, PageDone
@@ -95,7 +96,8 @@ export default function SetupWizard() {
         payFrequency: "bi-weekly", payday: "Friday",
         incomeType: "salary", hourlyRateNet: "", typicalHours: "", averagePaycheck: "",
         paycheckStandard: "", paycheckFirstOfMonth: "", isContractor: false,
-        taxBracketPercent: "", paycheckDepositAccount: "checking"
+        taxBracketPercent: "", paycheckDepositAccount: "checking",
+        currencyCode: "USD", stateCode: ""
     });
     const [spending, setSpending] = useState({
         weeklySpendAllowance: "", emergencyFloor: "", checkingBuffer: "",
@@ -146,6 +148,8 @@ export default function SetupWizard() {
                 paycheckDepositAccount: income.paycheckDepositAccount || existing.paycheckDepositAccount || "checking",
                 isContractor: income.isContractor,
                 taxBracketPercent: parseFloat(income.taxBracketPercent) || existing.taxBracketPercent || 0,
+                currencyCode: income.currencyCode || existing.currencyCode || "USD",
+                stateCode: income.stateCode || existing.stateCode || "",
                 weeklySpendAllowance: parseFloat(spending.weeklySpendAllowance) || existing.weeklySpendAllowance || 0,
                 emergencyFloor: parseFloat(spending.emergencyFloor) || existing.emergencyFloor || 0,
                 checkingBuffer: parseFloat(spending.checkingBuffer) || existing.checkingBuffer || 0,
@@ -163,6 +167,7 @@ export default function SetupWizard() {
             };
             delete merged._fromSetupWizard;
             await db.set("financial-config", merged);
+            setActiveCurrencyCode(merged.currencyCode || "USD");
 
             // AI provider + model
             await db.set("ai-provider", ai.aiProvider);

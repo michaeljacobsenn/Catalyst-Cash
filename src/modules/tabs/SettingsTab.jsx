@@ -8,13 +8,14 @@ import { Card, Label, InlineTooltip } from "../ui.jsx";
 import { Mono } from "../components.jsx";
 import { db, FaceId, nativeExport, fmt } from "../utils.js";
 import { isSecuritySensitiveKey } from "../securityKeys.js";
+import { CURRENCIES } from "../currency.js";
 
 
 import { haptic } from "../haptics.js";
 import { Capacitor } from "@capacitor/core";
 
 
-import { getConnections } from "../plaid.js";
+import { getConnections, removeConnection } from "../plaid.js";
 import { deleteSecureItem, getSecureItem, setSecureItem } from "../secureStore.js";
 const LazyPlaidSection = lazy(() => import("../settings/PlaidSection.jsx"));
 import { shouldShowGating, checkAuditQuota, getRawTier } from "../subscription.js";
@@ -141,6 +142,8 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
     const [showKey, setShowKey] = useState(false);
     const [confirmClear, setConfirmClear] = useState(false);
     const [confirmFactoryReset, setConfirmFactoryReset] = useState(false);
+    const [confirmDataDeletion, setConfirmDataDeletion] = useState(false);
+    const [deletionInProgress, setDeletionInProgress] = useState(false);
     const [backupStatus, setBackupStatus] = useState(null);
     const [restoreStatus, setRestoreStatus] = useState(null);
     const [activeSegment, setActiveSegment] = useState("app"); // Kept for logic
@@ -571,6 +574,72 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
                                             {opt.label}
                                         </button>
                                     ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ── Region & Currency ── */}
+                        <div>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginLeft: 16, marginBottom: 8, display: "block", letterSpacing: "0.03em", textTransform: "uppercase" }}>Region</span>
+                            <div style={{
+                                background: T.bg.card, borderRadius: T.radius.xl,
+                                border: `1px solid ${T.border.subtle}`, padding: "14px 16px",
+                                display: "flex", flexDirection: "column", gap: 14
+                            }}>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                    <div>
+                                        <div style={{ fontSize: 14, fontWeight: 600, color: T.text.primary }}>Currency</div>
+                                        <div style={{ fontSize: 11, color: T.text.muted, marginTop: 2 }}>All amounts display in this currency</div>
+                                    </div>
+                                    <select value={financialConfig.currencyCode || "USD"}
+                                        onChange={e => setFinancialConfig(prev => ({ ...prev, currencyCode: e.target.value }))}
+                                        style={{
+                                            padding: "6px 28px 6px 10px", borderRadius: T.radius.md,
+                                            background: T.bg.elevated, color: T.text.primary,
+                                            border: `1px solid ${T.border.default}`,
+                                            fontSize: 13, fontWeight: 600, fontFamily: T.font.sans,
+                                            WebkitAppearance: "none", appearance: "none",
+                                            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                                            backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center"
+                                        }}>
+                                        {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.flag} {c.code}</option>)}
+                                    </select>
+                                </div>
+                                <div style={{ borderTop: `1px solid ${T.border.subtle}`, paddingTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                    <div>
+                                        <div style={{ fontSize: 14, fontWeight: 600, color: T.text.primary }}>State</div>
+                                        <div style={{ fontSize: 11, color: T.text.muted, marginTop: 2 }}>Used for FIRE state tax modeling</div>
+                                    </div>
+                                    <select value={financialConfig.stateCode || ""}
+                                        onChange={e => setFinancialConfig(prev => ({ ...prev, stateCode: e.target.value }))}
+                                        style={{
+                                            padding: "6px 28px 6px 10px", borderRadius: T.radius.md,
+                                            background: T.bg.elevated, color: T.text.primary,
+                                            border: `1px solid ${T.border.default}`,
+                                            fontSize: 13, fontWeight: 600, fontFamily: T.font.sans,
+                                            WebkitAppearance: "none", appearance: "none",
+                                            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                                            backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center"
+                                        }}>
+                                        <option value="">Not set</option>
+                                        <option value="AL">Alabama</option><option value="AK">Alaska</option><option value="AZ">Arizona</option>
+                                        <option value="AR">Arkansas</option><option value="CA">California</option><option value="CO">Colorado</option>
+                                        <option value="CT">Connecticut</option><option value="DE">Delaware</option><option value="DC">DC</option>
+                                        <option value="FL">Florida</option><option value="GA">Georgia</option><option value="HI">Hawaii</option>
+                                        <option value="ID">Idaho</option><option value="IL">Illinois</option><option value="IN">Indiana</option>
+                                        <option value="IA">Iowa</option><option value="KS">Kansas</option><option value="KY">Kentucky</option>
+                                        <option value="LA">Louisiana</option><option value="ME">Maine</option><option value="MD">Maryland</option>
+                                        <option value="MA">Massachusetts</option><option value="MI">Michigan</option><option value="MN">Minnesota</option>
+                                        <option value="MS">Mississippi</option><option value="MO">Missouri</option><option value="MT">Montana</option>
+                                        <option value="NE">Nebraska</option><option value="NV">Nevada</option><option value="NH">New Hampshire</option>
+                                        <option value="NJ">New Jersey</option><option value="NM">New Mexico</option><option value="NY">New York</option>
+                                        <option value="NC">N. Carolina</option><option value="ND">N. Dakota</option><option value="OH">Ohio</option>
+                                        <option value="OK">Oklahoma</option><option value="OR">Oregon</option><option value="PA">Pennsylvania</option>
+                                        <option value="RI">Rhode Island</option><option value="SC">S. Carolina</option><option value="SD">S. Dakota</option>
+                                        <option value="TN">Tennessee</option><option value="TX">Texas</option><option value="UT">Utah</option>
+                                        <option value="VT">Vermont</option><option value="VA">Virginia</option><option value="WA">Washington</option>
+                                        <option value="WV">W. Virginia</option><option value="WI">Wisconsin</option><option value="WY">Wyoming</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -1190,10 +1259,82 @@ export default function SettingsTab({ onClear, onFactoryReset, onClearDemoData, 
                                     </p>
                                 </div>
                                 <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.5, marginTop: 4 }}>
-                                    🔒 Your core financial data is stored locally on your device. AI requests are routed through the
-                                    Catalyst Cash backend proxy with PII scrubbing, and raw financial payloads are not retained on our servers.
-                                    Chat history auto-expires after 24 hours on-device.
+                                    🔒 Your core financial data is stored locally on your device. Chat history is encrypted at rest
+                                    and auto-expires after 24 hours. AI requests are routed through our secure backend proxy with PII scrubbing.
                                 </p>
+
+                                {/* ── CCPA/GDPR Data Deletion ── */}
+                                <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border.subtle}` }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary, marginBottom: 6 }}>Your Data Rights (CCPA / GDPR)</div>
+                                    <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.5, margin: "0 0 10px" }}>
+                                        Under the California Consumer Privacy Act (CCPA) and General Data Protection Regulation (GDPR), you have the right to request deletion of all personal data.
+                                    </p>
+                                    {!confirmDataDeletion ? (
+                                        <button onClick={() => { setConfirmDataDeletion(true); haptic.medium(); }} style={{
+                                            width: "100%", padding: "12px 16px", borderRadius: T.radius.md,
+                                            border: `1px solid ${T.status.red}30`, background: T.status.redDim,
+                                            color: T.status.red, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                                            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                                            transition: "all .2s"
+                                        }}>
+                                            <Shield size={14} />
+                                            Request Data Deletion
+                                        </button>
+                                    ) : (
+                                        <div style={{
+                                            padding: 14, borderRadius: T.radius.md,
+                                            background: T.status.redDim, border: `1px solid ${T.status.red}40`,
+                                            animation: "fadeIn .3s ease-out"
+                                        }}>
+                                            <p style={{ fontSize: 11, color: T.status.red, fontWeight: 600, margin: "0 0 8px", lineHeight: 1.5 }}>
+                                                This will permanently erase all data from your device:
+                                            </p>
+                                            <ul style={{ fontSize: 10, color: T.text.secondary, lineHeight: 1.6, margin: "0 0 12px", paddingLeft: 16 }}>
+                                                <li>All financial data, audit history, and settings</li>
+                                                <li>Encrypted chat history and session memory</li>
+                                                <li>All connected bank accounts (Plaid access revoked)</li>
+                                                <li>API keys and secure keychain items</li>
+                                            </ul>
+                                            <div style={{ display: "flex", gap: 8 }}>
+                                                <button onClick={() => setConfirmDataDeletion(false)} style={{
+                                                    flex: 1, padding: "10px 0", borderRadius: T.radius.md, border: "none",
+                                                    background: "transparent", color: T.status.red, opacity: 0.8, fontSize: 11, fontWeight: 700, cursor: "pointer"
+                                                }}>Cancel</button>
+                                                <button disabled={deletionInProgress} onClick={async () => {
+                                                    setDeletionInProgress(true);
+                                                    haptic.heavy();
+                                                    try {
+                                                        // 1. Disconnect all Plaid connections
+                                                        const conns = await getConnections().catch(() => []);
+                                                        for (const conn of conns) {
+                                                            await removeConnection(conn.id).catch(() => { });
+                                                        }
+                                                        // 2. Clear all device storage
+                                                        await db.clear();
+                                                        // 3. Clear web storage
+                                                        try { localStorage.clear(); } catch { }
+                                                        try { sessionStorage.clear(); } catch { }
+                                                        // 4. Clear secure keychain items
+                                                        try { await deleteSecureItem("app-passcode"); } catch { }
+                                                        try { await deleteSecureItem("plaid-connections"); } catch { }
+                                                        // 5. Reload
+                                                        window.location.reload();
+                                                    } catch (e) {
+                                                        setDeletionInProgress(false);
+                                                        setConfirmDataDeletion(false);
+                                                    }
+                                                }} style={{
+                                                    flex: 2, padding: "10px 0", borderRadius: T.radius.md, border: "none",
+                                                    background: T.status.red, color: "white", fontSize: 11, fontWeight: 800, cursor: deletionInProgress ? "wait" : "pointer",
+                                                    opacity: deletionInProgress ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6
+                                                }}>
+                                                    {deletionInProgress ? <Loader2 size={12} className="spin" /> : <Shield size={12} />}
+                                                    {deletionInProgress ? "Deleting..." : "Confirm Deletion"}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
 

@@ -82,5 +82,79 @@ export async function decrypt(envelope, passphrase) {
  * Check if a parsed JSON object looks like an encrypted envelope.
  */
 export function isEncrypted(obj) {
-    return obj && typeof obj === "object" && obj.v === 1 && obj.salt && obj.iv && obj.ct;
+    return !!(obj && typeof obj === "object" && (obj.v === 1 || obj.v === 2) && obj.iv && obj.ct);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DEVICE-BOUND AT-REST ENCRYPTION — for chat history
+// No user passphrase needed. Uses a per-install random secret
+// stored in device preferences as the key material.
+// ═══════════════════════════════════════════════════════════════
+
+const DEVICE_SALT_KEY = "device-encryption-salt";
+
+async function getOrCreateDeviceSalt(db) {
+    let saltHex = await db.get(DEVICE_SALT_KEY);
+    if (!saltHex || typeof saltHex !== "string" || saltHex.length < 32) {
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, "0")).join("");
+        await db.set(DEVICE_SALT_KEY, saltHex);
+    }
+    return new Uint8Array(saltHex.match(/.{2}/g).map(h => parseInt(h, 16)));
+}
+
+async function deriveDeviceKey(db) {
+    const salt = await getOrCreateDeviceSalt(db);
+    const keyMaterial = await crypto.subtle.importKey(
+        "raw", salt, "PBKDF2", false, ["deriveKey"]
+    );
+    return crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+    );
+}
+
+/**
+ * Encrypt JSON-serializable data at rest (device-bound, no passphrase).
+ * @param {any} data - Data to encrypt
+ * @param {object} db - The db storage abstraction from utils.js
+ * @returns {Promise<{ iv: string, ct: string, v: 2 }>}
+ */
+export async function encryptAtRest(data, db) {
+    const key = await deriveDeviceKey(db);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const plaintext = new TextEncoder().encode(JSON.stringify(data));
+    const ciphertext = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv }, key, plaintext
+    );
+    return {
+        iv: toBase64(iv),
+        ct: toBase64(ciphertext),
+        v: 2,
+    };
+}
+
+/**
+ * Decrypt a device-bound encrypted payload.
+ * @param {{ iv: string, ct: string, v: 2 }} payload
+ * @param {object} db
+ * @returns {Promise<any>} Decrypted data
+ */
+export async function decryptAtRest(payload, db) {
+    if (!payload?.iv || !payload?.ct) return null;
+    try {
+        const key = await deriveDeviceKey(db);
+        const iv = fromBase64(payload.iv);
+        const ct = fromBase64(payload.ct);
+        const plaintext = await crypto.subtle.decrypt(
+            { name: "AES-GCM", iv }, key, ct
+        );
+        return JSON.parse(new TextDecoder().decode(plaintext));
+    } catch {
+        // If decryption fails (e.g. salt was reset), return null gracefully
+        return null;
+    }
 }
