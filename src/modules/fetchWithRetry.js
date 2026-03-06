@@ -78,11 +78,19 @@ export async function fetchWithRetry(url, opts = {}, retryOpts = {}) {
 
 function sleep(ms, signal) {
     return new Promise((resolve, reject) => {
-        const timer = setTimeout(resolve, ms);
-        signal?.addEventListener("abort", () => {
+        if (signal?.aborted) {
+            reject(new DOMException("The operation was aborted.", "AbortError"));
+            return;
+        }
+        const onAbort = () => {
             clearTimeout(timer);
             reject(new DOMException("The operation was aborted.", "AbortError"));
-        }, { once: true });
+        };
+        const timer = setTimeout(() => {
+            signal?.removeEventListener("abort", onAbort);
+            resolve();
+        }, ms);
+        signal?.addEventListener("abort", onAbort, { once: true });
     });
 }
 
