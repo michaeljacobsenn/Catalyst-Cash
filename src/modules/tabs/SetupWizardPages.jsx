@@ -8,7 +8,7 @@ import { db, FaceId, nativeExport } from "../utils.js";
 import { Capacitor } from "@capacitor/core";
 import { SignInWithApple } from "@capacitor-community/apple-sign-in";
 import { InlineTooltip } from "../ui.jsx";
-import { connectBank, getConnections } from "../plaid.js";
+import { connectBank, getConnections, autoMatchAccounts, saveConnectionLinks, fetchBalancesAndLiabilities, applyBalanceSync } from "../plaid.js";
 import { CURRENCIES } from "../currency.js";
 
 const ENABLE_PLAID = true;
@@ -715,7 +715,59 @@ export function PagePass3({ ai, security, spending, updateAi, updateSecurity, up
     const handlePlaidConnect = async () => {
         setPlaidConnecting(true);
         try {
-            await connectBank();
+            await connectBank(
+                async (connection) => {
+                    try {
+                        const existingCards = await db.get("cards") || [];
+                        const existingBanks = await db.get("bank-accounts") || [];
+                        const existingConfig = await db.get("financial-config") || {};
+                        const plaidInvestments = existingConfig.plaidInvestments || [];
+                        const cardCatalog = await db.get("card-catalog") || [];
+
+                        const { newCards, newBankAccounts, newPlaidInvestments } = autoMatchAccounts(connection, existingCards, existingBanks, cardCatalog, plaidInvestments);
+                        await saveConnectionLinks(connection);
+
+                        function mergeUniqueById(existing = [], incoming = []) {
+                            const ids = new Set(existing.map(e => e.id).filter(Boolean));
+                            return [...existing, ...incoming.filter(i => i.id && !ids.has(i.id))];
+                        }
+
+                        let allCards = mergeUniqueById(existingCards, newCards);
+                        let allBanks = mergeUniqueById(existingBanks, newBankAccounts);
+                        let allInvests = mergeUniqueById(plaidInvestments, newPlaidInvestments);
+
+                        await db.set("cards", allCards);
+                        await db.set("bank-accounts", allBanks);
+                        if (newPlaidInvestments.length > 0) {
+                            existingConfig.plaidInvestments = allInvests;
+                            await db.set("financial-config", existingConfig);
+                        }
+
+                        // Fetch live balances
+                        try {
+                            const refreshed = await fetchBalancesAndLiabilities(connection.id);
+                            if (refreshed) {
+                                const syncData = applyBalanceSync(refreshed, allCards, allBanks, allInvests);
+                                await db.set("cards", syncData.updatedCards);
+                                await db.set("bank-accounts", syncData.updatedBankAccounts);
+                                if (syncData.updatedPlaidInvestments) {
+                                    existingConfig.plaidInvestments = syncData.updatedPlaidInvestments;
+                                    await db.set("financial-config", existingConfig);
+                                }
+                                await saveConnectionLinks(refreshed);
+                            }
+                        } catch (balErr) {
+                            console.error('[Plaid] Balance fetch after connect failed:', balErr);
+                        }
+                    } catch (err) {
+                        console.error('[Plaid]', err);
+                    }
+                },
+                (err) => {
+                    if (window.toast) window.toast.error("Failed to link bank");
+                }
+            );
+
             const conns = await getConnections();
             setPlaidCount(conns?.length || 0);
             if (window.toast) window.toast.success("Bank connected successfully!");
