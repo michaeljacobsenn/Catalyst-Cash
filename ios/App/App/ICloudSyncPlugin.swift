@@ -17,7 +17,7 @@ public class ICloudSyncPlugin: CAPPlugin {
                 return
             }
 
-            let url = FileManager.default.url(forUbiquityContainerIdentifier: self.containerID)
+            let url = FileManager.default.url(forUbiquityContainerIdentifier: nil)
             let available = url != nil
 
             DispatchQueue.main.async {
@@ -44,7 +44,7 @@ public class ICloudSyncPlugin: CAPPlugin {
                 return
             }
 
-            guard let containerURL = FileManager.default.url(forUbiquityContainerIdentifier: self.containerID) else {
+            guard let containerURL = FileManager.default.url(forUbiquityContainerIdentifier: nil) else {
                 DispatchQueue.main.async {
                     call.reject("iCloud is not available. Make sure iCloud Drive is enabled in Settings.")
                 }
@@ -107,7 +107,7 @@ public class ICloudSyncPlugin: CAPPlugin {
                 return
             }
 
-            guard let containerURL = FileManager.default.url(forUbiquityContainerIdentifier: self.containerID) else {
+            guard let containerURL = FileManager.default.url(forUbiquityContainerIdentifier: nil) else {
                 DispatchQueue.main.async {
                     call.resolve(["data": NSNull(), "reason": "iCloud not available"])
                 }
