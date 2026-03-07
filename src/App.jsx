@@ -264,11 +264,27 @@ function CatalystCash() {
   const iCloudSyncTimer = useRef(null);
   useEffect(() => {
     if (!ready || !appleLinkedId) return;
+    if (autoBackupInterval === "off") return;
 
     if (iCloudSyncTimer.current) clearTimeout(iCloudSyncTimer.current);
 
     iCloudSyncTimer.current = setTimeout(async () => {
       try {
+        // Enforce backup schedule
+        const lastBackupStr = await db.get("last-backup-ts");
+        const lastBackup = lastBackupStr ? Number(lastBackupStr) : 0;
+        const now = Date.now();
+        const hrs24 = 24 * 60 * 60 * 1000;
+        let requiredDeltaMs = 0;
+
+        if (autoBackupInterval === "daily") requiredDeltaMs = hrs24;
+        else if (autoBackupInterval === "weekly") requiredDeltaMs = hrs24 * 7;
+        else if (autoBackupInterval === "monthly") requiredDeltaMs = hrs24 * 30;
+
+        if (now - lastBackup < requiredDeltaMs) {
+          return; // Throttled — schedule not yet met
+        }
+
         const backup = { app: "Catalyst Cash", version: APP_VERSION, exportedAt: new Date().toISOString(), data: {} };
         const keys = await db.keys();
         for (const key of keys) {
@@ -279,14 +295,21 @@ function CatalystCash() {
         if (!("personal-rules" in backup.data)) {
           backup.data["personal-rules"] = personalRules ?? "";
         }
-        await uploadToICloud(backup, null);
+
+        const success = await uploadToICloud(backup, null);
+        if (success) {
+          await db.set("last-backup-ts", now);
+          // Settings UI polls this key on mount or relies on local state update which is handled there. 
+          // We just need it perfectly accurately persisted to the DB on success.
+          console.log("[iCloud] Auto-backup schedule completed successfully.");
+        }
       } catch (e) {
         console.error("iCloud auto-sync error:", e);
       }
     }, 15000); // 15 second debounce — avoid writing on every keystroke
 
     return () => clearTimeout(iCloudSyncTimer.current);
-  }, [ready, history, renewals, cards, financialConfig, personalRules, appleLinkedId]);
+  }, [ready, history, renewals, cards, financialConfig, personalRules, appleLinkedId, autoBackupInterval]);
 
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: 0, behavior: "auto" }) }, [tab]);
