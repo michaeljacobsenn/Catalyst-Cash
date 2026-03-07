@@ -202,10 +202,16 @@ function CatalystCash() {
   const iCloudRestoreAttempted = useRef(false);
   useEffect(() => {
     if (!ready || iCloudRestoreAttempted.current) return;
+
+    // Check if we already attempted an iCloud restore this installation
+    if (localStorage.getItem("icloud-restore-attempted") === "true") return;
+
     // Only attempt restore if there's no local audit history (fresh install)
     if (history && history.length > 0) return;
 
     iCloudRestoreAttempted.current = true;
+    localStorage.setItem("icloud-restore-attempted", "true");
+
     (async () => {
       try {
         const backup = await downloadFromICloud(null);
