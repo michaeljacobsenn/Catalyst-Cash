@@ -6,6 +6,7 @@ import { resolveCardLabel } from "../cards.js";
 import { Card, Label, Badge } from "../ui.jsx";
 import { Mono, EmptyState } from "../components.jsx";
 import SearchableSelect from "../SearchableSelect.jsx";
+import { haptic } from "../haptics.js";
 
 // Interval options for dropdowns
 const WEEK_OPTIONS = Array.from({ length: 52 }, (_, i) => i + 1);
