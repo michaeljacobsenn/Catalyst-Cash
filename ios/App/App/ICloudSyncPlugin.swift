@@ -67,31 +67,17 @@ public class ICloudSyncPlugin: CAPPlugin {
 
             let fileURL = documentsURL.appendingPathComponent(self.fileName)
 
-            // Use NSFileCoordinator for safe iCloud writes
-            let coordinator = NSFileCoordinator(filePresenter: nil)
-            var coordinatorError: NSError?
-
-            coordinator.coordinate(writingItemAt: fileURL, options: .forReplacing, error: &coordinatorError) { writtenURL in
-                do {
-                    try data.write(to: writtenURL, atomically: true, encoding: .utf8)
-                } catch {
-                    DispatchQueue.main.async {
-                        call.reject("Failed to write iCloud backup: \(error.localizedDescription)")
-                    }
-                    return
-                }
-
+            do {
+                try data.write(to: fileURL, atomically: true, encoding: .utf8)
                 DispatchQueue.main.async {
                     call.resolve([
                         "success": true,
-                        "path": writtenURL.path
+                        "path": fileURL.path
                     ])
                 }
-            }
-
-            if let coordinatorError {
+            } catch {
                 DispatchQueue.main.async {
-                    call.reject("iCloud file coordination failed: \(coordinatorError.localizedDescription)")
+                    call.reject("Failed to write iCloud backup: \(error.localizedDescription)")
                 }
             }
         }
@@ -135,26 +121,14 @@ public class ICloudSyncPlugin: CAPPlugin {
                 return
             }
 
-            // Use NSFileCoordinator for safe iCloud reads
-            let coordinator = NSFileCoordinator(filePresenter: nil)
-            var coordinatorError: NSError?
-
-            coordinator.coordinate(readingItemAt: fileURL, options: [], error: &coordinatorError) { readURL in
-                do {
-                    let content = try String(contentsOf: readURL, encoding: .utf8)
-                    DispatchQueue.main.async {
-                        call.resolve(["data": content, "reason": "ok"])
-                    }
-                } catch {
-                    DispatchQueue.main.async {
-                        call.resolve(["data": NSNull(), "reason": "read error: \(error.localizedDescription)"])
-                    }
-                }
-            }
-
-            if let coordinatorError {
+            do {
+                let content = try String(contentsOf: fileURL, encoding: .utf8)
                 DispatchQueue.main.async {
-                    call.resolve(["data": NSNull(), "reason": "coordination error: \(coordinatorError.localizedDescription)"])
+                    call.resolve(["data": content, "reason": "ok"])
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    call.resolve(["data": NSNull(), "reason": "read error: \(error.localizedDescription)"])
                 }
             }
         }
