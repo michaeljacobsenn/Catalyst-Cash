@@ -1,4 +1,4 @@
-import React, { useState, useContext, useMemo, useEffect } from "react";
+import React, { useState, useContext, useMemo, useEffect, lazy, Suspense } from "react";
 import {
   Search, Sparkles, CreditCard, Coffee, ShoppingCart,
   Fuel, Plane, Train, Package, Store, Pill, AlertCircle, Info, Settings2, ChevronDown, Check, X, RefreshCw, Tv, DollarSign, Smartphone, RotateCw, Clock
@@ -11,6 +11,10 @@ import { haptic } from "../haptics.js";
 import { InlineTooltip, FormGroup, FormRow, Skeleton } from "../ui.jsx";
 import { MERCHANT_DATABASE, extractCategoryByKeywords } from "../merchantDatabase.js";
 import { T } from "../constants.js";
+import { shouldShowGating } from "../subscription.js";
+import ProBanner from "./ProBanner.jsx";
+
+const LazyProPaywall = lazy(() => import("./ProPaywall.jsx"));
 
 const QUICK_CATEGORIES = [
   { id: "dining", label: "Dining", icon: Coffee, color: T.status.amber, bg: T.status.amberDim },
@@ -39,9 +43,11 @@ let cachedQuery = "";
 let cachedCategory = null;
 let cachedMerchant = null;
 
-export default function CardWizardTab() {
+export default function CardWizardTab({ proEnabled }) {
   const { cards } = useContext(PortfolioContext);
   const { financialConfig, setFinancialConfig } = useSettings();
+
+  const [showPaywall, setShowPaywall] = useState(false);
 
   const [query, setQuery] = useState(cachedQuery);
   const [isTyping, setIsTyping] = useState(false);
@@ -353,6 +359,19 @@ export default function CardWizardTab() {
   return (
     <div className="safe-scroll-body scroll-area" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="page-body" style={{ maxWidth: 768, margin: "0 auto", width: "100%", display: "flex", flexDirection: "column", gap: 24 }}>
+
+        {shouldShowGating() && !proEnabled && (
+          <ProBanner
+            onUpgrade={() => setShowPaywall(true)}
+            label="Card Wizard is a Pro feature"
+            sublabel="Upgrade to unlock the ultimate card pairing engine"
+          />
+        )}
+        {showPaywall && (
+          <Suspense fallback={null}>
+            <LazyProPaywall onClose={() => setShowPaywall(false)} />
+          </Suspense>
+        )}
 
         {/* Header */}
         <div className="fade-in" style={{ textAlign: "center", marginTop: 8 }}>
