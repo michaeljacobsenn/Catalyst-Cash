@@ -112,6 +112,9 @@ export function NavigationProvider({ children }) {
   }, [swipeAnimClass]);
 
   useEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
     window.history.replaceState({ tab: "dashboard", viewingTs: null }, "", "");
 
     const onPopState = e => {

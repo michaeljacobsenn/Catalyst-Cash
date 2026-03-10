@@ -41,48 +41,48 @@ export default function HealthGauge({ score, grade, scoreColor, percentile }) {
       role="img"
       aria-label={healthGaugeLabel}
       aria-describedby="health-score-gauge-hint"
-      style={{ position: "relative", width: 90, height: 80, flexShrink: 0, isolation: "isolate" }}
+      style={{ position: "relative", width: 110, height: 100, flexShrink: 0, isolation: "isolate" }}
     >
       <svg
-        width="90"
-        height="80"
-        viewBox="0 0 90 80"
+        width="110"
+        height="100"
+        viewBox="0 0 110 100"
         style={{ position: "relative", zIndex: 1, transform: "translateZ(0)" }}
       >
         <circle
-          cx="45"
-          cy="45"
+          cx="55"
+          cy="55"
           r={radius}
           fill="none"
           stroke={`${T.border.default} `}
-          strokeWidth="6"
+          strokeWidth="8"
           strokeLinecap="round"
           strokeDasharray={`${circumference * 0.75} ${circumference * 0.25} `}
-          transform="rotate(135,45,45)"
+          transform="rotate(135,55,55)"
         />
         <circle
-          cx="45"
-          cy="45"
+          cx="55"
+          cy="55"
           r={radius}
           fill="none"
           stroke={scoreColor}
-          strokeWidth="6"
+          strokeWidth="8"
           strokeLinecap="round"
           strokeDasharray={`${arcLength} ${circumference - arcLength}`}
-          transform="rotate(135,45,45)"
+          transform="rotate(135,55,55)"
           style={{ transition: "stroke-dasharray 1.2s ease-out, stroke 0.8s ease" }}
         />
         <circle
-          cx="45"
-          cy="45"
+          cx="55"
+          cy="55"
           r={radius}
           fill="none"
           stroke={scoreColor}
-          strokeWidth="10"
+          strokeWidth="12"
           strokeLinecap="round"
           opacity="0.12"
           strokeDasharray={`${arcLength} ${circumference - arcLength}`}
-          transform="rotate(135,45,45)"
+          transform="rotate(135,55,55)"
           style={{ animation: "gaugePulseRing 3s infinite alternate cubic-bezier(0.4, 0, 0.2, 1)" }}
         />
       </svg>
@@ -95,32 +95,32 @@ export default function HealthGauge({ score, grade, scoreColor, percentile }) {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          paddingTop: 4,
+          paddingTop: 8,
           textAlign: "center",
           zIndex: 10,
         }}
       >
-        <div style={{ fontSize: 24, fontWeight: 900, color: scoreColor, fontFamily: T.font.sans, lineHeight: 1 }}>
+        <div style={{ fontSize: 32, fontWeight: 900, color: scoreColor, fontFamily: T.font.sans, lineHeight: 1 }}>
           {grade}
         </div>
-        <div style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, fontFamily: T.font.mono, marginTop: 1 }}>
+        <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, fontFamily: T.font.mono, marginTop: 2 }}>
           {displayScore}/100
         </div>
         {percentile > 0 && (
           <div
             style={{
-              fontSize: 7,
+              fontSize: 8,
               fontWeight: 800,
               color: scoreColor,
               fontFamily: T.font.mono,
               background: `${scoreColor}15`,
               backdropFilter: "blur(6px)",
               WebkitBackdropFilter: "blur(6px)",
-              padding: "2px 7px",
-              borderRadius: 10,
+              padding: "2px 8px",
+              borderRadius: 12,
               border: `1px solid ${scoreColor}20`,
-              letterSpacing: "0.02em",
-              marginTop: 4,
+              letterSpacing: "0.04em",
+              marginTop: 6,
             }}
           >
             Top {100 - percentile}%

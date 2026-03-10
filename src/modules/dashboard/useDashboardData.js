@@ -557,6 +557,7 @@ export default function useDashboardData() {
 
   return {
     dashboardMetrics,
+    fallbackChecking,
     floor,
     investmentSnapshot,
     fireProjection,

@@ -6,7 +6,7 @@ import { scheduleBillReminders } from "../notifications.js";
 import { fetchMarketPrices } from "../marketData.js";
 import { useSettings } from "./SettingsContext.jsx";
 
-const PortfolioContext = createContext(null);
+export const PortfolioContext = createContext(null);
 
 export function PortfolioProvider({ children }) {
   const { financialConfig, isSettingsReady } = useSettings();

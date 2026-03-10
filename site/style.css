@@ -1,27 +1,43 @@
 :root {
-  --bg: #0c121b;
-  --bg-elevated: rgba(18, 24, 34, 0.88);
-  --bg-panel: rgba(24, 30, 41, 0.84);
-  --line: rgba(123, 94, 167, 0.12);
-  --line-strong: rgba(123, 94, 167, 0.22);
-  --text: #e4e6f0;
-  --muted: #8890a6;
-  --dim: #6b7280;
-  --green: #2ecc71;
-  --green-deep: rgba(46, 204, 113, 0.1);
-  --amber: #e0a84d;
-  --amber-deep: rgba(224, 168, 77, 0.1);
-  --red: #e85c6a;
-  --red-deep: rgba(232, 92, 106, 0.1);
-  --blue: #6ba3e8;
-  --blue-deep: rgba(107, 163, 232, 0.1);
-  --purple: #7b5ea7;
-  --purple-deep: rgba(123, 94, 167, 0.1);
-  --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
-  --radius-xl: 30px;
-  --radius-lg: 22px;
+  /* Catalyst Cash App Theme Tokens */
+  --bg: #0B0A14;
+  --bg-elevated: #15141F;
+  --bg-panel: rgba(28, 27, 41, 0.7);
+  --bg-card: #1C1B29;
+  
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.15);
+  
+  --text: #F8FAFC;
+  --muted: #94A3B8;
+  --dim: #64748B;
+  
+  --green: #10B981;
+  --green-deep: rgba(16, 185, 129, 0.15);
+  
+  --amber: #F59E0B;
+  --amber-deep: rgba(245, 158, 11, 0.15);
+  
+  --red: #EF4444;
+  --red-deep: rgba(239, 68, 68, 0.15);
+  
+  --blue: #3B82F6;
+  --blue-deep: rgba(59, 130, 246, 0.15);
+  
+  --purple: #8A63D2;
+  --purple-deep: rgba(138, 99, 210, 0.15);
+  
+  --shadow: 0 24px 50px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 40px rgba(138, 99, 210, 0.15);
+  
+  --radius-xl: 32px;
+  --radius-lg: 24px;
   --radius-md: 16px;
   --radius-sm: 12px;
+  
+  --font-sans: "Space Grotesk", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+  
   --max: 1180px;
 }
 
@@ -33,19 +49,24 @@
 
 html {
   scroll-behavior: smooth;
-  background:
-    radial-gradient(circle at top left, rgba(123, 94, 167, 0.08), transparent 28%),
-    radial-gradient(circle at top right, rgba(46, 204, 113, 0.08), transparent 24%),
-    linear-gradient(180deg, #0c121b 0%, #121822 100%);
+  background-color: var(--bg);
+  background-image: 
+    radial-gradient(circle at top left, rgba(138, 99, 210, 0.15), transparent 35%),
+    radial-gradient(circle at top right, rgba(16, 185, 129, 0.1), transparent 30%);
 }
 
 body {
-  font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-sans);
   color: var(--text);
   background: transparent;
   min-height: 100vh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-sans);
+  color: var(--text);
 }
 
 body::before {
@@ -795,8 +816,8 @@ h2 {
 }
 
 .tone.green {
-  background: rgba(46, 204, 113, 0.1);
-  border: 1px solid rgba(46, 204, 113, 0.18);
+  background: var(--green-deep);
+  border: 1px solid rgba(16, 185, 129, 0.2);
   color: var(--green);
 }
 
@@ -820,6 +841,58 @@ h2 {
 
 .tracker-table {
   padding: 28px;
+}
+
+.glass-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-radius: var(--radius-lg);
+}
+
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .bento-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .bento-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bento-item {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s, border-color 0.3s;
+}
+
+.bento-item:hover {
+  transform: translateY(-4px);
+  border-color: var(--line-strong);
+}
+
+.bento-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
 }
 
 .compare-grid {
@@ -961,14 +1034,15 @@ h2 {
 }
 
 .price-card.free {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-panel);
 }
 
 .price-card.pro {
   background:
-    radial-gradient(circle at top right, rgba(46, 204, 113, 0.12), transparent 34%),
-    linear-gradient(180deg, rgba(16, 31, 50, 0.96), rgba(11, 24, 38, 0.94));
-  border-color: rgba(46, 204, 113, 0.22);
+    radial-gradient(circle at top right, rgba(138, 99, 210, 0.15), transparent 40%),
+    var(--bg-panel);
+  border-color: rgba(138, 99, 210, 0.3);
+  box-shadow: 0 10px 40px rgba(138, 99, 210, 0.15);
 }
 
 .price-badge {
@@ -977,13 +1051,13 @@ h2 {
   right: 20px;
   padding: 8px 12px;
   border-radius: 999px;
-  background: rgba(46, 204, 113, 0.12);
-  border: 1px solid rgba(46, 204, 113, 0.22);
-  color: var(--green);
+  background: var(--purple-deep);
+  border: 1px solid rgba(138, 99, 210, 0.3);
+  color: #D4C4FB;
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  font-family: "IBM Plex Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .price-amount {
@@ -2223,6 +2297,59 @@ p.lead {
   font-size: 0.95rem;
   margin-bottom: 0;
   color: #94a3b8;
+}
+
+/* --- Added Glass & Bento Utilities --- */
+.glass-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-radius: var(--radius-lg);
+}
+
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .bento-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .bento-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bento-item {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s, border-color 0.3s;
+}
+
+.bento-item:hover {
+  transform: translateY(-4px);
+  border-color: var(--line-strong);
+}
+
+.bento-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
 }
 
 .legal-content .policy-card li,

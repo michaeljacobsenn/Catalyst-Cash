@@ -69,19 +69,35 @@ function mergeUniqueById(existing = [], incoming = []) {
   return Array.from(map.values());
 }
 
-import { usePortfolio } from "../contexts/PortfolioContext.jsx";
+import { usePortfolio, PortfolioContext } from "../contexts/PortfolioContext.jsx";
 import { useSettings } from "../contexts/SettingsContext.jsx";
 import { useAudit } from "../contexts/AuditContext.jsx";
 
 export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled = false }) {
   const { current } = useAudit();
   const portfolioContext = usePortfolio();
-  const cards = current?.isTest ? current.demoPortfolio?.cards || [] : portfolioContext.cards;
-  const setCards = current?.isTest ? () => { } : portfolioContext.setCards;
-  const bankAccounts = current?.isTest ? current.demoPortfolio?.bankAccounts || [] : portfolioContext.bankAccounts;
-  const setBankAccounts = current?.isTest ? () => { } : portfolioContext.setBankAccounts;
+  const isTest = current?.isTest;
+
+  const cards = isTest ? current.demoPortfolio?.cards || [] : portfolioContext.cards;
+  const setCards = isTest ? () => { } : portfolioContext.setCards;
+  const bankAccounts = isTest ? current.demoPortfolio?.bankAccounts || [] : portfolioContext.bankAccounts;
+  const setBankAccounts = isTest ? () => { } : portfolioContext.setBankAccounts;
+  const renewals = isTest ? current.demoPortfolio?.renewals || [] : portfolioContext.renewals;
+  const setRenewals = isTest ? () => { } : portfolioContext.setRenewals;
+
   const { cardCatalog, marketPrices, setMarketPrices } = portfolioContext;
   const { financialConfig = {}, setFinancialConfig } = useSettings();
+
+  const demoOverrideContext = useMemo(() => {
+    if (!isTest) return portfolioContext;
+    return {
+      ...portfolioContext,
+      cards, setCards,
+      bankAccounts, setBankAccounts,
+      renewals, setRenewals,
+    };
+  }, [isTest, portfolioContext, cards, bankAccounts, renewals]);
+
   const [activeAddForm, setActiveAddForm] = useState(null); // kept for legacy compat
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [addSheetStep, setAddSheetStep] = useState(null);
@@ -657,8 +673,9 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
   );
 
   return (
-    <div className="page-body stagger-container" style={{ paddingBottom: 60, display: "flex", flexDirection: "column", gap: 0 }}>
-      <style>{`
+    <PortfolioContext.Provider value={demoOverrideContext}>
+      <div className="page-body stagger-container" style={{ paddingBottom: 60, display: "flex", flexDirection: "column", gap: 0 }}>
+        <style>{`
             @keyframes spin { 100% { transform: rotate(360deg); } }
             .spin { animation: spin 1s linear infinite; }
 
@@ -752,6 +769,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
         plaidError={plaidError}
         cardCatalog={cardCatalog}
       />
-    </div>
+      </div>
+    </PortfolioContext.Provider>
   );
 });

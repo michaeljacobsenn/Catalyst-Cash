@@ -36,7 +36,7 @@ export const AI_PROVIDERS = [
         poweredBy: "OpenAI o3-mini",
       },
     ],
-    defaultModel: "o3-mini",
+    defaultModel: "gpt-4o-mini",
     supportsStreaming: true,
     note: "No API key required. Powered by our secure backend.",
     isBackend: true,
@@ -44,7 +44,7 @@ export const AI_PROVIDERS = [
 ];
 
 export const DEFAULT_PROVIDER_ID = "backend";
-export const DEFAULT_MODEL_ID = "o3-mini";
+export const DEFAULT_MODEL_ID = "gpt-4o-mini";
 
 export function getProvider(id) {
   return AI_PROVIDERS.find(p => p.id === id) || AI_PROVIDERS[0];

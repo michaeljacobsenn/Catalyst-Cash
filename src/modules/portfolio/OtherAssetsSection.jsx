@@ -71,47 +71,44 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
         <>
             {/* ─── SAVINGS GOALS SECTION ─── */}
             {savingsGoals.length > 0 && (
-                <div>
+                <Card
+                    animate
+                    variant="glass"
+                    style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}
+                >
                     <div
                         onClick={() => setCollapsedSections(s => ({ ...s, savingsGoals: !s.savingsGoals }))}
-                        className="hover-lift"
+                        className="hover-card"
                         style={{
                             display: "flex",
                             alignItems: "center",
-                            gap: 12,
-                            marginTop: 8,
-                            marginBottom: collapsedSections.savingsGoals ? 8 : 16,
+                            justifyContent: "space-between",
                             padding: "16px 20px",
-                            borderRadius: 24,
                             cursor: "pointer",
-                            userSelect: "none",
-                            background: T.bg.glass,
-                            backdropFilter: "blur(20px)",
-                            WebkitBackdropFilter: "blur(20px)",
-                            border: `1px solid ${T.border.subtle}`,
-                            boxShadow: `0 4px 16px rgba(0,0,0,0.15), inset 0 1px 1px rgba(255,255,255,0.05)`,
-                            transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+                            background: `linear-gradient(90deg, ${T.accent.primary}08, transparent)`,
+                            borderBottom: collapsedSections.savingsGoals ? "none" : `1px solid ${T.border.subtle}`,
                         }}
                     >
-                        <div
-                            style={{
-                                width: 32,
-                                height: 32,
-                                borderRadius: 10,
-                                background: `linear-gradient(135deg, ${T.accent.primary}20, ${T.accent.emerald}10)`,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                boxShadow: `0 4px 12px ${T.accent.primary}15`,
-                                border: `1px solid ${T.accent.primary}30`,
-                            }}
-                        >
-                            <Target size={16} color={T.accent.primary} />
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <div
+                                style={{
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: 8,
+                                    background: `${T.accent.primary}1A`,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    boxShadow: `0 0 12px ${T.accent.primary}10`,
+                                }}
+                            >
+                                <Target size={14} color={T.accent.primary} />
+                            </div>
+                            <h2 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
+                                Savings Goals
+                            </h2>
                         </div>
-                        <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
-                            Savings Goals
-                        </h2>
-                        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <Badge
                                 variant="outline"
                                 style={{ fontSize: 10, color: T.accent.primary, borderColor: `${T.accent.primary}40` }}
@@ -130,7 +127,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                     {!collapsedSections.savingsGoals && (
                         <>
                             {savingsGoals.length > 0 && (
-                                <Card animate style={{ padding: 0, overflow: "hidden" }}>
+                                <div style={{ display: "flex", flexDirection: "column" }}>
                                     {savingsGoals.map((goal, i) => {
                                         const pct =
                                             goal.targetAmount > 0
@@ -265,7 +262,9 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                                                     </Mono>
                                                                     {editingGoals && (
                                                                         <button
-                                                                            onClick={() => {
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
                                                                                 if (window.confirm(`Delete "${goal.name}"?`)) removeGoal(i);
                                                                             }}
                                                                             style={{
@@ -336,10 +335,10 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                             </div>
                                         );
                                     })}
-                                </Card>
+                                </div>
                             )}
 
-                            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                            <div style={{ display: "flex", gap: 8, padding: "12px 16px", borderTop: `1px solid ${T.border.subtle}` }}>
                                 <button
                                     onClick={() => setEditingGoals(!editingGoals)}
                                     className="hover-lift"
@@ -378,70 +377,68 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                             </div>
                         </>
                     )}
-                </div>
+                </Card>
             )}
 
             {/* ─── OTHER ASSETS SECTION ─── */}
             {otherAssets.length > 0 && (
-                <div>
+                <Card
+                    animate
+                    variant="glass"
+                    style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}
+                >
                     <div
                         onClick={() => setCollapsedSections(s => ({ ...s, otherAssets: !s.otherAssets }))}
-                        className="hover-lift"
+                        className="hover-card"
                         style={{
                             display: "flex",
                             alignItems: "center",
-                            gap: 12,
-                            marginTop: 8,
-                            marginBottom: collapsedSections.otherAssets ? 8 : 16,
+                            justifyContent: "space-between",
                             padding: "16px 20px",
-                            borderRadius: 24,
                             cursor: "pointer",
-                            userSelect: "none",
-                            background: T.bg.glass,
-                            backdropFilter: "blur(20px)",
-                            WebkitBackdropFilter: "blur(20px)",
-                            border: `1px solid ${T.border.subtle}`,
-                            boxShadow: `0 4px 16px rgba(0,0,0,0.15), inset 0 1px 1px rgba(255,255,255,0.05)`,
-                            transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+                            background: `linear-gradient(90deg, ${T.accent.copper}08, transparent)`,
+                            borderBottom: collapsedSections.otherAssets ? "none" : `1px solid ${T.border.subtle}`,
                         }}
                     >
-                        <div
-                            style={{
-                                width: 32,
-                                height: 32,
-                                borderRadius: 10,
-                                background: `linear-gradient(135deg, ${T.accent.copper}20, #FFE5B410)`,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                boxShadow: `0 4px 12px ${T.accent.copper}15`,
-                                border: `1px solid ${T.accent.copper}30`,
-                            }}
-                        >
-                            <Wallet size={16} color={T.accent.copper} />
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <div
+                                style={{
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: 8,
+                                    background: `${T.accent.copper}1A`,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    boxShadow: `0 0 12px ${T.accent.copper}10`,
+                                }}
+                            >
+                                <Wallet size={14} color={T.accent.copper} />
+                            </div>
+                            <h2 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
+                                Other Assets
+                            </h2>
                         </div>
-                        <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
-                            Other Assets
-                        </h2>
-                        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <Badge
                                 variant="outline"
                                 style={{ fontSize: 10, color: T.accent.copper, borderColor: `${T.accent.copper}40` }}
                             >
                                 {totalOtherAssets > 0 ? fmt(totalOtherAssets) : "None"}
                             </Badge>
-                            {collapsedSections.otherAssets ? (
-                                <ChevronDown size={16} color={T.text.muted} />
-                            ) : (
-                                <ChevronUp size={16} color={T.text.muted} />
-                            )}
+                            <ChevronDown 
+                                size={16} 
+                                color={T.text.muted} 
+                                className="chevron-animated"
+                                data-open={String(!collapsedSections.otherAssets)} 
+                            />
                         </div>
                     </div>
 
                     {!collapsedSections.otherAssets && (
                         <>
                             {otherAssets.length > 0 && (
-                                <Card animate style={{ padding: 0, overflow: "hidden" }}>
+                                <div style={{ display: "flex", flexDirection: "column" }}>
                                     {otherAssets.map((asset, i) => (
                                         <div
                                             key={i}
@@ -540,7 +537,9 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                                             </Mono>
                                                             {editingAssets && (
                                                                 <button
-                                                                    onClick={() => {
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        e.stopPropagation();
                                                                         if (window.confirm(`Delete "${asset.name}"?`)) removeAsset(i);
                                                                     }}
                                                                     style={{
@@ -566,10 +565,10 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                             </div>
                                         </div>
                                     ))}
-                                </Card>
+                                </div>
                             )}
 
-                            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                            <div style={{ display: "flex", gap: 8, padding: "12px 16px", borderTop: `1px solid ${T.border.subtle}` }}>
                                 <button
                                     onClick={() => setEditingAssets(!editingAssets)}
                                     className="hover-lift"
@@ -607,51 +606,50 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                             </div>
                         </>
                     )}
-                </div>
+                </Card>
             )}
 
             {/* ─── DEBTS SECTION ─── */}
             {nonCardDebts.length > 0 && (
-                <div>
+                <Card
+                    animate
+                    variant="glass"
+                    style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}
+                >
                     {/* Premium Section Header: Debts */}
                     <div
                         onClick={() => setCollapsedSections(p => ({ ...p, debts: !p.debts }))}
+                        className="hover-card"
                         style={{
                             display: "flex",
                             alignItems: "center",
-                            gap: 12,
-                            marginTop: 8,
-                            marginBottom: collapsedSections.debts ? 8 : 16,
+                            justifyContent: "space-between",
                             padding: "16px 20px",
-                            borderRadius: 24,
                             cursor: "pointer",
-                            userSelect: "none",
-                            background: T.bg.glass,
-                            backdropFilter: "blur(20px)",
-                            WebkitBackdropFilter: "blur(20px)",
-                            border: `1px solid ${T.border.subtle}`,
-                            boxShadow: `0 4px 16px rgba(0,0,0,0.15), inset 0 1px 1px rgba(255,255,255,0.05)`,
-                            transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+                            background: `linear-gradient(90deg, ${T.status.amber}08, transparent)`,
+                            borderBottom: collapsedSections.debts ? "none" : `1px solid ${T.border.subtle}`,
                         }}
                     >
-                        <div
-                            style={{
-                                width: 28,
-                                height: 28,
-                                borderRadius: 8,
-                                background: `${T.status.amber}1A`,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                boxShadow: `0 0 12px ${T.status.amber}10`,
-                            }}
-                        >
-                            <AlertTriangle size={14} color={T.status.amber} />
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <div
+                                style={{
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: 8,
+                                    background: `${T.status.amber}1A`,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    boxShadow: `0 0 12px ${T.status.amber}10`,
+                                }}
+                            >
+                                <AlertTriangle size={14} color={T.status.amber} />
+                            </div>
+                            <h2 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
+                                Debts & Loans
+                            </h2>
                         </div>
-                        <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
-                            Debts & Loans
-                        </h2>
-                        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <Badge
                                 variant="outline"
                                 style={{
@@ -674,12 +672,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                     {!collapsedSections.debts && (
                         <>
                             {nonCardDebts.length > 0 && (
-                                <Card
-                                    animate
-                                    variant="glass"
-                                    className="hover-card"
-                                    style={{ padding: 0, overflow: "hidden", marginBottom: 12, borderLeft: `4px solid ${T.status.amber}` }}
-                                >
+                                <div style={{ display: "flex", flexDirection: "column" }}>
                                     {nonCardDebts
                                         .sort((a, b) => (b.balance || 0) - (a.balance || 0))
                                         .map((debt, i) => (
@@ -855,7 +848,9 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                                                     Save
                                                                 </button>
                                                                 <button
-                                                                    onClick={() => {
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        e.stopPropagation();
                                                                         if (window.confirm(`Delete "${editDebtForm.name}"?`)) removeDebt(i);
                                                                     }}
                                                                     style={{
@@ -958,35 +953,36 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                                     )}
                                                 </div>
                                             </div>
-                                        ))}
-                                </Card>
+                                    ))}
+                                </div>
                             )}
 
-                            <button
-                                onClick={() => openSheet("debt")}
-                                className="hover-btn"
-                                style={{
-                                    width: "100%",
-                                    padding: "12px",
-                                    borderRadius: T.radius.lg,
-                                    marginTop: 12,
-                                    border: `1px dashed ${T.status.amber}60`,
-                                    background: `${T.status.amber}05`,
-                                    color: T.status.amber,
-                                    fontSize: 12,
-                                    fontWeight: 800,
-                                    cursor: "pointer",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    gap: 6,
-                                }}
-                            >
-                                <Plus size={14} /> Add Debt
-                            </button>
+                            <div style={{ padding: "12px 16px", borderTop: `1px solid ${T.border.subtle}` }}>
+                                <button
+                                    onClick={() => openSheet("debt")}
+                                    className="hover-btn"
+                                    style={{
+                                        width: "100%",
+                                        padding: "12px",
+                                        borderRadius: T.radius.lg,
+                                        border: `1px dashed ${T.status.amber}60`,
+                                        background: `${T.status.amber}05`,
+                                        color: T.status.amber,
+                                        fontSize: 12,
+                                        fontWeight: 800,
+                                        cursor: "pointer",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        gap: 6,
+                                    }}
+                                >
+                                    <Plus size={14} /> Add Debt
+                                </button>
+                            </div>
                         </>
                     )}
-                </div>
+                </Card>
             )}
         </>
     );

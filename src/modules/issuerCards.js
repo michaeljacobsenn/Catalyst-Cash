@@ -7,7 +7,7 @@ const THIRTY_DAYS_MS = 1000 * 60 * 60 * 24 * 30;
 export const DEFAULT_CATALOG = {
   lastUpdated: "2026-02-22",
   issuers: {
-    Amex: {
+    "American Express": {
       personal: [
         "The Platinum Card from American Express",
         "American Express Gold Credit Card",
@@ -330,7 +330,7 @@ export const DEFAULT_CATALOG = {
 };
 
 const defaultPopular = {
-  Amex: [
+  "American Express": [
     "American Express Gold Credit Card",
     "The Platinum Card from American Express",
     "American Express Blue Cash Preferred Card",

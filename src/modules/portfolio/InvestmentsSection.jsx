@@ -97,48 +97,44 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
     if (enabledInvestments.length === 0) return null;
 
     return (
-        <div style={{ marginTop: 16 }}>
+        <Card
+            animate
+            variant="glass"
+            style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}
+        >
             <div
                 onClick={() => setCollapsedSections(p => ({ ...p, investments: !p.investments }))}
+                className="hover-card"
                 style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 12,
-                    marginTop: 8,
-                    marginBottom: collapsedSections.investments ? 8 : 16,
+                    justifyContent: "space-between",
                     padding: "16px 20px",
-                    borderRadius: 24,
                     cursor: "pointer",
-                    userSelect: "none",
-                    background: T.bg.glass,
-                    backdropFilter: "blur(20px)",
-                    WebkitBackdropFilter: "blur(20px)",
-                    border: `1px solid ${T.border.subtle}`,
-                    boxShadow: `0 4px 16px rgba(0,0,0,0.15), inset 0 1px 1px rgba(255,255,255,0.05)`,
-                    transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
-                    position: "sticky",
-                    top: 10,
-                    zIndex: 10,
+                    background: `linear-gradient(90deg, ${T.accent.emerald}08, transparent)`,
+                    borderBottom: collapsedSections.investments ? "none" : `1px solid ${T.border.subtle}`,
                 }}
             >
-                <div
-                    style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 8,
-                        background: `${T.accent.emerald}1A`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        boxShadow: `0 0 12px ${T.accent.emerald}10`,
-                    }}
-                >
-                    <TrendingUp size={14} color={T.accent.emerald} />
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div
+                        style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 8,
+                            background: `${T.accent.emerald}1A`,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            boxShadow: `0 0 12px ${T.accent.emerald}10`,
+                        }}
+                    >
+                        <TrendingUp size={14} color={T.accent.emerald} />
+                    </div>
+                    <h2 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
+                        Investments
+                    </h2>
                 </div>
-                <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
-                    Investments
-                </h2>
-                <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <button
                         onClick={e => {
                             e.stopPropagation();
@@ -180,8 +176,8 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
             </div>
 
             {!collapsedSections.investments && (
-                <>
-                    {enabledInvestments.map(({ key, label, color }) => {
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                    {enabledInvestments.map(({ key, label, color }, iGroup) => {
                         const items = holdings[key] || [];
                         const plaidItems = (financialConfig?.plaidInvestments || []).filter(pi => pi.bucket === key);
 
@@ -193,29 +189,26 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                         const totalCount = items.length + plaidItems.length;
                         const isCollapsed = collapsedInvest[key];
                         return (
-                            <Card
+                            <div
                                 key={key}
-                                animate
-                                variant="glass"
-                                className="hover-lift"
                                 style={{
-                                    marginBottom: 6,
                                     padding: 0,
-                                    overflow: "hidden",
+                                    borderBottom: iGroup === enabledInvestments.length - 1 ? "none" : `1px solid ${T.border.subtle}`,
                                     borderLeft: `3px solid ${color}`,
-                                    position: "relative",
                                 }}
                             >
                                 <div
                                     onClick={() => setCollapsedInvest(p => ({ ...p, [key]: !isCollapsed }))}
+                                    className="hover-card"
                                     style={{
-                                        padding: "10px 12px",
+                                        padding: "16px 18px",
                                         display: "flex",
                                         flexWrap: "wrap",
                                         alignItems: "center",
                                         justifyContent: "space-between",
                                         cursor: "pointer",
-                                        background: `linear-gradient(90deg, ${color}06, transparent)`,
+                                        background: `${color}08`,
+                                        borderBottom: isCollapsed ? "none" : `1px solid ${T.border.subtle}`,
                                     }}
                                 >
                                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -384,7 +377,9 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                                         </div>
                                                                         {setFinancialConfig && (
                                                                             <button
-                                                                                onClick={() => {
+                                                                                onClick={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    e.stopPropagation();
                                                                                     if (window.confirm(`Delete ${h.symbol}?`)) {
                                                                                         const cur = financialConfig?.holdings || {};
                                                                                         const updated = (cur[key] || []).filter((_, idx) => idx !== i);
@@ -419,11 +414,11 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                         )}
                                     </div>
                                 </div>
-                            </Card>
+                            </div>
                         );
                     })}
-                </>
+                </div>
             )}
-        </div>
+        </Card>
     );
 }

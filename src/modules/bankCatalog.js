@@ -221,7 +221,7 @@ export const BANK_CATALOG = {
     // ─── High-Yield Savings Specialists ───────────────────────
     "American Express National Bank": {
       checking: [],
-      savings: ["Amex High Yield Savings", "Amex CDs"],
+      savings: ["American Express High Yield Savings", "American Express CDs"],
     },
     "Bread Financial": {
       checking: [],

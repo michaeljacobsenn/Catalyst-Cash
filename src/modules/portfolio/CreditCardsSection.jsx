@@ -146,45 +146,42 @@ export default function CreditCardsSection() {
     if (cards.length === 0) return null;
 
     return (
-        <div>
+        <Card
+            animate
+            variant="glass"
+            style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}
+        >
             <div
                 onClick={() => setCollapsedSections(p => ({ ...p, creditCards: !p.creditCards }))}
+                className="hover-card"
                 style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 12,
-                    marginTop: 8,
-                    marginBottom: collapsedSections.creditCards ? 8 : 16,
+                    justifyContent: "space-between",
                     padding: "16px 20px",
-                    borderRadius: 24,
                     cursor: "pointer",
-                    userSelect: "none",
-                    background: T.bg.glass,
-                    backdropFilter: "blur(20px)",
-                    WebkitBackdropFilter: "blur(20px)",
-                    border: `1px solid ${T.border.subtle}`,
-                    boxShadow: `0 4px 16px rgba(0,0,0,0.15), inset 0 1px 1px rgba(255,255,255,0.05)`,
-                    transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+                    background: `linear-gradient(90deg, ${T.accent.primary}08, transparent)`,
+                    borderBottom: collapsedSections.creditCards ? "none" : `1px solid ${T.border.subtle}`,
                 }}
             >
-                <div
-                    style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 8,
-                        background: `${T.accent.primary}1A`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        boxShadow: `0 0 12px ${T.accent.primary}10`,
-                    }}
-                >
-                    <CreditCard size={14} color={T.accent.primary} />
-                </div>
-                <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
-                    Credit Cards
-                </h2>
-                <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div
+                        style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 8,
+                            background: `${T.accent.primary}1A`,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            boxShadow: `0 0 12px ${T.accent.primary}10`,
+                        }}
+                    >
+                        <CreditCard size={14} color={T.accent.primary} />
+                    </div>
+                    <h2 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
+                        Credit Cards
+                    </h2>
                     <Badge
                         variant="outline"
                         style={{
@@ -195,91 +192,96 @@ export default function CreditCardsSection() {
                     >
                         {cards.length}
                     </Badge>
-                    <ChevronDown
-                        size={16}
-                        color={T.text.muted}
-                        className="chevron-animated"
-                        data-open={String(!collapsedSections.creditCards)}
-                    />
                 </div>
+                <ChevronDown
+                    size={16}
+                    color={T.text.muted}
+                    className="chevron-animated"
+                    data-open={String(!collapsedSections.creditCards)}
+                />
             </div>
 
-            {!collapsedSections.creditCards &&
-                (grouped.length === 0 ? (
-                    <Card style={{ padding: "16px", textAlign: "center" }}>
+            <div className="collapse-section" data-collapsed={String(collapsedSections.creditCards)}>
+                {grouped.length === 0 ? (
+                    <div style={{ padding: "16px", textAlign: "center" }}>
                         <p style={{ fontSize: 11, color: T.text.muted }}>No credit cards yet — tap Add Account to get started.</p>
-                    </Card>
+                    </div>
                 ) : (
-                    grouped.map(([inst, cardsInCategory]) => {
-                        const colors = ic(inst);
-                        const isCollapsed = collapsedIssuers[inst];
-                        return (
-                            <Card
-                                key={inst}
-                                animate
-                                variant="glass"
-                                className="hover-card"
-                                style={{ marginBottom: 16, padding: 0, overflow: "hidden", borderLeft: `4px solid ${colors.text}` }}
-                            >
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                        {grouped.map(([inst, cardsInCategory], iGroup) => {
+                            const colors = ic(inst);
+                            const isCollapsed = collapsedIssuers[inst];
+                            return (
                                 <div
-                                    onClick={() => setCollapsedIssuers(p => ({ ...p, [inst]: !isCollapsed }))}
+                                    key={inst}
                                     style={{
-                                        padding: "16px 18px",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "space-between",
-                                        cursor: "pointer",
-                                        background: `${colors.text}08`,
+                                        padding: 0,
+                                        borderBottom: iGroup === grouped.length - 1 ? "none" : `1px solid ${T.border.subtle}`,
+                                        borderLeft: `3px solid ${colors.text}`,
                                     }}
                                 >
-                                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                        <div
-                                            style={{
-                                                padding: 6,
-                                                borderRadius: 8,
-                                                background: colors.text,
-                                                display: "flex",
-                                                alignItems: "center",
-                                                justifyContent: "center",
-                                            }}
-                                        >
-                                            <CreditCard size={14} color={T.bg.card} />
-                                        </div>
-                                        <span
-                                            style={{
-                                                fontSize: 13,
-                                                fontWeight: 800,
-                                                color: colors.text,
-                                                textTransform: "uppercase",
-                                                letterSpacing: "0.05em",
-                                            }}
-                                        >
-                                            {inst}
-                                        </span>
-                                        <Badge
-                                            variant="outline"
-                                            style={{ fontSize: 11, color: colors.text, borderColor: `${colors.text}40` }}
-                                        >
-                                            {cardsInCategory.length}
-                                        </Badge>
-                                    </div>
-                                    <ChevronDown
-                                        size={14}
-                                        color={T.text.dim}
-                                        className="chevron-animated"
-                                        data-open={String(!isCollapsed)}
-                                    />
-                                </div>
-                                <div className="collapse-section" data-collapsed={String(isCollapsed)}>
-                                    <div style={{ padding: 0 }}>
-                                        {cardsInCategory.map((card, i) => (
+                                    <div
+                                        onClick={() => setCollapsedIssuers(p => ({ ...p, [inst]: !isCollapsed }))}
+                                        className="hover-card"
+                                        style={{
+                                            padding: "16px 18px",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "space-between",
+                                            cursor: "pointer",
+                                            background: `${colors.text}08`,
+                                            borderBottom: isCollapsed ? "none" : `1px solid ${T.border.subtle}`,
+                                        }}
+                                    >
+                                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                                             <div
-                                                key={card.id}
                                                 style={{
-                                                    borderBottom: i === cardsInCategory.length - 1 ? "none" : `1px solid ${T.border.subtle}`,
+                                                    width: 24,
+                                                    height: 24,
+                                                    borderRadius: 6,
+                                                    background: colors.text,
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
                                                 }}
                                             >
-                                                <div style={{ padding: "10px 16px" }}>
+                                                <CreditCard size={12} color={T.bg.card} />
+                                            </div>
+                                            <span
+                                                style={{
+                                                    fontSize: 13,
+                                                    fontWeight: 800,
+                                                    color: colors.text,
+                                                    textTransform: "uppercase",
+                                                    letterSpacing: "0.05em",
+                                                }}
+                                            >
+                                                {inst}
+                                            </span>
+                                            <Badge
+                                                variant="outline"
+                                                style={{ fontSize: 11, color: colors.text, borderColor: `${colors.text}40` }}
+                                            >
+                                                {cardsInCategory.length}
+                                            </Badge>
+                                        </div>
+                                        <ChevronDown
+                                            size={14}
+                                            color={T.text.dim}
+                                            className="chevron-animated"
+                                            data-open={String(!isCollapsed)}
+                                        />
+                                    </div>
+                                    <div className="collapse-section" data-collapsed={String(isCollapsed)}>
+                                        <div style={{ padding: 0 }}>
+                                            {cardsInCategory.map((card, i) => (
+                                                <div
+                                                    key={card.id}
+                                                    style={{
+                                                        borderBottom: i === cardsInCategory.length - 1 ? "none" : `1px solid ${T.border.subtle}`,
+                                                    }}
+                                                >
+                                                    <div style={{ padding: "10px 16px" }}>
                                                     {editingCard === card.id ? (
                                                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                                                             {/* ── iOS Segmented Control ── */}
@@ -922,7 +924,9 @@ export default function CreditCardsSection() {
                                                             {/* Delete — subtle destructive link */}
                                                             <div style={{ textAlign: "center", paddingTop: 2 }}>
                                                                 <button
-                                                                    onClick={() => {
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        e.stopPropagation();
                                                                         if (window.confirm(`Delete "${card.nickname || card.name}"?`))
                                                                             removeCard(card.id);
                                                                     }}
@@ -1028,10 +1032,12 @@ export default function CreditCardsSection() {
                                         ))}
                                     </div>
                                 </div>
-                            </Card>
+                            </div>
                         );
-                    })
-                ))}
+                    })}
+                </div>
+            )}
         </div>
+        </Card>
     );
 }

@@ -163,7 +163,7 @@ export function applyTheme(mode) {
 }
 
 export const INSTITUTIONS = [
-  "Amex",
+  "American Express",
   "Bank of America",
   "Barclays",
   "Capital One",
@@ -185,7 +185,7 @@ export const INSTITUTIONS = [
 
 // Issuer brand colors
 export const ISSUER_COLORS = {
-  Amex: { bg: "rgba(0,111,191,0.10)", border: "rgba(0,111,191,0.20)", text: "#4DA3E8", accent: "#006FBF" },
+  "American Express": { bg: "rgba(0,111,191,0.10)", border: "rgba(0,111,191,0.20)", text: "#4DA3E8", accent: "#006FBF" },
   "Bank of America": { bg: "rgba(220,30,50,0.10)", border: "rgba(220,30,50,0.20)", text: "#E85060", accent: "#DC1E32" },
   Barclays: { bg: "rgba(0,175,215,0.10)", border: "rgba(0,175,215,0.20)", text: "#3CC0E0", accent: "#00AFD7" },
   "Capital One": { bg: "rgba(213,0,50,0.10)", border: "rgba(213,0,50,0.20)", text: "#F05060", accent: "#D50032" },
