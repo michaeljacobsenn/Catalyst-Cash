@@ -77,7 +77,7 @@ const US_STATES = [
 ];
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
-export const WizBtn = ({ children, onClick, variant = "primary", disabled = false, style = {} }) => {
+export const WizBtn = ({ children, onClick, type = "button", variant = "primary", disabled = false, style = {} }) => {
   const base = {
     padding: "13px 20px",
     borderRadius: T.radius.lg,
@@ -100,7 +100,7 @@ export const WizBtn = ({ children, onClick, variant = "primary", disabled = fals
     skip: { background: "transparent", color: T.text.dim, border: "none", fontSize: 13, padding: "8px 12px" },
   };
   return (
-    <button onClick={disabled ? undefined : onClick} style={{ ...base, ...v[variant] }}>
+    <button type={type} onClick={disabled ? undefined : onClick} style={{ ...base, ...v[variant] }}>
       {children}
     </button>
   );
@@ -2081,13 +2081,6 @@ export function PagePass3({
           ]}
         />
       </WizField>
-
-      <WizToggle
-        label="Require Authentication"
-        sub="Require Face ID / Touch ID / PIN to open the app"
-        checked={security.requireAuth}
-        onChange={v => updateSecurity("requireAuth", v)}
-      />
 
       <NavRow onBack={onBack} onNext={onNext} onSkip={onSkip} nextLabel="Save & Finish →" nextDisabled={!canProceed} />
     </div>

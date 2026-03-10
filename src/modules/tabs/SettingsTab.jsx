@@ -66,6 +66,7 @@ import { useAudit } from "../contexts/AuditContext.jsx";
 import { useSettings } from "../contexts/SettingsContext.jsx";
 import { useSecurity } from "../contexts/SecurityContext.jsx";
 import { usePortfolio } from "../contexts/PortfolioContext.jsx";
+import { useNavigation } from "../contexts/NavigationContext.jsx";
 
 export default function SettingsTab({
   onClear,
@@ -109,7 +110,8 @@ export default function SettingsTab({
     appleLinkedId,
     setAppleLinkedId,
   } = useSecurity();
-  const { cards, setCards, bankAccounts, setBankAccounts, cardCatalog, renewals } = usePortfolio();
+  const { cards, setCards, bankAccounts, setBankAccounts, cardCatalog, renewals, liabilitySum, refreshLiabilities } = usePortfolio();
+  const { navTo } = useNavigation();
 
   // Auth Plugins state management
   const [lastBackupTS, setLastBackupTS] = useState(null);
