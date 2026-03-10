@@ -8,7 +8,7 @@ import { useSettings } from "../contexts/SettingsContext.jsx";
 import { getCardMultiplier, VALUATIONS } from "../rewardsCatalog.js";
 import { classifyMerchant } from "../api.js";
 import { haptic } from "../haptics.js";
-import { InlineTooltip, FormGroup, FormRow, Skeleton } from "../ui.jsx";
+import { Card, InlineTooltip, FormGroup, FormRow, Skeleton } from "../ui.jsx";
 import { MERCHANT_DATABASE, extractCategoryByKeywords } from "../merchantDatabase.js";
 import { T } from "../constants.js";
 import { shouldShowGating } from "../subscription.js";
