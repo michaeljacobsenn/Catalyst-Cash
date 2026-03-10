@@ -204,6 +204,55 @@ export async function callAudit(
   return callBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), responseFormat);
 }
 
+/** 
+ * Rapidly classify a merchant into a rewards category using gpt-4o-mini. 
+ * This uses the standard /audit backend but passes a targeted categorization prompt.
+ */
+export async function classifyMerchant(merchantName) {
+  try {
+    const { getOrCreateDeviceId } = await import("./subscription.js");
+    const { getLocationCategorizationPrompt } = await import("./prompts.js");
+    
+    const deviceId = await getOrCreateDeviceId();
+    const sysText = getLocationCategorizationPrompt();
+    
+    // We intentionally force gpt-4o-mini to keep costs near-zero for rapid classification.
+    const rawJSON = await callBackend(
+      merchantName, // "snapshot" becomes the user query
+      "gpt-4o-mini",
+      sysText,
+      [], // no history needed
+      deviceId,
+      "openai",
+      "json"
+    );
+    
+    // Attempt to parse out the category, falling back to catch-all
+    let parsed = null;
+    if (typeof rawJSON === "string") {
+      try {
+        const cleaned = rawJSON.replace(/```json/g, "").replace(/```/g, "").trim();
+        parsed = JSON.parse(cleaned);
+      } catch (e) {
+        log.warn("wizard", "Failed to parse json string from classification", { rawJSON });
+      }
+    } else {
+      parsed = rawJSON;
+    }
+    
+    if (parsed && typeof parsed.category === "string") {
+      const c = parsed.category.toLowerCase().trim();
+      if (["dining", "groceries", "gas", "travel", "transit", "online_shopping", "wholesale_clubs", "streaming", "drugstores", "catch-all"].includes(c)) {
+        return c;
+      }
+    }
+    return "catch-all";
+  } catch (error) {
+    log.error("wizard", "Classification failed", { error: error.message });
+    throw error; // Let UI handle with error state + manual category selector
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // REMOTE GATING CONFIG — Anti-downgrade protection
 // Fetches server-side gating mode + minimum app version.

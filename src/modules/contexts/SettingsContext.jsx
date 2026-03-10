@@ -87,6 +87,7 @@ export const DEFAULT_FINANCIAL_CONFIG = {
   housingType: "", // "" | "rent" | "own"
   monthlyRent: 0, // Monthly rent payment (if renter)
   mortgagePayment: 0, // Monthly mortgage P+I+escrow (if homeowner)
+  customValuations: {}, // Custom CPP overrides (e.g., { CHASE_UR: 2.0 })
 };
 
 function financialConfigReducer(state, action) {

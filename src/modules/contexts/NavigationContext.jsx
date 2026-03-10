@@ -5,8 +5,8 @@ import { haptic } from "../haptics.js";
 const NavigationContext = createContext(null);
 
 // ── Swipeable tab order ──
-// Mirrors the bottom nav bar order exactly: Audit | Ask AI | Dashboard | Expenses | Accounts
-const SWIPE_TAB_ORDER = ["input", "chat", "dashboard", "renewals", "cards"];
+// Mirrors the bottom nav bar order exactly: Audit | Wizard | Dashboard | Expenses | Accounts
+const SWIPE_TAB_ORDER = ["input", "wizard", "dashboard", "renewals", "cards"];
 
 export function NavigationProvider({ children }) {
   const [tab, setTab] = useState("dashboard");

@@ -44,6 +44,8 @@ import { getSystemPrompt } from "./modules/prompts.js";
 import { generateStrategy } from "./modules/engine.js";
 import { POPULAR_STOCKS } from "./modules/marketData.js";
 import { buildScrubber } from "./modules/scrubber.js";
+import { extractCategoryByKeywords } from "./modules/merchantDatabase.js";
+import { getOptimalCard } from "./modules/rewardsCatalog.js";
 import { haptic } from "./modules/haptics.js";
 import { installGlobalHandlers } from "./modules/errorReporter.js";
 // Payday reminder scheduling is handled in SettingsContext.jsx
@@ -59,6 +61,7 @@ const SettingsTab = lazy(() => import("./modules/tabs/SettingsTab.jsx"));
 const CardPortfolioTab = lazy(() => import("./modules/tabs/CardPortfolioTab.jsx"));
 const RenewalsTab = lazy(() => import("./modules/tabs/RenewalsTab.jsx"));
 const TransactionFeed = lazy(() => import("./modules/tabs/TransactionFeed.jsx"));
+const CardWizardTab = lazy(() => import("./modules/tabs/CardWizardTab.jsx"));
 import GuideModal from "./modules/tabs/GuideModal.jsx";
 import LockScreen from "./modules/LockScreen.jsx";
 import SetupWizard from "./modules/tabs/SetupWizard.jsx";
@@ -67,9 +70,9 @@ import { SettingsProvider, useSettings } from "./modules/contexts/SettingsContex
 import { PortfolioProvider, usePortfolio } from "./modules/contexts/PortfolioContext.jsx";
 import { NavigationProvider, useNavigation } from "./modules/contexts/NavigationContext.jsx";
 import { AuditProvider, useAudit } from "./modules/contexts/AuditContext.jsx";
-import { uploadToICloud, downloadFromICloud } from "./modules/cloudSync.js";
 import { isPro, getGatingMode, syncRemoteGatingMode } from "./modules/subscription.js";
 import { initRevenueCat } from "./modules/revenuecat.js";
+import { syncOTAData } from "./modules/ota.js";
 import { isSecuritySensitiveKey } from "./modules/securityKeys.js";
 import { evaluateBadges, unlockBadge, BADGE_DEFINITIONS } from "./modules/badges.js";
 import "./modules/tabs/DashboardTab.css"; // Global animations, skeleton loaders, utility classes
@@ -140,9 +143,10 @@ function CatalystCash() {
   const online = useOnline();
   useGlobalHaptics(); // Auto-haptic on every button tap
 
-  // Sync remote gating config on boot (anti-downgrade protection)
+  // Sync remote gating config on boot (anti-downgrade protection) and start OTA Data routines
   useEffect(() => {
     syncRemoteGatingMode();
+    syncOTAData();
   }, []);
 
   const {
@@ -423,6 +427,10 @@ function CatalystCash() {
     navTo(lastCenterTab.current);
   }, [navTo, lastCenterTab]));
 
+  const overlaySwipeChat = useSwipeBack(useCallback(() => {
+    navTo(lastCenterTab.current);
+  }, [navTo, lastCenterTab]));
+
   const overlaySwipeGuide = useSwipeDown(useCallback(() => {
     setShowGuide(false);
   }, [setShowGuide]));
@@ -448,8 +456,36 @@ function CatalystCash() {
 
   const [showQuickMenu, setShowQuickMenu] = useState(false);
 
+  // ── GEO-FENCING SIMULATOR ──
+  const [simulatedNotification, setSimulatedNotification] = useState(null);
+
+  useEffect(() => {
+    const handleSimulate = (e) => {
+      const store = e.detail?.store || "Store";
+      const categoryStr = extractCategoryByKeywords(store) || "other";
+      // Need valuations to map strings correctly if custom ones exist, but getOptimalCard uses defaults gracefully
+      const optimal = getOptimalCard(cards || [], categoryStr, financialConfig?.valuations || {});
+
+      let recText = `Open Catalyst to see your best card.`;
+      if (optimal && optimal.yield) {
+         recText = `Use your ${optimal.cardName} here for ${parseFloat((optimal.yield * 100).toFixed(1))}% back!`;
+      }
+
+      setSimulatedNotification({
+        title: store + " Nearby",
+        body: recText,
+        store
+      });
+      // Auto-dismiss
+      setTimeout(() => setSimulatedNotification(null), 6000);
+    };
+    window.addEventListener("simulate-geo-fence", handleSimulate);
+    return () => window.removeEventListener("simulate-geo-fence", handleSimulate);
+  }, [cards, financialConfig]);
+
   // --- NATIVE SCROLL SNAP OBSERVER ---
   const snapContainerRef = useRef(null);
+  const initialScrollLock = useRef(true);
 
   useEffect(() => {
     const container = snapContainerRef.current;
@@ -477,6 +513,8 @@ function CatalystCash() {
     // Watch for physical swipe scrolling using raw math
     let scrollDebounce = null;
     const onScroll = () => {
+      if (initialScrollLock.current) return;
+      
       // If programmatically scrolling, extend the lock until scrolling stops
       if (isProgrammaticScroll) {
         if (programmaticDebounce) clearTimeout(programmaticDebounce);
@@ -489,7 +527,7 @@ function CatalystCash() {
       if (scrollDebounce) clearTimeout(scrollDebounce);
       scrollDebounce = setTimeout(() => {
         const width = container.clientWidth;
-        if (width === 0) return;
+        if (width <= 0) return; // Prevent division by zero and incorrect 0-index on boot
 
         // Calculate which pane is most visible
         const index = Math.round(container.scrollLeft / width);
@@ -501,19 +539,32 @@ function CatalystCash() {
     container.addEventListener("scroll", onScroll, { passive: true });
 
     // On mount, snap to the initial tab - wait for layout
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const initialIdx = SWIPE_TAB_ORDER.indexOf(tab);
-        if (initialIdx !== -1 && container.clientWidth > 0) {
+    const enforceInitialScroll = () => {
+      const initialIdx = SWIPE_TAB_ORDER.indexOf(tab);
+      if (initialIdx !== -1) {
+        const width = container.clientWidth || window.innerWidth;
+        const target = initialIdx * Math.max(width, 0);
+        if (Math.abs(container.scrollLeft - target) > 5) {
           isProgrammaticScroll = true;
-          container.scrollTo({ left: initialIdx * container.clientWidth, behavior: 'instant' });
+          container.scrollTo({ left: target, behavior: 'instant' });
           if (programmaticDebounce) clearTimeout(programmaticDebounce);
-          programmaticDebounce = setTimeout(() => { isProgrammaticScroll = false; }, 100);
+          programmaticDebounce = setTimeout(() => { isProgrammaticScroll = false; }, 200);
         }
-      });
-    });
+      }
+    };
+
+    // Enforcement loop: Chrome's native scroll restoration runs async after paint.
+    // We forcefully override it for the first 600ms to guarantee React's tab state is honored.
+    const enforceInterval = setInterval(enforceInitialScroll, 50);
+
+    const lockTimer = setTimeout(() => { 
+      clearInterval(enforceInterval);
+      initialScrollLock.current = false; 
+    }, 600);
 
     return () => {
+      clearInterval(enforceInterval);
+      clearTimeout(lockTimer);
       window.removeEventListener("app-scroll-to-tab", onScrollToTab);
       container.removeEventListener("scroll", onScroll);
       if (scrollDebounce) clearTimeout(scrollDebounce);
@@ -837,8 +888,8 @@ function CatalystCash() {
       },
       {
         id: "demo-card-2",
-        institution: "Amex",
-        name: "Amex Gold",
+        institution: "American Express",
+        name: "American Express Gold",
         mask: "9876",
         balance: 0,
         limit: 25000,
@@ -1278,7 +1329,7 @@ function CatalystCash() {
 
   const navItems = [
     { id: "input", label: "New Audit", icon: Plus, isCenter: false },
-    { id: "chat", label: "Ask AI", icon: MessageCircle, isCenter: false },
+    { id: "wizard", label: "Card Wizard", icon: Zap, isCenter: false },
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, isCenter: true },
     { id: "renewals", label: "Expenses", icon: ReceiptText, isCenter: false },
     {
@@ -1730,6 +1781,10 @@ function CatalystCash() {
           borderBottom: `1px solid ${T.border.subtle}`,
         }}
       >
+        <div style={{
+          position: "absolute", bottom: -1, left: 0, right: 0, height: 1,
+          background: `linear-gradient(90deg, transparent, ${T.accent.emerald}40, ${T.accent.primary}60, transparent)`
+        }} />
         <div style={{ display: "flex", gap: 8 }}>
           <button
             onClick={() => setShowGuide(!showGuide)}
@@ -1798,6 +1853,7 @@ function CatalystCash() {
             {tab === "dashboard" ? "Command Center" :
              tab === "input" ? "New Audit" :
              tab === "chat" ? "Catalyst AI" :
+             tab === "wizard" ? "Card Wizard" :
              tab === "renewals" ? "Expenses" :
              tab === "cards" ? "Accounts" : ""}
           </div>
@@ -1855,11 +1911,19 @@ function CatalystCash() {
           flex: 1,
           display: tab === "settings" || tab === "results" || tab === "history" || tab === "guide" ? "none" : "flex",
           overscrollBehaviorX: "none",
-          paddingBottom: showGuide ? 0 : 88, // Space for the floating nav pill
+          paddingBottom: "calc(var(--bottom-nav-h, 72px) + env(safe-area-inset-bottom, 16px) + 20px)", // Shrink snap-pages to end above the floating nav pill
         }}
       >
         {SWIPE_TAB_ORDER.map(t => (
-          <div key={t} className={`snap-page safe-scroll-body`} data-tabid={t}>
+          <div
+            key={t}
+            className="snap-page"
+            data-tabid={t}
+            style={{
+              overflowY: t === "chat" ? "hidden" : "auto",
+              paddingBottom: t === "chat" ? 0 : 20, // Visual breathing room at scroll bottom (nav clearance handled by container)
+            }}
+          >
             {t === "input" && (
               <ErrorBoundary name="InputForm">
                 <InputForm
@@ -1887,17 +1951,7 @@ function CatalystCash() {
               </ErrorBoundary>
             )}
 
-            {t === "chat" && (
-              <ErrorBoundary name="AI Chat">
-                <Suspense fallback={<TabFallback />}>
-                  <AIChatTab
-                    proEnabled={proEnabled}
-                    initialPrompt={chatInitialPrompt}
-                    clearInitialPrompt={() => setChatInitialPrompt(null)}
-                  />
-                </Suspense>
-              </ErrorBoundary>
-            )}
+
 
             {t === "dashboard" && (
               <ErrorBoundary name="Dashboard">
@@ -1927,6 +1981,14 @@ function CatalystCash() {
               <ErrorBoundary name="Accounts">
                 <Suspense fallback={<TabFallback />}>
                   <CardPortfolioTab onViewTransactions={() => setShowTransactionFeed(true)} proEnabled={proEnabled} />
+                </Suspense>
+              </ErrorBoundary>
+            )}
+
+            {t === "wizard" && (
+              <ErrorBoundary name="Card Wizard">
+                <Suspense fallback={<TabFallback />}>
+                  <CardWizardTab />
                 </Suspense>
               </ErrorBoundary>
             )}
@@ -2032,6 +2094,24 @@ function CatalystCash() {
         </div>
       )}
 
+      {tab === "chat" && (
+        <div ref={overlaySwipeChat.paneRef} onTouchStart={overlaySwipeChat.onTouchStart} onTouchMove={overlaySwipeChat.onTouchMove} onTouchEnd={overlaySwipeChat.onTouchEnd} className="slide-pane safe-scroll-body" style={{ flex: 1, overflowY: "auto", position: "relative", zIndex: 50, background: T.bg.base }}>
+          <ErrorBoundary name="AI Chat">
+            <Suspense fallback={<TabFallback />}>
+              <AIChatTab
+                proEnabled={proEnabled}
+                initialPrompt={chatInitialPrompt}
+                clearInitialPrompt={() => setChatInitialPrompt(null)}
+                onBack={() => {
+                  navTo(lastCenterTab.current);
+                  haptic.light();
+                }}
+              />
+            </Suspense>
+          </ErrorBoundary>
+        </div>
+      )}
+
       {tab === "settings" && (
         <ErrorBoundary name="Settings">
           <Suspense fallback={<TabFallback />}>
@@ -2093,7 +2173,7 @@ function CatalystCash() {
           border: `1px solid ${T.border.default}`,
           borderRadius: 36, // Maximum pill roundness
           position: "absolute",
-          bottom: 24, // Detached from bottom
+          bottom: "calc(env(safe-area-inset-bottom, 16px) + 16px)", // Detached from bottom safely
           left: 16, // Detached from edge
           right: 16, // Detached from edge
           zIndex: 200,
@@ -2117,7 +2197,7 @@ function CatalystCash() {
             <div
               style={{
                 position: "absolute",
-                bottom: 85,
+                bottom: "calc(env(safe-area-inset-bottom, 16px) + 76px)",
                 left: "50%",
                 transform: "translateX(-50%)",
                 background: T.bg.glass,
@@ -2326,9 +2406,9 @@ function CatalystCash() {
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      boxShadow: active ? T.shadow.navBtn : T.shadow.card,
+                      boxShadow: active ? `0 4px 20px ${T.accent.primary}60, 0 0 24px ${T.accent.emerald}40` : T.shadow.card,
                       transition: "all .3s cubic-bezier(0.16, 1, 0.3, 1)",
-                      animation: active ? "glowPulse 2.5s ease-in-out infinite" : "none",
+                      animation: active ? "glowPulse 3s ease-in-out infinite" : "none",
                       transform: active ? "scale(1.05)" : "scale(1)",
                     }}
                   >
@@ -2348,7 +2428,10 @@ function CatalystCash() {
                 
                 {/* Text only reveals on active for clean UI (unless it is the central button) */}
                 <div style={{
-                  height: active ? 14 : 0, 
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  height: active ? 18 : 0, 
                   overflow: "hidden", 
                   transition: "height .3s cubic-bezier(0.16, 1, 0.3, 1), opacity .2s",
                   opacity: active ? 1 : 0
@@ -2360,10 +2443,18 @@ function CatalystCash() {
                       fontWeight: 800,
                       fontFamily: T.font.sans,
                       letterSpacing: "0.03em",
+                      marginBottom: 2
                     }}
                   >
                     {n.label}
                   </span>
+                  {active && !isCenter && (
+                    <div style={{
+                      width: 4, height: 4, borderRadius: 2, background: T.accent.emerald,
+                      boxShadow: `0 0 8px ${T.accent.emerald}`,
+                      marginTop: 2
+                    }} />
+                  )}
                 </div>
               </button>
             );
@@ -2408,6 +2499,57 @@ function CatalystCash() {
           >
             SECURELY ERASING...
           </p>
+        </div>
+      )}
+
+      {/* SIMULATED PUSH NOTIFICATION */}
+      {simulatedNotification && (
+        <div
+          style={{
+            position: "fixed",
+            top: 16,
+            left: 16,
+            right: 16,
+            zIndex: 9999,
+            background: `linear-gradient(135deg, ${T.bg.card}, ${T.bg.surface})`,
+            borderRadius: T.radius.xl,
+            padding: 16,
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 12,
+            boxShadow: `0 12px 32px rgba(0,0,0,0.8), 0 0 0 1px ${T.border.default}`,
+            backdropFilter: "blur(24px)",
+            WebkitBackdropFilter: "blur(24px)",
+            animation: "slideDownNotif 0.4s cubic-bezier(0.16,1,0.3,1)",
+            cursor: "pointer",
+          }}
+          onClick={() => setSimulatedNotification(null)}
+        >
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 12,
+              background: T.accent.primaryDim,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <MapPin size={22} color={T.accent.primary} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
+                {simulatedNotification.title}
+              </span>
+              <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono }}>NOW</span>
+            </div>
+            <p style={{ margin: 0, fontSize: 12, color: T.text.secondary, lineHeight: 1.4 }}>
+              {simulatedNotification.body}
+            </p>
+          </div>
         </div>
       )}
     </div>

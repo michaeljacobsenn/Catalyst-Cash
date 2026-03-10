@@ -43,12 +43,16 @@ import {
   Gift,
   Baby,
   Dumbbell,
+  Sparkles,
 } from "lucide-react";
 import { T } from "../constants.js";
 import { Card } from "../ui.jsx";
 import { EmptyState } from "../components.jsx";
 import { nativeExport } from "../utils.js";
 import { getStoredTransactions, fetchAllTransactions } from "../plaid.js";
+import { PortfolioContext } from "../contexts/PortfolioContext.jsx";
+import { useSettings } from "../contexts/SettingsContext.jsx";
+import { getOptimalCard } from "../rewardsCatalog.js";
 import { haptic } from "../haptics.js";
 import "./TransactionFeed.css";
 
@@ -147,6 +151,9 @@ function buildCSV(transactions) {
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
 export default function TransactionFeed({ onClose }) {
+  const { cards } = useContext(PortfolioContext);
+  const { financialConfig } = useSettings();
+  
   const [transactions, setTransactions] = useState([]);
   const [fetchedAt, setFetchedAt] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -363,6 +370,63 @@ export default function TransactionFeed({ onClose }) {
         meta: getCategoryMeta(cat),
       }));
   }, [filtered]);
+
+  // ── Missed Opportunity Radar ──
+  const missedOpportunities = useMemo(() => {
+    if (!cards || cards.length === 0 || filtered.length === 0) return { totalMissedValue: 0, optimalTxns: 0, badTxns: 0 };
+    
+    let totalMissedValue = 0;
+    let optimalTxns = 0;
+    let badTxns = 0;
+    
+    // Only analyze debit transactions with recognizable categories
+    const analyzableTxns = filtered.filter(t => !t.isCredit && t.category && t.amount > 0);
+    
+    for (const txn of analyzableTxns) {
+      const bestCard = getOptimalCard(cards, txn.category, financialConfig?.customValuations);
+      if (!bestCard) continue;
+      
+      const optimalYield = bestCard.effectiveYield;
+      
+      // Attempt to figure out what card was actually used
+      // Since Plaid gives us the account name, we can try matching it to our portfolio
+      const usedCard = cards.find(c => 
+        (txn.accountName && c.name.toLowerCase().includes(txn.accountName.toLowerCase())) || 
+        (txn.institution && c.name.toLowerCase().includes(txn.institution.toLowerCase()))
+      );
+      
+      let actualYield = 1.0; // Assume 1% baseline if we can't identify the card
+      if (usedCard) {
+        // If we know the card they used, calculate its true yield for this category
+        const usedCardData = getOptimalCard([usedCard], txn.category, financialConfig?.customValuations);
+        if (usedCardData) {
+          actualYield = usedCardData.effectiveYield;
+        }
+      }
+      
+      // Calculate delta
+      if (optimalYield > actualYield) {
+        const yieldDiff = optimalYield - actualYield;
+        const dollarImpact = (txn.amount * yieldDiff) / 100;
+        totalMissedValue += dollarImpact;
+        badTxns++;
+        
+        // Attach optimal card data to the transaction for rendering the taglet later
+        txn.optimalCard = bestCard;
+      } else {
+        optimalTxns++;
+        txn.optimalCard = bestCard;
+        txn.usedOptimal = true;
+      }
+    }
+    
+    return {
+      totalMissedValue,
+      optimalTxns,
+      badTxns,
+      totalTxns: analyzableTxns.length
+    };
+  }, [filtered, cards, financialConfig]);
 
   // ── Infinite scroll ──
   const handleScroll = useCallback(() => {
@@ -658,6 +722,60 @@ export default function TransactionFeed({ onClose }) {
             <span style={{ fontSize: 13, fontWeight: 800, color: T.status.green, fontVariantNumeric: "tabular-nums" }}>
               {stats.totalReceived.toLocaleString("en-US", { style: "currency", currency: "USD" })}
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MISSED OPPORTUNITY RADAR ─── */}
+      {!loading && missedOpportunities.totalMissedValue > 0 && (
+        <div 
+          className="txn-missed-opp-banner"
+          style={{
+            margin: "12px 16px",
+            background: `linear-gradient(135deg, ${T.status.redDim}, ${T.bg.surface})`,
+            border: `1px solid ${T.status.red}40`,
+            borderRadius: T.radius.lg,
+            padding: 16,
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 12,
+            boxShadow: T.shadow.sm,
+            animation: "txnSlideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
+          }}
+        >
+          <div 
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              background: T.status.red,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              boxShadow: `0 4px 12px ${T.status.red}40`
+            }}
+          >
+            <Zap size={16} color="#FFF" strokeWidth={2.5} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h4 style={{ 
+              fontSize: 14, 
+              fontWeight: 800, 
+              color: T.status.red, 
+              margin: "0 0 4px 0",
+              letterSpacing: "-0.01em"
+            }}>
+              Missed Opportunity Radar
+            </h4>
+            <p style={{ 
+              fontSize: 12, 
+              color: T.text.secondary, 
+              lineHeight: 1.4,
+              margin: 0 
+            }}>
+              You lost <strong style={{ color: T.text.primary, fontVariantNumeric: "tabular-nums" }}>{missedOpportunities.totalMissedValue.toLocaleString("en-US", { style: "currency", currency: "USD" })}</strong> in value this month by using the wrong card on {missedOpportunities.badTxns} past transactions. Look for the <span style={{ color: T.accent.primary, fontWeight: 700 }}>Best Card</span> badges below.
+            </p>
           </div>
         </div>
       )}
@@ -1211,6 +1329,29 @@ export default function TransactionFeed({ onClose }) {
                             </>
                           )}
                         </div>
+                        {/* ─── BEST CARD TAGLET ─── */}
+                        {txn.optimalCard && !txn.isCredit && (
+                          <div style={{ marginTop: 4, display: "flex", alignItems: "center" }}>
+                            <span style={{
+                              fontSize: 9,
+                              fontWeight: 800,
+                              color: txn.usedOptimal ? T.status.green : T.accent.primary,
+                              background: txn.usedOptimal ? T.status.greenDim : T.accent.primaryDim,
+                              border: `1px solid ${txn.usedOptimal ? T.status.green : T.accent.primary}30`,
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                              letterSpacing: "0.02em",
+                              textTransform: "uppercase",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 3
+                            }}>
+                              <Sparkles size={10} />
+                              {txn.usedOptimal ? "Used Best Card: " : "Should've Used: "} 
+                              {txn.optimalCard.name.length > 18 ? txn.optimalCard.name.substring(0, 15) + "..." : txn.optimalCard.name} ({txn.optimalCard.effectiveYield}x)
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Amount */}

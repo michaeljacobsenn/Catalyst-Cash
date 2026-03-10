@@ -228,7 +228,7 @@ function TypingIndicator() {
   );
 }
 
-export default memo(function AIChatTab({ proEnabled = false, initialPrompt = null, clearInitialPrompt = null }) {
+export default memo(function AIChatTab({ proEnabled = false, initialPrompt = null, clearInitialPrompt = null, onBack = null }) {
   const { current, history, trendContext } = useAudit();
   const { apiKey, aiProvider, aiModel, financialConfig, persona, personalRules } = useSettings();
   const { cards, renewals } = usePortfolio();
@@ -662,8 +662,33 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
         `}</style>
 
       {/* ── HEADER ACTIONS ONLY ── */}
-      {messages.length > 0 && (
-        <div style={{ position: "absolute", top: 12, right: 16, zIndex: 10 }}>
+      <div style={{ position: "absolute", top: 12, left: 16, right: 16, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        {onBack ? (
+          <button
+            onClick={onBack}
+            aria-label="Go back"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 17,
+              border: `1px solid ${T.border.subtle}`,
+              background: T.bg.glass,
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: T.text.muted,
+              transition: "all .2s",
+              boxShadow: T.shadow.subtle,
+            }}
+          >
+            <ChevronLeft size={18} strokeWidth={2.5} />
+          </button>
+        ) : <div />}
+
+        {messages.length > 0 && (
           <button
             onClick={clearChat}
             aria-label="New chat"
@@ -694,8 +719,8 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
           >
             <Sparkles size={14} strokeWidth={2.5} style={{ opacity: 0.8 }} />
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* ── MESSAGES AREA ── */}
       <div

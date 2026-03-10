@@ -32,6 +32,8 @@ import {
   Layers,
   Save,
   RefreshCw,
+  Terminal,
+  MapPin
 } from "lucide-react";
 import { T, APP_VERSION } from "../constants.js";
 import { AI_PROVIDERS, getProvider } from "../providers.js";
@@ -828,6 +830,7 @@ export default function SettingsTab({
                     { id: "backup", label: "Backup & Sync", icon: Database, color: T.status.green, desc: "iCloud, exports, config" },
                     { id: "security", label: "App Security", icon: Lock, color: T.status.red, desc: "Passcodes, Face ID" },
                     { id: "guide", label: "Help & Guide", icon: Info, color: T.text.secondary, desc: "Learn how Catalyst works" },
+                    { id: "dev", label: "Developer Tools", icon: Terminal, color: T.text.dim, desc: "Simulators & testing" },
                   ].map((item, i, arr) => (
                     <button
                       key={item.id}
@@ -2391,6 +2394,69 @@ export default function SettingsTab({
                   </div>
                 </div>
               )}
+            </Card>
+
+            {/* ── Developer Tools ───────────────────────────────────────── */}
+            <Card
+              style={{ borderLeft: `3px solid ${T.text.dim}40`, display: activeMenu === "dev" ? "block" : "none" }}
+            >
+              <Label>Simulators</Label>
+              <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.6, marginBottom: 16 }}>
+                Trigger simulated native bridging events for testing features on web.
+              </p>
+              
+              <button
+                onClick={() => {
+                  haptic.medium();
+                  window.dispatchEvent(new CustomEvent("simulate-geo-fence", { detail: { store: "Whole Foods" } }));
+                }}
+                className="hover-btn"
+                style={{
+                  width: "100%",
+                  padding: "14px",
+                  borderRadius: T.radius.md,
+                  border: `1px solid ${T.border.default}`,
+                  background: T.bg.elevated,
+                  color: T.text.primary,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  marginBottom: 12
+                }}
+              >
+                <MapPin size={16} color={T.status.green} />
+                Simulate: Arrive at Whole Foods
+              </button>
+              
+              <button
+                onClick={() => {
+                  haptic.medium();
+                  window.dispatchEvent(new CustomEvent("simulate-geo-fence", { detail: { store: "Shell Station" } }));
+                }}
+                className="hover-btn"
+                style={{
+                  width: "100%",
+                  padding: "14px",
+                  borderRadius: T.radius.md,
+                  border: `1px solid ${T.border.default}`,
+                  background: T.bg.elevated,
+                  color: T.text.primary,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8
+                }}
+              >
+                <MapPin size={16} color={T.status.red} />
+                Simulate: Arrive at Shell Gas
+              </button>
             </Card>
 
             {/* ── Security Suite ───────────────────────────────────────── */}
