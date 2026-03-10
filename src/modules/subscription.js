@@ -214,6 +214,7 @@ export const TIERS = {
       "advanced_alerts", // Score change drivers, trend warnings
       "priority_refresh", // 15-min market data
       "unlimited_chat", // 100/day AskAI messages (vs 15/day free)
+      "card_wizard", // Card Wizard feature
 
       // ── Future Pro Features (roadmap) ──
       // "ai_followup_chat",     // Ask follow-up questions after audit

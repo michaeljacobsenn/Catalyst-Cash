@@ -1988,7 +1988,7 @@ function CatalystCash() {
             {t === "wizard" && (
               <ErrorBoundary name="Card Wizard">
                 <Suspense fallback={<TabFallback />}>
-                  <CardWizardTab />
+                  <CardWizardTab proEnabled={proEnabled} />
                 </Suspense>
               </ErrorBoundary>
             )}
