@@ -1,11 +1,7 @@
 import { useRef } from "react";
-import { Zap, Activity } from "lucide-react";
+import { Zap, Activity, ChevronRight, Settings, Building2, CalendarClock } from "lucide-react";
 import { T } from "../constants.js";
-import { fmt } from "../utils.js";
 import { Card, Label } from "../ui.jsx";
-import { Mono } from "../components.jsx";
-import BudgetTab from "../tabs/BudgetTab.jsx";
-import CashFlowCalendar from "../tabs/CashFlowCalendar.jsx";
 import { haptic } from "../haptics.js";
 import { useSettings } from "../contexts/SettingsContext.jsx";
 import { usePortfolio } from "../contexts/PortfolioContext.jsx";
@@ -46,7 +42,7 @@ export default function EmptyDashboard({ investmentSnapshot, onRestore, onDemoAu
       desc: "Income, zip code, and basic settings.",
       done: !!financialConfig?.incomeSources?.length,
       action: onGoSettings,
-      icon: "⚙️"
+      Icon: Settings,
     },
     {
       id: "cards",
@@ -54,7 +50,7 @@ export default function EmptyDashboard({ investmentSnapshot, onRestore, onDemoAu
       desc: "Securely link your banks via Plaid.",
       done: hasCards,
       action: onGoCards,
-      icon: "🏦"
+      Icon: Building2,
     },
     {
       id: "renewals",
@@ -62,7 +58,7 @@ export default function EmptyDashboard({ investmentSnapshot, onRestore, onDemoAu
       desc: "Add Netflix, Spotify, rent, etc.",
       done: hasRenewals,
       action: onGoRenewals,
-      icon: "📅"
+      Icon: CalendarClock,
     }
   ];
 
@@ -72,7 +68,7 @@ export default function EmptyDashboard({ investmentSnapshot, onRestore, onDemoAu
   return (
     <div
       className="page-body"
-      style={{ paddingBottom: 20, display: "flex", flexDirection: "column", minHeight: "100%" }}
+      style={{ paddingBottom: 20 }}
     >
       {/* 🚀 HERO SECTION */}
       <div style={{ textAlign: "center", paddingTop: 20, paddingBottom: 20, animation: "fadeInUp .6s ease-out both" }}>
@@ -260,7 +256,7 @@ export default function EmptyDashboard({ investmentSnapshot, onRestore, onDemoAu
       )}
 
       {/* 💾 RESTORE SYSTEM */}
-      <div style={{ marginTop: "auto", paddingTop: 24, textAlign: "center" }}>
+      <div style={{ paddingTop: 24, textAlign: "center" }}>
         <input
           ref={restoreInputRef}
           type="file"

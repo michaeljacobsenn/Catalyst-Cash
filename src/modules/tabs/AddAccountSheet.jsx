@@ -26,7 +26,7 @@ import { getTickerOptions } from "../marketData.js";
 import { haptic } from "../haptics.js";
 
 const INSTITUTIONS = [
-  "Amex",
+  "American Express",
   "Bank of America",
   "Barclays",
   "Capital One",

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, memo } from "react";
-import { MessageCircle, Send, Trash2, Sparkles, ArrowDown, Loader2, AlertTriangle, ArrowUpRight, ChevronRight } from "lucide-react";
+import { MessageCircle, Send, Trash2, Sparkles, ArrowDown, Loader2, AlertTriangle, ArrowUpRight, ChevronRight, ChevronLeft } from "lucide-react";
 import { T } from "../constants.js";
 import { Card, Badge, Skeleton } from "../ui.jsx";
 import { Mono } from "../components.jsx";
@@ -87,7 +87,7 @@ function getWeeklySuggestions() {
 // Handles partial streaming gracefully by avoiding broken markdown
 function ChatMarkdown({ text, isStreaming: live }) {
   if (!text) return null;
-  const lines = text.split("\n");
+  const lines = text.trim().split("\n");
 
   return (
     <div>
@@ -246,16 +246,19 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
 
   const suggestionsScrollRef = useRef(null);
   const [canScrollRight, setCanScrollRight] = useState(true);
+  const [canScrollLeft, setCanScrollLeft] = useState(false); // New state variable
 
   const handleSuggestionsScroll = useCallback((e) => {
     const { scrollLeft, scrollWidth, clientWidth } = e.target;
-    setCanScrollRight(Math.ceil(scrollLeft) + clientWidth < scrollWidth - 10);
+    setCanScrollLeft(scrollLeft > 10); // Update canScrollLeft
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10); // Update canScrollRight
   }, []);
 
   useEffect(() => {
     if (suggestionsScrollRef.current) {
-      const { scrollWidth, clientWidth } = suggestionsScrollRef.current;
-      setCanScrollRight(scrollWidth > clientWidth);
+      const { scrollLeft, scrollWidth, clientWidth } = suggestionsScrollRef.current;
+      setCanScrollLeft(scrollLeft > 10); // Initialize left scroll state
+      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10); // Initialize right scroll state
     }
   }, []);
 
@@ -645,10 +648,10 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "100%",
+        height: "100%", // This ensures the container takes the full height of the snap page
         width: "100%",
-        flex: 1,           // Ensure it competes properly in the snap-page flex column
-        minHeight: 0,      // Prevent content from breaking out of the flex container
+        flex: 1,
+        minHeight: 0,
         boxSizing: "border-box",
         position: "relative",
       }}
@@ -702,11 +705,11 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
         style={{
           flex: 1,
           overflowY: "auto",
-          padding: "12px 14px",
+          padding: "16px 14px",
           display: "flex",
           flexDirection: "column",
           gap: 6,
-          justifyContent: messages.length === 0 ? "center" : "flex-end",
+          // Let flexbox naturally push elements around instead of hardcoding justify-content inside a scrolling container
           touchAction: "pan-y pinch-zoom",
           overscrollBehavior: "contain none",
         }}
@@ -870,7 +873,57 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
               ))}
               </div>
               
-              {/* Premium Glassmorphic Scroll Arrow Indicator */}
+              {/* Premium Glassmorphic Scroll Arrow Indicator (Left) */}
+              <div
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  top: 0,
+                  bottom: 20, 
+                  width: 50,
+                  background: `linear-gradient(to left, transparent, ${T.bg.base})`,
+                  opacity: canScrollLeft ? 1 : 0,
+                  pointerEvents: "none", 
+                  transition: "opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                  paddingLeft: 8,
+                  zIndex: 2,
+                }}
+              >
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (suggestionsScrollRef.current) {
+                      haptic.light();
+                      suggestionsScrollRef.current.scrollBy({ left: -200, behavior: 'smooth' });
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  className="hover-btn"
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    background: "rgba(255, 255, 255, 0.08)",
+                    backdropFilter: "blur(12px)",
+                    WebkitBackdropFilter: "blur(12px)",
+                    border: "1px solid rgba(255, 255, 255, 0.15)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                    pointerEvents: "auto", 
+                    cursor: "pointer",
+                  }}
+                >
+                  <ChevronLeft size={16} color={T.text.primary} style={{ marginRight: 2 }} />
+                </div>
+              </div>
+
+              {/* Premium Glassmorphic Scroll Arrow Indicator (Right) */}
               <div
                 style={{
                   position: "absolute",
@@ -959,8 +1012,8 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
                 >
                   <div
                     style={{
-                      maxWidth: isUser ? "82%" : "92%",
-                      padding: isUser ? "12px 18px" : "14px 18px",
+                      maxWidth: isUser ? "82%" : "95%", // Allow assistant to take more width so markdown tables fit better
+                      padding: isUser ? "12px 18px" : "12px 14px", // Tighter padding for markdown 
                       borderRadius: borderRadius,
                       background: isUser ? T.accent.gradient : T.bg.elevated,
                       border: isUser ? "none" : `1px solid ${T.border.subtle}`,
@@ -976,7 +1029,9 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
                     {isUser ? (
                       <p style={{ margin: 0, fontWeight: 500 }}>{msg.content}</p>
                     ) : (
-                      <ChatMarkdown text={msg.content} isStreaming={isLatestAssistant} />
+                      <div className="ask-ai-markdown">
+                        <ChatMarkdown text={msg.content} isStreaming={isLatestAssistant} />
+                      </div>
                     )}
                     {isLatestAssistant && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: msg.content ? 12 : 4 }}>
@@ -1052,7 +1107,7 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
           onClick={() => scrollToBottom()}
           style={{
             position: "absolute",
-            bottom: 80,
+            bottom: 72,
             right: 16,
             zIndex: 10,
             width: 36,
@@ -1079,7 +1134,7 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
       <div
         style={{
           padding: "8px 12px",
-          paddingBottom: "112px", // Safe area padding for the floating navigation pill
+          paddingBottom: 12, // Nav clearance handled by snap-container padding
           borderTop: `1px solid ${T.border.subtle}`,
           background: T.bg.glass,
           backdropFilter: "blur(16px)",

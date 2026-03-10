@@ -83,6 +83,8 @@ export const GlobalStyles = () => (
     @keyframes confettiFall{0%{transform:translateY(0) rotate(0deg) scale(1);opacity:1}100%{transform:translateY(85vh) rotate(720deg) scale(0.3);opacity:0}}
     @keyframes confettiBurst{0%{transform:translateY(0) scale(0);opacity:0}15%{opacity:1;transform:translateY(-20px) scale(1)}100%{transform:translateY(85vh) rotate(720deg) scale(0.3);opacity:0}}
     @keyframes floatUp{0%{transform:translateY(0);opacity:0.8}50%{transform:translateY(-10px);opacity:1}100%{transform:translateY(0);opacity:0.6}}
+    @keyframes ctaShimmer{0%{background-position:-200% center}100%{background-position:200% center}}
+    @keyframes ambientFloat{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(8px,-6px) scale(1.05)}66%{transform:translate(-4px,4px) scale(0.97)}}
     @keyframes tabSlideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
     @keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
     @keyframes tabFadeIn{from{opacity:0}to{opacity:1}}
@@ -223,7 +225,7 @@ export const GlobalStyles = () => (
     /* Safe-area + bottom-nav aware padding for scroll bodies */
     :root{--bottom-nav-h:72px;--top-bar-h:48px}
     .safe-scroll-body{
-      padding-bottom:calc(var(--bottom-nav-h,72px) + env(safe-area-inset-bottom, 0px) + 16px);
+      padding-bottom:calc(var(--bottom-nav-h,72px) + env(safe-area-inset-bottom, 16px) + 24px);
     }
     .safe-pane{
       padding-top:calc(var(--top-bar-h,0px) + env(safe-area-inset-top,0px));
@@ -292,6 +294,41 @@ export const GlobalStyles = () => (
       transition:transform .1s cubic-bezier(0.4,0,0.2,1), box-shadow .1s ease !important;
     }
 
+    /* ── CTA Shimmer Button — draws attention to primary actions ── */
+    .cta-shimmer{
+      position:relative;
+      overflow:hidden;
+    }
+    .cta-shimmer::after{
+      content:'';
+      position:absolute;
+      inset:0;
+      background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,0.15) 50%,transparent 60%);
+      background-size:200% 100%;
+      animation:ctaShimmer 3s ease-in-out infinite;
+      pointer-events:none;
+      border-radius:inherit;
+    }
+
+    /* ── Nav Active Dot Indicator ── */
+    .nav-active-dot::after{
+      content:'';
+      position:absolute;
+      bottom:2px;
+      left:50%;
+      transform:translateX(-50%);
+      width:4px;
+      height:4px;
+      border-radius:2px;
+      background:${T.accent.primary};
+      opacity:0;
+      transition:opacity .3s ease, transform .3s var(--spring-elastic);
+    }
+    .nav-active-dot[data-active="true"]::after{
+      opacity:1;
+      transform:translateX(-50%) scale(1);
+    }
+
     /* ── Landscape mode: constrain to a centered 520px pillar ── */
     @media (orientation:landscape) and (max-height:600px){
       #root{
@@ -306,7 +343,7 @@ export const GlobalStyles = () => (
     /* ── Keyboard-aware scrolling: let the environment variable shift content ── */
     @supports (padding-bottom: env(keyboard-inset-height, 0px)){
       .safe-scroll-body{
-        padding-bottom:calc(var(--bottom-nav-h,72px) + env(keyboard-inset-height,0px) + 16px);
+        padding-bottom:calc(var(--bottom-nav-h,72px) + env(keyboard-inset-height,0px) + 24px);
       }
     }
   `}</style>

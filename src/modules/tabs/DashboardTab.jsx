@@ -33,7 +33,6 @@ import DebtSimulator from "./DebtSimulator.jsx";
 import FIReSimulator from "./FIReSimulator.jsx";
 import WeeklyChallenges from "./WeeklyChallenges.jsx";
 import CashFlowCalendar from "./CashFlowCalendar.jsx";
-import BudgetTab from "./BudgetTab.jsx";
 import CreditScoreSimulator from "./CreditScoreSimulator.jsx";
 import BillNegotiationCard from "./BillNegotiationCard.jsx";
 import { haptic } from "../haptics.js";
@@ -66,6 +65,29 @@ import EmptyDashboard from "../dashboard/EmptyDashboard.jsx";
 const SYNC_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
 let _autoSyncDone = false; // Survives component remounts — only auto-sync once per app session
 const LazyProPaywall = lazy(() => import("./ProPaywall.jsx"));
+
+
+const DashboardSection = ({ title, children, marginTop = 24 }) => (
+  <section style={{ marginTop, marginBottom: 16 }}>
+    <h2
+      style={{
+        fontSize: 12,
+        fontWeight: 800,
+        textTransform: "uppercase",
+        letterSpacing: "0.12em",
+        color: T.text.dim,
+        marginBottom: 10,
+        marginLeft: 4,
+        fontFamily: T.font.sans,
+      }}
+    >
+      {title}
+    </h2>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {children}
+    </div>
+  </section>
+);
 
 export default memo(function DashboardTab({
   onRestore,
@@ -124,6 +146,7 @@ export default memo(function DashboardTab({
   const p = current?.parsed;
   const {
     dashboardMetrics,
+    fallbackChecking,
     floor,
     investmentSnapshot,
     fireProjection,
@@ -136,9 +159,6 @@ export default memo(function DashboardTab({
     freedomStats,
     alerts,
   } = useDashboardData();
-
-  // Main Segmented View Toggle
-  const [viewMode, setViewMode] = useState("command"); // 'command' | 'budget'
 
   // Confetti
   const [runConfetti, setRunConfetti] = useState(false);
@@ -253,8 +273,6 @@ export default memo(function DashboardTab({
     return (
       <EmptyDashboard
         investmentSnapshot={investmentSnapshot}
-        viewMode={viewMode}
-        setViewMode={setViewMode}
         onRestore={onRestore}
         onDemoAudit={onDemoAudit}
       />
@@ -439,120 +457,8 @@ export default memo(function DashboardTab({
         </Card>
       )}
 
-      {/* Segmented View Toggle & Global Actions */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            background: T.bg.elevated,
-            padding: 3,
-            borderRadius: T.radius.lg,
-            border: `1px solid ${T.border.subtle} `,
-          }}
-        >
-          {[
-            { id: "command", label: "Command Center" },
-            { id: "budget", label: "Weekly Budget" },
-          ].map(v => (
-            <button
-              key={v.id}
-              className="a11y-hit-target hover-btn"
-              onClick={() => {
-                haptic.selection();
-                setViewMode(v.id);
-              }}
-              style={{
-                flex: 1,
-                padding: "6px 12px",
-                border: "none",
-                borderRadius: T.radius.md,
-                background: viewMode === v.id ? T.bg.card : "transparent",
-                color: viewMode === v.id ? T.text.primary : T.text.dim,
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: "pointer",
-                lineHeight: 1.3,
-                boxShadow: viewMode === v.id ? T.shadow.navBtn : "none",
-                transition: "all .2s ease",
-              }}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Action buttons (Latest Result / Export / Share) */}
-        {current && (
-          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-            <button
-              className="a11y-hit-target hover-btn"
-              onClick={() => {
-                haptic.selection();
-                navTo("history");
-              }}
-              style={{
-                height: 44,
-                padding: "0 12px",
-                borderRadius: T.radius.md,
-                border: `1px solid ${T.border.subtle}`,
-                background: T.bg.elevated,
-                color: T.text.secondary,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 5,
-                boxShadow: T.shadow.sm,
-                flexShrink: 0,
-                fontSize: 11,
-                fontWeight: 700,
-                fontFamily: T.font.mono,
-              }}
-            >
-              Latest
-            </button>
-            {[
-              { fn: () => exportAudit(current), icon: Download },
-              { fn: () => shareAudit(current), icon: ExternalLink },
-            ].map(({ fn, icon: I }, i) => (
-              <button
-                key={i}
-                className="a11y-hit-target hover-btn"
-                onClick={fn}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: T.radius.md,
-                  border: `1px solid ${T.border.subtle} `,
-                  background: T.bg.elevated,
-                  color: T.text.primary,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: T.shadow.sm,
-                  flexShrink: 0,
-                }}
-              >
-                <I size={17} strokeWidth={2.2} />
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {viewMode === "budget" ? (
-        <BudgetTab
-          budgetCategories={financialConfig?.budgetCategories || []}
-          budgetActuals={current?.form?.budgetActuals || {}}
-          weeklySpendAllowance={financialConfig?.weeklySpendAllowance || 0}
-          financialConfig={financialConfig}
-          setFinancialConfig={setFinancialConfig}
-          incomeSources={financialConfig?.incomeSources || []}
-        />
-      ) : (
-        <>
+      {/* ═══ COMMAND CENTER ═══ */}
+      <>
           {/* Demo Banner */}
           {current?.isTest && (
             <Card
@@ -623,342 +529,124 @@ export default memo(function DashboardTab({
             </Suspense>
           )}
 
-          {/* ═══ COMMAND HEADER — Consolidated Hero ═══ */}
-          <Card
-            animate
-            delay={50}
-            className="hover-card"
-            style={{
-              padding: 0,
-              marginBottom: 24,
-              overflow: "hidden",
-              position: "relative",
-              background: T.bg.card,
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
-              border: `1px solid ${scoreColor}25`,
-              boxShadow: `0 16px 40px -12px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06), 0 0 50px ${scoreColor}10`,
-              zIndex: 0,
-            }}
-          >
-            <div
-              style={{
-                position: "absolute",
-                inset: -60,
-                zIndex: -1,
-                background: `radial-gradient(circle at 85% 0%, ${scoreColor}25, transparent 50%), radial-gradient(circle at 10% 110%, ${T.accent.primary}20, transparent 45%)`,
-                backgroundSize: "200% 200%",
-                animation: "ambientGlow 14s ease-in-out infinite alternate",
-              }}
-            />
-            {/* Top section: Score gauge + Net Worth */}
-            <div style={{ padding: "24px 20px 18px", display: "flex", alignItems: "center", gap: 20 }}>
-              {hs.score != null && (
-                <HealthGauge score={score} grade={grade} scoreColor={scoreColor} percentile={percentile} />
-              )}
+          {/* ═══ ALERT STRIP ═══ */}
+          <AlertStrip alerts={alerts} />
 
-              {/* Net Worth + Status */}
-              <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                  <StatusDot status={cleanStatus} size="sm" />
-                  <Mono size={9} color={T.text.dim}>
-                    {fmtDate(current.date)}
-                  </Mono>
-                  {streak > 1 && (
-                    <div
-                      title="Weekly Audit Streak"
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 3,
-                        padding: "1px 6px",
-                        borderRadius: 12,
-                        background: `linear-gradient(135deg, ${T.accent.emerald}15, ${T.status.green}15)`,
-                        border: `1px solid ${T.status.green}25`,
-                      }}
-                    >
-                      <span style={{ fontSize: 10 }}>📅</span>
-                      <span style={{ fontSize: 8, fontWeight: 800, color: T.status.green, fontFamily: T.font.mono }}>
-                        W{streak}
-                      </span>
-                    </div>
-                  )}
-                  {noSpendStreak >= 1 && (
-                    <div
-                      title="No-Spend Discretionary Streak"
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 3,
-                        padding: "1px 6px",
-                        borderRadius: 12,
-                        background: `linear-gradient(135deg, #FF6B3518, #FF8C0018)`,
-                        border: `1px solid #FF6B3525`,
-                        animation: noSpendStreak >= 3 ? "alertPulse 2s ease-in-out infinite" : "none",
-                      }}
-                    >
-                      <span style={{ fontSize: 10 }}>🔥</span>
-                      <span style={{ fontSize: 8, fontWeight: 800, color: "#FF8C00", fontFamily: T.font.mono }}>
-                        {noSpendStreak} DAYS
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <p
-                  style={{
-                    fontSize: 10,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.14em",
-                    color: T.text.secondary,
-                    marginBottom: 6,
-                    fontFamily: T.font.mono,
-                    fontWeight: 800,
-                  }}
-                >
-                  Net Worth
-                </p>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
-                  <CountUp
-                    value={p?.netWorth ?? 0}
-                    size={32}
-                    weight={900}
-                    color={p?.netWorth != null && p.netWorth >= 0 ? T.text.primary : T.status.red}
-                  />
-                </div>
-                {p?.netWorthDelta && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 3 }}>
-                    {String(p.netWorthDelta).includes("+") ? (
-                      <ArrowUpRight size={12} color={T.status.green} />
-                    ) : (
-                      <ArrowDownRight size={12} color={T.status.red} />
-                    )}
-                    <Mono size={10} color={String(p.netWorthDelta).includes("+") ? T.status.green : T.status.red}>
-                      {p.netWorthDelta}
-                    </Mono>
-                  </div>
-                )}
-                {freedomStats.freeDateStr && freedomStats.weeklyPaydown != null && (
-                  <div
-                    style={{
-                      marginTop: 8,
-                      background: `${T.status.green}15`,
-                      border: `1px solid ${T.status.green}30`,
-                      borderRadius: 4,
-                      padding: "4px 8px",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
-                    <span style={{ fontSize: 12 }}>🎯</span>
-                    <p
-                      style={{
-                        fontSize: 9,
-                        color: T.status.green,
-                        margin: 0,
-                        fontWeight: 700,
-                        fontFamily: T.font.mono,
-                      }}
-                    >
-                      Projected debt-free: {freedomStats.freeDateStr} at current $
-                      {freedomStats.weeklyPaydown.toFixed(0)}/wk
-                    </p>
-                  </div>
-                )}
-                {summary && (
-                  <p
-                    style={{ fontSize: 10, color: T.text.secondary, lineHeight: 1.4, margin: "6px 0 0", maxWidth: 240 }}
-                  >
-                    {summary}
-                  </p>
-                )}
-                {hs.narrative && (
-                  <div
-                    style={{
-                      marginTop: 12,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 8,
-                      padding: "10px 12px",
-                      background: `${scoreColor}06`,
-                      border: `1px solid ${scoreColor}20`,
-                      borderRadius: T.radius.md,
-                    }}
-                  >
-                    {hs.narrative
-                      .split(/(?<=[.?!])\s+/)
-                      .filter(Boolean)
-                      .map((sentence, i) => (
-                        <div key={i} style={{ display: "flex", gap: 8, alignItems: "start" }}>
-                          <div style={{ marginTop: 2, flexShrink: 0 }}>
-                            {score >= 80 ? (
-                              <CheckCircle size={10} color={T.status.green} />
-                            ) : (
-                              <AlertTriangle size={10} color={scoreColor} />
-                            )}
-                          </div>
-                          <p style={{ fontSize: 10, color: T.text.secondary, lineHeight: 1.4, margin: 0 }}>
-                            {sentence.trim()}
-                          </p>
-                        </div>
-                      ))}
+          {/* ═══ COMMAND HEADER — Bento Grid ═══ */}
+          {/* Top Row: Health Score (Left) & Available Cash (Right) */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            
+            {/* Health Score Square */}
+            <Card
+              animate
+              delay={50}
+              className="hover-card a11y-hit-target"
+              onClick={() => {
+                haptic.selection();
+                onViewResult();
+              }}
+              style={{
+                padding: "20px 16px",
+                position: "relative",
+                background: T.bg.card,
+                backdropFilter: "blur(20px)",
+                WebkitBackdropFilter: "blur(20px)",
+                border: `1px solid ${scoreColor}25`,
+                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 24px -8px ${scoreColor}15`,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                overflow: "hidden",
+                minHeight: 160,
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background: `radial-gradient(circle at center, ${scoreColor}15 0%, transparent 70%)`,
+                  opacity: 0.5,
+                  zIndex: 0,
+                }}
+              />
+              <div style={{ position: "relative", zIndex: 1, transform: "scale(0.9)" }}>
+                {hs.score != null ? (
+                  <HealthGauge score={score} grade={grade} scoreColor={scoreColor} percentile={percentile} />
+                ) : (
+                  <div style={{ width: 80, height: 80, borderRadius: "50%", background: `${T.border.default}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Activity color={T.text.dim} />
                   </div>
                 )}
               </div>
-            </div>
+              <div style={{ marginTop: -10, textAlign: "center", zIndex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary }}>Health Score</div>
+                <div style={{ fontSize: 11, color: scoreColor, fontWeight: 600, marginTop: 2 }}>{cleanStatus}</div>
+              </div>
+            </Card>
 
-            {/* Metrics strip */}
-            <MetricsBar quickMetrics={quickMetrics} privacyMode={privacyMode} />
-          </Card>
-
-          {/* ═══ GLANCEABLE BUDGET PACE ═══ */}
-          {(() => {
-            const budgetActuals = current?.form?.budgetActuals || {};
-            const budgetCategories = financialConfig?.budgetCategories || [];
-            const weeklySpendAllowance = financialConfig?.weeklySpendAllowance || 0;
-            const totalMonthlyBudget = budgetCategories.reduce((sum, cat) => sum + (cat.monthlyTarget || 0), 0);
-            const weeksInMonth = 52.14 / 12;
-            const totalWeeklyBudget = totalMonthlyBudget / weeksInMonth + weeklySpendAllowance;
-
-            if (totalWeeklyBudget === 0) return null; // Only show if they set up a budget
-
-            const totalWeeklyActuals = Object.values(budgetActuals).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
-            const isOver = totalWeeklyActuals > totalWeeklyBudget;
-            const pct = Math.min((totalWeeklyActuals / totalWeeklyBudget) * 100, 100);
-            const color = isOver ? T.status.red : pct > 85 ? T.status.amber : T.status.green;
-
-            const dayOfWeek = new Date().getDay() === 0 ? 7 : new Date().getDay();
-            const expectedPace = (dayOfWeek / 7) * 100;
-
-            return (
-              <Card
-                animate
-                delay={100}
-                className="hover-card a11y-hit-target"
-                onClick={() => {
-                  haptic.selection();
-                  setViewMode("budget");
-                }}
-                style={{
-                  padding: "12px 16px",
-                  marginBottom: 16,
-                  cursor: "pointer",
-                  background: T.bg.card,
-                  borderLeft: `3px solid ${color}`,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 8,
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <Target size={14} color={color} />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>Weekly Spending Pace</span>
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 800, fontFamily: T.font.mono, color: isOver ? T.status.red : T.text.primary }}>
-                    {fmt(Math.max(0, totalWeeklyBudget - totalWeeklyActuals))} <span style={{ fontSize: 10, color: T.text.dim, fontWeight: 500, fontFamily: T.font.sans }}>/ {fmt(totalWeeklyBudget)} left</span>
-                  </div>
+            {/* Available Cash Square */}
+            <Card
+              animate
+              delay={100}
+              className="hover-card"
+              style={{
+                padding: "20px 16px",
+                position: "relative",
+                background: T.bg.card,
+                backdropFilter: "blur(20px)",
+                WebkitBackdropFilter: "blur(20px)",
+                border: `1px solid ${T.border.subtle}`,
+                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.06)`,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                minHeight: 160,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                <div style={{ width: 24, height: 24, borderRadius: "50%", background: dashboardMetrics.available >= floor ? `${T.status.green}20` : `${T.status.amber}20`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <TrendingUp size={12} color={dashboardMetrics.available >= floor ? T.status.green : T.status.amber} strokeWidth={3} />
                 </div>
-                <div style={{ position: "relative", paddingTop: "14px", paddingBottom: "4px" }}>
-                  <ProgressBar progress={pct} color={color} style={{ height: 6 }} />
-                  {/* Today Marker */}
-                  <div
-                    style={{
-                      position: "absolute", left: `${expectedPace}%`, top: 10, bottom: 2, width: 2,
-                      background: T.text.primary, borderRadius: 2, zIndex: 2, boxShadow: "0 0 6px rgba(255,255,255,0.7)"
-                    }}
-                  />
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: `${expectedPace}%`,
-                      top: -1,
-                      fontSize: 8,
-                      fontWeight: 800,
-                      color: T.text.secondary,
-                      fontFamily: T.font.mono,
-                      transform: "translateX(-50%)"
-                    }}
-                  >
-                    TODAY
-                  </div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>Available Cash</span>
+              </div>
+              
+              <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 4, marginBottom: 4 }}>
+                <span style={{ fontSize: 24, fontWeight: 900, color: privacyMode ? T.text.dim : T.text.primary, letterSpacing: "-0.02em" }}>
+                  {privacyMode ? "••••" : fmt(dashboardMetrics.available)}
+                </span>
+              </div>
+
+              {floor > 0 && (
+                <div style={{ fontSize: 11, color: T.text.secondary, marginTop: 4 }}>
+                  Floor: <span style={{ fontFamily: T.font.mono, color: privacyMode ? T.text.dim : T.text.primary }}>{privacyMode ? "•••" : fmt(floor)}</span>
                 </div>
-              </Card>
-            );
-          })()}
-
-          {/* ═══ PAYDAY ROUTINE GENERATOR (Free Zero-Cost Value Add) ═══ */}
-          {(() => {
-            if (!financialConfig?.incomeSources?.length || !financialConfig?.budgetCategories?.length) return null;
-
-            const primaryIncome = financialConfig.incomeSources[0]; // Assume first is primary
-            const weeklyAllowance = financialConfig.weeklySpendAllowance || 0;
-            const fixedMonthly = financialConfig.budgetCategories.reduce((s, c) => s + (c.monthlyTarget || 0), 0);
-
-            // Generate deterministic checklist based on frequency
-            let freqMult = 1;
-            let title = "Monthly Payday Routine";
-            if (primaryIncome.frequency === "bi-weekly") { freqMult = 2; title = "Bi-Weekly Payday Routine"; }
-            if (primaryIncome.frequency === "weekly") { freqMult = 4; title = "Weekly Payday Routine"; }
-
-            const incomePerPeriod = primaryIncome.amount;
-            const fixedPerPeriod = fixedMonthly / freqMult;
-            const allowancePerPeriod = (weeklyAllowance * 4.33) / freqMult;
-            const savingsPerPeriod = incomePerPeriod - fixedPerPeriod - allowancePerPeriod;
-
-            // Only show if the math makes sense for a routine
-            if (savingsPerPeriod <= 0 || incomePerPeriod <= 0) return null;
-
-            return (
-              <Card
-                animate
-                delay={150}
-                variant="elevated"
-                style={{
-                  marginBottom: 16,
-                  padding: "16px",
-                  border: `1px solid ${T.accent.emerald}30`,
-                  background: `linear-gradient(135deg, ${T.bg.card}, ${T.accent.emerald}0A)`
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 8, background: T.accent.emerald, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Briefcase size={14} color="#fff" strokeWidth={2.5} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary }}>{title}</div>
-                    <div style={{ fontSize: 11, color: T.text.dim }}>Automated flow for your {fmt(incomePerPeriod)} paycheck</div>
-                  </div>
+              )}
+              
+              <div style={{ marginTop: "auto", paddingTop: 12 }}>
+                <div style={{ 
+                  display: "inline-flex", 
+                  alignItems: "center", 
+                  gap: 4, 
+                  padding: "4px 8px", 
+                  background: dashboardMetrics.available >= floor ? `${T.status.green}15` : `${T.status.amber}15`, 
+                  borderRadius: T.radius.sm,
+                  border: `1px solid ${dashboardMetrics.available >= floor ? T.status.green : T.status.amber}30`
+                }}>
+                  {dashboardMetrics.available >= floor ? (
+                    <CheckCircle size={10} color={T.status.green} />
+                  ) : (
+                    <AlertTriangle size={10} color={T.status.amber} />
+                  )}
+                  <span style={{ fontSize: 10, fontWeight: 700, color: dashboardMetrics.available >= floor ? T.status.green : T.status.amber }}>
+                    {dashboardMetrics.available >= floor ? "Safe to spend" : "Below floor"}
+                  </span>
                 </div>
+              </div>
+            </Card>
+          </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: T.bg.surface, padding: "10px 12px", borderRadius: T.radius.md }}>
-                    <div style={{ width: 20, height: 20, borderRadius: 10, background: `${T.status.blue}20`, color: T.status.blue, fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>1</div>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>Leave {fmt(fixedPerPeriod)} in Checking</div>
-                      <div style={{ fontSize: 10, color: T.text.dim, marginTop: 2 }}>This covers your prorated fixed bills & renewals until next payday.</div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: T.bg.surface, padding: "10px 12px", borderRadius: T.radius.md }}>
-                    <div style={{ width: 20, height: 20, borderRadius: 10, background: `${T.accent.purple}20`, color: T.accent.purple, fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>2</div>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>Keep {fmt(allowancePerPeriod)} for Flex Spend</div>
-                      <div style={{ fontSize: 10, color: T.text.dim, marginTop: 2 }}>Your guilt-free discretionary allowance for the next period.</div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: T.bg.surface, padding: "10px 12px", borderRadius: T.radius.md, borderLeft: `2px solid ${T.status.green}` }}>
-                    <div style={{ width: 20, height: 20, borderRadius: 10, background: `${T.status.green}20`, color: T.status.green, fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>3</div>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>Sweep {fmt(savingsPerPeriod)} into Vault/Investing</div>
-                      <div style={{ fontSize: 10, color: T.text.dim, marginTop: 2 }}>Zero-out the rest immediately. Don't leave this in checking where it can trigger lifestyle creep.</div>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            );
-          })()}
 
           {/* ═══ SYNC BALANCES BAR ═══ */}
           {!current?.isTest && (cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId)) && (
@@ -1207,11 +895,55 @@ export default memo(function DashboardTab({
             </button>
           </div>
 
-          {/* ═══ ALERT STRIP ═══ */}
-          <AlertStrip alerts={alerts} />
 
-          {/* ═══ DEBT FREEDOM COUNTDOWN ═══ */}
-          <DebtFreedomCard cards={cards} freedomStats={freedomStats} />
+          <DashboardSection title="AI CFO & Next Steps">
+          {/* AI Insights Action Hub */}
+          {(summary || hs.narrative) && (
+            <Card
+              animate
+              delay={200}
+              style={{
+                padding: "20px 20px",
+                marginBottom: 24,
+                background: `linear-gradient(145deg, ${T.bg.card}, ${scoreColor}05)`,
+                border: `1px solid ${scoreColor}20`,
+                borderLeft: `3px solid ${scoreColor}`,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <Zap size={16} color={scoreColor} strokeWidth={2.5} />
+                <span style={{ fontSize: 14, fontWeight: 800, color: T.text.primary }}>CFO Insights</span>
+              </div>
+              
+              {summary && (
+                <p style={{ fontSize: 13, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 16px" }}>
+                  {summary}
+                </p>
+              )}
+              
+              {hs.narrative && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {hs.narrative
+                    .split(/(?<=[.?!])\s+/)
+                    .filter(Boolean)
+                    .map((sentence, i) => (
+                      <div key={i} style={{ display: "flex", gap: 10, alignItems: "start", background: T.bg.surface, padding: "10px 12px", borderRadius: T.radius.md }}>
+                        <div style={{ marginTop: 2, flexShrink: 0 }}>
+                          {score >= 80 ? (
+                            <CheckCircle size={14} color={T.status.green} />
+                          ) : (
+                            <AlertTriangle size={14} color={scoreColor} />
+                          )}
+                        </div>
+                        <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5, margin: 0 }}>
+                          {sentence.trim()}
+                        </p>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </Card>
+          )}
 
           {/* ═══ NEXT ACTION ═══ */}
           {p?.sections?.nextAction && (
@@ -1308,96 +1040,152 @@ export default memo(function DashboardTab({
             </button>
           )}
 
-          {/* ═══ CREDIT SCORE SIMULATOR ═══ */}
-          <ErrorBoundary name="Credit Score Simulator">
-            <CreditScoreSimulator cards={cards} financialConfig={financialConfig} />
-          </ErrorBoundary>
+          </DashboardSection>
 
-          {/* ═══ CASH FLOW CALENDAR ═══ */}
-          {(dashboardMetrics.checking != null || fallbackChecking != null) && (
-            <CashFlowCalendar
-              config={financialConfig}
-              cards={cards}
-              renewals={renewals}
-              checkingBalance={dashboardMetrics.checking ?? fallbackChecking ?? 0}
-              snapshotDate={current?.date}
-            />
-          )}
+          <DashboardSection title="Tactical & Current">
+          {/* ═══ GLANCEABLE BUDGET PACE ═══ */}
+          {(() => {
+            const budgetActuals = current?.form?.budgetActuals || {};
+            const budgetCategories = financialConfig?.budgetCategories || [];
+            const weeklySpendAllowance = financialConfig?.weeklySpendAllowance || 0;
+            const totalMonthlyBudget = budgetCategories.reduce((sum, cat) => sum + (cat.monthlyTarget || 0), 0);
+            const weeksInMonth = 52.14 / 12;
+            const totalWeeklyBudget = totalMonthlyBudget / weeksInMonth + weeklySpendAllowance;
 
-          {/* ═══ INVESTMENT SNAPSHOT ═══ */}
-          {investmentSnapshot.accounts.length > 0 && (
-            <Card
-              animate
-              delay={250}
-              style={{
-                background: `linear-gradient(160deg, ${T.bg.card}, ${T.accent.emerald}06)`,
-                borderColor: `${T.accent.emerald}15`,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div
-                    style={{
-                      width: 26,
-                      height: 26,
-                      borderRadius: 7,
-                      background: `${T.accent.emerald}15`,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <TrendingUp size={13} color={T.accent.emerald} strokeWidth={2.5} />
+            if (totalWeeklyBudget === 0) return null; // Only show if they set up a budget
+
+            const totalWeeklyActuals = Object.values(budgetActuals).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
+            const isOver = totalWeeklyActuals > totalWeeklyBudget;
+            const pct = Math.min((totalWeeklyActuals / totalWeeklyBudget) * 100, 100);
+            const color = isOver ? T.status.red : pct > 85 ? T.status.amber : T.status.green;
+
+            const dayOfWeek = new Date().getDay() === 0 ? 7 : new Date().getDay();
+            const expectedPace = (dayOfWeek / 7) * 100;
+
+            return (
+              <Card
+                animate
+                delay={100}
+                className="hover-card"
+                style={{
+                  padding: "12px 16px",
+                  marginBottom: 16,
+                  background: T.bg.card,
+                  borderLeft: `3px solid ${color}`,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Target size={14} color={color} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>Weekly Spending Pace</span>
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 700 }}>Investment Portfolio</span>
+                  <div style={{ fontSize: 13, fontWeight: 800, fontFamily: T.font.mono, color: isOver ? T.status.red : T.text.primary }}>
+                    {fmt(Math.max(0, totalWeeklyBudget - totalWeeklyActuals))} <span style={{ fontSize: 10, color: T.text.dim, fontWeight: 500, fontFamily: T.font.sans }}>/ {fmt(totalWeeklyBudget)} left</span>
+                  </div>
                 </div>
-                <div style={{ textAlign: "right" }}>
-                  <Mono size={16} weight={900} color={T.accent.emerald}>
-                    {fmt(Math.round(investmentSnapshot.total))}
-                  </Mono>
-                </div>
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {investmentSnapshot.accounts.map((a, idx) => (
+                <div style={{ position: "relative", paddingTop: "14px", paddingBottom: "4px" }}>
+                  <ProgressBar progress={pct} color={color} style={{ height: 6 }} />
+                  {/* Today Marker */}
                   <div
-                    key={a.key}
                     style={{
-                      flex: "1 1 45%",
-                      minWidth: 120,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "8px 10px",
-                      background: `${a.color}08`,
-                      borderRadius: T.radius.sm,
-                      border: `1px solid ${a.color}18`,
-                      animation: `fadeInUp .35s ease-out ${idx * 0.06}s both`,
+                      position: "absolute", left: `${expectedPace}%`, top: 10, bottom: 2, width: 2,
+                      background: T.text.primary, borderRadius: 2, zIndex: 2, boxShadow: "0 0 6px rgba(255,255,255,0.7)"
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: `${expectedPace}%`,
+                      top: -1,
+                      fontSize: 8,
+                      fontWeight: 800,
+                      color: T.text.secondary,
+                      fontFamily: T.font.mono,
+                      transform: "translateX(-50%)"
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: a.color }} />
-                      <span style={{ fontSize: 10, fontWeight: 700, color: T.text.secondary }}>{a.label}</span>
+                    TODAY
+                  </div>
+                </div>
+              </Card>
+            );
+          })()}
+
+          {/* ═══ PAYDAY ROUTINE GENERATOR (Free Zero-Cost Value Add) ═══ */}
+          {(() => {
+            if (!financialConfig?.incomeSources?.length || !financialConfig?.budgetCategories?.length) return null;
+
+            const primaryIncome = financialConfig.incomeSources[0]; // Assume first is primary
+            const weeklyAllowance = financialConfig.weeklySpendAllowance || 0;
+            const fixedMonthly = financialConfig.budgetCategories.reduce((s, c) => s + (c.monthlyTarget || 0), 0);
+
+            // Generate deterministic checklist based on frequency
+            let freqMult = 1;
+            let title = "Monthly Payday Routine";
+            if (primaryIncome.frequency === "bi-weekly") { freqMult = 2; title = "Bi-Weekly Payday Routine"; }
+            if (primaryIncome.frequency === "weekly") { freqMult = 4; title = "Weekly Payday Routine"; }
+
+            const incomePerPeriod = primaryIncome.amount;
+            const fixedPerPeriod = fixedMonthly / freqMult;
+            const allowancePerPeriod = (weeklyAllowance * 4.33) / freqMult;
+            const savingsPerPeriod = incomePerPeriod - fixedPerPeriod - allowancePerPeriod;
+
+            // Only show if the math makes sense for a routine
+            if (savingsPerPeriod <= 0 || incomePerPeriod <= 0) return null;
+
+            return (
+              <Card
+                animate
+                delay={150}
+                variant="elevated"
+                style={{
+                  marginBottom: 16,
+                  padding: "16px",
+                  border: `1px solid ${T.accent.emerald}30`,
+                  background: `linear-gradient(135deg, ${T.bg.card}, ${T.accent.emerald}0A)`
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 8, background: T.accent.emerald, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Briefcase size={14} color="#fff" strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary }}>{title}</div>
+                    <div style={{ fontSize: 11, color: T.text.dim }}>Automated flow for your {fmt(incomePerPeriod)} paycheck</div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: T.bg.surface, padding: "10px 12px", borderRadius: T.radius.md }}>
+                    <div style={{ width: 20, height: 20, borderRadius: 10, background: `${T.status.blue}20`, color: T.status.blue, fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>1</div>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>Leave {fmt(fixedPerPeriod)} in Checking</div>
+                      <div style={{ fontSize: 10, color: T.text.dim, marginTop: 2 }}>This covers your prorated fixed bills & renewals until next payday.</div>
                     </div>
-                    <Mono size={11} weight={800} color={a.total > 0 ? a.color : T.text.muted}>
-                      {a.total > 0 ? fmt(Math.round(a.total)) : "—"}
-                    </Mono>
                   </div>
-                ))}
-              </div>
-            </Card>
-          )}
 
-          {/* ═══ FIRE PROJECTION ═══ */}
-          <FireCard fireProjection={fireProjection} />
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: T.bg.surface, padding: "10px 12px", borderRadius: T.radius.md }}>
+                    <div style={{ width: 20, height: 20, borderRadius: 10, background: `${T.accent.purple}20`, color: T.accent.purple, fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>2</div>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>Keep {fmt(allowancePerPeriod)} for Flex Spend</div>
+                      <div style={{ fontSize: 10, color: T.text.dim, marginTop: 2 }}>Your guilt-free discretionary allowance for the next period.</div>
+                    </div>
+                  </div>
 
-          {/* ═══ BILL NEGOTIATION ═══ */}
-          <ErrorBoundary name="Bill Negotiation">
-            <BillNegotiationCard
-              cards={cards}
-              financialConfig={financialConfig}
-              negotiationTargets={p?.negotiationTargets || []}
-            />
-          </ErrorBoundary>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: T.bg.surface, padding: "10px 12px", borderRadius: T.radius.md, borderLeft: `2px solid ${T.status.green}` }}>
+                    <div style={{ width: 20, height: 20, borderRadius: 10, background: `${T.status.green}20`, color: T.status.green, fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>3</div>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>Sweep {fmt(savingsPerPeriod)} into Vault/Investing</div>
+                      <div style={{ fontSize: 10, color: T.text.dim, marginTop: 2 }}>Zero-out the rest immediately. Don't leave this in checking where it can trigger lifestyle creep.</div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            );
+          })()}
 
           {/* ═══ LIFESTYLE CREEP DETECTOR (Pro Tier Power Feature 1) ═══ */}
           {(() => {
@@ -1541,11 +1329,157 @@ export default memo(function DashboardTab({
             );
           })()}
 
+          {/* ═══ CASH FLOW CALENDAR ═══ */}
+          {(dashboardMetrics.checking != null || fallbackChecking != null) && (
+            <CashFlowCalendar
+              config={financialConfig}
+              cards={cards}
+              renewals={renewals}
+              checkingBalance={dashboardMetrics.checking ?? fallbackChecking ?? 0}
+              snapshotDate={current?.date}
+            />
+          )}
+
+          </DashboardSection>
+
+          <DashboardSection title="Wealth & Strategy">
+          {/* ═══ WIDE ROW: NET WORTH TREND ═══ */}
+          <Card
+            animate
+            delay={150}
+            style={{
+              padding: "20px 20px",
+              marginBottom: 12,
+              background: T.bg.card,
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              border: `1px solid ${T.border.subtle}`,
+              position: "relative",
+              overflow: "hidden"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.14em", color: T.text.secondary, margin: "0 0 4px", fontFamily: T.font.mono, fontWeight: 800 }}>
+                  Net Worth
+                </p>
+                <CountUp
+                  value={p?.netWorth ?? 0}
+                  size={32}
+                  weight={900}
+                  color={p?.netWorth != null && p.netWorth >= 0 ? T.text.primary : T.status.red}
+                />
+                
+                {p?.netWorthDelta && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 4 }}>
+                    {String(p.netWorthDelta).includes("+") ? (
+                      <ArrowUpRight size={14} color={T.status.green} strokeWidth={3} />
+                    ) : (
+                      <ArrowDownRight size={14} color={T.status.red} strokeWidth={3} />
+                    )}
+                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: T.font.mono, color: String(p.netWorthDelta).includes("+") ? T.status.green : T.status.red }}>
+                      {p.netWorthDelta}
+                    </span>
+                  </div>
+                )}
+              </div>
+              
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+                <StatusDot status={cleanStatus} size="sm" />
+                <Mono size={10} color={T.text.dim}>{fmtDate(current.date)}</Mono>
+                {streak > 1 && (
+                  <div title="Weekly Audit Streak" style={{ display: "flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 12, background: `${T.accent.emerald}15`, border: `1px solid ${T.status.green}25` }}>
+                    <span style={{ fontSize: 10 }}>📅</span>
+                    <span style={{ fontSize: 9, fontWeight: 800, color: T.status.green, fontFamily: T.font.mono }}>W{streak}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div style={{ marginTop: 16 }}>
+              <MetricsBar quickMetrics={quickMetrics} privacyMode={privacyMode} />
+            </div>
+          </Card>
+
+          {/* ═══ INVESTMENT SNAPSHOT ═══ */}
+          {investmentSnapshot.accounts.length > 0 && (
+            <Card
+              animate
+              delay={250}
+              style={{
+                background: `linear-gradient(160deg, ${T.bg.card}, ${T.accent.emerald}06)`,
+                borderColor: `${T.accent.emerald}15`,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 7,
+                      background: `${T.accent.emerald}15`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <TrendingUp size={13} color={T.accent.emerald} strokeWidth={2.5} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700 }}>Investment Portfolio</span>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <Mono size={16} weight={900} color={T.accent.emerald}>
+                    {fmt(Math.round(investmentSnapshot.total))}
+                  </Mono>
+                </div>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {investmentSnapshot.accounts.map((a, idx) => (
+                  <div
+                    key={a.key}
+                    style={{
+                      flex: "1 1 45%",
+                      minWidth: 120,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "8px 10px",
+                      background: `${a.color}08`,
+                      borderRadius: T.radius.sm,
+                      border: `1px solid ${a.color}18`,
+                      animation: `fadeInUp .35s ease-out ${idx * 0.06}s both`,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: a.color }} />
+                      <span style={{ fontSize: 10, fontWeight: 700, color: T.text.secondary }}>{a.label}</span>
+                    </div>
+                    <Mono size={11} weight={800} color={a.total > 0 ? a.color : T.text.muted}>
+                      {a.total > 0 ? fmt(Math.round(a.total)) : "—"}
+                    </Mono>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* ═══ DEBT FREEDOM COUNTDOWN ═══ */}
+          <DebtFreedomCard cards={cards} freedomStats={freedomStats} />
+
           {/* ═══ SINKING FUNDS ═══ */}
           <SinkingFundsRing paceData={p?.paceData} />
 
-          {/* ═══ WEEKLY CHALLENGES ═══ */}
-          <WeeklyChallenges />
+          {/* ═══ FIRE PROJECTION ═══ */}
+          <FireCard fireProjection={fireProjection} />
+
+          </DashboardSection>
+
+          <DashboardSection title="Simulators & Tools">
+          {/* ═══ CREDIT SCORE SIMULATOR ═══ */}
+          <ErrorBoundary name="Credit Score Simulator">
+            <CreditScoreSimulator cards={cards} financialConfig={financialConfig} />
+          </ErrorBoundary>
 
           {/* ═══ DEBT PAYOFF SIMULATOR ═══ */}
           <ErrorBoundary name="Debt Simulator">
@@ -1561,11 +1495,28 @@ export default memo(function DashboardTab({
             />
           </ErrorBoundary>
 
+          {/* ═══ BILL NEGOTIATION ═══ */}
+          <ErrorBoundary name="Bill Negotiation">
+            <BillNegotiationCard
+              cards={cards}
+              financialConfig={financialConfig}
+              negotiationTargets={p?.negotiationTargets || []}
+            />
+          </ErrorBoundary>
+
+          </DashboardSection>
+
+          <DashboardSection title="Analytics & Achievements">
           {/* ═══ ANALYTICS ═══ */}
           <AnalyticsCharts chartData={chartData} scoreData={scoreData} spendData={spendData} chartA11y={chartA11y} />
 
+          {/* ═══ WEEKLY CHALLENGES ═══ */}
+          <WeeklyChallenges />
+
           {/* ═══ ACHIEVEMENTS ═══ */}
           <BadgeStrip badges={badges} />
+
+          </DashboardSection>
 
           {/* ═══ BOTTOM CTAs ═══ */}
           <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
@@ -1793,8 +1744,7 @@ export default memo(function DashboardTab({
           >
             AI-generated educational content only · Not professional financial advice
           </p>
-        </>
-      )}
+      </>
     </div>
   );
 });

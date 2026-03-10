@@ -576,9 +576,9 @@ export async function getStoredTransactions() {
  * Maps Plaid's institution names to the app's INSTITUTIONS list.
  */
 const INSTITUTION_ALIASES = {
-  "american express": "Amex",
-  "american express card": "Amex",
-  amex: "Amex",
+  "american express": "American Express",
+  "american express card": "American Express",
+  amex: "American Express",
   "bank of america": "Bank of America",
   barclays: "Barclays",
   "barclays bank": "Barclays",

@@ -220,7 +220,7 @@ export default function SetupWizard() {
   }); // Spending state preserved for saveAndFinish defaults
   const [ai, setAi] = useState({
     aiProvider: "backend",
-    aiModel: "gemini-2.5-flash",
+    aiModel: "gpt-4o-mini",
     apiKey: "",
   });
   const [security, setSecurity] = useState({

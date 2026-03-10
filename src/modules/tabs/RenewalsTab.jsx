@@ -450,14 +450,11 @@ export default memo(function RenewalsTab({ proEnabled }) {
           </Badge>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button
+          <div
             onClick={() => setShowAdd(!showAdd)}
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              padding: "0 16px",
+              margin: 0,
+              padding: 0,
               borderRadius: 100, // Pill shape
               background: showAdd ? T.status.amberDim : T.bg.elevated,
               border: `1px solid ${showAdd ? T.status.amber + '40' : T.border.default}`,
@@ -467,45 +464,42 @@ export default memo(function RenewalsTab({ proEnabled }) {
               fontFamily: T.font.sans,
               cursor: "pointer",
               height: 32,
-              minWidth: 90,
-              transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
-            }}
-          >
-            {showAdd ? <X size={14} /> : <Plus size={14} />}
-            {showAdd ? "Cancel" : "Add"}
-          </button>
-          
-          <div
-            style={{
+              width: 105,
+              minWidth: 105,
+              maxWidth: 105,
+              flexShrink: 0,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              height: 32,
-              minWidth: 90,
-              borderRadius: 100, // Pill shape
-              background: T.bg.elevated,
-              border: `1px solid ${T.border.default}`,
-              padding: "0 12px",
-              cursor: "pointer",
-              transition: "background 0.2s",
+              gap: 4,
+              boxSizing: "border-box",
+              outline: "none",
+              WebkitAppearance: "none",
+              transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
             }}
           >
+            {showAdd ? <X size={14} style={{ flexShrink: 0 }} /> : <Plus size={14} style={{ flexShrink: 0 }} />}
+            <span style={{ transform: "translateY(1px)" }}>{showAdd ? "Cancel" : "Add"}</span>
+          </div>
+          <div style={{ position: "relative", width: 105, minWidth: 105, maxWidth: 105, height: 32, flexShrink: 0, margin: 0, padding: 0, boxSizing: "border-box" }}>
             <select
               value={sortBy}
               onChange={e => setSortBy(e.target.value)}
               aria-label="Sort order"
               style={{
-                fontSize: 12,
-                color: T.text.primary,
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                fontFamily: T.font.sans,
-                fontWeight: 700,
+                position: "absolute",
+                inset: 0,
+                opacity: 0,
+                width: "100%",
+                height: "100%",
+                margin: 0,
                 padding: 0,
+                border: "none",
                 outline: "none",
+                boxSizing: "border-box",
+                cursor: "pointer",
+                zIndex: 2,
                 WebkitAppearance: "none",
-                appearance: "none",
               }}
             >
               <option value="type">Sort: Type</option>
@@ -513,9 +507,37 @@ export default memo(function RenewalsTab({ proEnabled }) {
               <option value="amount">Sort: Amt</option>
               <option value="name">Sort: A-Z</option>
             </select>
-            <ChevronDown size={14} color={T.text.muted} style={{ marginLeft: 4, pointerEvents: "none" }} />
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: T.bg.elevated,
+                border: `1px solid ${T.border.default}`,
+                borderRadius: 100, // Pill shape
+                boxSizing: "border-box",
+                pointerEvents: "none",
+                zIndex: 1,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", position: "relative" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, fontFamily: T.font.sans, color: T.text.primary, transform: "translate(-2px, 1px)" }}>
+                  {(() => {
+                    switch(sortBy){
+                      case "date": return "Sort: Date";
+                      case "amount": return "Sort: Amt";
+                      case "name": return "Sort: A-Z";
+                      default: return "Sort: Type";
+                    }
+                  })()}
+                </span>
+                <ChevronDown size={14} color={T.text.muted} style={{ position: "absolute", right: 12 }} />
+              </div>
+            </div>
+            </div>
           </div>
-        </div>
       </div>
 
       {/* Monthly total */}
@@ -1146,7 +1168,7 @@ export default memo(function RenewalsTab({ proEnabled }) {
                             </Mono>
                             {item.chargedTo && (
                               <Mono size={10} color={T.accent.primary}>
-                                → {item.chargedTo.replace(/^(Amex|Barclays|Capital One|Chase|Citi|Discover) /, "")}
+                                → {item.chargedTo.replace(/^(American Express|Barclays|Capital One|Chase|Citi|Discover) /, "")}
                               </Mono>
                             )}
                             {item.nextDue && (
@@ -1187,7 +1209,11 @@ export default memo(function RenewalsTab({ proEnabled }) {
                             <>
                               {!item.isExpired && (
                                 <button
-                                  onClick={() => toggleCancel(renewalIndex, item.name)}
+                                  onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      toggleCancel(renewalIndex, item.name);
+                                  }}
                                   style={{
                                     height: 36,
                                     padding: "0 12px",
@@ -1208,7 +1234,11 @@ export default memo(function RenewalsTab({ proEnabled }) {
                                 </button>
                               )}
                               <button
-                                onClick={() => startEdit(item, renewalIndex)}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    startEdit(item, renewalIndex);
+                                }}
                                 style={{
                                   width: 36,
                                   height: 36,
@@ -1226,7 +1256,11 @@ export default memo(function RenewalsTab({ proEnabled }) {
                                 ✎
                               </button>
                               <button
-                                onClick={() => removeItem(renewalIndex, item.name)}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    removeItem(renewalIndex, item.name);
+                                }}
                                 style={{
                                   width: 36,
                                   height: 36,
