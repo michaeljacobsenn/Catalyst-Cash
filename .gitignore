@@ -16,6 +16,8 @@ ios/App/App/GoogleService-Info.plist
 .gemini/
 *.key
 *.pem
+CatalystCash_CloudSync*.json
+*test_keys.js
 
 # ── Logs ──
 *.log

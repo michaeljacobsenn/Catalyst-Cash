@@ -31,7 +31,8 @@ export function getShortCardLabel(cards, card) {
   if (!card) return "";
   let name = card.name || "";
   // Strip verbose suffixes
-  name = name.replace(/ American Express Card$/i, "")
+  name = name
+    .replace(/ American Express Card$/i, "")
     .replace(/ from American Express$/i, "")
     .replace(/ Visa Signature Card$/i, "")
     .replace(/ World Elite Mastercard$/i, "")

@@ -14,9 +14,9 @@ app.use(express.json({ limit: "2mb" }));
 
 // CORS for native Capacitor app — locked to known origins
 const ALLOWED_ORIGINS = [
-  "capacitor://localhost",     // iOS WKWebView
-  "https://catalystcash.app",  // production website
-  "http://localhost:5173",     // Vite dev server
+  "capacitor://localhost", // iOS WKWebView
+  "https://catalystcash.app", // production website
+  "http://localhost:5173", // Vite dev server
 ];
 
 app.use((req, res, next) => {
@@ -25,7 +25,10 @@ app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", origin);
     res.header("Vary", "Origin");
   }
-  res.header("Access-Control-Allow-Headers", "Content-Type, X-Device-ID, X-App-Version, X-Subscription-Tier, X-RC-App-User-ID, x-pp-secret, x-pp-user, x-pp-tier");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, X-Device-ID, X-App-Version, X-Subscription-Tier, X-RC-App-User-ID, x-pp-secret, x-pp-user, x-pp-tier"
+  );
   res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   return next();
@@ -34,7 +37,7 @@ app.get("/config", (_req, res) => {
   res.json({
     gatingMode: process.env.GATING_MODE || "live",
     minVersion: process.env.MIN_VERSION || "2.0.0",
-    entitlementVerification: Boolean(process.env.REVENUECAT_SECRET_KEY)
+    entitlementVerification: Boolean(process.env.REVENUECAT_SECRET_KEY),
   });
 });
 app.get("/privacy", (_req, res) => {
@@ -55,11 +58,19 @@ const TIER_LIMITS = {
   basic: 10,
   standard: 25,
   plus: 50,
-  power: 100
+  power: 100,
 };
 
 const usage = new Map();
 const monthKey = () => new Date().toISOString().slice(0, 7); // YYYY-MM
+
+// Prevent memory leak by clearing stale months every 6 hours
+setInterval(() => {
+  const currentMonth = monthKey();
+  for (const key of usage.keys()) {
+    if (!key.endsWith(currentMonth)) usage.delete(key);
+  }
+}, 6 * 60 * 60 * 1000);
 
 function getUserId(req) {
   return req.headers["x-pp-user"] || req.ip || "anonymous";
@@ -120,16 +131,16 @@ app.post("/audit/openai", requireAuth, checkLimit, async (req, res) => {
       model,
       messages: req.body?.messages || [],
       stream: false,
-      max_tokens: req.body?.max_tokens || 12000
+      max_tokens: req.body?.max_tokens || 12000,
     };
 
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${OPENAI_API_KEY}`
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
     });
     const data = await r.json();
     if (!r.ok) return res.status(r.status).json(data);
@@ -139,7 +150,6 @@ app.post("/audit/openai", requireAuth, checkLimit, async (req, res) => {
     return res.status(500).json({ error: e.message || "OpenAI proxy failed" });
   }
 });
-
 
 app.post("/audit/gemini", requireAuth, checkLimit, async (req, res) => {
   if (!GEMINI_API_KEY) return res.status(503).json({ error: "Gemini key not configured" });
@@ -154,13 +164,13 @@ app.post("/audit/gemini", requireAuth, checkLimit, async (req, res) => {
     const body = {
       contents: req.body?.contents || [],
       systemInstruction: req.body?.systemInstruction,
-      generationConfig: req.body?.generationConfig || { maxOutputTokens: 12000 }
+      generationConfig: req.body?.generationConfig || { maxOutputTokens: 12000 },
     };
 
     const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
     });
     const data = await r.json();
     if (!r.ok) return res.status(r.status).json(data);

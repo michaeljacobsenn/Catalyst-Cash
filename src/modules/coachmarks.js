@@ -22,34 +22,34 @@ const COACHMARK_PREFIX = "coachmark-seen-";
  * Add new onboarding tips here with a unique key, text, and optional position.
  */
 export const COACHMARKS = {
-    "first-audit": {
-        text: "Tap here to run your first financial audit — it only takes 2 minutes!",
-        position: "below",
-    },
-    "card-portfolio": {
-        text: "Add your credit cards here to track balances, limits, and utilization.",
-        position: "below",
-    },
-    "fire-projection": {
-        text: "Your FIRE projection shows when you could reach financial independence.",
-        position: "above",
-    },
-    "weekly-budget": {
-        text: "Switch to Budget view to track your weekly spending against your allowance.",
-        position: "below",
-    },
-    "export-data": {
-        text: "Export your audit data as PDF or spreadsheet to keep offline records.",
-        position: "below",
-    },
-    "plaid-sync": {
-        text: "Connect your bank to auto-import balances and transactions.",
-        position: "below",
-    },
-    "debt-simulator": {
-        text: "Use the debt simulator to see how extra payments accelerate your payoff.",
-        position: "below",
-    },
+  "first-audit": {
+    text: "Tap here to run your first financial audit — it only takes 2 minutes!",
+    position: "below",
+  },
+  "card-portfolio": {
+    text: "Add your credit cards here to track balances, limits, and utilization.",
+    position: "below",
+  },
+  "fire-projection": {
+    text: "Your FIRE projection shows when you could reach financial independence.",
+    position: "above",
+  },
+  "weekly-budget": {
+    text: "Switch to Budget view to track your weekly spending against your allowance.",
+    position: "below",
+  },
+  "export-data": {
+    text: "Export your audit data as PDF or spreadsheet to keep offline records.",
+    position: "below",
+  },
+  "plaid-sync": {
+    text: "Connect your bank to auto-import balances and transactions.",
+    position: "below",
+  },
+  "debt-simulator": {
+    text: "Use the debt simulator to see how extra payments accelerate your payoff.",
+    position: "below",
+  },
 };
 
 /**
@@ -61,36 +61,38 @@ export const COACHMARKS = {
  * @returns {{ show: boolean, dismiss: () => void }}
  */
 export function useCoachmark(key, condition = true) {
-    const [show, setShow] = useState(false);
+  const [show, setShow] = useState(false);
 
-    useEffect(() => {
-        if (!condition || !COACHMARKS[key]) return;
+  useEffect(() => {
+    if (!condition || !COACHMARKS[key]) return;
 
-        let cancelled = false;
-        (async () => {
-            try {
-                const seen = await db.get(`${COACHMARK_PREFIX}${key}`);
-                if (!cancelled && !seen) {
-                    setShow(true);
-                }
-            } catch {
-                // If db fails, don't show coachmark (fail safe)
-            }
-        })();
-
-        return () => { cancelled = true; };
-    }, [key, condition]);
-
-    const dismiss = useCallback(async () => {
-        setShow(false);
-        try {
-            await db.set(`${COACHMARK_PREFIX}${key}`, Date.now());
-        } catch {
-            // Silently fail — tip won't show again until page reload
+    let cancelled = false;
+    (async () => {
+      try {
+        const seen = await db.get(`${COACHMARK_PREFIX}${key}`);
+        if (!cancelled && !seen) {
+          setShow(true);
         }
-    }, [key]);
+      } catch {
+        // If db fails, don't show coachmark (fail safe)
+      }
+    })();
 
-    return { show, dismiss };
+    return () => {
+      cancelled = true;
+    };
+  }, [key, condition]);
+
+  const dismiss = useCallback(async () => {
+    setShow(false);
+    try {
+      await db.set(`${COACHMARK_PREFIX}${key}`, Date.now());
+    } catch {
+      // Silently fail — tip won't show again until page reload
+    }
+  }, [key]);
+
+  return { show, dismiss };
 }
 
 /**
@@ -99,12 +101,12 @@ export function useCoachmark(key, condition = true) {
  * @returns {Promise<boolean>}
  */
 export async function hasSeenCoachmark(key) {
-    try {
-        const seen = await db.get(`${COACHMARK_PREFIX}${key}`);
-        return !!seen;
-    } catch {
-        return true; // Fail safe — assume seen
-    }
+  try {
+    const seen = await db.get(`${COACHMARK_PREFIX}${key}`);
+    return !!seen;
+  } catch {
+    return true; // Fail safe — assume seen
+  }
 }
 
 /**
@@ -112,23 +114,23 @@ export async function hasSeenCoachmark(key) {
  * @param {string} key
  */
 export async function markCoachmarkSeen(key) {
-    try {
-        await db.set(`${COACHMARK_PREFIX}${key}`, Date.now());
-    } catch {
-        // Silently fail
-    }
+  try {
+    await db.set(`${COACHMARK_PREFIX}${key}`, Date.now());
+  } catch {
+    // Silently fail
+  }
 }
 
 /**
  * Reset all coachmarks (e.g., for testing or "Show Tips Again" in settings).
  */
 export async function resetAllCoachmarks() {
-    try {
-        const keys = Object.keys(COACHMARKS);
-        for (const key of keys) {
-            await db.del(`${COACHMARK_PREFIX}${key}`);
-        }
-    } catch {
-        // Silently fail
+  try {
+    const keys = Object.keys(COACHMARKS);
+    for (const key of keys) {
+      await db.del(`${COACHMARK_PREFIX}${key}`);
     }
+  } catch {
+    // Silently fail
+  }
 }

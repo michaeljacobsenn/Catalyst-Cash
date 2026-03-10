@@ -10,9 +10,9 @@
 //   gemini-2.5-pro    $1.25/$10.0/M  ≈ $0.024/audit  → Pro  (Catalyst AI Pro)
 //   o4-mini           $1.10/$4.40/M  ≈ $0.012/audit  → Pro  (Catalyst AI Reasoning)
 //
-//   Free: 2 audits/wk on Flash  → ~$0.05/user/month
-//   Pro worst case: 60 audits/mo on Gemini Pro → $1.44/user/month
-//   Pro @ $6.99/mo (after Apple 15%): $5.94 net → $4.50+ profit/user
+//   Free: 3 audits/wk on Flash  → ~$0.07/user/month
+//   Pro worst case: 50 audits/mo on o3-mini → ~$0.85/user/month
+//   Pro @ $11.99/mo (after Apple 15%): $10.19 net → ~$6.00+ profit/user
 // ═══════════════════════════════════════════════════════════════
 
 import { db } from "./utils.js";
@@ -40,7 +40,7 @@ let _effectiveGatingMode = GATING_MODE_DEFAULT;
  * Consumers can check this to decide whether to show/enforce limits.
  */
 export function getGatingMode() {
-    return _effectiveGatingMode;
+  return _effectiveGatingMode;
 }
 
 /**
@@ -48,27 +48,36 @@ export function getGatingMode() {
  * "off" = no enforcement, "soft" = show but don't block, "live" = enforce.
  */
 export function isGatingEnforced() {
-    return _effectiveGatingMode === "live";
+  return _effectiveGatingMode === "live";
 }
 
 /**
  * Returns true if gating UI should be shown (soft or live mode).
  */
 export function shouldShowGating() {
-    return _effectiveGatingMode === "soft" || _effectiveGatingMode === "live";
+  return _effectiveGatingMode === "soft" || _effectiveGatingMode === "live";
 }
 
 /**
  * Compare semver strings. Returns -1, 0, or 1.
  */
 function compareVersions(a, b) {
-    const pa = a.split(".").map(Number);
-    const pb = b.split(".").map(Number);
-    for (let i = 0; i < 3; i++) {
-        const diff = (pa[i] || 0) - (pb[i] || 0);
-        if (diff !== 0) return diff > 0 ? 1 : -1;
-    }
-    return 0;
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+/**
+ * Last known rate-limit state from the worker (source of truth).
+ * Updated on every successful API response via X-RateLimit-Remaining.
+ */
+const _lastServerRateLimit = { audit: null, chat: null };
+export function getServerRateLimit() {
+  return _lastServerRateLimit;
 }
 
 /**
@@ -79,28 +88,35 @@ function compareVersions(a, b) {
  * hardcoded will still get overridden to "live" when we flip the switch.
  */
 export async function syncRemoteGatingMode() {
-    try {
-        const { fetchGatingConfig } = await import("./api.js");
-        const config = await fetchGatingConfig();
-        if (!config) return;
+  try {
+    const { fetchGatingConfig, onRateLimitUpdate } = await import("./api.js");
 
-        // Remote gating mode always wins if it's more restrictive
-        const modes = ["off", "soft", "live"];
-        const localIdx = modes.indexOf(_effectiveGatingMode);
-        const remoteIdx = modes.indexOf(config.gatingMode);
-        if (remoteIdx > localIdx) {
-            _effectiveGatingMode = config.gatingMode;
-        }
+    // Register rate-limit sync callback (runs on every API response)
+    onRateLimitUpdate(({ remaining, limit, isChat }) => {
+      const key = isChat ? "chat" : "audit";
+      _lastServerRateLimit[key] = { remaining, limit, ts: Date.now() };
+    });
 
-        // Check minimum version — if below, force live mode
-        if (config.minVersion && compareVersions(APP_VERSION, config.minVersion) < 0) {
-            _effectiveGatingMode = "live";
-            console.warn(`[Gating] App version ${APP_VERSION} below minimum ${config.minVersion} — forcing live mode`);
-        }
-    } catch (e) {
-        // Fail silently — keep hardcoded default
-        console.warn("[Gating] Remote config sync failed:", e?.message);
+    const config = await fetchGatingConfig();
+    if (!config) return;
+
+    // Remote gating mode always wins if it's more restrictive
+    const modes = ["off", "soft", "live"];
+    const localIdx = modes.indexOf(_effectiveGatingMode);
+    const remoteIdx = modes.indexOf(config.gatingMode);
+    if (remoteIdx > localIdx) {
+      _effectiveGatingMode = config.gatingMode;
     }
+
+    // Check minimum version — if below, force live mode
+    if (config.minVersion && compareVersions(APP_VERSION, config.minVersion) < 0) {
+      _effectiveGatingMode = "live";
+      console.warn(`[Gating] App version ${APP_VERSION} below minimum ${config.minVersion} — forcing live mode`);
+    }
+  } catch (e) {
+    // Fail silently — keep hardcoded default
+    console.warn("[Gating] Remote config sync failed:", e?.message);
+  }
 }
 
 // ── Tier Definitions ──────────────────────────────────────────
@@ -128,167 +144,171 @@ export async function syncRemoteGatingMode() {
 //   ~hour during waking hours. Pro upgrades feel like removing a
 //   ceiling, not getting unlocked from a cage.
 // ──────────────────────────────────────────────────────────────
-export const PRO_MONTHLY_AUDIT_CAP = 60;  // ~2/day, $1.20/mo max API cost at $0.02/audit
-export const PRO_DAILY_CHAT_CAP = 50;     // ~2/hr, prevents abuse while feeling generous
+export const PRO_MONTHLY_AUDIT_CAP = 50; // ~1.6/day, $0.85/mo max API cost at $0.017/audit
+export const PRO_DAILY_CHAT_CAP = 100; // ~6/hr, prevents abuse while feeling generous
 
 export const TIERS = {
-    free: {
-        id: "free",
-        name: "Free",
-        auditsPerWeek: 2,                    // Covers weekly audit + 1 re-run
-        chatMessagesPerDay: 10,              // ~1/hr waking hours, hooks users
-        marketRefreshMs: 60 * 60 * 1000,     // 60 minutes
-        historyLimit: 12,                     // ~3 months of trends (quarterly)
-        models: ["gemini-2.5-flash"],  // Catalyst AI — fast, free
-        features: [
-            "basic_audit",          // Core AI audit
-            "health_score",         // Financial health scoring
-            "weekly_moves",         // Action items from audit
-            "history",              // Audit history (limited to 8)
-            "demo",                 // Demo / test audit
-            "dashboard_charts",     // Full trend charts (Net Worth, Health, Spending)
-            "debt_simulator",       // Full debt payoff simulator
-            "cash_flow_calendar",   // Full cash flow calendar
-            "budget_tracking",      // Full budget tracking
-            "card_portfolio",       // Full card/bank management
-            "renewals",             // Full renewals tracking
-            "weekly_challenges",    // Gamification / badges
-            "share_card_branded",   // Share score card (with Catalyst Cash branding)
-            "basic_alerts",         // Standard alerts (floor, promo sprint)
-            "ask_ai",               // AskAI chat (daily limited)
-        ],
-        badge: null,
-    },
-    pro: {
-        id: "pro",
-        name: "Pro",
-        auditsPerWeek: Infinity,             // No weekly cap (monthly cap of 150 applies)
-        chatMessagesPerDay: Infinity,        // No daily cap enforced at tier level (PRO_DAILY_CHAT_CAP = 100 applies)
-        marketRefreshMs: 5 * 60 * 1000,      // 5 minutes
-        historyLimit: Infinity,               // All history
-        models: [
-            "gemini-2.5-flash",               // Catalyst AI (free)
-            "gemini-2.5-pro",                 // Catalyst AI Pro
-            "o4-mini",                        // Catalyst AI Reasoning
-        ],
-        features: [
-            // ── Everything in Free ──
-            "basic_audit", "health_score", "weekly_moves", "history", "demo",
-            "dashboard_charts", "debt_simulator", "cash_flow_calendar",
-            "budget_tracking", "card_portfolio", "renewals",
-            "weekly_challenges", "share_card_branded", "basic_alerts",
+  free: {
+    id: "free",
+    name: "Free",
+    auditsPerWeek: 3, // Covers weekly audit + 2 re-runs
+    chatMessagesPerDay: 15, // Generous free chat to hook users
+    marketRefreshMs: 60 * 60 * 1000, // 60 minutes
+    historyLimit: 12, // ~3 months of trends (quarterly)
+    models: ["gpt-4o-mini"], // Catalyst AI — fast, free
+    features: [
+      "basic_audit", // Core AI audit
+      "health_score", // Financial health scoring
+      "weekly_moves", // Action items from audit
+      "history", // Audit history (limited to 8)
+      "demo", // Demo / test audit
+      "dashboard_charts", // Full trend charts (Net Worth, Health, Spending)
+      "debt_simulator", // Full debt payoff simulator
+      "cash_flow_calendar", // Full cash flow calendar
+      "budget_tracking", // Full budget tracking
+      "card_portfolio", // Full card/bank management
+      "renewals", // Full renewals tracking
+      "weekly_challenges", // Gamification / badges
+      "share_card_branded", // Share score card (with Catalyst Cash branding)
+      "basic_alerts", // Standard alerts (floor, promo sprint)
+      "ask_ai", // AskAI chat (daily limited)
+    ],
+    badge: null,
+  },
+  pro: {
+    id: "pro",
+    name: "Pro",
+    auditsPerWeek: Infinity, // No weekly cap (monthly cap of 150 applies)
+    chatMessagesPerDay: Infinity, // No daily cap enforced at tier level (PRO_DAILY_CHAT_CAP = 100 applies)
+    marketRefreshMs: 5 * 60 * 1000, // 5 minutes
+    historyLimit: Infinity, // All history
+    models: [
+      "gpt-4o-mini", // Catalyst AI (free)
+      "gpt-4o", // Catalyst AI Chat
+      "o3-mini", // Catalyst AI Reasoning
+    ],
+    features: [
+      // ── Everything in Free ──
+      "basic_audit",
+      "health_score",
+      "weekly_moves",
+      "history",
+      "demo",
+      "dashboard_charts",
+      "debt_simulator",
+      "cash_flow_calendar",
+      "budget_tracking",
+      "card_portfolio",
+      "renewals",
+      "weekly_challenges",
+      "share_card_branded",
+      "basic_alerts",
 
-            // ── Pro Exclusives ──
-            "unlimited_audits",        // No weekly cap (60/mo monthly safety cap)
-            "premium_models",          // Access to Pro/Sonnet/o3
-            "unlimited_history",       // Full audit archive
-            "share_card_clean",        // Share without branding
-            "export_csv",              // CSV / XLSX export
-            "export_pdf",              // PDF report export
-            "advanced_alerts",         // Score change drivers, trend warnings
-            "priority_refresh",        // 15-min market data
-            "unlimited_chat",          // 50/day AskAI messages (vs 10/day free)
+      // ── Pro Exclusives ──
+      "unlimited_audits", // No weekly cap (50/mo monthly safety cap)
+      "premium_models", // Access to o3-mini / GPT-4o
+      "unlimited_history", // Full audit archive
+      "share_card_clean", // Share without branding
+      "export_csv", // CSV / XLSX export
+      "export_pdf", // PDF report export
+      "advanced_alerts", // Score change drivers, trend warnings
+      "priority_refresh", // 15-min market data
+      "unlimited_chat", // 100/day AskAI messages (vs 15/day free)
 
-            // ── Future Pro Features (roadmap) ──
-            // "ai_followup_chat",     // Ask follow-up questions after audit
-            // "net_worth_projections",// Monte Carlo simulation (1yr/5yr/10yr)
-            // "goal_tracking",        // Debt-free target, savings milestones
-            // "custom_categories",    // User-defined budget categories beyond defaults
-            // "multi_currency",       // International users
-            // "family_sharing",       // Shared household finances
-            // "tax_summary",          // Year-end tax-relevant transaction summary
-            // "plaid_auto_sync",      // Auto-sync Plaid balances daily
-            // "widget_kit",           // iOS home screen widgets
-            // "apple_watch",          // Wrist glanceable net worth
-        ],
-        badge: "⚡ Pro",
-    },
+      // ── Future Pro Features (roadmap) ──
+      // "ai_followup_chat",     // Ask follow-up questions after audit
+      // "net_worth_projections",// Monte Carlo simulation (1yr/5yr/10yr)
+      // "goal_tracking",        // Debt-free target, savings milestones
+      // "custom_categories",    // User-defined budget categories beyond defaults
+      // "multi_currency",       // International users
+      // "family_sharing",       // Shared household finances
+      // "tax_summary",          // Year-end tax-relevant transaction summary
+      // "plaid_auto_sync",      // Auto-sync Plaid balances daily
+      // "widget_kit",           // iOS home screen widgets
+      // "apple_watch",          // Wrist glanceable net worth
+    ],
+    badge: "⚡ Pro",
+  },
 };
 
 // ── IAP Product IDs (Apple App Store) ─────────────────────────
 export const IAP_PRODUCTS = {
-    monthly: "com.catalystcash.pro.monthly.v2",   // $6.99/mo
-    yearly: "com.catalystcash.pro.yearly.v2",     // $49.99/yr ($4.17/mo)
+  monthly: "com.catalystcash.pro.monthly.v2", // $7.99/mo
+  yearly: "com.catalystcash.pro.yearly.v2", // $59.99/yr ($4.99/mo)
 };
 
 // ── IAP Display Pricing (for UI — no StoreKit dependency) ─────
 //
-// PRICING RATIONALE:
-//   $6.99/mo  → Competitive vs Copilot ($10.99), Monarch ($9.99)
-//   $49.99/yr → $4.17/mo effective, 40% savings anchors yearly
-//   Apple takes 15% (Small Business Program) → $5.94 net/mo
-//   AI costs for Pro user: ~$0.42/mo → $5.52 profit/user/mo
-//
-//   Yearly: $49.99 × 0.85 = $42.49 net, minus ~$5.04 AI = $37.45/yr profit
+// PRICING RATIONALE (Frozen Account Pivot):
+//   $8.99/mo → "Under $10" budget alternative vs Copilot ($14.99)
+//   $69.99/yr → $5.83/mo effective, massive 35% savings anchors yearly
+//   Apple takes 30% → $6.29 net/mo (monthly), $4.08 net/mo (yearly)
+//   Free COGS is strictly bounded as 1-time snapshot. Pro max COGS is ~$5.75/mo.
 // ──────────────────────────────────────────────────────────────
 export const IAP_PRICING = {
-    monthly: {
-        price: "$6.99",
-        period: "month",
-        note: "Billed monthly",
-    },
-    yearly: {
-        price: "$49.99",
-        period: "year",
-        perMonth: "$4.17",
-        savings: "Save 40%",
-        trial: "7-day free trial",
-    },
+  monthly: { price: "$8.99", period: "month", savings: false },
+  yearly: { price: "$69.99", period: "year", savings: "SAVE 35%", perMonth: "$5.83", original: "$107.88", trial: "7-day free trial" },
+};
+
+// ── Institution Limits (Plaid bank connections per tier) ───────
+export const INSTITUTION_LIMITS = {
+  free: 1, // Single initial snapshot. Account is then "frozen" from live syncs.
+  pro: 6,
 };
 
 // ── State Management ──────────────────────────────────────────
 const STATE_KEY = "subscription-state";
 
 const DEFAULT_STATE = {
-    tier: "free",
-    expiresAt: null,        // ISO string, null = never (for free)
-    productId: null,        // Last purchased product ID
-    purchaseDate: null,     // ISO string
-    auditsThisWeek: 0,      // Reset every Monday
-    weekStartDate: null,    // UTC ISO string of current week's Monday
-    auditsThisMonth: 0,     // Reset on 1st of each month (Pro cap)
-    monthKey: null,         // UTC month key, e.g. "2026-03"
-    chatMessagesToday: 0,   // Reset daily at midnight
-    chatDayKey: null,       // UTC day key, e.g. "2026-03-01"
+  tier: "free",
+  expiresAt: null, // ISO string, null = never (for free)
+  productId: null, // Last purchased product ID
+  purchaseDate: null, // ISO string
+  auditsThisWeek: 0, // Reset every Monday
+  weekStartDate: null, // UTC ISO string of current week's Monday
+  auditsThisMonth: 0, // Reset on 1st of each month (Pro cap)
+  monthKey: null, // UTC month key, e.g. "2026-03"
+  chatMessagesToday: 0, // Reset daily at midnight
+  chatDayKey: null, // UTC day key, e.g. "2026-03-01"
 };
 
 /**
  * Get a UTC ISO day key (YYYY-MM-DD).
  */
 function getUtcDayKey(now = new Date()) {
-    return now.toISOString().slice(0, 10);
+  return now.toISOString().slice(0, 10);
 }
 
 /**
  * Get the current week's Monday using UTC boundaries.
  */
 function getCurrentWeekMonday(now = new Date()) {
-    const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const dayNum = monday.getUTCDay() || 7;
-    monday.setUTCDate(monday.getUTCDate() + 1 - dayNum);
-    return monday.toISOString().slice(0, 10);
+  const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const dayNum = monday.getUTCDay() || 7;
+  monday.setUTCDate(monday.getUTCDate() + 1 - dayNum);
+  return monday.toISOString().slice(0, 10);
 }
 
 /**
  * Get current month key for monthly cap tracking (e.g. "2026-03").
  */
 function getCurrentMonthKey(now = new Date()) {
-    return now.toISOString().slice(0, 7);
+  return now.toISOString().slice(0, 7);
 }
 
 /**
  * Get current day key for daily chat tracking (e.g. "2026-03-01").
  */
 function getCurrentDayKey(now = new Date()) {
-    return getUtcDayKey(now);
+  return getUtcDayKey(now);
 }
 
 export function getUsageWindowKeys(now = new Date()) {
-    return {
-        weekStartDate: getCurrentWeekMonday(now),
-        monthKey: getCurrentMonthKey(now),
-        dayKey: getCurrentDayKey(now),
-    };
+  return {
+    weekStartDate: getCurrentWeekMonday(now),
+    monthKey: getCurrentMonthKey(now),
+    dayKey: getCurrentDayKey(now),
+  };
 }
 
 // ── Keychain Helpers (Anti-Abuse) ─────────────────────────────
@@ -304,32 +324,32 @@ const KC_AUDIT_STATE_KEY = "cc-audit-state";
 const isNativePlatform = Capacitor.isNativePlatform();
 
 async function keychainGet(key) {
-    if (!isNativePlatform) return null;
-    try {
-        const result = await SecureStoragePlugin.get({ key });
-        return result?.value ? JSON.parse(result.value) : null;
-    } catch {
-        return null; // Key doesn't exist yet
-    }
+  if (!isNativePlatform) return null;
+  try {
+    const result = await SecureStoragePlugin.get({ key });
+    return result?.value ? JSON.parse(result.value) : null;
+  } catch {
+    return null; // Key doesn't exist yet
+  }
 }
 
 async function keychainSet(key, value) {
-    if (!isNativePlatform) return;
-    try {
-        await SecureStoragePlugin.set({ key, value: JSON.stringify(value) });
-    } catch (e) {
-        console.warn("[Keychain] Failed to write:", key, e?.message);
-    }
+  if (!isNativePlatform) return;
+  try {
+    await SecureStoragePlugin.set({ key, value: JSON.stringify(value) });
+  } catch (e) {
+    console.warn("[Keychain] Failed to write:", key, e?.message);
+  }
 }
 
 function generateUUID() {
-    if (typeof crypto !== "undefined" && crypto.randomUUID) {
-        return crypto.randomUUID();
-    }
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
-        const r = (Math.random() * 16) | 0;
-        return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
-    });
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
 }
 
 /**
@@ -338,30 +358,30 @@ function generateUUID() {
  * On first native boot after update, migrates existing Preferences ID to Keychain.
  */
 export async function getOrCreateDeviceId() {
-    try {
-        // 1. Try Keychain first (survives reinstall)
-        let kcId = await keychainGet(KC_DEVICE_ID_KEY);
-        if (kcId) {
-            // Ensure Preferences also has it (for non-Keychain reads)
-            await db.set(DEVICE_ID_KEY, kcId);
-            return kcId;
-        }
-
-        // 2. Migrate existing Preferences ID → Keychain (seamless upgrade)
-        let prefId = await db.get(DEVICE_ID_KEY);
-        if (prefId) {
-            await keychainSet(KC_DEVICE_ID_KEY, prefId);
-            return prefId;
-        }
-
-        // 3. First install — generate new ID and store in both
-        const newId = generateUUID();
-        await db.set(DEVICE_ID_KEY, newId);
-        await keychainSet(KC_DEVICE_ID_KEY, newId);
-        return newId;
-    } catch {
-        return "unknown";
+  try {
+    // 1. Try Keychain first (survives reinstall)
+    const kcId = await keychainGet(KC_DEVICE_ID_KEY);
+    if (kcId) {
+      // Ensure Preferences also has it (for non-Keychain reads)
+      await db.set(DEVICE_ID_KEY, kcId);
+      return kcId;
     }
+
+    // 2. Migrate existing Preferences ID → Keychain (seamless upgrade)
+    const prefId = await db.get(DEVICE_ID_KEY);
+    if (prefId) {
+      await keychainSet(KC_DEVICE_ID_KEY, prefId);
+      return prefId;
+    }
+
+    // 3. First install — generate new ID and store in both
+    const newId = generateUUID();
+    await db.set(DEVICE_ID_KEY, newId);
+    await keychainSet(KC_DEVICE_ID_KEY, newId);
+    return newId;
+  } catch {
+    return "unknown";
+  }
 }
 
 /**
@@ -369,74 +389,74 @@ export async function getOrCreateDeviceId() {
  * Returns { auditsThisWeek, weekStartDate, auditsThisMonth, monthKey } or null.
  */
 async function getKeychainAuditState() {
-    return await keychainGet(KC_AUDIT_STATE_KEY);
+  return await keychainGet(KC_AUDIT_STATE_KEY);
 }
 
 /**
  * Write audit usage counters to Keychain.
  */
 async function setKeychainAuditState(counters) {
-    await keychainSet(KC_AUDIT_STATE_KEY, counters);
+  await keychainSet(KC_AUDIT_STATE_KEY, counters);
 }
 
 /**
  * Load subscription state from local storage.
  */
 export async function getSubscriptionState() {
-    try {
-        const raw = await db.get(STATE_KEY);
-        const state = raw ? { ...DEFAULT_STATE, ...raw } : { ...DEFAULT_STATE };
+  try {
+    const raw = await db.get(STATE_KEY);
+    const state = raw ? { ...DEFAULT_STATE, ...raw } : { ...DEFAULT_STATE };
 
-        // ── Merge Keychain audit counters (anti-reinstall) ──────
-        // If Keychain has higher counters for the same period,
-        // it means the user reinstalled — use Keychain values.
-        const kcState = await getKeychainAuditState();
+    // ── Merge Keychain audit counters (anti-reinstall) ──────
+    // If Keychain has higher counters for the same period,
+    // it means the user reinstalled — use Keychain values.
+    const kcState = await getKeychainAuditState();
 
-        // Auto-reset weekly audit counter if a new week started
-        const currentMonday = getCurrentWeekMonday();
-        if (state.weekStartDate !== currentMonday) {
-            state.auditsThisWeek = 0;
-            state.weekStartDate = currentMonday;
-        }
-        // Keychain weekly merge: if same week, take the higher count
-        if (kcState && kcState.weekStartDate === currentMonday) {
-            state.auditsThisWeek = Math.max(state.auditsThisWeek, kcState.auditsThisWeek || 0);
-        }
-
-        // Auto-reset monthly audit counter on new month
-        const currentMonth = getCurrentMonthKey();
-        if (state.monthKey !== currentMonth) {
-            state.auditsThisMonth = 0;
-            state.monthKey = currentMonth;
-        }
-        // Keychain monthly merge: if same month, take the higher count
-        if (kcState && kcState.monthKey === currentMonth) {
-            state.auditsThisMonth = Math.max(state.auditsThisMonth, kcState.auditsThisMonth || 0);
-        }
-
-        // Auto-reset daily chat counter on new day
-        const currentDay = getCurrentDayKey();
-        if (state.chatDayKey !== currentDay) {
-            state.chatMessagesToday = 0;
-            state.chatDayKey = currentDay;
-        }
-        // Keychain daily merge: if same day, take the higher count
-        if (kcState && kcState.chatDayKey === currentDay) {
-            state.chatMessagesToday = Math.max(state.chatMessagesToday, kcState.chatMessagesToday || 0);
-        }
-
-        // Check if Pro expired
-        if (state.tier === "pro" && state.expiresAt) {
-            if (new Date(state.expiresAt) < new Date()) {
-                state.tier = "free";
-            }
-        }
-
-        await db.set(STATE_KEY, state);
-        return state;
-    } catch {
-        return { ...DEFAULT_STATE };
+    // Auto-reset weekly audit counter if a new week started
+    const currentMonday = getCurrentWeekMonday();
+    if (state.weekStartDate !== currentMonday) {
+      state.auditsThisWeek = 0;
+      state.weekStartDate = currentMonday;
     }
+    // Keychain weekly merge: if same week, take the higher count
+    if (kcState && kcState.weekStartDate === currentMonday) {
+      state.auditsThisWeek = Math.max(state.auditsThisWeek, kcState.auditsThisWeek || 0);
+    }
+
+    // Auto-reset monthly audit counter on new month
+    const currentMonth = getCurrentMonthKey();
+    if (state.monthKey !== currentMonth) {
+      state.auditsThisMonth = 0;
+      state.monthKey = currentMonth;
+    }
+    // Keychain monthly merge: if same month, take the higher count
+    if (kcState && kcState.monthKey === currentMonth) {
+      state.auditsThisMonth = Math.max(state.auditsThisMonth, kcState.auditsThisMonth || 0);
+    }
+
+    // Auto-reset daily chat counter on new day
+    const currentDay = getCurrentDayKey();
+    if (state.chatDayKey !== currentDay) {
+      state.chatMessagesToday = 0;
+      state.chatDayKey = currentDay;
+    }
+    // Keychain daily merge: if same day, take the higher count
+    if (kcState && kcState.chatDayKey === currentDay) {
+      state.chatMessagesToday = Math.max(state.chatMessagesToday, kcState.chatMessagesToday || 0);
+    }
+
+    // Check if Pro expired
+    if (state.tier === "pro" && state.expiresAt) {
+      if (new Date(state.expiresAt) < new Date()) {
+        state.tier = "free";
+      }
+    }
+
+    await db.set(STATE_KEY, state);
+    return state;
+  } catch {
+    return { ...DEFAULT_STATE };
+  }
 }
 
 /**
@@ -444,9 +464,9 @@ export async function getSubscriptionState() {
  * When GATING_MODE is "off", always returns Pro tier.
  */
 export async function getCurrentTier() {
-    if (_effectiveGatingMode === "off") return TIERS.pro;
-    const state = await getSubscriptionState();
-    return TIERS[state.tier] || TIERS.free;
+  if (_effectiveGatingMode === "off") return TIERS.pro;
+  const state = await getSubscriptionState();
+  return TIERS[state.tier] || TIERS.free;
 }
 
 /**
@@ -454,16 +474,16 @@ export async function getCurrentTier() {
  * Use this when you need to show the user's actual subscription status.
  */
 export async function getRawTier() {
-    const state = await getSubscriptionState();
-    return TIERS[state.tier] || TIERS.free;
+  const state = await getSubscriptionState();
+  return TIERS[state.tier] || TIERS.free;
 }
 
 /**
  * Check if a specific feature is available on the current tier.
  */
 export async function hasFeature(featureId) {
-    const tier = await getCurrentTier();
-    return tier.features.includes(featureId);
+  const tier = await getCurrentTier();
+  return tier.features.includes(featureId);
 }
 
 /**
@@ -472,11 +492,11 @@ export async function hasFeature(featureId) {
  * and properly gated in "live" mode.
  */
 export async function isModelAvailable(modelId) {
-    const tier = await getCurrentTier();
-    const activeModels = new Set(
-        AI_PROVIDERS.flatMap(provider => provider.models.filter(isModelSelectable).map(model => model.id))
-    );
-    return tier.models.includes(modelId) && activeModels.has(modelId);
+  const tier = await getCurrentTier();
+  const activeModels = new Set(
+    AI_PROVIDERS.flatMap(provider => provider.models.filter(isModelSelectable).map(model => model.id))
+  );
+  return tier.models.includes(modelId) && activeModels.has(modelId);
 }
 
 /**
@@ -485,38 +505,38 @@ export async function isModelAvailable(modelId) {
  * When GATING_MODE is "off", always returns unlimited.
  */
 export async function checkAuditQuota() {
-    if (_effectiveGatingMode === "off") {
-        return { allowed: true, remaining: Infinity, limit: Infinity, used: 0, monthlyUsed: 0, monthlyCap: Infinity };
-    }
+  if (_effectiveGatingMode === "off") {
+    return { allowed: true, remaining: Infinity, limit: Infinity, used: 0, monthlyUsed: 0, monthlyCap: Infinity };
+  }
 
-    const state = await getSubscriptionState();
-    const tier = TIERS[state.tier] || TIERS.free;
-    const limit = tier.auditsPerWeek;
-    const remaining = Math.max(0, limit - state.auditsThisWeek);
+  const state = await getSubscriptionState();
+  const tier = TIERS[state.tier] || TIERS.free;
+  const limit = tier.auditsPerWeek;
+  const remaining = Math.max(0, limit - state.auditsThisWeek);
 
-    const result = {
-        allowed: remaining > 0 || limit === Infinity,
-        remaining: limit === Infinity ? Infinity : remaining,
-        limit,
-        used: state.auditsThisWeek,
-        monthlyUsed: state.auditsThisMonth || 0,
-        monthlyCap: state.tier === "pro" ? PRO_MONTHLY_AUDIT_CAP : Infinity,
-    };
+  const result = {
+    allowed: remaining > 0 || limit === Infinity,
+    remaining: limit === Infinity ? Infinity : remaining,
+    limit,
+    used: state.auditsThisWeek,
+    monthlyUsed: state.auditsThisMonth || 0,
+    monthlyCap: state.tier === "pro" ? PRO_MONTHLY_AUDIT_CAP : Infinity,
+  };
 
-    // Pro monthly cap check
-    if (state.tier === "pro" && (state.auditsThisMonth || 0) >= PRO_MONTHLY_AUDIT_CAP) {
-        result.allowed = false;
-        result.remaining = 0;
-        result.monthlyCapReached = true;
-    }
+  // Pro monthly cap check
+  if (state.tier === "pro" && (state.auditsThisMonth || 0) >= PRO_MONTHLY_AUDIT_CAP) {
+    result.allowed = false;
+    result.remaining = 0;
+    result.monthlyCapReached = true;
+  }
 
-    // In "soft" mode, show limits but don't block
-    if (_effectiveGatingMode === "soft") {
-        result.allowed = true;
-        result.softBlocked = remaining <= 0 && limit !== Infinity;
-    }
+  // In "soft" mode, show limits but don't block
+  if (_effectiveGatingMode === "soft") {
+    result.allowed = true;
+    result.softBlocked = remaining <= 0 && limit !== Infinity;
+  }
 
-    return result;
+  return result;
 }
 
 /**
@@ -525,20 +545,20 @@ export async function checkAuditQuota() {
  * Always records usage regardless of gating mode (for analytics).
  */
 export async function recordAuditUsage() {
-    const state = await getSubscriptionState();
-    state.auditsThisWeek = (state.auditsThisWeek || 0) + 1;
-    state.auditsThisMonth = (state.auditsThisMonth || 0) + 1;
-    await db.set(STATE_KEY, state);
+  const state = await getSubscriptionState();
+  state.auditsThisWeek = (state.auditsThisWeek || 0) + 1;
+  state.auditsThisMonth = (state.auditsThisMonth || 0) + 1;
+  await db.set(STATE_KEY, state);
 
-    // Persist counters to Keychain (survives reinstall)
-    await setKeychainAuditState({
-        auditsThisWeek: state.auditsThisWeek,
-        weekStartDate: state.weekStartDate,
-        auditsThisMonth: state.auditsThisMonth,
-        monthKey: state.monthKey,
-        chatMessagesToday: state.chatMessagesToday,
-        chatDayKey: state.chatDayKey,
-    });
+  // Persist counters to Keychain (survives reinstall)
+  await setKeychainAuditState({
+    auditsThisWeek: state.auditsThisWeek,
+    weekStartDate: state.weekStartDate,
+    auditsThisMonth: state.auditsThisMonth,
+    monthKey: state.monthKey,
+    chatMessagesToday: state.chatMessagesToday,
+    chatDayKey: state.chatDayKey,
+  });
 }
 
 /**
@@ -547,36 +567,36 @@ export async function recordAuditUsage() {
  * When GATING_MODE is "off", always returns unlimited.
  */
 export async function checkChatQuota() {
-    if (_effectiveGatingMode === "off") {
-        return { allowed: true, remaining: Infinity, limit: Infinity, used: 0 };
-    }
+  if (_effectiveGatingMode === "off") {
+    return { allowed: true, remaining: Infinity, limit: Infinity, used: 0 };
+  }
 
-    const state = await getSubscriptionState();
-    const tier = TIERS[state.tier] || TIERS.free;
-    const limit = tier.chatMessagesPerDay;
-    const remaining = Math.max(0, limit - state.chatMessagesToday);
+  const state = await getSubscriptionState();
+  const tier = TIERS[state.tier] || TIERS.free;
+  const limit = tier.chatMessagesPerDay;
+  const remaining = Math.max(0, limit - state.chatMessagesToday);
 
-    const result = {
-        allowed: remaining > 0 || limit === Infinity,
-        remaining: limit === Infinity ? Infinity : remaining,
-        limit,
-        used: state.chatMessagesToday,
-    };
+  const result = {
+    allowed: remaining > 0 || limit === Infinity,
+    remaining: limit === Infinity ? Infinity : remaining,
+    limit,
+    used: state.chatMessagesToday,
+  };
 
-    // Pro daily cap check (anti-abuse)
-    if (state.tier === "pro" && state.chatMessagesToday >= PRO_DAILY_CHAT_CAP) {
-        result.allowed = false;
-        result.remaining = 0;
-        result.dailyCapReached = true;
-    }
+  // Pro daily cap check (anti-abuse)
+  if (state.tier === "pro" && state.chatMessagesToday >= PRO_DAILY_CHAT_CAP) {
+    result.allowed = false;
+    result.remaining = 0;
+    result.dailyCapReached = true;
+  }
 
-    // In "soft" mode, show limits but don't block
-    if (_effectiveGatingMode === "soft") {
-        result.allowed = true;
-        result.softBlocked = remaining <= 0 && limit !== Infinity;
-    }
+  // In "soft" mode, show limits but don't block
+  if (_effectiveGatingMode === "soft") {
+    result.allowed = true;
+    result.softBlocked = remaining <= 0 && limit !== Infinity;
+  }
 
-    return result;
+  return result;
 }
 
 /**
@@ -585,19 +605,19 @@ export async function checkChatQuota() {
  * Always records usage regardless of gating mode (for analytics).
  */
 export async function recordChatUsage() {
-    const state = await getSubscriptionState();
-    state.chatMessagesToday = (state.chatMessagesToday || 0) + 1;
-    await db.set(STATE_KEY, state);
+  const state = await getSubscriptionState();
+  state.chatMessagesToday = (state.chatMessagesToday || 0) + 1;
+  await db.set(STATE_KEY, state);
 
-    // Persist to Keychain
-    await setKeychainAuditState({
-        auditsThisWeek: state.auditsThisWeek,
-        weekStartDate: state.weekStartDate,
-        auditsThisMonth: state.auditsThisMonth,
-        monthKey: state.monthKey,
-        chatMessagesToday: state.chatMessagesToday,
-        chatDayKey: state.chatDayKey,
-    });
+  // Persist to Keychain
+  await setKeychainAuditState({
+    auditsThisWeek: state.auditsThisWeek,
+    weekStartDate: state.weekStartDate,
+    auditsThisMonth: state.auditsThisMonth,
+    monthKey: state.monthKey,
+    chatMessagesToday: state.chatMessagesToday,
+    chatDayKey: state.chatDayKey,
+  });
 }
 
 /**
@@ -606,8 +626,8 @@ export async function recordChatUsage() {
  * When GATING_MODE is "off", returns Pro-level refresh rate.
  */
 export async function getMarketRefreshTTL() {
-    const tier = await getCurrentTier();
-    return tier.marketRefreshMs;
+  const tier = await getCurrentTier();
+  return tier.marketRefreshMs;
 }
 
 /**
@@ -616,34 +636,34 @@ export async function getMarketRefreshTTL() {
  * When GATING_MODE is "off", returns Infinity.
  */
 export async function getHistoryLimit() {
-    const tier = await getCurrentTier();
-    return tier.historyLimit;
+  const tier = await getCurrentTier();
+  return tier.historyLimit;
 }
 
 /**
  * Activate Pro subscription (called after successful IAP).
  */
 export async function activatePro(productId, durationDays = 30) {
-    const state = await getSubscriptionState();
-    state.tier = "pro";
-    state.productId = productId;
-    state.purchaseDate = new Date().toISOString();
-    const expires = new Date();
-    expires.setDate(expires.getDate() + durationDays);
-    state.expiresAt = expires.toISOString();
-    await db.set(STATE_KEY, state);
-    return state;
+  const state = await getSubscriptionState();
+  state.tier = "pro";
+  state.productId = productId;
+  state.purchaseDate = new Date().toISOString();
+  const expires = new Date();
+  expires.setDate(expires.getDate() + durationDays);
+  state.expiresAt = expires.toISOString();
+  await db.set(STATE_KEY, state);
+  return state;
 }
 
 /**
  * Deactivate Pro (manual or after failed renewal).
  */
 export async function deactivatePro() {
-    const state = await getSubscriptionState();
-    state.tier = "free";
-    state.expiresAt = null;
-    state.productId = null;
-    await db.set(STATE_KEY, state);
+  const state = await getSubscriptionState();
+  state.tier = "free";
+  state.expiresAt = null;
+  state.productId = null;
+  await db.set(STATE_KEY, state);
 }
 
 /**
@@ -653,7 +673,7 @@ export async function deactivatePro() {
  * In "live" mode, checks the actual RevenueCat subscription.
  */
 export async function isPro() {
-    if (!isGatingEnforced()) return true;
-    const state = await getSubscriptionState();
-    return state.tier === "pro";
+  if (!isGatingEnforced()) return true;
+  const state = await getSubscriptionState();
+  return state.tier === "pro";
 }

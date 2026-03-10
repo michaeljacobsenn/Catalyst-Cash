@@ -10,13 +10,13 @@ export const APP_VERSION = "2.0.0";
 
 const DARK_TOKENS = {
   bg: {
-    base: "#0C121B",      // Exactly matches Native iOS Splash Background & X Header
-    card: "#121822",      // Slightly elevated card background
-    elevated: "#181E29",
-    surface: "#1E2430",
+    base: "#05080F", // Deep, rich void for maximum contrast against neon accents
+    card: "#0A1018", // Slightly elevated card background
+    elevated: "#121824",
+    surface: "#1A202D",
     hover: "rgba(110,75,180,0.08)",
-    glass: "rgba(12,18,27,0.75)",
-    navGlass: "rgba(12,18,27,0.88)",
+    glass: "rgba(5,8,15,0.75)",
+    navGlass: "rgba(5,8,15,0.88)",
   },
   border: {
     subtle: "rgba(160,140,220,0.06)",
@@ -41,7 +41,7 @@ const DARK_TOKENS = {
     copper: "#2ECC71",
     copperDim: "rgba(46,204,113,0.10)",
     gradient: "linear-gradient(135deg,#7B5EA7,#1A9B5A)",
-    gradientNav: "linear-gradient(135deg,#6B4E97,#1A8B50)",
+    gradientNav: "linear-gradient(145deg,rgba(123,94,167,0.95),rgba(26,139,80,0.95))",
   },
   status: {
     green: "#2ECC71",
@@ -56,11 +56,11 @@ const DARK_TOKENS = {
     purpleDim: "rgba(155,111,212,0.08)",
   },
   shadow: {
-    sm: "0 1px 2px rgba(0,0,0,0.25)",
-    card: "0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25)",
-    elevated: "0 4px 12px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.3)",
-    glow: "0 0 20px rgba(123,94,167,0.18), 0 0 6px rgba(123,94,167,0.12)",
-    navBtn: "0 4px 20px rgba(123,94,167,0.35), 0 2px 8px rgba(0,0,0,0.5), 0 0 30px rgba(46,204,113,0.12)",
+    sm: "0 1px 2px rgba(0,0,0,0.4)",
+    card: "0 2px 8px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3)",
+    elevated: "0 8px 24px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)",
+    glow: "0 0 24px rgba(123,94,167,0.20), 0 0 8px rgba(123,94,167,0.15)",
+    navBtn: "0 4px 20px rgba(123,94,167,0.35), 0 2px 8px rgba(0,0,0,0.6), 0 0 30px rgba(46,204,113,0.15)",
   },
 };
 
@@ -124,8 +124,8 @@ const LIGHT_TOKENS = {
 const SHARED_TOKENS = {
   radius: { sm: 8, md: 12, lg: 16, xl: 24 },
   font: {
-    mono: "'JetBrains Mono',ui-monospace,monospace",
-    sans: "'Inter',-apple-system,BlinkMacSystemFont,sans-serif",
+    mono: "ui-monospace, 'SF Mono', 'JetBrains Mono', monospace",
+    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', sans-serif",
   },
 };
 
@@ -162,24 +162,50 @@ export function applyTheme(mode) {
   }
 }
 
+export const INSTITUTIONS = [
+  "Amex",
+  "Bank of America",
+  "Barclays",
+  "Capital One",
+  "Chase",
+  "Citi",
+  "Discover",
+  "FNBO",
+  "Goldman Sachs",
+  "HSBC",
+  "Navy Federal",
+  "PenFed",
+  "Synchrony",
+  "TD Bank",
+  "US Bank",
+  "USAA",
+  "Wells Fargo",
+  "Other",
+];
+
 // Issuer brand colors
 export const ISSUER_COLORS = {
-  "Amex": { bg: "rgba(0,111,191,0.10)", border: "rgba(0,111,191,0.20)", text: "#4DA3E8", accent: "#006FBF" },
+  Amex: { bg: "rgba(0,111,191,0.10)", border: "rgba(0,111,191,0.20)", text: "#4DA3E8", accent: "#006FBF" },
   "Bank of America": { bg: "rgba(220,30,50,0.10)", border: "rgba(220,30,50,0.20)", text: "#E85060", accent: "#DC1E32" },
-  "Barclays": { bg: "rgba(0,175,215,0.10)", border: "rgba(0,175,215,0.20)", text: "#3CC0E0", accent: "#00AFD7" },
+  Barclays: { bg: "rgba(0,175,215,0.10)", border: "rgba(0,175,215,0.20)", text: "#3CC0E0", accent: "#00AFD7" },
   "Capital One": { bg: "rgba(213,0,50,0.10)", border: "rgba(213,0,50,0.20)", text: "#F05060", accent: "#D50032" },
-  "Chase": { bg: "rgba(60,80,180,0.10)", border: "rgba(60,80,180,0.20)", text: "#7080D0", accent: "#3C50B4" },
-  "Citi": { bg: "rgba(0,82,155,0.10)", border: "rgba(0,82,155,0.20)", text: "#4D8EC4", accent: "#00529B" },
-  "Discover": { bg: "rgba(255,96,0,0.10)", border: "rgba(255,96,0,0.20)", text: "#FF8040", accent: "#FF6000" },
-  "FNBO": { bg: "rgba(0,100,60,0.10)", border: "rgba(0,100,60,0.20)", text: "#4DAF80", accent: "#00643C" },
-  "Goldman Sachs": { bg: "rgba(110,130,160,0.10)", border: "rgba(110,130,160,0.20)", text: "#8AA0C0", accent: "#6E82A0" },
-  "HSBC": { bg: "rgba(219,0,17,0.10)", border: "rgba(219,0,17,0.20)", text: "#E85050", accent: "#DB0011" },
+  Chase: { bg: "rgba(60,80,180,0.10)", border: "rgba(60,80,180,0.20)", text: "#7080D0", accent: "#3C50B4" },
+  Citi: { bg: "rgba(0,82,155,0.10)", border: "rgba(0,82,155,0.20)", text: "#4D8EC4", accent: "#00529B" },
+  Discover: { bg: "rgba(255,96,0,0.10)", border: "rgba(255,96,0,0.20)", text: "#FF8040", accent: "#FF6000" },
+  FNBO: { bg: "rgba(0,100,60,0.10)", border: "rgba(0,100,60,0.20)", text: "#4DAF80", accent: "#00643C" },
+  "Goldman Sachs": {
+    bg: "rgba(110,130,160,0.10)",
+    border: "rgba(110,130,160,0.20)",
+    text: "#8AA0C0",
+    accent: "#6E82A0",
+  },
+  HSBC: { bg: "rgba(219,0,17,0.10)", border: "rgba(219,0,17,0.20)", text: "#E85050", accent: "#DB0011" },
   "Navy Federal": { bg: "rgba(0,52,120,0.10)", border: "rgba(0,52,120,0.20)", text: "#4D78B0", accent: "#003478" },
-  "PenFed": { bg: "rgba(0,60,110,0.10)", border: "rgba(0,60,110,0.20)", text: "#4D80B0", accent: "#003C6E" },
-  "Synchrony": { bg: "rgba(0,140,120,0.10)", border: "rgba(0,140,120,0.20)", text: "#40B0A0", accent: "#008C78" },
+  PenFed: { bg: "rgba(0,60,110,0.10)", border: "rgba(0,60,110,0.20)", text: "#4D80B0", accent: "#003C6E" },
+  Synchrony: { bg: "rgba(0,140,120,0.10)", border: "rgba(0,140,120,0.20)", text: "#40B0A0", accent: "#008C78" },
   "TD Bank": { bg: "rgba(52,168,83,0.10)", border: "rgba(52,168,83,0.20)", text: "#50C070", accent: "#34A853" },
   "US Bank": { bg: "rgba(200,25,30,0.10)", border: "rgba(200,25,30,0.20)", text: "#E05050", accent: "#C8191E" },
-  "USAA": { bg: "rgba(0,47,108,0.10)", border: "rgba(0,47,108,0.20)", text: "#4D70A0", accent: "#002F6C" },
+  USAA: { bg: "rgba(0,47,108,0.10)", border: "rgba(0,47,108,0.20)", text: "#4D70A0", accent: "#002F6C" },
   "Wells Fargo": { bg: "rgba(208,18,27,0.10)", border: "rgba(208,18,27,0.20)", text: "#E05050", accent: "#D0121B" },
 };
 

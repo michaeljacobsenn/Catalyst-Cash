@@ -8,7 +8,7 @@ import { haptic } from "./haptics.js";
 // ═══════════════════════════════════════════════════════════════
 export function useGlobalHaptics() {
   useEffect(() => {
-    const handler = (e) => {
+    const handler = e => {
       const btn = e.target.closest("button, [role='button']");
       if (btn && !btn.disabled) haptic.light();
     };
@@ -16,6 +16,28 @@ export function useGlobalHaptics() {
     return () => document.removeEventListener("touchstart", handler);
   }, []);
 }
+
+// ═══════════════════════════════════════════════════════════════
+// DYNAMIC TYPOGRAPHY TRACKING
+// Replicates Apple's San Francisco dynamic letter-spacing curves.
+// Larger text = tighter tracking. Smaller text = looser tracking.
+// ═══════════════════════════════════════════════════════════════
+export const getTracking = (fontSize, weight = "regular") => {
+  // Base mathematical curve for SF Pro
+  let tracking = 0;
+  if (fontSize <= 10) tracking = 0.04;
+  else if (fontSize <= 12) tracking = 0.02;
+  else if (fontSize <= 16) tracking = 0;
+  else if (fontSize <= 24) tracking = -0.015;
+  else if (fontSize <= 36) tracking = -0.025;
+  else tracking = -0.04; // Massive numbers
+
+  // Adjust for visual weight (heavy weights need slightly more breathing room)
+  if (weight === "bold" || weight >= 700) {
+    tracking += 0.005;
+  }
+  return `${tracking}em`;
+};
 
 export const GlobalStyles = () => (
   <style>{`
@@ -57,6 +79,7 @@ export const GlobalStyles = () => (
     @keyframes pulseShadow{0%,100%{transform:scale(1);filter:drop-shadow(0 8px 32px rgba(0,0,0,0.4))}50%{transform:scale(1.03);filter:drop-shadow(0 16px 48px rgba(130,120,255,0.4))}}
     @keyframes subtleBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
     @keyframes pulseAlert{0%,100%{box-shadow:0 0 0 0 rgba(248,81,73,0.4)}70%{box-shadow:0 0 0 10px rgba(248,81,73,0)}}
+    @keyframes scorePop{0%{opacity:0;transform:scale(0.85)}60%{opacity:1;transform:scale(1.05)}100%{opacity:1;transform:scale(1)}}
     @keyframes confettiFall{0%{transform:translateY(0) rotate(0deg) scale(1);opacity:1}100%{transform:translateY(85vh) rotate(720deg) scale(0.3);opacity:0}}
     @keyframes confettiBurst{0%{transform:translateY(0) scale(0);opacity:0}15%{opacity:1;transform:translateY(-20px) scale(1)}100%{transform:translateY(85vh) rotate(720deg) scale(0.3);opacity:0}}
     @keyframes floatUp{0%{transform:translateY(0);opacity:0.8}50%{transform:translateY(-10px);opacity:1}100%{transform:translateY(0);opacity:0.6}}
@@ -66,53 +89,78 @@ export const GlobalStyles = () => (
     @keyframes settingsSlideIn{from{opacity:0;transform:translateX(50px)}to{opacity:1;transform:translateX(0)}}
     @keyframes settingsSlideOut{from{opacity:0;transform:translateX(-50px)}to{opacity:1;transform:translateX(0)}}
     @keyframes slidePaneIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes paneSlideFromRight{from{transform:translateX(100%);opacity:0.8}to{transform:translateX(0);opacity:1}}
+    @keyframes paneSlideToRight{from{transform:translateX(0);opacity:1}to{transform:translateX(100%);opacity:0.6}}
+    @keyframes modalSlideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+    @keyframes modalSlideDown{from{transform:translateY(0)}to{transform:translateY(100%);opacity:0}}
 
     /* ── Native iOS-style horizontal swipe transitions ── */
-    @keyframes tabSlideFromRight{from{opacity:0;transform:translateX(50px) scale(0.98)}to{opacity:1;transform:translateX(0) scale(1)}}
-    @keyframes tabSlideFromLeft{from{opacity:0;transform:translateX(-50px) scale(0.98)}to{opacity:1;transform:translateX(0) scale(1)}}
+    /* REMOVED: tabSlideFromRight and tabSlideFromLeft are replaced by native scroll-snap */
 
     /* Native Apple Spring Physics (UISpringTimingParameters equivalent) */
     :root {
       --spring-soft: cubic-bezier(0.175, 0.885, 0.32, 1.15);
       --spring-stiff: cubic-bezier(0.25, 1, 0.5, 1);
+      --spring-elastic: cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    .slide-up{animation:slideUp .5s var(--spring-soft) both;will-change:transform,opacity}
-    .fade-in{animation:fadeIn .4s var(--spring-stiff) both}
-    .scale-in{animation:scaleIn .4s var(--spring-soft) both}
-    .shimmer-bg{background:linear-gradient(90deg,${T.bg.card} 30%,${T.bg.elevated} 50%,${T.bg.card} 70%);background-size:200% 100%;animation:shimmer 2.5s ease-in-out 1 forwards}
-    .pulse-alert{animation:pulseAlert 2s infinite}
-    .spin{animation:spin .8s linear infinite}
-    .tab-transition{animation:tabSlideIn .35s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
-    .tab-slide-right{animation:tabSlideFromRight .4s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
-    .tab-slide-left{animation:tabSlideFromLeft .4s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
-    .slide-pane{animation:slidePaneIn .35s cubic-bezier(.16,1,.3,1) both;will-change:transform,opacity}
+    .slide-up{animation:slideUp .5s var(--spring-elastic) both;will-change:transform,opacity;transform:translateZ(0);}
+    .fade-in{animation:fadeIn .4s var(--spring-stiff) both;transform:translateZ(0);}
+    .scale-in{animation:scaleIn .4s var(--spring-elastic) both;transform:translateZ(0);}
+    .score-pop{animation:scorePop .6s var(--spring-elastic) .4s both;will-change:transform,opacity;transform:translateZ(0);}
+    .shimmer-bg{background:linear-gradient(90deg,${T.bg.card} 30%,${T.bg.elevated} 50%,${T.bg.card} 70%);background-size:200% 100%;animation:shimmer 2.5s ease-in-out 1 forwards;transform:translateZ(0);}
+    .pulse-alert{animation:pulseAlert 2.5s infinite var(--spring-soft);transform:translateZ(0);}
+    .spin{animation:spin .8s linear infinite;transform:translateZ(0);}
+    .tab-transition{animation:tabSlideIn .35s var(--spring-elastic) both;will-change:transform,opacity;transform:translateZ(0);}
+    /* REMOVED: .tab-slide-right and .tab-slide-left replaced by native scroll-snap */
+    .slide-pane{animation:paneSlideFromRight .4s var(--spring-elastic) both;will-change:transform,opacity;transform:translateZ(0);}
+    .slide-pane-dismiss{animation:paneSlideToRight .35s cubic-bezier(.4,0,1,1) both;will-change:transform,opacity;transform:translateZ(0);}
+    .modal-pane{animation:modalSlideUp .45s var(--spring-elastic) both;will-change:transform;background:var(--bg-base);z-index:200;transform:translateZ(0);}
+    .modal-pane-dismiss{animation:modalSlideDown .35s cubic-bezier(.4,0,1,1) both;will-change:transform,opacity;z-index:200;transform:translateZ(0);}
+    
+    /* ── Staggered Waterfall Transitions ── */
+    /* Add this class to a parent to cascade its children's entrance */
+    .stagger-container > * { opacity: 0; animation: slideUp 0.6s var(--spring-elastic) forwards; }
+    .stagger-container > *:nth-child(1) { animation-delay: 0.05s; }
+    .stagger-container > *:nth-child(2) { animation-delay: 0.10s; }
+    .stagger-container > *:nth-child(3) { animation-delay: 0.15s; }
+    .stagger-container > *:nth-child(4) { animation-delay: 0.20s; }
+    .stagger-container > *:nth-child(5) { animation-delay: 0.25s; }
+    .stagger-container > *:nth-child(6) { animation-delay: 0.30s; }
+    .stagger-container > *:nth-child(7) { animation-delay: 0.35s; }
+    .stagger-container > *:nth-child(8) { animation-delay: 0.40s; }
+    .stagger-container > *:nth-child(n+9) { animation-delay: 0.45s; }
+    /* Interactive swipe-back/down: disable CSS animation while user is dragging */
+    .swipe-back-pane, .swipe-down-pane{will-change:transform;transition:none !important;animation:none !important;transform:translateZ(0);}
 
-    /* Top 0.0001% Micro-Animations & Haptic Press States */
+    /* Top 0.00001% Micro-Animations & Haptic Press States */
     .hover-card {
-      transition: border-color .4s ease, box-shadow .4s var(--spring-stiff), transform .4s var(--spring-stiff) !important;
+      transition: border-color .4s ease, box-shadow .4s var(--spring-elastic), transform .4s var(--spring-elastic) !important;
+      will-change: transform, box-shadow;
     }
     .hover-card:hover {
-      transform: translateY(-2px) scale(1.01) !important;
-      box-shadow: 0 16px 32px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.3), 0 0 0 1px rgba(160,140,220,0.15) !important;
+      transform: translateY(-2px) scale(1.01) translateZ(0) !important;
+      box-shadow: 0 16px 32px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.4), 0 0 0 1px rgba(160,140,220,0.15) !important;
       border-color: rgba(160,140,220,0.3) !important;
       z-index: 10;
     }
     .hover-card:active {
-      transform: translateY(2px) scale(0.96) !important;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.5), 0 0 0 1px rgba(160,140,220,0.05) !important;
+      transform: translateY(2px) scale(0.97) translateZ(0) !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.7), 0 0 0 1px rgba(160,140,220,0.05) !important;
       transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease !important;
     }
     
     .hover-btn {
-      transition: transform .3s var(--spring-stiff), box-shadow .3s ease, filter .3s ease, opacity .3s ease !important;
+      transition: transform .3s var(--spring-elastic), box-shadow .3s ease, filter .3s ease, opacity .3s ease !important;
+      will-change: transform, filter;
     }
     .hover-btn:not(:disabled):hover {
-      filter: brightness(1.05);
+      filter: brightness(1.1);
+      transform: translateY(-1px) scale(1.02) translateZ(0) !important;
     }
     .hover-btn:not(:disabled):active {
-      transform: translateY(1px) scale(0.94) !important;
+      transform: translateY(2px) scale(0.94) translateZ(0) !important;
       filter: brightness(0.9);
-      opacity: 0.8;
+      opacity: 0.85;
       transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), filter 0.1s ease, opacity 0.1s ease !important;
     }
 
@@ -143,10 +191,39 @@ export const GlobalStyles = () => (
     .scroll-area{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior:contain}
     .scroll-area::-webkit-scrollbar{display:none}
 
+    /* ── Native iOS CSS Scroll Snap ── */
+    .snap-container {
+      display: flex;
+      flex-direction: row;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scroll-snap-type: x mandatory;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: none;
+      scroll-behavior: smooth;
+    }
+    .snap-container::-webkit-scrollbar {
+      display: none;
+    }
+    .snap-page {
+      scroll-snap-align: center;
+      scroll-snap-stop: always;
+      flex: 0 0 100%;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      position: relative;
+    }
+
     /* Safe-area + bottom-nav aware padding for scroll bodies */
     :root{--bottom-nav-h:72px;--top-bar-h:48px}
     .safe-scroll-body{
-      padding-bottom:calc(var(--bottom-nav-h,0px) + 16px);
+      padding-bottom:calc(var(--bottom-nav-h,72px) + env(safe-area-inset-bottom, 0px) + 16px);
     }
     .safe-pane{
       padding-top:calc(var(--top-bar-h,0px) + env(safe-area-inset-top,0px));
@@ -199,19 +276,20 @@ export const GlobalStyles = () => (
     /* ── Premium Input Focus Glow ── */
     input:focus,textarea:focus,select:focus{
       border-color:${T.accent.primary} !important;
-      box-shadow:0 0 0 3px ${T.accent.primaryGlow}, 0 0 12px ${T.accent.primaryDim} !important;
-      transition:border-color .2s ease, box-shadow .3s ease !important;
+      box-shadow:inset 0 2px 4px rgba(0,0,0,0.3), 0 0 0 3px ${T.accent.primaryGlow}, 0 0 16px ${T.accent.primaryDim} !important;
+      transition:border-color .2s ease, box-shadow .3s var(--spring-elastic) !important;
     }
 
     /* ── Card Press Feedback (for tappable cards) ── */
     .card-press{
-      transition:transform .3s var(--spring-stiff), box-shadow .3s ease !important;
+      transition:transform .3s var(--spring-elastic), box-shadow .3s ease !important;
       cursor:pointer;
+      will-change: transform;
     }
     .card-press:active{
-      transform:scale(0.97) !important;
-      box-shadow:0 2px 6px rgba(0,0,0,0.3) !important;
-      transition:transform .1s ease, box-shadow .1s ease !important;
+      transform:scale(0.95) translateZ(0) !important;
+      box-shadow:0 2px 8px rgba(0,0,0,0.5) !important;
+      transition:transform .1s cubic-bezier(0.4,0,0.2,1), box-shadow .1s ease !important;
     }
 
     /* ── Landscape mode: constrain to a centered 520px pillar ── */
@@ -263,14 +341,24 @@ export const Card = ({ children, style, animate, delay = 0, onClick, variant = "
 
   return (
     <div
-      onClick={(e) => {
+      onClick={e => {
         if (onClick) {
           haptic.selection();
           // Note: using selection() for lightweight UI interactions (tabs, cards) instead of impact, which is heavier
           onClick(e);
         }
       }}
-      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); haptic.selection(); onClick(e); } } : undefined}
+      onKeyDown={
+        onClick
+          ? e => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              haptic.selection();
+              onClick(e);
+            }
+          }
+          : undefined
+      }
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
       className={`${animate ? "slide-up " : ""}${onClick ? "hover-card " : ""}`}
@@ -354,20 +442,40 @@ export const ProgressBar = ({ progress = 0, color = T.accent.primary, style }) =
         width: `${Math.min(Math.max(progress, 0), 100)}%`,
         background: color,
         borderRadius: 3,
-        transition: "width 1s cubic-bezier(0.16, 1, 0.3, 1), background 0.5s ease"
+        transition: "width 1s cubic-bezier(0.16, 1, 0.3, 1), background 0.5s ease",
       }}
     />
   </div>
 );
 
+// ═══════════════════════════════════════════════════════════════
+// 100/100 ELITE SKELETON LOADER
+// Apple-style shimmering skeleton for loading states, replacing spinners.
+// ═══════════════════════════════════════════════════════════════
+export const Skeleton = ({ width = "100%", height = 24, borderRadius = 8, style, isCircle = false }) => (
+  <div
+    style={{
+      width,
+      height,
+      borderRadius: isCircle ? "50%" : borderRadius,
+      background: `linear-gradient(90deg, ${T.bg.elevated} 25%, ${T.border.default} 50%, ${T.bg.elevated} 75%)`,
+      backgroundSize: "200% 100%",
+      animation: "shimmer 1.5s infinite linear",
+      opacity: 0.6,
+      ...style,
+    }}
+  />
+);
+
 export const InlineTooltip = ({ term, children }) => {
   const descriptions = {
-    "Floor": "The absolute minimum balance you require in your checking account after all obligations.",
-    "Available": "Cash technically in your account, but potentially reserved by upcoming bills or floors.",
+    Floor: "The absolute minimum balance you require in your checking account after all obligations.",
+    Available: "Cash technically in your account, but potentially reserved by upcoming bills or floors.",
     "Available Capital": "Your checking balance minus your global floor and buffers.",
-    "Promo sprint": "Accelerated payoff of a 0% APR card right before the promo period ends to avoid deferred interest.",
+    "Promo sprint":
+      "Accelerated payoff of a 0% APR card right before the promo period ends to avoid deferred interest.",
     "Sinking fund": "Money incrementally saved for a known future expense.",
-    "Emergency reserve": "Your liquid safety net, usually kept in a High-Yield Savings Account (HYSA)."
+    "Emergency reserve": "Your liquid safety net, usually kept in a High-Yield Savings Account (HYSA).",
   };
   const [show, setShow] = React.useState(false);
   const text = descriptions[term] || term;
@@ -383,21 +491,65 @@ export const InlineTooltip = ({ term, children }) => {
       onMouseLeave={() => setShow(false)}
       onFocus={() => setShow(true)}
       onBlur={() => setShow(false)}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setShow(!show); } if (e.key === "Escape") setShow(false); }}
-      onClick={(e) => { e.stopPropagation(); setShow(!show); }}
-      style={{ position: "relative", display: "inline-flex", alignItems: "center", cursor: "help", borderBottom: `1px dotted ${T.text.secondary}`, color: "inherit", zIndex: show ? 50 : 1 }}
+      onKeyDown={e => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          setShow(!show);
+        }
+        if (e.key === "Escape") setShow(false);
+      }}
+      onClick={e => {
+        e.stopPropagation();
+        setShow(!show);
+      }}
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        cursor: "help",
+        borderBottom: `1px dotted ${T.text.secondary}`,
+        color: "inherit",
+        zIndex: show ? 50 : 1,
+      }}
     >
       {children || term}
       {show && (
-        <span id={tooltipId} role="tooltip" className="fade-in" style={{
-          position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)",
-          marginBottom: 8, padding: "8px 12px", background: T.bg.elevated, color: T.text.secondary,
-          fontSize: 11, fontWeight: 500, fontFamily: T.font.sans, lineHeight: 1.4,
-          borderRadius: 8, border: `1px solid ${T.border.default}`, boxShadow: T.shadow.elevated,
-          width: "max-content", maxWidth: 260, zIndex: 100, textAlign: "center", pointerEvents: "none"
-        }}>
+        <span
+          id={tooltipId}
+          role="tooltip"
+          className="fade-in"
+          style={{
+            position: "absolute",
+            bottom: "100%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            marginBottom: 8,
+            padding: "8px 12px",
+            background: T.bg.elevated,
+            color: T.text.secondary,
+            fontSize: 11,
+            fontWeight: 500,
+            fontFamily: T.font.sans,
+            lineHeight: 1.4,
+            borderRadius: 8,
+            border: `1px solid ${T.border.default}`,
+            boxShadow: T.shadow.elevated,
+            width: "max-content",
+            maxWidth: 260,
+            zIndex: 100,
+            textAlign: "center",
+            pointerEvents: "none",
+          }}
+        >
           {text}
-          <svg style={{ position: "absolute", bottom: -5, left: "50%", transform: "translateX(-50%)" }} width="10" height="5" viewBox="0 0 10 5" fill="none">
+          <svg
+            style={{ position: "absolute", bottom: -5, left: "50%", transform: "translateX(-50%)" }}
+            width="10"
+            height="5"
+            viewBox="0 0 10 5"
+            fill="none"
+          >
             <path d="M0 0L5 5L10 0H0Z" fill={T.bg.elevated} />
             <path d="M0 0L5 5L10 0" stroke={T.border.default} />
           </svg>
@@ -405,4 +557,86 @@ export const InlineTooltip = ({ term, children }) => {
       )}
     </span>
   );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// IOS-STYLE SETTINGS / EDIT PANELS
+// ═══════════════════════════════════════════════════════════════
+
+export function FormGroup({ children, label, style }) {
+  return (
+    <div style={{ marginBottom: 24, ...style }}>
+      {label && (
+        <div style={{
+          fontSize: 12,
+          fontWeight: 800,
+          color: T.text.secondary,
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          marginBottom: 8,
+          paddingLeft: 4,
+          fontFamily: T.font.sans,
+        }}>
+          {label}
+        </div>
+      )}
+      <div style={{
+        background: T.bg.elevated,
+        borderRadius: T.radius.lg,
+        border: `1px solid ${T.border.subtle}`,
+        overflow: "hidden",
+      }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export function FormRow({ icon: Icon, label, children, isLast = false, onClick, style }) {
+  const inner = (
+    <>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {Icon && (
+          <div style={{
+            width: 28, height: 28, borderRadius: 8,
+            background: `linear-gradient(135deg, ${T.accent.primaryDim}, ${T.accent.primary}10)`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Icon size={14} color={T.accent.primary} strokeWidth={2.5} />
+          </div>
+        )}
+        <span style={{ fontSize: 14, fontWeight: 600, color: T.text.primary, fontFamily: T.font.sans }}>
+          {label}
+        </span>
+      </div>
+      <div style={{ flex: 1, display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
+        {children}
+      </div>
+    </>
+  );
+
+  const rowStyle = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "12px 16px",
+    minHeight: 52,
+    borderBottom: isLast ? "none" : `1px solid ${T.border.subtle}`,
+    background: "transparent",
+    width: "100%",
+    borderTop: "none", borderLeft: "none", borderRight: "none",
+    textAlign: "left",
+    cursor: onClick ? "pointer" : "default",
+    ...style
+  };
+
+  if (onClick) {
+    return (
+      <button className="hover-btn" onClick={onClick} style={rowStyle}>
+        {inner}
+      </button>
+    );
+  }
+
+  return <div style={rowStyle}>{inner}</div>;
 };

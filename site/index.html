@@ -25,7 +25,7 @@
         href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap"
         rel="stylesheet" />
     <meta name="robots" content="index, follow" />
-    <link rel="stylesheet" href="/style.css?v=2.7" />
+    <link rel="stylesheet" href="/style.css?v=2.8" />
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -66,6 +66,7 @@
                     <a href="#sample-audit">Sample Audit</a>
                     <a href="#difference">Why It Wins</a>
                     <a href="#pricing">Pricing</a>
+                    <a href="/compare.html">Compare</a>
                     <a href="/guide.html">Guide</a>
                     <a href="https://testflight.apple.com/join/3rpWQq49" class="nav-cta">Join TestFlight</a>
                 </div>
@@ -89,8 +90,8 @@
                             <a href="#sample-audit" class="button-secondary">See a Sample Audit</a>
                         </div>
                         <div class="hero-note">
-                            <span>2 free audits every week</span>
-                            <span>10 free AskAI chats per day</span>
+                            <span>3 free audits every week</span>
+                            <span>15 free AskAI chats per day</span>
                             <span>Local-first storage with secure AI proxy</span>
                         </div>
                     </div>
@@ -358,10 +359,10 @@
                         </div>
                         <p>Enough to build the weekly habit and trust the system.</p>
                         <ul>
-                            <li>2 weekly audits</li>
-                            <li>10 AskAI chats per day</li>
+                            <li>3 weekly audits</li>
+                            <li>15 AskAI chats per day</li>
                             <li>Catalyst AI — fast, intelligent analysis</li>
-                            <li>Plaid sync with automatic transaction categorization</li>
+                            <li>Manual Plaid sync (1x/week)</li>
                             <li>Debt simulator, cash flow calendar, state tax modeling</li>
                             <li>Face ID lock, CCPA/GDPR control, encrypted backups</li>
                             <li>Multi-currency mode (28 global currencies)</li>
@@ -374,16 +375,17 @@
                         <div class="price-badge">Most Popular</div>
                         <h3>Pro</h3>
                         <div class="price-amount">
-                            <strong>$6.99</strong>
+                            <strong>$8.99</strong>
                             <span>per month</span>
                         </div>
                         <p>For users who want deeper reasoning, more usage room, and a cleaner pro workflow.</p>
                         <ul>
-                            <li>60 audits per month</li>
-                            <li>50 AskAI chats per day</li>
-                            <li>Catalyst AI Pro &amp; Catalyst AI Reasoning</li>
+                            <li>50 audits per month</li>
+                            <li>100 AskAI chats per day</li>
+                            <li>Catalyst AI Reasoning &amp; Catalyst AI Chat</li>
+                            <li>Automatic background Plaid sync</li>
                             <li>Transaction ledger, export tools, unbranded sharing</li>
-                            <li>$49.99 yearly plan with 40% savings</li>
+                            <li>$69.99 yearly plan with 35% savings</li>
                         </ul>
                         <a href="https://testflight.apple.com/join/3rpWQq49" class="button-primary">Start 7-Day Free
                             Trial</a>
@@ -463,6 +465,7 @@
                         <a href="#sample-audit">Sample Audit</a>
                         <a href="#difference">Why It Wins</a>
                         <a href="#pricing">Pricing</a>
+                        <a href="/compare.html">Compare</a>
                     </div>
                     <div class="footer-col">
                         <h4>Resources</h4>
@@ -486,7 +489,7 @@
     </div>
 
     <script>
-        (function () {
+        (() => {
             var btn = document.getElementById('hamburger-btn');
             var nav = document.getElementById('nav-links');
             var overlay = document.getElementById('mobile-overlay');
@@ -505,36 +508,17 @@
             }
             btn.addEventListener('click', toggle);
             if (overlay) overlay.addEventListener('click', close);
-            nav.querySelectorAll('a').forEach(function (a) {
-                a.addEventListener('click', close);
+            nav.querySelectorAll('a').forEach((a) => {
+                a.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const target = a.getAttribute('href');
+                    close();
+                    setTimeout(() => { window.location.href = target; }, 350);
+                });
             });
         })();
     </script>
-    <script>
-        (function () {
-            var btn = document.getElementById('hamburger-btn');
-            var nav = document.getElementById('nav-links');
-            var overlay = document.getElementById('mobile-overlay');
-            if (!btn || !nav) return;
-            function toggle() {
-                var open = nav.classList.toggle('open');
-                btn.classList.toggle('active');
-                btn.setAttribute('aria-expanded', String(open));
-                if (overlay) overlay.classList.toggle('active', open);
-            }
-            function close() {
-                nav.classList.remove('open');
-                btn.classList.remove('active');
-                btn.setAttribute('aria-expanded', 'false');
-                if (overlay) overlay.classList.remove('active');
-            }
-            btn.addEventListener('click', toggle);
-            if (overlay) overlay.addEventListener('click', close);
-            nav.querySelectorAll('a').forEach(function (a) {
-                a.addEventListener('click', close);
-            });
-        })();
-    </script>
+
 </body>
 
 </html>

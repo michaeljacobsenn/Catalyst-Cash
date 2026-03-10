@@ -2,15 +2,15 @@
 // STORAGE — Capacitor Preferences on iOS (iCloud KV-backed),
 //           localStorage fallback on web / Vite dev server
 // ═══════════════════════════════════════════════════════════════
-import { Preferences } from '@capacitor/preferences';
-import { Share } from '@capacitor/share';
-import { Filesystem, Directory } from '@capacitor/filesystem';
-import { Capacitor } from '@capacitor/core';
-import { APP_VERSION } from './constants.js';
+import { Preferences } from "@capacitor/preferences";
+import { Share } from "@capacitor/share";
+import { Filesystem, Directory } from "@capacitor/filesystem";
+import { Capacitor } from "@capacitor/core";
+import { APP_VERSION } from "./constants.js";
 
-import { registerPlugin } from '@capacitor/core';
+import { registerPlugin } from "@capacitor/core";
 
-import { BiometricAuth } from '@aparajita/capacitor-biometric-auth';
+import { BiometricAuth } from "@aparajita/capacitor-biometric-auth";
 
 export const FaceId = {
   isAvailable: async () => {
@@ -22,26 +22,26 @@ export const FaceId = {
       return { isAvailable: false };
     }
   },
-  authenticate: async (opts) => {
+  authenticate: async opts => {
     if (!Capacitor.isNativePlatform()) throw new Error("Not supported on web");
     return await BiometricAuth.authenticate(opts);
-  }
+  },
 };
-export const PdfViewer = registerPlugin('PdfViewer');
+export const PdfViewer = registerPlugin("PdfViewer");
 
 const _exportLocks = {};
 
 export async function nativeExport(filename, content, mimeType = "text/plain", isBase64 = false) {
-  if (_exportLocks[filename] && (Date.now() - _exportLocks[filename]) < 1500) return;
+  if (_exportLocks[filename] && Date.now() - _exportLocks[filename] < 1500) return;
   _exportLocks[filename] = Date.now();
 
   if (Capacitor.isNativePlatform()) {
     try {
       const opts = { path: filename, data: content, directory: Directory.Cache, recursive: true };
-      if (!isBase64) opts.encoding = 'utf8';
+      if (!isBase64) opts.encoding = "utf8";
       const res = await Filesystem.writeFile(opts);
       // Only pass `files` — passing both `url` and `files` causes iOS to show 2 items
-      await Share.share({ files: [res.uri], dialogTitle: 'Export File' });
+      await Share.share({ files: [res.uri], dialogTitle: "Export File" });
     } catch (e) {
       console.error("Native export failed:", e);
       if (window.toast) window.toast.error("Export failed. Please check permissions.");
@@ -62,7 +62,12 @@ export async function nativeExport(filename, content, mimeType = "text/plain", i
     }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 }
 
@@ -72,7 +77,12 @@ export const db = {
       const { value } = await Preferences.get({ key: k });
       return value ? JSON.parse(value) : null;
     } catch {
-      try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : null; } catch { return null; }
+      try {
+        const r = localStorage.getItem(k);
+        return r ? JSON.parse(r) : null;
+      } catch {
+        return null;
+      }
     }
   },
   async set(k, v) {
@@ -80,14 +90,21 @@ export const db = {
       await Preferences.set({ key: k, value: JSON.stringify(v) });
       return true;
     } catch {
-      try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; }
+      try {
+        localStorage.setItem(k, JSON.stringify(v));
+        return true;
+      } catch {
+        return false;
+      }
     }
   },
   async del(k) {
     try {
       await Preferences.remove({ key: k });
     } catch {
-      try { localStorage.removeItem(k); } catch { }
+      try {
+        localStorage.removeItem(k);
+      } catch {}
     }
   },
   async keys() {
@@ -95,19 +112,25 @@ export const db = {
       const { keys } = await Preferences.keys();
       return keys;
     } catch {
-      try { return Object.keys(localStorage); } catch { return []; }
+      try {
+        return Object.keys(localStorage);
+      } catch {
+        return [];
+      }
     }
   },
   async clear() {
     try {
       await Preferences.clear();
     } catch {
-      try { localStorage.clear(); } catch { }
+      try {
+        localStorage.clear();
+      } catch {}
     }
-  }
+  },
 };
 
-import { formatCurrency } from './currency.js';
+import { formatCurrency } from "./currency.js";
 
 export const fmt = n => formatCurrency(n);
 
@@ -125,28 +148,34 @@ export const fmtDate = d => {
     const date = new Date(y, m - 1, day);
     if (isNaN(date.getTime())) return String(d);
     return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  } catch { return String(d); }
+  } catch {
+    return String(d);
+  }
 };
 
 // Strip parenthetical clarifiers from paycheck labels in Next Action.
-export const stripPaycheckParens = (text) => {
+export const stripPaycheckParens = text => {
   if (!text) return text;
-  return text.split("\n").map(line => (
-    line.replace(/^(Pre-Paycheck|Post-Paycheck)\s*\([^)]*\)/i, "$1")
-  )).join("\n");
+  return text
+    .split("\n")
+    .map(line => line.replace(/^(Pre-Paycheck|Post-Paycheck)\s*\([^)]*\)/i, "$1"))
+    .join("\n");
 };
-
-
 
 // ═══════════════════════════════════════════════════════════════
 // DATE AUTO-ADVANCE — Rolling expired dates forward
 // ═══════════════════════════════════════════════════════════════
-export function advanceExpiredDate(dateString, intervalAmt, intervalUnit, todayStr = new Date().toISOString().split("T")[0]) {
+export function advanceExpiredDate(
+  dateString,
+  intervalAmt,
+  intervalUnit,
+  todayStr = new Date().toISOString().split("T")[0]
+) {
   if (!dateString) return dateString;
   if (dateString >= todayStr) return dateString; // not expired
 
-  const d = new Date(dateString + 'T12:00:00Z'); // force midday UTC to avoid timezone shift
-  const today = new Date(todayStr + 'T12:00:00Z');
+  const d = new Date(dateString + "T12:00:00Z"); // force midday UTC to avoid timezone shift
+  const today = new Date(todayStr + "T12:00:00Z");
 
   if (isNaN(d.getTime())) return dateString;
 
@@ -199,14 +228,14 @@ export function advanceExpiredDate(dateString, intervalAmt, intervalUnit, todayS
 export function parseCurrency(value) {
   if (value == null || value === "") return null;
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  let str = String(value).trim();
+  const str = String(value).trim();
   // Handle Banker's / Accounting negative notation: ($1,234.56) -> -1234.56
   const isNegative = str.startsWith("-") || (str.startsWith("(") && str.endsWith(")"));
   const cleanStr = str.replace(/[^0-9.]+/g, "");
   if (!cleanStr) return null;
   let n = parseFloat(cleanStr);
   if (isNegative) n = -n;
-  // Banker's Rounding (Round half to even for financial precision) is not strictly needed here 
+  // Banker's Rounding (Round half to even for financial precision) is not strictly needed here
   // since it's just parsing input, but we enforce strict float handling.
   return Number.isFinite(n) ? n : null;
 }
@@ -215,7 +244,10 @@ export function parseJSON(raw) {
   let j;
   try {
     // Aggressive JSON extraction: strip ALL markdown wrappers and extract only the {} block
-    let cleaned = raw.replace(/```json?\s*/gi, "").replace(/```/g, "").trim();
+    const cleaned = raw
+      .replace(/```json?\s*/gi, "")
+      .replace(/```/g, "")
+      .trim();
     const startIdx = cleaned.indexOf("{");
     const endIdx = cleaned.lastIndexOf("}");
     if (startIdx >= 0 && endIdx > startIdx) {
@@ -232,13 +264,20 @@ export function parseJSON(raw) {
       }
     }
   } catch (e) {
-    console.warn("[parseJSON] JSON.parse failed:", e.message, "— raw length:", raw?.length, "— first 200 chars:", raw?.slice(0, 200));
+    console.warn(
+      "[parseJSON] JSON.parse failed:",
+      e.message,
+      "— raw length:",
+      raw?.length,
+      "— first 200 chars:",
+      raw?.slice(0, 200)
+    );
     return null; // Stream hasn't finished accumulating enough valid JSON
   }
 
   // Normalize ALL snake_case keys to camelCase recursively (top level)
   if (j && typeof j === "object") {
-    const camelCase = (s) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    const camelCase = s => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
     for (const key of Object.keys(j)) {
       const cc = camelCase(key);
       if (cc !== key && !(cc in j)) {
@@ -263,14 +302,24 @@ export function parseJSON(raw) {
     raw,
     status: j.headerCard?.status || j.status || j.headerCard?.headline || "UNKNOWN",
     mode: "FULL", // Implicit in the new architecture unless overridden
-    netWorth: parseCurrency(j.netWorth) ?? parseCurrency(j.investments?.netWorth) ?? parseCurrency(j.investments?.balance),
+    netWorth:
+      parseCurrency(j.netWorth) ?? parseCurrency(j.investments?.netWorth) ?? parseCurrency(j.investments?.balance),
     netWorthDelta: j.netWorthDelta ?? j.investments?.netWorthDelta ?? null,
     healthScore: j.healthScore || null, // { score, grade, trend, summary }
     structured: j,
     sections: {
       header: `**${new Date().toISOString().split("T")[0]}** · FULL · ${j.headerCard?.status || "UNKNOWN"}`,
-      alerts: (j.alertsCard || []).map(a => `⚠️ ${String(a).replace(/^[\u26A0\uFE0F\u2757\u203C\s⚠️!]+/u, "").trim()}`).join("\n"),
-      dashboard: (j.dashboardCard || []).map(d => `**${d.category}:** ${d.amount} ${d.status ? `(${d.status})` : ""}`).join("\n"),
+      alerts: (j.alertsCard || [])
+        .map(
+          a =>
+            `⚠️ ${String(a)
+              .replace(/^[\u26A0\uFE0F\u2757\u203C\s⚠️!]+/u, "")
+              .trim()}`
+        )
+        .join("\n"),
+      dashboard: (j.dashboardCard || [])
+        .map(d => `**${d.category}:** ${d.amount} ${d.status ? `(${d.status})` : ""}`)
+        .join("\n"),
       moves: (j.weeklyMoves || []).join("\n"),
       radar: (j.radar || []).map(r => `**${r.date}** ${r.item} ${r.amount}`).join("\n"),
       longRange: (j.longRangeRadar || []).map(r => `**${r.date}** ${r.item} ${r.amount}`).join("\n"),
@@ -278,7 +327,7 @@ export function parseJSON(raw) {
       investments: `**Balance:** ${j.investments?.balance || "N/A"}\n**As Of:** ${j.investments?.asOf || "N/A"}\n**Gate:** ${j.investments?.gateStatus || "N/A"}`,
       nextAction: j.nextAction || "",
       autoUpdates: "Handled natively via JSON output",
-      qualityScore: "Strict JSON Mode Active"
+      qualityScore: "Strict JSON Mode Active",
     },
     // Map moves to actionable checkboxes
     moveItems: (j.weeklyMoves || []).map(m => ({ tag: null, text: m, done: false })),
@@ -286,8 +335,8 @@ export function parseJSON(raw) {
     negotiationTargets: Array.isArray(j.negotiationTargets) ? j.negotiationTargets : [],
     dashboardData: {
       checkingBalance: null, // Extracted from dashboardCard dynamically on demand
-      savingsVaultTotal: null
-    }
+      savingsVaultTotal: null,
+    },
   };
 }
 
@@ -311,13 +360,15 @@ export function extractDashboardMetrics(parsed) {
       vault: legacyVault,
       pending: legacyPending,
       debts: null,
-      available: legacyAvailable
+      available: legacyAvailable,
     };
   }
 
   const rowValue = {};
   for (const row of cardRows) {
-    const key = String(row?.category || "").trim().toLowerCase();
+    const key = String(row?.category || "")
+      .trim()
+      .toLowerCase();
     if (!key) continue;
     rowValue[key] = parseCurrency(row?.amount);
   }
@@ -326,10 +377,10 @@ export function extractDashboardMetrics(parsed) {
     checking: rowValue.checking ?? legacyChecking,
     vault: rowValue.vault ?? rowValue.savings ?? legacyVault,
     investments: rowValue.investments ?? null,
-    otherAssets: rowValue['other assets'] ?? null,
+    otherAssets: rowValue["other assets"] ?? null,
     pending: rowValue.pending ?? legacyPending,
     debts: rowValue.debts ?? null,
-    available: rowValue.available ?? legacyAvailable
+    available: rowValue.available ?? legacyAvailable,
   };
 }
 
@@ -402,17 +453,14 @@ export async function exportAudit(audit) {
 
   try {
     // Dynamically import to keep bundle size small if users don't export often
-    const [{ jsPDF }, html2canvas] = await Promise.all([
-      import("jspdf"),
-      import("html2canvas").then((m) => m.default)
-    ]);
+    const [{ jsPDF }, html2canvas] = await Promise.all([import("jspdf"), import("html2canvas").then(m => m.default)]);
 
     // We want the highest quality render
     const canvas = await html2canvas(container, {
       scale: window.devicePixelRatio || 2,
       useCORS: true,
       logging: false,
-      backgroundColor: "#FFFFFF"
+      backgroundColor: "#FFFFFF",
     });
 
     const imgData = canvas.toDataURL("image/png");
@@ -420,7 +468,7 @@ export async function exportAudit(audit) {
     const pdf = new jsPDF({
       orientation: "portrait",
       unit: "pt",
-      format: "letter"
+      format: "letter",
     });
 
     // Letter dimensions in pt: 612 x 792
@@ -429,11 +477,11 @@ export async function exportAudit(audit) {
 
     pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
 
-    const pdfBase64 = pdf.output('datauristring').split(',')[1];
+    const pdfBase64 = pdf.output("datauristring").split(",")[1];
     await nativeExport(`CatalystCash_CPA_TearSheet_${dateStr}.pdf`, pdfBase64, "application/pdf", true);
-
   } catch (err) {
-    const isCancel = err.message?.toLowerCase().includes("cancel") || err.message?.toLowerCase().includes("user interaction");
+    const isCancel =
+      err.message?.toLowerCase().includes("cancel") || err.message?.toLowerCase().includes("user interaction");
     if (!isCancel) {
       console.error("PDF generation or Share sheet failed:", err);
       // Fallback
@@ -448,29 +496,55 @@ export async function exportAudit(audit) {
 export async function exportAllAudits(audits) {
   if (!audits?.length) return;
   const payload = {
-    app: "Catalyst Cash", version: APP_VERSION,
-    exportedAt: new Date().toISOString(), count: audits.length, audits
+    app: "Catalyst Cash",
+    version: APP_VERSION,
+    exportedAt: new Date().toISOString(),
+    count: audits.length,
+    audits,
   };
-  await nativeExport(`CatalystCash_ALL_${new Date().toISOString().split("T")[0]}.json`, JSON.stringify(payload, null, 2), "application/json");
+  await nativeExport(
+    `CatalystCash_ALL_${new Date().toISOString().split("T")[0]}.json`,
+    JSON.stringify(payload, null, 2),
+    "application/json"
+  );
 }
 
 export async function exportSelectedAudits(audits) {
   if (!audits?.length) return;
   const payload = {
-    app: "Catalyst Cash", version: APP_VERSION,
-    exportedAt: new Date().toISOString(), count: audits.length, audits
+    app: "Catalyst Cash",
+    version: APP_VERSION,
+    exportedAt: new Date().toISOString(),
+    count: audits.length,
+    audits,
   };
-  await nativeExport(`CatalystCash_Selected_${audits.length}_${new Date().toISOString().split("T")[0]}.json`, JSON.stringify(payload, null, 2), "application/json");
+  await nativeExport(
+    `CatalystCash_Selected_${audits.length}_${new Date().toISOString().split("T")[0]}.json`,
+    JSON.stringify(payload, null, 2),
+    "application/json"
+  );
 }
 
 export async function exportAuditCSV(audits) {
   if (!audits?.length) return;
-  const rows = [["Date", "Status", "Mode", "Net Worth", "Net Worth Delta", "Checking", "Vault", "Pending", "Debts", "Available"]];
+  const rows = [
+    ["Date", "Status", "Mode", "Net Worth", "Net Worth Delta", "Checking", "Vault", "Pending", "Debts", "Available"],
+  ];
   audits.forEach(a => {
     const p = a.parsed;
     const d = extractDashboardMetrics(p);
-    rows.push([a.date, p?.status || "", p?.mode || "", p?.netWorth ?? ""
-      , p?.netWorthDelta || "", d.checking ?? "", d.vault ?? "", d.pending ?? "", d.debts ?? "", d.available ?? ""]);
+    rows.push([
+      a.date,
+      p?.status || "",
+      p?.mode || "",
+      p?.netWorth ?? "",
+      p?.netWorthDelta || "",
+      d.checking ?? "",
+      d.vault ?? "",
+      d.pending ?? "",
+      d.debts ?? "",
+      d.available ?? "",
+    ]);
   });
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
   await nativeExport(`CatalystCash_History_${new Date().toISOString().split("T")[0]}.csv`, csv, "text/csv");
@@ -479,7 +553,10 @@ export async function exportAuditCSV(audits) {
 export async function shareAudit(audit) {
   const p = audit.parsed;
   const t = `Catalyst Cash — ${audit.date} — ${p.status}\nNet Worth: ${p.netWorth != null ? fmt(p.netWorth) : "N/A"}\nMode: ${p.mode}\n${p.sections?.nextAction || ""}`;
-  if (navigator.share) try { await navigator.share({ title: `Catalyst Cash — ${audit.date}`, text: t }) } catch { }
+  if (navigator.share)
+    try {
+      await navigator.share({ title: `Catalyst Cash — ${audit.date}`, text: t });
+    } catch {}
   else await navigator.clipboard?.writeText(t);
 }
 
@@ -487,7 +564,8 @@ export async function shareAudit(audit) {
 // HASHING UTILITY — Fast string fingerprinting for diff detection
 // ═══════════════════════════════════════════════════════════════
 export const cyrb53 = (str, seed = 0) => {
-  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+  let h1 = 0xdeadbeef ^ seed,
+    h2 = 0x41c6ce57 ^ seed;
   for (let i = 0, ch; i < str.length; i++) {
     ch = str.charCodeAt(i);
     h1 = Math.imul(h1 ^ ch, 2654435761);

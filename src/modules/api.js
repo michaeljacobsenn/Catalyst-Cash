@@ -13,6 +13,28 @@ import { getRevenueCatAppUserId } from "./revenuecat.js";
 
 const BACKEND_URL = "https://api.catalystcash.app";
 
+// ── Rate-limit sync callback ──────────────────────────────────
+// The worker returns X-RateLimit-Remaining and X-RateLimit-Limit
+// in every response. This callback allows subscription.js or UI
+// to sync the authoritative server-side count.
+let _rateLimitCallback = null;
+export function onRateLimitUpdate(cb) {
+  _rateLimitCallback = cb;
+}
+
+function emitRateLimit(res, isChat) {
+  if (!_rateLimitCallback) return;
+  const remaining = res.headers.get("X-RateLimit-Remaining");
+  const limit = res.headers.get("X-RateLimit-Limit");
+  if (remaining != null) {
+    _rateLimitCallback({
+      remaining: parseInt(remaining, 10),
+      limit: limit ? parseInt(limit, 10) : null,
+      isChat,
+    });
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // BACKEND MODE — Cloudflare Worker Proxy
 // ═══════════════════════════════════════════════════════════════
@@ -50,6 +72,9 @@ async function buildBackendHeaders(deviceId) {
 }
 
 async function* streamBackend(snapshot, model, sysText, history, deviceId, backendProvider, signal, responseFormat) {
+  // Map models to standard API backend endpoints if they are openai
+  const resolvedProvider = model.includes("gpt") || model.includes("o3") || model.includes("o1") || model.includes("o4") ? "openai" : backendProvider || "gemini";
+
   const res = await fetch(`${BACKEND_URL}/audit`, {
     method: "POST",
     headers: await buildBackendHeaders(deviceId),
@@ -59,7 +84,7 @@ async function* streamBackend(snapshot, model, sysText, history, deviceId, backe
       history: history || [],
       model,
       stream: true,
-      provider: backendProvider || "gemini",
+      provider: resolvedProvider,
       responseFormat: responseFormat || "json",
     }),
     signal,
@@ -69,15 +94,18 @@ async function* streamBackend(snapshot, model, sysText, history, deviceId, backe
     const e = await res.json().catch(() => ({}));
     if (res.status === 429) {
       log.warn("audit", "Rate limit reached", { status: 429 });
+      emitRateLimit(res, responseFormat === "text");
       const retryAfter = res.headers.get("Retry-After");
       const msg = retryAfter
         ? `Audit limit reached. Try again in ${retryAfter} seconds.`
-        : (e.error || "Daily audit limit reached. Try again later!");
+        : e.error || "Daily audit limit reached. Try again later!";
       throw new Error(msg);
     }
     log.error("audit", "Backend error", { status: res.status });
     throw new Error(e.error || `Backend error: HTTP ${res.status}`);
   }
+
+  emitRateLimit(res, responseFormat === "text");
 
   const reader = res.body.getReader();
   const dec = new TextDecoder();
@@ -97,12 +125,16 @@ async function* streamBackend(snapshot, model, sysText, history, deviceId, backe
         const parsed = JSON.parse(d);
         const text = extractSSEText(parsed);
         if (text) yield text;
-      } catch (e) { log.warn("api", "Backend SSE parse error", { chunk: d.slice(0, 40) }); }
+      } catch (e) {
+        log.warn("api", "Backend SSE parse error", { chunk: d.slice(0, 40) });
+      }
     }
   }
 }
 
 async function callBackend(snapshot, model, sysText, history, deviceId, backendProvider, responseFormat) {
+  const resolvedProvider = model.includes("gpt") || model.includes("o3") || model.includes("o1") || model.includes("o4") ? "openai" : backendProvider || "gemini";
+
   const res = await fetchWithRetry(`${BACKEND_URL}/audit`, {
     method: "POST",
     headers: await buildBackendHeaders(deviceId),
@@ -112,7 +144,7 @@ async function callBackend(snapshot, model, sysText, history, deviceId, backendP
       history: history || [],
       model,
       stream: false,
-      provider: backendProvider || "gemini",
+      provider: resolvedProvider,
       responseFormat: responseFormat || "json",
     }),
   });
@@ -120,15 +152,17 @@ async function callBackend(snapshot, model, sysText, history, deviceId, backendP
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
     if (res.status === 429) {
+      emitRateLimit(res, responseFormat === "text");
       const retryAfter = res.headers.get("Retry-After");
       const msg = retryAfter
         ? `Audit limit reached. Try again in ${retryAfter} seconds.`
-        : (e.error || "Daily audit limit reached. Try again later!");
+        : e.error || "Daily audit limit reached. Try again later!";
       throw new Error(msg);
     }
     throw new Error(e.error || `Backend error: HTTP ${res.status}`);
   }
 
+  emitRateLimit(res, responseFormat === "text");
   const data = await res.json();
   return data.result || "";
 }
@@ -138,14 +172,33 @@ async function callBackend(snapshot, model, sysText, history, deviceId, backendP
 // ═══════════════════════════════════════════════════════════════
 
 /** Stream an audit or chat response through the backend proxy. */
-export async function* streamAudit(apiKey, snapshot, providerId = "backend", model, sysText, history = [], deviceId, signal, isChat = false) {
+export async function* streamAudit(
+  apiKey,
+  snapshot,
+  providerId = "backend",
+  model,
+  sysText,
+  history = [],
+  deviceId,
+  signal,
+  isChat = false
+) {
   const responseFormat = isChat ? "text" : "json";
   log.info("audit", "Audit started", { provider: "backend", model, streaming: true, isChat });
   yield* streamBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), signal, responseFormat);
 }
 
 /** Call the backend proxy for a non-streaming audit or chat response. */
-export async function callAudit(apiKey, snapshot, providerId = "backend", model, sysText, history = [], deviceId, isChat = false) {
+export async function callAudit(
+  apiKey,
+  snapshot,
+  providerId = "backend",
+  model,
+  sysText,
+  history = [],
+  deviceId,
+  isChat = false
+) {
   const responseFormat = isChat ? "text" : "json";
   log.info("audit", "Audit started", { provider: "backend", model, streaming: false, isChat });
   return callBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), responseFormat);

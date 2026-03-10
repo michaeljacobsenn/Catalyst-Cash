@@ -7,7 +7,7 @@ const THIRTY_DAYS_MS = 1000 * 60 * 60 * 24 * 30;
 export const DEFAULT_CATALOG = {
   lastUpdated: "2026-02-22",
   issuers: {
-    "Amex": {
+    Amex: {
       personal: [
         "The Platinum Card from American Express",
         "American Express Gold Credit Card",
@@ -24,7 +24,7 @@ export const DEFAULT_CATALOG = {
         "Hilton Honors American Express Aspire Card",
         "Marriott Bonvoy Brilliant American Express Card",
         "Marriott Bonvoy Bevy American Express Card",
-        "Marriott Bonvoy American Express Card"
+        "Marriott Bonvoy American Express Card",
       ],
       business: [
         "The Business Platinum Card from American Express",
@@ -41,10 +41,10 @@ export const DEFAULT_CATALOG = {
         "Hilton Honors American Express Business Card",
         "Marriott Bonvoy Business American Express Card",
         "Lowe's Business Rewards Card",
-        "Lowe's Business Credit Card"
-      ]
+        "Lowe's Business Credit Card",
+      ],
     },
-    "Chase": {
+    Chase: {
       personal: [
         "Chase Sapphire Reserve",
         "Chase Sapphire Preferred",
@@ -75,7 +75,7 @@ export const DEFAULT_CATALOG = {
         "Prime Visa",
         "Amazon Visa",
         "DoorDash Rewards Mastercard",
-        "Instacart Mastercard"
+        "Instacart Mastercard",
       ],
       business: [
         "Sapphire Reserve for Business",
@@ -88,10 +88,10 @@ export const DEFAULT_CATALOG = {
         "United Business",
         "United Club Business",
         "IHG One Rewards Premier Business",
-        "World of Hyatt Business"
-      ]
+        "World of Hyatt Business",
+      ],
     },
-    "Discover": {
+    Discover: {
       personal: [
         "Discover it Cash Back",
         "Discover it Student Cash Back",
@@ -99,9 +99,9 @@ export const DEFAULT_CATALOG = {
         "Discover it Secured",
         "Discover it Miles",
         "Discover it Chrome",
-        "Discover NHL Credit Card"
+        "Discover NHL Credit Card",
       ],
-      business: []
+      business: [],
     },
     "Bank of America": {
       personal: [
@@ -111,16 +111,16 @@ export const DEFAULT_CATALOG = {
         "Bank of America Premium Rewards credit card",
         "Bank of America Premium Rewards Elite credit card",
         "Alaska Airlines Visa Signature credit card",
-        "Free Spirit Travel More World Elite Mastercard"
+        "Free Spirit Travel More World Elite Mastercard",
       ],
       business: [
         "Business Advantage Customized Cash Rewards Mastercard",
         "Business Advantage Unlimited Cash Rewards Mastercard",
         "Business Advantage Travel Rewards World Mastercard",
-        "Alaska Airlines Visa Business card"
-      ]
+        "Alaska Airlines Visa Business card",
+      ],
     },
-    "Barclays": {
+    Barclays: {
       personal: [
         "JetBlue Plus Card",
         "JetBlue Card",
@@ -134,14 +134,14 @@ export const DEFAULT_CATALOG = {
         "Frontier Airlines World Mastercard",
         "Carnival World Mastercard",
         "Holland America Line Rewards Visa Card",
-        "Princess Cruises Rewards Visa Card"
+        "Princess Cruises Rewards Visa Card",
       ],
       business: [
         "JetBlue Business Card",
         "AAdvantage Aviator Business Mastercard",
         "Wyndham Rewards Earner Business Card",
-        "Hawaiian Airlines Business Mastercard"
-      ]
+        "Hawaiian Airlines Business Mastercard",
+      ],
     },
     "Capital One": {
       personal: [
@@ -152,17 +152,17 @@ export const DEFAULT_CATALOG = {
         "Venture Rewards",
         "Venture X Rewards",
         "VentureOne Rewards",
-        "Platinum Mastercard"
+        "Platinum Mastercard",
       ],
       business: [
         "Spark Cash Plus",
         "Spark Cash Select",
         "Spark Miles for Business",
         "Spark Miles Select",
-        "Venture X Business"
-      ]
+        "Venture X Business",
+      ],
     },
-    "Citi": {
+    Citi: {
       personal: [
         "Citi Custom Cash Card",
         "Citi / AAdvantage Platinum Select World Elite Mastercard",
@@ -187,24 +187,21 @@ export const DEFAULT_CATALOG = {
         "The Home Depot Consumer Credit Card",
         "TSC Store Card",
         "TSC Visa Card",
-        "Wayfair's Credit Cards"
+        "Wayfair's Credit Cards",
       ],
-      business: [
-        "Citi / AAdvantage Business World Elite Mastercard",
-        "Costco Anywhere Visa Business Card by Citi"
-      ]
+      business: ["Citi / AAdvantage Business World Elite Mastercard", "Costco Anywhere Visa Business Card by Citi"],
     },
-    "FNBO": {
+    FNBO: {
       personal: ["FNBO Evergreen Rewards Visa Card", "FNBO Getaway Rewards Visa Card"],
-      business: ["Evergreen by FNBO Business Credit Card"]
+      business: ["Evergreen by FNBO Business Credit Card"],
     },
     "Goldman Sachs": {
       personal: ["Apple Card", "My GM Rewards Card"],
-      business: []
+      business: [],
     },
-    "HSBC": {
+    HSBC: {
       personal: ["HSBC Elite Credit Card", "HSBC Premier Credit Card"],
-      business: []
+      business: [],
     },
     "Navy Federal": {
       personal: [
@@ -213,15 +210,19 @@ export const DEFAULT_CATALOG = {
         "GO REWARDS Credit Card",
         "More Rewards American Express Card",
         "Visa Signature Flagship Rewards Credit Card",
-        "nRewards Secured Credit Card"
+        "nRewards Secured Credit Card",
       ],
-      business: []
+      business: [],
     },
-    "PenFed": {
-      personal: ["PenFed Power Cash Rewards Visa Signature", "PenFed Platinum Rewards Visa Signature", "PenFed Gold Visa Card"],
-      business: []
+    PenFed: {
+      personal: [
+        "PenFed Power Cash Rewards Visa Signature",
+        "PenFed Platinum Rewards Visa Signature",
+        "PenFed Gold Visa Card",
+      ],
+      business: [],
     },
-    "Synchrony": {
+    Synchrony: {
       personal: [
         "Verizon Visa Card",
         "Sam's Club Mastercard",
@@ -230,13 +231,18 @@ export const DEFAULT_CATALOG = {
         "Walgreens Mastercard",
         "Rakuten Cash Back Visa",
         "Amazon Store Card",
-        "Lowe's Advantage Card"
+        "Lowe's Advantage Card",
       ],
-      business: ["Sam's Club Business Mastercard"]
+      business: ["Sam's Club Business Mastercard"],
     },
     "TD Bank": {
-      personal: ["TD Double Up Credit Card", "TD Clear Credit Card", "TD Cash Credit Card", "Target Circle Credit Card"],
-      business: ["TD Business Solutions Credit Card"]
+      personal: [
+        "TD Double Up Credit Card",
+        "TD Clear Credit Card",
+        "TD Cash Credit Card",
+        "Target Circle Credit Card",
+      ],
+      business: ["TD Business Solutions Credit Card"],
     },
     "US Bank": {
       personal: [
@@ -246,18 +252,22 @@ export const DEFAULT_CATALOG = {
         "U.S. Bank Cash+ Visa Signature Card",
         "U.S. Bank Shopper Cash Rewards Visa Signature Card",
         "Kroger Rewards World Elite Mastercard",
-        "Ralphs Rewards World Elite Mastercard"
+        "Ralphs Rewards World Elite Mastercard",
       ],
       business: [
         "U.S. Bank Business Altitude Power World Elite Mastercard",
         "U.S. Bank Business Altitude Connect World Elite Mastercard",
         "U.S. Bank Business Leverage Visa Signature Card",
-        "U.S. Bank Triple Cash Rewards Visa Business Card"
-      ]
+        "U.S. Bank Triple Cash Rewards Visa Business Card",
+      ],
     },
-    "USAA": {
-      personal: ["USAA Cashback Rewards Plus American Express", "USAA Rate Advantage Visa Platinum", "USAA Rewards Visa Signature"],
-      business: []
+    USAA: {
+      personal: [
+        "USAA Cashback Rewards Plus American Express",
+        "USAA Rate Advantage Visa Platinum",
+        "USAA Rewards Visa Signature",
+      ],
+      business: [],
     },
     "Wells Fargo": {
       personal: [
@@ -267,33 +277,35 @@ export const DEFAULT_CATALOG = {
         "Wells Fargo Reflect Card",
         "Bilt World Elite Mastercard",
         "Choice Privileges Mastercard",
-        "Choice Privileges Select Mastercard"
+        "Choice Privileges Select Mastercard",
       ],
-      business: [
-        "Signify Business Cash Card by Wells Fargo"
-      ]
+      business: ["Signify Business Cash Card by Wells Fargo"],
     },
     "Citizens Bank": {
-      personal: ["Citizens Cash Back Plus World Mastercard", "Citizens Clear Value Mastercard", "Citizens Bank Platinum Card"],
-      business: ["Citizens Everyday Business Credit Card"]
+      personal: [
+        "Citizens Cash Back Plus World Mastercard",
+        "Citizens Clear Value Mastercard",
+        "Citizens Bank Platinum Card",
+      ],
+      business: ["Citizens Everyday Business Credit Card"],
     },
     "Elan Financial": {
       personal: ["Max Cash Preferred Card", "Everyday Rewards+ Card", "Platinum Card", "Travel Rewards+ Card"],
-      business: ["Max Cash Preferred Business Card"]
+      business: ["Max Cash Preferred Business Card"],
     },
     "Fifth Third Bank": {
       personal: ["1.67% Cash/Back Visa", "Truly Simple Visa", "Stand By Me Visa", "Secured Card"],
-      business: ["Business Rewards Visa"]
+      business: ["Business Rewards Visa"],
     },
     "PNC Bank": {
       personal: ["PNC Cash Rewards Visa", "PNC Core Visa", "PNC points Visa"],
-      business: ["PNC Cash Rewards Visa Signature Business", "PNC points Visa Business"]
+      business: ["PNC Cash Rewards Visa Signature Business", "PNC points Visa Business"],
     },
-    "Truist": {
+    Truist: {
       personal: ["Truist Enjoy Cash", "Truist Enjoy Travel", "Truist Enjoy Beyond", "Truist Future"],
-      business: ["Truist Business Cash Rewards"]
+      business: ["Truist Business Cash Rewards"],
     },
-    "Other": {
+    Other: {
       personal: [
         "Fidelity Rewards Visa Signature Card",
         "Robinhood Gold Card",
@@ -310,23 +322,23 @@ export const DEFAULT_CATALOG = {
         "Deserve EDU Mastercard",
         "Chime Credit Builder Visa Secured Credit Card",
         "Varo Believe Secured Credit Card",
-        "Cred.ai Guaranty Card"
+        "Cred.ai Guaranty Card",
       ],
-      business: [
-        "Brex Card",
-        "Ramp Card",
-        "Divvy Corporate Card"
-      ]
-    }
-  }
+      business: ["Brex Card", "Ramp Card", "Divvy Corporate Card"],
+    },
+  },
 };
 
 const defaultPopular = {
-  "Amex": ["American Express Gold Credit Card", "The Platinum Card from American Express", "American Express Blue Cash Preferred Card"],
-  "Chase": ["Chase Sapphire Preferred", "Chase Freedom Unlimited", "Chase Freedom Flex"],
+  Amex: [
+    "American Express Gold Credit Card",
+    "The Platinum Card from American Express",
+    "American Express Blue Cash Preferred Card",
+  ],
+  Chase: ["Chase Sapphire Preferred", "Chase Freedom Unlimited", "Chase Freedom Flex"],
   "Capital One": ["Venture Rewards", "SavorOne Cash Rewards", "Quicksilver Cash Rewards"],
-  "Citi": ["Citi Custom Cash Card", "Citi Strata Premier Card", "Citi Double Cash Credit Card"],
-  "Discover": ["Discover it Cash Back", "Discover it Miles", "Discover it Chrome"]
+  Citi: ["Citi Custom Cash Card", "Citi Strata Premier Card", "Citi Double Cash Credit Card"],
+  Discover: ["Discover it Cash Back", "Discover it Miles", "Discover it Chrome"],
 };
 
 const remoteUrl = () => {
@@ -340,20 +352,20 @@ function mergeCatalog(localCatalog, remoteCatalog) {
   if (!remoteCatalog?.issuers) return localCatalog;
   const merged = { ...remoteCatalog, issuers: { ...remoteCatalog.issuers } };
   const localIssuers = localCatalog?.issuers || {};
-  Object.keys(localIssuers).forEach((issuer) => {
+  Object.keys(localIssuers).forEach(issuer => {
     const local = localIssuers[issuer] || { personal: [], business: [], discontinued: [] };
     const remote = merged.issuers[issuer] || { personal: [], business: [], discontinued: [] };
     const key = (t, name) => `${t}:${name}`.toLowerCase();
     const remoteSet = new Set([
       ...(remote.personal || []).map(n => key("personal", n)),
-      ...(remote.business || []).map(n => key("business", n))
+      ...(remote.business || []).map(n => key("business", n)),
     ]);
     const keepPersonal = (local.personal || []).filter(n => !remoteSet.has(key("personal", n)));
     const keepBusiness = (local.business || []).filter(n => !remoteSet.has(key("business", n)));
     merged.issuers[issuer] = {
       personal: [...(remote.personal || []), ...keepPersonal],
       business: [...(remote.business || []), ...keepBusiness],
-      discontinued: Array.from(new Set([...(remote.discontinued || []), ...(local.discontinued || [])]))
+      discontinued: Array.from(new Set([...(remote.discontinued || []), ...(local.discontinued || [])])),
     };
   });
   return merged;
@@ -365,7 +377,7 @@ export async function loadCardCatalog() {
   let catalog = cached || DEFAULT_CATALOG;
   let updatedAt = cachedAt || null;
 
-  const shouldRefresh = !cachedAt || (Date.now() - cachedAt) > THIRTY_DAYS_MS;
+  const shouldRefresh = !cachedAt || Date.now() - cachedAt > THIRTY_DAYS_MS;
   const url = remoteUrl();
   if (url && shouldRefresh) {
     try {
@@ -391,8 +403,16 @@ export function getIssuerCards(issuer, catalog) {
   const disc = new Set((entry.discontinued || []).map(n => n.toLowerCase()));
 
   const rawCards = [
-    ...(entry.personal || []).map(n => ({ name: n, type: "personal", status: disc.has(n.toLowerCase()) ? "discontinued" : "active" })),
-    ...(entry.business || []).map(n => ({ name: n, type: "business", status: disc.has(n.toLowerCase()) ? "discontinued" : "active" }))
+    ...(entry.personal || []).map(n => ({
+      name: n,
+      type: "personal",
+      status: disc.has(n.toLowerCase()) ? "discontinued" : "active",
+    })),
+    ...(entry.business || []).map(n => ({
+      name: n,
+      type: "business",
+      status: disc.has(n.toLowerCase()) ? "discontinued" : "active",
+    })),
   ];
 
   // Guarantee absolute deduplication (case-insensitive)

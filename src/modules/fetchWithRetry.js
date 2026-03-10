@@ -20,78 +20,78 @@ const BASE_DELAY_MS = 1000;
  * @returns {Promise<Response>}
  */
 export async function fetchWithRetry(url, opts = {}, retryOpts = {}) {
-    const maxRetries = retryOpts.maxRetries ?? MAX_RETRIES;
-    let lastError;
+  const maxRetries = retryOpts.maxRetries ?? MAX_RETRIES;
+  let lastError;
 
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        // Respect abort signal
-        if (opts.signal?.aborted) {
-            throw new DOMException("The operation was aborted.", "AbortError");
-        }
-
-        try {
-            const res = await fetch(url, opts);
-
-            // Non-retryable client errors — return immediately
-            if (res.ok || !RETRYABLE_STATUS.has(res.status)) {
-                return res;
-            }
-
-            // Retryable server error
-            lastError = new Error(`HTTP ${res.status}`);
-            lastError.status = res.status;
-            lastError.response = res;
-
-            if (attempt < maxRetries) {
-                let delay = BASE_DELAY_MS * Math.pow(2, attempt);
-
-                // Respect Retry-After header on 429
-                if (res.status === 429) {
-                    const retryAfter = res.headers.get("Retry-After");
-                    if (retryAfter) {
-                        const parsed = Number(retryAfter);
-                        if (!isNaN(parsed) && parsed > 0) {
-                            delay = Math.min(parsed * 1000, 30000); // cap at 30s
-                        }
-                    }
-                }
-
-                // Add jitter (±25%)
-                delay = delay * (0.75 + Math.random() * 0.5);
-                await sleep(delay, opts.signal);
-            }
-        } catch (err) {
-            // AbortError — never retry
-            if (err.name === "AbortError") throw err;
-
-            // Network error — retry
-            lastError = err;
-            if (attempt < maxRetries) {
-                const delay = BASE_DELAY_MS * Math.pow(2, attempt) * (0.75 + Math.random() * 0.5);
-                await sleep(delay, opts.signal);
-            }
-        }
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // Respect abort signal
+    if (opts.signal?.aborted) {
+      throw new DOMException("The operation was aborted.", "AbortError");
     }
 
-    throw lastError;
+    try {
+      const res = await fetch(url, opts);
+
+      // Non-retryable client errors — return immediately
+      if (res.ok || !RETRYABLE_STATUS.has(res.status)) {
+        return res;
+      }
+
+      // Retryable server error
+      lastError = new Error(`HTTP ${res.status}`);
+      lastError.status = res.status;
+      lastError.response = res;
+
+      if (attempt < maxRetries) {
+        let delay = BASE_DELAY_MS * 2 ** attempt;
+
+        // Respect Retry-After header on 429
+        if (res.status === 429) {
+          const retryAfter = res.headers.get("Retry-After");
+          if (retryAfter) {
+            const parsed = Number(retryAfter);
+            if (!isNaN(parsed) && parsed > 0) {
+              delay = Math.min(parsed * 1000, 30000); // cap at 30s
+            }
+          }
+        }
+
+        // Add jitter (±25%)
+        delay = delay * (0.75 + Math.random() * 0.5);
+        await sleep(delay, opts.signal);
+      }
+    } catch (err) {
+      // AbortError — never retry
+      if (err.name === "AbortError") throw err;
+
+      // Network error — retry
+      lastError = err;
+      if (attempt < maxRetries) {
+        const delay = BASE_DELAY_MS * 2 ** attempt * (0.75 + Math.random() * 0.5);
+        await sleep(delay, opts.signal);
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 function sleep(ms, signal) {
-    return new Promise((resolve, reject) => {
-        if (signal?.aborted) {
-            reject(new DOMException("The operation was aborted.", "AbortError"));
-            return;
-        }
-        const onAbort = () => {
-            clearTimeout(timer);
-            reject(new DOMException("The operation was aborted.", "AbortError"));
-        };
-        const timer = setTimeout(() => {
-            signal?.removeEventListener("abort", onAbort);
-            resolve();
-        }, ms);
-        signal?.addEventListener("abort", onAbort, { once: true });
-    });
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("The operation was aborted.", "AbortError"));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("The operation was aborted.", "AbortError"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 export default fetchWithRetry;

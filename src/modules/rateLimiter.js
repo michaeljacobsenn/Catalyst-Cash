@@ -7,67 +7,65 @@
  * and improve UX (instant rejection vs. waiting for a 429).
  */
 
-const DEFAULT_WINDOW_MS = 60_000;  // 1 minute
-const DEFAULT_MAX_REQUESTS = 12;   // 12 requests per minute
+const DEFAULT_WINDOW_MS = 60_000; // 1 minute
+const DEFAULT_MAX_REQUESTS = 12; // 12 requests per minute
 
 class RateLimiter {
-    /**
-     * @param {number} maxRequests - Max requests in the window
-     * @param {number} windowMs - Sliding window duration in ms
-     */
-    constructor(maxRequests = DEFAULT_MAX_REQUESTS, windowMs = DEFAULT_WINDOW_MS) {
-        this.maxRequests = maxRequests;
-        this.windowMs = windowMs;
-        this.timestamps = [];
+  /**
+   * @param {number} maxRequests - Max requests in the window
+   * @param {number} windowMs - Sliding window duration in ms
+   */
+  constructor(maxRequests = DEFAULT_MAX_REQUESTS, windowMs = DEFAULT_WINDOW_MS) {
+    this.maxRequests = maxRequests;
+    this.windowMs = windowMs;
+    this.timestamps = [];
+  }
+
+  /**
+   * Try to consume a token. Returns true if allowed, false if rate-limited.
+   * @returns {{ allowed: boolean, retryAfterMs: number | null, remaining: number }}
+   */
+  check() {
+    const now = Date.now();
+    // Purge expired timestamps outside the sliding window
+    this.timestamps = this.timestamps.filter(ts => now - ts < this.windowMs);
+
+    if (this.timestamps.length >= this.maxRequests) {
+      const oldestInWindow = this.timestamps[0];
+      const retryAfterMs = this.windowMs - (now - oldestInWindow);
+      return {
+        allowed: false,
+        retryAfterMs: Math.max(0, retryAfterMs),
+        remaining: 0,
+      };
     }
 
-    /**
-     * Try to consume a token. Returns true if allowed, false if rate-limited.
-     * @returns {{ allowed: boolean, retryAfterMs: number | null, remaining: number }}
-     */
-    check() {
-        const now = Date.now();
-        // Purge expired timestamps outside the sliding window
-        this.timestamps = this.timestamps.filter(ts => now - ts < this.windowMs);
+    this.timestamps.push(now);
+    return {
+      allowed: true,
+      retryAfterMs: null,
+      remaining: this.maxRequests - this.timestamps.length,
+    };
+  }
 
-        if (this.timestamps.length >= this.maxRequests) {
-            const oldestInWindow = this.timestamps[0];
-            const retryAfterMs = this.windowMs - (now - oldestInWindow);
-            return {
-                allowed: false,
-                retryAfterMs: Math.max(0, retryAfterMs),
-                remaining: 0
-            };
-        }
+  /**
+   * Reset the rate limiter (e.g., on user logout).
+   */
+  reset() {
+    this.timestamps = [];
+  }
 
-        this.timestamps.push(now);
-        return {
-            allowed: true,
-            retryAfterMs: null,
-            remaining: this.maxRequests - this.timestamps.length
-        };
-    }
-
-    /**
-     * Reset the rate limiter (e.g., on user logout).
-     */
-    reset() {
-        this.timestamps = [];
-    }
-
-    /**
-     * Get current state without consuming a token.
-     * @returns {{ remaining: number, resetMs: number | null }}
-     */
-    peek() {
-        const now = Date.now();
-        const active = this.timestamps.filter(ts => now - ts < this.windowMs);
-        const remaining = Math.max(0, this.maxRequests - active.length);
-        const resetMs = active.length > 0
-            ? this.windowMs - (now - active[0])
-            : null;
-        return { remaining, resetMs };
-    }
+  /**
+   * Get current state without consuming a token.
+   * @returns {{ remaining: number, resetMs: number | null }}
+   */
+  peek() {
+    const now = Date.now();
+    const active = this.timestamps.filter(ts => now - ts < this.windowMs);
+    const remaining = Math.max(0, this.maxRequests - active.length);
+    const resetMs = active.length > 0 ? this.windowMs - (now - active[0]) : null;
+    return { remaining, resetMs };
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════

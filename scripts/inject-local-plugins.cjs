@@ -8,33 +8,33 @@
  *
  * Or automatically via the npm "build:ios" script.
  */
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
-const CONFIG_PATH = path.join(__dirname, '..', 'ios', 'App', 'App', 'capacitor.config.json');
-const LOCAL_PLUGINS = ['FaceIdPlugin', 'PdfViewerPlugin', 'ICloudSyncPlugin']; // ObjC runtime names of local plugins
+const CONFIG_PATH = path.join(__dirname, "..", "ios", "App", "App", "capacitor.config.json");
+const LOCAL_PLUGINS = ["FaceIdPlugin", "PdfViewerPlugin", "ICloudSyncPlugin"]; // ObjC runtime names of local plugins
 
 try {
-    const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-    const classList = config.packageClassList || [];
-    let changed = false;
+  const config = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+  const classList = config.packageClassList || [];
+  let changed = false;
 
-    for (const plugin of LOCAL_PLUGINS) {
-        if (!classList.includes(plugin)) {
-            classList.push(plugin);
-            changed = true;
-            console.log(`✅ Added "${plugin}" to packageClassList`);
-        }
+  for (const plugin of LOCAL_PLUGINS) {
+    if (!classList.includes(plugin)) {
+      classList.push(plugin);
+      changed = true;
+      console.log(`✅ Added "${plugin}" to packageClassList`);
     }
+  }
 
-    if (changed) {
-        config.packageClassList = classList;
-        fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
-        console.log('📝 Updated capacitor.config.json');
-    } else {
-        console.log('✅ All local plugins already registered');
-    }
+  if (changed) {
+    config.packageClassList = classList;
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + "\n");
+    console.log("📝 Updated capacitor.config.json");
+  } else {
+    console.log("✅ All local plugins already registered");
+  }
 } catch (e) {
-    console.error('❌ Failed to inject local plugins:', e.message);
-    process.exit(1);
+  console.error("❌ Failed to inject local plugins:", e.message);
+  process.exit(1);
 }

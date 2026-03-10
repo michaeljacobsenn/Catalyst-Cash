@@ -21,7 +21,7 @@
     href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap"
     rel="stylesheet" />
   <meta name="robots" content="index, follow" />
-  <link rel="stylesheet" href="/style.css?v=2.7" />
+  <link rel="stylesheet" href="/style.css?v=2.8" />
 </head>
 
 <body>
@@ -247,7 +247,7 @@
     </footer>
   </div>
   <script>
-    (function () {
+    (() => {
       var btn = document.getElementById('hamburger-btn');
       var nav = document.getElementById('nav-links');
       var overlay = document.getElementById('mobile-overlay');
@@ -266,9 +266,14 @@
       }
       btn.addEventListener('click', toggle);
       if (overlay) overlay.addEventListener('click', close);
-      nav.querySelectorAll('a').forEach(function (a) {
-        a.addEventListener('click', close);
-      });
+            nav.querySelectorAll('a').forEach((a) => {
+                a.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const target = a.getAttribute('href');
+                    close();
+                    setTimeout(() => { window.location.href = target; }, 350);
+                });
+            });
     })();
   </script>
 </body>

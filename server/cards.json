@@ -6,26 +6,10 @@
       "The Platinum Card from American Express",
       "American Express Blue Cash Preferred Card"
     ],
-    "Chase": [
-      "Chase Sapphire Preferred",
-      "Chase Freedom Unlimited",
-      "Chase Freedom Flex"
-    ],
-    "Capital One": [
-      "Venture Rewards",
-      "SavorOne Cash Rewards",
-      "Quicksilver Cash Rewards"
-    ],
-    "Citi": [
-      "Citi Custom Cash Card",
-      "Citi Strata Premier Card",
-      "Citi Double Cash Credit Card"
-    ],
-    "Discover": [
-      "Discover it Cash Back",
-      "Discover it Miles",
-      "Discover it Chrome"
-    ]
+    "Chase": ["Chase Sapphire Preferred", "Chase Freedom Unlimited", "Chase Freedom Flex"],
+    "Capital One": ["Venture Rewards", "SavorOne Cash Rewards", "Quicksilver Cash Rewards"],
+    "Citi": ["Citi Custom Cash Card", "Citi Strata Premier Card", "Citi Double Cash Credit Card"],
+    "Discover": ["Discover it Cash Back", "Discover it Miles", "Discover it Chrome"]
   },
   "issuers": {
     "Amex": {
@@ -127,11 +111,7 @@
     "Bank of America": { "personal": [], "business": [] },
     "Barclays": { "personal": ["JetBlue Plus Card"], "business": [] },
     "Capital One": {
-      "personal": [
-        "Quicksilver Cash Rewards",
-        "SavorOne Cash Rewards",
-        "Venture Rewards"
-      ],
+      "personal": ["Quicksilver Cash Rewards", "SavorOne Cash Rewards", "Venture Rewards"],
       "business": []
     },
     "Citi": {
@@ -161,10 +141,7 @@
         "TSC Visa Card",
         "Wayfair's Credit Cards"
       ],
-      "business": [
-        "Citi / AAdvantage Business World Elite Mastercard",
-        "Costco Anywhere Visa Business Card by Citi"
-      ]
+      "business": ["Citi / AAdvantage Business World Elite Mastercard", "Costco Anywhere Visa Business Card by Citi"]
     },
     "FNBO": { "personal": [], "business": [] },
     "Goldman Sachs": { "personal": [], "business": [] },

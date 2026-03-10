@@ -9,80 +9,113 @@ import { fmt } from "../utils.js";
 import { Sparkles, Phone } from "lucide-react";
 
 export default function BillNegotiationCard({ cards = [], financialConfig = {}, negotiationTargets = [] }) {
-    if (!negotiationTargets || negotiationTargets.length === 0) return null;
+  if (!negotiationTargets || negotiationTargets.length === 0) return null;
 
-    // Filter out invalid targets just in case
-    const validTargets = negotiationTargets.filter(t => t && t.target && typeof t.target === 'string');
-    if (validTargets.length === 0) return null;
+  // Filter out invalid targets just in case
+  const validTargets = negotiationTargets.filter(t => t && t.target && typeof t.target === "string");
+  if (validTargets.length === 0) return null;
 
-    const totalPotential = validTargets.reduce((s, o) => s + (parseFloat(o.estimatedAnnualSavings) || 0), 0);
+  const totalPotential = validTargets.reduce((s, o) => s + (parseFloat(o.estimatedAnnualSavings) || 0), 0);
 
-    return (
-        <Card animate delay={130} style={{
-            background: `linear-gradient(160deg, ${T.bg.card}, ${T.status.amber}06)`,
-            borderColor: `${T.status.amber}15`
-        }}>
-            {/* Header */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{
-                        width: 26, height: 26, borderRadius: 7,
-                        background: `${T.status.amber}15`,
-                        display: "flex", alignItems: "center", justifyContent: "center"
-                    }}>
-                        <Sparkles size={13} color={T.status.amber} strokeWidth={2.5} />
-                    </div>
-                    <span style={{ fontSize: 12, fontWeight: 700 }}>AI Negotiation Targets</span>
-                </div>
-                <div style={{
-                    padding: "3px 8px", borderRadius: 10,
-                    background: `${T.status.green}12`, border: `1px solid ${T.status.green}25`
-                }}>
-                    <Mono size={9} weight={800} color={T.status.green}>
-                        ~{fmt(totalPotential)}/yr
-                    </Mono>
-                </div>
+  return (
+    <Card
+      animate
+      delay={130}
+      style={{
+        background: `linear-gradient(160deg, ${T.bg.card}, ${T.status.amber}06)`,
+        borderColor: `${T.status.amber}15`,
+      }}
+    >
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 7,
+              background: `${T.status.amber}15`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Sparkles size={13} color={T.status.amber} strokeWidth={2.5} />
+          </div>
+          <span style={{ fontSize: 12, fontWeight: 700 }}>AI Negotiation Targets</span>
+        </div>
+        <div
+          style={{
+            padding: "3px 8px",
+            borderRadius: 10,
+            background: `${T.status.green}12`,
+            border: `1px solid ${T.status.green}25`,
+          }}
+        >
+          <Mono size={9} weight={800} color={T.status.green}>
+            ~{fmt(totalPotential)}/yr
+          </Mono>
+        </div>
+      </div>
+
+      {/* Opportunity list */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {validTargets.map((opp, i) => (
+          <div
+            key={i}
+            style={{
+              padding: "10px 12px",
+              borderRadius: T.radius.sm,
+              background: T.bg.elevated,
+              border: `1px solid ${T.border.subtle}`,
+              animation: `fadeInUp .35s ease-out ${i * 0.06}s both`,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <Phone size={10} color={T.status.amber} />
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: T.text.primary,
+                    maxWidth: "70%",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {opp.target}
+                </span>
+              </div>
+              <Mono size={10} weight={800} color={T.status.green}>
+                ~{fmt(opp.estimatedAnnualSavings || 0)}/yr
+              </Mono>
             </div>
-
-            {/* Opportunity list */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {validTargets.map((opp, i) => (
-                    <div key={i} style={{
-                        padding: "10px 12px", borderRadius: T.radius.sm,
-                        background: T.bg.elevated, border: `1px solid ${T.border.subtle}`,
-                        animation: `fadeInUp .35s ease-out ${i * 0.06}s both`
-                    }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                <Phone size={10} color={T.status.amber} />
-                                <span style={{
-                                    fontSize: 10, fontWeight: 700, color: T.text.primary,
-                                    maxWidth: "70%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
-                                }}>{opp.target}</span>
-                            </div>
-                            <Mono size={10} weight={800} color={T.status.green}>
-                                ~{fmt(opp.estimatedAnnualSavings || 0)}/yr
-                            </Mono>
-                        </div>
-                        <div style={{ fontSize: 9, color: T.text.secondary, lineHeight: 1.4, marginBottom: 4 }}>
-                            {opp.strategy}
-                        </div>
-                        <div style={{
-                            display: "inline-flex", alignItems: "center", gap: 4,
-                            padding: "2px 6px", borderRadius: 4,
-                            background: `${T.status.amber}10`,
-                            fontSize: 8, fontWeight: 700, color: T.status.amber,
-                            fontFamily: T.font.mono
-                        }}>
-                            AI INSIGHT
-                        </div>
-                    </div>
-                ))}
+            <div style={{ fontSize: 9, color: T.text.secondary, lineHeight: 1.4, marginBottom: 4 }}>{opp.strategy}</div>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "2px 6px",
+                borderRadius: 4,
+                background: `${T.status.amber}10`,
+                fontSize: 8,
+                fontWeight: 700,
+                color: T.status.amber,
+                fontFamily: T.font.mono,
+              }}
+            >
+              AI INSIGHT
             </div>
+          </div>
+        ))}
+      </div>
 
-            <div style={{ marginTop: 10, fontSize: 8, color: T.text.muted, lineHeight: 1.4, textAlign: "center" }}>
-                Suggestions generated by AI based on your live budget and linked accounts. Expected savings are estimates.
-            </div>
-        </Card>
-    );
+      <div style={{ marginTop: 10, fontSize: 8, color: T.text.muted, lineHeight: 1.4, textAlign: "center" }}>
+        Suggestions generated by AI based on your live budget and linked accounts. Expected savings are estimates.
+      </div>
+    </Card>
+  );
 }

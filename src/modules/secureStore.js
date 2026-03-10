@@ -23,7 +23,7 @@ async function getPlugin() {
     import("capacitor-secure-storage-plugin")
       .then(mod => mod.SecureStoragePlugin || mod.default?.SecureStoragePlugin || mod.default || null)
       .catch(() => null),
-    new Promise(resolve => setTimeout(() => resolve(null), 3000)) // 3s timeout — never hang
+    new Promise(resolve => setTimeout(() => resolve(null), 3000)), // 3s timeout — never hang
   ]);
   return securePluginPromise;
 }
@@ -65,7 +65,7 @@ async function removeFallback(key) {
   } catch {
     try {
       localStorage.removeItem(prefKey);
-    } catch { }
+    } catch {}
   }
 }
 
@@ -75,7 +75,7 @@ export async function getSecureItem(key) {
     try {
       const result = await plugin.get({ key });
       return deserialize(result?.value);
-    } catch { }
+    } catch {}
   }
   return getFallback(key);
 }
@@ -87,7 +87,7 @@ export async function setSecureItem(key, value) {
     try {
       await plugin.set({ key, value: serialized });
       return true;
-    } catch { }
+    } catch {}
   }
   return setFallback(key, value);
 }
@@ -97,7 +97,7 @@ export async function deleteSecureItem(key) {
   if (plugin) {
     try {
       await plugin.remove({ key });
-    } catch { }
+    } catch {}
   }
   await removeFallback(key);
 }

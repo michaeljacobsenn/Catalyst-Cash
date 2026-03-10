@@ -19,74 +19,74 @@ const WIDGET_KEY = "catalyst-widget-data";
  * Falls back gracefully on web — no errors thrown.
  */
 export async function updateWidgetData({
-    healthScore = null,
-    healthLabel = "",
-    netWorth = null,
-    weeklyMoves = 0,
-    weeklyMovesTotal = 0,
-    streak = 0,
-    lastAuditDate = null,
-    // ── Expanded payload for richer widgets ──
-    checkingBalance = null,
-    dailyBurnRate = null,
-    status = "",
-    nextPayday = "",
-    budgetBurnPct = null,
-    percentile = null,
+  healthScore = null,
+  healthLabel = "",
+  netWorth = null,
+  weeklyMoves = 0,
+  weeklyMovesTotal = 0,
+  streak = 0,
+  lastAuditDate = null,
+  // ── Expanded payload for richer widgets ──
+  checkingBalance = null,
+  dailyBurnRate = null,
+  status = "",
+  nextPayday = "",
+  budgetBurnPct = null,
+  percentile = null,
 } = {}) {
-    try {
-        const widgetPayload = {
-            healthScore,
-            healthLabel,
-            netWorth,
-            weeklyMoves,
-            weeklyMovesTotal,
-            streak,
-            lastAuditDate: lastAuditDate || new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            // Extended data — widgets can opt-in to these
-            checkingBalance,
-            dailyBurnRate,
-            status,
-            nextPayday,
-            budgetBurnPct,
-            percentile,
-        };
+  try {
+    const widgetPayload = {
+      healthScore,
+      healthLabel,
+      netWorth,
+      weeklyMoves,
+      weeklyMovesTotal,
+      streak,
+      lastAuditDate: lastAuditDate || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      // Extended data — widgets can opt-in to these
+      checkingBalance,
+      dailyBurnRate,
+      status,
+      nextPayday,
+      budgetBurnPct,
+      percentile,
+    };
 
-        await Preferences.set({
-            key: WIDGET_KEY,
-            value: JSON.stringify(widgetPayload),
-        });
+    await Preferences.set({
+      key: WIDGET_KEY,
+      value: JSON.stringify(widgetPayload),
+    });
 
-        // On iOS, also write to the shared App Group UserDefaults
-        // so the WidgetKit extension can access it.
-        // This requires a native plugin (future: CatalystWidgetPlugin).
-        if (Capacitor.getPlatform() === "ios") {
-            try {
-                // @ts-ignore — future native plugin
-                const { CatalystWidget } = Capacitor.Plugins;
-                if (CatalystWidget?.updateTimeline) {
-                    await CatalystWidget.updateTimeline(widgetPayload);
-                }
-            } catch {
-                // Widget plugin not installed yet — silently ignore
-            }
+    // On iOS, also write to the shared App Group UserDefaults
+    // so the WidgetKit extension can access it.
+    // This requires a native plugin (future: CatalystWidgetPlugin).
+    if (Capacitor.getPlatform() === "ios") {
+      try {
+        // @ts-expect-error — future native plugin
+        const { CatalystWidget } = Capacitor.Plugins;
+        if (CatalystWidget?.updateTimeline) {
+          await CatalystWidget.updateTimeline(widgetPayload);
         }
-
-        return true;
-    } catch {
-        return false;
+      } catch {
+        // Widget plugin not installed yet — silently ignore
+      }
     }
+
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Read the latest widget data (for debugging/display).
  */
 export async function getWidgetData() {
-    try {
-        const { value } = await Preferences.get({ key: WIDGET_KEY });
-        return value ? JSON.parse(value) : null;
-    } catch {
-        return null;
-    }
+  try {
+    const { value } = await Preferences.get({ key: WIDGET_KEY });
+    return value ? JSON.parse(value) : null;
+  } catch {
+    return null;
+  }
 }
