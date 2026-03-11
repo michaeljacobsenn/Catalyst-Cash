@@ -12,7 +12,7 @@
 //
 //   Free: 2 audits/wk on Flash  → ~$0.05/user/month
 //   Pro worst case: 31 audits/mo on o3-mini → ~$0.74/user/month
-//   Pro @ $8.99/mo (after Apple 30%): $6.29 net → ~$5.55+ profit/user
+//   Pro @ $9.99/mo (after Apple 30%): $6.99 net → ~$5.79+ profit/user
 // ═══════════════════════════════════════════════════════════════
 
 import { db } from "./utils.js";
@@ -184,7 +184,7 @@ export const TIERS = {
     id: "pro",
     name: "Pro",
     auditsPerWeek: Infinity, // No weekly cap (monthly cap of 31 applies)
-    chatMessagesPerDay: Infinity, // No daily cap enforced at tier level (PRO_DAILY_CHAT_CAP = 100 applies)
+    chatMessagesPerDay: Infinity, // No daily cap enforced at tier level (PRO_DAILY_CHAT_CAP = 50 applies)
     marketRefreshMs: 5 * 60 * 1000, // 5 minutes
     historyLimit: Infinity, // All history
     models: [
@@ -220,6 +220,7 @@ export const TIERS = {
       "priority_refresh", // 15-min market data
       "daily_50_chat", // 50/day AskAI messages (vs 10/day free)
       "card_wizard", // Card Wizard feature
+      "bill_negotiation", // AI Bill Negotiation scripts
 
       // ── Future Pro Features (roadmap) ──
       // "ai_followup_chat",     // Ask follow-up questions after audit
@@ -239,27 +240,27 @@ export const TIERS = {
 
 // ── IAP Product IDs (Apple App Store) ─────────────────────────
 export const IAP_PRODUCTS = {
-  monthly: "com.catalystcash.pro.monthly.v2", // $7.99/mo
-  yearly: "com.catalystcash.pro.yearly.v2", // $59.99/yr ($4.99/mo)
+  monthly: "com.catalystcash.pro.monthly.v2", // $9.99/mo
+  yearly: "com.catalystcash.pro.yearly.v2", // $89.99/yr ($7.50/mo)
 };
 
 // ── IAP Display Pricing (for UI — no StoreKit dependency) ─────
 //
 // PRICING RATIONALE (Frozen Account Pivot):
-//   $8.99/mo → "Under $10" budget alternative vs Copilot ($14.99)
-//   $69.99/yr → $5.83/mo effective, massive 35% savings anchors yearly
-//   Apple takes 30% → $6.29 net/mo (monthly), $4.08 net/mo (yearly)
-//   Free COGS is strictly bounded as 1-time snapshot. Pro max COGS is ~$5.75/mo.
+//   $9.99/mo → "Under $10" premium at exact psychological threshold
+//   $89.99/yr → $7.50/mo effective, 25% savings anchors yearly
+//   Apple takes 30% → $6.99 net/mo (monthly), $5.25 net/mo (yearly)
+//   Free COGS is strictly bounded as 1-time snapshot. Pro max COGS is ~$4.80/mo.
 // ──────────────────────────────────────────────────────────────
 export const IAP_PRICING = {
-  monthly: { price: "$8.99", period: "month", savings: false },
-  yearly: { price: "$69.99", period: "year", savings: "SAVE 35%", perMonth: "$5.83", original: "$107.88", trial: "7-day free trial" },
+  monthly: { price: "$9.99", period: "month", savings: false },
+  yearly: { price: "$89.99", period: "year", savings: "SAVE 25%", perMonth: "$7.50", original: "$119.88", trial: "7-day free trial" },
 };
 
 // ── Institution Limits (Plaid bank connections per tier) ───────
 export const INSTITUTION_LIMITS = {
   free: 2, // Checking + 1 credit card — enough to demo value
-  pro: 6,
+  pro: 10, // Power users with multiple banks, credit cards, and investment accounts
 };
 
 // ── State Management ──────────────────────────────────────────

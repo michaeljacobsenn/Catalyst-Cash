@@ -23,7 +23,7 @@ const FEATURES = [
   { label: "Debt & Tax Simulator", free: "✓ Full", pro: "✓ Full", icon: "⚠️" },
   { label: "Cash Flow Calendar", free: "✓ Full", pro: "✓ Full", icon: "📅" },
   { label: "AI Bill Negotiation", free: "—", pro: "Drafts Scripts (0 Fee)", icon: "🗣️" },
-  { label: "Bank Sync (Plaid)", free: "2 Banks Live Sync", pro: "6 Banks Live Sync", icon: "🏦" },
+  { label: "Bank Sync (Plaid)", free: "2 Banks Live Sync", pro: "10 Banks Live Sync", icon: "🏦" },
   { label: "Auto Background Sync", free: "—", pro: "✓", icon: "🔁" },
   { label: "Transaction Ledger", free: "—", pro: "✓ Full", icon: "📒" },
   { label: "Categories & Rules", free: "✓", pro: "✓", icon: "🏷️" },
