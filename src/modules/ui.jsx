@@ -596,6 +596,8 @@ export const InlineTooltip = ({ term, children }) => {
   );
 }
 
+export { ViewToggle } from "./uiComponents.jsx";
+
 // ═══════════════════════════════════════════════════════════════
 // IOS-STYLE SETTINGS / EDIT PANELS
 // ═══════════════════════════════════════════════════════════════

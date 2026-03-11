@@ -10,9 +10,9 @@
 //   gemini-2.5-pro    $1.25/$10.0/M  ≈ $0.024/audit  → Pro  (Catalyst AI Pro)
 //   o4-mini           $1.10/$4.40/M  ≈ $0.012/audit  → Pro  (Catalyst AI Reasoning)
 //
-//   Free: 3 audits/wk on Flash  → ~$0.07/user/month
-//   Pro worst case: 50 audits/mo on o3-mini → ~$0.85/user/month
-//   Pro @ $11.99/mo (after Apple 15%): $10.19 net → ~$6.00+ profit/user
+//   Free: 2 audits/wk on Flash  → ~$0.05/user/month
+//   Pro worst case: 31 audits/mo on o3-mini → ~$0.74/user/month
+//   Pro @ $8.99/mo (after Apple 30%): $6.29 net → ~$5.55+ profit/user
 // ═══════════════════════════════════════════════════════════════
 
 import { db } from "./utils.js";
@@ -131,7 +131,7 @@ export async function syncRemoteGatingMode() {
 // ABUSE PREVENTION:
 //   - Device fingerprint (UUID stored in Keychain) persists across
 //     app reinstalls to prevent free-tier resets.
-//   - Pro has a generous monthly cap (150) to prevent API cost abuse.
+//   - Pro has a monthly cap (31 ≈ 1/day) to control API cost.
 //   - Backend rate-limiting via X-Device-ID header provides server-side
 //     protection even if client storage is tampered with.
 //
@@ -139,20 +139,25 @@ export async function syncRemoteGatingMode() {
 //   Audits: Heavy (~3K tokens in, ~2K out, structured JSON). Weekly cap.
 //   AskAI:  Light (~300 tokens in, ~500 out, natural language). Daily cap.
 //
-//   Free AskAI must be generous enough to hook users — the "aha"
-//   moment happens in chat, not audits. 15/day = 1 message every
-//   ~hour during waking hours. Pro upgrades feel like removing a
-//   ceiling, not getting unlocked from a cage.
+//   Free AskAI: 10/day — enough to experience the value proposition.
+//   Pro AskAI: 50/day — generous but bounded to prevent abuse.
+//   These limits match the Cloudflare Worker enforcement exactly.
+//
+// ── BILLING CYCLE ANCHORING ─────────────────────────────────────
+//   Pro monthly audit counter resets on the purchase anniversary day.
+//   e.g. purchased Jan 15 → cycle runs 15th→15th each month.
+//   For months shorter than the anchor day (e.g. anchor=31, Feb),
+//   the last day of the month is used. All dates are UTC.
 // ──────────────────────────────────────────────────────────────
-export const PRO_MONTHLY_AUDIT_CAP = 50; // ~1.6/day, $0.85/mo max API cost at $0.017/audit
-export const PRO_DAILY_CHAT_CAP = 100; // ~6/hr, prevents abuse while feeling generous
+export const PRO_MONTHLY_AUDIT_CAP = 31; // 1/day, $0.74/mo max API cost at $0.024/audit
+export const PRO_DAILY_CHAT_CAP = 50; // ~3/hr, prevents abuse while feeling generous
 
 export const TIERS = {
   free: {
     id: "free",
     name: "Free",
-    auditsPerWeek: 3, // Covers weekly audit + 2 re-runs
-    chatMessagesPerDay: 15, // Generous free chat to hook users
+    auditsPerWeek: 2, // Weekly audit + 1 re-run (matches worker enforcement)
+    chatMessagesPerDay: 10, // Enough to experience value (matches worker enforcement)
     marketRefreshMs: 60 * 60 * 1000, // 60 minutes
     historyLimit: 12, // ~3 months of trends (quarterly)
     models: ["gpt-4o-mini"], // Catalyst AI — fast, free
@@ -178,7 +183,7 @@ export const TIERS = {
   pro: {
     id: "pro",
     name: "Pro",
-    auditsPerWeek: Infinity, // No weekly cap (monthly cap of 150 applies)
+    auditsPerWeek: Infinity, // No weekly cap (monthly cap of 31 applies)
     chatMessagesPerDay: Infinity, // No daily cap enforced at tier level (PRO_DAILY_CHAT_CAP = 100 applies)
     marketRefreshMs: 5 * 60 * 1000, // 5 minutes
     historyLimit: Infinity, // All history
@@ -205,7 +210,7 @@ export const TIERS = {
       "basic_alerts",
 
       // ── Pro Exclusives ──
-      "unlimited_audits", // No weekly cap (50/mo monthly safety cap)
+      "31_audits_per_month", // 31/mo monthly cap (1/day)
       "premium_models", // Access to o3-mini / GPT-4o
       "unlimited_history", // Full audit archive
       "share_card_clean", // Share without branding
@@ -213,7 +218,7 @@ export const TIERS = {
       "export_pdf", // PDF report export
       "advanced_alerts", // Score change drivers, trend warnings
       "priority_refresh", // 15-min market data
-      "unlimited_chat", // 100/day AskAI messages (vs 15/day free)
+      "daily_50_chat", // 50/day AskAI messages (vs 10/day free)
       "card_wizard", // Card Wizard feature
 
       // ── Future Pro Features (roadmap) ──
@@ -253,7 +258,7 @@ export const IAP_PRICING = {
 
 // ── Institution Limits (Plaid bank connections per tier) ───────
 export const INSTITUTION_LIMITS = {
-  free: 1, // Single initial snapshot. Account is then "frozen" from live syncs.
+  free: 2, // Checking + 1 credit card — enough to demo value
   pro: 6,
 };
 
@@ -265,10 +270,12 @@ const DEFAULT_STATE = {
   expiresAt: null, // ISO string, null = never (for free)
   productId: null, // Last purchased product ID
   purchaseDate: null, // ISO string
+  purchaseAnchorDay: null, // Day-of-month when Pro was purchased (1-31)
   auditsThisWeek: 0, // Reset every Monday
   weekStartDate: null, // UTC ISO string of current week's Monday
-  auditsThisMonth: 0, // Reset on 1st of each month (Pro cap)
-  monthKey: null, // UTC month key, e.g. "2026-03"
+  auditsThisMonth: 0, // Reset on billing cycle boundary (Pro cap)
+  billingCycleKey: null, // Billing cycle start date, e.g. "2026-03-15"
+  monthKey: null, // UTC calendar month key, e.g. "2026-03" (fallback)
   chatMessagesToday: 0, // Reset daily at midnight
   chatDayKey: null, // UTC day key, e.g. "2026-03-01"
 };
@@ -292,6 +299,7 @@ function getCurrentWeekMonday(now = new Date()) {
 
 /**
  * Get current month key for monthly cap tracking (e.g. "2026-03").
+ * Used as fallback when no purchase anchor day is set.
  */
 function getCurrentMonthKey(now = new Date()) {
   return now.toISOString().slice(0, 7);
@@ -304,9 +312,66 @@ function getCurrentDayKey(now = new Date()) {
   return getUtcDayKey(now);
 }
 
-export function getUsageWindowKeys(now = new Date()) {
+/**
+ * Get the current billing cycle key, anchored to the purchase anniversary day.
+ *
+ * Example: purchased on Jan 15 (anchorDay=15)
+ *   - Jan 15 → Feb 14 = cycle key "2026-01-15"
+ *   - Feb 15 → Mar 14 = cycle key "2026-02-15"
+ *
+ * Edge cases:
+ *   - anchorDay=31, February → cycle starts on Feb 28 (or 29 in leap year)
+ *   - anchorDay=30, February → same treatment
+ *   - Months with 30 days and anchor=31 → cycle starts on the 30th
+ *
+ * @param {number} anchorDay - Day of month (1-31) when subscription was purchased
+ * @param {Date} now - Current date (UTC)
+ * @returns {string} Billing cycle start date key, e.g. "2026-03-15"
+ */
+export function getBillingCycleKey(anchorDay, now = new Date()) {
+  if (!anchorDay || anchorDay < 1 || anchorDay > 31) {
+    // Fallback to calendar month if no valid anchor
+    return getCurrentMonthKey(now);
+  }
+
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth(); // 0-indexed
+  const day = now.getUTCDate();
+
+  // Clamp anchor day to the number of days in the current month
+  const daysInCurrentMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const effectiveAnchor = Math.min(anchorDay, daysInCurrentMonth);
+
+  let cycleStartYear, cycleStartMonth;
+
+  if (day >= effectiveAnchor) {
+    // We're on or past the anchor day → cycle started THIS month
+    cycleStartYear = year;
+    cycleStartMonth = month;
+  } else {
+    // We're before the anchor day → cycle started LAST month
+    if (month === 0) {
+      cycleStartYear = year - 1;
+      cycleStartMonth = 11; // December
+    } else {
+      cycleStartYear = year;
+      cycleStartMonth = month - 1;
+    }
+  }
+
+  // Clamp to the actual days in the cycle start month
+  const daysInStartMonth = new Date(Date.UTC(cycleStartYear, cycleStartMonth + 1, 0)).getUTCDate();
+  const cycleDay = Math.min(anchorDay, daysInStartMonth);
+
+  const mm = String(cycleStartMonth + 1).padStart(2, "0");
+  const dd = String(cycleDay).padStart(2, "0");
+  return `${cycleStartYear}-${mm}-${dd}`;
+}
+
+export function getUsageWindowKeys(now = new Date(), anchorDay = null) {
   return {
     weekStartDate: getCurrentWeekMonday(now),
+    billingCycleKey: anchorDay ? getBillingCycleKey(anchorDay, now) : getCurrentMonthKey(now),
     monthKey: getCurrentMonthKey(now),
     dayKey: getCurrentDayKey(now),
   };
@@ -424,14 +489,26 @@ export async function getSubscriptionState() {
       state.auditsThisWeek = Math.max(state.auditsThisWeek, kcState.auditsThisWeek || 0);
     }
 
-    // Auto-reset monthly audit counter on new month
+    // Auto-reset monthly audit counter on new billing cycle (or calendar month for free users)
+    const currentBillingCycle = state.purchaseAnchorDay
+      ? getBillingCycleKey(state.purchaseAnchorDay)
+      : getCurrentMonthKey();
+
+    // Reset if we crossed into a new cycle
+    if (state.billingCycleKey !== currentBillingCycle) {
+      state.auditsThisMonth = 0;
+      state.billingCycleKey = currentBillingCycle;
+    }
+
+    // Fallback: also update the legacy/fallback calendar month key
     const currentMonth = getCurrentMonthKey();
     if (state.monthKey !== currentMonth) {
-      state.auditsThisMonth = 0;
+      if (!state.purchaseAnchorDay) state.auditsThisMonth = 0;
       state.monthKey = currentMonth;
     }
-    // Keychain monthly merge: if same month, take the higher count
-    if (kcState && kcState.monthKey === currentMonth) {
+
+    // Keychain monthly merge: if same cycle/month, take the higher count
+    if (kcState && (kcState.billingCycleKey === currentBillingCycle || (!state.purchaseAnchorDay && kcState.monthKey === currentMonth))) {
       state.auditsThisMonth = Math.max(state.auditsThisMonth, kcState.auditsThisMonth || 0);
     }
 
@@ -556,6 +633,7 @@ export async function recordAuditUsage() {
     auditsThisWeek: state.auditsThisWeek,
     weekStartDate: state.weekStartDate,
     auditsThisMonth: state.auditsThisMonth,
+    billingCycleKey: state.billingCycleKey,
     monthKey: state.monthKey,
     chatMessagesToday: state.chatMessagesToday,
     chatDayKey: state.chatDayKey,
@@ -615,6 +693,7 @@ export async function recordChatUsage() {
     auditsThisWeek: state.auditsThisWeek,
     weekStartDate: state.weekStartDate,
     auditsThisMonth: state.auditsThisMonth,
+    billingCycleKey: state.billingCycleKey,
     monthKey: state.monthKey,
     chatMessagesToday: state.chatMessagesToday,
     chatDayKey: state.chatDayKey,
@@ -646,10 +725,16 @@ export async function getHistoryLimit() {
  */
 export async function activatePro(productId, durationDays = 30) {
   const state = await getSubscriptionState();
+  const now = new Date();
   state.tier = "pro";
   state.productId = productId;
-  state.purchaseDate = new Date().toISOString();
-  const expires = new Date();
+  state.purchaseDate = now.toISOString();
+
+  // Determine the anchor day (1-31) in UTC to lock in the billing cycle
+  state.purchaseAnchorDay = now.getUTCDate();
+  state.billingCycleKey = getBillingCycleKey(state.purchaseAnchorDay, now);
+
+  const expires = new Date(now);
   expires.setDate(expires.getDate() + durationDays);
   state.expiresAt = expires.toISOString();
   await db.set(STATE_KEY, state);
@@ -664,6 +749,9 @@ export async function deactivatePro() {
   state.tier = "free";
   state.expiresAt = null;
   state.productId = null;
+  // We keep purchaseAnchorDay and billingCycleKey untouched so
+  // if they resubscribe later in the same month, we have history.
+  // When they resubscribe, activatePro() will reset the anchor.
   await db.set(STATE_KEY, state);
 }
 

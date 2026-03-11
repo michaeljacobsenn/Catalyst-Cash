@@ -341,10 +341,13 @@ export default function InputForm({
       style={{
         display: "flex",
         flexDirection: "column",
+        alignItems: "center",
+        width: "100%",
         minHeight: "100%",
         flexShrink: 0,
       }}
     >
+      <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
       {/* ── SNAPSHOT ITEMS ── */}
       <div style={{ marginBottom: 20 }}>
         <Card
@@ -2140,6 +2143,7 @@ export default function InputForm({
         >
           <Zap size={20} strokeWidth={isTestMode ? 3 : 2} fill={isTestMode ? T.status.amber : "none"} />
         </button>
+      </div>
       </div>
     </div >
   );

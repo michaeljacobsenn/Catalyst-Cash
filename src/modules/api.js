@@ -285,6 +285,9 @@ export async function fetchGatingConfig() {
       gatingMode: data.gatingMode || "soft",
       minVersion: data.minVersion || "1.0.0",
     };
+    if (data.rotatingCategories) {
+      localStorage.setItem("ota_rotating_categories", JSON.stringify(data.rotatingCategories));
+    }
     _configFetchedAt = Date.now();
     log.info("config", "Remote gating config fetched", _cachedConfig);
     return _cachedConfig;

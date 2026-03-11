@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// DEBT PAYOFF SIMULATOR — Interactive "what-if" debt destroyer
+// DEBT PAYOFF SIMULATOR — Interactive debt payoff planner
 // ═══════════════════════════════════════════════════════════════
 import { useState, useMemo } from "react";
 import { T } from "../constants.js";
@@ -338,7 +338,7 @@ export default function DebtSimulator({ cards = [], financialConfig }) {
       {/* Extra Payment Slider */}
       <div style={{ marginBottom: 20, padding: 16, background: T.bg.elevated, borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle}` }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-          <Label style={{ margin: 0 }}>Extra Monthly Ammo</Label>
+          <Label style={{ margin: 0 }}>Extra Monthly Payment</Label>
           <Mono size={14} weight={800} color={T.accent.emerald}>
             +${extraPayment}/mo
           </Mono>

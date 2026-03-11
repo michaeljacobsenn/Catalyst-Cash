@@ -44,6 +44,7 @@ import {
   Baby,
   Dumbbell,
   Sparkles,
+  Lock,
 } from "lucide-react";
 import { T } from "../constants.js";
 import { Card } from "../ui.jsx";
@@ -150,7 +151,7 @@ function buildCSV(transactions) {
 // ═══════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
-export default function TransactionFeed({ onClose }) {
+export default function TransactionFeed({ onClose, proEnabled = false }) {
   const { cards } = useContext(PortfolioContext);
   const { financialConfig } = useSettings();
   
@@ -331,7 +332,8 @@ export default function TransactionFeed({ onClose }) {
 
   // ── Group by date ──
   const grouped = useMemo(() => {
-    const visible = filtered.slice(0, visibleCount);
+    const allowedList = proEnabled ? filtered : filtered.slice(0, 5);
+    const visible = allowedList.slice(0, visibleCount);
     const map = new Map();
     for (const t of visible) {
       const key = t.date;
@@ -430,12 +432,13 @@ export default function TransactionFeed({ onClose }) {
 
   // ── Infinite scroll ──
   const handleScroll = useCallback(() => {
+    if (!proEnabled) return;
     const el = scrollRef.current;
     if (!el) return;
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
       setVisibleCount(prev => Math.min(prev + 30, filtered.length));
     }
-  }, [filtered.length]);
+  }, [filtered.length, proEnabled]);
 
   // ── Export handlers ──
   const handleExportCSV = useCallback(async () => {
@@ -1372,8 +1375,49 @@ export default function TransactionFeed({ onClose }) {
               </div>
             ))}
 
+            {/* Pro Teaser Banner */}
+            {!proEnabled && filtered.length > 5 && (
+              <div style={{ padding: "8px 16px 24px" }}>
+                <Card
+                  style={{
+                    background: `linear-gradient(135deg, ${T.accent.primaryDim}, ${T.bg.surface})`,
+                    border: `1px solid ${T.accent.primary}40`,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    textAlign: "center",
+                    padding: 24,
+                    gap: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 24,
+                      background: T.accent.primary,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: `0 8px 16px ${T.accent.primary}40`,
+                    }}
+                  >
+                    <Lock size={24} color="#FFF" />
+                  </div>
+                  <div>
+                    <h4 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, margin: "0 0 6px 0" }}>
+                      Unlock Full Ledger
+                    </h4>
+                    <p style={{ fontSize: 13, color: T.text.secondary, margin: 0, lineHeight: 1.5 }}>
+                      You have {filtered.length - 5} more transactions hidden. Upgrade to Pro to search, filter, and export your entire financial history.
+                    </p>
+                  </div>
+                </Card>
+              </div>
+            )}
+
             {/* Load More */}
-            {visibleCount < filtered.length && (
+            {proEnabled && visibleCount < filtered.length && (
               <div style={{ padding: "16px", display: "flex", justifyContent: "center" }}>
                 <button
                   onClick={() => setVisibleCount(v => v + 50)}

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, memo } from "react";
+import React, { useState, useRef, useEffect, useCallback, memo, Suspense } from "react";
 import { MessageCircle, Send, Trash2, Sparkles, ArrowDown, Loader2, AlertTriangle, ArrowUpRight, ChevronRight, ChevronLeft } from "lucide-react";
 import { T } from "../constants.js";
 import { Card, Badge, Skeleton } from "../ui.jsx";
@@ -11,6 +11,8 @@ import { db } from "../utils.js";
 import { log } from "../logger.js";
 import { encryptAtRest, decryptAtRest, isEncrypted } from "../crypto.js";
 import { checkChatQuota, recordChatUsage, shouldShowGating, isGatingEnforced } from "../subscription.js";
+import ProBanner from "./ProBanner.jsx";
+const LazyProPaywall = React.lazy(() => import("./ProPaywall.jsx"));
 import { loadMemory, extractMemoryTags, addFacts, getMemoryBlock } from "../memory.js";
 
 import { useAudit } from "../contexts/AuditContext.jsx";
@@ -59,7 +61,7 @@ function pruneExpired(msgs) {
   return msgs.filter(m => (m.ts || 0) > cutoff);
 }
 
-// Suggested quick questions — rotated weekly
+// Suggested quick questions — rotated randomly
 const SUGGESTIONS = [
   { emoji: "💰", text: "Can I afford a $500 purchase this week?" },
   { emoji: "💳", text: "Which credit card should I pay off first?" },
@@ -69,17 +71,19 @@ const SUGGESTIONS = [
   { emoji: "📉", text: "When will I be debt-free at my current pace?" },
   { emoji: "💡", text: "Give me 3 quick wins to improve my score" },
   { emoji: "🎯", text: "Am I safe until my next paycheck?" },
+  { emoji: "🍔", text: "How much did I spend on dining out this month?" },
+  { emoji: "📋", text: "Are there any subscriptions I should cancel?" },
+  { emoji: "📈", text: "What's my current net worth?" },
+  { emoji: "💸", text: "Where did my money go last week?" },
+  { emoji: "🚗", text: "Can I comfortably afford a car payment right now?" },
+  { emoji: "🏠", text: "How much should I be saving for a house down payment?" },
+  { emoji: "✈️", text: "Am I saving enough for my upcoming vacation?" },
+  { emoji: "🛍️", text: "Did I overspend on shopping recently?" },
 ];
 
-// Get 4 suggestions deterministically based on week
-function getWeeklySuggestions() {
-  const now = new Date();
-  const weekSeed = Math.floor(now.getTime() / (7 * 24 * 60 * 60 * 1000));
-  const shuffled = [...SUGGESTIONS].sort((a, b) => {
-    const ha = ((weekSeed * 2654435761) ^ a.text.length) >>> 0;
-    const hb = ((weekSeed * 2654435761) ^ b.text.length) >>> 0;
-    return ha - hb;
-  });
+// Get 4 random suggestions from the pool
+function getRandomSuggestions() {
+  const shuffled = [...SUGGESTIONS].sort(() => 0.5 - Math.random());
   return shuffled.slice(0, 4);
 }
 
@@ -243,6 +247,7 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
   const [inputFocused, setInputFocused] = useState(false);
   const [sessionSummary, setSessionSummary] = useState(null); // Prior session memory
   const [memoryData, setMemoryData] = useState(null); // Persistent AI memory
+  const [showPaywall, setShowPaywall] = useState(false);
 
   const suggestionsScrollRef = useRef(null);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -443,7 +448,7 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
 
       // ── Quota gate — check BEFORE adding message to state ──
       if (isGatingEnforced() && !chatQuota.allowed) {
-        setError("You've reached your daily AskAI limit. Upgrade to Pro for 50 messages/day.");
+        setError("You've reached your daily AskAI limit. Upgrade to Pro for 50 messages/day!");
         haptic.medium();
         return;
       }
@@ -638,8 +643,7 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
       return () => clearTimeout(timer);
     }
   }, [initialPrompt, sendMessage, clearInitialPrompt]);
-
-  const suggestions = getWeeklySuggestions();
+  const [suggestions] = useState(() => getRandomSuggestions());
   const hasData = !!current?.parsed;
 
   return (
@@ -648,6 +652,7 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
       style={{
         display: "flex",
         flexDirection: "column",
+        alignItems: "center",
         height: "100%", // This ensures the container takes the full height of the snap page
         width: "100%",
         flex: 1,
@@ -656,45 +661,21 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
         position: "relative",
       }}
     >
+      <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
       <style>{`
             @keyframes chatBubbleIn { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
             .chat-bubble-in { animation: chatBubbleIn .3s cubic-bezier(.16,1,.3,1) both; }
         `}</style>
 
       {/* ── HEADER ACTIONS ONLY ── */}
-      <div style={{ position: "absolute", top: 12, left: 16, right: 16, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        {onBack ? (
-          <button
-            onClick={onBack}
-            aria-label="Go back"
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 17,
-              border: `1px solid ${T.border.subtle}`,
-              background: T.bg.glass,
-              backdropFilter: "blur(8px)",
-              WebkitBackdropFilter: "blur(8px)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              color: T.text.muted,
-              transition: "all .2s",
-              boxShadow: T.shadow.subtle,
-            }}
-          >
-            <ChevronLeft size={18} strokeWidth={2.5} />
-          </button>
-        ) : <div />}
-
+      <div style={{ position: "absolute", top: 12, left: 16, right: 16, zIndex: 10, display: "flex", justifyContent: "flex-start", alignItems: "center", pointerEvents: "none" }}>
         {messages.length > 0 && (
           <button
             onClick={clearChat}
-            aria-label="New chat"
+            aria-label="Clear chat"
             style={{
-              width: 34,
               height: 34,
+              padding: "0 14px",
               borderRadius: 17,
               border: `1px solid ${T.border.subtle}`,
               background: T.bg.glass,
@@ -703,21 +684,26 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              gap: 8,
               cursor: "pointer",
               color: T.text.muted,
               transition: "all .2s cubic-bezier(.16,1,.3,1)",
               boxShadow: T.shadow.subtle,
+              pointerEvents: "auto",
             }}
             onMouseOver={e => {
-              e.currentTarget.style.color = T.text.primary;
-              e.currentTarget.style.background = T.bg.elevated;
+              e.currentTarget.style.color = T.status.red;
+              e.currentTarget.style.border = `1px solid ${T.status.red}40`;
+              e.currentTarget.style.background = T.status.redDim;
             }}
             onMouseOut={e => {
               e.currentTarget.style.color = T.text.muted;
+              e.currentTarget.style.border = `1px solid ${T.border.subtle}`;
               e.currentTarget.style.background = T.bg.glass;
             }}
           >
-            <Sparkles size={14} strokeWidth={2.5} style={{ opacity: 0.8 }} />
+            <Trash2 size={14} strokeWidth={2.5} style={{ opacity: 0.8 }} />
+            <span style={{ fontSize: 13, fontWeight: 700 }}>Clear Chat</span>
           </button>
         )}
       </div>
@@ -790,22 +776,25 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
             </div>
             <h3
               style={{
-                fontSize: 18,
-                fontWeight: 800,
-                color: T.text.primary,
-                marginBottom: 4,
-                letterSpacing: "-0.01em",
+                fontSize: 24,
+                fontWeight: 900,
+                background: `linear-gradient(135deg, ${T.text.primary}, ${T.accent.primaryHover})`,
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                marginBottom: 6,
+                letterSpacing: "-0.02em",
               }}
             >
               Ask Anything
             </h3>
             <p
               style={{
-                fontSize: 12,
-                color: T.text.dim,
-                lineHeight: 1.4,
+                fontSize: 13,
+                color: T.text.secondary,
+                lineHeight: 1.5,
+                fontWeight: 500,
                 maxWidth: 240,
-                marginBottom: 8,
+                marginBottom: 12,
               }}
             >
               {hasData
@@ -842,18 +831,13 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
             {/* Elite Horizontally Scrolling Suggestion Chips */}
             <div style={{ position: "relative", width: "100%", margin: "0 -16px", padding: "0 16px" }}>
               <div
-                ref={suggestionsScrollRef}
-                onScroll={handleSuggestionsScroll}
                 className="scroll-area hide-scrollbar"
                 style={{
-                  display: "flex",
-                  flexDirection: "row",
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
                   gap: 8,
                   width: "100%",
-                  overflowX: "auto",
                   paddingBottom: 20,
-                  scrollSnapType: "x mandatory",
-                  WebkitOverflowScrolling: "touch",
                 }}
               >
                 {suggestions.map((s, i) => (
@@ -866,24 +850,23 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "flex-start",
-                    gap: 6,
-                    padding: "12px 16px",
-                    borderRadius: 20,
+                    justifyContent: "center",
+                    gap: 8,
+                    padding: "16px",
+                    borderRadius: 16,
                     border: `1px solid ${T.border.subtle}`,
                     background: T.bg.glass,
                     backdropFilter: "blur(12px)",
                     WebkitBackdropFilter: "blur(12px)",
                     color: T.text.primary,
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: 600,
                     cursor: "pointer",
                     textAlign: "left",
                     lineHeight: 1.3,
-                    flexShrink: 0,
-                    width: 145,
-                    height: 100,
-                    scrollSnapAlign: "center",
-                    boxShadow: T.shadow.card,
+                    width: "100%",
+                    minHeight: 100,
+                    boxShadow: T.shadow.subtle,
                     transition: "all .3s cubic-bezier(.16,1,.3,1)",
                     animation: `chatBubbleIn .5s cubic-bezier(.16,1,.3,1) ${i * 0.08}s both`,
                   }}
@@ -898,106 +881,7 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
               ))}
               </div>
               
-              {/* Premium Glassmorphic Scroll Arrow Indicator (Left) */}
-              <div
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  top: 0,
-                  bottom: 20, 
-                  width: 50,
-                  background: `linear-gradient(to left, transparent, ${T.bg.base})`,
-                  opacity: canScrollLeft ? 1 : 0,
-                  pointerEvents: "none", 
-                  transition: "opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "flex-start",
-                  paddingLeft: 8,
-                  zIndex: 2,
-                }}
-              >
-                <div
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (suggestionsScrollRef.current) {
-                      haptic.light();
-                      suggestionsScrollRef.current.scrollBy({ left: -200, behavior: 'smooth' });
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  className="hover-btn"
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 14,
-                    background: "rgba(255, 255, 255, 0.08)",
-                    backdropFilter: "blur(12px)",
-                    WebkitBackdropFilter: "blur(12px)",
-                    border: "1px solid rgba(255, 255, 255, 0.15)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-                    pointerEvents: "auto", 
-                    cursor: "pointer",
-                  }}
-                >
-                  <ChevronLeft size={16} color={T.text.primary} style={{ marginRight: 2 }} />
-                </div>
-              </div>
 
-              {/* Premium Glassmorphic Scroll Arrow Indicator (Right) */}
-              <div
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: 0,
-                  bottom: 20, // matches paddingBottom of container
-                  width: 50,
-                  background: `linear-gradient(to right, transparent, ${T.bg.base})`,
-                  opacity: canScrollRight ? 1 : 0,
-                  pointerEvents: "none", // Outer container ignores clicks to pass through to chips below
-                  transition: "opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "flex-end",
-                  paddingRight: 8,
-                  zIndex: 2,
-                }}
-              >
-                <div
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (suggestionsScrollRef.current) {
-                      haptic.light();
-                      suggestionsScrollRef.current.scrollBy({ left: 200, behavior: 'smooth' });
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  className="hover-btn"
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 14,
-                    background: "rgba(255, 255, 255, 0.08)",
-                    backdropFilter: "blur(12px)",
-                    WebkitBackdropFilter: "blur(12px)",
-                    border: "1px solid rgba(255, 255, 255, 0.15)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-                    animation: "pulseFloatX 2s infinite ease-in-out",
-                    pointerEvents: "auto", // Re-enable clicks exclusively for the circle
-                    cursor: "pointer",
-                  }}
-                >
-                  <ChevronRight size={16} color={T.text.primary} style={{ marginLeft: 2 }} />
-                </div>
-              </div>
             </div>
             {/* Removed the small informational text for a cleaner empty state (less clutter is better) */}
           </div>
@@ -1159,7 +1043,7 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
       <div
         style={{
           padding: "8px 12px",
-          paddingBottom: 12, // Nav clearance handled by snap-container padding
+          paddingBottom: 12,
           borderTop: `1px solid ${T.border.subtle}`,
           background: T.bg.glass,
           backdropFilter: "blur(16px)",
@@ -1285,20 +1169,54 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
         {/* Privacy & Provider info */}
         <div
           style={{
-            textAlign: "center",
-            marginTop: 6,
-            fontSize: 9,
+            display: "flex",
+            justifyContent: "center",
+            marginTop: 8,
+            fontSize: 10,
             color: T.text.dim,
             fontFamily: T.font.mono,
-            opacity: 0.8,
           }}
         >
-          {privacyMode
-            ? "🔒 Privacy Mode · Chats are not stored"
-            : chatQuota.limit !== Infinity
-              ? `${chatQuota.remaining} of ${chatQuota.limit} daily chats remaining`
-              : "Conversations auto-expire · We never see or store your chats"}
+          {privacyMode ? (
+            <span style={{ opacity: 0.8 }}>🔒 Privacy Mode · Chats are not stored</span>
+          ) : chatQuota.limit !== Infinity ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", width: 140, fontWeight: 600, color: chatQuota.remaining <= 3 ? T.status.red : T.text.secondary }}>
+                <span>{chatQuota.remaining} chats left</span>
+                <span style={{ opacity: 0.5 }}>{chatQuota.limit} limit</span>
+              </div>
+              <div style={{ width: 140, height: 4, background: T.border.subtle, borderRadius: 2, overflow: "hidden" }}>
+                <div style={{ 
+                  height: "100%", 
+                  width: `${(chatQuota.remaining / chatQuota.limit) * 100}%`, 
+                  background: chatQuota.remaining <= 3 ? T.status.red : T.accent.primary,
+                  borderRadius: 2,
+                  transition: "width 0.5s var(--spring-elastic), background 0.3s ease"
+                }} />
+              </div>
+            </div>
+          ) : (
+            <span style={{ opacity: 0.8 }}>Conversations auto-expire · We never store your chats</span>
+          )}
         </div>
+
+        {/* Pro upsell when quota is running low */}
+        {shouldShowGating() && chatQuota.remaining <= 3 && chatQuota.remaining > 0 && !proEnabled && (
+          <div style={{ marginTop: 8 }}>
+            <ProBanner
+              onUpgrade={() => setShowPaywall(true)}
+              label="⚡ Upgrade to Pro"
+              sublabel={`Only ${chatQuota.remaining} chats left today — Pro gives you 50/day`}
+            />
+          </div>
+        )}
+
+        {showPaywall && (
+          <Suspense fallback={null}>
+            <LazyProPaywall onClose={() => setShowPaywall(false)} />
+          </Suspense>
+        )}
+      </div>
       </div>
     </div>
   );

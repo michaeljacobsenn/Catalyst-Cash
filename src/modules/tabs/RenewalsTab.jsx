@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, memo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, memo, useCallback, Suspense } from "react";
 import { ChevronDown, ChevronUp, AlertTriangle, X, Plus, Check, CheckCircle2 } from "lucide-react";
 import { T, RENEWAL_CATEGORIES, formatInterval } from "../constants.js";
 import { fmt } from "../utils.js";
@@ -7,6 +7,9 @@ import { Card, Label, Badge, FormGroup, FormRow } from "../ui.jsx";
 import { Mono, EmptyState } from "../components.jsx";
 import SearchableSelect from "../SearchableSelect.jsx";
 import { haptic } from "../haptics.js";
+import { shouldShowGating } from "../subscription.js";
+import ProBanner from "./ProBanner.jsx";
+const LazyProPaywall = React.lazy(() => import("./ProPaywall.jsx"));
 
 // Interval options for dropdowns
 const WEEK_OPTIONS = Array.from({ length: 52 }, (_, i) => i + 1);
@@ -17,7 +20,227 @@ const DAY_OPTIONS = Array.from({ length: 90 }, (_, i) => i + 1);
 import { usePortfolio } from "../contexts/PortfolioContext.jsx";
 import { useAudit } from "../contexts/AuditContext.jsx";
 import { useSubscriptions } from "../useSubscriptions.js";
-import { Zap } from "lucide-react";
+import { Zap, ExternalLink } from "lucide-react";
+
+const CANCELLATION_LINKS = {
+  // ── Streaming Video ──
+  "netflix": "https://www.netflix.com/cancelplan",
+  "hulu": "https://secure.hulu.com/account",
+  "disney+": "https://www.disneyplus.com/account",
+  "disney plus": "https://www.disneyplus.com/account",
+  "max": "https://auth.max.com/subscription",
+  "hbo max": "https://auth.max.com/subscription",
+  "hbo": "https://auth.max.com/subscription",
+  "peacock": "https://www.peacocktv.com/account",
+  "paramount+": "https://www.paramountplus.com/account/",
+  "paramount plus": "https://www.paramountplus.com/account/",
+  "youtube premium": "https://www.youtube.com/paid_memberships",
+  "youtube tv": "https://tv.youtube.com/welcome/",
+  "youtube music": "https://www.youtube.com/paid_memberships",
+  "crunchyroll": "https://www.crunchyroll.com/account/subscription",
+  "funimation": "https://www.funimation.com/account/",
+  "espn+": "https://plus.espn.com/account",
+  "espn plus": "https://plus.espn.com/account",
+  "discovery+": "https://www.discoveryplus.com/account",
+  "amc+": "https://www.amcplus.com/account",
+  "starz": "https://www.starz.com/account",
+  "showtime": "https://www.sho.com/account",
+  "britbox": "https://www.britbox.com/account",
+  "mubi": "https://mubi.com/account",
+  "tubi": "https://tubitv.com/account",
+  "sling tv": "https://www.sling.com/account",
+  "sling": "https://www.sling.com/account",
+  "fubo": "https://www.fubo.tv/account",
+  "fubotv": "https://www.fubo.tv/account",
+  "philo": "https://www.philo.com/account",
+  "dazn": "https://www.dazn.com/account",
+
+  // ── Streaming Music & Audio ──
+  "spotify": "https://www.spotify.com/us/account/subscription/",
+  "apple music": "https://apps.apple.com/account/subscriptions",
+  "tidal": "https://account.tidal.com/subscription",
+  "pandora": "https://www.pandora.com/account/settings",
+  "amazon music": "https://www.amazon.com/music/settings",
+  "deezer": "https://www.deezer.com/account/subscription",
+  "sirius xm": "https://care.siriusxm.com/manage-subscription",
+  "siriusxm": "https://care.siriusxm.com/manage-subscription",
+  "audible": "https://www.audible.com/account/overview",
+
+  // ── Apple Services ──
+  "apple tv+": "https://apps.apple.com/account/subscriptions",
+  "apple tv": "https://apps.apple.com/account/subscriptions",
+  "icloud": "https://apps.apple.com/account/subscriptions",
+  "icloud+": "https://apps.apple.com/account/subscriptions",
+  "apple one": "https://apps.apple.com/account/subscriptions",
+  "apple arcade": "https://apps.apple.com/account/subscriptions",
+  "apple fitness": "https://apps.apple.com/account/subscriptions",
+  "apple news": "https://apps.apple.com/account/subscriptions",
+
+  // ── Amazon / Shopping ──
+  "amazon prime": "https://www.amazon.com/mc/pipe",
+  "prime video": "https://www.amazon.com/mc/pipe",
+  "prime": "https://www.amazon.com/mc/pipe",
+  "kindle unlimited": "https://www.amazon.com/kindle-dbs/ku/ku-central",
+  "kindle": "https://www.amazon.com/kindle-dbs/ku/ku-central",
+  "walmart+": "https://www.walmart.com/plus/account",
+  "walmart plus": "https://www.walmart.com/plus/account",
+  "costco": "https://www.costco.com/my-account/membership",
+  "sam's club": "https://www.samsclub.com/account/membership",
+  "instacart": "https://www.instacart.com/store/account/instacart-plus",
+  "instacart+": "https://www.instacart.com/store/account/instacart-plus",
+  "shipt": "https://shop.shipt.com/account/membership",
+
+  // ── Food Delivery ──
+  "doordash": "https://www.doordash.com/consumer/membership/",
+  "dashpass": "https://www.doordash.com/consumer/membership/",
+  "uber one": "https://account.uber.com/manage-membership",
+  "uber eats": "https://account.uber.com/manage-membership",
+  "grubhub": "https://www.grubhub.com/account/manage-membership",
+  "grubhub+": "https://www.grubhub.com/account/manage-membership",
+
+  // ── Meal Kits ──
+  "hellofresh": "https://www.hellofresh.com/my-account/plan",
+  "blue apron": "https://www.blueapron.com/account/details",
+  "home chef": "https://www.homechef.com/account",
+  "factor": "https://www.factor75.com/my-account/plan",
+  "factor75": "https://www.factor75.com/my-account/plan",
+  "daily harvest": "https://www.daily-harvest.com/account",
+  "freshly": "https://www.freshly.com/account",
+
+  // ── Fitness & Wellness ──
+  "planet fitness": "https://www.planetfitness.com/my-account/subscription",
+  "crunch fitness": "https://members.crunch.com/",
+  "crunch": "https://members.crunch.com/",
+  "equinox": "https://www.equinox.com/account",
+  "orangetheory": "https://www.orangetheory.com/en-us/member-portal",
+  "peloton": "https://members.onepeloton.com/settings/subscription",
+  "strava": "https://www.strava.com/account",
+  "alltrails": "https://www.alltrails.com/account",
+  "headspace": "https://www.headspace.com/subscriptions",
+  "calm": "https://www.calm.com/account",
+  "noom": "https://web.noom.com/account/subscription",
+  "weight watchers": "https://www.weightwatchers.com/us/account",
+  "ww": "https://www.weightwatchers.com/us/account",
+  "fitbit": "https://www.fitbit.com/settings/subscription",
+  "tonal": "https://www.tonal.com/account",
+  "beachbody": "https://www.beachbodyondemand.com/account",
+  "classpass": "https://classpass.com/account/membership",
+  "ymca": "https://www.ymca.org/",
+  "la fitness": "https://www.lafitness.com/Pages/MyAccount.aspx",
+  "anytime fitness": "https://www.anytimefitness.com/account/",
+  "24 hour fitness": "https://www.24hourfitness.com/myaccount/",
+  "lifetime fitness": "https://my.lifetime.life/account",
+  "gold's gym": "https://www.goldsgym.com/account",
+
+  // ── Productivity & Cloud Storage ──
+  "adobe": "https://account.adobe.com/plans",
+  "adobe creative cloud": "https://account.adobe.com/plans",
+  "canva": "https://www.canva.com/settings/billing",
+  "microsoft 365": "https://account.microsoft.com/services",
+  "microsoft": "https://account.microsoft.com/services",
+  "office 365": "https://account.microsoft.com/services",
+  "google one": "https://one.google.com/settings",
+  "google workspace": "https://workspace.google.com/dashboard",
+  "google storage": "https://one.google.com/settings",
+  "dropbox": "https://www.dropbox.com/account/plan",
+  "notion": "https://www.notion.so/my-account",
+  "evernote": "https://www.evernote.com/Settings.action",
+  "slack": "https://slack.com/plans",
+  "zoom": "https://us02web.zoom.us/account",
+  "grammarly": "https://account.grammarly.com/subscription",
+  "1password": "https://my.1password.com/settings/billing",
+  "lastpass": "https://lastpass.com/update_billing.php",
+  "dashlane": "https://app.dashlane.com/settings/subscription",
+  "figma": "https://www.figma.com/settings",
+  "github": "https://github.com/settings/billing",
+  "github copilot": "https://github.com/settings/copilot",
+  "chatgpt": "https://chat.openai.com/settings/subscription",
+  "openai": "https://platform.openai.com/settings/organization/billing",
+  "claude": "https://claude.ai/settings",
+  "midjourney": "https://www.midjourney.com/account",
+
+  // ── VPN & Security ──
+  "nordvpn": "https://my.nordaccount.com/dashboard/nordvpn/",
+  "expressvpn": "https://www.expressvpn.com/subscriptions",
+  "surfshark": "https://my.surfshark.com/subscription",
+  "protonvpn": "https://account.protonvpn.com/dashboard",
+  "proton": "https://account.proton.me/dashboard",
+  "norton": "https://my.norton.com/extspa/subscriptions",
+  "mcafee": "https://home.mcafee.com/root/subscription",
+  "malwarebytes": "https://my.malwarebytes.com/account/subscriptions",
+
+  // ── Gaming ──
+  "xbox game pass": "https://account.microsoft.com/services",
+  "xbox": "https://account.microsoft.com/services",
+  "playstation plus": "https://store.playstation.com/en-us/subscriptions",
+  "ps plus": "https://store.playstation.com/en-us/subscriptions",
+  "playstation": "https://store.playstation.com/en-us/subscriptions",
+  "nintendo switch online": "https://ec.nintendo.com/my/membership",
+  "nintendo": "https://ec.nintendo.com/my/membership",
+  "ea play": "https://myaccount.ea.com/cp-ui/subscriptions",
+  "geforce now": "https://www.nvidia.com/en-us/account/gfn/",
+
+  // ── News & Media ──
+  "wsj": "https://customercenter.wsj.com/manage-subscriptions",
+  "wall street journal": "https://customercenter.wsj.com/manage-subscriptions",
+  "nytimes": "https://myaccount.nytimes.com/seg/subscription",
+  "new york times": "https://myaccount.nytimes.com/seg/subscription",
+  "washington post": "https://www.washingtonpost.com/my-account/subscriptions/",
+  "the athletic": "https://www.nytimes.com/athletic/account/subscription",
+  "medium": "https://medium.com/me/settings/membership",
+  "scribd": "https://www.scribd.com/account-settings/subscription",
+  "linkedin": "https://www.linkedin.com/premium/cancel",
+  "linkedin premium": "https://www.linkedin.com/premium/cancel",
+  "substack": "https://substack.com/account/payment",
+
+  // ── Dating ──
+  "tinder": "https://account.gotinder.com/subscriptions",
+  "bumble": "https://bumble.com/en/get-started",
+  "hinge": "https://hingeapp.zendesk.com/hc/en-us/articles/360012065853",
+  "match": "https://www.match.com/account",
+
+  // ── Education ──
+  "duolingo": "https://www.duolingo.com/settings/subscription",
+  "masterclass": "https://www.masterclass.com/account/subscription",
+  "coursera": "https://www.coursera.org/account-settings",
+  "skillshare": "https://www.skillshare.com/settings/payments",
+  "brilliant": "https://brilliant.org/account/",
+  "blinkist": "https://www.blinkist.com/en/settings/subscription",
+
+  // ── Subscription Boxes ──
+  "barkbox": "https://www.barkbox.com/account",
+  "dollar shave club": "https://www.dollarshaveclub.com/your-account",
+  "birchbox": "https://www.birchbox.com/account",
+  "fabfitfun": "https://www.fabfitfun.com/account",
+  "stitch fix": "https://www.stitchfix.com/settings/account",
+  "ipsy": "https://www.ipsy.com/glambag/settings",
+
+  // ── Insurance & Utilities ──
+  "geico": "https://www.geico.com/my-account/",
+  "progressive": "https://account.progressive.com/access/login",
+  "state farm": "https://www.statefarm.com/customer-care",
+
+  // ── Communications ──
+  "ring": "https://account.ring.com/account/subscription",
+  "adt": "https://www.adt.com/myadt",
+  "simplisafe": "https://webapp.simplisafe.com/new/#/account",
+};
+
+// Build a universal fallback for any merchant not in the list
+function getCancelUrl(itemName) {
+  const nameLower = (itemName || "").toLowerCase().trim();
+  if (!nameLower) return null;
+  // 1. Exact match
+  if (CANCELLATION_LINKS[nameLower]) return CANCELLATION_LINKS[nameLower];
+  // 2. Partial match (e.g., "Netflix Standard" matches "netflix")
+  const partialMatch = Object.keys(CANCELLATION_LINKS).find(k => nameLower.includes(k));
+  if (partialMatch) return CANCELLATION_LINKS[partialMatch];
+  // 3. Reverse partial (e.g., "gym membership" matches "gym" key... but also "la fitness" matching)
+  const reverseMatch = Object.keys(CANCELLATION_LINKS).find(k => k.includes(nameLower));
+  if (reverseMatch) return CANCELLATION_LINKS[reverseMatch];
+  // 4. Universal fallback — Google search for cancellation instructions
+  return `https://www.google.com/search?q=how+to+cancel+${encodeURIComponent(itemName)}+subscription`;
+}
 
 export default memo(function RenewalsTab({ proEnabled }) {
   const { current } = useAudit();
@@ -38,6 +261,7 @@ export default memo(function RenewalsTab({ proEnabled }) {
   const [editing, setEditing] = useState(null); // index within user renewals
   const [editVal, setEditVal] = useState({});
   const [showAdd, setShowAdd] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
   const [addForm, setAddForm] = useState({
     name: "",
     amount: "",
@@ -285,10 +509,22 @@ export default memo(function RenewalsTab({ proEnabled }) {
       const current = (renewals || [])[renewalIndex];
       if (!current) return;
       if (!current.isCancelled) {
-        // Cancelling — confirm first
+        // Cancelling — confirm with projected savings
+        const amt = current.amount || 0;
+        const unit = (current.intervalUnit || "monthly").toLowerCase();
+        const interval = current.interval || 1;
+        let annualSavings = 0;
+        if (unit === "weekly" || unit === "week") annualSavings = (amt / interval) * 52;
+        else if (unit === "monthly" || unit === "month") annualSavings = (amt / interval) * 12;
+        else if (unit === "yearly" || unit === "year" || unit === "annual") annualSavings = amt / interval;
+        else if (unit === "daily" || unit === "day") annualSavings = (amt / interval) * 365;
+        else annualSavings = amt * 12; // default monthly
+        const savingsLine = annualSavings > 0
+          ? `\n\nYou'll save ~$${annualSavings.toFixed(0)}/year.`
+          : "";
         if (
           !window.confirm(
-            `Cancel "${itemName || current.name}"?\n\nThis will move it to Inactive & History. You can restore it later.`
+            `Cancel "${itemName || current.name}"?\n\nThis will move it to Inactive & History. You can restore it later.${savingsLine}`
           )
         )
           return;
@@ -433,7 +669,8 @@ export default memo(function RenewalsTab({ proEnabled }) {
   const { detected, dismissSuggestion } = useSubscriptions(renewals, proEnabled);
 
   return (
-    <div className="page-body stagger-container" style={{ paddingBottom: 0 }}>
+    <div className="page-body stagger-container" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+      <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
       {/* existing header & monthly total */}
       <div
         style={{
@@ -536,8 +773,8 @@ export default memo(function RenewalsTab({ proEnabled }) {
                 <ChevronDown size={14} color={T.text.muted} style={{ position: "absolute", right: 12 }} />
               </div>
             </div>
-            </div>
           </div>
+        </div>
       </div>
 
       {/* Monthly total */}
@@ -572,6 +809,22 @@ export default memo(function RenewalsTab({ proEnabled }) {
           {fmt(monthlyTotal / 4.33)}/wk · {fmt(monthlyTotal * 12)}/yr
         </Mono>
       </Card>
+
+      {/* Pro upsell for non-Pro users */}
+      {shouldShowGating() && !proEnabled && (
+        <div style={{ marginBottom: 16 }}>
+          <ProBanner
+            onUpgrade={() => setShowPaywall(true)}
+            label="⚡ Export & Auto-Detect"
+            sublabel="Pro unlocks CSV/PDF export and AI subscription detection"
+          />
+        </div>
+      )}
+      {showPaywall && (
+        <Suspense fallback={null}>
+          <LazyProPaywall onClose={() => setShowPaywall(false)} />
+        </Suspense>
+      )}
 
       {/* Detected Subscriptions (Pro Only) */}
       {proEnabled && detected && detected.length > 0 && (
@@ -846,6 +1099,9 @@ export default memo(function RenewalsTab({ proEnabled }) {
                 const itemKey = item.linkedCardId
                   ? `card-af-${item.linkedCardId}`
                   : `${item.name || "item"}-${item.nextDue || ""}-${item.amount || 0}-${i}`;
+                  
+                // Find matching cancellation link (exact → partial → universal fallback)
+                const cancelUrl = item.isCancelled || item.isExpired ? null : getCancelUrl(item.name);
 
                 return (
                   <div
@@ -1103,191 +1359,113 @@ export default memo(function RenewalsTab({ proEnabled }) {
                           minHeight: 30,
                         }}
                       >
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
                             <span
                               style={{
-                                fontSize: 12,
-                                fontWeight: 500,
+                                fontSize: 14,
+                                fontWeight: 700,
                                 color: item.isCancelled || item.isExpired ? T.text.muted : T.text.primary,
                                 textDecoration: item.isCancelled ? "line-through" : "none",
                               }}
                             >
                               {item.name}
                             </span>
-                            {item.isCardAF && (
-                              <Badge variant="gold" style={{ fontSize: 8, padding: "1px 5px" }}>
-                                AUTO
-                              </Badge>
-                            )}
-                            {item.isWaived && (
-                              <Badge
-                                variant="outline"
-                                style={{
-                                  fontSize: 8,
-                                  padding: "1px 5px",
-                                  color: T.status.green,
-                                  borderColor: `${T.status.green}40`,
-                                }}
-                              >
-                                WAIVED
-                              </Badge>
-                            )}
-                            {item.isCancelled && (
-                              <Badge
-                                variant="outline"
-                                style={{
-                                  fontSize: 8,
-                                  padding: "1px 5px",
-                                  color: T.text.muted,
-                                  borderColor: T.border.default,
-                                }}
-                              >
-                                CANCELLED
-                              </Badge>
-                            )}
-                            {item.isExpired && (
-                              <Badge
-                                variant="outline"
-                                style={{
-                                  fontSize: 8,
-                                  padding: "1px 5px",
-                                  color: T.text.muted,
-                                  borderColor: T.border.default,
-                                }}
-                              >
-                                EXPIRED
-                              </Badge>
-                            )}
+                            {item.isCardAF && <Badge variant="gold" style={{ fontSize: 8, padding: "2px 6px" }}>AUTO</Badge>}
+                            {item.isWaived && <Badge variant="outline" style={{ fontSize: 8, padding: "2px 6px", color: T.status.green, borderColor: `${T.status.green}40` }}>WAIVED</Badge>}
+                            {item.isCancelled && <Badge variant="outline" style={{ fontSize: 8, padding: "2px 6px", color: T.text.muted, borderColor: T.border.default }}>CANCELLED</Badge>}
+                            {item.isExpired && <Badge variant="outline" style={{ fontSize: 8, padding: "2px 6px", color: T.text.muted, borderColor: T.border.default }}>EXPIRED</Badge>}
                           </div>
-                          <div
-                            style={{ display: "flex", gap: 8, marginTop: 3, flexWrap: "wrap", alignItems: "center" }}
-                          >
-                            <Mono size={10} color={T.text.dim}>
+                          
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
+                            <Mono size={11} color={T.text.dim}>
                               {item.cadence || formatInterval(item.interval, item.intervalUnit)}
                             </Mono>
                             {item.chargedTo && (
-                              <Mono size={10} color={T.accent.primary}>
+                              <Mono size={11} color={T.accent.primary}>
                                 → {item.chargedTo.replace(/^(American Express|Barclays|Capital One|Chase|Citi|Discover) /, "")}
                               </Mono>
                             )}
                             {item.nextDue && (
-                              <Badge
-                                variant="outline"
-                                style={{
-                                  fontSize: 8,
-                                  padding: "1px 5px",
-                                  color: T.text.secondary,
-                                  borderColor: T.border.default,
-                                }}
-                              >
+                              <Badge variant="outline" style={{ fontSize: 9, padding: "1px 5px", color: T.text.secondary, borderColor: T.border.default }}>
                                 DUE {item.nextDue}
                               </Badge>
                             )}
-                            {item.cancelledAt && (
-                              <Mono size={9} color={T.text.muted}>
-                                Cancelled {item.cancelledAt}
-                              </Mono>
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                            {item.source && (
+                              <Badge variant="outline" style={{ fontSize: 10, color: T.text.muted }}>{item.source}</Badge>
                             )}
-                            {item.archivedAt && !item.cancelledAt && (
-                              <Mono size={9} color={T.text.muted}>
-                                Archived {item.archivedAt}
-                              </Mono>
+                            {item.isCardAF && (
+                              <span style={{ fontSize: 10, color: T.text.muted }}>Imported from Portfolio</span>
                             )}
-                            {item.source && !item.chargedTo && (
-                              <Mono size={10} color={T.text.muted}>
-                                {item.source}
-                              </Mono>
+                            {!item.isCardAF && !item.archivedAt && cancelUrl && (
+                              <a
+                                href={cancelUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  color: T.status.red,
+                                  textDecoration: "none",
+                                  background: `${T.status.red}10`,
+                                  padding: "3px 8px",
+                                  borderRadius: 4,
+                                  border: `1px solid ${T.status.red}20`,
+                                }}
+                              >
+                                {cancelUrl.includes("google.com/search") ? "How to Cancel" : "Cancel Plan"}
+                                <ExternalLink size={10} />
+                              </a>
                             )}
                           </div>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                          <Mono size={13} weight={700} color={cat.color}>
-                            {fmt(item.amount)}
-                          </Mono>
+
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                          <span style={{ fontSize: 16, fontWeight: 800, color: T.text.primary }}>
+                            ${(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                          
                           {!item.isCardAF && isUserRenewal && editing !== renewalIndex && (
-                            <>
-                              {!item.isExpired && (
-                                <button
-                                  onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      toggleCancel(renewalIndex, item.name);
-                                  }}
-                                  style={{
-                                    height: 36,
-                                    padding: "0 12px",
-                                    borderRadius: T.radius.md,
-                                    border: `1px solid ${item.isCancelled ? T.status.green + "40" : T.border.default}`,
-                                    background: item.isCancelled ? T.status.greenDim : T.bg.elevated,
-                                    color: item.isCancelled ? T.status.green : T.text.dim,
-                                    fontFamily: T.font.mono,
-                                    cursor: "pointer",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  {item.isCancelled ? "RESTORE" : "CANCEL"}
-                                </button>
-                              )}
+                            <div style={{ display: "flex", gap: 6 }}>
                               <button
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    startEdit(item, renewalIndex);
-                                }}
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEdit(item, renewalIndex); }}
                                 style={{
-                                  width: 36,
-                                  height: 36,
-                                  borderRadius: T.radius.md,
-                                  border: `1px solid ${T.border.default}`,
-                                  background: T.bg.elevated,
-                                  color: T.text.dim,
-                                  cursor: "pointer",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  fontSize: 13,
+                                  width: 28, height: 28, borderRadius: T.radius.sm,
+                                  background: T.bg.elevated, color: T.text.dim, border: `1px solid ${T.border.default}`,
+                                  display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 12
                                 }}
                               >
                                 ✎
                               </button>
                               <button
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    removeItem(renewalIndex, item.name);
-                                }}
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeItem(renewalIndex, item.name); }}
                                 style={{
-                                  width: 36,
-                                  height: 36,
-                                  borderRadius: T.radius.md,
-                                  border: "none",
-                                  background: T.status.redDim,
-                                  color: T.status.red,
-                                  cursor: "pointer",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
+                                  width: 28, height: 28, borderRadius: T.radius.sm, border: "none",
+                                  background: T.status.redDim, color: T.status.red,
+                                  display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer"
                                 }}
                               >
-                                <X size={13} />
+                                <X size={12} />
                               </button>
-                            </>
+                            </div>
                           )}
                         </div>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+              )}
             </div>
-          </Card>
-        ))
-      )}
-    </div>
-  );
+          );
+        })}
+      </div>
+    </Card>
+  ))
+)}
+</div>
+</div>
+);
 });

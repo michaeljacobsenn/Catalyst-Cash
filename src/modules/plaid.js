@@ -674,7 +674,11 @@ function extractLast4(card) {
 }
 
 function sameInstitution(a, b) {
-  return normText(a) === normText(b);
+  // Normalize both sides through the alias table so
+  // "Amex" matches "American Express", "Chase Bank" matches "Chase", etc.
+  const normA = normalizeInstitution(a) || a;
+  const normB = normalizeInstitution(b) || b;
+  return normText(normA) === normText(normB);
 }
 
 /**

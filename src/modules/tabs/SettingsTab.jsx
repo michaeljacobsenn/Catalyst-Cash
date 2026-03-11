@@ -765,6 +765,7 @@ export default function SettingsTab({
           flexDirection: "column",
         }}
       >
+        <div style={{ width: "100%", maxWidth: 768, margin: "0 auto", display: "flex", flexDirection: "column", flex: 1 }}>
         <div
           key={activeMenu || "root"}
           style={{
@@ -792,7 +793,7 @@ export default function SettingsTab({
                 <div style={{ background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}` }}>
                   {[
                     { id: "finance", label: "Financial Profile", icon: Target, color: T.accent.emerald, desc: "Region, housing, demographics" },
-                    { id: "ai", label: "AI & Persona", icon: Cpu, color: T.status.blue, desc: "Model routing & behavior" },
+                    { id: "ai", label: "Assistant Persona", icon: Cpu, color: T.status.blue, desc: "Model routing & behavior" },
                   ].map((item, i, arr) => (
                     <button
                       key={item.id}
@@ -2829,6 +2830,7 @@ export default function SettingsTab({
               </Suspense>
             )}
           </div>
+        </div>
         </div>
       </div>{" "}
       {/* close animation wrapper */}

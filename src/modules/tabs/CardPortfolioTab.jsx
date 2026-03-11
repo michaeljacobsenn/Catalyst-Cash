@@ -28,6 +28,7 @@ import {
   CheckCircle2,
   Trash2,
   ReceiptText,
+  Loader2,
 } from "lucide-react";
 import { T, ISSUER_COLORS } from "../constants.js";
 import { getIssuerCards, getPinnedForIssuer } from "../issuerCards.js";
@@ -72,6 +73,8 @@ function mergeUniqueById(existing = [], incoming = []) {
 import { usePortfolio, PortfolioContext } from "../contexts/PortfolioContext.jsx";
 import { useSettings } from "../contexts/SettingsContext.jsx";
 import { useAudit } from "../contexts/AuditContext.jsx";
+import { uploadToICloud } from "../cloudSync.js";
+import useDashboardData from "../dashboard/useDashboardData.js";
 
 export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled = false }) {
   const { current } = useAudit();
@@ -87,6 +90,9 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
 
   const { cardCatalog, marketPrices, setMarketPrices } = portfolioContext;
   const { financialConfig = {}, setFinancialConfig } = useSettings();
+
+  // Bring in unified master metrics globally calculated
+  const { portfolioMetrics } = useDashboardData();
 
   const demoOverrideContext = useMemo(() => {
     if (!isTest) return portfolioContext;
@@ -291,309 +297,107 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
     },
   ];
   const enabledInvestments = investmentSections.filter(s => s.enabled || (holdings[s.key] || []).length > 0);
-  const investTotalValue = useMemo(() => {
-    let total = 0;
-    Object.values(holdings)
-      .flat()
-      .forEach(h => {
-        const p = marketPrices?.[h?.symbol];
-        if (p?.price) total += p.price * (h.shares || 0);
-      });
-    (financialConfig?.plaidInvestments || []).forEach(pi => {
-      if (pi._plaidBalance) total += pi._plaidBalance;
-    });
-    return total;
-  }, [holdings, marketPrices, financialConfig?.plaidInvestments]);
-
-  const nonCardDebts = financialConfig?.nonCardDebts || [];
-  const totalDebtBalance = useMemo(() => nonCardDebts.reduce((s, d) => s + (d.balance || 0), 0), [nonCardDebts]);
-
-  // ── SAVINGS GOALS ──
-  const savingsGoals = financialConfig?.savingsGoals || [];
-
-  // ── OTHER ASSETS ──
-  const otherAssets = financialConfig?.otherAssets || [];
-  const totalOtherAssets = otherAssets.reduce((s, a) => s + (a.value || 0), 0);
-
-  const totalCash = useMemo(
-    () =>
-      bankAccounts.reduce((s, b) => s + (b._plaidBalance != null ? b._plaidBalance : 0), 0) +
-      savingsGoals.reduce((s, g) => s + (g.currentAmount || 0), 0),
-    [bankAccounts, savingsGoals]
-  );
-  const netWorth = totalCash + (investTotalValue || 0) + totalOtherAssets - totalDebtBalance;
+  // ── Unified Master Metrics (Vault Header Display) ──
+  const netWorth = portfolioMetrics?.netWorth || 0;
+  const totalCash = portfolioMetrics?.liquidCash || 0;
+  const totalDebtBalance = (portfolioMetrics?.totalDebtBalance || 0) + (portfolioMetrics?.ccDebt || 0);
+  const investTotalValue = portfolioMetrics?.totalInvestments || 0;
+  const totalOtherAssets = portfolioMetrics?.totalOtherAssets || 0;
 
   // ── CREDIT UTILIZATION WIDGET (Moved to separate module) ──
 
   const headerSection = (
     <>
-      <div style={{ paddingTop: 20, paddingBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          {/* Removed separate Total Accounts badge row to inline it with the breakdown below */}
-          {ENABLE_PLAID && (cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId)) && (
-            <div style={{ display: "flex", gap: 6 }}>
-              {onViewTransactions && (
-                <button
-                  onClick={() => {
-                    haptic.light();
-                    if (proEnabled) {
-                      onViewTransactions();
-                    } else {
-                      toast?.("Ledger requires Catalyst Cash Pro", "info");
-                    }
-                  }}
-                  className="hover-btn"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 5,
-                    padding: "5px 10px",
-                    borderRadius: 16,
-                    border: `1px solid ${T.accent.emerald}25`,
-                    background: `${T.accent.emerald}08`,
-                    color: T.accent.emerald,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    transition: "all .2s",
-                    position: "relative",
-                  }}
-                >
-                  <ReceiptText size={10} />
-                  Ledger
-                  {!proEnabled && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: -4,
-                        right: -4,
-                        fontSize: 7,
-                        fontWeight: 800,
-                        background: T.accent.primary,
-                        color: "#fff",
-                        padding: "1px 4px",
-                        borderRadius: 4,
-                        fontFamily: T.font.mono,
-                      }}
-                    >
-                      PRO
-                    </div>
-                  )}
-                </button>
-              )}
+      {/* ─── Premium Wealth Dashboard Hero ─── */}
+      <div style={{ paddingTop: 20, paddingBottom: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <h1 style={{ fontSize: 13, fontWeight: 700, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
+              Total Net Worth
+            </h1>
+            <div style={{ fontSize: 36, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.02em", textShadow: `0 2px 10px ${T.text.primary}20` }}>
+              {fmt(netWorth)}
+            </div>
+          </div>
+          
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => openSheet()}
+              className="hover-btn card-press"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                background: `linear-gradient(135deg, ${T.accent.primaryDim}, ${T.bg.elevated})`,
+                color: T.accent.primary,
+                border: `1px solid ${T.accent.primary}40`,
+                boxShadow: `0 2px 10px ${T.accent.primary}15`,
+                cursor: "pointer",
+                transition: "all .2s cubic-bezier(0.16, 1, 0.3, 1)",
+              }}
+              title="Add Account"
+            >
+              <Plus size={16} strokeWidth={2.5} color={T.accent.primary} />
+            </button>
+            {ENABLE_PLAID && (
               <button
-                onClick={handleRefreshPlaid}
-                disabled={plaidRefreshing}
-                className="hover-btn"
+                onClick={e => { haptic.medium(); handlePlaidConnect(e); }}
+                disabled={plaidLoading}
+                className="hover-btn card-press"
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 5,
-                  padding: "5px 10px",
-                  borderRadius: 16,
-                  border: `1px solid ${T.status.blue}25`,
-                  background: `${T.status.blue}08`,
-                  color: T.status.blue,
-                  fontSize: 10,
-                  fontWeight: 700,
-                  cursor: plaidRefreshing ? "wait" : "pointer",
-                  transition: "all .2s",
+                  justifyContent: "center",
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  background: T.bg.glass,
+                  border: `1px solid ${T.border.subtle}`,
+                  color: T.text.primary,
+                  cursor: plaidLoading ? "wait" : "pointer",
+                  opacity: plaidLoading ? 0.6 : 1,
+                  transition: "all .2s cubic-bezier(0.16, 1, 0.3, 1)",
                 }}
+                title="Plaid Sync"
               >
-                <RefreshCw size={10} className={plaidRefreshing ? "spin" : ""} />
-                {plaidRefreshing ? "Syncing…" : "Sync"}
+                {plaidLoading ? <Loader2 size={16} className="spin" color={T.text.primary} /> : <Link2 size={16} strokeWidth={2.5} color={T.text.primary} />}
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* Inline badges */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12, alignItems: "center" }}>
-          <Badge
-            variant="outline"
-            style={{
-              fontSize: 11,
-              padding: "4px 8px",
-              color: T.text.primary,
-              borderColor: T.border.default,
-              background: T.bg.elevated,
-              fontWeight: 800,
-              marginRight: 2, // Slight separation from breakdown
-            }}
-          >
-            {totalAccounts} Accounts
-          </Badge>
-          {cards.length > 0 && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                padding: "3px 8px",
-                borderRadius: 99,
-                background: `${T.accent.primary}10`,
-                border: `1px solid ${T.accent.primary}18`,
-              }}
-            >
-              <CreditCard size={9} color={T.accent.primary} />
-              <Mono size={9} weight={700} color={T.accent.primary}>
-                {cards.length} Card{cards.length !== 1 ? "s" : ""}
-              </Mono>
+        {/* Wealth Breakdown Cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+          <div style={{ background: `${T.accent.emerald}10`, border: `1px solid ${T.accent.emerald}20`, borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 4 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, color: T.accent.emerald }}>
+              <Landmark size={12} />
+              <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase" }}>Liquid Cash</span>
             </div>
-          )}
-          {checkingCount > 0 && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                padding: "3px 8px",
-                borderRadius: 99,
-                background: `${T.status.blue}10`,
-                border: `1px solid ${T.status.blue}18`,
-              }}
-            >
-              <Landmark size={9} color={T.status.blue} />
-              <Mono size={9} weight={700} color={T.status.blue}>
-                {checkingCount} Checking
-              </Mono>
+            <span style={{ fontSize: 16, fontWeight: 800, color: T.text.primary }}>{fmt(totalCash)}</span>
+          </div>
+
+          <div style={{ background: `${T.status.blue}10`, border: `1px solid ${T.status.blue}20`, borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 4 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, color: T.status.blue }}>
+              <TrendingUp size={12} />
+              <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase" }}>Investments</span>
             </div>
-          )}
-          {savingsCount > 0 && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                padding: "3px 8px",
-                borderRadius: 99,
-                background: `${T.accent.emerald}10`,
-                border: `1px solid ${T.accent.emerald}18`,
-              }}
-            >
-              <Landmark size={9} color={T.accent.emerald} />
-              <Mono size={9} weight={700} color={T.accent.emerald}>
-                {savingsCount} Saving{savingsCount !== 1 ? "s" : ""}
-              </Mono>
+            <span style={{ fontSize: 16, fontWeight: 800, color: T.text.primary }}>{fmt(investTotalValue + totalOtherAssets)}</span>
+          </div>
+
+          <div style={{ background: `${T.status.red}10`, border: `1px solid ${T.status.red}20`, borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 4 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, color: T.status.red }}>
+              <AlertTriangle size={12} />
+              <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase" }}>Liabilities</span>
             </div>
-          )}
-          {enabledInvestments.length > 0 && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                padding: "3px 8px",
-                borderRadius: 99,
-                background: `${T.accent.emerald}10`,
-                border: `1px solid ${T.accent.emerald}18`,
-              }}
-            >
-              <TrendingUp size={9} color={T.accent.emerald} />
-              <Mono size={9} weight={700} color={T.accent.emerald}>
-                {enabledInvestments.length} Inv.
-              </Mono>
-            </div>
-          )}
-          {nonCardDebts.length > 0 && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                padding: "3px 8px",
-                borderRadius: 99,
-                background: `${T.status.amber}10`,
-                border: `1px solid ${T.status.amber}18`,
-              }}
-            >
-              <AlertTriangle size={9} color={T.status.amber} />
-              <Mono size={9} weight={700} color={T.status.amber}>
-                {nonCardDebts.length} Debt{nonCardDebts.length !== 1 ? "s" : ""}
-              </Mono>
-            </div>
-          )}
-          {savingsGoals.length > 0 && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                padding: "3px 8px",
-                borderRadius: 99,
-                background: `${T.accent.primary}10`,
-                border: `1px solid ${T.accent.primary}18`,
-              }}
-            >
-              <Target size={9} color={T.accent.primary} />
-              <Mono size={9} weight={700} color={T.accent.primary}>
-                {savingsGoals.length} Goal{savingsGoals.length !== 1 ? "s" : ""}
-              </Mono>
-            </div>
-          )}
+            <span style={{ fontSize: 16, fontWeight: 800, color: T.text.primary }}>{fmt(-totalDebtBalance)}</span>
+          </div>
         </div>
       </div>
 
-      {/* Sleek Action Row */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <button
-          onClick={() => openSheet()}
-          className="hover-btn card-press"
-          style={{
-            flex: 1,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-            height: 34,
-            borderRadius: 99,
-            border: `1px solid ${T.accent.primary}40`,
-            background: `linear-gradient(135deg, ${T.accent.primaryDim}, ${T.bg.elevated})`,
-            color: T.accent.primary,
-            fontSize: 12,
-            fontWeight: 800,
-            cursor: "pointer",
-            boxShadow: `0 2px 10px ${T.accent.primary}15`,
-            transition: "all .3s cubic-bezier(0.16, 1, 0.3, 1)",
-          }}
-        >
-          <Plus size={12} strokeWidth={2.5} />
-          Add Account
-        </button>
-        {ENABLE_PLAID && (
-          <button
-            onClick={e => {
-              haptic.medium();
-              handlePlaidConnect(e);
-            }}
-            disabled={plaidLoading}
-            className="hover-btn card-press"
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              height: 34,
-              borderRadius: 99,
-              border: `1px solid ${T.border.subtle}`,
-              background: T.bg.glass,
-              backdropFilter: "blur(12px)",
-              color: T.text.primary,
-              fontSize: 12,
-              fontWeight: 800,
-              cursor: plaidLoading ? "wait" : "pointer",
-              opacity: plaidLoading ? 0.6 : 1,
-              transition: "all .3s cubic-bezier(0.16, 1, 0.3, 1)",
-            }}
-          >
-            {plaidLoading ? <Loader2 size={12} className="spin" /> : <Link2 size={12} strokeWidth={2.5} />}
-            {plaidLoading ? "Connecting…" : "Plaid Sync"}
-          </button>
-        )}
-      </div>
-
-      {/* ═══ Top Level Credit Health ═══ */}
+      {/* ─── Top Level Credit Health ─── */}
       <CreditUtilizationWidget />
 
       <div
@@ -602,34 +406,41 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
           justifyContent: "space-between",
           alignItems: "center",
           marginTop: 16,
-          marginBottom: 4,
+          marginBottom: 8,
           padding: "0 4px",
         }}
       >
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {onViewTransactions && (
+            <button
+              onClick={() => { haptic.light(); onViewTransactions(); }}
+              className="hover-btn"
+              style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 16, border: `1px solid ${T.accent.emerald}25`, background: `${T.accent.emerald}08`, color: T.accent.emerald, fontSize: 10, fontWeight: 700, cursor: "pointer", transition: "all .2s", position: "relative" }}
+            >
+              <ReceiptText size={10} /> Ledger
+              {!proEnabled && <div style={{ position: "absolute", top: -4, right: -4, fontSize: 7, fontWeight: 800, background: T.accent.primary, color: "#fff", padding: "1px 4px", borderRadius: 4, fontFamily: T.font.mono }}>PRO</div>}
+            </button>
+          )}
+          {ENABLE_PLAID && (cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId)) && (
+            <button
+              onClick={handleRefreshPlaid}
+              disabled={plaidRefreshing}
+              className="hover-btn"
+              style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 16, border: `1px solid ${T.status.blue}25`, background: `${T.status.blue}08`, color: T.status.blue, fontSize: 10, fontWeight: 700, cursor: plaidRefreshing ? "wait" : "pointer", transition: "all .2s" }}
+            >
+              <RefreshCw size={10} className={plaidRefreshing ? "spin" : ""} />
+              {plaidRefreshing ? "Syncing..." : "Sync Plaid"}
+            </button>
+          )}
+        </div>
+
         <button
           onClick={() => {
             const allCol = Object.values(collapsedSections).every(Boolean);
-            setCollapsedSections({
-              creditCards: !allCol,
-              bankAccounts: !allCol,
-              savingsAccounts: !allCol,
-              investments: !allCol,
-              debts: !allCol,
-              savingsGoals: !allCol,
-              otherAssets: !allCol,
-            });
+            setCollapsedSections({ creditCards: !allCol, bankAccounts: !allCol, savingsAccounts: !allCol, investments: !allCol, debts: !allCol, savingsGoals: !allCol, otherAssets: !allCol });
           }}
-          style={{
-            border: "none",
-            background: "transparent",
-            color: T.accent.primary,
-            fontSize: 12,
-            fontWeight: 700,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-          }}
+          className="hover-btn"
+          style={{ border: "none", background: "transparent", color: T.text.muted, fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
         >
           {Object.values(collapsedSections).every(Boolean) ? "Expand All" : "Collapse All"}
         </button>
@@ -674,7 +485,8 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
 
   return (
     <PortfolioContext.Provider value={demoOverrideContext}>
-      <div className="page-body stagger-container" style={{ paddingBottom: 60, display: "flex", flexDirection: "column", gap: 0 }}>
+      <div className="page-body stagger-container" style={{ paddingBottom: 60, display: "flex", flexDirection: "column", alignItems: "center", width: "100%", gap: 0 }}>
+        <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
         <style>{`
             @keyframes spin { 100% { transform: rotate(360deg); } }
             .spin { animation: spin 1s linear infinite; }
@@ -769,6 +581,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
         plaidError={plaidError}
         cardCatalog={cardCatalog}
       />
+      </div>
       </div>
     </PortfolioContext.Provider>
   );

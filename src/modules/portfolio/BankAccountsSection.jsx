@@ -78,7 +78,8 @@ export default function BankAccountsSection() {
                 style={{
                     padding: 0,
                     overflow: "hidden",
-                    borderLeft: `3px solid ${T.status.blue}`,
+                    border: `1px solid ${T.border.subtle}`,
+                    boxShadow: `0 8px 32px -12px ${T.status.blue}25`,
                 }}
             >
                 <div
@@ -174,7 +175,7 @@ export default function BankAccountsSection() {
                                             </div>
                                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                                 <Mono size={12} weight={700} color={T.status.blue}>
-                                                    {fmt(accts.reduce((sum, a) => sum + (a._plaidBalance || 0), 0))}
+                                                    {fmt(accts.reduce((sum, a) => sum + (a._plaidBalance != null ? a._plaidBalance : (parseFloat(a.balance) || 0)), 0))}
                                                 </Mono>
                                                 <ChevronDown
                                                     size={14}
@@ -227,7 +228,7 @@ export default function BankAccountsSection() {
                                                                         )}
                                                                     </div>
                                                                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                                                                        <Mono size={13} weight={800} color={acct._plaidBalance != null ? T.status.blue : T.text.muted}>{acct._plaidBalance != null ? fmt(acct._plaidBalance) : "—"}</Mono>
+                                                                        <Mono size={13} weight={800} color={acct._plaidBalance != null ? T.status.blue : T.text.muted}>{fmt(acct._plaidBalance != null ? acct._plaidBalance : (parseFloat(acct.balance) || 0))}</Mono>
                                                                         <button onClick={() => startEditBank(acct)} style={{ width: 28, height: 28, borderRadius: T.radius.md, border: "none", background: "transparent", color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} className="hover-btn"><Edit3 size={11} /></button>
                                                                     </div>
                                                                 </div>
@@ -255,7 +256,8 @@ export default function BankAccountsSection() {
                 style={{
                     padding: 0,
                     overflow: "hidden",
-                    borderLeft: `3px solid ${T.accent.emerald}`,
+                    border: `1px solid ${T.border.subtle}`,
+                    boxShadow: `0 8px 32px -12px ${T.accent.emerald}25`,
                 }}
             >
                 <div
@@ -351,7 +353,7 @@ export default function BankAccountsSection() {
                                             </div>
                                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                                 <Mono size={12} weight={700} color={T.accent.emerald}>
-                                                    {fmt(accts.reduce((sum, a) => sum + (a._plaidBalance || 0), 0))}
+                                                    {fmt(accts.reduce((sum, a) => sum + (a._plaidBalance != null ? a._plaidBalance : (parseFloat(a.balance) || 0)), 0))}
                                                 </Mono>
                                                 <ChevronDown
                                                     size={14}
@@ -404,7 +406,7 @@ export default function BankAccountsSection() {
                                                                         )}
                                                                     </div>
                                                                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                                                                        <Mono size={13} weight={800} color={acct._plaidBalance != null ? T.accent.emerald : T.text.muted}>{acct._plaidBalance != null ? fmt(acct._plaidBalance) : "—"}</Mono>
+                                                                        <Mono size={13} weight={800} color={acct._plaidBalance != null ? T.accent.emerald : T.text.muted}>{fmt(acct._plaidBalance != null ? acct._plaidBalance : (parseFloat(acct.balance) || 0))}</Mono>
                                                                         <button onClick={() => startEditBank(acct)} style={{ width: 28, height: 28, borderRadius: T.radius.md, border: "none", background: "transparent", color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} className="hover-btn"><Edit3 size={11} /></button>
                                                                     </div>
                                                                 </div>
