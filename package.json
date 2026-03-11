@@ -10,6 +10,7 @@
     "test": "vitest run",
     "sync": "npm run build && echo '\\n⏳ Syncing iOS project and installing Pods (this may take 1-2 mins)...' && npx cap copy ios && cd ios/App && pod install && cd ../.. && node scripts/inject-local-plugins.cjs",
     "ios": "npm run sync && npx cap open ios",
+    "sync:site": "node scripts/sync-site.cjs",
     "deploy": "npm run build && npx cap copy"
   },
   "dependencies": {
