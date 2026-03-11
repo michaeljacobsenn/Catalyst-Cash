@@ -780,6 +780,57 @@ export default {
       }
     }
 
+    // ─── Household Sync ──────────────────────────────────────
+    if (url.pathname.startsWith("/api/household/")) {
+      if (!env.DB) {
+        return new Response(JSON.stringify({ error: "DB not configured" }), {
+          status: 500,
+          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+        });
+      }
+      try {
+        if (url.pathname === "/api/household/sync" && request.method === "POST") {
+          const body = await request.json();
+          const { householdId, encryptedBlob } = body;
+          
+          if (!householdId || !encryptedBlob) {
+            return new Response(JSON.stringify({ error: "Missing householdId or encryptedBlob" }), { status: 400, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+          }
+          
+          await env.DB.prepare(
+            `INSERT INTO household_sync (household_id, encrypted_blob, last_updated_at) 
+             VALUES (?, ?, CURRENT_TIMESTAMP)
+             ON CONFLICT(household_id) DO UPDATE SET 
+             encrypted_blob=excluded.encrypted_blob, 
+             last_updated_at=CURRENT_TIMESTAMP`
+          ).bind(householdId, encryptedBlob).run();
+          
+          return new Response(JSON.stringify({ success: true }), {
+            status: 200,
+            headers: buildHeaders(cors, { "Content-Type": "application/json" })
+          });
+        } else if (url.pathname === "/api/household/sync" && request.method === "GET") {
+          const householdId = url.searchParams.get("householdId");
+          if (!householdId) {
+            return new Response(JSON.stringify({ error: "Missing householdId" }), { status: 400, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+          }
+          
+          const { results } = await env.DB.prepare("SELECT encrypted_blob, last_updated_at FROM household_sync WHERE household_id = ?").bind(householdId).all();
+          if (!results || results.length === 0) {
+            return new Response(JSON.stringify({ hasData: false }), { status: 200, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+          }
+          
+          return new Response(JSON.stringify({
+            hasData: true,
+            encryptedBlob: results[0].encrypted_blob,
+            lastUpdatedAt: results[0].last_updated_at
+          }), { status: 200, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+        }
+      } catch (err) {
+        return new Response(JSON.stringify({ error: "Household sync error", details: err.message }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+      }
+    }
+
     // ─── Market Data Proxy (GET /market?symbols=VTI,VOO) ─────
     if (url.pathname === "/market" && request.method === "GET") {
       const symbols = (url.searchParams.get("symbols") || "")

@@ -673,6 +673,58 @@ function CatalystCash() {
     return () => clearTimeout(iCloudSyncTimer.current);
   }, [ready, history, renewals, cards, financialConfig, personalRules, appleLinkedId, autoBackupInterval]);
 
+  // ═══════════════════════════════════════════════════════════════
+  // HOUSEHOLD CLOUD SYNC — Syncs to Cloudflare D1
+  // ═══════════════════════════════════════════════════════════════
+  const householdSyncTimer = useRef(null);
+  useEffect(() => {
+    if (!ready || autoBackupInterval === "off") return;
+
+    if (householdSyncTimer.current) clearTimeout(householdSyncTimer.current);
+
+    householdSyncTimer.current = setTimeout(async () => {
+      try {
+        const householdId = await db.get("household-id");
+        const passcode = await db.get("household-passcode");
+        if (!householdId || !passcode) return;
+
+        const { pushHouseholdSync } = await import("./modules/householdSync.js");
+        const success = await pushHouseholdSync(householdId, passcode);
+        if (success) {
+          console.log("[Household Sync] Auto-sync completed successfully.");
+        }
+      } catch (e) {
+        console.error("Household auto-sync error:", e);
+      }
+    }, 16000); // 16s debounce (offset slightly from iCloud)
+    
+    return () => clearTimeout(householdSyncTimer.current);
+  }, [ready, history, renewals, cards, financialConfig, personalRules, autoBackupInterval]);
+
+  useEffect(() => {
+    // Attempt pull on load
+    const doPull = async () => {
+      if (!ready || !online) return;
+      try {
+        const householdId = await db.get("household-id");
+        const passcode = await db.get("household-passcode");
+        if (!householdId || !passcode) return;
+        
+        const { pullHouseholdSync, mergeHouseholdState } = await import("./modules/householdSync.js");
+        const payload = await pullHouseholdSync(householdId, passcode);
+        if (payload) {
+          const merged = await mergeHouseholdState(payload);
+          if (merged) {
+             console.log("[Household Sync] New data merged. Refreshing app state.");
+             toast.success("Household data synced. Refreshing...");
+             setTimeout(() => window.location.reload(), 1500);
+          }
+        }
+      } catch(e) {}
+    }
+    doPull();
+  }, [ready, online]);
+
   // Sync privacy mode to global for components that read it outside React
   useEffect(() => {
     window.__privacyMode = privacyMode;

@@ -116,11 +116,17 @@ export default function SettingsTab({
   // Auth Plugins state management
   const [lastBackupTS, setLastBackupTS] = useState(null);
 
+  const [householdId, setHouseholdId] = useState("");
+  const [householdPasscode, setHouseholdPasscode] = useState("");
+  const [showHouseholdModal, setShowHouseholdModal] = useState(false);
+  const [hsInputId, setHsInputId] = useState("");
+  const [hsInputPasscode, setHsInputPasscode] = useState("");
+
   useEffect(() => {
     // Initialization now handled at root level in App.jsx
-    db.get("last-backup-ts")
-      .then(ts => setLastBackupTS(ts))
-      .catch(() => { });
+    db.get("last-backup-ts").then(ts => setLastBackupTS(ts)).catch(() => { });
+    db.get("household-id").then(val => { setHouseholdId(val || ""); setHsInputId(val || ""); }).catch(() => {});
+    db.get("household-passcode").then(val => { setHouseholdPasscode(val || ""); setHsInputPasscode(val || ""); }).catch(() => {});
   }, []);
 
   // ── Auto-backup scheduling ──────────────────────────────────
@@ -563,6 +569,84 @@ export default function SettingsTab({
         boxSizing: "border-box",
       }}
     >
+      {/* ── Household Sync Modal ── */}
+      {showHouseholdModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            background: "rgba(0,0,0,0.75)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 340,
+              background: T.bg.card,
+              borderRadius: T.radius.xl,
+              border: `1px solid ${T.border.subtle}`,
+              padding: 24,
+              boxShadow: "0 24px 48px rgba(0,0,0,0.6)",
+            }}
+          >
+            <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 8, color: T.text.primary }}>
+              Household Sync (E2EE)
+            </div>
+            <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.6, marginBottom: 16 }}>
+              Sync your finances with a partner across devices securely. Data is End-to-End Encrypted before leaving your device. Enter a shared ID and Passcode below, or clear them to disconnect.
+            </p>
+            <form onSubmit={async (e) => { 
+                e.preventDefault(); 
+                const nid = hsInputId.trim();
+                const np = hsInputPasscode.trim();
+                await db.set("household-id", nid);
+                await db.set("household-passcode", np);
+                setHouseholdId(nid);
+                setHouseholdPasscode(np);
+                setShowHouseholdModal(false);
+                if (window.toast) window.toast.success(nid ? "Household linked. Initializing sync..." : "Household disconnected.");
+                if (nid) setTimeout(() => window.location.reload(), 1500); // Trigger full app reboot to pull initial state
+            }}>
+              <Label>Household ID (E.g. SmithFamily)</Label>
+              <input
+                type="text"
+                value={hsInputId}
+                onChange={e => setHsInputId(e.target.value)}
+                style={{ width: "100%", padding: "10px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.base, color: T.text.primary, fontSize: 14, marginBottom: 12, outline: "none" }}
+              />
+              <Label>Shared Passcode (Encryption Key)</Label>
+              <input
+                type="password"
+                value={hsInputPasscode}
+                onChange={e => setHsInputPasscode(e.target.value)}
+                style={{ width: "100%", padding: "10px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.base, color: T.text.primary, fontSize: 14, marginBottom: 20, outline: "none" }}
+              />
+              <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowHouseholdModal(false)}
+                  style={{ flex: 1, padding: "12px 0", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.secondary, fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{ flex: 1, padding: "12px 0", borderRadius: T.radius.md, border: "none", background: T.accent.primary, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Save & Sync
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {/* ── Passphrase Modal ── */}
       {ppModal.open && (
         <div
@@ -1813,6 +1897,45 @@ export default function SettingsTab({
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* NEW HOUSEHOLD SYNC SECTION */}
+              <div style={{ padding: "16px 14px", background: householdId ? T.accent.primaryDim : T.bg.elevated, borderRadius: T.radius.md, border: `1px solid ${householdId ? T.accent.primary + '30' : T.border.default}`, marginBottom: 20 }}>
+                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                       <div
+                         style={{
+                           width: 32,
+                           height: 32,
+                           borderRadius: 16,
+                           background: householdId ? T.accent.primary : T.bg.base,
+                           border: `1px solid ${householdId ? "transparent" : T.border.default}`,
+                           display: "flex",
+                           alignItems: "center",
+                           justifyContent: "center",
+                           flexShrink: 0
+                         }}
+                       >
+                         <Cloud size={16} color={householdId ? "#fff" : T.text.muted} />
+                       </div>
+                       <div>
+                         <span style={{ fontSize: 13, fontWeight: 700, color: householdId ? T.accent.primary : T.text.primary, display: "flex", alignItems: "center", gap: 6 }}>
+                            Household Cloud {householdId && <CheckCircle size={12} color={T.accent.primary} />}
+                         </span>
+                         <p style={{ fontSize: 11, color: T.text.secondary, marginTop: 4, lineHeight: 1.4 }}>
+                           {householdId 
+                             ? `Linked as: ${householdId}` 
+                             : "End-to-End Encrypted Cloud Sync"}
+                         </p>
+                       </div>
+                    </div>
+                    <button 
+                       onClick={() => setShowHouseholdModal(true)}
+                       style={{ padding: "8px 14px", background: householdId ? "none" : T.accent.primary, border: householdId ? `1px solid ${T.accent.primary}50` : "none", color: householdId ? T.accent.primary : "#fff", borderRadius: T.radius.sm, fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}
+                    >
+                       {householdId ? "Manage" : "Setup"}
+                    </button>
+                 </div>
               </div>
 
               {/* Status banner */}
