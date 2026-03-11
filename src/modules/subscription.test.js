@@ -73,8 +73,8 @@ describe("IAP Constants", () => {
   });
 
   it("has display pricing", () => {
-    expect(IAP_PRICING.monthly.price).toBe("$8.99");
-    expect(IAP_PRICING.yearly.price).toBe("$69.99");
+    expect(IAP_PRICING.monthly.price).toBe("$9.99");
+    expect(IAP_PRICING.yearly.price).toBe("$89.99");
     expect(IAP_PRICING.yearly.savings).toBeTruthy();
   });
 });

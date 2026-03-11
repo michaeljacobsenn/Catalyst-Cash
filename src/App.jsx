@@ -671,6 +671,11 @@ function CatalystCash() {
     return () => clearTimeout(iCloudSyncTimer.current);
   }, [ready, history, renewals, cards, financialConfig, personalRules, appleLinkedId, autoBackupInterval]);
 
+  // Sync privacy mode to global for components that read it outside React
+  useEffect(() => {
+    window.__privacyMode = privacyMode;
+  }, [privacyMode]);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
   }, [tab]);
@@ -1645,11 +1650,8 @@ function CatalystCash() {
         overflow: "hidden",
       }}
     >
-      {(() => {
-        window.__privacyMode = privacyMode;
-        return null;
-      })()}
       <GlobalStyles />
+      {/* Privacy mode sync — moved to useEffect in CatalystCash body */}
       {showAiConsent && (
         <div
           style={{
