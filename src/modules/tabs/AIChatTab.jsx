@@ -237,6 +237,7 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
   const { apiKey, aiProvider, aiModel, financialConfig, persona, personalRules } = useSettings();
   const { cards, renewals } = usePortfolio();
   const { privacyMode } = useSecurity();
+  const { navState, clearNavState } = useNavigation();
 
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -443,7 +444,7 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
 
   // ── Send message ──
   const sendMessage = useCallback(
-    async text => {
+    async (text, overrideSystemPrompt = null) => {
       if (!text?.trim() || isStreamingRef.current) return;
 
       // ── Quota gate — check BEFORE adding message to state ──
@@ -491,7 +492,7 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
 
       // Build system prompt with full financial context + persistent memory
       const memBlock = memoryData ? getMemoryBlock(memoryData) : "";
-      const sysPrompt = getChatSystemPrompt(
+      const sysPrompt = overrideSystemPrompt || getChatSystemPrompt(
         current,
         financialConfig,
         cards,
@@ -643,6 +644,37 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
       return () => clearTimeout(timer);
     }
   }, [initialPrompt, sendMessage, clearInitialPrompt]);
+
+  // ── Auto-send Bill Negotiation prompt ──
+  useEffect(() => {
+    if (navState?.negotiateBill && !initialPromptSent.current && !isStreamingRef.current) {
+      initialPromptSent.current = true;
+      const { merchant, amount, tactic } = navState.negotiateBill;
+      
+      const userMessage = `Draft a negotiation script to lower my $${amount} monthly bill with ${merchant}.`;
+      
+      const negotiateSysPrompt = `You are an expert consumer advocate and bill negotiator. 
+The user wants to negotiate their $${amount} monthly bill with ${merchant}.
+The known winning tactic for ${merchant} is: "${tactic}"
+
+Draft a clear, step-by-step phone script for the user to use when calling ${merchant}. 
+Include:
+1. The exact number to call or department to ask for (e.g. Retention, Cancellation).
+2. The opening statement (what to explicitly say to start the negotiation).
+3. The specific counter-offer or promotion to demand.
+4. What to say if they say "No".
+
+Format this with markdown. Be punchy, highly confident, and strictly practical. Do NOT talk about budgeting or tracking, ONLY the script. Give them the exact words.`;
+
+      const timer = setTimeout(() => {
+        sendMessage(userMessage, negotiateSysPrompt);
+        clearNavState();
+        initialPromptSent.current = false;
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [navState, sendMessage, clearNavState]);
+
   const [suggestions] = useState(() => getRandomSuggestions());
   const hasData = !!current?.parsed;
 

@@ -20,8 +20,6 @@ export default defineConfig({
   base: "/",
   build: {
     outDir: "dist",
-    // Disable module preload polyfill — not needed in Capacitor WebView
-    modulePreload: { polyfill: false },
     rollupOptions: {
       output: {
         manualChunks(id) {

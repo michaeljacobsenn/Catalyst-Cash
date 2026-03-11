@@ -20,7 +20,9 @@ const DAY_OPTIONS = Array.from({ length: 90 }, (_, i) => i + 1);
 import { usePortfolio } from "../contexts/PortfolioContext.jsx";
 import { useAudit } from "../contexts/AuditContext.jsx";
 import { useSubscriptions } from "../useSubscriptions.js";
-import { Zap, ExternalLink } from "lucide-react";
+import { Zap, ExternalLink, Bot } from "lucide-react";
+import { getNegotiableMerchant } from "../negotiation.js";
+import { useNavigation } from "../contexts/NavigationContext.jsx";
 
 const CANCELLATION_LINKS = {
   // ── Streaming Video ──
@@ -245,6 +247,7 @@ function getCancelUrl(itemName) {
 export default memo(function RenewalsTab({ proEnabled }) {
   const { current } = useAudit();
   const portfolioContext = usePortfolio();
+  const { navTo } = useNavigation();
   const isDemo = !!current?.isTest;
 
   // Demo mode: use local state so cancel/restore/delete actually work
@@ -1102,6 +1105,7 @@ export default memo(function RenewalsTab({ proEnabled }) {
                   
                 // Find matching cancellation link (exact → partial → universal fallback)
                 const cancelUrl = item.isCancelled || item.isExpired ? null : getCancelUrl(item.name);
+                const negotiableMerchant = item.isCancelled || item.isExpired || item.isCardAF ? null : getNegotiableMerchant(item.name);
 
                 return (
                   <div
@@ -1422,6 +1426,43 @@ export default memo(function RenewalsTab({ proEnabled }) {
                                 {cancelUrl.includes("google.com/search") ? "How to Cancel" : "Cancel Plan"}
                                 <ExternalLink size={10} />
                               </a>
+                            )}
+                            {negotiableMerchant && (
+                               <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (shouldShowGating(proEnabled)) {
+                                    if (typeof haptic !== "undefined") haptic.selection();
+                                    setShowPaywall(true);
+                                    return;
+                                  }
+                                  if (typeof haptic !== "undefined") haptic.selection();
+                                  navTo("chat", { 
+                                    negotiateBill: { 
+                                      merchant: negotiableMerchant.merchant, 
+                                      amount: item.amount,
+                                      tactic: negotiableMerchant.tactic
+                                    } 
+                                  });
+                                }}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  fontSize: 11,
+                                  fontWeight: 800,
+                                  color: T.accent.primary,
+                                  background: T.accent.primaryDim,
+                                  border: `1px solid ${T.accent.primary}40`,
+                                  padding: "3px 8px",
+                                  borderRadius: 4,
+                                  cursor: "pointer"
+                                }}
+                              >
+                                <Bot size={11} />
+                                AI Negotiate
+                              </button>
                             )}
                           </div>
                         </div>
