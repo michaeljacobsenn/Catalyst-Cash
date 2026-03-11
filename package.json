@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && cp -r site/* dist/",
     "preview": "vite preview",
     "test": "vitest run",
     "sync": "npm run build && echo '\\n⏳ Syncing iOS project and installing Pods (this may take 1-2 mins)...' && npx cap copy ios && cd ios/App && pod install && cd ../.. && node scripts/inject-local-plugins.cjs",

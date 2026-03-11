@@ -46,7 +46,7 @@ function updateSiteHtml(filePath) {
   content = content.replace(/<li>\d+ AskAI chats per day<\/li>/g, `<li>${freeChats} AskAI chats per day</li>`);
   content = content.replace(/<li>\d+ Bank Snapshots? \(Manual Plaid sync\)<\/li>/g, `<li>${freePlaid} Bank Snapshot${parseInt(freePlaid) > 1 ? "s" : ""} (Manual Plaid sync)</li>`);
   
-  content = content.replace(/<li>\d+ audits\/month \(1\/day\) &amp; \d+ AskAI chats\/day<\/li>/g, `<li>${proAudits} audits/month (1/day) &amp; ${proChats} AskAI chats/day</li>`);
+  content = content.replace(/<li>\d+ audits\/month \(1\/day\) &amp; \d+ AskAI chats\/day<\/li>/g, `<li>${proAudits} audits/month &amp; ${proChats} AskAI chats/day</li>`);
   content = content.replace(/<li>\d+ audits\/month & \d+ AskAI chats\/day<\/li>/g, `<li>${proAudits} audits/month & ${proChats} AskAI chats/day</li>`);
 
   // Compare.html specific replaces
