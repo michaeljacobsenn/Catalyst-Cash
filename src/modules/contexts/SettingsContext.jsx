@@ -76,7 +76,7 @@ export const DEFAULT_FINANCIAL_CONFIG = {
   isContractor: false,
   homeEquity: 0,
   vehicleValue: 0,
-  otherAssets: 0,
+  otherAssets: [],
   otherAssetsLabel: "",
   insuranceDeductibles: [],
   bigTicketItems: [],

@@ -343,8 +343,6 @@ export default function InputForm({
         flexDirection: "column",
         alignItems: "center",
         width: "100%",
-        minHeight: "100%",
-        flexShrink: 0,
       }}
     >
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>

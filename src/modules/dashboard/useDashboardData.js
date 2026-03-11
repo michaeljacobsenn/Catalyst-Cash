@@ -131,7 +131,8 @@ export default function useDashboardData() {
 
     // Credit card balances are liabilities — include in net worth
     const ccDebt = cards.reduce((s, c) => {
-      if ((c.type === "credit" || !c.type) && c.balance > 0) return s + c.balance;
+      const bal = parseFloat(c._plaidBalance ?? c.balance) || 0;
+      if ((c.type === "credit" || !c.type) && bal > 0) return s + bal;
       return s;
     }, 0);
 

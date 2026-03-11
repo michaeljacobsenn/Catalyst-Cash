@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { AlertTriangle, Target, Wallet, ChevronDown, ChevronUp, Edit3, Trash2, Check, Plus } from "lucide-react";
+import { AlertTriangle, Target, Wallet, ChevronDown, ChevronUp, Edit3, Trash2, Check, Plus, Link2, TrendingUp, TrendingDown } from "lucide-react";
 import { Card, Badge } from "../ui.jsx";
 import { Mono } from "../components.jsx";
 import { T } from "../constants.js";
@@ -23,6 +23,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
             balance: String(debt.balance || ""),
             apr: String(debt.apr || ""),
             minPayment: String(debt.minPayment || ""),
+            linkedAssetId: debt.linkedAssetId || "",
         });
     };
     const saveEditDebt = i => {
@@ -34,6 +35,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
             balance: parseFloat(editDebtForm.balance) || 0,
             apr: parseFloat(editDebtForm.apr) || 0,
             minPayment: parseFloat(editDebtForm.minPayment) || 0,
+            linkedAssetId: editDebtForm.linkedAssetId || null,
         };
         setFinancialConfig({ ...financialConfig, nonCardDebts: arr });
         setEditingDebt(null);
@@ -446,122 +448,177 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                         >
                                             <div style={{ padding: "14px 16px" }}>
                                                 {editingAssets ? (
-                                                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                                                        <input
-                                                            value={asset.name || ""}
-                                                            onChange={e => updateAsset(i, "name", e.target.value)}
-                                                            placeholder="e.g. Vehicle, Property"
-                                                            style={{
-                                                                flex: 1,
-                                                                padding: "8px 10px",
-                                                                borderRadius: T.radius.sm,
-                                                                border: `1px solid ${T.border.default}`,
-                                                                background: T.bg.elevated,
-                                                                color: T.text.primary,
-                                                                fontSize: 12,
-                                                            }}
-                                                        />
-                                                        <div style={{ position: "relative", width: 100, flexShrink: 0 }}>
-                                                            <span
-                                                                style={{
-                                                                    position: "absolute",
-                                                                    left: 8,
-                                                                    top: "50%",
-                                                                    transform: "translateY(-50%)",
-                                                                    color: T.text.dim,
-                                                                    fontSize: 11,
-                                                                    fontWeight: 600,
-                                                                }}
-                                                            >
-                                                                $
-                                                            </span>
+                                                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                                                             <input
-                                                                type="number"
-                                                                inputMode="decimal"
-                                                                value={asset.value || ""}
-                                                                onChange={e => updateAsset(i, "value", parseFloat(e.target.value) || 0)}
-                                                                placeholder="Value"
+                                                                value={asset.name || ""}
+                                                                onChange={e => updateAsset(i, "name", e.target.value)}
+                                                                placeholder="e.g. Vehicle, Property"
                                                                 style={{
-                                                                    width: "100%",
-                                                                    padding: "8px 8px 8px 20px",
+                                                                    flex: 1,
+                                                                    padding: "8px 10px",
                                                                     borderRadius: T.radius.sm,
                                                                     border: `1px solid ${T.border.default}`,
                                                                     background: T.bg.elevated,
                                                                     color: T.text.primary,
-                                                                    fontSize: 11,
+                                                                    fontSize: 12,
                                                                 }}
                                                             />
-                                                        </div>
-                                                        <button
-                                                            onClick={() => updateAsset(i, "liquid", !asset.liquid)}
-                                                            title={asset.liquid ? "Liquid" : "Illiquid"}
-                                                            style={{
-                                                                width: 32,
-                                                                height: 32,
-                                                                borderRadius: T.radius.sm,
-                                                                border: `1px solid ${asset.liquid ? T.accent.emerald : T.border.default}`,
-                                                                background: asset.liquid ? `${T.accent.emerald}15` : T.bg.elevated,
-                                                                color: asset.liquid ? T.accent.emerald : T.text.muted,
-                                                                cursor: "pointer",
-                                                                display: "flex",
-                                                                alignItems: "center",
-                                                                justifyContent: "center",
-                                                                fontSize: 12,
-                                                                flexShrink: 0,
-                                                            }}
-                                                        >
-                                                            {asset.liquid ? "💧" : "🔒"}
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                            <span style={{ fontSize: 13, fontWeight: 600, color: T.text.primary }}>
-                                                                {asset.name || "Unnamed"}
-                                                            </span>
-                                                            <Badge
-                                                                variant="outline"
-                                                                style={{
-                                                                    fontSize: 8,
-                                                                    padding: "1px 5px",
-                                                                    color: asset.liquid ? T.accent.emerald : T.text.dim,
-                                                                    borderColor: asset.liquid ? `${T.accent.emerald}40` : T.border.default,
-                                                                }}
-                                                            >
-                                                                {asset.liquid ? "LIQUID" : "ILLIQUID"}
-                                                            </Badge>
-                                                        </div>
-                                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                            <Mono size={13} weight={700} color={T.accent.copper}>
-                                                                {fmt(asset.value || 0)}
-                                                            </Mono>
-                                                            {editingAssets && (
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.preventDefault();
-                                                                        e.stopPropagation();
-                                                                        if (window.confirm(`Delete "${asset.name}"?`)) removeAsset(i);
-                                                                    }}
+                                                            <div style={{ position: "relative", width: 100, flexShrink: 0 }}>
+                                                                <span
                                                                     style={{
-                                                                        width: 28,
-                                                                        height: 28,
-                                                                        borderRadius: T.radius.md,
-                                                                        border: "none",
-                                                                        background: "transparent",
-                                                                        color: T.status.red,
-                                                                        cursor: "pointer",
-                                                                        display: "flex",
-                                                                        alignItems: "center",
-                                                                        justifyContent: "center",
-                                                                        marginLeft: 4,
+                                                                        position: "absolute",
+                                                                        left: 8,
+                                                                        top: "50%",
+                                                                        transform: "translateY(-50%)",
+                                                                        color: T.text.dim,
+                                                                        fontSize: 11,
+                                                                        fontWeight: 600,
                                                                     }}
                                                                 >
-                                                                    <Trash2 size={13} />
-                                                                </button>
-                                                            )}
+                                                                    $
+                                                                </span>
+                                                                <input
+                                                                    type="number"
+                                                                    inputMode="decimal"
+                                                                    value={asset.value || ""}
+                                                                    onChange={e => updateAsset(i, "value", parseFloat(e.target.value) || 0)}
+                                                                    placeholder="Value"
+                                                                    style={{
+                                                                        width: "100%",
+                                                                        padding: "8px 8px 8px 20px",
+                                                                        borderRadius: T.radius.sm,
+                                                                        border: `1px solid ${T.border.default}`,
+                                                                        background: T.bg.elevated,
+                                                                        color: T.text.primary,
+                                                                        fontSize: 11,
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                            <button
+                                                                onClick={() => updateAsset(i, "liquid", !asset.liquid)}
+                                                                title={asset.liquid ? "Liquid" : "Illiquid"}
+                                                                style={{
+                                                                    width: 32,
+                                                                    height: 32,
+                                                                    borderRadius: T.radius.sm,
+                                                                    border: `1px solid ${asset.liquid ? T.accent.emerald : T.border.default}`,
+                                                                    background: asset.liquid ? `${T.accent.emerald}15` : T.bg.elevated,
+                                                                    color: asset.liquid ? T.accent.emerald : T.text.muted,
+                                                                    cursor: "pointer",
+                                                                    display: "flex",
+                                                                    alignItems: "center",
+                                                                    justifyContent: "center",
+                                                                    fontSize: 12,
+                                                                    flexShrink: 0,
+                                                                }}
+                                                            >
+                                                                {asset.liquid ? "💧" : "🔒"}
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    if (window.confirm(`Delete "${asset.name}"?`)) removeAsset(i);
+                                                                }}
+                                                                style={{
+                                                                    width: 32,
+                                                                    height: 32,
+                                                                    borderRadius: T.radius.sm,
+                                                                    border: "none",
+                                                                    background: "transparent",
+                                                                    color: T.status.red,
+                                                                    cursor: "pointer",
+                                                                    display: "flex",
+                                                                    alignItems: "center",
+                                                                    justifyContent: "center",
+                                                                    flexShrink: 0,
+                                                                }}
+                                                            >
+                                                                <Trash2 size={13} />
+                                                            </button>
+                                                        </div>
+                                                        {/* Link to Debt */}
+                                                        {nonCardDebts.length > 0 && (
+                                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                                <Link2 size={13} color={T.text.dim} style={{ flexShrink: 0 }} />
+                                                                <select
+                                                                    value={asset.linkedDebtId || ""}
+                                                                    onChange={e => updateAsset(i, "linkedDebtId", e.target.value || null)}
+                                                                    aria-label="Link to debt"
+                                                                    style={{
+                                                                        flex: 1,
+                                                                        padding: "6px 10px",
+                                                                        borderRadius: T.radius.sm,
+                                                                        border: `1px solid ${asset.linkedDebtId ? T.accent.emerald : T.border.default}`,
+                                                                        background: T.bg.elevated,
+                                                                        color: T.text.primary,
+                                                                        fontSize: 11,
+                                                                        outline: "none",
+                                                                    }}
+                                                                >
+                                                                    <option value="">No linked debt</option>
+                                                                    {nonCardDebts.map(d => (
+                                                                        <option key={d.id || d.name} value={d.id || d.name}>{d.name} ({fmt(d.balance || 0)})</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (() => {
+                                                    const linkedDebt = asset.linkedDebtId
+                                                        ? nonCardDebts.find(d => (d.id || d.name) === asset.linkedDebtId)
+                                                        : null;
+                                                    const equity = linkedDebt ? (asset.value || 0) - (linkedDebt.balance || 0) : null;
+                                                    return (
+                                                    <div>
+                                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                                                <span style={{ fontSize: 13, fontWeight: 600, color: T.text.primary }}>
+                                                                    {asset.name || "Unnamed"}
+                                                                </span>
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    style={{
+                                                                        fontSize: 8,
+                                                                        padding: "1px 5px",
+                                                                        color: asset.liquid ? T.accent.emerald : T.text.dim,
+                                                                        borderColor: asset.liquid ? `${T.accent.emerald}40` : T.border.default,
+                                                                    }}
+                                                                >
+                                                                    {asset.liquid ? "LIQUID" : "ILLIQUID"}
+                                                                </Badge>
+                                                                {linkedDebt && (
+                                                                    <Badge
+                                                                        variant="outline"
+                                                                        style={{ fontSize: 8, padding: "1px 5px", color: T.status.amber, borderColor: `${T.status.amber}40`, display: "flex", alignItems: "center", gap: 3 }}
+                                                                    >
+                                                                        <Link2 size={7} /> {linkedDebt.name}
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                                <div style={{ textAlign: "right" }}>
+                                                                    <Mono size={13} weight={700} color={T.accent.copper}>
+                                                                        {fmt(asset.value || 0)}
+                                                                    </Mono>
+                                                                    {equity !== null && (
+                                                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 3, marginTop: 2 }}>
+                                                                            {equity >= 0
+                                                                                ? <TrendingUp size={9} color={T.status.green} />
+                                                                                : <TrendingDown size={9} color={T.status.red} />
+                                                                            }
+                                                                            <span style={{ fontSize: 9, fontWeight: 700, color: equity >= 0 ? T.status.green : T.status.red, fontFamily: T.font.mono }}>
+                                                                                {equity >= 0 ? "+" : ""}{fmt(equity)} equity
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                )}
+                                                    );
+                                                })()}
                                             </div>
                                         </div>
                                     ))}
@@ -825,6 +882,32 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                                                     />
                                                                 </div>
                                                             </div>
+                                                            {/* Link to Asset */}
+                                                            {otherAssets.length > 0 && (
+                                                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                                    <Link2 size={13} color={T.text.dim} style={{ flexShrink: 0 }} />
+                                                                    <select
+                                                                        value={editDebtForm.linkedAssetId || ""}
+                                                                        onChange={e => setEditDebtForm(p => ({ ...p, linkedAssetId: e.target.value }))}
+                                                                        aria-label="Link to asset"
+                                                                        style={{
+                                                                            flex: 1,
+                                                                            padding: "8px 10px",
+                                                                            borderRadius: T.radius.md,
+                                                                            border: `1px solid ${editDebtForm.linkedAssetId ? T.accent.emerald : T.border.default}`,
+                                                                            background: T.bg.elevated,
+                                                                            color: T.text.primary,
+                                                                            fontSize: 12,
+                                                                            outline: "none",
+                                                                        }}
+                                                                    >
+                                                                        <option value="">No linked asset</option>
+                                                                        {otherAssets.map(a => (
+                                                                            <option key={a.id || a.name} value={a.id || a.name}>{a.name} ({fmt(a.value || 0)})</option>
+                                                                        ))}
+                                                                    </select>
+                                                                </div>
+                                                            )}
                                                             <div style={{ display: "flex", gap: 8 }}>
                                                                 <button
                                                                     onClick={() => saveEditDebt(i)}
@@ -889,68 +972,97 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                                                 </button>
                                                             </div>
                                                         </div>
-                                                    ) : (
-                                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                                <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>
-                                                                    {debt.name || "Unnamed Debt"}
-                                                                </span>
-                                                                <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
-                                                                    {debt.type && (
-                                                                        <Badge
-                                                                            variant="outline"
-                                                                            style={{
-                                                                                fontSize: 8,
-                                                                                padding: "1px 5px",
-                                                                                color: T.status.amber,
-                                                                                borderColor: `${T.status.amber}40`,
-                                                                            }}
-                                                                        >
-                                                                            {debt.type.toUpperCase()}
-                                                                        </Badge>
-                                                                    )}
-                                                                    {debt.apr > 0 && (
-                                                                        <Badge
-                                                                            variant="outline"
-                                                                            style={{ fontSize: 8, padding: "1px 5px", color: T.text.secondary }}
-                                                                        >
-                                                                            {debt.apr}% APR
-                                                                        </Badge>
-                                                                    )}
-                                                                    {debt.minPayment > 0 && (
-                                                                        <Badge
-                                                                            variant="outline"
-                                                                            style={{ fontSize: 8, padding: "1px 5px", color: T.text.dim }}
-                                                                        >
-                                                                            Min {fmt(debt.minPayment)}
-                                                                        </Badge>
-                                                                    )}
+                                                    ) : (() => {
+                                                        const linkedAsset = debt.linkedAssetId
+                                                            ? otherAssets.find(a => (a.id || a.name) === debt.linkedAssetId)
+                                                            : null;
+                                                        const equity = linkedAsset ? (linkedAsset.value || 0) - (debt.balance || 0) : null;
+                                                        return (
+                                                        <div>
+                                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                                    <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>
+                                                                        {debt.name || "Unnamed Debt"}
+                                                                    </span>
+                                                                    <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                                                                        {debt.type && (
+                                                                            <Badge
+                                                                                variant="outline"
+                                                                                style={{
+                                                                                    fontSize: 8,
+                                                                                    padding: "1px 5px",
+                                                                                    color: T.status.amber,
+                                                                                    borderColor: `${T.status.amber}40`,
+                                                                                }}
+                                                                            >
+                                                                                {debt.type.toUpperCase()}
+                                                                            </Badge>
+                                                                        )}
+                                                                        {debt.apr > 0 && (
+                                                                            <Badge
+                                                                                variant="outline"
+                                                                                style={{ fontSize: 8, padding: "1px 5px", color: T.text.secondary }}
+                                                                            >
+                                                                                {debt.apr}% APR
+                                                                            </Badge>
+                                                                        )}
+                                                                        {debt.minPayment > 0 && (
+                                                                            <Badge
+                                                                                variant="outline"
+                                                                                style={{ fontSize: 8, padding: "1px 5px", color: T.text.dim }}
+                                                                            >
+                                                                                Min {fmt(debt.minPayment)}
+                                                                            </Badge>
+                                                                        )}
+                                                                        {linkedAsset && (
+                                                                            <Badge
+                                                                                variant="outline"
+                                                                                style={{ fontSize: 8, padding: "1px 5px", color: T.accent.emerald, borderColor: `${T.accent.emerald}40`, display: "flex", alignItems: "center", gap: 3 }}
+                                                                            >
+                                                                                <Link2 size={7} /> {linkedAsset.name}
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                                                                    <div style={{ textAlign: "right" }}>
+                                                                        <Mono size={13} weight={700} color={T.status.amber}>
+                                                                            {fmt(debt.balance)}
+                                                                        </Mono>
+                                                                        {equity !== null && (
+                                                                            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 3, marginTop: 2 }}>
+                                                                                {equity >= 0
+                                                                                    ? <TrendingUp size={9} color={T.status.green} />
+                                                                                    : <TrendingDown size={9} color={T.status.red} />
+                                                                                }
+                                                                                <span style={{ fontSize: 9, fontWeight: 700, color: equity >= 0 ? T.status.green : T.status.red, fontFamily: T.font.mono }}>
+                                                                                    {equity >= 0 ? "+" : ""}{fmt(equity)} equity
+                                                                                </span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={() => startEditDebt(debt, i)}
+                                                                        style={{
+                                                                            width: 36,
+                                                                            height: 36,
+                                                                            borderRadius: T.radius.md,
+                                                                            border: `1px solid ${T.border.default}`,
+                                                                            background: T.bg.elevated,
+                                                                            color: T.text.dim,
+                                                                            cursor: "pointer",
+                                                                            display: "flex",
+                                                                            alignItems: "center",
+                                                                            justifyContent: "center",
+                                                                        }}
+                                                                    >
+                                                                        <Edit3 size={11} />
+                                                                    </button>
                                                                 </div>
                                                             </div>
-                                                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                                                                <Mono size={13} weight={700} color={T.status.amber}>
-                                                                    {fmt(debt.balance)}
-                                                                </Mono>
-                                                                <button
-                                                                    onClick={() => startEditDebt(debt, i)}
-                                                                    style={{
-                                                                        width: 36,
-                                                                        height: 36,
-                                                                        borderRadius: T.radius.md,
-                                                                        border: `1px solid ${T.border.default}`,
-                                                                        background: T.bg.elevated,
-                                                                        color: T.text.dim,
-                                                                        cursor: "pointer",
-                                                                        display: "flex",
-                                                                        alignItems: "center",
-                                                                        justifyContent: "center",
-                                                                    }}
-                                                                >
-                                                                    <Edit3 size={11} />
-                                                                </button>
-                                                            </div>
                                                         </div>
-                                                    )}
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
                                     ))}

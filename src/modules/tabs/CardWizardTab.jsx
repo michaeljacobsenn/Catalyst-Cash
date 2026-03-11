@@ -1,4 +1,4 @@
-import React, { useState, useContext, useMemo, useEffect, lazy, Suspense } from "react";
+import React, { useState, useContext, useMemo, useEffect, useRef, lazy, Suspense } from "react";
 import {
   Search, Sparkles, CreditCard, Coffee, ShoppingCart,
   Fuel, Plane, Train, Package, Store, Pill, AlertCircle, Info, Settings2, ChevronDown, Check, X, RefreshCw, Tv, DollarSign, Smartphone, RotateCw, Clock, Lock, Zap
@@ -7,6 +7,7 @@ import { PortfolioContext } from "../contexts/PortfolioContext.jsx";
 import { useSettings } from "../contexts/SettingsContext.jsx";
 import { getCardMultiplier, VALUATIONS } from "../rewardsCatalog.js";
 import { classifyMerchant } from "../api.js";
+import { db } from "../utils.js";
 import { haptic } from "../haptics.js";
 import { Card, InlineTooltip, FormGroup, FormRow, Skeleton, Badge } from "../ui.jsx";
 import { MERCHANT_DATABASE, extractCategoryByKeywords } from "../merchantDatabase.js";
@@ -15,6 +16,57 @@ import { shouldShowGating } from "../subscription.js";
 import ProBanner from "./ProBanner.jsx";
 
 const LazyProPaywall = lazy(() => import("./ProPaywall.jsx"));
+
+// ── Controversial Merchants (coded differently across card issuers) ──
+// These are merchants where the same transaction can be categorized under
+// different spend categories depending on which card/issuer processes it.
+const CONTROVERSIAL_MERCHANTS = {
+  // Gas station convenience hybrids — gas at Chase/Citi, often "other" at Capital One/Amex
+  "7-eleven":     { issuers: "Chase/Citi → Gas · Capital One → Other", tip: "7-Eleven codes as gas at most issuers but falls into catch-all at Capital One.", overrides: { "chase": "gas", "citi": "gas", "capital one": "catch-all", "amex": "catch-all" } },
+  "wawa":         { issuers: "Chase/Citi → Gas · Amex → Other", tip: "Wawa codes as a gas/convenience purchase; category varies by issuer.", overrides: { "chase": "gas", "citi": "gas", "amex": "catch-all" } },
+  "sheetz":       { issuers: "Chase → Gas · Capital One → Other", tip: "Sheetz is typically gas but some issuers treat it as general retail.", overrides: { "chase": "gas", "capital one": "catch-all" } },
+  "casey's":      { issuers: "Chase → Gas · Others → Varies", tip: "Casey's General Store is often coded as gas but varies by issuer.", overrides: { "chase": "gas" } },
+  "quiktrip":     { issuers: "Chase → Gas · Capital One → Other", tip: "QuikTrip typically codes as gas but varies across issuers.", overrides: { "chase": "gas", "capital one": "catch-all" } },
+  "buc-ee's":     { issuers: "Chase → Gas · Others → Varies", tip: "Buc-ee's is a large gas/convenience chain; category varies by issuer.", overrides: { "chase": "gas" } },
+  "speedway":     { issuers: "Chase → Gas · Others → Varies", tip: "Speedway codes as gas at most issuers but may vary.", overrides: { "chase": "gas" } },
+  "circle k":     { issuers: "Chase → Gas · Capital One → Other", tip: "Circle K is often coded as gas but can fall into other categories.", overrides: { "chase": "gas", "capital one": "catch-all" } },
+  "racetrac":     { issuers: "Various → Gas or Other", tip: "RaceTrac is a gas/convenience hybrid; coding varies by issuer.", overrides: {} },
+  // Superstores — wholesale/superstore (no grocery bonus) at most, but some edge cases
+  "walmart":      { issuers: "Most → Wholesale/Other · Amex Gold → Check Notes", tip: "Walmart is excluded from grocery bonuses at most issuers and counts as wholesale/other.", overrides: {} },
+  "target":       { issuers: "Most → Wholesale/Other", tip: "Target is excluded from grocery bonuses at most issuers — it codes as wholesale or general retail.", overrides: {} },
+  "meijer":       { issuers: "Some → Groceries · Others → Wholesale", tip: "Meijer is coded as groceries at some issuers but wholesale/other at others.", overrides: { "chase": "groceries", "citi": "groceries" } },
+  // Online ambiguity
+  "paypal":       { issuers: "Citi/Chase → Online Shopping · Amex/Capital One → Catch-all", tip: "PayPal transactions may or may not trigger online shopping bonuses depending on issuer.", overrides: { "citi": "online_shopping", "chase": "online_shopping", "amex": "catch-all", "capital one": "catch-all" } },
+  "venmo":        { issuers: "Most → Catch-all", tip: "Venmo purchases vary widely; many issuers treat them as catch-all.", overrides: {} },
+  // Travel ambiguity
+  "airbnb":       { issuers: "Chase/Amex → Travel · Capital One → Catch-all", tip: "Airbnb codes as travel at premium cards but catch-all at others.", overrides: { "chase": "travel", "amex": "travel", "capital one": "catch-all" } },
+  "vrbo":         { issuers: "Chase → Travel · Others → Catch-all", tip: "VRBO may or may not trigger travel bonuses depending on your card issuer.", overrides: { "chase": "travel", "amex": "travel" } },
+  // Warehouse gas — same issuer can split gas vs membership
+  "costco gas":   { issuers: "Citi Costco → Gas · Others → Varies", tip: "Costco gas stations at most issuers code as gas, but the Costco membership fee does not.", overrides: { "citi": "gas" } },
+  "sam's club":   { issuers: "Most → Wholesale · Walmart Visa → Special rate", tip: "Sam's Club often codes as wholesale clubs, not grocery.", overrides: {} },
+};
+
+function getControversialWarning(merchantName) {
+  if (!merchantName) return null;
+  const lower = merchantName.toLowerCase().trim();
+  // Exact match
+  if (CONTROVERSIAL_MERCHANTS[lower]) return CONTROVERSIAL_MERCHANTS[lower];
+  // Partial match
+  const key = Object.keys(CONTROVERSIAL_MERCHANTS).find(k => lower.includes(k) || k.includes(lower));
+  return key ? CONTROVERSIAL_MERCHANTS[key] : null;
+}
+
+// Returns the category this specific issuer actually uses for a merchant, or null if no override known.
+// e.g. getIssuerCategoryOverride("7-Eleven", "Capital One") → "catch-all"
+//      getIssuerCategoryOverride("7-Eleven", "Chase") → "gas"
+function getIssuerCategoryOverride(merchantName, institution) {
+  if (!merchantName || !institution) return null;
+  const entry = getControversialWarning(merchantName);
+  if (!entry?.overrides || Object.keys(entry.overrides).length === 0) return null;
+  const instLower = institution.toLowerCase();
+  const matchKey = Object.keys(entry.overrides).find(k => instLower.includes(k) || k.includes(instLower));
+  return matchKey ? entry.overrides[matchKey] : null;
+}
 
 const QUICK_CATEGORIES = [
   { id: "dining", label: "Dining", icon: Coffee, color: T.status.amber, bg: T.status.amberDim },
@@ -28,15 +80,17 @@ const QUICK_CATEGORIES = [
   { id: "drugstores", label: "Pharmacy", icon: Pill, color: T.status.green, bg: T.status.greenDim },
 ];
 
-// ── Persistent Search History ──
+// ── Persistent Search History — stored via db for proper data-layer consistency ──
+// Module-level cache so history persists across tab navigation without re-fetching.
 const HISTORY_KEY = "cw-search-history";
 let searchHistory = [];
-try { searchHistory = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch { searchHistory = []; }
+// Async load on module init — brief empty state on first render is acceptable
+db.get(HISTORY_KEY).then(val => { if (Array.isArray(val)) searchHistory = val; }).catch(() => {});
 
 function addToHistory(merchant) {
   if (!merchant || !merchant.name) return;
   searchHistory = [merchant, ...searchHistory.filter(m => m.name !== merchant.name)].slice(0, 5);
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(searchHistory)); } catch { /* quota */ }
+  db.set(HISTORY_KEY, searchHistory);
 }
 
 let cachedQuery = "";
@@ -60,21 +114,25 @@ export default function CardWizardTab({ proEnabled }) {
   const [showValuations, setShowValuations] = useState(false);
   const [spendAmount, setSpendAmount] = useState("");
   const [showAllRunners, setShowAllRunners] = useState(false);
-  
-  // 150/100 Feature: Sign-Up Bonus Target
-  const [subTargetId, setSubTargetId] = useState(() => localStorage.getItem("cw-sub-target") || null);
+  const scrollRef = useRef(null);
 
-  // 150/100 Feature: Quarterly Cap Tracker
-  const [usedCaps, setUsedCaps] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("cw-used-caps") || "{}"); }
-    catch { return {}; }
-  });
+  // 150/100 Feature: Sign-Up Bonus Target — persisted via db (consistent with app data layer)
+  const [subTargetId, setSubTargetId] = useState(null);
+  useEffect(() => {
+    db.get("cw-sub-target").then(val => { if (val) setSubTargetId(val); });
+  }, []);
+
+  // 150/100 Feature: Quarterly Cap Tracker — persisted via db (consistent with app data layer)
+  const [usedCaps, setUsedCaps] = useState({});
+  useEffect(() => {
+    db.get("cw-used-caps").then(val => { if (val && typeof val === "object") setUsedCaps(val); });
+  }, []);
 
   const handleUpdateUsedCap = (cardId, e) => {
     const val = e.target.value;
     const newCaps = { ...usedCaps, [cardId]: val === "" ? "" : parseFloat(val) };
     setUsedCaps(newCaps);
-    localStorage.setItem("cw-used-caps", JSON.stringify(newCaps));
+    db.set("cw-used-caps", newCaps);
   };
 
   const filteredMerchants = useMemo(() => {
@@ -206,10 +264,10 @@ export default function CardWizardTab({ proEnabled }) {
     haptic.selection();
     if (subTargetId === cardId) {
       setSubTargetId(null);
-      localStorage.removeItem("cw-sub-target");
+      db.del("cw-sub-target");
     } else {
       setSubTargetId(cardId);
-      localStorage.setItem("cw-sub-target", cardId);
+      db.set("cw-sub-target", cardId);
     }
   };
 
@@ -237,8 +295,13 @@ export default function CardWizardTab({ proEnabled }) {
   const recommendations = useMemo(() => {
     if (!resolvedCategory || activeCreditCards.length === 0) return [];
 
+    const merchantName = resolvedMerchant?.name;
+
     const scored = activeCreditCards.map(card => {
-      const rewardInfo = getCardMultiplier(card.name, resolvedCategory, customValuations);
+      // Per-card issuer category: some merchants code differently depending on which bank issues the card
+      const issuerCategory = getIssuerCategoryOverride(merchantName, card.institution);
+      const effectiveCategory = issuerCategory || resolvedCategory;
+      const rewardInfo = getCardMultiplier(card.name, effectiveCategory, customValuations);
       const utilization = (card.balance && card.limit && card.limit > 0) ? (card.balance / card.limit) : 0;
 
       let finalYield = rewardInfo.effectiveYield;
@@ -287,6 +350,9 @@ export default function CardWizardTab({ proEnabled }) {
         notes: rewardInfo.notes,
         rotating: rewardInfo.rotating,
         mobileWallet: rewardInfo.mobileWallet,
+        // Issuer-specific category scoring
+        issuerCategory: issuerCategory || null,
+        effectiveCategory,
       };
     });
 
@@ -302,7 +368,7 @@ export default function CardWizardTab({ proEnabled }) {
     });
 
     return scored;
-  }, [resolvedCategory, activeCreditCards, customValuations, subTargetId]);
+  }, [resolvedCategory, resolvedMerchant, activeCreditCards, customValuations, subTargetId, spendAmount, usedCaps]);
 
   const dollarReturn = (yield_) => {
     const amt = parseFloat(spendAmount);
@@ -363,7 +429,7 @@ export default function CardWizardTab({ proEnabled }) {
   const runnersToShow = showAllRunners ? recommendations.slice(1) : recommendations.slice(1, 4);
 
   return (
-    <div className="safe-scroll-body scroll-area hide-scrollbar" style={{ display: "flex", flexDirection: "column", alignItems: "center", height: "100%", width: "100%", flex: 1, paddingBottom: 120, overflowY: "auto", overflowX: "hidden" }}>
+    <div ref={scrollRef} className="safe-scroll-body scroll-area hide-scrollbar" style={{ display: "flex", flexDirection: "column", alignItems: "center", height: "100%", width: "100%", flex: 1, overflowY: "auto", overflowX: "hidden" }}>
       <div className="page-body" style={{ maxWidth: 768, margin: "0 auto", width: "100%", display: "flex", flexDirection: "column", gap: 24 }}>
 
         {/* Pro Banner Removed - Teaser is now in the results section */}
@@ -662,6 +728,22 @@ export default function CardWizardTab({ proEnabled }) {
                </h3>
             </div>
 
+            {/* Controversial Merchant Warning */}
+            {(() => {
+              const warning = getControversialWarning(resolvedMerchant?.name);
+              if (!warning) return null;
+              return (
+                <div className="fade-in" style={{ padding: "10px 14px", borderRadius: 12, background: `${T.status.amber}12`, border: `1px solid ${T.status.amber}35`, display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  <AlertCircle size={15} color={T.status.amber} style={{ flexShrink: 0, marginTop: 1 }} />
+                  <div>
+                    <p style={{ margin: "0 0 3px 0", fontSize: 12, fontWeight: 800, color: T.status.amber }}>Issuer Coding Varies</p>
+                    <p style={{ margin: 0, fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>{warning.tip}</p>
+                    <p style={{ margin: "4px 0 0 0", fontSize: 10, fontWeight: 700, color: T.text.dim, fontFamily: T.font.mono }}>{warning.issuers}</p>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Spend Amount Input */}
             <div className="fade-in" style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 4px" }}>
               <DollarSign size={16} color={T.text.dim} />
@@ -768,7 +850,10 @@ export default function CardWizardTab({ proEnabled }) {
                         {recommendations[0].id === subTargetId ? "SUB TARGET" : `${recommendations[0].effectiveYield}%`}
                       </div>
                       <p style={{ fontSize: 13, fontWeight: 700, opacity: 0.9, marginTop: 6, color: getCardThemeColors(recommendations[0].name).text, textShadow: "0 1px 2px rgba(0,0,0,0.1)" }}>
-                        {recommendations[0].currentMultiplier}x {resolvedCategory.replace(/_/g, " ")}{recommendations[0].cpp !== 1.0 ? ` × ${recommendations[0].cpp}cpp` : ""}
+                        {recommendations[0].currentMultiplier}x {(recommendations[0].effectiveCategory || resolvedCategory).replace(/_/g, " ")}{recommendations[0].cpp !== 1.0 ? ` × ${recommendations[0].cpp}cpp` : ""}
+                        {recommendations[0].issuerCategory && recommendations[0].issuerCategory !== resolvedCategory && (
+                          <span style={{ fontSize: 10, opacity: 0.75, fontWeight: 600 }}> (coded as {recommendations[0].issuerCategory.replace(/_/g, " ")} at {recommendations[0].institution})</span>
+                        )}
                       </p>
                       {dollarReturn(recommendations[0].effectiveYield) && recommendations[0].id !== subTargetId && (
                         <p style={{ fontSize: 15, fontWeight: 800, marginTop: 4, color: getCardThemeColors(recommendations[0].name).text, textShadow: "0 1px 2px rgba(0,0,0,0.1)" }}>
@@ -865,7 +950,7 @@ export default function CardWizardTab({ proEnabled }) {
                   const catLabels = { dining: "Dining", groceries: "Groceries", gas: "Gas", travel: "Travel", transit: "Transit", online_shopping: "Online", streaming: "Streaming", wholesale_clubs: "Wholesale", drugstores: "Pharmacy", "catch-all": "Everything Else" };
                   const profile = allCats.map(cat => {
                     const info = getCardMultiplier(winner.name, cat, customValuations);
-                    return { cat, label: catLabels[cat] || cat, multiplier: info.multiplier, yield: info.effectiveYield, active: cat === resolvedCategory };
+                    return { cat, label: catLabels[cat] || cat, multiplier: info.multiplier, yield: info.effectiveYield, active: cat === (winner.effectiveCategory || resolvedCategory) };
                   });
                   return (
                     <div className="fade-in" style={{ marginTop: 16, animationDelay: "0.5s" }}>
@@ -938,7 +1023,10 @@ export default function CardWizardTab({ proEnabled }) {
                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                              {card.id === subTargetId && <Badge variant="purple" style={{ fontSize: 9, padding: "2px 6px" }}>Sign-Up Bonus</Badge>}
                              <Badge variant="gray" style={{ fontSize: 9, padding: "2px 6px" }}>{card.cpp}¢ / pt</Badge>
-                             <span style={{ fontSize: 11, fontWeight: 500, color: T.text.muted }}>{card.currentMultiplier}x Base</span>
+                             <span style={{ fontSize: 11, fontWeight: 500, color: T.text.muted }}>{card.currentMultiplier}x {(card.effectiveCategory || resolvedCategory).replace(/_/g, " ")}</span>
+                             {card.issuerCategory && card.issuerCategory !== resolvedCategory && (
+                               <Badge variant="amber" style={{ fontSize: 9, padding: "2px 6px" }}>Coded as {card.issuerCategory.replace(/_/g, " ")}</Badge>
+                             )}
                              {card.blendedMsg && <Badge variant="amber" style={{ fontSize: 9, padding: "2px 6px" }}>Blended Yield</Badge>}
                              {card.isFlexible && <Badge variant="amber" style={{ fontSize: 9, padding: "2px 6px" }}>Conditional</Badge>}
                              {card.rotating && <Badge variant="purple" style={{ fontSize: 9, padding: "2px 6px" }}>Rotating</Badge>}
@@ -1012,7 +1100,7 @@ export default function CardWizardTab({ proEnabled }) {
                 setResolvedMerchant(null);
                 setSpendAmount("");
                 setShowAllRunners(false);
-                window.scrollTo({ top: 0, behavior: "smooth" });
+                scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
               }}
               style={{
                 width: "100%", padding: 16, marginTop: 16, borderRadius: 16,

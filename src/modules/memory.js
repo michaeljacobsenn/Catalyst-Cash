@@ -15,10 +15,12 @@ const MAX_MILESTONES = 20;
 
 // ── PII scrubber (mirrors AIChatTab pattern) ──
 const PII_PATTERNS = [
-  /\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b/g,
-  /\b\d{3}[- ]?\d{2}[- ]?\d{4}\b/g,
-  /\b\d{9}\b/g,
-  /\b\d{10,17}\b/g,
+  /\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b/g,     // Credit/debit card numbers
+  /\b\d{3}[- ]?\d{2}[- ]?\d{4}\b/g,                // SSN (###-##-####)
+  /\b\d{9}\b/g,                                     // 9-digit numbers (routing/SSN)
+  /\b\d{10,17}\b/g,                                 // Long account numbers
+  /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, // Email addresses
+  /\b\d{1,5}\s+[A-Z][a-z]+\s+(?:St|Ave|Rd|Blvd|Dr|Ln|Way|Ct|Pl)\b/gi, // Street addresses
 ];
 function scrubPII(text) {
   if (!text || typeof text !== "string") return text;

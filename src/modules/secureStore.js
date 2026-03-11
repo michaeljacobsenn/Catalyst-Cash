@@ -24,7 +24,17 @@ async function getPlugin() {
       .then(mod => mod.SecureStoragePlugin || mod.default?.SecureStoragePlugin || mod.default || null)
       .catch(() => null),
     new Promise(resolve => setTimeout(() => resolve(null), 3000)), // 3s timeout — never hang
-  ]);
+  ]).then(plugin => {
+    // Security warning: if on native but plugin unavailable, data falls back to Preferences.
+    // Preferences on iOS is backed by NSUserDefaults (not Keychain) — not encrypted at rest.
+    if (!plugin && Capacitor.isNativePlatform()) {
+      console.warn(
+        "[SecureStore] Native keychain plugin unavailable — sensitive data will use Preferences fallback. " +
+        "Ensure capacitor-secure-storage-plugin is correctly installed and synced."
+      );
+    }
+    return plugin;
+  });
   return securePluginPromise;
 }
 

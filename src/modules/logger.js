@@ -47,6 +47,15 @@ const REDACTED_KEYS = [
   "messages",
   "rules",
   "personal",
+  // Financial PII additions
+  "networth",   // catches netWorth, net_worth, networth_today, etc.
+  "spending",   // catches spendingTotal, monthlySpending, etc.
+  "ssn",        // social security number fields
+  "routing",    // bank routing numbers
+  "account",    // catches accountNumber, accountId, etc.
+  "credit",     // catches creditScore, creditLimit, etc.
+  "investment", // catches investmentBalance, investmentTotal, etc.
+  "holding",    // catches holdings, holdingBalance, etc.
 ];
 
 // ── Internal: persist buffer ──────────────────────────────────

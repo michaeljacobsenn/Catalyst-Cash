@@ -232,14 +232,51 @@ const CANCELLATION_LINKS = {
 function getCancelUrl(itemName) {
   const nameLower = (itemName || "").toLowerCase().trim();
   if (!nameLower) return null;
-  // 1. Exact match
+
+  // 1. Exact Name match
   if (CANCELLATION_LINKS[nameLower]) return CANCELLATION_LINKS[nameLower];
-  // 2. Partial match (e.g., "Netflix Standard" matches "netflix")
-  const partialMatch = Object.keys(CANCELLATION_LINKS).find(k => nameLower.includes(k));
-  if (partialMatch) return CANCELLATION_LINKS[partialMatch];
-  // 3. Reverse partial (e.g., "gym membership" matches "gym" key... but also "la fitness" matching)
-  const reverseMatch = Object.keys(CANCELLATION_LINKS).find(k => k.includes(nameLower));
-  if (reverseMatch) return CANCELLATION_LINKS[reverseMatch];
+
+  // Helper for simple Levenshtein distance (fuzzy matching)
+  const getDistance = (a, b) => {
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+    const matrix = Array(b.length + 1).fill(null).map(() => Array(a.length + 1).fill(null));
+    for (let i = 0; i <= a.length; i += 1) matrix[0][i] = i;
+    for (let j = 0; j <= b.length; j += 1) matrix[j][0] = j;
+    for (let j = 1; j <= b.length; j += 1) {
+      for (let i = 1; i <= a.length; i += 1) {
+        const ind = a[i - 1] === b[j - 1] ? 0 : 1;
+        matrix[j][i] = Math.min(
+          matrix[j][i - 1] + 1,
+          matrix[j - 1][i] + 1,
+          matrix[j - 1][i - 1] + ind
+        );
+      }
+    }
+    return matrix[b.length][a.length];
+  };
+
+  const normalizedInput = nameLower.replace(/[^a-z0-9]/g, "");
+
+  for (const key of Object.keys(CANCELLATION_LINKS)) {
+    const normalizedKey = key.replace(/[^a-z0-9]/g, "");
+    
+    // 2. Normalized substring match (handles "Net flix" or "Netflix Premium" or "N.e.t.f.l.i.x")
+    if (normalizedInput.includes(normalizedKey) || normalizedKey.includes(normalizedInput)) {
+      return CANCELLATION_LINKS[key];
+    }
+    
+    // 3. Fuzzy match for typos (e.g. "Netlix" vs "Netflix")
+    // Only fuzzy match if both strings are >= 4 chars to prevent short acronyms from false-positives
+    if (normalizedInput.length >= 4 && normalizedKey.length >= 4) {
+      // Allow 1 typo (insertion, deletion, substitution) for every 5 characters
+      const allowedTypos = Math.floor(Math.max(normalizedInput.length, normalizedKey.length) / 5) || 1;
+      if (getDistance(normalizedInput, normalizedKey) <= allowedTypos) {
+        return CANCELLATION_LINKS[key];
+      }
+    }
+  }
+
   // 4. Universal fallback — Google search for cancellation instructions
   return `https://www.google.com/search?q=how+to+cancel+${encodeURIComponent(itemName)}+subscription`;
 }
@@ -1405,27 +1442,49 @@ export default memo(function RenewalsTab({ proEnabled }) {
                               <span style={{ fontSize: 10, color: T.text.muted }}>Imported from Portfolio</span>
                             )}
                             {!item.isCardAF && !item.archivedAt && cancelUrl && (
-                              <a
-                                href={cancelUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 4,
-                                  fontSize: 11,
-                                  fontWeight: 600,
-                                  color: T.status.red,
-                                  textDecoration: "none",
-                                  background: `${T.status.red}10`,
-                                  padding: "3px 8px",
-                                  borderRadius: 4,
-                                  border: `1px solid ${T.status.red}20`,
-                                }}
-                              >
-                                {cancelUrl.includes("google.com/search") ? "How to Cancel" : "Cancel Plan"}
-                                <ExternalLink size={10} />
-                              </a>
+                              <div style={{ display: "flex", gap: 6 }}>
+                                <a
+                                  href={cancelUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    color: T.status.red,
+                                    textDecoration: "none",
+                                    background: `${T.status.red}10`,
+                                    padding: "3px 8px",
+                                    borderRadius: 4,
+                                    border: `1px solid ${T.status.red}20`,
+                                  }}
+                                >
+                                  {cancelUrl.includes("google.com/search") ? "How to Cancel" : "Cancel Plan"}
+                                  <ExternalLink size={10} />
+                                </a>
+                                {!cancelUrl.includes("google.com/search") && (
+                                  <a
+                                    href={`mailto:support@${(item.name || "company").toLowerCase().replace(/[^a-z0-9]/g, "")}.com?subject=Subscription%20Cancellation%20Request&body=Hello,%0D%0A%0D%0AI%20would%20like%20to%20cancel%20my%20${encodeURIComponent(item.name || "subscription")}%20plan%20effective%20immediately.%20Please%20confirm%20when%20this%20has%20been%20processed.%0D%0A%0D%0AThank%20you.`}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 4,
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      color: T.text.primary,
+                                      textDecoration: "none",
+                                      background: T.bg.elevated,
+                                      padding: "3px 8px",
+                                      borderRadius: 4,
+                                      border: `1px solid ${T.border.default}`,
+                                    }}
+                                  >
+                                    1-Click Email Cancel
+                                  </a>
+                                )}
+                              </div>
                             )}
                             {negotiableMerchant && (
                                <button

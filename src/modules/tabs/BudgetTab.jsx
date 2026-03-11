@@ -123,13 +123,24 @@ export default function BudgetTab({ onRunAudit }) {
           textAlign: "center"
         }}
       >
-        <div style={{ fontSize: 12, fontWeight: 800, color: readyToAssign === 0 ? T.text.dim : readyToAssign > 0 ? T.status.green : T.status.red, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-          {readyToAssign > 0 ? "Ready to Assign" : readyToAssign < 0 ? "Overassigned" : "All Funds Assigned"}
+        <div style={{ fontSize: 14, fontWeight: 900, color: readyToAssign === 0 ? T.status.green : readyToAssign > 0 ? T.status.green : T.status.red, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
+          {readyToAssign > 0 ? "Unassigned Cash" : readyToAssign < 0 ? "Overassigned" : "Zero-Based Budget Complete!"}
         </div>
-        <div style={{ fontSize: 42, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.04em", display: "flex", alignItems: "baseline", justifyContent: "center" }}>
+        <div style={{ fontSize: 48, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.04em", display: "flex", alignItems: "baseline", justifyContent: "center" }}>
           <span style={{ fontSize: 24, color: T.text.dim, marginRight: 4, transform: "translateY(-6px)" }}>$</span>
           {Math.abs(readyToAssign).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
         </div>
+        {readyToAssign > 0 && (
+          <div style={{ fontSize: 13, fontWeight: 600, color: T.status.green, marginTop: 8 }}>
+            Give every dollar a job! Assign this cash to an envelope below.
+          </div>
+        )}
+        {readyToAssign === 0 && (
+          <div style={{ fontSize: 13, fontWeight: 600, color: T.text.secondary, marginTop: 8 }}>
+            Every dollar is assigned to an envelope. Your budget is airtight.
+          </div>
+        )}
+        
         
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${T.border.subtle}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
            <span style={{ fontSize: 12, color: T.text.dim }}>Monthly Income</span>

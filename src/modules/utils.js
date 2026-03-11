@@ -264,14 +264,8 @@ export function parseJSON(raw) {
       }
     }
   } catch (e) {
-    console.warn(
-      "[parseJSON] JSON.parse failed:",
-      e.message,
-      "— raw length:",
-      raw?.length,
-      "— first 200 chars:",
-      raw?.slice(0, 200)
-    );
+    // NOTE: never log raw response content — it may contain financial PII
+    console.warn("[parseJSON] JSON.parse failed:", e.message, "— raw length:", raw?.length);
     return null; // Stream hasn't finished accumulating enough valid JSON
   }
 
@@ -384,6 +378,18 @@ export function extractDashboardMetrics(parsed) {
   };
 }
 
+// Safely escape all HTML special characters to prevent XSS injection
+// via user-controlled content rendered into innerHTML (PDF export).
+function htmlEscape(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export async function exportAudit(audit) {
   const p = audit.parsed;
   const dateStr = audit.date || new Date().toISOString().split("T")[0];
@@ -438,7 +444,7 @@ export async function exportAudit(audit) {
   const content = `
     <h2 style="font-size: 18px; font-weight: 700; color: #111827; border-bottom: 1px solid #E5E7EB; padding-bottom: 8px; margin-bottom: 16px;">Executive AI Summary</h2>
     <div style="background-color: #F9FAFB; padding: 20px; border-radius: 8px; border: 1px solid #E5E7EB; margin-bottom: 30px;">
-      <p style="white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: #374151; margin: 0;">${p.raw.replace(/</g, "&lt;")}</p>
+      <p style="white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: #374151; margin: 0;">${htmlEscape(p.raw)}</p>
     </div>
   `;
 

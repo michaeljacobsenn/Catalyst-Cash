@@ -62,6 +62,7 @@ import BadgeStrip from "../dashboard/BadgeStrip.jsx";
 import DebtFreedomCard from "../dashboard/DebtFreedomCard.jsx";
 import EmptyDashboard from "../dashboard/EmptyDashboard.jsx";
 import { SafeToSpendCard } from "../dashboard/SafeToSpendCard.jsx";
+import GeoSuggestWidget from "../dashboard/GeoSuggestWidget.jsx";
 
 const SYNC_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
 let _autoSyncDone = false; // Survives component remounts — only auto-sync once per app session
@@ -454,6 +455,9 @@ export default memo(function DashboardTab({
           </div>
         </Card>
       )}
+
+      {/* ═══ GEO SUGGEST WIDGET ═══ */}
+      <GeoSuggestWidget />
 
       {/* ═══ COMMAND CENTER ═══ */}
       <>

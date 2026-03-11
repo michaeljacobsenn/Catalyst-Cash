@@ -23,6 +23,8 @@ import { db } from "./utils.js";
 import { getIssuerCards } from "./issuerCards.js";
 import { fetchWithRetry } from "./fetchWithRetry.js";
 import { getSubscriptionState, INSTITUTION_LIMITS } from "./subscription.js";
+import { categorizeBatch, learn } from "./merchantMap.js";
+import { batchCategorizeTransactions } from "./api.js";
 
 const PLAID_STORAGE_KEY = "plaid-connections";
 const API_BASE = "https://api.catalystcash.app";
@@ -529,6 +531,7 @@ export async function fetchTransactions(connectionId, days = 30) {
 
 /**
  * Fetch transactions for ALL connections and store locally.
+ * Includes On-Device AI Categorization Engine pipeline.
  * @param {number} [days=30] - How many days back
  * @returns {{ transactions: Array, fetchedAt: string }}
  */
@@ -555,6 +558,50 @@ export async function fetchAllTransactions(days = 30) {
       return true;
     })
     .sort((a, b) => b.date.localeCompare(a.date));
+
+  // --- AI CATEGORIZATION PIPELINE ---
+  
+  // 1. First pass: On-Device fast mapping via merchantMap.js baseline/user history
+  const localMapResult = await categorizeBatch(all.map(t => ({ description: t.description })));
+  
+  const uncategorizedItems = new Map(); // desc -> list of transaction objects
+  
+  for (let t of all) {
+    const desc = t.description;
+    const localMatch = localMapResult.get(desc);
+    if (localMatch) {
+      t.category = localMatch.category; // overwrite raw Plaid category
+    } else {
+      // It's unknown. Collect it for the AI fallback.
+      if (!uncategorizedItems.has(desc)) {
+        uncategorizedItems.set(desc, []);
+      }
+      uncategorizedItems.get(desc).push(t);
+    }
+  }
+
+  // 2. Second pass: AI Fallback for unknowns
+  const uniqueUnknowns = Array.from(uncategorizedItems.keys());
+  if (uniqueUnknowns.length > 0) {
+    console.warn(`[Plaid] Sending ${uniqueUnknowns.length} unknown merchants to AI Categorization Engine...`);
+    const aiCategoryMap = await batchCategorizeTransactions(uniqueUnknowns);
+    
+    // 3. Apply AI results and learn them so we never hit the AI again for these
+    for (const [desc, category] of Object.entries(aiCategoryMap)) {
+      if (!category) continue;
+      
+      // Update the transaction objects in memory
+      const txnsToUpdate = uncategorizedItems.get(desc) || [];
+      for (const t of txnsToUpdate) {
+        t.category = category;
+      }
+      
+      // Learn it locally (saves to IndexedDB)
+      await learn(desc, category);
+    }
+  }
+  
+  // ----------------------------------
 
   const stored = { data: all, fetchedAt: new Date().toISOString() };
   await db.set(TRANSACTIONS_STORAGE_KEY, stored);

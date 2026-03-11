@@ -5,6 +5,7 @@ import { fetchWithRetry } from "./fetchWithRetry.js";
 import { APP_VERSION } from "./constants.js";
 import { isPro } from "./subscription.js";
 import { getRevenueCatAppUserId } from "./revenuecat.js";
+import { db } from "./utils.js";
 
 // ═══════════════════════════════════════════════════════════════
 // AI API MODULE — Catalyst Cash
@@ -71,9 +72,15 @@ async function buildBackendHeaders(deviceId) {
   return headers;
 }
 
+function resolveProvider(model, fallbackProvider) {
+  if (model.includes("gpt") || model.includes("o3") || model.includes("o1") || model.includes("o4")) {
+    return "openai";
+  }
+  return fallbackProvider || "gemini";
+}
+
 async function* streamBackend(snapshot, model, sysText, history, deviceId, backendProvider, signal, responseFormat) {
-  // Map models to standard API backend endpoints if they are openai
-  const resolvedProvider = model.includes("gpt") || model.includes("o3") || model.includes("o1") || model.includes("o4") ? "openai" : backendProvider || "gemini";
+  const resolvedProvider = resolveProvider(model, backendProvider);
 
   const res = await fetch(`${BACKEND_URL}/audit`, {
     method: "POST",
@@ -125,15 +132,16 @@ async function* streamBackend(snapshot, model, sysText, history, deviceId, backe
         const parsed = JSON.parse(d);
         const text = extractSSEText(parsed);
         if (text) yield text;
-      } catch (e) {
-        log.warn("api", "Backend SSE parse error", { chunk: d.slice(0, 40) });
+      } catch {
+        // Don't log chunk content — may contain partial financial data
+        log.warn("api", "Backend SSE parse error — skipping malformed chunk");
       }
     }
   }
 }
 
 async function callBackend(snapshot, model, sysText, history, deviceId, backendProvider, responseFormat) {
-  const resolvedProvider = model.includes("gpt") || model.includes("o3") || model.includes("o1") || model.includes("o4") ? "openai" : backendProvider || "gemini";
+  const resolvedProvider = resolveProvider(model, backendProvider);
 
   const res = await fetchWithRetry(`${BACKEND_URL}/audit`, {
     method: "POST",
@@ -233,8 +241,9 @@ export async function classifyMerchant(merchantName) {
       try {
         const cleaned = rawJSON.replace(/```json/g, "").replace(/```/g, "").trim();
         parsed = JSON.parse(cleaned);
-      } catch (e) {
-        log.warn("wizard", "Failed to parse json string from classification", { rawJSON });
+      } catch {
+        // Don't log rawJSON — could contain unexpected content from AI response
+        log.warn("wizard", "Failed to parse JSON string from classification response");
       }
     } else {
       parsed = rawJSON;
@@ -250,6 +259,51 @@ export async function classifyMerchant(merchantName) {
   } catch (error) {
     log.error("wizard", "Classification failed", { error: error.message });
     throw error; // Let UI handle with error state + manual category selector
+  }
+}
+
+/**
+ * Batch classify multiple unknown merchant strings at once using gpt-4o-mini.
+ * @param {Array<string>} merchantNames - Array of raw merchant string descriptions.
+ * @returns {Record<string, string>} Mapping of merchantName -> Category
+ */
+export async function batchCategorizeTransactions(merchantNames) {
+  if (!merchantNames || merchantNames.length === 0) return {};
+  try {
+    const { getOrCreateDeviceId } = await import("./subscription.js");
+    const { getBatchCategorizationPrompt } = await import("./prompts.js");
+    
+    const deviceId = await getOrCreateDeviceId();
+    const sysText = getBatchCategorizationPrompt();
+    
+    // We intentionally force gpt-4o-mini to keep costs near-zero for rapid classification.
+    const rawJSON = await callBackend(
+      JSON.stringify(merchantNames), // User query is the array of strings
+      "gpt-4o-mini",
+      sysText,
+      [], // no history needed
+      deviceId,
+      "openai",
+      "json"
+    );
+    
+    let parsed = null;
+    if (typeof rawJSON === "string") {
+      try {
+        const cleaned = rawJSON.replace(/```json/g, "").replace(/```/g, "").trim();
+        parsed = JSON.parse(cleaned);
+      } catch {
+        log.warn("categorization", "Failed to parse JSON string from batch categorization response");
+        return {};
+      }
+    } else {
+      parsed = rawJSON;
+    }
+    
+    return parsed || {};
+  } catch (error) {
+    log.error("categorization", "Batch classification failed", { error: error.message });
+    return {}; // Graceful degrade — everything stays 'Other'
   }
 }
 
@@ -286,7 +340,7 @@ export async function fetchGatingConfig() {
       minVersion: data.minVersion || "1.0.0",
     };
     if (data.rotatingCategories) {
-      localStorage.setItem("ota_rotating_categories", JSON.stringify(data.rotatingCategories));
+      db.set("ota_rotating_categories", data.rotatingCategories);
     }
     _configFetchedAt = Date.now();
     log.info("config", "Remote gating config fetched", _cachedConfig);

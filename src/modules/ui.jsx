@@ -340,10 +340,18 @@ export const GlobalStyles = () => (
       }
     }
 
+    /* Shrinks snap-container height so snap-pages live above the floating nav pill */
+    .snap-container-clearance{
+      padding-bottom:calc(var(--bottom-nav-h,72px) + env(safe-area-inset-bottom,16px) + 20px);
+    }
+
     /* ── Keyboard-aware scrolling: let the environment variable shift content ── */
     @supports (padding-bottom: env(keyboard-inset-height, 0px)){
       .safe-scroll-body{
         padding-bottom:calc(var(--bottom-nav-h,72px) + env(keyboard-inset-height,0px) + 24px);
+      }
+      .snap-container-clearance{
+        padding-bottom:calc(var(--bottom-nav-h,72px) + env(keyboard-inset-height,0px) + 20px);
       }
     }
   `}</style>

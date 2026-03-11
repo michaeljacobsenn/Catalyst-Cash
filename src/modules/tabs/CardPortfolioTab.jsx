@@ -385,6 +385,11 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
               <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase" }}>Investments</span>
             </div>
             <span style={{ fontSize: 16, fontWeight: 800, color: T.text.primary }}>{fmt(investTotalValue + totalOtherAssets)}</span>
+            {totalOtherAssets > 0 && (
+              <span style={{ fontSize: 9, color: T.text.dim, fontWeight: 600, fontFamily: T.font.mono }}>
+                incl. {fmt(totalOtherAssets)} other assets
+              </span>
+            )}
           </div>
 
           <div style={{ background: `${T.status.red}10`, border: `1px solid ${T.status.red}20`, borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 4 }}>
