@@ -536,14 +536,11 @@ export default {
             headers: buildHeaders(cors, { "Content-Type": "application/json" }),
           });
         } else if (url.pathname === "/plaid/balances") {
-          plaidEndpoint = "/accounts/balance/get";
+          plaidEndpoint = "/accounts/get";
           plaidBody = {
             client_id: env.PLAID_CLIENT_ID,
             secret: env.PLAID_SECRET,
             access_token: reqBody.accessToken,
-            options: {
-              min_last_updated_datetime: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-            },
           };
         } else if (url.pathname === "/plaid/liabilities") {
           plaidEndpoint = "/liabilities/get";
@@ -622,8 +619,8 @@ export default {
               }
               // --------------------------
 
-              // Background sync: BALANCE ONLY ($0.10 per call, not $0.30)
-              const balRes = await fetch(`${plaidDomain}/accounts/balance/get`, {
+              // Background sync: Use free /accounts/get since webhook means data is fresh
+              const balRes = await fetch(`${plaidDomain}/accounts/get`, {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ client_id: env.PLAID_CLIENT_ID, secret: env.PLAID_SECRET, access_token })
               });
@@ -687,8 +684,8 @@ export default {
           for (const item of itemResults) {
             const { access_token, item_id: syncItemId } = item;
             try {
-              // Balance-only for manual sync ($0.10 per institution, not $0.30)
-              const balRes = await fetch(`${plaidDomain}/accounts/balance/get`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ client_id: env.PLAID_CLIENT_ID, secret: env.PLAID_SECRET, access_token }) });
+              // Manual sync: use free /accounts/get and rely on background product updates ($0.30/mo flat)
+              const balRes = await fetch(`${plaidDomain}/accounts/get`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ client_id: env.PLAID_CLIENT_ID, secret: env.PLAID_SECRET, access_token }) });
               const balances = await balRes.json();
 
               await env.DB.prepare(
