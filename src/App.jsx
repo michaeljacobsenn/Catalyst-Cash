@@ -61,6 +61,7 @@ const AIChatTab = lazy(() => import("./modules/tabs/AIChatTab.jsx"));
 const SettingsTab = lazy(() => import("./modules/tabs/SettingsTab.jsx"));
 const CashflowTab = lazy(() => import("./modules/tabs/CashflowTab.jsx"));
 const PortfolioTab = lazy(() => import("./modules/tabs/PortfolioTab.jsx"));
+const TransactionFeed = lazy(() => import("./modules/tabs/TransactionFeed.jsx"));
 import GuideModal from "./modules/tabs/GuideModal.jsx";
 import LockScreen from "./modules/LockScreen.jsx";
 import SetupWizard from "./modules/tabs/SetupWizard.jsx";

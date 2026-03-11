@@ -11,6 +11,7 @@ import { db } from "../utils.js";
 import { log } from "../logger.js";
 import { encryptAtRest, decryptAtRest, isEncrypted } from "../crypto.js";
 import { checkChatQuota, recordChatUsage, shouldShowGating, isGatingEnforced } from "../subscription.js";
+import { useNavigation } from "../contexts/NavigationContext.jsx";
 import ProBanner from "./ProBanner.jsx";
 const LazyProPaywall = React.lazy(() => import("./ProPaywall.jsx"));
 import { loadMemory, extractMemoryTags, addFacts, getMemoryBlock } from "../memory.js";
@@ -653,18 +654,36 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
       
       const userMessage = `Draft a negotiation script to lower my $${amount} monthly bill with ${merchant}.`;
       
-      const negotiateSysPrompt = `You are an expert consumer advocate and bill negotiator. 
-The user wants to negotiate their $${amount} monthly bill with ${merchant}.
-The known winning tactic for ${merchant} is: "${tactic}"
+      const negotiateSysPrompt = `You are a world-class consumer advocate and retention-desk negotiation specialist. You have a 94% success rate reducing bills.
 
-Draft a clear, step-by-step phone script for the user to use when calling ${merchant}. 
-Include:
-1. The exact number to call or department to ask for (e.g. Retention, Cancellation).
-2. The opening statement (what to explicitly say to start the negotiation).
-3. The specific counter-offer or promotion to demand.
-4. What to say if they say "No".
+The user wants to negotiate their $${amount}/month bill with ${merchant}.
+The proven winning tactic for ${merchant} is: "${tactic}"
 
-Format this with markdown. Be punchy, highly confident, and strictly practical. Do NOT talk about budgeting or tracking, ONLY the script. Give them the exact words.`;
+Generate a BATTLE-TESTED phone/chat script in markdown with these exact sections:
+
+## 📞 Before You Call
+- The exact phone number or chat URL (if widely known) for ${merchant}.
+- Say "Cancel my service" at the IVR to reach the retention/loyalty desk immediately — this is non-negotiable.
+- Have a competitor's current rate ready as your anchor (name the specific competitor and price).
+
+## 🗣️ Opening Line
+Give them the EXACT words to say in the first 15 seconds. This must establish: (1) how long they've been a loyal customer, (2) that they've found a cheaper alternative, (3) that they are ready to cancel today unless the price is fixed.
+
+## 💰 The Ask
+State the specific target price or discount percentage to demand. Use the competitor rate as anchor. Example: "I'd like to stay, but I need my bill at $X/month — that's what [Competitor] is offering me right now."
+
+## 🛡️ If They Say No
+Provide 3 escalation responses:
+1. A firmness response ("I understand, but I'll need to proceed with cancellation then.")
+2. A supervisor request ("Can you connect me to someone authorized to offer loyalty pricing?")
+3. A callback play ("I'll call back tomorrow — please note my cancellation request on my account.")
+
+## ⚡ Pro Tips
+- Best times to call (Tue-Thu morning = shorter hold, better offers).
+- Never accept the first offer — always counter once.
+- If offered a "temporary" discount, ask for the duration in writing/confirmation number.
+
+RULES: Be punchy, confident, and ruthlessly practical. Give EXACT words to say, not vague advice. Do NOT discuss budgeting, tracking, or financial planning — ONLY the negotiation script. Format with clear headers and bold key phrases.`;
 
       const timer = setTimeout(() => {
         sendMessage(userMessage, negotiateSysPrompt);

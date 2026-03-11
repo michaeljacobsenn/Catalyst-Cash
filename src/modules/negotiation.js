@@ -104,6 +104,60 @@ export const NEGOTIABLE_MERCHANTS = [
     type: "Security",
     tactic: "Call and request the cancellation department. State you are switching to SimpliSafe or Ring because the monthly monitoring is too high. Ask them to lower it to match DIY systems (around $15-$20/mo).",
   },
+
+  // Car Insurance (Often negotiable via re-quoting)
+  {
+    merchant: "GEICO",
+    aliases: ["GEICO", "Geico"],
+    type: "Insurance",
+    tactic: "Call and ask for a policy review. Mention you got a lower quote from Progressive or USAA. Ask about multi-policy, safe driver, and low-mileage discounts.",
+  },
+  {
+    merchant: "State Farm",
+    aliases: ["State Farm", "StateFarm"],
+    type: "Insurance",
+    tactic: "Ask your agent to re-quote your policy with higher deductibles. Mention a competitive quote from GEICO or Progressive and ask them to match it.",
+  },
+  {
+    merchant: "Progressive",
+    aliases: ["Progressive"],
+    type: "Insurance",
+    tactic: "Call and request a rate review. Ask about Snapshot/usage-based discounts and bundling with renters/homeowners insurance.",
+  },
+
+  // Gyms (High success rate — afraid of churn)
+  {
+    merchant: "Planet Fitness",
+    aliases: ["Planet Fitness", "PF"],
+    type: "Gym",
+    tactic: "Visit in person (required by many locations). State you want to cancel or downgrade your Classic membership. They often offer 1-3 months free to retain you.",
+  },
+  {
+    merchant: "LA Fitness",
+    aliases: ["LA Fitness", "Esporta"],
+    type: "Gym",
+    tactic: "Call corporate (not your local gym). Tell them you want to cancel because of price. Ask for a reduced rate or month-to-month conversion.",
+  },
+
+  // Streaming (Retention offers are common)
+  {
+    merchant: "Hulu",
+    aliases: ["Hulu"],
+    type: "Streaming",
+    tactic: "Start the online cancellation flow. On the 'Are you sure?' screen, Hulu frequently offers a discounted rate or free month. Always complete the flow to see the retention offer.",
+  },
+  {
+    merchant: "YouTube TV",
+    aliases: ["YouTube TV", "YTTV"],
+    type: "Streaming",
+    tactic: "Pause your membership for up to 6 months. YouTube TV often sends a re-activation discount via email after 2-3 weeks of being paused.",
+  },
+  {
+    merchant: "Sling TV",
+    aliases: ["Sling TV", "Sling"],
+    type: "Streaming",
+    tactic: "Cancel online. Sling frequently emails a 'come back' offer within 7 days with a significant monthly discount for 2-3 months.",
+  },
 ];
 
 /**

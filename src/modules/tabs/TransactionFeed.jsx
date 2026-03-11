@@ -4,7 +4,7 @@
 // filtering, and CSV/JSON export.
 // ═══════════════════════════════════════════════════════════════
 
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useContext, useMemo, useCallback, useEffect, useRef } from "react";
 import {
   ArrowLeft,
   Search,

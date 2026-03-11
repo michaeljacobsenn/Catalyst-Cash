@@ -21,9 +21,9 @@ test("getNegotiableMerchant uses lowercase substring checking effectively", () =
 test("getNegotiableMerchant avoids false positives", () => {
   expect(getNegotiableMerchant("Netflix")).toBeNull();
   expect(getNegotiableMerchant("Spotify")).toBeNull();
-  expect(getNegotiableMerchant("Hulu")).toBeNull();
+  expect(getNegotiableMerchant("Chipotle")).toBeNull();
   expect(getNegotiableMerchant("Apple Music")).toBeNull();
-  expect(getNegotiableMerchant("Planet Fitness")).toBeNull();
+  expect(getNegotiableMerchant("Amazon Prime")).toBeNull();
 });
 
 test("getNegotiableMerchant gracefully handles null/undefined inputs", () => {
