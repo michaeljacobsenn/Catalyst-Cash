@@ -814,13 +814,32 @@ export let REWARDS_CATALOG = {
 export function getCardMultiplier(cardName, category, customValuations = {}) {
   const name = String(cardName || "").trim();
 
-  const resolveMultiplier = (cardRules, cat) => {
+  const resolveMultiplier = (cardRules, cat, catalogKey) => {
     let isFlexible = false;
     let potentialMax = null;
     let base = cardRules["catch-all"] || 1;
     let multiplier = cardRules[cat];
     let currency = cardRules.currency || "CASH";
     let cap = null;
+
+    // Check OTA Config for active rotating categories
+    if (cardRules.rotating && catalogKey) {
+      try {
+        const otaData = localStorage.getItem("ota_rotating_categories");
+        if (otaData) {
+          const parsedOta = JSON.parse(otaData);
+          const activeCategories = parsedOta[catalogKey];
+          if (Array.isArray(activeCategories) && activeCategories.includes(cat)) {
+            multiplier = cardRules.rotating;
+            if (cardRules.caps && cardRules.caps.rotating) {
+              cap = cardRules.caps.rotating;
+            }
+          }
+        }
+      } catch (e) {
+        // Ignore parse error
+      }
+    }
 
     if (cardRules["highest-spend"]) {
       isFlexible = true;
@@ -859,7 +878,7 @@ export function getCardMultiplier(cardName, category, customValuations = {}) {
 
   // Attempt exact match
   if (REWARDS_CATALOG[name]) {
-    return resolveMultiplier(REWARDS_CATALOG[name], category);
+    return resolveMultiplier(REWARDS_CATALOG[name], category, name);
   }
 
   // Try partial match
@@ -868,7 +887,7 @@ export function getCardMultiplier(cardName, category, customValuations = {}) {
   const match = catalogKeys.find(k => k.toLowerCase().includes(lowerName) || lowerName.includes(k.toLowerCase()));
 
   if (match) {
-    return resolveMultiplier(REWARDS_CATALOG[match], category);
+    return resolveMultiplier(REWARDS_CATALOG[match], category, match);
   }
 
   // Flat-rate fallback heuristics — flat cards earn their rate on ALL categories

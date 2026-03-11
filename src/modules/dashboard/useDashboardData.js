@@ -35,7 +35,6 @@ export default function useDashboardData() {
 
   const p = current?.parsed;
   const dashboardMetrics = extractDashboardMetrics(p);
-  const fallbackChecking = bankAccounts.filter(b => b.accountType === "checking").reduce((s, b) => s + (parseFloat(b.balance) || 0), 0);
   const floor =
     (Number.isFinite(financialConfig?.weeklySpendAllowance) ? financialConfig.weeklySpendAllowance : 0) +
     (Number.isFinite(financialConfig?.emergencyFloor) ? financialConfig.emergencyFloor : 0);
@@ -88,8 +87,67 @@ export default function useDashboardData() {
       if (total > 0 || s.enabled) result.push({ ...s, total, count: items.length });
       grandTotal += total;
     }
+    // Also add Plaid Investments to the total
+    (financialConfig?.plaidInvestments || []).forEach(pi => {
+      if (pi._plaidBalance) grandTotal += pi._plaidBalance;
+    });
     return { accounts: result, total: grandTotal };
   }, [financialConfig, marketPrices]);
+
+  // ── Unified Master Portfolio Metrics ──
+  const portfolioMetrics = useMemo(() => {
+    const savingsGoals = financialConfig?.savingsGoals || [];
+    const otherAssets = financialConfig?.otherAssets || [];
+    const nonCardDebts = financialConfig?.nonCardDebts || [];
+
+    const totalOtherAssets = otherAssets.reduce((s, a) => s + (a.value || 0), 0);
+    const totalDebtBalance = nonCardDebts.reduce((s, d) => s + (d.balance || 0), 0);
+
+    // Separate checking vs savings from Plaid-linked accounts
+    let plaidChecking = 0;
+    let plaidSavings = 0;
+    let hasPlaidCash = false;
+    bankAccounts.forEach(b => {
+      if (b._plaidBalance != null) {
+        hasPlaidCash = true;
+        if (b.accountType === "savings") {
+          plaidSavings += b._plaidBalance;
+        } else {
+          plaidChecking += b._plaidBalance;
+        }
+      }
+    });
+
+    const aiChecking = dashboardMetrics?.checking || 0;
+    const aiSavings = dashboardMetrics?.vault || 0;
+
+    // Spendable cash = checking accounts ONLY (what you can actually spend today)
+    const spendableCash = hasPlaidCash ? plaidChecking : aiChecking;
+    // Savings = vault/savings accounts + earmarked savings goals
+    const savingsCash = (hasPlaidCash ? plaidSavings : aiSavings)
+      + savingsGoals.reduce((s, g) => s + (g.currentAmount || 0), 0);
+    // Total liquid = checking + savings (for net worth / overview)
+    const liquidCash = spendableCash + savingsCash;
+
+    // Credit card balances are liabilities — include in net worth
+    const ccDebt = cards.reduce((s, c) => {
+      if ((c.type === "credit" || !c.type) && c.balance > 0) return s + c.balance;
+      return s;
+    }, 0);
+
+    const netWorth = liquidCash + investmentSnapshot.total + totalOtherAssets - totalDebtBalance - ccDebt;
+
+    return {
+      spendableCash,
+      savingsCash,
+      liquidCash,
+      netWorth,
+      ccDebt,
+      totalDebtBalance,
+      totalOtherAssets,
+      totalInvestments: investmentSnapshot.total,
+    };
+  }, [financialConfig, bankAccounts, cards, investmentSnapshot.total, dashboardMetrics?.checking, dashboardMetrics?.vault]);
 
   const fireProjection = useMemo(() => {
     if (current?.isTest) {
@@ -557,7 +615,6 @@ export default function useDashboardData() {
 
   return {
     dashboardMetrics,
-    fallbackChecking,
     floor,
     investmentSnapshot,
     fireProjection,
@@ -569,5 +626,6 @@ export default function useDashboardData() {
     chartA11y,
     freedomStats,
     alerts,
+    portfolioMetrics, // Unified top-level live metrics
   };
 }

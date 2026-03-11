@@ -18,11 +18,12 @@ import {
   Zap,
   Trash2,
   ClipboardPaste,
-  LayoutDashboard,
   ReceiptText,
   Clock,
   MessageCircle,
   TrendingUp,
+  Wallet,
+  LayoutDashboard,
 } from "lucide-react";
 import { T, DEFAULT_CARD_PORTFOLIO, RENEWAL_CATEGORIES, APP_VERSION } from "./modules/constants.js";
 import { DEFAULT_PROVIDER_ID, DEFAULT_MODEL_ID, getProvider, getModel } from "./modules/providers.js";
@@ -58,10 +59,8 @@ import ResultsView from "./modules/tabs/ResultsView.jsx";
 const HistoryTab = lazy(() => import("./modules/tabs/HistoryTab.jsx"));
 const AIChatTab = lazy(() => import("./modules/tabs/AIChatTab.jsx"));
 const SettingsTab = lazy(() => import("./modules/tabs/SettingsTab.jsx"));
-const CardPortfolioTab = lazy(() => import("./modules/tabs/CardPortfolioTab.jsx"));
-const RenewalsTab = lazy(() => import("./modules/tabs/RenewalsTab.jsx"));
-const TransactionFeed = lazy(() => import("./modules/tabs/TransactionFeed.jsx"));
-const CardWizardTab = lazy(() => import("./modules/tabs/CardWizardTab.jsx"));
+const CashflowTab = lazy(() => import("./modules/tabs/CashflowTab.jsx"));
+const PortfolioTab = lazy(() => import("./modules/tabs/PortfolioTab.jsx"));
 import GuideModal from "./modules/tabs/GuideModal.jsx";
 import LockScreen from "./modules/LockScreen.jsx";
 import SetupWizard from "./modules/tabs/SetupWizard.jsx";
@@ -70,6 +69,7 @@ import { SettingsProvider, useSettings } from "./modules/contexts/SettingsContex
 import { PortfolioProvider, usePortfolio } from "./modules/contexts/PortfolioContext.jsx";
 import { NavigationProvider, useNavigation } from "./modules/contexts/NavigationContext.jsx";
 import { AuditProvider, useAudit } from "./modules/contexts/AuditContext.jsx";
+import { BudgetProvider } from "./modules/contexts/BudgetContext.jsx";
 import { isPro, getGatingMode, syncRemoteGatingMode } from "./modules/subscription.js";
 import { initRevenueCat } from "./modules/revenuecat.js";
 import { syncOTAData } from "./modules/ota.js";
@@ -123,11 +123,13 @@ export default function AppRoot() {
       <SettingsProvider>
         <SecurityProvider>
           <PortfolioProvider>
-            <NavigationProvider>
-              <AuditProvider>
-                <CatalystCash />
-              </AuditProvider>
-            </NavigationProvider>
+            <BudgetProvider>
+              <NavigationProvider>
+                <AuditProvider>
+                  <CatalystCash />
+                </AuditProvider>
+              </NavigationProvider>
+            </BudgetProvider>
           </PortfolioProvider>
         </SecurityProvider>
       </SettingsProvider>
@@ -424,10 +426,6 @@ function CatalystCash() {
   }, [resultsBackTarget, navTo]));
 
   const overlaySwipeHistory = useSwipeBack(useCallback(() => {
-    navTo(lastCenterTab.current);
-  }, [navTo, lastCenterTab]));
-
-  const overlaySwipeChat = useSwipeBack(useCallback(() => {
     navTo(lastCenterTab.current);
   }, [navTo, lastCenterTab]));
 
@@ -1328,17 +1326,12 @@ function CatalystCash() {
   }, [financialConfig]);
 
   const navItems = [
-    { id: "input", label: "New Audit", icon: Plus, isCenter: false },
-    { id: "wizard", label: "Card Wizard", icon: Zap, isCenter: false },
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, isCenter: true },
-    { id: "renewals", label: "Expenses", icon: ReceiptText, isCenter: false },
-    {
-      id: "cards",
-      label: "Portfolio",
-      icon: CreditCard,
-      isCenter: false,
-    },
-  ];
+    { id: "dashboard", label: "Home", icon: Home },
+    { id: "cashflow", label: "Cashflow", icon: Wallet },
+    { id: "input", label: "", icon: Plus, isCenter: true },
+    { id: "portfolio", label: "Portfolio", icon: CreditCard },
+    { id: "chat", label: "Ask AI", icon: MessageCircle },
+  ].filter(Boolean);
 
   // Native iOS swipe-back is handled via WKWebView allowsBackForwardNavigationGestures
   // (set in capacitor.config.ts). The popstate listener (above) handles the navigation.
@@ -1739,7 +1732,7 @@ function CatalystCash() {
       {isLocked && <LockScreen />}
       {showTransactionFeed && (
         <Suspense fallback={<TabFallback />}>
-          <TransactionFeed onClose={() => setShowTransactionFeed(false)} />
+          <TransactionFeed onClose={() => setShowTransactionFeed(false)} proEnabled={proEnabled} />
         </Suspense>
       )}
       {/* Skip-to-content link for a11y */}
@@ -1853,9 +1846,8 @@ function CatalystCash() {
             {tab === "dashboard" ? "Command Center" :
              tab === "input" ? "New Audit" :
              tab === "chat" ? "Catalyst AI" :
-             tab === "wizard" ? "Card Wizard" :
-             tab === "renewals" ? "Expenses" :
-             tab === "cards" ? "Accounts" : ""}
+             tab === "cashflow" ? "Cashflow" :
+             tab === "portfolio" ? "Portfolio" : ""}
           </div>
         </div>
 
@@ -1909,7 +1901,7 @@ function CatalystCash() {
         className="snap-container"
         style={{
           flex: 1,
-          display: tab === "settings" || tab === "results" || tab === "history" || tab === "guide" ? "none" : "flex",
+          display: tab === "settings" || tab === "results" || tab === "history" || tab === "guide" || tab === "input" ? "none" : "flex",
           overscrollBehaviorX: "none",
           paddingBottom: "calc(var(--bottom-nav-h, 72px) + env(safe-area-inset-bottom, 16px) + 20px)", // Shrink snap-pages to end above the floating nav pill
         }}
@@ -1922,37 +1914,9 @@ function CatalystCash() {
             style={{
               overflowY: t === "chat" ? "hidden" : "auto",
               paddingBottom: t === "chat" ? 0 : 20, // Visual breathing room at scroll bottom (nav clearance handled by container)
+              background: t === "chat" ? T.bg.base : undefined,
             }}
           >
-            {t === "input" && (
-              <ErrorBoundary name="InputForm">
-                <InputForm
-                  onSubmit={handleSubmit}
-                  isLoading={loading}
-                  lastAudit={current}
-                  renewals={renewals}
-                  cardAnnualFees={cardAnnualFees}
-                  cards={cards}
-                  bankAccounts={bankAccounts}
-                  onManualImport={handleManualImport}
-                  toast={toast}
-                  financialConfig={financialConfig}
-                  setFinancialConfig={setFinancialConfig}
-                  aiProvider={aiProvider}
-                  personalRules={personalRules}
-                  setPersonalRules={setPersonalRules}
-                  persona={persona}
-                  instructionHash={instructionHash}
-                  setInstructionHash={setInstructionHash}
-                  db={db}
-                  proEnabled={proEnabled}
-                  onBack={() => navTo("dashboard")}
-                />
-              </ErrorBoundary>
-            )}
-
-
-
             {t === "dashboard" && (
               <ErrorBoundary name="Dashboard">
                 <DashboardTab
@@ -1968,27 +1932,42 @@ function CatalystCash() {
                 />
               </ErrorBoundary>
             )}
-
-            {t === "renewals" && (
-              <ErrorBoundary name="Expenses">
+            {t === "chat" && (
+              <ErrorBoundary name="AI Chat">
                 <Suspense fallback={<TabFallback />}>
-                  <RenewalsTab proEnabled={proEnabled} />
+                  <AIChatTab
+                    proEnabled={proEnabled}
+                    initialPrompt={chatInitialPrompt}
+                    clearInitialPrompt={() => setChatInitialPrompt(null)}
+                    onBack={() => {
+                      navTo("dashboard");
+                      haptic.light();
+                    }}
+                    embedded
+                  />
                 </Suspense>
               </ErrorBoundary>
             )}
 
-            {t === "cards" && (
-              <ErrorBoundary name="Accounts">
+            {t === "cashflow" && (
+              <ErrorBoundary name="Cashflow">
                 <Suspense fallback={<TabFallback />}>
-                  <CardPortfolioTab onViewTransactions={() => setShowTransactionFeed(true)} proEnabled={proEnabled} />
+                  <CashflowTab
+                    onRunAudit={handleDemoAudit}
+                    toast={toast}
+                    proEnabled={proEnabled}
+                  />
                 </Suspense>
               </ErrorBoundary>
             )}
 
-            {t === "wizard" && (
-              <ErrorBoundary name="Card Wizard">
+            {t === "portfolio" && (
+              <ErrorBoundary name="Portfolio">
                 <Suspense fallback={<TabFallback />}>
-                  <CardWizardTab proEnabled={proEnabled} />
+                  <PortfolioTab 
+                    onViewTransactions={() => setShowTransactionFeed(true)} 
+                    proEnabled={proEnabled} 
+                  />
                 </Suspense>
               </ErrorBoundary>
             )}
@@ -2048,7 +2027,34 @@ function CatalystCash() {
         </div>
       )}
 
-      {/* FULL SCREEN DEDICATED OVERLAYS (Results, History) */}
+      {/* FULL SCREEN DEDICATED OVERLAYS (Results, History, Input) */}
+      {tab === "input" && (
+        <ErrorBoundary name="InputForm">
+          <InputForm
+            onSubmit={handleSubmit}
+            isLoading={loading}
+            lastAudit={current}
+            renewals={renewals}
+            cardAnnualFees={cardAnnualFees}
+            cards={cards}
+            bankAccounts={bankAccounts}
+            onManualImport={handleManualImport}
+            toast={toast}
+            financialConfig={financialConfig}
+            setFinancialConfig={setFinancialConfig}
+            aiProvider={aiProvider}
+            personalRules={personalRules}
+            setPersonalRules={setPersonalRules}
+            persona={persona}
+            instructionHash={instructionHash}
+            setInstructionHash={setInstructionHash}
+            db={db}
+            proEnabled={proEnabled}
+            onBack={() => navTo("dashboard")}
+          />
+        </ErrorBoundary>
+      )}
+
       {tab === "results" && (
         <div ref={overlaySwipeResults.paneRef} onTouchStart={overlaySwipeResults.onTouchStart} onTouchMove={overlaySwipeResults.onTouchMove} onTouchEnd={overlaySwipeResults.onTouchEnd} className="slide-pane safe-scroll-body" style={{ flex: 1, overflowY: "auto", position: "relative", zIndex: 20 }}>
           {loading ? (
@@ -2094,23 +2100,6 @@ function CatalystCash() {
         </div>
       )}
 
-      {tab === "chat" && (
-        <div ref={overlaySwipeChat.paneRef} onTouchStart={overlaySwipeChat.onTouchStart} onTouchMove={overlaySwipeChat.onTouchMove} onTouchEnd={overlaySwipeChat.onTouchEnd} className="slide-pane safe-scroll-body" style={{ flex: 1, overflowY: "auto", position: "relative", zIndex: 50, background: T.bg.base }}>
-          <ErrorBoundary name="AI Chat">
-            <Suspense fallback={<TabFallback />}>
-              <AIChatTab
-                proEnabled={proEnabled}
-                initialPrompt={chatInitialPrompt}
-                clearInitialPrompt={() => setChatInitialPrompt(null)}
-                onBack={() => {
-                  navTo(lastCenterTab.current);
-                  haptic.light();
-                }}
-              />
-            </Suspense>
-          </ErrorBoundary>
-        </div>
-      )}
 
       {tab === "settings" && (
         <ErrorBoundary name="Settings">

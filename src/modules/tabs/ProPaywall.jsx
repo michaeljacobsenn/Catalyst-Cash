@@ -15,8 +15,8 @@ const loadRevenueCat = () => import("../revenuecat.js");
 
 // ── Feature comparison: generous Free vs premium Pro ──────────
 const FEATURES = [
-  { label: "AI Audits", free: "3 / week", pro: "50 / month", icon: "📊" },
-  { label: "AskAI Chat", free: "15 / day", pro: "100 / day", icon: "💬" },
+  { label: "AI Audits", free: "2 / week", pro: "31 / month (1/day)", icon: "📊" },
+  { label: "AskAI Chat", free: "10 / day", pro: "50 / day", icon: "💬" },
   { label: "AI Models", free: "Catalyst AI", pro: "Pro · Reasoning", icon: "🧠" },
   { label: "Audit History", free: "Last 12", pro: "Full archive", icon: "📜" },
   { label: "Dashboard & Charts", free: "✓ Full", pro: "✓ Full", icon: "📈" },
@@ -208,7 +208,7 @@ export default function ProPaywall({ onClose }) {
           <div style={{ fontSize: 36, marginBottom: 8 }}>⚡</div>
           <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 6px", color: T.text.primary }}>Upgrade to Pro</h2>
           <p style={{ fontSize: 13, color: T.text.dim, margin: "0 0 10px", lineHeight: 1.4 }}>
-            50 audits/month, premium AI models, and advanced financial tools.
+            31 audits/month, premium AI models, and advanced financial tools.
           </p>
           {/* Social proof / positioning */}
           <div

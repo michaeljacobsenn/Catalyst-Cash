@@ -194,7 +194,6 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                 style={{
                                     padding: 0,
                                     borderBottom: iGroup === enabledInvestments.length - 1 ? "none" : `1px solid ${T.border.subtle}`,
-                                    borderLeft: `3px solid ${color}`,
                                 }}
                             >
                                 <div

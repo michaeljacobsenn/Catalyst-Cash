@@ -61,6 +61,7 @@ import AnalyticsCharts from "../dashboard/AnalyticsCharts.jsx";
 import BadgeStrip from "../dashboard/BadgeStrip.jsx";
 import DebtFreedomCard from "../dashboard/DebtFreedomCard.jsx";
 import EmptyDashboard from "../dashboard/EmptyDashboard.jsx";
+import { SafeToSpendCard } from "../dashboard/SafeToSpendCard.jsx";
 
 const SYNC_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
 let _autoSyncDone = false; // Survives component remounts — only auto-sync once per app session
@@ -146,7 +147,6 @@ export default memo(function DashboardTab({
   const p = current?.parsed;
   const {
     dashboardMetrics,
-    fallbackChecking,
     floor,
     investmentSnapshot,
     fireProjection,
@@ -158,6 +158,7 @@ export default memo(function DashboardTab({
     chartA11y,
     freedomStats,
     alerts,
+    portfolioMetrics,
   } = useDashboardData();
 
   // Confetti
@@ -313,22 +314,19 @@ export default memo(function DashboardTab({
   })();
 
   const quickMetrics = [
-    { l: "Checking", v: dashboardMetrics.checking, c: T.text.primary, icon: "💳" },
-    { l: "Vault", v: dashboardMetrics.vault, c: T.text.primary, icon: "🏦" },
-    (dashboardMetrics.investments ?? 0) > 0 ? { l: "Investments", v: dashboardMetrics.investments, c: T.accent.emerald, icon: "📈" } : null,
+    { l: "Checking", v: portfolioMetrics?.spendableCash, c: T.text.primary, icon: "💳" },
+    (portfolioMetrics?.savingsCash ?? 0) > 0 ? { l: "Savings", v: portfolioMetrics.savingsCash, c: T.status.blue, icon: "🏦" } : null,
+    { l: "Net Worth", v: portfolioMetrics?.netWorth, c: T.text.primary, icon: "📊" },
+    (portfolioMetrics?.totalInvestments ?? 0) > 0 ? { l: "Investments", v: portfolioMetrics.totalInvestments, c: T.accent.emerald, icon: "📈" } : null,
     { l: "Pending", v: dashboardMetrics.pending, c: T.status.amber, icon: "⏳" },
-    { l: "Debts", v: dashboardMetrics.debts, c: T.status.red, icon: "📊" },
-    { l: "Other Assets", v: dashboardMetrics.otherAssets, c: T.text.secondary, icon: "🏠" },
-    {
-      l: "Available",
-      v: dashboardMetrics.available,
-      c: (dashboardMetrics.available ?? 0) >= floor ? T.status.green : T.status.red,
-      icon: "✅",
-    },
-  ].filter(m => m !== null && m.v != null);
+    (portfolioMetrics?.ccDebt ?? 0) > 0 ? { l: "CC Debt", v: portfolioMetrics.ccDebt, c: T.status.red, icon: "💳" } : null,
+    (portfolioMetrics?.totalDebtBalance ?? 0) > 0 ? { l: "Loans", v: portfolioMetrics.totalDebtBalance, c: T.status.red, icon: "🏦" } : null,
+    (portfolioMetrics?.totalOtherAssets ?? 0) > 0 ? { l: "Other Assets", v: portfolioMetrics.totalOtherAssets, c: T.text.secondary, icon: "🏠" } : null,
+  ].filter(Boolean);
 
   return (
-    <div className="page-body stagger-container" aria-live="polite" style={{ paddingBottom: 0 }}>
+    <div className="page-body stagger-container" aria-live="polite" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+      <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
       {runConfetti && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, pointerEvents: "none" }}>
           <Confetti
@@ -586,7 +584,7 @@ export default memo(function DashboardTab({
               </div>
             </Card>
 
-            {/* Available Cash Square */}
+            {/* Checking Balance Square */}
             <Card
               animate
               delay={100}
@@ -606,15 +604,15 @@ export default memo(function DashboardTab({
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                <div style={{ width: 24, height: 24, borderRadius: "50%", background: dashboardMetrics.available >= floor ? `${T.status.green}20` : `${T.status.amber}20`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <TrendingUp size={12} color={dashboardMetrics.available >= floor ? T.status.green : T.status.amber} strokeWidth={3} />
+                <div style={{ width: 24, height: 24, borderRadius: "50%", background: (portfolioMetrics?.spendableCash ?? 0) >= floor ? `${T.status.green}20` : `${T.status.amber}20`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <TrendingUp size={12} color={(portfolioMetrics?.spendableCash ?? 0) >= floor ? T.status.green : T.status.amber} strokeWidth={3} />
                 </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>Available Cash</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>Checking</span>
               </div>
-              
+
               <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 4, marginBottom: 4 }}>
                 <span style={{ fontSize: 24, fontWeight: 900, color: privacyMode ? T.text.dim : T.text.primary, letterSpacing: "-0.02em" }}>
-                  {privacyMode ? "••••" : fmt(dashboardMetrics.available)}
+                  {privacyMode ? "••••" : fmt(portfolioMetrics?.spendableCash)}
                 </span>
               </div>
 
@@ -623,30 +621,38 @@ export default memo(function DashboardTab({
                   Floor: <span style={{ fontFamily: T.font.mono, color: privacyMode ? T.text.dim : T.text.primary }}>{privacyMode ? "•••" : fmt(floor)}</span>
                 </div>
               )}
-              
+
               <div style={{ marginTop: "auto", paddingTop: 12 }}>
-                <div style={{ 
-                  display: "inline-flex", 
-                  alignItems: "center", 
-                  gap: 4, 
-                  padding: "4px 8px", 
-                  background: dashboardMetrics.available >= floor ? `${T.status.green}15` : `${T.status.amber}15`, 
+                <div style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "4px 8px",
+                  background: (portfolioMetrics?.spendableCash ?? 0) >= floor ? `${T.status.green}15` : `${T.status.amber}15`,
                   borderRadius: T.radius.sm,
-                  border: `1px solid ${dashboardMetrics.available >= floor ? T.status.green : T.status.amber}30`
+                  border: `1px solid ${(portfolioMetrics?.spendableCash ?? 0) >= floor ? T.status.green : T.status.amber}30`
                 }}>
-                  {dashboardMetrics.available >= floor ? (
+                  {(portfolioMetrics?.spendableCash ?? 0) >= floor ? (
                     <CheckCircle size={10} color={T.status.green} />
                   ) : (
                     <AlertTriangle size={10} color={T.status.amber} />
                   )}
-                  <span style={{ fontSize: 10, fontWeight: 700, color: dashboardMetrics.available >= floor ? T.status.green : T.status.amber }}>
-                    {dashboardMetrics.available >= floor ? "Safe to spend" : "Below floor"}
+                  <span style={{ fontSize: 10, fontWeight: 700, color: (portfolioMetrics?.spendableCash ?? 0) >= floor ? T.status.green : T.status.amber }}>
+                    {(portfolioMetrics?.spendableCash ?? 0) >= floor ? "Above floor" : "Below floor"}
                   </span>
                 </div>
               </div>
             </Card>
           </div>
 
+          {/* ═══ ULTIMATE ROADMAP: SAFE TO SPEND ═══ */}
+          <div style={{ marginBottom: 12 }}>
+            <SafeToSpendCard
+              theme={T.theme}
+              spendableCash={portfolioMetrics?.spendableCash ?? 0}
+              ccDebt={portfolioMetrics?.ccDebt ?? 0}
+            />
+          </div>
 
           {/* ═══ SYNC BALANCES BAR ═══ */}
           {!current?.isTest && (cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId)) && (
@@ -1187,10 +1193,9 @@ export default memo(function DashboardTab({
             );
           })()}
 
-          {/* ═══ LIFESTYLE CREEP DETECTOR (Pro Tier Power Feature 1) ═══ */}
+          {/* ═══ SPENDING PACE ALERT (Pro Tier Power Feature 1) ═══ */}
           {(() => {
-            // Temporary override for testing so we don't need 2 weeks of history
-            // if (!history || history.length < 2 || !cards || cards.length === 0) return null;
+            if (!history || history.length < 2) return null;
 
             // Look at spending pace Data over last 30 vs previous 30.
             // Simplified heuristic for zero-cost operation: Compare reported weekly actuals.
@@ -1215,11 +1220,8 @@ export default memo(function DashboardTab({
             currentDiscretionary += currentAllowance;
             prevDiscretionary += prevAllowance;
 
-            // Force testing values if empty
-            if (currentDiscretionary === 0 && prevDiscretionary === 0) {
-              currentDiscretionary = 450;
-              prevDiscretionary = 300;
-            }
+            // No real data — don't show fake numbers
+            if (currentDiscretionary === 0 && prevDiscretionary === 0) return null;
 
             const diff = currentDiscretionary - prevDiscretionary;
             const creepPct = prevDiscretionary > 0 ? (diff / prevDiscretionary) * 100 : 0;
@@ -1237,8 +1239,8 @@ export default memo(function DashboardTab({
                       <Shield size={16} color={T.status.green} />
                     </div>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary }}>Lifestyle Maintained</div>
-                      <div style={{ fontSize: 11, color: T.text.dim }}>Your discretionary spend is stable vs last week.</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary }}>Spending Stable</div>
+                      <div style={{ fontSize: 11, color: T.text.dim }}>Your discretionary cash flow is consistent with last week.</div>
                     </div>
                   </div>
                 </Card>
@@ -1270,7 +1272,7 @@ export default memo(function DashboardTab({
                     <Activity size={18} color={T.status.amber} strokeWidth={2.5} />
                   </div>
                   <div style={{ flex: 1, filter: !proEnabled ? "blur(3px)" : "none", pointerEvents: !proEnabled ? "none" : "auto", transition: "filter 0.3s" }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary, marginBottom: 2 }}>Lifestyle Creep Detected</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary, marginBottom: 2 }}>Spending Pace Alert</div>
                     <div style={{ fontSize: 11, color: T.text.secondary, marginBottom: 12 }}>
                       Your discretionary spending increased by <strong style={{ color: T.status.amber }}>{creepPct.toFixed(0)}%</strong> vs last week.
                     </div>
@@ -1285,7 +1287,7 @@ export default memo(function DashboardTab({
                         <span style={{ fontWeight: 800, fontFamily: T.font.mono, color: T.status.amber }}>{fmt(currentDiscretionary)}</span>
                       </div>
                       <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${T.border.subtle}`, fontSize: 11, color: T.text.secondary, lineHeight: 1.4 }}>
-                        <strong style={{ color: T.text.primary }}>Recommendation:</strong> If this +{fmt(diff)} continues, it will cost you {fmt(diff * 52)} this year. Review your transactions and cut back on flexible categories to re-align with yourFIRE goals.
+                        <strong style={{ color: T.text.primary }}>Recommendation:</strong> At this +{fmt(diff)} pace, your annual flexible spending will rise by {fmt(diff * 52)}. Consider holding off on non-essentials to stay aligned with your goals.
                       </div>
                     </div>
                   </div>
@@ -1304,8 +1306,8 @@ export default memo(function DashboardTab({
                     backdropFilter: "blur(2px)"
                   }}>
                     <div style={{ textAlign: "center", padding: "0 20px" }}>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary, marginBottom: 8 }}>Stop Lifestyle Inflation</div>
-                      <div style={{ fontSize: 11, color: T.text.secondary, marginBottom: 14 }}>Upgrade to detect creeping expenses before they derail your FIRE number.</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary, marginBottom: 8 }}>Track Spending Trends</div>
+                      <div style={{ fontSize: 11, color: T.text.secondary, marginBottom: 14 }}>Upgrade to Pro to detect creeping expenses before they impact your targets.</div>
                       <button
                         onClick={() => setShowPaywall(true)}
                         style={{
@@ -1330,12 +1332,12 @@ export default memo(function DashboardTab({
           })()}
 
           {/* ═══ CASH FLOW CALENDAR ═══ */}
-          {(dashboardMetrics.checking != null || fallbackChecking != null) && (
+          {(portfolioMetrics?.spendableCash != null) && (
             <CashFlowCalendar
               config={financialConfig}
               cards={cards}
               renewals={renewals}
-              checkingBalance={dashboardMetrics.checking ?? fallbackChecking ?? 0}
+              checkingBalance={portfolioMetrics.spendableCash ?? 0}
               snapshotDate={current?.date}
             />
           )}
@@ -1744,7 +1746,8 @@ export default memo(function DashboardTab({
           >
             AI-generated educational content only · Not professional financial advice
           </p>
-      </>
+        </>
+      </div>
     </div>
   );
 });

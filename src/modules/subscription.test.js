@@ -47,7 +47,7 @@ beforeEach(() => {
 // ═══════════════════════════════════════════════════════════════
 describe("Tier Definitions", () => {
   it("free tier has correct limits", () => {
-    expect(TIERS.free.auditsPerWeek).toBe(3);
+    expect(TIERS.free.auditsPerWeek).toBe(2);
     expect(TIERS.free.marketRefreshMs).toBe(60 * 60 * 1000); // 60 min
     expect(TIERS.free.historyLimit).toBe(12);
     expect(TIERS.free.models).toEqual(["gpt-4o-mini"]);
@@ -124,7 +124,7 @@ describe("Soft Gating — Free-tier limits with banners", () => {
 
   it("hasFeature returns false for pro-only features", async () => {
     expect(await hasFeature("premium_models")).toBe(false);
-    expect(await hasFeature("unlimited_audits")).toBe(false);
+    expect(await hasFeature("31_audits_per_month")).toBe(false);
   });
 
   it("hasFeature returns true for free-tier features", async () => {
@@ -209,6 +209,44 @@ describe("Subscription State", () => {
     expect(keys.dayKey).toBe("2026-03-02");
     expect(keys.weekStartDate).toBe("2026-03-02");
     expect(keys.monthKey).toBe("2026-03");
+  });
+
+  describe("Billing Cycle Anchoring", () => {
+    it("anchors to standard mid-month date", () => {
+      // Anchor 15th, currently Mar 10 -> cycle started Feb 15
+      const key1 = getUsageWindowKeys(new Date("2026-03-10T12:00:00Z"), 15).billingCycleKey;
+      expect(key1).toBe("2026-02-15");
+
+      // Anchor 15th, currently Mar 16 -> cycle started Mar 15
+      const key2 = getUsageWindowKeys(new Date("2026-03-16T12:00:00Z"), 15).billingCycleKey;
+      expect(key2).toBe("2026-03-15");
+    });
+
+    it("clamps anchor to month length (e.g. 31st in short month)", () => {
+      // Anchor 31, currently Feb 10 (2026 not leap year) -> cycle started Jan 31
+      const key1 = getUsageWindowKeys(new Date("2026-02-10T12:00:00Z"), 31).billingCycleKey;
+      expect(key1).toBe("2026-01-31");
+
+      // Anchor 31, currently Mar 5 -> cycle started Feb 28
+      const key2 = getUsageWindowKeys(new Date("2026-03-05T12:00:00Z"), 31).billingCycleKey;
+      expect(key2).toBe("2026-02-28");
+
+      // Anchor 30, currently Mar 5 -> cycle started Feb 28
+      const key3 = getUsageWindowKeys(new Date("2026-03-05T12:00:00Z"), 30).billingCycleKey;
+      expect(key3).toBe("2026-02-28");
+    });
+
+    it("handles leap years correctly", () => {
+      // Anchor 31, currently Mar 5 (2024 leap year) -> cycle started Feb 29
+      const key1 = getUsageWindowKeys(new Date("2024-03-05T12:00:00Z"), 31).billingCycleKey;
+      expect(key1).toBe("2024-02-29");
+    });
+
+    it("handles crossing year boundaries", () => {
+      // Anchor 15, currently Jan 5 -> cycle started Dec 15 of prior year
+      const key1 = getUsageWindowKeys(new Date("2026-01-05T12:00:00Z"), 15).billingCycleKey;
+      expect(key1).toBe("2025-12-15");
+    });
   });
 });
 

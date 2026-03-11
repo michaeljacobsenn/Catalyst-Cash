@@ -9,7 +9,7 @@ const MAX_BODY_SIZE = 512_000; // 512KB max request body (system prompt alone is
 const VALID_PROVIDERS = ["gemini", "openai", "claude"];
 const PLAID_ENV = "production"; // "sandbox", "development", or "production"
 const FREE_AUDITS_PER_WEEK = 2;
-const PRO_AUDITS_PER_MONTH = 60;
+const PRO_AUDITS_PER_MONTH = 31;
 const FREE_CHATS_PER_DAY = 10;
 const PRO_CHATS_PER_DAY = 50;
 const PROVIDER_TIMEOUT_MS = 240_000; // 4 min for all models (client has a cancel button)
@@ -21,6 +21,8 @@ const SECURITY_HEADERS = {
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
   "Referrer-Policy": "no-referrer",
   "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Content-Security-Policy": "frame-ancestors 'none'",
 };
 const MODEL_ALLOWLIST = {
   free: new Set(["gemini-2.5-flash", "gpt-4o-mini"]),
@@ -455,6 +457,10 @@ export default {
           gatingMode: env.GATING_MODE || "live",
           minVersion: env.MIN_VERSION || "2.0.0",
           entitlementVerification: Boolean(env.REVENUECAT_SECRET_KEY),
+          rotatingCategories: {
+            "Chase Freedom Flex": ["gas", "transit"], // Example active quarter
+            "Discover it Cash Back": ["groceries", "drugstores", "online_shopping"] // Example active quarter
+          }
         }),
         {
           status: 200,
@@ -769,22 +775,6 @@ export default {
             headers: buildHeaders(cors, { "Content-Type": "application/json" }),
           });
         }
-
-        const plaidRes = await fetchWithTimeout(
-          `${plaidDomain}${plaidEndpoint}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(plaidBody),
-          },
-          PLAID_TIMEOUT_MS
-        );
-
-        const plaidData = await plaidRes.json();
-        return new Response(JSON.stringify(plaidData), {
-          status: plaidRes.status,
-          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
-        });
       } catch (err) {
         return new Response(JSON.stringify({ error: "Plaid proxy error", details: err.message }), {
           status: 500,

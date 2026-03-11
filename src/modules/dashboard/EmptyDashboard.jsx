@@ -24,11 +24,11 @@ export default function EmptyDashboard({ investmentSnapshot, onRestore, onDemoAu
   };
   const onGoCards = () => {
     setSetupReturnTab("dashboard");
-    navTo("cards");
+    navTo("portfolio");
   };
   const onGoRenewals = () => {
     setSetupReturnTab("dashboard");
-    navTo("renewals");
+    navTo("cashflow");
   };
 
   const hasCards = cards.length > 0;

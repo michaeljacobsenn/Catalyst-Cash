@@ -1,14 +1,14 @@
 import React, { useState, useContext, useMemo, useEffect, lazy, Suspense } from "react";
 import {
   Search, Sparkles, CreditCard, Coffee, ShoppingCart,
-  Fuel, Plane, Train, Package, Store, Pill, AlertCircle, Info, Settings2, ChevronDown, Check, X, RefreshCw, Tv, DollarSign, Smartphone, RotateCw, Clock
+  Fuel, Plane, Train, Package, Store, Pill, AlertCircle, Info, Settings2, ChevronDown, Check, X, RefreshCw, Tv, DollarSign, Smartphone, RotateCw, Clock, Lock, Zap
 } from "lucide-react";
 import { PortfolioContext } from "../contexts/PortfolioContext.jsx";
 import { useSettings } from "../contexts/SettingsContext.jsx";
 import { getCardMultiplier, VALUATIONS } from "../rewardsCatalog.js";
 import { classifyMerchant } from "../api.js";
 import { haptic } from "../haptics.js";
-import { Card, InlineTooltip, FormGroup, FormRow, Skeleton } from "../ui.jsx";
+import { Card, InlineTooltip, FormGroup, FormRow, Skeleton, Badge } from "../ui.jsx";
 import { MERCHANT_DATABASE, extractCategoryByKeywords } from "../merchantDatabase.js";
 import { T } from "../constants.js";
 import { shouldShowGating } from "../subscription.js";
@@ -55,6 +55,7 @@ export default function CardWizardTab({ proEnabled }) {
   const [categorizing, setCategorizing] = useState(false);
   const [resolvedCategory, setResolvedCategory] = useState(cachedCategory);
   const [resolvedMerchant, setResolvedMerchant] = useState(cachedMerchant);
+  const [matchSource, setMatchSource] = useState(""); // "instant" | "keyword" | "ai"
   const [error, setError] = useState("");
   const [showValuations, setShowValuations] = useState(false);
   const [spendAmount, setSpendAmount] = useState("");
@@ -120,6 +121,7 @@ export default function CardWizardTab({ proEnabled }) {
     if (offlineMatch) {
       setResolvedCategory(offlineMatch.category);
       setResolvedMerchant({ ...offlineMatch, name: offlineMatch.name }); // Keep original capitalization
+      setMatchSource("instant");
       addToHistory(offlineMatch);
       setCategorizing(false);
       setShowValuations(false);
@@ -134,6 +136,7 @@ export default function CardWizardTab({ proEnabled }) {
       setResolvedCategory(heuristicCategory);
       const merchant = { name: query, category: heuristicCategory, color: null };
       setResolvedMerchant(merchant);
+      setMatchSource("keyword");
       addToHistory(merchant);
       setCategorizing(false);
       setShowValuations(false);
@@ -148,6 +151,7 @@ export default function CardWizardTab({ proEnabled }) {
       setResolvedCategory(category);
       const merchant = { name: query, category, color: null };
       setResolvedMerchant(merchant);
+      setMatchSource("ai");
       addToHistory(merchant);
       setShowValuations(false);
       setShowAllRunners(false);
@@ -171,6 +175,7 @@ export default function CardWizardTab({ proEnabled }) {
     setShowAllRunners(false);
     setResolvedCategory(merchant.category);
     setResolvedMerchant(merchant);
+    setMatchSource("instant");
     addToHistory(merchant);
   };
 
@@ -182,6 +187,7 @@ export default function CardWizardTab({ proEnabled }) {
     setShowSuggestions(false);
     setShowValuations(false);
     setShowAllRunners(false);
+    setMatchSource("category");
     setResolvedCategory(categoryId);
     setResolvedMerchant({ name: categoryId.replace("_", " "), category: categoryId, color: null });
   };
@@ -357,16 +363,10 @@ export default function CardWizardTab({ proEnabled }) {
   const runnersToShow = showAllRunners ? recommendations.slice(1) : recommendations.slice(1, 4);
 
   return (
-    <div className="safe-scroll-body scroll-area" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div className="safe-scroll-body scroll-area hide-scrollbar" style={{ display: "flex", flexDirection: "column", alignItems: "center", height: "100%", width: "100%", flex: 1, paddingBottom: 120, overflowY: "auto", overflowX: "hidden" }}>
       <div className="page-body" style={{ maxWidth: 768, margin: "0 auto", width: "100%", display: "flex", flexDirection: "column", gap: 24 }}>
 
-        {shouldShowGating() && !proEnabled && (
-          <ProBanner
-            onUpgrade={() => setShowPaywall(true)}
-            label="Card Wizard is a Pro feature"
-            sublabel="Upgrade to unlock the ultimate card pairing engine"
-          />
-        )}
+        {/* Pro Banner Removed - Teaser is now in the results section */}
         {showPaywall && (
           <Suspense fallback={null}>
             <LazyProPaywall onClose={() => setShowPaywall(false)} />
@@ -379,7 +379,7 @@ export default function CardWizardTab({ proEnabled }) {
             <Sparkles color={T.accent.primary} size={28} />
           </div>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: T.text.primary, marginBottom: 6 }}>Card Wizard</h1>
-          <p style={{ fontSize: 14, color: T.text.secondary, maxWidth: 320, margin: "0 auto" }}>Where are you shopping? We'll calculate the highest mathematical yield instantaneously.</p>
+          <p style={{ fontSize: 14, color: T.text.secondary, maxWidth: 320, margin: "0 auto" }}>Enter a merchant to find your best card for maximum rewards.</p>
         </div>
 
         {/* Search Bar */}
@@ -587,8 +587,9 @@ export default function CardWizardTab({ proEnabled }) {
 
         {/* Quick Select Bento Grid */}
         {!resolvedCategory && !isTyping && !showValuations && !error && (
-          <div className="stagger-container" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-            {QUICK_CATEGORIES.map((cat, idx) => {
+          <div style={{ maxWidth: 500, margin: "0 auto", width: "100%" }}>
+            <div className="stagger-container" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+              {QUICK_CATEGORIES.map((cat, idx) => {
               const Icon = cat.icon;
               return (
                 <button
@@ -596,7 +597,7 @@ export default function CardWizardTab({ proEnabled }) {
                   onClick={() => handleQuickSelect(cat.id)}
                   className="card-press"
                   style={{
-                    aspectRatio: "1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    height: 96, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
                     padding: 8, borderRadius: 16, background: T.bg.elevated, border: `1px solid ${T.border.default}`,
                     boxShadow: T.shadow.sm, animationDelay: `${idx * 0.05}s`
                   }}
@@ -608,6 +609,7 @@ export default function CardWizardTab({ proEnabled }) {
                 </button>
               );
             })}
+            </div>
           </div>
         )}
 
@@ -654,7 +656,7 @@ export default function CardWizardTab({ proEnabled }) {
           <div className="stagger-container" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 4px" }}>
-               <Badge variant="purple">AI Matched</Badge>
+               <Badge variant="purple">{matchSource === "ai" ? "AI Matched" : matchSource === "keyword" ? "Keyword Match" : matchSource === "category" ? "Category" : "Instant Match"}</Badge>
                <h3 style={{ fontSize: 12, fontWeight: 800, color: T.text.primary, textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 }}>
                  {resolvedCategory.replace(/_/g, " ")}
                </h3>
@@ -855,11 +857,72 @@ export default function CardWizardTab({ proEnabled }) {
                     </div>
                   )}
                 </div>
+
+                {/* ── Full Earning Profile ── */}
+                {(() => {
+                  const winner = recommendations[0];
+                  const allCats = ["dining", "groceries", "gas", "travel", "transit", "online_shopping", "streaming", "wholesale_clubs", "drugstores", "catch-all"];
+                  const catLabels = { dining: "Dining", groceries: "Groceries", gas: "Gas", travel: "Travel", transit: "Transit", online_shopping: "Online", streaming: "Streaming", wholesale_clubs: "Wholesale", drugstores: "Pharmacy", "catch-all": "Everything Else" };
+                  const profile = allCats.map(cat => {
+                    const info = getCardMultiplier(winner.name, cat, customValuations);
+                    return { cat, label: catLabels[cat] || cat, multiplier: info.multiplier, yield: info.effectiveYield, active: cat === resolvedCategory };
+                  });
+                  return (
+                    <div className="fade-in" style={{ marginTop: 16, animationDelay: "0.5s" }}>
+                      <p style={{ fontSize: 11, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8, paddingLeft: 4 }}>Full Earning Profile</p>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4 }}>
+                        {profile.map(p => (
+                          <div key={p.cat} style={{
+                            padding: "6px 4px", borderRadius: 8, textAlign: "center",
+                            background: p.active ? `${T.accent.primary}20` : T.bg.surface,
+                            border: `1px solid ${p.active ? T.accent.primary : T.border.subtle}`,
+                          }}>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: p.active ? T.accent.primary : T.text.primary }}>{p.multiplier}x</div>
+                            <div style={{ fontSize: 8, fontWeight: 700, color: p.active ? T.accent.primary : T.text.dim, textTransform: "uppercase", letterSpacing: "0.02em", marginTop: 2 }}>{p.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
-            {/* Runners Up */}
-            {recommendations.length > 1 && (
+            {/* Runners Up Teaser (Free) */}
+            {!proEnabled && recommendations.length > 1 && (
+              <div style={{ marginTop: 24, position: "relative" }}>
+                <h3 style={{ fontSize: 12, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16, paddingLeft: 4 }}>Runner Up Options</h3>
+                
+                {/* Blurred mock up */}
+                <div style={{ opacity: 0.25, filter: "blur(6px)", pointerEvents: "none", userSelect: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[1, 2].map(i => (
+                    <Card key={i} variant="elevated" style={{ height: 86, background: T.bg.surface, border: `1px solid ${T.border.default}` }} />
+                  ))}
+                </div>
+                
+                {/* Centered CTA */}
+                <div style={{ position: "absolute", top: 40, left: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 10 }}>
+                  <div style={{ padding: 24, textAlign: "center", width: "100%", maxWidth: 320, background: T.bg.elevated, border: `1px solid ${T.accent.primary}40`, borderRadius: 24, boxShadow: `0 16px 32px rgba(0,0,0,0.5), 0 0 0 1px ${T.accent.primary}20` }}>
+                     <div style={{ width: 48, height: 48, borderRadius: 24, background: T.accent.primary, margin: "0 auto 12px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 8px 16px ${T.accent.primary}40` }}>
+                       <Lock size={24} color="#FFF" />
+                     </div>
+                     <h4 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, margin: "0 0 8px 0", letterSpacing: "-0.02em" }}>Unlock All Rankers</h4>
+                     <p style={{ fontSize: 13, color: T.text.secondary, margin: "0 auto 20px", lineHeight: 1.5 }}>Upgrade to Catalyst Cash Pro to see every card in your wallet modeled to this purchase.</p>
+                     <button
+                       onClick={() => { haptic.medium(); setShowPaywall(true); }}
+                       className="hover-lift"
+                       style={{ background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`, color: "#fff", border: "none", padding: "14px 24px", borderRadius: 16, fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: `0 8px 16px ${T.accent.primary}40`, width: "100%", textShadow: "0 1px 2px rgba(0,0,0,0.2)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                     >
+                       <Zap size={16} fill="#fff" />
+                       View Pro Plans
+                     </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Runners Up (Pro) */}
+            {proEnabled && recommendations.length > 1 && (
               <div style={{ marginTop: 8 }}>
                 <h3 style={{ fontSize: 12, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12, paddingLeft: 4 }}>Runner Up Options</h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

@@ -5,8 +5,8 @@ import { haptic } from "../haptics.js";
 const NavigationContext = createContext(null);
 
 // ── Swipeable tab order ──
-// Mirrors the bottom nav bar order exactly: Audit | Wizard | Dashboard | Expenses | Accounts
-const SWIPE_TAB_ORDER = ["input", "wizard", "dashboard", "renewals", "cards"];
+// Mirrors the bottom nav bar order exactly: Dashboard | Cashflow | Portfolio | Ask AI
+const SWIPE_TAB_ORDER = ["dashboard", "cashflow", "portfolio", "chat"];
 
 export function NavigationProvider({ children }) {
   const [tab, setTab] = useState("dashboard");
@@ -52,7 +52,7 @@ export function NavigationProvider({ children }) {
 
       // When leaving an overlay the snap-container transitions from display:none → flex.
       // We must wait for React to re-render so container.clientWidth > 0 before scrolling.
-      const OVERLAY_TABS = ["settings", "results", "history", "guide"];
+      const OVERLAY_TABS = ["settings", "results", "history", "guide", "input"];
       if (OVERLAY_TABS.includes(prevTab)) {
         requestAnimationFrame(() => requestAnimationFrame(doScroll));
       } else {

@@ -101,7 +101,8 @@ export default memo(function HistoryTab({ toast }) {
   const [showPaywall, setShowPaywall] = useState(false);
 
   return (
-    <div className="page-body" style={{ paddingBottom: 0 }}>
+    <div className="page-body" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+      <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
       {shouldShowGating() && (
         <ProBanner
           onUpgrade={() => setShowPaywall(true)}
@@ -879,6 +880,7 @@ export default memo(function HistoryTab({ toast }) {
           });
         })()
       )}
+      </div>
     </div>
   );
 });

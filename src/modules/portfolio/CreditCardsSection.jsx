@@ -217,7 +217,6 @@ export default function CreditCardsSection() {
                                     style={{
                                         padding: 0,
                                         borderBottom: iGroup === grouped.length - 1 ? "none" : `1px solid ${T.border.subtle}`,
-                                        borderLeft: `3px solid ${colors.text}`,
                                     }}
                                 >
                                     <div
