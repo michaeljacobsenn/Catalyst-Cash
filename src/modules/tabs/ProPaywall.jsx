@@ -591,6 +591,20 @@ export default function ProPaywall({ onClose }) {
             {plan === "yearly" &&
               " Your 7-day free trial begins immediately. You won't be charged until the trial ends."}
           </p>
+          <div style={{ marginTop: 10, display: "flex", justifyContent: "center", gap: 16 }}>
+            <button
+              onClick={() => window.open("https://catalystcash.app/terms", "_blank")}
+              style={{ background: "none", border: "none", color: T.text.muted, fontSize: 10, textDecoration: "underline", cursor: "pointer" }}
+            >
+              Terms of Service
+            </button>
+            <button
+              onClick={() => window.open("https://catalystcash.app/privacy", "_blank")}
+              style={{ background: "none", border: "none", color: T.text.muted, fontSize: 10, textDecoration: "underline", cursor: "pointer" }}
+            >
+              Privacy Policy
+            </button>
+          </div>
         </div>
       </div>
     </div>,
