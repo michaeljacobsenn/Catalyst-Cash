@@ -14,3 +14,12 @@ GATING_MODE = "live"
 # database_name = "catalyst-cash-db"
 # database_id = "5c52c002-ac48-4fd7-8ae3-75b2b2b1dc85" # Replace with actual ID when provisioning
 # migrations_dir = "migrations"
+
+[durable_objects]
+bindings = [
+  { name = "RATE_LIMITER", class_name = "RateLimiter" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateLimiter"]

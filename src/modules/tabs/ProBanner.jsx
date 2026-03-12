@@ -25,7 +25,7 @@ const SHIMMER_CSS = `
 
 /* Benefit pills shown inside the card */
 const BENEFITS = [
-  { emoji: "📊", text: "50 audits/mo" },
+  { emoji: "📊", text: "31 audits/mo" },
   { emoji: "🤖", text: "Premium AI" },
   { emoji: "📈", text: "Full history" },
   { emoji: "💳", text: "Card Wizard" },

@@ -41,7 +41,7 @@ function getBucketId(name) {
   return "personal";
 }
 
-export default function BudgetTab({ onRunAudit, embedded }) {
+export default function BudgetTab({ onRunAudit, embedded, proEnabled = false }) {
   const { envelopes, monthlyIncome, updateMonthlyIncome, allocateToEnvelope, getReadyToAssign } = useBudget();
   const { current } = useAudit();
 
@@ -98,7 +98,7 @@ export default function BudgetTab({ onRunAudit, embedded }) {
           </div>
         )}
 
-        {shouldShowGating() && (
+        {shouldShowGating() && !proEnabled && (
           <ProBanner
             onUpgrade={() => setShowPaywall(true)}
             label="⚡ AI Budget Insights"

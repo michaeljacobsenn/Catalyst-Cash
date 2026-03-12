@@ -4,7 +4,7 @@ import { T, APP_VERSION } from "../constants.js";
 
 import { useNavigation } from "../contexts/NavigationContext.jsx";
 
-export default function GuideModal({ onClose: onExplicitClose, swipeHook = {} }) {
+export default function GuideModal({ onClose: onExplicitClose, swipeHook = {}, proEnabled = false }) {
   const { setShowGuide } = useNavigation();
   const [isClosing, setIsClosing] = useState(false);
 
@@ -28,6 +28,8 @@ export default function GuideModal({ onClose: onExplicitClose, swipeHook = {} })
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, []);
+
+  const guideUrl = proEnabled ? "/CatalystCash-Guide-Pro.html" : "/CatalystCash-Guide-Free.html";
 
   return (
     <div
@@ -118,7 +120,7 @@ export default function GuideModal({ onClose: onExplicitClose, swipeHook = {} })
       {/* Embedded Iframe */}
       <div style={{ flex: 1, position: "relative", background: "#06080F" }}>
         <iframe
-          src="/CatalystCash-Guide.html"
+          src={guideUrl}
           style={{
             position: "absolute",
             inset: 0,

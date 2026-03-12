@@ -3,7 +3,6 @@ import { Card, Label } from "../ui.jsx";
 import { T } from "../constants.js";
 import { addDays, daysBetween, getNextPayday, getNextDateForDayOfMonth } from "../engine.js";
 import { Lock } from "lucide-react";
-import { useSettings } from "../contexts/SettingsContext.jsx";
 
 // Helper to format date "Mar 14"
 function formatShortDate(dateStr) {
@@ -11,8 +10,8 @@ function formatShortDate(dateStr) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
-export default function CashFlowCalendar({ config, cards, renewals, checkingBalance, snapshotDate }) {
-  const { proEnabled: isPro } = useSettings();
+export default function CashFlowCalendar({ config, cards, renewals, checkingBalance, snapshotDate, proEnabled = false }) {
+  const isPro = proEnabled;
 
   // useMemo MUST come before any early returns (Rules of Hooks)
   const timeline = useMemo(() => {

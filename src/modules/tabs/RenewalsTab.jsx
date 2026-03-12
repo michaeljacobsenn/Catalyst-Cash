@@ -1521,7 +1521,7 @@ export default memo(function RenewalsTab({ proEnabled }) {
                                     onClick={(e) => {
                                       e.preventDefault();
                                       e.stopPropagation();
-                                      if (shouldShowGating(proEnabled)) {
+                                      if (shouldShowGating() && !proEnabled) {
                                         if (typeof haptic !== "undefined") haptic.selection();
                                         setShowPaywall(true);
                                         return;

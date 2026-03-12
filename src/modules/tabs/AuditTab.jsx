@@ -180,7 +180,7 @@ export default memo(function AuditTab({ proEnabled = false, toast }) {
     <div className="page-body" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
 
-        {shouldShowGating() && (
+        {shouldShowGating() && !proEnabled && (
           <ProBanner
             compact
             onUpgrade={() => setShowPaywall(true)}

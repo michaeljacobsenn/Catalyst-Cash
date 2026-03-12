@@ -47,7 +47,7 @@ export default function CashflowTab({
 
       <div style={{ flex: 1, position: "relative" }}>
         <div style={{ display: activeView === "budget" ? "block" : "none", height: "100%" }}>
-          <BudgetTab onRunAudit={onRunAudit} toast={toast} embedded />
+          <BudgetTab onRunAudit={onRunAudit} toast={toast} embedded proEnabled={proEnabled} />
         </div>
         <div style={{ display: activeView === "renewals" ? "block" : "none", height: "100%" }}>
           <RenewalsTab proEnabled={proEnabled} embedded />

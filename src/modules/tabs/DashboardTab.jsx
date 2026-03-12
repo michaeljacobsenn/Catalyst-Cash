@@ -688,17 +688,13 @@ export default memo(function DashboardTab({
              )}
              {/* Ledger */}
              <button
-               onClick={() => { 
+               onClick={() => {
                  haptic.light();
-                 console.warn("Ledger Button Clicked!");
-                 console.warn(" - proEnabled:", proEnabled);
-                 console.warn(" - isGatingEnforced():", isGatingEnforced());
-                 console.warn(" - getGatingMode():", getGatingMode());
-                 if (proEnabled || !isGatingEnforced()) { 
-                   onViewTransactions?.(); 
-                 } else { 
-                   setShowPaywall(true); 
-                 } 
+                 if (proEnabled || !isGatingEnforced()) {
+                   onViewTransactions?.();
+                 } else {
+                   setShowPaywall(true);
+                 }
                }}
                className="hover-btn"
                style={{
@@ -728,8 +724,8 @@ export default memo(function DashboardTab({
              </button>
            </div>
 
-           {/* Pro upsell — compact strip for free users */}
-           {shouldShowGating() && (
+           {/* Pro upsell — compact strip for free users only */}
+           {shouldShowGating() && !proEnabled && (
              <ProBanner compact onUpgrade={() => setShowPaywall(true)} label="Unlock Catalyst Pro" sublabel="50 AI chats/day · Plaid sync · Card Wizard" />
            )}
 

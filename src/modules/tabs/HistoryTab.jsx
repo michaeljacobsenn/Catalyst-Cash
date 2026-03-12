@@ -66,7 +66,7 @@ const getGradeLetter = score => {
   return "F";
 };
 
-export default memo(function HistoryTab({ toast }) {
+export default memo(function HistoryTab({ toast, proEnabled = false }) {
   const { history: audits, deleteHistoryItem: onDelete, handleManualImport } = useAudit();
   const { navTo, setResultsBackTarget } = useNavigation();
 
@@ -103,7 +103,7 @@ export default memo(function HistoryTab({ toast }) {
   return (
     <div className="page-body" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
-      {shouldShowGating() && (
+      {shouldShowGating() && !proEnabled && (
         <ProBanner
           onUpgrade={() => setShowPaywall(true)}
           label="Showing last 12 audits"
