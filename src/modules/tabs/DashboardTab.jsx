@@ -583,7 +583,7 @@ export default memo(function DashboardTab({
              border: `1px solid ${T.border.subtle}`,
              borderRadius: T.radius.lg,
              padding: "20px 16px 24px",
-             boxShadow: `0 2px 12px rgba(0,0,0,0.1)`,
+             boxShadow: `0 16px 48px rgba(16,185,129,0.06), 0 8px 24px rgba(138,99,210,0.1), inset 0 1px 0 rgba(255,255,255,0.05)`,
              marginBottom: 6
            }}>
              <div>
