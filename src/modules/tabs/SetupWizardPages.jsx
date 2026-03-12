@@ -805,7 +805,7 @@ export function PageImport({ onNext, toast, onComplete, appleLinkedId, setAppleL
       <input
         ref={fileRef}
         type="file"
-        accept=".json,.enc,*/*"
+        accept="*/*"
         style={{ display: "none" }}
         onChange={e => {
           if (e.target.files[0]) handleBackupFile(e.target.files[0]);
@@ -815,7 +815,7 @@ export function PageImport({ onNext, toast, onComplete, appleLinkedId, setAppleL
       <input
         ref={csvRef}
         type="file"
-        accept=".xlsx,.xls,.csv"
+        accept="*/*"
         style={{ display: "none" }}
         onChange={e => {
           if (e.target.files[0]) handleSpreadsheet(e.target.files[0]);

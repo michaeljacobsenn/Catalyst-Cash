@@ -2018,7 +2018,7 @@ export default function SettingsTab({
                 <div style={{ flex: 1, minWidth: "100%", position: "relative", marginTop: 4 }}>
                   <input
                     type="file"
-                    accept=".json,.enc,*/*"
+                    accept="*/*"
                     onChange={handleImport}
                     disabled={restoreStatus === "restoring"}
                     aria-label="Restore backup file"

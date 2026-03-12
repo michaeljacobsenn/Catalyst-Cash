@@ -260,7 +260,7 @@ export default function EmptyDashboard({ investmentSnapshot, onRestore, onDemoAu
         <input
           ref={restoreInputRef}
           type="file"
-          accept=".json"
+          accept="*/*"
           onChange={e => {
             const f = e.target.files?.[0];
             e.target.value = "";
