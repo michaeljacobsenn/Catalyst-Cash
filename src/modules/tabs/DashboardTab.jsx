@@ -47,7 +47,7 @@ import { useCoachmark, COACHMARKS } from "../coachmarks.js";
 import Coachmark from "../Coachmark.jsx";
 
 import { useAudit } from "../contexts/AuditContext.jsx";
-import { useSettings } from "../contexts/SettingsContext.jsx";
+import { useSettings } from "../contexts/SettingsContext";
 import { usePortfolio } from "../contexts/PortfolioContext.jsx";
 import { useNavigation } from "../contexts/NavigationContext.jsx";
 
@@ -85,6 +85,7 @@ export default memo(function DashboardTab({
   const { navTo, setSetupReturnTab } = useNavigation();
   const { appPasscode, privacyMode } = useSecurity();
   const [showPaywall, setShowPaywall] = useState(false);
+  const [nextActionExpanded, setNextActionExpanded] = useState(false);
 
   // ── Plaid Balance Sync (shared hook) ──
   const { syncing, sync: handleSyncBalances } = usePlaidSync({
@@ -595,6 +596,7 @@ export default memo(function DashboardTab({
                  fontWeight: 900, 
                  color: privacyMode ? T.text.dim : T.text.primary, 
                  letterSpacing: "-0.02em",
+                 textShadow: privacyMode ? "none" : `0 0 15px ${T.text.primary}80, 0 2px 10px ${T.text.primary}20`,
                }}>
                  {privacyMode ? "••••••" : fmt(portfolioMetrics?.netWorth || 0)}
                </div>
@@ -958,29 +960,53 @@ export default memo(function DashboardTab({
               </div>
               <div
                 style={{
-                  display: "-webkit-box",
-                  WebkitLineClamp: 4,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
                   position: "relative",
+                  ...(nextActionExpanded ? {} : {
+                    display: "-webkit-box",
+                    WebkitLineClamp: 4,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }),
                 }}
               >
                 <Md text={stripPaycheckParens(p.sections.nextAction)} />
-                <div
-                  style={{
-                    position: "absolute",
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    height: "1.5em",
-                    background: `linear-gradient(transparent, ${T.bg.card})`,
-                    pointerEvents: "none",
-                  }}
-                />
+                {!nextActionExpanded && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: "1.5em",
+                      background: `linear-gradient(transparent, ${T.bg.card})`,
+                      pointerEvents: "none",
+                    }}
+                  />
+                )}
               </div>
+              <button
+                onClick={() => { haptic.light(); setNextActionExpanded(e => !e); }}
+                style={{
+                  marginTop: 8,
+                  background: "none",
+                  border: "none",
+                  color: T.accent.primary,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  padding: "4px 0",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  fontFamily: T.font.mono,
+                  letterSpacing: "0.02em",
+                }}
+              >
+                {nextActionExpanded ? "Show less ↑" : "Show more ↓"}
+              </button>
             </div>
           )}
+
 
           {/* ═══ DISCUSS WITH CFO ═══ */}
           {p && onDiscussWithCFO && (

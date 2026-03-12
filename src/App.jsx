@@ -51,7 +51,7 @@ import { getOptimalCard } from "./modules/rewardsCatalog.js";
 import { haptic } from "./modules/haptics.js";
 import { connectBank, autoMatchAccounts, saveConnectionLinks, fetchBalancesAndLiabilities, applyBalanceSync, getConnections } from "./modules/plaid.js";
 import { installGlobalHandlers } from "./modules/errorReporter.js";
-// Payday reminder scheduling is handled in SettingsContext.jsx
+// Payday reminder scheduling is handled in SettingsContext
 installGlobalHandlers();
 import { ToastProvider, useToast } from "./modules/Toast.jsx";
 import { getDemoAuditPayload } from "./modules/demoAudit.js";
@@ -70,7 +70,7 @@ import GuideModal from "./modules/tabs/GuideModal.jsx";
 import LockScreen from "./modules/LockScreen.jsx";
 import SetupWizard from "./modules/tabs/SetupWizard.jsx";
 import { SecurityProvider, useSecurity } from "./modules/contexts/SecurityContext.jsx";
-import { SettingsProvider, useSettings } from "./modules/contexts/SettingsContext.jsx";
+import { SettingsProvider, useSettings } from "./modules/contexts/SettingsContext";
 import { PortfolioProvider, usePortfolio } from "./modules/contexts/PortfolioContext.jsx";
 import { NavigationProvider, useNavigation } from "./modules/contexts/NavigationContext.jsx";
 import { AuditProvider, useAudit } from "./modules/contexts/AuditContext.jsx";
@@ -681,7 +681,7 @@ function CatalystCash() {
 
   // ═══════════════════════════════════════════════════════════════
 
-  // Payday reminder scheduling is handled in SettingsContext.jsx — no duplicate here
+  // Payday reminder scheduling is handled in SettingsContext — no duplicate here
 
   // ═══════════════════════════════════════════════════════════════
   // iCLOUD AUTO-BACKUP — Syncs all user data to iCloud ubiquity

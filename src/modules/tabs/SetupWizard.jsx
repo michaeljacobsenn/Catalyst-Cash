@@ -66,7 +66,7 @@ function StepHeader({ step }) {
 
 import { useSecurity } from "../contexts/SecurityContext.jsx";
 import { useNavigation } from "../contexts/NavigationContext.jsx";
-import { useSettings } from "../contexts/SettingsContext.jsx";
+import { useSettings } from "../contexts/SettingsContext";
 import { usePortfolio } from "../contexts/PortfolioContext.jsx";
 import { isPro } from "../subscription.js";
 import { useToast } from "../Toast.jsx";

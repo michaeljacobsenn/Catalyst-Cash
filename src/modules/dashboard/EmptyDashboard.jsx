@@ -3,7 +3,7 @@ import { Zap, Activity, ChevronRight, Settings, Building2, CalendarClock } from 
 import { T } from "../constants.js";
 import { Card, Label } from "../ui.jsx";
 import { haptic } from "../haptics.js";
-import { useSettings } from "../contexts/SettingsContext.jsx";
+import { useSettings } from "../contexts/SettingsContext";
 import { usePortfolio } from "../contexts/PortfolioContext.jsx";
 import { useNavigation } from "../contexts/NavigationContext.jsx";
 

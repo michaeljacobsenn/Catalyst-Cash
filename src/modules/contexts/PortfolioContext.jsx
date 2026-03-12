@@ -4,7 +4,7 @@ import { ensureCardIds, getCardLabel, getShortCardLabel } from "../cards.js";
 import { loadCardCatalog } from "../issuerCards.js";
 import { scheduleBillReminders } from "../notifications.js";
 import { fetchMarketPrices } from "../marketData.js";
-import { useSettings } from "./SettingsContext.jsx";
+import { useSettings } from "./SettingsContext";
 
 export const PortfolioContext = createContext(null);
 

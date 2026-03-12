@@ -71,7 +71,7 @@ function mergeUniqueById(existing = [], incoming = []) {
 }
 
 import { usePortfolio, PortfolioContext } from "../contexts/PortfolioContext.jsx";
-import { useSettings } from "../contexts/SettingsContext.jsx";
+import { useSettings } from "../contexts/SettingsContext";
 import { useAudit } from "../contexts/AuditContext.jsx";
 import { uploadToICloud } from "../cloudSync.js";
 import useDashboardData from "../dashboard/useDashboardData.js";

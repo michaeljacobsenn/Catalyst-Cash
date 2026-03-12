@@ -17,7 +17,7 @@ const LazyProPaywall = React.lazy(() => import("./ProPaywall.jsx"));
 import { loadMemory, extractMemoryTags, addFacts, getMemoryBlock } from "../memory.js";
 
 import { useAudit } from "../contexts/AuditContext.jsx";
-import { useSettings } from "../contexts/SettingsContext.jsx";
+import { useSettings } from "../contexts/SettingsContext";
 import { usePortfolio } from "../contexts/PortfolioContext.jsx";
 import { useSecurity } from "../contexts/SecurityContext.jsx";
 

@@ -6,7 +6,7 @@ import { T } from "../constants.js";
 import { fmt } from "../utils.js";
 import { fetchMarketPrices } from "../marketData.js";
 import { usePortfolio } from "../contexts/PortfolioContext.jsx";
-import { useSettings } from "../contexts/SettingsContext.jsx";
+import { useSettings } from "../contexts/SettingsContext";
 
 export default function InvestmentsSection({ collapsedSections, setCollapsedSections }) {
     const { financialConfig, setFinancialConfig } = useSettings();

@@ -4,7 +4,7 @@ import { Card, Badge } from "../ui.jsx";
 import { Mono } from "../components.jsx";
 import { T } from "../constants.js";
 import { fmt } from "../utils.js";
-import { useSettings } from "../contexts/SettingsContext.jsx";
+import { useSettings } from "../contexts/SettingsContext";
 
 export default function OtherAssetsSection({ collapsedSections, setCollapsedSections, openSheet }) {
     const { financialConfig, setFinancialConfig } = useSettings();

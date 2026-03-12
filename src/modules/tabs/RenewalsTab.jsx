@@ -283,6 +283,7 @@ export default memo(function RenewalsTab({ proEnabled }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
+  const [negotiateSheet, setNegotiateSheet] = useState(null); // { merchant, type, tactic, amount, name }
   const [addForm, setAddForm] = useState({
     name: "",
     amount: "",
@@ -692,6 +693,7 @@ export default memo(function RenewalsTab({ proEnabled }) {
   const { detected, dismissSuggestion } = useSubscriptions(renewals, proEnabled);
 
   return (
+    <>
     <div className="page-body stagger-container" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
@@ -1515,24 +1517,24 @@ export default memo(function RenewalsTab({ proEnabled }) {
                                   </a>
                                 )}
 
-                                {/* AI Negotiate */}
+                                {/* Negotiate — opens inline sheet, no tab navigation */}
                                 {negotiableMerchant && (
                                   <button
                                     onClick={(e) => {
                                       e.preventDefault();
                                       e.stopPropagation();
                                       if (shouldShowGating() && !proEnabled) {
-                                        if (typeof haptic !== "undefined") haptic.selection();
+                                        haptic.selection();
                                         setShowPaywall(true);
                                         return;
                                       }
-                                      if (typeof haptic !== "undefined") haptic.selection();
-                                      navTo("chat", {
-                                        negotiateBill: {
-                                          merchant: negotiableMerchant.merchant,
-                                          amount: item.amount,
-                                          tactic: negotiableMerchant.tactic
-                                        }
+                                      haptic.selection();
+                                      setNegotiateSheet({
+                                        merchant: negotiableMerchant.merchant,
+                                        type: negotiableMerchant.type,
+                                        tactic: negotiableMerchant.tactic,
+                                        amount: item.amount,
+                                        name: item.name,
                                       });
                                     }}
                                     className="hover-lift"
@@ -1635,5 +1637,160 @@ export default memo(function RenewalsTab({ proEnabled }) {
         </div>
     </div>
     </div>
+
+      {/* ── NEGOTIATE SHEET ── */}
+      {negotiateSheet && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => { setNegotiateSheet(null); haptic.light(); }}
+            style={{
+              position: "fixed", inset: 0, zIndex: 200,
+              background: "rgba(0,0,0,0.55)",
+              backdropFilter: "blur(4px)",
+              WebkitBackdropFilter: "blur(4px)",
+              animation: "fadeIn .2s ease",
+            }}
+          />
+          {/* Sheet */}
+          <div
+            style={{
+              position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 201,
+              background: T.bg.card,
+              borderTop: `1px solid ${T.border.default}`,
+              borderRadius: `${T.radius.xl}px ${T.radius.xl}px 0 0`,
+              padding: "0 0 env(safe-area-inset-bottom, 20px)",
+              maxHeight: "82vh",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 -8px 40px rgba(0,0,0,0.45)",
+              animation: "slideUp .3s cubic-bezier(.16,1,.3,1)",
+            }}
+          >
+            <style>{`
+              @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+              @keyframes fadeIn  { from { opacity:0; } to { opacity:1; } }
+            `}</style>
+
+            {/* Handle bar */}
+            <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: T.border.default }} />
+            </div>
+
+            {/* Header */}
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "8px 20px 12px",
+              borderBottom: `1px solid ${T.border.subtle}`,
+            }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Bot size={16} color={T.accent.primary} />
+                  <span style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em" }}>
+                    {negotiateSheet.merchant}
+                  </span>
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
+                    color: T.accent.primary, background: T.accent.primaryDim,
+                    border: `1px solid ${T.accent.primary}30`,
+                    padding: "2px 7px", borderRadius: 99,
+                    fontFamily: T.font.mono,
+                  }}>{ negotiateSheet.type }</span>
+                </div>
+                <div style={{ fontSize: 12, color: T.text.dim, marginTop: 3 }}>
+                  ${(negotiateSheet.amount || 0).toFixed(2)}/mo · Negotiation Playbook
+                </div>
+              </div>
+              <button
+                onClick={() => { setNegotiateSheet(null); haptic.light(); }}
+                style={{
+                  width: 32, height: 32, borderRadius: "50%",
+                  background: T.bg.elevated, border: `1px solid ${T.border.default}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  cursor: "pointer", color: T.text.dim,
+                }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Scrollable tactic body */}
+            <div style={{ overflowY: "auto", padding: "16px 20px", flex: 1 }}>
+              {/* Tactic card */}
+              <div style={{
+                background: T.bg.elevated,
+                border: `1px solid ${T.border.default}`,
+                borderRadius: T.radius.lg,
+                padding: "14px 16px",
+                marginBottom: 16,
+              }}>
+                <div style={{
+                  fontSize: 9, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase",
+                  color: T.status.green, fontFamily: T.font.mono, marginBottom: 10,
+                  display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  <span style={{ display: "inline-block", width: 14, height: 1, background: T.status.green }} />
+                  Proven Tactic
+                </div>
+                <p style={{
+                  fontSize: 14, lineHeight: 1.75, color: T.text.secondary,
+                  margin: 0, whiteSpace: "pre-wrap",
+                }}>
+                  {negotiateSheet.tactic}
+                </p>
+              </div>
+
+              {/* CTA buttons */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {/* Generate full AI script — opens AskAI with the negotiation context */}
+                <button
+                  onClick={() => {
+                    if (shouldShowGating() && !proEnabled) {
+                      haptic.selection();
+                      setShowPaywall(true);
+                      return;
+                    }
+                    haptic.success();
+                    setNegotiateSheet(null);
+                    navTo("chat", {
+                      negotiateBill: {
+                        merchant: negotiateSheet.merchant,
+                        amount: negotiateSheet.amount,
+                        tactic: negotiateSheet.tactic,
+                      }
+                    });
+                  }}
+                  style={{
+                    width: "100%", padding: "14px",
+                    borderRadius: T.radius.md, border: "none",
+                    background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`,
+                    color: "#fff", fontSize: 14, fontWeight: 800,
+                    cursor: "pointer", display: "flex",
+                    alignItems: "center", justifyContent: "center", gap: 8,
+                    boxShadow: `0 4px 16px ${T.accent.primary}40`,
+                  }}
+                >
+                  <Bot size={15} />
+                  Generate Full AI Phone Script
+                </button>
+                <button
+                  onClick={() => { setNegotiateSheet(null); haptic.light(); }}
+                  style={{
+                    width: "100%", padding: "12px",
+                    borderRadius: T.radius.md,
+                    border: `1px solid ${T.border.default}`,
+                    background: "transparent",
+                    color: T.text.secondary, fontSize: 13, fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Got It
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </>
   );
 });

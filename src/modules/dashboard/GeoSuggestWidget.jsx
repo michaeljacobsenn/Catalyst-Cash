@@ -6,7 +6,7 @@ import { PortfolioContext } from "../contexts/PortfolioContext.jsx";
 import { getCardMultiplier } from "../rewardsCatalog.js";
 import { classifyMerchant } from "../api.js";
 import { haptic } from "../haptics.js";
-import { useSettings } from "../contexts/SettingsContext.jsx";
+import { useSettings } from "../contexts/SettingsContext";
 
 export default function GeoSuggestWidget() {
   const { cards } = useContext(PortfolioContext);
