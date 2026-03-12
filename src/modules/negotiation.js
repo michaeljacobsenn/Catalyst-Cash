@@ -378,6 +378,410 @@ export const NEGOTIABLE_MERCHANTS = [
     type: "Subscription",
     tactic: "Cancel at birchbox.com/account. Birchbox typically offers a free box or heavily discounted renewal during cancellation. If no offer appears, cancel and wait for the re-engagement email.",
   },
+
+  // ═══════════════════════════════════════════════════════════
+  // Gaming Subscriptions (Medium success — 40-60%)
+  // ═══════════════════════════════════════════════════════════
+  {
+    merchant: "Xbox Game Pass",
+    aliases: ["Xbox Game Pass", "Game Pass", "Xbox", "Microsoft Game Pass"],
+    type: "Gaming",
+    tactic: "Cancel at account.microsoft.com/services. Microsoft's cancel flow shows a retention offer — typically 1 free month or $1 for the next month. If you cancel fully, Microsoft sends 'come back for $1' emails within 2-4 weeks. The $1/3-months reactivation deal is almost always available to returning subscribers.",
+  },
+  {
+    merchant: "PlayStation Plus",
+    aliases: ["PlayStation Plus", "PS Plus", "PSN", "PlayStation Now"],
+    type: "Gaming",
+    tactic: "Cancel via Settings → Account Management → Subscriptions on your PS5, or store.playstation.com. PS Plus doesn't typically negotiate, but downgrading tiers (Premium → Extra → Essential) saves $40-$60/yr. Sony occasionally offers discounted annual renewals via email after cancellation. Buy annual during Black Friday sales ($40 vs $60 for Essential).",
+  },
+  {
+    merchant: "Nintendo Switch Online",
+    aliases: ["Nintendo Switch Online", "NSO", "Nintendo Online"],
+    type: "Gaming",
+    tactic: "Cancel at accounts.nintendo.com. Nintendo doesn't negotiate, but the Family Plan ($34.99/yr for 8 users) is drastically cheaper per-person than individual ($19.99/yr). Find a family group online to split costs — $4.37/yr per person.",
+  },
+  {
+    merchant: "EA Play",
+    aliases: ["EA Play", "EA Access", "Electronic Arts"],
+    type: "Gaming",
+    tactic: "Cancel via ea.com/ea-play or your platform's subscription management. EA Play is included free with Xbox Game Pass Ultimate — check if you're double-paying. The Pro tier ($16.99/mo) is rarely worth it vs. buying games individually on sale.",
+  },
+  {
+    merchant: "Apple Arcade",
+    aliases: ["Apple Arcade"],
+    type: "Gaming",
+    tactic: "Cancel via Settings → Apple ID → Subscriptions. Apple Arcade ($6.99/mo) is included in Apple One ($19.95/mo). If you pay for 3+ Apple services, Apple One saves money. After cancellation, Apple sometimes offers a free month re-trial after 30+ days.",
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // Dating Apps (Medium success — 50-70%)
+  // ═══════════════════════════════════════════════════════════
+  {
+    merchant: "Match.com",
+    aliases: ["Match.com", "Match"],
+    type: "Dating",
+    tactic: "Cancel at match.com/account. Match.com has aggressive retention — expect 50-60% off renewal during the cancel flow. If you cancel and wait 7-14 days, they send 'come back' emails with heavily discounted 3-month plans. Their retention budget is one of the highest in dating apps.",
+  },
+  {
+    merchant: "Tinder",
+    aliases: ["Tinder", "Tinder Plus", "Tinder Gold", "Tinder Platinum"],
+    type: "Dating",
+    tactic: "Cancel via your App Store/Play Store subscription settings (not through the Tinder app). Tinder offers downgrade options during cancellation (Platinum → Gold → Plus). After cancelling, Tinder frequently emails 50% off 'come back' promotions within 1-2 weeks. Never pay full price for re-subscription.",
+  },
+  {
+    merchant: "Bumble",
+    aliases: ["Bumble", "Bumble Premium", "Bumble Boost"],
+    type: "Dating",
+    tactic: "Cancel via App Store/Play Store subscription settings. Bumble shows retention offers during the cancel flow — typically 1 week free or a discounted month. Bumble Premium Lifetime ($199.99) eliminates recurring charges entirely if you plan to use it long-term.",
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // VPN Services (High success — 70-85%)
+  // ═══════════════════════════════════════════════════════════
+  {
+    merchant: "NordVPN",
+    aliases: ["NordVPN", "Nord VPN"],
+    type: "VPN",
+    tactic: "Cancel at my.nordaccount.com. NordVPN's retention is aggressive — during cancellation they offer 60-70% off for 2-year plans. If no good offer, cancel fully and wait 1-2 weeks — they email a 70%+ discount 'come back' deal. Nord is famous for never letting subscribers pay full price on renewal.",
+  },
+  {
+    merchant: "ExpressVPN",
+    aliases: ["ExpressVPN", "Express VPN"],
+    type: "VPN",
+    tactic: "Cancel at expressvpn.com/subscriptions. ExpressVPN offers retention discounts of 40-50% during the cancel flow. The 12-month plan is significantly cheaper per-month than monthly billing. Check if ExpressVPN is included with your Aircove router purchase.",
+  },
+  {
+    merchant: "Surfshark",
+    aliases: ["Surfshark"],
+    type: "VPN",
+    tactic: "Cancel at my.surfshark.com. Surfshark offers 80%+ off 2-year plans during retention. Their pricing strategy relies heavily on long-term commitments — if offered a discounted 2-year plan during cancellation, it's typically the best VPN value available.",
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // Identity Protection & Credit Monitoring (Medium — 50-65%)
+  // ═══════════════════════════════════════════════════════════
+  {
+    merchant: "Norton LifeLock",
+    aliases: ["Norton", "LifeLock", "Norton LifeLock", "Norton 360"],
+    type: "Security",
+    tactic: "Call 800-543-3562 and say 'cancel'. Norton/LifeLock retention is well-documented: expect 40-60% off your renewal rate. They almost never let you leave at the first attempt. Check if your bank/credit card offers free identity monitoring (many premium cards do). If canceling, also check norton.com/manage for online cancellation per FTC rules.",
+  },
+  {
+    merchant: "McAfee",
+    aliases: ["McAfee", "McAfee Total Protection"],
+    type: "Security",
+    tactic: "Cancel at mcafee.com/myaccount. McAfee's auto-renewal is notoriously hard to turn off — look for 'Turn Off Auto-Renewal' in My Account. Retention offers 50-60% off. Windows Defender (free, built-in) provides equivalent protection for most users — consider if you need McAfee at all.",
+  },
+  {
+    merchant: "Experian",
+    aliases: ["Experian", "Experian CreditWorks"],
+    type: "Credit",
+    tactic: "Cancel at experian.com/consumer/account. Experian Premium ($24.99/mo) is often unnecessary — Credit Karma, Discover Scorecard, and most bank apps provide free FICO scores and monitoring. If you need bureau-specific monitoring, call retention for a discounted rate.",
+  },
+  {
+    merchant: "IdentityForce",
+    aliases: ["IdentityForce", "Identity Guard"],
+    type: "Security",
+    tactic: "Cancel via your account dashboard or call customer service. These services often offer 30-50% off during retention. Check if your employer, bank, or credit card already provides identity monitoring — many offer it free as a benefit.",
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // Tax & Financial Software (Medium — 40-60%)
+  // ═══════════════════════════════════════════════════════════
+  {
+    merchant: "TurboTax",
+    aliases: ["TurboTax", "Intuit TurboTax"],
+    type: "Software",
+    tactic: "TurboTax now uses a subscription model. Cancel at accounts.intuit.com. Before renewal, check IRS Free File (free if AGI < $84k), FreeTaxUSA ($14.99 for federal+state), or Cash App Taxes (free). TurboTax is significantly overpriced for simple returns. If you must stay, call to negotiate — retention sometimes offers 30-40% off.",
+  },
+  {
+    merchant: "H&R Block",
+    aliases: ["H&R Block", "HR Block", "HRBlock"],
+    type: "Software",
+    tactic: "Cancel subscriptions at hrblock.com/account. H&R Block's online pricing is negotiable if you call — mention you're switching to TurboTax or FreeTaxUSA. In-person preparation is also negotiable, especially early season (January-February).",
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // Language Learning (High success — 65-80%)
+  // ═══════════════════════════════════════════════════════════
+  {
+    merchant: "Duolingo",
+    aliases: ["Duolingo", "Duolingo Plus", "Duolingo Super"],
+    type: "Education",
+    tactic: "Cancel via App Store/Play Store subscription settings. Duolingo Super ($12.99/mo) occasionally shows 50% off annual ($79.99/yr) during the cancel flow. After cancellation, Duolingo sends 'come back' emails with 60% off promotions. The free tier is fully functional for learning — Super just removes ads and adds mistakes tracking.",
+  },
+  {
+    merchant: "Rosetta Stone",
+    aliases: ["Rosetta Stone"],
+    type: "Education",
+    tactic: "Cancel at rosettastone.com/account. Rosetta Stone offers retention discounts of 40-50% or extended access periods. Their Lifetime subscription ($179 on sale) eliminates recurring charges — wait for holiday sales when it drops to $120-$150.",
+  },
+  {
+    merchant: "Babbel",
+    aliases: ["Babbel"],
+    type: "Education",
+    tactic: "Cancel at babbel.com/account. Babbel offers 30-50% off during the cancel flow. Their Lifetime membership ($149.99 on sale) is the best value — check for promotional pricing on deal sites.",
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // Home Warranty (Medium success — 50-65%)
+  // ═══════════════════════════════════════════════════════════
+  {
+    merchant: "American Home Shield",
+    aliases: ["American Home Shield", "AHS"],
+    type: "Home",
+    tactic: "Call 888-682-1043 and say 'cancel'. AHS retention offers $5-$15/mo discounts or a reduced service call fee. If your contract is up, compare Choice Home Warranty or First American — use the competitor quote as leverage. Ask about their 'loyalty rate' for renewing customers.",
+  },
+  {
+    merchant: "Choice Home Warranty",
+    aliases: ["Choice Home Warranty", "CHW"],
+    type: "Home",
+    tactic: "Call 888-275-2980 to cancel. Choice Home Warranty offers retention discounts of $10-$20/mo. They also offer multi-year discounts — 3-year plans are typically 30% cheaper per year than annual billing.",
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // Lawn & Pest Control (Medium success — 50-65%)
+  // ═══════════════════════════════════════════════════════════
+  {
+    merchant: "TruGreen",
+    aliases: ["TruGreen"],
+    type: "Home",
+    tactic: "Call 866-688-6722 to cancel. TruGreen's retention team offers free additional treatments, discounted annual plans, or a seasonal pause option. Mention you received a lower quote from a local provider — they typically match within 10-15%.",
+  },
+  {
+    merchant: "Terminix",
+    aliases: ["Terminix"],
+    type: "Home",
+    tactic: "Call 877-837-6464 to cancel. Terminix's contracts are annual — check your term. Retention offers $10-$20/mo discounts on quarterly pest control plans. Mention you're switching to a local provider or DIY solutions.",
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // Food Delivery Memberships (High success — 65-80%)
+  // ═══════════════════════════════════════════════════════════
+  {
+    merchant: "DoorDash DashPass",
+    aliases: ["DoorDash", "DashPass", "DoorDash DashPass"],
+    type: "Subscription",
+    tactic: "Cancel at doordash.com/consumer/membership. DashPass ($9.99/mo) shows retention offers during cancellation — typically a free month or $4.99/mo for 2 months. Check if your Chase Sapphire or Capital One Savor card includes a free/discounted DashPass benefit — many do in 2026.",
+  },
+  {
+    merchant: "Uber One",
+    aliases: ["Uber One", "Uber Eats Pass", "Uber Pass"],
+    type: "Subscription",
+    tactic: "Cancel at account.uber.com/membership. Uber One ($9.99/mo) occasionally shows $4.99/mo retention offers. Check if your American Express or Capital One card includes an Uber credit — many premium cards offer $10-$15/mo Uber credits that offset the membership cost entirely.",
+  },
+  {
+    merchant: "Instacart+",
+    aliases: ["Instacart+", "Instacart Plus", "Instacart Express"],
+    type: "Subscription",
+    tactic: "Cancel at instacart.com/account. Instacart+ ($9.99/mo or $99/yr) shows retention offers 60% of the time. Instacart also partners with Chase and other banks for free membership with certain credit cards — check your card benefits before paying.",
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // Antivirus & Digital Security (High success — 70-85%)
+  // ═══════════════════════════════════════════════════════════
+  {
+    merchant: "Bitdefender",
+    aliases: ["Bitdefender"],
+    type: "Security",
+    tactic: "Cancel at central.bitdefender.com. Bitdefender's auto-renewal is at full price ($80-$100/yr) — always cancel before renewal and rebuy at the promotional new-customer rate ($30-$40/yr). This is the standard practice for all antivirus products and saves 50-60%.",
+  },
+  {
+    merchant: "Kaspersky",
+    aliases: ["Kaspersky"],
+    type: "Security",
+    tactic: "Cancel at my.kaspersky.com. Same strategy as all antivirus: cancel before auto-renewal and re-purchase at the new-customer discount (50-70% off). Consider Windows Defender (free) or Bitdefender Free as zero-cost alternatives for basic protection.",
+  },
+  {
+    merchant: "Malwarebytes",
+    aliases: ["Malwarebytes"],
+    type: "Security",
+    tactic: "Cancel at my.malwarebytes.com/account. Malwarebytes Premium ($44.99/yr) auto-renews at full price — cancel and rebuy at the promotional rate ($29.99-$34.99/yr for new customers). The free version still provides on-demand scanning, which is sufficient for most users.",
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // Productivity & SaaS (Medium success — 40-60%)
+  // ═══════════════════════════════════════════════════════════
+  {
+    merchant: "LinkedIn Premium",
+    aliases: ["LinkedIn", "LinkedIn Premium", "LinkedIn Sales Navigator"],
+    type: "Professional",
+    tactic: "Cancel at linkedin.com/psettings/account. LinkedIn Premium ($29.99-$59.99/mo) shows a retention offer of 50% off for 2 months during the cancel flow. After cancellation, LinkedIn often emails a 'come back for 50% off' deal within 2-4 weeks. Sales Navigator cancellation requires calling — retention discounts of 20-30% are common.",
+  },
+  {
+    merchant: "Grammarly",
+    aliases: ["Grammarly", "Grammarly Premium"],
+    type: "Software",
+    tactic: "Cancel at account.grammarly.com. Grammarly Premium ($12/mo) offers 40-50% off annual plans during the cancel flow. Grammarly's free tier handles basic grammar — Premium is mainly for tone/clarity suggestions. Check if your employer or university provides Grammarly Business for free.",
+  },
+  {
+    merchant: "Canva Pro",
+    aliases: ["Canva", "Canva Pro"],
+    type: "Software",
+    tactic: "Cancel at canva.com/settings/billing. Canva Pro ($12.99/mo) shows retention offers of 30-50% off during cancellation. The Canva for Teams plan ($14.99/mo per person) is more cost-effective if you have 2+ users. Canva Free includes 250k+ templates — evaluate if Pro features are truly needed.",
+  },
+  {
+    merchant: "Zoom",
+    aliases: ["Zoom", "Zoom Pro", "Zoom Workplace"],
+    type: "Software",
+    tactic: "Cancel at zoom.us/account/billing. Zoom Pro ($13.33/mo annually) can often be negotiated down 15-25% by calling sales directly and mentioning you're switching to Google Meet (free) or Microsoft Teams (free). Annual billing saves 17% over monthly. Check if your employer provides Zoom already.",
+  },
+  {
+    merchant: "Evernote",
+    aliases: ["Evernote"],
+    type: "Software",
+    tactic: "Cancel at evernote.com/settings. Evernote Personal ($14.99/mo) shows retention offers during cancellation — typically 40% off annual billing. Consider switching to Apple Notes (free), Notion (free tier), or Obsidian (free) as alternatives with comparable or better features.",
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // Mental Health & Therapy (Medium success — 50-65%)
+  // ═══════════════════════════════════════════════════════════
+  {
+    merchant: "BetterHelp",
+    aliases: ["BetterHelp"],
+    type: "Health",
+    tactic: "Cancel at betterhelp.com/account. BetterHelp ($65-$100/week) offers a financial aid discount (25-50% off) if you mention cost as the reason for canceling. They also offer session frequency reductions. Check if your employer EAP (Employee Assistance Program) covers therapy sessions — most provide 6-12 free sessions per year.",
+  },
+  {
+    merchant: "Talkspace",
+    aliases: ["Talkspace"],
+    type: "Health",
+    tactic: "Cancel at talkspace.com/account. Talkspace ($69-$109/week) offers retention discounts of 20-30% but also check your health insurance — many insurers now cover Talkspace as an in-network provider (copay only, not full price). Your employer's EAP may also cover Talkspace sessions.",
+  },
+  {
+    merchant: "Care.com",
+    aliases: ["Care.com"],
+    type: "Health",
+    tactic: "Cancel at care.com/account. Care.com Premium ($39.99/mo) shows retention offers of 50% off during cancellation. If you only need occasional caregiving, their one-time background check option ($58) is cheaper than maintaining a monthly subscription.",
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // Pet Services (Medium-High success — 55-75%)
+  // ═══════════════════════════════════════════════════════════
+  {
+    merchant: "Chewy Autoship",
+    aliases: ["Chewy", "Chewy Autoship"],
+    type: "Pet",
+    tactic: "Manage at chewy.com/app/account/autoship. Chewy Autoship already gives 5-10% off — but you can call 800-672-4399 and the famously helpful Chewy team often applies additional credits ($10-$20) to retain autoship subscribers. Adjusting delivery frequency (every 8-12 weeks instead of 4-6) reduces costs without losing the discount.",
+  },
+  {
+    merchant: "Rover",
+    aliases: ["Rover"],
+    type: "Pet",
+    tactic: "Rover doesn't have a subscription, but their fees are negotiable for repeat bookings. Contact your sitter directly about off-platform arrangements for repeat service (Rover charges 20% service fee). For recurring pet sitting, negotiate a flat weekly rate directly with your sitter.",
+  },
+  {
+    merchant: "Wag",
+    aliases: ["Wag", "Wag!"],
+    type: "Pet",
+    tactic: "Cancel Wag Premium ($9.99/mo) at wagwalking.com/account. Wag Premium offers insurance/VIP support — evaluate if standard Wag (no subscription) meets your needs. Wag's retention typically offers 1-2 free months during cancellation.",
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // More Fitness (Verified tactics — 55-75%)
+  // ═══════════════════════════════════════════════════════════
+  {
+    merchant: "Strava",
+    aliases: ["Strava", "Strava Summit", "Strava Premium"],
+    type: "Fitness",
+    tactic: "Cancel at strava.com/settings/subscription. Strava Premium ($11.99/mo) shows a retention offer of 2 free months during cancellation about 60% of the time. The free tier still tracks activities — Premium is mainly for training analytics and route planning. Annual billing ($79.99/yr) saves 45%.",
+  },
+  {
+    merchant: "Fitbit Premium",
+    aliases: ["Fitbit Premium", "Fitbit"],
+    type: "Fitness",
+    tactic: "Cancel via the Fitbit app or fitbit.com/settings. Fitbit Premium ($9.99/mo) is included with Pixel Watch and some Fitbit devices for 6 months. After that, evaluate if the free features (step tracking, heart rate, sleep) are sufficient. Google sometimes emails $4.99/mo retention offers to returning users.",
+  },
+  {
+    merchant: "Apple Fitness+",
+    aliases: ["Apple Fitness+", "Apple Fitness Plus"],
+    type: "Fitness",
+    tactic: "Cancel via Settings → Apple ID → Subscriptions. Apple Fitness+ ($9.99/mo) is included in Apple One Premier ($32.95/mo). It's also included free for 3 months with new Apple Watch purchases. After cancellation, Apple occasionally offers a free month to return.",
+  },
+  {
+    merchant: "WHOOP",
+    aliases: ["WHOOP"],
+    type: "Fitness",
+    tactic: "Cancel at app.whoop.com/account. WHOOP ($30/mo or $239/yr) offers retention discounts of 20-30% during cancel flow. The 24-month commitment ($16.60/mo) is significantly cheaper. If canceling, you keep the device but lose data access — export your data before canceling.",
+  },
+  {
+    merchant: "MyFitnessPal",
+    aliases: ["MyFitnessPal", "MyFitnessPal Premium", "MFP"],
+    type: "Fitness",
+    tactic: "Cancel via App Store/Play Store subscription settings. MyFitnessPal Premium ($19.99/mo) is overpriced — cancel and use the free tier (calorie tracking, food database) or switch to Cronometer (free, better micronutrient tracking). MFP occasionally emails 50% off 'come back' offers.",
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // Box Subscriptions (Very high success — 80-95%)
+  // ═══════════════════════════════════════════════════════════
+  {
+    merchant: "Stitch Fix",
+    aliases: ["Stitch Fix"],
+    type: "Subscription",
+    tactic: "Cancel at stitchfix.com/account/settings. Stitch Fix charges a $20 styling fee (credited toward purchases) — you can pause deliveries indefinitely without canceling to avoid fees. If you ask to cancel, they offer a free styling session or $25 credit to stay.",
+  },
+  {
+    merchant: "Dollar Shave Club",
+    aliases: ["Dollar Shave Club", "DSC"],
+    type: "Subscription",
+    tactic: "Cancel at dollarshaveclub.com/account. Dollar Shave Club offers skip/pause options and retention discounts of 20-30% during the cancel flow. Their razor handle is compatible with cheap third-party cartridges — consider switching to refills only.",
+  },
+  {
+    merchant: "Harry's",
+    aliases: ["Harry's", "Harrys"],
+    type: "Subscription",
+    tactic: "Cancel at harrys.com/account. Harry's offers flexible delivery pausing (skip up to 3 months) and retention credits ($5-$10) during cancellation. Their Trial Set ($13) is a low-cost way to re-engage vs. full subscription.",
+  },
+  {
+    merchant: "Ipsy",
+    aliases: ["Ipsy", "IPSY"],
+    type: "Subscription",
+    tactic: "Cancel at ipsy.com/account. Ipsy offers skip months and retention discounts (free bag or 30% off next month) during cancellation. Pause instead of canceling to keep your beauty profile and preferences.",
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // More Telecom & Internet (High success — 65-80%)
+  // ═══════════════════════════════════════════════════════════
+  {
+    merchant: "Google Fiber",
+    aliases: ["Google Fiber", "Google Fi Internet"],
+    type: "ISP",
+    tactic: "Google Fiber doesn't negotiate much on price since they're already competitively priced, but you can downgrade speed tiers to save $20-$40/mo. If in a Google Fiber market, use your Google Fiber pricing as leverage when negotiating with competitors.",
+  },
+  {
+    merchant: "T-Mobile Home Internet",
+    aliases: ["T-Mobile Home Internet", "T-Mobile 5G Home"],
+    type: "ISP",
+    tactic: "Cancel at t-mobile.com/account. T-Mobile Home Internet ($50/mo) is already among the cheapest options. If experiencing issues, call 611 — T-Mobile sometimes offers $10/mo credits for 6-12 months. Use this service as negotiation leverage against cable ISPs (Comcast, Spectrum).",
+  },
+  {
+    merchant: "Verizon 5G Home",
+    aliases: ["Verizon 5G Home", "Verizon Home Internet"],
+    type: "ISP",
+    tactic: "Cancel at verizon.com/account. Verizon 5G Home Internet ($35-$60/mo with Verizon Wireless) is discounted when bundled with wireless. If you're a Verizon Wireless customer, the bundled discount makes this one of the cheapest home internet options. Threaten to drop the bundle for maximum leverage.",
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // Professional & Email (Medium success — 40-55%)
+  // ═══════════════════════════════════════════════════════════
+  {
+    merchant: "Slack",
+    aliases: ["Slack", "Slack Pro", "Slack Business"],
+    type: "Professional",
+    tactic: "Cancel at slack.com/admin/billing. Slack Pro ($7.25/mo per user) — for small teams, consider switching to Discord (free) or Google Chat (free with Workspace). Slack's sales team can negotiate 15-25% volume discounts for annual commitments of 10+ seats.",
+  },
+  {
+    merchant: "Squarespace",
+    aliases: ["Squarespace"],
+    type: "Professional",
+    tactic: "Cancel at squarespace.com/account/billing. Squarespace ($16-$49/mo) offers 20-30% off annual billing during the cancel flow. If you're on a personal site, Carrd ($19/yr) or WordPress.com free tier may be sufficient alternatives. Check 'SQUARESPACE' promo codes from podcast sponsorships — they're frequently available online.",
+  },
+  {
+    merchant: "GoDaddy",
+    aliases: ["GoDaddy"],
+    type: "Professional",
+    tactic: "Call 480-505-8877 to cancel. GoDaddy's auto-renewal pricing is 2-3x the promotional rate — always call retention before renewal. They offer 30-50% renewal discounts. For domains only, transfer to Cloudflare Registrar ($0 markup) or Namecheap (cheaper renewals).",
+  },
 ];
 
 /**
