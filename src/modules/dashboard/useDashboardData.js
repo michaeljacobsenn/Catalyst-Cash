@@ -2,9 +2,9 @@ import { useMemo } from "react";
 import { fmt, extractDashboardMetrics } from "../utils.js";
 import { T } from "../constants.js";
 import { computeFireProjection } from "../fire.js";
-import { useAudit } from "../contexts/AuditContext.jsx";
+import { useAudit } from "../contexts/AuditContext";
 import { useSettings } from "../contexts/SettingsContext";
-import { usePortfolio } from "../contexts/PortfolioContext.jsx";
+import { usePortfolio } from "../contexts/PortfolioContext";
 
 function summarizeTrend(data, key, formatter) {
   if (!Array.isArray(data) || data.length < 2) {

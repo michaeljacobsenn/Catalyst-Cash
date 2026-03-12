@@ -4,7 +4,7 @@ import { Card, Badge } from "../ui.jsx";
 import SearchableSelect from "../SearchableSelect.jsx";
 import { Mono } from "../components.jsx";
 import { T, INSTITUTIONS, ISSUER_COLORS } from "../constants.js";
-import { usePortfolio } from "../contexts/PortfolioContext.jsx";
+import { usePortfolio } from "../contexts/PortfolioContext";
 import { fmt } from "../utils.js";
 import { haptic } from "../haptics.js";
 import { getIssuerCards, getPinnedForIssuer } from "../issuerCards.js";

@@ -51,7 +51,7 @@ import { Card } from "../ui.jsx";
 import { EmptyState } from "../components.jsx";
 import { nativeExport } from "../utils.js";
 import { getStoredTransactions, fetchAllTransactions } from "../plaid.js";
-import { PortfolioContext } from "../contexts/PortfolioContext.jsx";
+import { PortfolioContext } from "../contexts/PortfolioContext";
 import { useSettings } from "../contexts/SettingsContext";
 import { getOptimalCard } from "../rewardsCatalog.js";
 import { haptic } from "../haptics.js";

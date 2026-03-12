@@ -36,11 +36,13 @@
     "allowJs": true,
     "checkJs": false,
     "strict": false,
+    "strictNullChecks": true,
     "jsx": "react-jsx",
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
     "skipLibCheck": true,
-  }
+  },
+  "exclude": ["dist", "ios/App/App/public/assets"]
 }

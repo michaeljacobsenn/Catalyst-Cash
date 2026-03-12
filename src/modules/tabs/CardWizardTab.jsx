@@ -3,7 +3,7 @@ import {
   Search, Sparkles, CreditCard, Coffee, ShoppingCart,
   Fuel, Plane, Train, Package, Store, Pill, AlertCircle, Info, Settings2, ChevronDown, Check, X, RefreshCw, Tv, DollarSign, Smartphone, RotateCw, Clock, Lock, Zap
 } from "lucide-react";
-import { PortfolioContext } from "../contexts/PortfolioContext.jsx";
+import { PortfolioContext } from "../contexts/PortfolioContext";
 import { useSettings } from "../contexts/SettingsContext";
 import { getCardMultiplier, VALUATIONS } from "../rewardsCatalog.js";
 import { classifyMerchant } from "../api.js";

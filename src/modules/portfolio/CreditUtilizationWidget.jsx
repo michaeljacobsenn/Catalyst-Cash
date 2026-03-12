@@ -3,7 +3,7 @@ import { HelpCircle } from "lucide-react";
 import { Card, Badge, InlineTooltip } from "../ui.jsx";
 import { Mono } from "../components.jsx";
 import { T } from "../constants.js";
-import { usePortfolio } from "../contexts/PortfolioContext.jsx";
+import { usePortfolio } from "../contexts/PortfolioContext";
 import { fmt } from "../utils.js";
 
 export default function CreditUtilizationWidget() {

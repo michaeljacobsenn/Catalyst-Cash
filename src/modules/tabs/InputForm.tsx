@@ -1,4 +1,13 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+  type ChangeEvent,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import {
   AlertCircle,
   AlertTriangle,
@@ -17,8 +26,8 @@ import {
 } from "lucide-react";
 import { T } from "../constants.js";
 import { validateSnapshot } from "../validation.js";
-import { Card, Label, Badge } from "../ui.jsx";
-import { Mono, DI, CustomSelect } from "../components.jsx";
+import { Card as UICard, Label as UILabel, Badge } from "../ui.jsx";
+import { Mono as UIMono, DI as UIDI, CustomSelect as UICustomSelect } from "../components.jsx";
 import { getSystemPrompt } from "../prompts.js";
 import { generateStrategy, mergeSnapshotDebts } from "../engine.js";
 import { resolveCardLabel, getShortCardLabel } from "../cards.js";
@@ -29,10 +38,203 @@ import { getPlaidAutoFill, getStoredTransactions } from "../plaid.js";
 import { haptic } from "../haptics.js";
 import { buildSnapshotMessage } from "../buildSnapshotMessage.js";
 import { checkAuditQuota } from "../subscription.js";
-import { useAudit } from "../contexts/AuditContext.jsx";
+import { useAudit } from "../contexts/AuditContext.js";
+import { DEFAULT_FINANCIAL_CONFIG } from "../contexts/SettingsContext.js";
+import type { PersonaMode, SetFinancialConfig } from "../contexts/SettingsContext.js";
+import type {
+  AuditFormData,
+  AuditFormDebt,
+  AuditRecord,
+  BankAccount,
+  Card,
+  CatalystCashConfig,
+  MarketPriceMap,
+  Renewal,
+} from "../../types/index.js";
+
+type MoneyInput = number | string;
+
+interface InputDebt extends AuditFormDebt {
+  cardId: string;
+  name: string;
+  balance: MoneyInput;
+}
+
+interface PendingCharge {
+  amount: MoneyInput | "";
+  cardId: string;
+  description: string;
+  confirmed: boolean;
+}
+
+interface InputFormState extends AuditFormData {
+  time: string;
+  checking: MoneyInput | "";
+  savings: MoneyInput | "";
+  roth: MoneyInput | "";
+  brokerage: MoneyInput | "";
+  k401Balance: MoneyInput | "";
+  pendingCharges: PendingCharge[];
+  habitCount: number;
+  debts: InputDebt[];
+  notes: string;
+  autoPaycheckAdd: boolean;
+  paycheckAddOverride: string;
+}
+
+interface HoldingValues {
+  roth: number;
+  k401: number;
+  brokerage: number;
+  crypto: number;
+  hsa: number;
+}
+
+interface OverrideInvestState {
+  roth: boolean;
+  brokerage: boolean;
+  k401: boolean;
+}
+
+interface OverridePlaidState {
+  checking: boolean;
+  vault: boolean;
+  debts: Record<string, boolean | undefined>;
+}
+
+interface AuditQuota {
+  remaining: number;
+  limit: number;
+  monthlyCap?: number;
+  monthlyUsed?: number;
+}
+
+interface PlaidTransaction {
+  id?: string;
+  date: string;
+  pending?: boolean;
+  isCredit?: boolean;
+  amount: number;
+  description: string;
+  category?: string;
+  accountName?: string;
+}
+
+interface StoredTransactionsResult {
+  data?: PlaidTransaction[];
+  fetchedAt?: string | number | null;
+}
+
+interface PlaidAutoFillData {
+  checking: number | null;
+  vault: number | null;
+  debts: InputDebt[];
+}
+
+interface InputFormConfig extends CatalystCashConfig {
+  monthlySalary?: number;
+  hourlyRate?: number;
+  assumedHours?: number;
+  typicalPaycheck?: number;
+  trackPaycheck?: boolean;
+}
+
+interface ToastApi {
+  success: (message: string) => void;
+  error: (message: string) => void;
+  info?: (message: string) => void;
+}
+
+interface DbApi {
+  get: (key: string) => Promise<unknown>;
+  set: (key: string, value: unknown) => Promise<void> | void;
+}
+
+interface InputFormProps {
+  onSubmit: (msg: string, formData: InputFormState & { budgetActuals: Record<string, string | number> }, isTestMode: boolean) => void | Promise<void>;
+  isLoading: boolean;
+  lastAudit: AuditRecord | null;
+  renewals: Renewal[];
+  cardAnnualFees: Renewal[];
+  cards: Card[];
+  bankAccounts: BankAccount[];
+  onManualImport: (resultText: string) => void | Promise<void>;
+  toast: ToastApi;
+  financialConfig: InputFormConfig;
+  setFinancialConfig: SetFinancialConfig;
+  aiProvider: string;
+  personalRules: string;
+  setPersonalRules: (value: string) => void;
+  persona?: PersonaMode;
+  instructionHash: number | string | null;
+  setInstructionHash: (value: string | number | null) => void;
+  db: DbApi;
+  onBack: () => void;
+  proEnabled?: boolean;
+}
+
+interface SelectOption {
+  value: string;
+  label: string;
+}
+
+interface SelectGroup {
+  label: string;
+  options: SelectOption[];
+}
+
+interface CardComponentProps {
+  children?: ReactNode;
+  className?: string;
+  variant?: string;
+  style?: CSSProperties;
+  onClick?: () => void;
+  animate?: boolean;
+  delay?: number;
+}
+
+interface LabelProps {
+  children?: ReactNode;
+  style?: CSSProperties;
+}
+
+interface MonoProps {
+  children?: ReactNode;
+  color?: string;
+  size?: number;
+  weight?: number;
+  style?: CSSProperties;
+}
+
+interface DollarInputProps {
+  value: MoneyInput | "";
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+  label?: string;
+}
+
+interface CustomSelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  options: SelectGroup[];
+  placeholder?: string;
+  ariaLabel?: string;
+  icon?: ReactNode;
+}
+
+interface InputFormPromptContext {
+  summary?: string;
+  recent: Array<{ role: string; content: string; ts?: number }>;
+}
+
+const Card = UICard as unknown as (props: CardComponentProps) => ReactNode;
+const Label = UILabel as unknown as (props: LabelProps) => ReactNode;
+const Mono = UIMono as unknown as (props: MonoProps) => ReactNode;
+const DI = UIDI as unknown as (props: DollarInputProps) => ReactNode;
+const CustomSelect = UICustomSelect as unknown as (props: CustomSelectProps) => ReactNode;
 
 // Sanitize dollar input: strip non-numeric chars except decimal point
-const sanitizeDollar = v => v.replace(/[^0-9.]/g, "").replace(/\.(?=.*\.)/g, "");
+const sanitizeDollar = (value: string): string => value.replace(/[^0-9.]/g, "").replace(/\.(?=.*\.)/g, "");
 
 export default function InputForm({
   onSubmit,
@@ -55,41 +257,47 @@ export default function InputForm({
   db,
   onBack,
   proEnabled = false,
-}) {
+}: InputFormProps) {
   const { error } = useAudit();
   const today = new Date();
+  const typedFinancialConfig = (financialConfig ?? (DEFAULT_FINANCIAL_CONFIG as InputFormConfig)) as InputFormConfig;
+  const setTypedFinancialConfig = setFinancialConfig as unknown as (
+    value: InputFormConfig | ((prev: InputFormConfig) => InputFormConfig)
+  ) => void;
 
   // Auto-fill from Plaid if available
-  const plaidData = getPlaidAutoFill(cards || [], bankAccounts || []);
+  const plaidData = getPlaidAutoFill(cards || [], bankAccounts || []) as PlaidAutoFillData;
 
   // Load Plaid transactions from local storage
-  const [plaidTransactions, setPlaidTransactions] = useState([]);
-  const [txnFetchedAt, setTxnFetchedAt] = useState(null);
-  const [showTxns, setShowTxns] = useState(false);
+  const [plaidTransactions, setPlaidTransactions] = useState<PlaidTransaction[]>([]);
+  const [txnFetchedAt, setTxnFetchedAt] = useState<string | number | null>(null);
+  const [showTxns, setShowTxns] = useState<boolean>(false);
   useEffect(() => {
-    getStoredTransactions()
-      .then(stored => {
-        if (stored?.data?.length) {
-          // For weekly audit: only show last 7 days of non-pending transactions
-          const cutoff = new Date();
-          cutoff.setDate(cutoff.getDate() - 7);
-          const cutoffStr = cutoff.toISOString().split("T")[0];
-          const recent = stored.data.filter(t => t.date >= cutoffStr && !t.pending && !t.isCredit);
-          setPlaidTransactions(recent);
-          setTxnFetchedAt(stored.fetchedAt);
-        }
-      })
-      .catch(() => { });
+    try {
+      const typedStored = getStoredTransactions() as StoredTransactionsResult | null;
+      if (typedStored?.data?.length) {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 7);
+        const cutoffStr = cutoff.toISOString().split("T")[0] ?? cutoff.toISOString().slice(0, 10);
+        const recent = typedStored.data.filter(
+          (transaction) => transaction.date >= cutoffStr && !transaction.pending && !transaction.isCredit
+        );
+        setPlaidTransactions(recent);
+        setTxnFetchedAt(typedStored.fetchedAt ?? null);
+      }
+    } catch {
+      // ignore transaction cache read failures
+    }
   }, []);
 
-  const [form, setForm] = useState({
-    date: today.toISOString().split("T")[0],
-    time: today.toTimeString().split(" ")[0].slice(0, 5),
+  const [form, setForm] = useState<InputFormState>({
+    date: today.toISOString().split("T")[0] ?? today.toISOString().slice(0, 10),
+    time: (today.toTimeString().split(" ")[0] ?? "00:00:00").slice(0, 5),
     checking: plaidData.checking !== null ? plaidData.checking : "",
     savings: plaidData.vault !== null ? plaidData.vault : "",
-    roth: financialConfig?.investmentRoth || "",
-    brokerage: financialConfig?.investmentBrokerage || "",
-    k401Balance: financialConfig?.k401Balance || "",
+    roth: typedFinancialConfig?.investmentRoth || "",
+    brokerage: typedFinancialConfig?.investmentBrokerage || "",
+    k401Balance: typedFinancialConfig?.k401Balance || "",
     pendingCharges: [],
     habitCount: 10,
     debts: plaidData.debts?.length > 0 ? plaidData.debts : [{ cardId: "", name: "", balance: "" }],
@@ -97,37 +305,37 @@ export default function InputForm({
     autoPaycheckAdd: false,
     paycheckAddOverride: "",
   });
-  const [isTestMode, setIsTestMode] = useState(false);
+  const [isTestMode, setIsTestMode] = useState<boolean>(false);
 
-  const [budgetActuals, setBudgetActuals] = useState({});
-  const [holdingValues, setHoldingValues] = useState({ roth: 0, k401: 0, brokerage: 0, crypto: 0, hsa: 0 });
-  const [overrideInvest, setOverrideInvest] = useState({ roth: false, brokerage: false, k401: false });
-  const [overridePlaid, setOverridePlaid] = useState({ checking: false, vault: false, debts: {} });
+  const [budgetActuals, setBudgetActuals] = useState<Record<string, string | number>>({});
+  const [holdingValues, setHoldingValues] = useState<HoldingValues>({ roth: 0, k401: 0, brokerage: 0, crypto: 0, hsa: 0 });
+  const [overrideInvest, setOverrideInvest] = useState<OverrideInvestState>({ roth: false, brokerage: false, k401: false });
+  const [overridePlaid, setOverridePlaid] = useState<OverridePlaidState>({ checking: false, vault: false, debts: {} });
 
-  const [auditQuota, setAuditQuota] = useState(null);
+  const [auditQuota, setAuditQuota] = useState<AuditQuota | null>(null);
   useEffect(() => {
-    checkAuditQuota().then(setAuditQuota);
+    checkAuditQuota().then((quota) => setAuditQuota(quota as AuditQuota | null));
   }, []);
 
   // Re-sync Plaid balances when cards or bankAccounts update (e.g. after Plaid sync finishes)
   useEffect(() => {
-    const freshPlaid = getPlaidAutoFill(cards || [], bankAccounts || []);
-    setForm(p => {
-      const updates = {};
+    const freshPlaid = getPlaidAutoFill(cards || [], bankAccounts || []) as PlaidAutoFillData;
+    setForm((p) => {
+      const updates: Partial<InputFormState> = {};
       // Only update checking/savings if user hasn't overridden
       if (freshPlaid.checking !== null && !overridePlaid.checking) updates.checking = freshPlaid.checking;
       if (freshPlaid.vault !== null && !overridePlaid.vault) updates.savings = freshPlaid.vault;
       // Update debt balances for cards that have Plaid data and aren't overridden
       if (freshPlaid.debts?.length > 0) {
-        const newDebts = (p.debts || []).map(d => {
+        const newDebts = (p.debts || []).map((d) => {
           if (!d.cardId) return d;
           if (overridePlaid.debts[d.cardId]) return d;
-          const pd = freshPlaid.debts.find(fd => fd.cardId === d.cardId);
+          const pd = freshPlaid.debts.find((fd) => fd.cardId === d.cardId);
           return pd ? { ...d, balance: pd.balance } : d;
         });
         // Add any new Plaid debts that aren't already in the form
-        const existingIds = new Set(newDebts.map(d => d.cardId).filter(Boolean));
-        const additions = freshPlaid.debts.filter(pd => pd.cardId && !existingIds.has(pd.cardId));
+        const existingIds = new Set(newDebts.map((d) => d.cardId).filter(Boolean));
+        const additions = freshPlaid.debts.filter((pd) => pd.cardId && !existingIds.has(pd.cardId));
         if (additions.length > 0 || newDebts.some((d, i) => d !== (p.debts || [])[i])) {
           updates.debts = [...newDebts, ...additions];
         }
@@ -136,8 +344,8 @@ export default function InputForm({
       return { ...p, ...updates };
     });
   }, [cards, bankAccounts]);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
+  const [showConfig, setShowConfig] = useState<boolean>(false);
 
   // Auto-calculate portfolio values from cached market prices
   useEffect(() => {
@@ -173,64 +381,12 @@ export default function InputForm({
   }, [financialConfig?.enableHoldings, financialConfig?.holdings]);
 
   // Structured validation via validation.js
-  const validation = useMemo(() => validateSnapshot(form, financialConfig), [form, financialConfig]);
+  const validation = useMemo(() => validateSnapshot(form, typedFinancialConfig), [form, typedFinancialConfig]);
   const validationErrors = validation.errors.filter(e => e.severity === "error");
   const validationWarnings = validation.errors.filter(e => e.severity === "warning");
 
   // Identify if the generated system prompt has drifted from the last downloaded version
-  const activeConfig = financialConfig || {
-    payday: "Friday",
-    paycheckStandard: 0.0,
-    paycheckFirstOfMonth: 0.0,
-    weeklySpendAllowance: 0.0,
-    emergencyFloor: 0.0,
-    checkingBuffer: 0.0,
-    heavyHorizonStart: 15,
-    heavyHorizonEnd: 45,
-    heavyHorizonThreshold: 0.0,
-    greenStatusTarget: 0.0,
-    emergencyReserveTarget: 0.0,
-    habitName: "Coffee Pods",
-    habitRestockCost: 25,
-    habitCheckThreshold: 6,
-    habitCriticalThreshold: 3,
-    trackHabits: false,
-    defaultAPR: 24.99,
-    fireExpectedReturnPct: 7,
-    fireInflationPct: 2.5,
-    fireSafeWithdrawalPct: 4,
-    investmentBrokerage: 0,
-    investmentRoth: 0,
-    investmentsAsOfDate: "",
-    trackRoth: false,
-    rothContributedYTD: 0,
-    rothAnnualLimit: 0,
-    autoTrackRothYTD: true,
-    track401k: false,
-    k401Balance: 0,
-    k401ContributedYTD: 0,
-    k401AnnualLimit: 0,
-    autoTrack401kYTD: true,
-    trackBrokerage: true,
-    brokerageStockPct: 90,
-    rothStockPct: 90,
-    budgetCategories: [],
-    savingsGoals: [],
-    nonCardDebts: [],
-    incomeSources: [],
-    creditScore: null,
-    creditScoreDate: "",
-    creditUtilization: null,
-    taxWithholdingRate: 0,
-    quarterlyTaxEstimate: 0,
-    isContractor: false,
-    homeEquity: 0,
-    vehicleValue: 0,
-    otherAssets: 0,
-    otherAssetsLabel: "",
-    insuranceDeductibles: [],
-    bigTicketItems: [],
-  };
+  const activeConfig: InputFormConfig = typedFinancialConfig;
   const promptRenewals = [...(renewals || []), ...(cardAnnualFees || [])];
 
   const strategyCards = useMemo(
@@ -247,7 +403,18 @@ export default function InputForm({
     snapshotDate: form.date,
   });
 
-  const currentPayload = getSystemPrompt(
+  const currentPayload = (getSystemPrompt as unknown as (
+    provider: string,
+    config: InputFormConfig,
+    cards: Card[],
+    renewals: Renewal[],
+    personalRules: string,
+    trendContext: null,
+    persona: PersonaMode,
+    computedStrategy: unknown,
+    chatContext?: InputFormPromptContext | null,
+    memBlock?: unknown
+  ) => string)(
     aiProvider || "gemini",
     activeConfig,
     cards || [],
@@ -259,19 +426,32 @@ export default function InputForm({
   );
   const liveHash = cyrb53(currentPayload);
   const instructionsOutOfSync = instructionHash !== liveHash;
+  const cardOptions = useMemo<SelectGroup[]>(() => {
+    const groupedCards = (cards || []).reduce<Record<string, Card[]>>((groups, card) => {
+      (groups[card.institution] = groups[card.institution] || []).push(card);
+      return groups;
+    }, {});
+    return Object.entries(groupedCards).map(([inst, instCards]) => ({
+      label: inst,
+      options: instCards.map((card) => ({
+        value: card.id || card.name,
+        label: getShortCardLabel(cards || [], card).replace(`${inst} `, ""),
+      })),
+    }));
+  }, [cards]);
 
   useEffect(() => {
     if (lastAudit?.form && !lastAudit.isTest) {
       const prevDebts = Array.isArray(lastAudit.form.debts) ? lastAudit.form.debts : [];
       const debtWithBalance = prevDebts
-        .filter(d => d?.name && parseFloat(d?.balance || "0") > 0)
-        .map(d => {
+        .filter((d) => d?.name && parseFloat(String(d?.balance || "0")) > 0)
+        .map((d) => {
           if (d.cardId) return d;
-          const match = (cards || []).find(c => c.name === d.name);
+          const match = (cards || []).find((c) => c.name === d.name);
           return match ? { ...d, cardId: match.id } : d;
-        });
-      const plaidNow = getPlaidAutoFill(cards || [], bankAccounts || []);
-      setForm(p => ({
+        }) as InputDebt[];
+      const plaidNow = getPlaidAutoFill(cards || [], bankAccounts || []) as PlaidAutoFillData;
+      setForm((p) => ({
         ...p,
         ...lastAudit.form,
         debts:
@@ -280,8 +460,8 @@ export default function InputForm({
             : debtWithBalance.length
               ? debtWithBalance
               : [{ cardId: "", name: "", balance: "" }],
-        date: today.toISOString().split("T")[0],
-        time: today.toTimeString().split(" ")[0].slice(0, 5),
+        date: today.toISOString().split("T")[0] ?? today.toISOString().slice(0, 10),
+        time: (today.toTimeString().split(" ")[0] ?? "00:00:00").slice(0, 5),
         // Prefer live Plaid balance > last audit > empty
         checking: plaidNow.checking !== null ? plaidNow.checking : lastAudit?.form?.checking || "",
         savings: plaidNow.vault !== null ? plaidNow.vault : lastAudit?.form?.savings || lastAudit?.form?.ally || "",
@@ -293,23 +473,26 @@ export default function InputForm({
       }));
     }
   }, [lastAudit, cards, bankAccounts]);
-  const s = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  function s<K extends keyof InputFormState>(key: K, value: InputFormState[K]): void {
+    setForm((p) => ({ ...p, [key]: value }));
+  }
   const addD = () => {
     haptic.medium();
     s("debts", [...form.debts, { cardId: "", name: "", balance: "" }]);
   };
-  const rmD = i => {
+  const rmD = (i: number) => {
     haptic.light();
     s(
       "debts",
       form.debts.filter((_, j) => j !== i)
     );
   };
-  const sD = (i, k, v) =>
-    setForm(p => ({
+  function sD<K extends keyof InputDebt>(i: number, key: K, value: InputDebt[K]): void {
+    setForm((p) => ({
       ...p,
-      debts: p.debts.map((d, j) => (j === i ? { ...d, [k]: v } : d)),
+      debts: p.debts.map((d, j) => (j === i ? { ...d, [key]: value } : d)),
     }));
+  }
   // Count how many balance fields are filled to determine if we have enough data
   const filledFields = [
     activeConfig.trackChecking !== false && form.checking,
@@ -671,18 +854,7 @@ export default function InputForm({
                       }));
                     }}
                     placeholder="Card..."
-                    options={Object.entries(
-                      (cards || []).reduce((g, c) => {
-                        (g[c.institution] = g[c.institution] || []).push(c);
-                        return g;
-                      }, {})
-                    ).map(([inst, instCards]) => ({
-                      label: inst,
-                      options: instCards.map(c => ({
-                        value: c.id || c.name,
-                        label: getShortCardLabel(cards || [], c).replace(inst + " ", "")
-                      }))
-                    }))}
+                    options={cardOptions}
                   />
                   <div style={{ flex: "0 0 90px" }}>
                     {hasPlaid && !isOverridden ? (
@@ -874,18 +1046,7 @@ export default function InputForm({
                     }));
                   }}
                   placeholder="Card..."
-                  options={Object.entries(
-                    (cards || []).reduce((g, c) => {
-                      (g[c.institution] = g[c.institution] || []).push(c);
-                      return g;
-                    }, {})
-                  ).map(([inst, instCards]) => ({
-                    label: inst,
-                    options: instCards.map(c => ({
-                      value: c.id,
-                      label: (getShortCardLabel(cards || [], c) || "").replace((inst || "") + " ", "")
-                    }))
-                  }))}
+                    options={cardOptions}
                 />
                 <div style={{ flex: "0 0 90px" }}>
                   <DI
@@ -927,7 +1088,7 @@ export default function InputForm({
                 </button>
               </div>
               {/* Row 2: description + confirm */}
-              < div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <input
                   type="text"
                   aria-label={`Pending charge description ${ci + 1}`}
@@ -1454,7 +1615,7 @@ export default function InputForm({
                     </span>
                   </div>
                   <div style={{ fontSize: 10, color: T.text.muted, marginTop: 4, fontFamily: T.font.mono }}>
-                    {(financialConfig.holdings.crypto || []).map(h => (h.symbol || "").replace("-USD", "")).join(" · ")} ·
+                    {((typedFinancialConfig.holdings?.crypto || []) as Array<{ symbol?: string }>).map((h) => (h.symbol || "").replace("-USD", "")).join(" · ")} ·
                     Live
                   </div>
                 </Card>
@@ -1667,20 +1828,20 @@ export default function InputForm({
             <Card style={{ marginBottom: 12 }}>
               <Label>Income & Cash Flow</Label>
               <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                {["salary", "hourly", "variable"].map(type => (
+                {(["salary", "hourly", "variable"] as const).map((type) => (
                   <button
                     key={type}
                     onClick={() => {
                       haptic.light();
-                      setFinancialConfig({ ...financialConfig, incomeType: type });
+                      setTypedFinancialConfig({ ...typedFinancialConfig, incomeType: type });
                     }}
                     style={{
                       flex: 1,
                       padding: "10px 0",
                       borderRadius: T.radius.sm,
-                      border: `1px solid ${financialConfig?.incomeType === type ? T.accent.primary : T.border.default}`,
-                      background: financialConfig?.incomeType === type ? `${T.accent.primary}15` : T.bg.elevated,
-                      color: financialConfig?.incomeType === type ? T.accent.primary : T.text.secondary,
+                      border: `1px solid ${typedFinancialConfig?.incomeType === type ? T.accent.primary : T.border.default}`,
+                      background: typedFinancialConfig?.incomeType === type ? `${T.accent.primary}15` : T.bg.elevated,
+                      color: typedFinancialConfig?.incomeType === type ? T.accent.primary : T.text.secondary,
                       fontSize: 12,
                       fontWeight: 700,
                       cursor: "pointer",
@@ -1693,7 +1854,7 @@ export default function InputForm({
                 ))}
               </div>
 
-              {financialConfig?.incomeType === "salary" && (
+              {typedFinancialConfig?.incomeType === "salary" && (
                 <div style={{ position: "relative" }}>
                   <span
                     style={{
@@ -1713,11 +1874,8 @@ export default function InputForm({
                     inputMode="decimal"
                     pattern="[0-9]*"
                     aria-label="Monthly take-home salary"
-                    value={financialConfig?.monthlySalary || ""}
-                    onChange={e =>
-                      setFinancialConfig &&
-                      setFinancialConfig({ ...financialConfig, monthlySalary: parseFloat(e.target.value) || 0 })
-                    }
+                    value={typedFinancialConfig?.monthlySalary || ""}
+                    onChange={(e) => setTypedFinancialConfig({ ...typedFinancialConfig, monthlySalary: parseFloat(e.target.value) || 0 })}
                     placeholder="Monthly Take-Home Salary"
                     className="app-input"
                     style={{
@@ -1735,7 +1893,7 @@ export default function InputForm({
                 </div>
               )}
 
-              {financialConfig?.incomeType === "hourly" && (
+              {typedFinancialConfig?.incomeType === "hourly" && (
                 <div style={{ display: "flex", gap: 10 }}>
                   <div style={{ flex: 1, position: "relative" }}>
                     <span
@@ -1756,11 +1914,8 @@ export default function InputForm({
                       inputMode="decimal"
                       pattern="[0-9]*"
                       aria-label="Hourly rate"
-                      value={financialConfig?.hourlyRate || ""}
-                      onChange={e =>
-                        setFinancialConfig &&
-                        setFinancialConfig({ ...financialConfig, hourlyRate: parseFloat(e.target.value) || 0 })
-                      }
+                      value={typedFinancialConfig?.hourlyRate || ""}
+                      onChange={(e) => setTypedFinancialConfig({ ...typedFinancialConfig, hourlyRate: parseFloat(e.target.value) || 0 })}
                       placeholder="Hourly Rate"
                       className="app-input"
                       style={{
@@ -1782,11 +1937,8 @@ export default function InputForm({
                       inputMode="decimal"
                       pattern="[0-9]*"
                       aria-label="Hours per week"
-                      value={financialConfig?.assumedHours || ""}
-                      onChange={e =>
-                        setFinancialConfig &&
-                        setFinancialConfig({ ...financialConfig, assumedHours: parseFloat(e.target.value) || 0 })
-                      }
+                      value={typedFinancialConfig?.assumedHours || ""}
+                      onChange={(e) => setTypedFinancialConfig({ ...typedFinancialConfig, assumedHours: parseFloat(e.target.value) || 0 })}
                       placeholder="Hrs/Week"
                       className="app-input"
                       style={{
@@ -1805,7 +1957,7 @@ export default function InputForm({
                 </div>
               )}
 
-              {financialConfig?.incomeType === "variable" && (
+              {typedFinancialConfig?.incomeType === "variable" && (
                 <div style={{ position: "relative" }}>
                   <span
                     style={{
@@ -1825,11 +1977,8 @@ export default function InputForm({
                     inputMode="decimal"
                     pattern="[0-9]*"
                     aria-label="Typical paycheck amount"
-                    value={financialConfig?.typicalPaycheck || ""}
-                    onChange={e =>
-                      setFinancialConfig &&
-                      setFinancialConfig({ ...financialConfig, typicalPaycheck: parseFloat(e.target.value) || 0 })
-                    }
+                    value={typedFinancialConfig?.typicalPaycheck || ""}
+                    onChange={(e) => setTypedFinancialConfig({ ...typedFinancialConfig, typicalPaycheck: parseFloat(e.target.value) || 0 })}
                     placeholder="Typical Paycheck"
                     className="app-input"
                     style={{

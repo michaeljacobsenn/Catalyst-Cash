@@ -4,7 +4,7 @@ import { T } from "../constants.js";
 import { Card, Label } from "../ui.jsx";
 import { haptic } from "../haptics.js";
 import { useSettings } from "../contexts/SettingsContext";
-import { usePortfolio } from "../contexts/PortfolioContext.jsx";
+import { usePortfolio } from "../contexts/PortfolioContext";
 import { useNavigation } from "../contexts/NavigationContext.jsx";
 
 /**

@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback, memo, lazy, Suspense } from "react";
+import { useRef, useState, useEffect, memo, lazy, Suspense, type CSSProperties, type ReactNode } from "react";
 import Confetti from "react-confetti";
 import {
   Zap,
@@ -27,7 +27,7 @@ import { T } from "../constants.js";
 
 import { fmt, fmtDate, exportAudit, shareAudit, stripPaycheckParens, db } from "../utils.js";
 import { uploadToICloud } from "../cloudSync.js";
-import { Card, Label, Badge, ProgressBar, InlineTooltip, getTracking } from "../ui.jsx";
+import { Card as UICard, Label, Badge, ProgressBar, InlineTooltip, getTracking } from "../ui.jsx";
 import { Mono, StatusDot, PaceBar, Md, CountUp, Section } from "../components.jsx";
 import { unlockBadge } from "../badges.js";
 import DebtSimulator from "./DebtSimulator.jsx";
@@ -46,10 +46,11 @@ import "./DashboardTab.css";
 import { useCoachmark, COACHMARKS } from "../coachmarks.js";
 import Coachmark from "../Coachmark.jsx";
 
-import { useAudit } from "../contexts/AuditContext.jsx";
-import { useSettings } from "../contexts/SettingsContext";
-import { usePortfolio } from "../contexts/PortfolioContext.jsx";
+import { useAudit } from "../contexts/AuditContext.js";
+import { useSettings } from "../contexts/SettingsContext.js";
+import { usePortfolio } from "../contexts/PortfolioContext.js";
 import { useNavigation } from "../contexts/NavigationContext.jsx";
+import type { BankAccount, Card as CardType, CatalystCashConfig, HealthScore } from "../../types/index.js";
 
 // ── Extracted dashboard components ──
 import useDashboardData from "../dashboard/useDashboardData.js";
@@ -62,8 +63,90 @@ const SYNC_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
 let _autoSyncDone = false; // Survives component remounts — only auto-sync once per app session
 const LazyProPaywall = lazy(() => import("./ProPaywall.jsx"));
 
+interface DashboardSectionProps {
+  children: ReactNode;
+  marginTop?: number;
+  title?: ReactNode;
+}
 
-const DashboardSection = ({ children, marginTop = 12 }) => (
+interface DashboardTabProps {
+  onRestore?: () => void;
+  proEnabled?: boolean;
+  onDemoAudit?: () => void;
+  onRefreshDashboard?: () => void;
+  onViewTransactions?: () => void;
+  onDiscussWithCFO?: (prompt: string) => void;
+}
+
+interface WindowSize {
+  width: number;
+  height: number;
+}
+
+interface StreakMilestone {
+  emoji: string;
+  label: string;
+}
+
+interface SetupStep {
+  id: string;
+  title: string;
+  desc: string;
+  done: boolean;
+  action: () => void;
+  Icon: typeof Settings;
+}
+
+interface QuickMetric {
+  l: string;
+  v: number | null | undefined;
+  c: string;
+  icon: string;
+}
+
+interface CompactMetric {
+  label: string;
+  value: number;
+  color: string;
+}
+
+interface SecurityKeysModule {
+  isSecuritySensitiveKey: (key: string) => boolean;
+  sanitizePlaidForBackup: (connections: unknown[]) => unknown;
+}
+
+interface BackupEnvelope {
+  app: string;
+  version: string;
+  exportedAt: string;
+  data: Record<string, unknown>;
+}
+
+interface ToastApi {
+  success: (message: string) => void;
+  error: (message: string) => void;
+  info?: (message: string) => void;
+}
+
+interface DashboardCardProps {
+  children?: ReactNode;
+  style?: CSSProperties;
+  animate?: boolean;
+  delay?: number;
+  onClick?: () => void;
+  variant?: string;
+  className?: string;
+}
+
+declare global {
+  interface Window {
+    toast?: ToastApi;
+  }
+}
+
+const Card = UICard as unknown as (props: DashboardCardProps) => ReactNode;
+
+const DashboardSection = ({ children, marginTop = 12 }: DashboardSectionProps) => (
   <section style={{ marginTop, marginBottom: 12 }}>
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {children}
@@ -78,7 +161,7 @@ export default memo(function DashboardTab({
   onRefreshDashboard,
   onViewTransactions,
   onDiscussWithCFO,
-}) {
+}: DashboardTabProps) {
   const { current, history } = useAudit();
   const { financialConfig, setFinancialConfig, autoBackupInterval } = useSettings();
   const { cards, setCards, bankAccounts, setBankAccounts, renewals, badges } = usePortfolio();
@@ -86,12 +169,13 @@ export default memo(function DashboardTab({
   const { appPasscode, privacyMode } = useSecurity();
   const [showPaywall, setShowPaywall] = useState(false);
   const [nextActionExpanded, setNextActionExpanded] = useState(false);
+  const typedFinancialConfig = financialConfig as CatalystCashConfig;
 
   // ── Plaid Balance Sync (shared hook) ──
   const { syncing, sync: handleSyncBalances } = usePlaidSync({
     cards,
     bankAccounts,
-    financialConfig,
+    financialConfig: typedFinancialConfig,
     setCards,
     setBankAccounts,
     setFinancialConfig,
@@ -103,7 +187,9 @@ export default memo(function DashboardTab({
   useEffect(() => {
     const trySync = () => {
       if (document.visibilityState === "visible") {
-        const hasPlaid = cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId);
+        const hasPlaid =
+          cards.some((card: CardType) => card._plaidAccountId) ||
+          bankAccounts.some((account: BankAccount) => account._plaidAccountId);
         if (hasPlaid) handleSyncBalances();
       }
     };
@@ -145,8 +231,8 @@ export default memo(function DashboardTab({
 
   // Confetti
   const [runConfetti, setRunConfetti] = useState(false);
-  const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
-  const prevCurrentTs = useRef(current?.ts);
+  const [windowSize, setWindowSize] = useState<WindowSize>({ width: window.innerWidth, height: window.innerHeight });
+  const prevCurrentTs = useRef<string | undefined>(current?.ts);
 
   useEffect(() => {
     const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
@@ -155,7 +241,7 @@ export default memo(function DashboardTab({
   }, []);
 
   // ── Streak milestone celebration ──
-  const STREAK_MILESTONES = {
+  const STREAK_MILESTONES: Record<number, StreakMilestone> = {
     4: { emoji: "🔥", label: "1 Month Strong!" },
     8: { emoji: "💪", label: "2 Months of Consistency!" },
     12: { emoji: "🏆", label: "Quarter Master!" },
@@ -167,7 +253,8 @@ export default memo(function DashboardTab({
   useEffect(() => {
     if (current?.ts !== prevCurrentTs.current) {
       prevCurrentTs.current = current?.ts;
-      if (current?.parsed?.healthScore?.score >= 95 && !current?.isTest) {
+      const latestScore = current?.parsed?.healthScore?.score;
+      if ((latestScore ?? 0) >= 95 && !current?.isTest) {
         setRunConfetti(true);
         setTimeout(() => setRunConfetti(false), 8000);
       }
@@ -198,9 +285,9 @@ export default memo(function DashboardTab({
   useEffect(() => {
     if (autoBackupInterval && autoBackupInterval !== "off") return; // auto-backup is on, no nudge needed
     (async () => {
-      const dismissed = await db.get("backup-nudge-dismissed");
+      const dismissed = (await db.get("backup-nudge-dismissed")) as number | null;
       if (dismissed && Date.now() - dismissed < 7 * 86400000) return; // dismissed within 7 days
-      const lastTs = await db.get("last-backup-ts");
+      const lastTs = (await db.get("last-backup-ts")) as number | null;
       if (!lastTs || Date.now() - lastTs > 7 * 86400000) {
         setShowBackupNudge(true);
       }
@@ -210,9 +297,9 @@ export default memo(function DashboardTab({
   const handleBackupNow = async () => {
     setBackingUp(true);
     try {
-      const { isSecuritySensitiveKey, sanitizePlaidForBackup } = await import("../securityKeys.js");
-      const backup = { app: "Catalyst Cash", version: "2.0", exportedAt: new Date().toISOString(), data: {} };
-      const keys = await db.keys();
+      const { isSecuritySensitiveKey, sanitizePlaidForBackup } = (await import("../securityKeys.js")) as SecurityKeysModule;
+      const backup: BackupEnvelope = { app: "Catalyst Cash", version: "2.0", exportedAt: new Date().toISOString(), data: {} };
+      const keys = (await db.keys()) as string[];
       for (const key of keys) {
         if (isSecuritySensitiveKey(key)) continue;
         const val = await db.get(key);
@@ -227,8 +314,9 @@ export default memo(function DashboardTab({
       await db.set("last-backup-ts", Date.now());
       setShowBackupNudge(false);
       if (window.toast) window.toast.success("✅ Backed up to iCloud");
-    } catch (e) {
-      if (window.toast) window.toast.error("Backup failed: " + (e.message || "Unknown error"));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      if (window.toast) window.toast.error("Backup failed: " + message);
     }
     setBackingUp(false);
   };
@@ -254,12 +342,12 @@ export default memo(function DashboardTab({
   // ── Setup Checklist ──
   const hasCards = cards.length > 0;
   const hasRenewals = (renewals || []).length > 0;
-  const steps = [
+  const steps: SetupStep[] = [
     {
       id: "profile",
       title: "Configure Profile",
       desc: "Income, zip code, and basic settings.",
-      done: financialConfig?.paycheckStandard > 0 || financialConfig?.incomeSources?.length > 0,
+      done: typedFinancialConfig?.paycheckStandard > 0 || typedFinancialConfig?.incomeSources?.length > 0,
       action: onGoSettings,
       Icon: Settings,
     },
@@ -300,10 +388,10 @@ export default memo(function DashboardTab({
         : cleanStatus === "RED"
           ? T.status.red
           : T.text.dim;
-  const hs = p?.healthScore || {};
-  const score = typeof hs.score === "number" ? hs.score : 0;
-  const grade = hs.grade || "?";
-  const summary = hs.summary || "";
+  const hs: HealthScore | null = p?.healthScore ?? null;
+  const score = typeof hs?.score === "number" ? hs.score : 0;
+  const grade = hs?.grade || "?";
+  const summary = hs?.summary || "";
   const scoreColor = score >= 80 ? T.status.green : score >= 60 ? T.status.amber : T.status.red;
 
   // ── Synthetic Percentile (client-side, no real user data) ──
@@ -316,7 +404,7 @@ export default memo(function DashboardTab({
     return Math.round(z > 0 ? (1 - phi) * 100 : phi * 100);
   })();
 
-  const quickMetrics = [
+  const quickMetrics: QuickMetric[] = [
     { l: "Checking", v: portfolioMetrics?.spendableCash, c: T.text.primary, icon: "💳" },
     (portfolioMetrics?.savingsCash ?? 0) > 0 ? { l: "Savings", v: portfolioMetrics.savingsCash, c: T.status.blue, icon: "🏦" } : null,
     { l: "Net Worth", v: portfolioMetrics?.netWorth, c: T.text.primary, icon: "📊" },
@@ -325,7 +413,7 @@ export default memo(function DashboardTab({
     (portfolioMetrics?.ccDebt ?? 0) > 0 ? { l: "CC Debt", v: portfolioMetrics.ccDebt, c: T.status.red, icon: "💳" } : null,
     (portfolioMetrics?.totalDebtBalance ?? 0) > 0 ? { l: "Loans", v: portfolioMetrics.totalDebtBalance, c: T.status.red, icon: "🏦" } : null,
     (portfolioMetrics?.totalOtherAssets ?? 0) > 0 ? { l: "Other Assets", v: portfolioMetrics.totalOtherAssets, c: T.text.secondary, icon: "🏠" } : null,
-  ].filter(Boolean);
+  ].filter((metric): metric is QuickMetric => metric !== null);
 
   return (
     <div className="page-body stagger-container" aria-live="polite" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
@@ -345,7 +433,7 @@ export default memo(function DashboardTab({
       {/* ═══ Header + inline greeting ═══ */}
       <div style={{ paddingTop: 16, paddingBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 900, letterSpacing: getTracking(22, 900), margin: 0 }}>Dashboard</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 900, letterSpacing: getTracking(22, "bold"), margin: 0 }}>Dashboard</h1>
           <p style={{ fontSize: 11, color: T.text.dim, margin: "2px 0 0", fontWeight: 500, letterSpacing: "0.01em" }}>{greeting}</p>
         </div>
         {streak > 1 && (
@@ -538,9 +626,9 @@ export default memo(function DashboardTab({
                <span style={{ fontSize: 12, fontWeight: 600, color: T.text.dim, letterSpacing: "0.02em" }}>
                  Net Worth
                </span>
-               {hs.score != null ? (
+               {hs?.score != null ? (
                  <div
-                   onClick={e => { e.stopPropagation(); haptic.selection(); navTo("audit"); }}
+                   onClick={(e) => { e.stopPropagation(); haptic.selection(); navTo("audit"); }}
                    style={{
                      display: "inline-flex",
                      alignItems: "center",
@@ -559,7 +647,7 @@ export default memo(function DashboardTab({
                  </div>
                ) : (
                  <div
-                   onClick={e => { e.stopPropagation(); haptic.selection(); navTo("audit"); }}
+                   onClick={(e) => { e.stopPropagation(); haptic.selection(); navTo("audit"); }}
                    style={{
                      display: "inline-flex",
                      alignItems: "center",
@@ -604,7 +692,7 @@ export default memo(function DashboardTab({
            </div>
 
              {/* Status tag */}
-             {hs.score != null && (
+             {hs?.score != null && (
                <span style={{ fontSize: 11, color: T.text.dim, fontWeight: 500 }}>
                  Status: <span style={{ color: scoreColor, fontWeight: 700 }}>{cleanStatus}</span>
                  {percentile > 0 && <span style={{ color: T.text.dim }}> · Top {100 - percentile}%</span>}
@@ -620,12 +708,12 @@ export default memo(function DashboardTab({
                return cash - ccMin - floor;
              })();
              const safeColor = safeToSpend <= 0 ? T.status.red : safeToSpend < (portfolioMetrics?.spendableCash ?? 0) * 0.2 ? T.status.amber : T.status.green;
-             const metrics = [
+             const metrics: CompactMetric[] = [
                { label: "Safe to Spend", value: Math.max(0, safeToSpend), color: safeColor },
                { label: "Checking", value: portfolioMetrics?.spendableCash ?? 0, color: T.text.primary },
                (portfolioMetrics?.ccDebt ?? 0) > 0 ? { label: "CC Debt", value: portfolioMetrics.ccDebt, color: T.status.red } : null,
                (portfolioMetrics?.savingsCash ?? 0) > 0 ? { label: "Savings", value: portfolioMetrics.savingsCash, color: T.text.primary } : null,
-             ].filter(Boolean);
+             ].filter((metric): metric is CompactMetric => metric !== null);
 
              return (
                <div style={{
@@ -785,13 +873,13 @@ export default memo(function DashboardTab({
                          transition: "all 0.3s cubic-bezier(.16,1,.3,1)",
                          opacity: step.done ? 0.6 : 1,
                        }}
-                       onMouseEnter={e => {
+                       onMouseEnter={(e) => {
                          if (!step.done) {
                            e.currentTarget.style.transform = "translateY(-2px)";
                            e.currentTarget.style.boxShadow = `0 6px 16px ${T.bg.base}`;
                          }
                        }}
-                       onMouseLeave={e => {
+                       onMouseLeave={(e) => {
                          if (!step.done) {
                            e.currentTarget.style.transform = "none";
                            e.currentTarget.style.boxShadow = "none";
@@ -827,7 +915,7 @@ export default memo(function DashboardTab({
 
           <DashboardSection title="AI CFO & Next Steps">
           {/* ═══ EMPTY STATE — no audit yet ═══ */}
-          {!p && !summary && !hs.narrative && (
+          {!p && !summary && !hs?.narrative && (
              <Card
                animate
                delay={200}
@@ -884,7 +972,7 @@ export default memo(function DashboardTab({
              </Card>
           )}
           {/* AI Insights Action Hub */}
-          {(summary || hs.narrative) && (
+          {(summary || hs?.narrative) && (
             <div
               className="fade-in"
               style={{
@@ -907,12 +995,12 @@ export default memo(function DashboardTab({
                 </p>
               )}
               
-              {hs.narrative && (
+              {hs?.narrative && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {hs.narrative
                     .split(/(?<=[.?!])\s+/)
                     .filter(Boolean)
-                    .map((sentence, i) => {
+                    .map((sentence, i: number) => {
                       // First sentence = positive/summary; subsequent = action/advisory
                       const isPositive = i === 0;
                       const iconColor = isPositive ? T.status.green : T.status.blue;
@@ -985,7 +1073,7 @@ export default memo(function DashboardTab({
                 )}
               </div>
               <button
-                onClick={() => { haptic.light(); setNextActionExpanded(e => !e); }}
+                onClick={() => { haptic.light(); setNextActionExpanded((expanded) => !expanded); }}
                 style={{
                   marginTop: 8,
                   background: "none",

@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { T } from "../constants.js";
 import { Card } from "../ui.jsx";
 import { ShieldCheck, AlertTriangle } from "lucide-react";
-import { usePortfolio } from "../contexts/PortfolioContext.jsx";
+import { usePortfolio } from "../contexts/PortfolioContext";
 import { useSettings } from "../contexts/SettingsContext";
 
 function getDaysUntil(nextDueStr) {

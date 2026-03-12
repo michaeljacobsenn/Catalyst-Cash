@@ -2,7 +2,7 @@ import React, { useState, useContext } from "react";
 import { Navigation, MapPin, RefreshCw, AlertCircle, Sparkles, X } from "lucide-react";
 import { Badge } from "../ui.jsx";
 import { T } from "../constants.js";
-import { PortfolioContext } from "../contexts/PortfolioContext.jsx";
+import { PortfolioContext } from "../contexts/PortfolioContext";
 import { getCardMultiplier } from "../rewardsCatalog.js";
 import { classifyMerchant } from "../api.js";
 import { haptic } from "../haptics.js";

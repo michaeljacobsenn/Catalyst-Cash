@@ -70,9 +70,9 @@ function mergeUniqueById(existing = [], incoming = []) {
   return Array.from(map.values());
 }
 
-import { usePortfolio, PortfolioContext } from "../contexts/PortfolioContext.jsx";
+import { usePortfolio, PortfolioContext } from "../contexts/PortfolioContext";
 import { useSettings } from "../contexts/SettingsContext";
-import { useAudit } from "../contexts/AuditContext.jsx";
+import { useAudit } from "../contexts/AuditContext";
 import { uploadToICloud } from "../cloudSync.js";
 import useDashboardData from "../dashboard/useDashboardData.js";
 

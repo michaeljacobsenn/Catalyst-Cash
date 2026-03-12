@@ -20,7 +20,7 @@ import { Mono, Section, MoveRow, Md } from "../components.jsx";
 import { haptic } from "../haptics.js";
 
 import { useSettings } from "../contexts/SettingsContext";
-import { useAudit } from "../contexts/AuditContext.jsx";
+import { useAudit } from "../contexts/AuditContext";
 import { useNavigation } from "../contexts/NavigationContext.jsx";
 
 const ReportSection = ({ title, icon: Icon, content, accentColor, badge, isLast }) => {

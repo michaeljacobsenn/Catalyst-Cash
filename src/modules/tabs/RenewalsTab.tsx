@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo, memo, useCallback, Suspense } from "react";
+import React, { useState, useEffect, useMemo, memo, useCallback, Suspense, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
 import { ChevronDown, ChevronUp, AlertTriangle, X, Plus, Check, CheckCircle2, Calendar, CreditCard, AlignLeft } from "lucide-react";
 import { T, RENEWAL_CATEGORIES, formatInterval } from "../constants.js";
 import { fmt } from "../utils.js";
 import { resolveCardLabel, getShortCardLabel } from "../cards.js";
-import { Card, Label, Badge, FormGroup, FormRow } from "../ui.jsx";
-import { Mono, EmptyState } from "../components.jsx";
-import SearchableSelect from "../SearchableSelect.jsx";
+import { Card as UICard, Label as UILabel, Badge as UIBadge, FormGroup as UIFormGroup, FormRow as UIFormRow } from "../ui.jsx";
+import { Mono as UIMono, EmptyState as UIEmptyState } from "../components.jsx";
+import SearchableSelectBase from "../SearchableSelect.jsx";
 import { haptic } from "../haptics.js";
 import { shouldShowGating } from "../subscription.js";
 import ProBanner from "./ProBanner.jsx";
@@ -17,12 +17,141 @@ const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
 const YEAR_OPTIONS = [1, 2, 3];
 const DAY_OPTIONS = Array.from({ length: 90 }, (_, i) => i + 1);
 
-import { usePortfolio } from "../contexts/PortfolioContext.jsx";
-import { useAudit } from "../contexts/AuditContext.jsx";
+import { usePortfolio } from "../contexts/PortfolioContext.js";
+import { useAudit } from "../contexts/AuditContext.js";
 import { useSubscriptions } from "../useSubscriptions.js";
 import { Zap, ExternalLink, Bot } from "lucide-react";
 import { getNegotiableMerchant } from "../negotiation.js";
 import { useNavigation } from "../contexts/NavigationContext.jsx";
+import type { CatalystCashConfig, Card, Renewal } from "../../types/index.js";
+
+interface RenewalsTabProps {
+  proEnabled?: boolean;
+  embedded?: boolean;
+}
+
+interface NegotiationSheetState {
+  merchant: string;
+  type: string;
+  tactic: string;
+  amount: number;
+  name: string;
+}
+
+interface NegotiationFlowPayload {
+  merchant: string;
+  amount: number;
+  tactic: string;
+  financialContext?: Partial<CatalystCashConfig> | null;
+}
+
+interface EditRenewalState {
+  name: string;
+  amount: string;
+  interval: number;
+  intervalUnit: string;
+  source: string;
+  chargedTo: string;
+  chargedToId: string;
+  nextDue: string;
+  category: string;
+}
+
+interface AddRenewalState extends EditRenewalState {}
+
+interface GroupedRenewalItem extends Renewal {
+  originalIndex?: number;
+  isExpired?: boolean;
+}
+
+interface GroupedCategory {
+  id: string;
+  label: string;
+  color: string;
+  items: GroupedRenewalItem[];
+}
+
+interface SearchableOption {
+  value: string;
+  label: string;
+  group?: string;
+}
+
+interface IntervalDropdownProps {
+  interval: number;
+  unit: string;
+  onChange: (value: { interval: number; unit: string }) => void;
+}
+
+interface CardSelectorProps {
+  value: string;
+  onChange: (value: string) => void;
+}
+
+interface SearchableSelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  options?: SearchableOption[];
+  style?: CSSProperties;
+  maxHeight?: number;
+  displayValue?: string;
+}
+
+interface CardProps {
+  children?: ReactNode;
+  animate?: boolean;
+  delay?: number;
+  variant?: string;
+  style?: CSSProperties;
+  className?: string;
+}
+
+interface LabelProps {
+  children?: ReactNode;
+  style?: CSSProperties;
+}
+
+interface BadgeProps {
+  children?: ReactNode;
+  variant?: string;
+  size?: string;
+  style?: CSSProperties;
+}
+
+interface FormGroupProps {
+  children?: ReactNode;
+  label?: ReactNode;
+}
+
+interface FormRowProps {
+  children?: ReactNode;
+  label?: ReactNode;
+  isLast?: boolean;
+}
+
+interface MonoProps {
+  children?: ReactNode;
+  size?: number;
+  weight?: number;
+  color?: string;
+  style?: CSSProperties;
+}
+
+interface EmptyStateProps {
+  icon?: React.ComponentType<{ size?: number; color?: string }>;
+  title?: ReactNode;
+  message?: ReactNode;
+}
+
+const Card = UICard as unknown as (props: CardProps) => ReactNode;
+const Label = UILabel as unknown as (props: LabelProps) => ReactNode;
+const Badge = UIBadge as unknown as (props: BadgeProps) => ReactNode;
+const FormGroup = UIFormGroup as unknown as (props: FormGroupProps) => ReactNode;
+const FormRow = UIFormRow as unknown as (props: FormRowProps) => ReactNode;
+const Mono = UIMono as unknown as (props: MonoProps) => ReactNode;
+const EmptyState = UIEmptyState as unknown as (props: EmptyStateProps) => ReactNode;
+const SearchableSelect = SearchableSelectBase as unknown as (props: SearchableSelectProps) => ReactNode;
 
 const CANCELLATION_LINKS = {
   // ── Streaming Video ──
@@ -209,7 +338,7 @@ const CANCELLATION_LINKS = {
 };
 
 // Build a universal fallback for any merchant not in the list
-function getCancelUrl(itemName) {
+function getCancelUrl(itemName: string | undefined): string | null {
   const nameLower = (itemName || "").toLowerCase().trim();
   if (!nameLower) return null;
 
@@ -217,23 +346,31 @@ function getCancelUrl(itemName) {
   if (CANCELLATION_LINKS[nameLower]) return CANCELLATION_LINKS[nameLower];
 
   // Helper for simple Levenshtein distance (fuzzy matching)
-  const getDistance = (a, b) => {
+  const getDistance = (a: string, b: string): number => {
     if (a.length === 0) return b.length;
     if (b.length === 0) return a.length;
     const matrix = Array(b.length + 1).fill(null).map(() => Array(a.length + 1).fill(null));
-    for (let i = 0; i <= a.length; i += 1) matrix[0][i] = i;
-    for (let j = 0; j <= b.length; j += 1) matrix[j][0] = j;
+    const firstRow = matrix[0];
+    if (!firstRow) return Math.max(a.length, b.length);
+    for (let i = 0; i <= a.length; i += 1) firstRow[i] = i;
+    for (let j = 0; j <= b.length; j += 1) {
+      const row = matrix[j];
+      if (row) row[0] = j;
+    }
     for (let j = 1; j <= b.length; j += 1) {
       for (let i = 1; i <= a.length; i += 1) {
         const ind = a[i - 1] === b[j - 1] ? 0 : 1;
-        matrix[j][i] = Math.min(
-          matrix[j][i - 1] + 1,
-          matrix[j - 1][i] + 1,
-          matrix[j - 1][i - 1] + ind
+        const currentRow = matrix[j];
+        const previousRow = matrix[j - 1];
+        if (!currentRow || !previousRow) continue;
+        currentRow[i] = Math.min(
+          (currentRow[i - 1] ?? 0) + 1,
+          (previousRow[i] ?? 0) + 1,
+          (previousRow[i - 1] ?? 0) + ind
         );
       }
     }
-    return matrix[b.length][a.length];
+    return matrix[b.length]?.[a.length] ?? Math.max(a.length, b.length);
   };
 
   const normalizedInput = nameLower.replace(/[^a-z0-9]/g, "");
@@ -261,14 +398,14 @@ function getCancelUrl(itemName) {
   return null;
 }
 
-export default memo(function RenewalsTab({ proEnabled }) {
+export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProps) {
   const { current } = useAudit();
   const portfolioContext = usePortfolio();
   const { navTo } = useNavigation();
   const isDemo = !!current?.isTest;
 
   // Demo mode: use local state so cancel/restore/delete actually work
-  const [demoRenewals, setDemoRenewals] = useState(() => current?.demoPortfolio?.renewals || []);
+  const [demoRenewals, setDemoRenewals] = useState<Renewal[]>(() => current?.demoPortfolio?.renewals || []);
   // Reset demo renewals if the demo data changes
   useEffect(() => {
     if (isDemo) setDemoRenewals(current?.demoPortfolio?.renewals || []);
@@ -278,13 +415,23 @@ export default memo(function RenewalsTab({ proEnabled }) {
   const setRenewals = isDemo ? setDemoRenewals : portfolioContext.setRenewals;
   const cards = isDemo ? current.demoPortfolio?.cards || [] : portfolioContext.cards;
   const { cardAnnualFees } = portfolioContext;
-  const [editing, setEditing] = useState(null); // index within user renewals
-  const [editVal, setEditVal] = useState({});
-  const [showAdd, setShowAdd] = useState(false);
-  const [showPaywall, setShowPaywall] = useState(false);
-  const [showInactive, setShowInactive] = useState(false);
-  const [negotiateSheet, setNegotiateSheet] = useState(null); // { merchant, type, tactic, amount, name }
-  const [addForm, setAddForm] = useState({
+  const [editing, setEditing] = useState<number | null>(null); // index within user renewals
+  const [editVal, setEditVal] = useState<EditRenewalState>({
+    name: "",
+    amount: "",
+    interval: 1,
+    intervalUnit: "months",
+    source: "",
+    chargedTo: "",
+    chargedToId: "",
+    nextDue: "",
+    category: "subs",
+  });
+  const [showAdd, setShowAdd] = useState<boolean>(false);
+  const [showPaywall, setShowPaywall] = useState<boolean>(false);
+  const [showInactive, setShowInactive] = useState<boolean>(false);
+  const [negotiateSheet, setNegotiateSheet] = useState<NegotiationSheetState | null>(null);
+  const [addForm, setAddForm] = useState<AddRenewalState>({
     name: "",
     amount: "",
     interval: 1,
@@ -295,10 +442,10 @@ export default memo(function RenewalsTab({ proEnabled }) {
     category: "subs",
     nextDue: "",
   });
-  const [sortBy, setSortBy] = useState("type");
-  const [editStep, setEditStep] = useState(0);
+  const [sortBy, setSortBy] = useState<"type" | "date" | "amount" | "name">("type");
+  const [editStep, setEditStep] = useState<number>(0);
 
-  const formInputStyle = {
+  const formInputStyle: CSSProperties = {
     flex: 1,
     border: "none",
     background: "transparent",
@@ -314,9 +461,9 @@ export default memo(function RenewalsTab({ proEnabled }) {
   // Auto-archive expired one-time items (runs as effect, not during render)
   useEffect(() => {
     if (!renewals?.length) return;
-    const now = new Date().toISOString().split("T")[0];
+    const now = new Date().toISOString().split("T")[0] ?? new Date().toISOString().slice(0, 10);
     let changed = false;
-    const updated = renewals.map(r => {
+    const updated = renewals.map((r) => {
       const isExpired = r.intervalUnit === "one-time" && r.nextDue && r.nextDue < now && !r.isCancelled;
       if (isExpired && !r.archivedAt) {
         changed = true;
@@ -328,8 +475,8 @@ export default memo(function RenewalsTab({ proEnabled }) {
   }, [renewals, setRenewals]);
 
   // Merge user renewals + auto-generated card annual fees
-  const allItems = useMemo(() => {
-    const now = new Date().toISOString().split("T")[0];
+  const allItems = useMemo<GroupedRenewalItem[]>(() => {
+    const now = new Date().toISOString().split("T")[0] ?? new Date().toISOString().slice(0, 10);
     const items = [...(renewals || [])].map((r, idx) => ({
       ...r,
       originalIndex: idx,
@@ -348,8 +495,8 @@ export default memo(function RenewalsTab({ proEnabled }) {
   }, [renewals, cardAnnualFees]);
 
   // Group by category
-  const grouped = useMemo(() => {
-    const cats = {};
+  const grouped = useMemo<GroupedCategory[]>(() => {
+    const cats: Record<string, GroupedCategory> = {};
     const catMeta = {
       housing: { label: "Housing & Utilities", color: T.status.red },
       subs: { label: "Subscriptions", color: T.accent.primary },
@@ -387,7 +534,8 @@ export default memo(function RenewalsTab({ proEnabled }) {
       const legacyMap = { ss: "subs", fixed: "housing", monthly: "housing", cadence: "subs", periodic: "subs" };
       const catId = legacyMap[rawCat] || rawCat;
       if (!cats[catId]) cats[catId] = { ...(catMeta[catId] || catMeta.subs), id: catId, items: [] };
-      cats[catId].items.push(item);
+      const category = cats[catId];
+      if (category) category.items.push(item);
     });
 
     // Sort items within each category: frequency (most frequent first) → next due (soonest first) → amount (highest first)
@@ -400,7 +548,7 @@ export default memo(function RenewalsTab({ proEnabled }) {
       if (unit === "one-time") return 999;
       return i;
     };
-    Object.values(cats).forEach(cat => {
+    Object.values(cats).forEach((cat) => {
       cat.items.sort((a, b) => {
         // 1. Frequency: shortest interval first
         const freqA = toMonths(a.interval, a.intervalUnit);
@@ -432,12 +580,12 @@ export default memo(function RenewalsTab({ proEnabled }) {
       "af",
       "inactive",
     ];
-    return order.filter(id => cats[id]).map(id => cats[id]);
+    return order.filter((id) => cats[id]).map((id) => cats[id] as GroupedCategory);
   }, [allItems, sortBy]);
 
-  const monthlyTotal = useMemo(() => {
+  const monthlyTotal = useMemo<number>(() => {
     let t = 0;
-    allItems.forEach(i => {
+    allItems.forEach((i) => {
       if (i.isCancelled || i.isExpired) return;
       const int = i.interval || 1;
       const unit = i.intervalUnit || "months";
@@ -450,7 +598,7 @@ export default memo(function RenewalsTab({ proEnabled }) {
   }, [allItems]);
 
   const startEdit = useCallback(
-    (item, renewalIndex) => {
+    (item: GroupedRenewalItem, renewalIndex: number | null | undefined) => {
       if (renewalIndex == null || renewalIndex < 0) return;
       setEditing(renewalIndex);
       setEditStep(0);
@@ -461,10 +609,10 @@ export default memo(function RenewalsTab({ proEnabled }) {
         // Try to match source against known card names (e.g. "Ally→Delta Business Gold" → look for "Delta Business Gold")
         const allCardNames = (cards || []).map(c => c.name);
         const srcParts = (item.source || "").split("→");
-        const potentialCard = srcParts[srcParts.length - 1].trim();
+        const potentialCard = (srcParts[srcParts.length - 1] ?? "").trim();
         // Check if any card name ends with the potential card reference
         const matched = allCardNames.find(
-          cn => cn.endsWith(potentialCard) || potentialCard.endsWith(cn.split(" ").slice(1).join(" "))
+          (cn) => cn.endsWith(potentialCard) || potentialCard.endsWith(cn.split(" ").slice(1).join(" "))
         );
         if (matched) {
           chargedTo = matched;
@@ -487,14 +635,14 @@ export default memo(function RenewalsTab({ proEnabled }) {
     [cards]
   );
   const saveEdit = useCallback(
-    (renewalIndex, fallbackName) => {
+    (renewalIndex: number | null | undefined, fallbackName: string | undefined) => {
       if (renewalIndex == null || renewalIndex < 0) return;
       // If standard user flow, ensure label is consistent short name
       const label = editVal.chargedToId
         ? getShortCardLabel(cards || [], cards.find(c => c.id === editVal.chargedToId)) || editVal.chargedTo
         : editVal.chargedTo;
       const newName = (editVal.name || "").trim() || fallbackName;
-      setRenewals(prev =>
+      setRenewals((prev) =>
         (prev || []).map((r, idx) =>
           idx === renewalIndex
             ? {
@@ -518,7 +666,7 @@ export default memo(function RenewalsTab({ proEnabled }) {
     [editVal, cards, setRenewals]
   );
   const removeItem = useCallback(
-    (renewalIndex, itemName) => {
+    (renewalIndex: number | null | undefined, itemName: string | undefined) => {
       if (renewalIndex == null || renewalIndex < 0) return;
       if (!window.confirm(`Delete "${itemName}"? This cannot be undone.`)) return;
       setRenewals(prev => (prev || []).filter((_, idx) => idx !== renewalIndex));
@@ -527,7 +675,7 @@ export default memo(function RenewalsTab({ proEnabled }) {
   );
 
   const toggleCancel = useCallback(
-    (renewalIndex, itemName) => {
+    (renewalIndex: number | null | undefined, itemName: string | undefined) => {
       if (renewalIndex == null || renewalIndex < 0) return;
       const current = (renewals || [])[renewalIndex];
       if (!current) return;
@@ -551,14 +699,14 @@ export default memo(function RenewalsTab({ proEnabled }) {
           )
         )
           return;
-        setRenewals(prev =>
+        setRenewals((prev) =>
           (prev || []).map((r, idx) =>
             idx === renewalIndex ? { ...r, isCancelled: true, cancelledAt: new Date().toISOString().split("T")[0] } : r
           )
         );
       } else {
         // Restoring
-        setRenewals(prev =>
+        setRenewals((prev) =>
           (prev || []).map((r, idx) =>
             idx === renewalIndex ? { ...r, isCancelled: false, cancelledAt: undefined } : r
           )
@@ -568,7 +716,7 @@ export default memo(function RenewalsTab({ proEnabled }) {
     [renewals, setRenewals]
   );
 
-  const addItem = () => {
+  const addItem = (): void => {
     if (!addForm.name.trim() || !addForm.amount) return;
     // Resolve actual name if card was selected by ID
     const label = addForm.chargedToId
@@ -601,11 +749,11 @@ export default memo(function RenewalsTab({ proEnabled }) {
     setShowAdd(false);
   };
 
-  const IntervalDropdown = ({ interval, unit, onChange }) => (
+  const IntervalDropdown = ({ interval, unit, onChange }: IntervalDropdownProps) => (
     <div style={{ display: "flex", gap: 6, flex: 1 }}>
       <select
         value={interval}
-        onChange={e => onChange({ interval: parseInt(e.target.value), unit })}
+        onChange={(e: ChangeEvent<HTMLSelectElement>) => onChange({ interval: parseInt(e.target.value, 10), unit })}
         aria-label="Interval count"
         style={{
           flex: 0.4,
@@ -635,7 +783,7 @@ export default memo(function RenewalsTab({ proEnabled }) {
       </select>
       <select
         value={unit}
-        onChange={e => onChange({ interval, unit: e.target.value })}
+        onChange={(e: ChangeEvent<HTMLSelectElement>) => onChange({ interval, unit: e.target.value })}
         aria-label="Interval unit"
         style={{
           flex: 0.6,
@@ -659,24 +807,33 @@ export default memo(function RenewalsTab({ proEnabled }) {
     </div>
   );
 
-  const CardSelector = ({ value, onChange }) => {
-    const grouped = {};
-    (cards || []).forEach(c => {
+  const CardSelector = ({ value, onChange }: CardSelectorProps) => {
+    const grouped: Record<string, Card[]> = {};
+    (cards || []).forEach((c) => {
       (grouped[c.institution] = grouped[c.institution] || []).push(c);
     });
-    const opts = [
+    const opts: SearchableOption[] = [
       { value: "Checking", label: "Checking Account" },
       { value: "Savings", label: "Savings Account" },
       { value: "Cash", label: "Cash" },
       ...Object.entries(grouped).flatMap(([inst, instCards]) =>
-        instCards.map(c => ({
+        instCards.map((c) => ({
           value: c.id || "",
           label: getShortCardLabel(cards || [], c),
           group: inst,
         }))
       ),
     ];
-    return <SearchableSelect value={value || ""} onChange={onChange} placeholder="Payment method…" options={opts} />;
+    const displayValue = opts.find((option) => option.value === (value || ""))?.label || value || "";
+    return (
+      <SearchableSelect
+        value={value || ""}
+        onChange={onChange}
+        placeholder="Payment method…"
+        options={opts}
+        displayValue={displayValue}
+      />
+    );
   };
 
   const categoryOptions = [
@@ -1016,6 +1173,7 @@ export default memo(function RenewalsTab({ proEnabled }) {
                     onChange={v => setAddForm(p => ({ ...p, category: v }))}
                     placeholder="Category"
                     options={categoryOptions.map(c => ({ value: c.id, label: c.label }))}
+                    displayValue={categoryOptions.find((c) => c.id === addForm.category)?.label || ""}
                   />
                 </div>
               </FormRow>
@@ -1232,6 +1390,7 @@ export default memo(function RenewalsTab({ proEnabled }) {
                                     onChange={v => setEditVal(p => ({ ...p, category: v }))}
                                     placeholder="Category"
                                     options={categoryOptions.map(c => ({ value: c.id, label: c.label }))}
+                                    displayValue={categoryOptions.find((c) => c.id === (editVal.category || "subs"))?.label || ""}
                                   />
                                 </div>
                               </FormRow>
@@ -1752,11 +1911,17 @@ export default memo(function RenewalsTab({ proEnabled }) {
                     }
                     haptic.success();
                     setNegotiateSheet(null);
+                    const payload: NegotiationFlowPayload = {
+                      merchant: negotiateSheet.merchant,
+                      amount: negotiateSheet.amount,
+                      tactic: negotiateSheet.tactic,
+                      financialContext: null,
+                    };
                     navTo("chat", {
                       negotiateBill: {
-                        merchant: negotiateSheet.merchant,
-                        amount: negotiateSheet.amount,
-                        tactic: negotiateSheet.tactic,
+                        merchant: payload.merchant,
+                        amount: payload.amount,
+                        tactic: payload.tactic,
                       }
                     });
                   }}

@@ -186,6 +186,82 @@ export interface ParsedAudit {
   dashboardData: ParsedAuditDashboardData;
 }
 
+export interface AuditFormDebt {
+  id?: string;
+  cardId?: string;
+  name?: string;
+  balance: number | string;
+  amount?: number | string;
+  apr?: number | string;
+  minPayment?: number | string;
+  limit?: number | string;
+}
+
+export interface AuditFormInvestment {
+  id?: string;
+  name?: string;
+  symbol?: string;
+  amount: number | string;
+  type?: string;
+}
+
+export interface AuditFormData {
+  date: string;
+  time?: string;
+  checking?: number | string;
+  savings?: number | string;
+  ally?: number | string;
+  debts?: AuditFormDebt[];
+  investments?: AuditFormInvestment[];
+  budgetActuals?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface DemoPortfolio {
+  cards: Card[];
+  bankAccounts: BankAccount[];
+  renewals: Renewal[];
+}
+
+export interface MoveCheckState {
+  [moveText: string]: boolean | undefined;
+}
+
+export interface TrendContextEntry {
+  week: number | string;
+  date: string;
+  checking: number | string;
+  vault: number | string;
+  totalDebt: number | string;
+  score: number | null;
+  status: string;
+}
+
+export interface AuditRecord {
+  date: string;
+  ts: string;
+  form: AuditFormData;
+  parsed: ParsedAudit;
+  model?: string;
+  isTest: boolean;
+  isDemoHistory?: boolean;
+  moveChecks: MoveCheckState;
+  demoPortfolio?: DemoPortfolio;
+}
+
+export interface CurrentDebtSnapshotItem {
+  name: string;
+  balance: number;
+  apr: number;
+  minPayment: number;
+  limit: number;
+}
+
+export interface CurrentDebtSnapshot {
+  ts: number;
+  debts: CurrentDebtSnapshotItem[];
+}
+
 export interface DashboardMetrics {
   checking: number | null;
   vault: number | null;
@@ -307,6 +383,72 @@ export interface BigTicketItem {
   targetDate?: string;
 }
 
+export interface Card {
+  id: string;
+  institution: string;
+  name: string;
+  nickname?: string;
+  limit?: number | null;
+  balance?: number | string | null;
+  mask?: string | null;
+  last4?: string | null;
+  annualFee?: number | string | null;
+  annualFeeDue?: string;
+  annualFeeWaived?: boolean;
+  notes?: string;
+  apr?: number | null;
+  hasPromoApr?: boolean;
+  promoAprAmount?: number | null;
+  promoAprExp?: string;
+  statementCloseDay?: number | null;
+  paymentDueDay?: number | null;
+  minPayment?: number | null;
+  type?: string;
+  _plaidAccountId?: string;
+  _plaidConnectionId?: string;
+  _plaidBalance?: number | null;
+  _plaidAvailable?: number | null;
+}
+
+export interface BankAccount {
+  id: string;
+  bank: string;
+  accountType: "checking" | "savings" | string;
+  name: string;
+  balance?: number | string | null;
+  apy?: number | null;
+  notes?: string;
+  _plaidAccountId?: string;
+  _plaidConnectionId?: string;
+  _plaidBalance?: number | null;
+  _plaidAvailable?: number | null;
+}
+
+export interface Renewal {
+  id?: string;
+  linkedCardId?: string;
+  linkedCardAF?: string;
+  cardName?: string;
+  name: string;
+  amount: number;
+  interval: number;
+  intervalUnit: string;
+  cadence?: string;
+  source?: string;
+  chargedTo?: string;
+  chargedToId?: string;
+  nextDue?: string;
+  category?: string;
+  isCardAF?: boolean;
+  isAnnualFee?: boolean;
+  isWaived?: boolean;
+  isCancelled?: boolean;
+  cancelledAt?: string;
+  archivedAt?: string;
+  originalIndex?: number;
+  isExpired?: boolean;
+}
+
 export interface PlaidInvestmentAccount {
   id: string;
   institution: string;
@@ -319,6 +461,26 @@ export interface PlaidInvestmentAccount {
 
 export interface CustomValuations {
   [rewardCurrency: string]: number | undefined;
+}
+
+export interface IssuerCatalogEntry {
+  personal: string[];
+  business: string[];
+  discontinued?: string[];
+}
+
+export interface IssuerCardCatalog {
+  lastUpdated?: string;
+  issuers: Record<string, IssuerCatalogEntry>;
+}
+
+export interface MarketPriceQuote {
+  price: number;
+  [key: string]: unknown;
+}
+
+export interface MarketPriceMap {
+  [symbol: string]: MarketPriceQuote | undefined;
 }
 
 export interface CatalystCashConfigCore {

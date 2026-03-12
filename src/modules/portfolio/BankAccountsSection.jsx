@@ -3,7 +3,7 @@ import { Landmark, ChevronDown, Edit3, Check, DollarSign } from "lucide-react";
 import { Card, Badge } from "../ui.jsx";
 import { Mono } from "../components.jsx";
 import { T, ISSUER_COLORS } from "../constants.js";
-import { usePortfolio } from "../contexts/PortfolioContext.jsx";
+import { usePortfolio } from "../contexts/PortfolioContext";
 import { fmt } from "../utils.js";
 
 export default function BankAccountsSection({ collapsedSections: propCollapsed, setCollapsedSections: propSetCollapsed }) {

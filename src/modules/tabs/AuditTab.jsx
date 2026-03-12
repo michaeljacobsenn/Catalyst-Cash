@@ -19,7 +19,7 @@ import { Card, Badge } from "../ui.jsx";
 import { Mono, StatusDot, EmptyState } from "../components.jsx";
 import { haptic } from "../haptics.js";
 import { shouldShowGating } from "../subscription.js";
-import { useAudit } from "../contexts/AuditContext.jsx";
+import { useAudit } from "../contexts/AuditContext";
 import { useNavigation } from "../contexts/NavigationContext.jsx";
 import ProBanner from "./ProBanner.jsx";
 import "./DashboardTab.css";

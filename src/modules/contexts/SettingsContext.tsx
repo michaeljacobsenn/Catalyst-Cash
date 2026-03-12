@@ -184,21 +184,27 @@ export const DEFAULT_FINANCIAL_CONFIG: CatalystCashConfig = {
   customValuations: {},
 };
 
-function financialConfigReducer(state: CatalystCashConfig, action: FinancialConfigAction): CatalystCashConfig {
-  switch (action.type) {
-    case "SET_FIELD":
-      return { ...state, [action.field]: action.value };
-    case "MERGE":
-      return { ...state, ...action.payload };
-    case "REPLACE":
-      return { ...action.payload };
-    case "FUNCTIONAL_UPDATE":
-      return action.updater(state);
-    case "RESET_YTD":
-      return { ...state, rothContributedYTD: 0, k401ContributedYTD: 0 };
-    default:
-      return state;
+function financialConfigReducer(
+  state: CatalystCashConfig,
+  action: FinancialConfigAction | undefined
+): CatalystCashConfig {
+  if (!action) return state;
+  if (action.type === "SET_FIELD") {
+    return { ...state, [action.field]: action.value };
   }
+  if (action.type === "MERGE") {
+    return { ...state, ...action.payload };
+  }
+  if (action.type === "REPLACE") {
+    return { ...action.payload };
+  }
+  if (action.type === "FUNCTIONAL_UPDATE") {
+    return action.updater(state);
+  }
+  if (action.type === "RESET_YTD") {
+    return { ...state, rothContributedYTD: 0, k401ContributedYTD: 0 };
+  }
+  return state;
 }
 
 export function SettingsProvider({ children }: SettingsProviderProps) {

@@ -3,8 +3,8 @@ import { Plus, Settings, AlertTriangle, ArrowRight, Wallet, TrendingUp, HelpCirc
 import { T } from "../constants.js";
 import { Card } from "../ui.jsx";
 import { useBudget } from "../contexts/BudgetContext.jsx";
-import { usePortfolio } from "../contexts/PortfolioContext.jsx";
-import { useAudit } from "../contexts/AuditContext.jsx";
+import { usePortfolio } from "../contexts/PortfolioContext";
+import { useAudit } from "../contexts/AuditContext";
 import { fmt } from "../utils.js";
 import { haptic } from "../haptics.js";
 import { shouldShowGating } from "../subscription.js";

@@ -5,7 +5,7 @@ import { Mono } from "../components.jsx";
 import { T } from "../constants.js";
 import { fmt } from "../utils.js";
 import { fetchMarketPrices } from "../marketData.js";
-import { usePortfolio } from "../contexts/PortfolioContext.jsx";
+import { usePortfolio } from "../contexts/PortfolioContext";
 import { useSettings } from "../contexts/SettingsContext";
 
 export default function InvestmentsSection({ collapsedSections, setCollapsedSections }) {

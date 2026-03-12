@@ -65,10 +65,10 @@ const loadAppleSignIn = () => import("@capacitor-community/apple-sign-in");
 const loadCloudSync = () => import("../cloudSync.js");
 const loadRevenueCat = () => import("../revenuecat.js");
 
-import { useAudit } from "../contexts/AuditContext.jsx";
+import { useAudit } from "../contexts/AuditContext";
 import { useSettings } from "../contexts/SettingsContext";
 import { useSecurity } from "../contexts/SecurityContext.jsx";
-import { usePortfolio } from "../contexts/PortfolioContext.jsx";
+import { usePortfolio } from "../contexts/PortfolioContext";
 import { useNavigation } from "../contexts/NavigationContext.jsx";
 
 export default function SettingsTab({
