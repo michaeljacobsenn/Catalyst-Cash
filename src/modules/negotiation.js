@@ -12,7 +12,7 @@ export const NEGOTIABLE_MERCHANTS = [
     merchant: "Comcast",
     aliases: ["Xfinity", "Comcast"],
     type: "ISP",
-    tactic: "Under the 2026 FTC Click-to-Cancel rule, Xfinity must offer online cancellation. However, calling retention (say 'cancel service') yields $20-$40/mo discounts. Mention T-Mobile 5G Home or a local fiber provider. Ask for the 'new customer promotional rate' applied to your existing account. Target: 30-50% discount for 12 months.",
+    tactic: "Under the FTC Click-to-Cancel rule, Xfinity must offer online cancellation. However, calling retention (say 'cancel service') yields $20-$40/mo discounts. Mention T-Mobile 5G Home or a local fiber provider. Ask for the 'new customer promotional rate' applied to your existing account. Target: 30-50% discount for 12 months.",
   },
   {
     merchant: "AT&T",
@@ -24,7 +24,7 @@ export const NEGOTIABLE_MERCHANTS = [
     merchant: "Spectrum",
     aliases: ["Spectrum", "Charter Communications", "Time Warner Cable"],
     type: "ISP",
-    tactic: "Spectrum's 2026 pricing is aggressive post-contract. Call retention and mention T-Mobile 5G Home Internet ($50/mo) or Starlink. Ask for the 'loyalty pricing' — typically $15-$25/mo off for 12 months. If they refuse, schedule cancellation for 30 days out — they'll call back with an offer within a week.",
+    tactic: "Spectrum's current pricing is aggressive post-contract. Call retention and mention T-Mobile 5G Home Internet ($50/mo) or Starlink. Ask for the 'loyalty pricing' — typically $15-$25/mo off for 12 months. If they refuse, schedule cancellation for 30 days out — they'll call back with an offer within a week.",
   },
   {
     merchant: "Cox",
@@ -92,7 +92,7 @@ export const NEGOTIABLE_MERCHANTS = [
     merchant: "Netflix",
     aliases: ["Netflix"],
     type: "Streaming",
-    tactic: "Netflix doesn't negotiate directly, but the 2026 cancel flow shows a retention offer 70% of the time. Start the cancellation at netflix.com/cancelplan. You'll typically see: (1) downgrade to ad-supported for $7.99/mo, or (2) a free month to reconsider. Complete the flow to see the offer — you can always resubscribe.",
+    tactic: "Netflix doesn't negotiate directly, but the current cancel flow shows a retention offer 70% of the time. Start the cancellation at netflix.com/cancelplan. You'll typically see: (1) downgrade to ad-supported, or (2) a free month to reconsider. Complete the flow to see the offer — you can always resubscribe.",
   },
   {
     merchant: "Hulu",
@@ -230,7 +230,7 @@ export const NEGOTIABLE_MERCHANTS = [
     merchant: "Planet Fitness",
     aliases: ["Planet Fitness", "PF"],
     type: "Gym",
-    tactic: "In 2026, Planet Fitness still requires in-person or certified-letter cancellation in many states. Visit your home club and say you're canceling due to relocation or financial hardship. They often offer 1-3 months free or a rate freeze. Check if your state's consumer protection laws now require online cancellation under the FTC's 2024 Click-to-Cancel rule.",
+    tactic: "Planet Fitness may still require in-person or certified-letter cancellation in many states. Visit your home club and say you're canceling due to relocation or financial hardship. They often offer 1-3 months free or a rate freeze. Check if your state's consumer protection laws require online cancellation under the FTC Click-to-Cancel rule.",
   },
   {
     merchant: "LA Fitness",
@@ -332,7 +332,7 @@ export const NEGOTIABLE_MERCHANTS = [
     merchant: "GEICO",
     aliases: ["GEICO", "Geico"],
     type: "Insurance",
-    tactic: "Call and ask for a policy review. Mention you got a lower quote from Progressive, USAA, or a direct writer. Ask about multi-policy, safe driver, military, federal employee, and low-mileage discounts. In 2026, also ask about telematics (DriveEasy) discounts — up to 25% off for safe driving.",
+    tactic: "Call and ask for a policy review. Mention you got a lower quote from Progressive, USAA, or a direct writer. Ask about multi-policy, safe driver, military, federal employee, and low-mileage discounts. Also ask about telematics (DriveEasy) discounts — up to 25% off for safe driving.",
   },
   {
     merchant: "State Farm",
@@ -354,7 +354,7 @@ export const NEGOTIABLE_MERCHANTS = [
     merchant: "Sirius XM",
     aliases: ["Sirius XM", "SiriusXM", "Sirius Radio"],
     type: "Subscription",
-    tactic: "Under the 2026 FTC Click-to-Cancel rule, SiriusXM now must allow online cancellation (they were specifically targeted by the FTC). But calling still gets better deals: (1) DO NOT accept the first 3 offers, (2) Target the $5/mo for 12 months plan + waived royalty fees, (3) If they won't go below $8/mo, cancel fully — they'll call back within 48 hours with the lowest offer.",
+    tactic: "Under the FTC Click-to-Cancel rule, SiriusXM must allow online cancellation (they were specifically targeted by the FTC). But calling still gets better deals: (1) DO NOT accept the first 3 offers, (2) Target the $5/mo for 12 months plan + waived royalty fees, (3) If they won't go below $8/mo, cancel fully — they'll call back within 48 hours with the lowest offer.",
   },
 
   // ═══════════════════════════════════════════════════════════
@@ -562,7 +562,7 @@ export const NEGOTIABLE_MERCHANTS = [
     merchant: "DoorDash DashPass",
     aliases: ["DoorDash", "DashPass", "DoorDash DashPass"],
     type: "Subscription",
-    tactic: "Cancel at doordash.com/consumer/membership. DashPass ($9.99/mo) shows retention offers during cancellation — typically a free month or $4.99/mo for 2 months. Check if your Chase Sapphire or Capital One Savor card includes a free/discounted DashPass benefit — many do in 2026.",
+    tactic: "Cancel at doordash.com/consumer/membership. DashPass ($9.99/mo) shows retention offers during cancellation — typically a free month or $4.99/mo for 2 months. Check if your Chase Sapphire or Capital One Savor card includes a free/discounted DashPass benefit — many premium cards include this.",
   },
   {
     merchant: "Uber One",
@@ -785,14 +785,43 @@ export const NEGOTIABLE_MERCHANTS = [
 ];
 
 /**
+ * Simple Levenshtein edit-distance for typo tolerance.
+ * Only used as a fallback when exact substring matching fails.
+ */
+function levenshtein(a, b) {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      const cost = b[i - 1] === a[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,       // deletion
+        matrix[i][j - 1] + 1,       // insertion
+        matrix[i - 1][j - 1] + cost  // substitution
+      );
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+/**
  * Checks if a given item name matches a known negotiable merchant.
- * @param {string} itemName 
+ * Uses a 3-pass strategy for maximum coverage:
+ *   1. Exact substring match (handles "Netflix james@gmail.com")
+ *   2. Word-level exact match (handles "my netflix account")
+ *   3. Fuzzy Levenshtein fallback (handles "Netflx", "Comcst", "Spotfy")
+ *
+ * @param {string} itemName - The bill/subscription name to check.
  * @returns {Object|null} The merchant object if negotiable, or null.
  */
 export function getNegotiableMerchant(itemName) {
   if (!itemName) return null;
   const normalized = itemName.toLowerCase().trim();
-  
+
+  // ── Pass 1: Exact substring match (fastest) ──
   for (const merchant of NEGOTIABLE_MERCHANTS) {
     for (const alias of merchant.aliases) {
       if (normalized.includes(alias.toLowerCase())) {
@@ -800,5 +829,52 @@ export function getNegotiableMerchant(itemName) {
       }
     }
   }
-  return null;
+
+  // ── Pass 2: Fuzzy match — split input into words, check each against aliases ──
+  // Max edit distance: 2 for aliases ≥ 5 chars, 1 for shorter aliases
+  const words = normalized.replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length >= 3);
+  let bestMatch = null;
+  let bestDistance = Infinity;
+
+  for (const merchant of NEGOTIABLE_MERCHANTS) {
+    for (const alias of merchant.aliases) {
+      const aliasLower = alias.toLowerCase().replace(/[^a-z0-9\s]/g, " ").trim();
+      const aliasWords = aliasLower.split(/\s+/);
+      const maxDist = aliasLower.length >= 5 ? 2 : 1;
+
+      // Check each input word against each alias word
+      for (const word of words) {
+        for (const aw of aliasWords) {
+          if (aw.length < 3) continue; // skip tiny alias fragments
+          // Length guard: words must be within ±2 chars of each other
+          if (Math.abs(word.length - aw.length) > 2) continue;
+          const dist = levenshtein(word, aw);
+          // Match ratio: require ≥70% similarity to avoid short-word false positives
+          const maxLen = Math.max(word.length, aw.length);
+          const ratio = 1 - dist / maxLen;
+          if (dist <= maxDist && ratio >= 0.7 && dist < bestDistance) {
+            bestDistance = dist;
+            bestMatch = merchant;
+          }
+        }
+      }
+
+      // Also check full multi-word aliases against joined input words
+      if (aliasWords.length > 1) {
+        // Try sliding window of N words across input
+        for (let i = 0; i <= words.length - aliasWords.length; i++) {
+          const joined = words.slice(i, i + aliasWords.length).join(" ");
+          const dist = levenshtein(joined, aliasLower);
+          const maxLen = Math.max(joined.length, aliasLower.length);
+          const ratio = 1 - dist / maxLen;
+          if (dist <= maxDist && ratio >= 0.7 && dist < bestDistance) {
+            bestDistance = dist;
+            bestMatch = merchant;
+          }
+        }
+      }
+    }
+  }
+
+  return bestMatch;
 }
