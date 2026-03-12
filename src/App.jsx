@@ -1529,9 +1529,12 @@ function CatalystCash() {
           >
             {tab === "dashboard" ? "Command Center" :
              tab === "input" ? "New Audit" :
+             tab === "audit" ? "Audit" :
              tab === "chat" ? "Catalyst AI" :
              tab === "cashflow" ? "Cashflow" :
-             tab === "portfolio" ? "Portfolio" : ""}
+             tab === "portfolio" ? "Portfolio" :
+             tab === "results" ? "Results" :
+             tab === "history" ? "History" : ""}
           </div>
         </div>
 
