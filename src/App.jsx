@@ -24,6 +24,7 @@ import {
   TrendingUp,
   Wallet,
   LayoutDashboard,
+  MapPin,
 } from "lucide-react";
 import { T, DEFAULT_CARD_PORTFOLIO, RENEWAL_CATEGORIES, APP_VERSION } from "./modules/constants.js";
 import { DEFAULT_PROVIDER_ID, DEFAULT_MODEL_ID, getProvider, getModel } from "./modules/providers.js";
@@ -48,6 +49,7 @@ import { buildScrubber } from "./modules/scrubber.js";
 import { extractCategoryByKeywords } from "./modules/merchantDatabase.js";
 import { getOptimalCard } from "./modules/rewardsCatalog.js";
 import { haptic } from "./modules/haptics.js";
+import { connectBank, autoMatchAccounts, saveConnectionLinks, fetchBalancesAndLiabilities, applyBalanceSync, getConnections } from "./modules/plaid.js";
 import { installGlobalHandlers } from "./modules/errorReporter.js";
 // Payday reminder scheduling is handled in SettingsContext.jsx
 installGlobalHandlers();
@@ -256,11 +258,78 @@ function CatalystCash() {
   const scrollRef = useRef(null);
   const bottomNavRef = useRef(null);
   const topBarRef = useRef(null);
-  const [showTransactionFeed, setShowTransactionFeed] = useState(false);
+  const [headerHidden, setHeaderHidden] = useState(false);
+  const lastScrollY = useRef(0);
+  const [transactionFeedTab, setTransactionFeedTab] = useState(null);
   const swipeStart = useRef(null);
   const longPressTimer = useRef(null);
   const touchStartTime = useRef(0);
   const [chatInitialPrompt, setChatInitialPrompt] = useState(null);
+
+  function mergeUniqueById(existing = [], incoming = []) {
+    const ids = new Set(existing.map(e => e.id).filter(Boolean));
+    return [...existing, ...incoming.filter(i => i.id && !ids.has(i.id))];
+  }
+
+  const handleConnectAccount = async () => {
+    try {
+      await connectBank(
+        async connection => {
+          try {
+            const plaidInvestments = financialConfig?.plaidInvestments || [];
+            const { newCards, newBankAccounts, newPlaidInvestments } = autoMatchAccounts(
+              connection,
+              cards,
+              bankAccounts,
+              cardCatalog,
+              plaidInvestments
+            );
+            await saveConnectionLinks(connection);
+
+            const allCards = mergeUniqueById(cards, newCards);
+            const allBanks = mergeUniqueById(bankAccounts, newBankAccounts);
+            const allInvests = mergeUniqueById(plaidInvestments, newPlaidInvestments);
+            setCards(allCards);
+            setBankAccounts(allBanks);
+            if (newPlaidInvestments.length > 0) {
+              setFinancialConfig({ type: "SET_FIELD", field: "plaidInvestments", value: allInvests });
+            }
+
+            // Optional: try to fetch balances
+            try {
+              const refreshed = await fetchBalancesAndLiabilities(connection.id);
+              if (refreshed) {
+                const syncData = applyBalanceSync(refreshed, allCards, allBanks, allInvests);
+                setCards(syncData.updatedCards);
+                setBankAccounts(syncData.updatedBankAccounts);
+                if (syncData.updatedPlaidInvestments) {
+                  setFinancialConfig({
+                    type: "SET_FIELD",
+                    field: "plaidInvestments",
+                    value: syncData.updatedPlaidInvestments,
+                  });
+                }
+                await saveConnectionLinks(refreshed);
+              }
+            } catch (e) { /* ignore */ }
+
+            if (window.toast) window.toast.success("Bank linked successfully!");
+          } catch (err) {
+            console.error("Link err", err);
+          }
+        },
+        err => {
+          if (window.toast) {
+            const msg = err?.message || "Failed to link bank";
+            if (msg === "cancelled") return;
+            window.toast.error(msg);
+          }
+        }
+      );
+    } catch (err) {
+      if (window.toast) window.toast.error("Plaid unavailable.");
+    }
+  };
 
   // ── iOS-native interactive swipe-back for overlay panes ──
   const useSwipeBack = (onDismiss) => {
@@ -469,7 +538,7 @@ function CatalystCash() {
 
       let recText = `Open Catalyst to see your best card.`;
       if (optimal && optimal.yield) {
-         recText = `Use your ${optimal.cardName} here for ${parseFloat((optimal.yield * 100).toFixed(1))}% back!`;
+        recText = `Use your ${optimal.cardName} here for ${parseFloat((optimal.yield * 100).toFixed(1))}% back!`;
       }
 
       setSimulatedNotification({
@@ -483,6 +552,8 @@ function CatalystCash() {
     window.addEventListener("simulate-geo-fence", handleSimulate);
     return () => window.removeEventListener("simulate-geo-fence", handleSimulate);
   }, [cards, financialConfig]);
+
+
 
   // --- NATIVE SCROLL SNAP OBSERVER ---
   const snapContainerRef = useRef(null);
@@ -502,7 +573,7 @@ function CatalystCash() {
       if (idx !== -1) {
         isProgrammaticScroll = true;
         const width = container.clientWidth;
-        container.scrollTo({ left: idx * width, behavior: 'smooth' });
+        container.scrollTo({ left: idx * width, behavior: 'instant' });
 
         // Backup safeguard in case `scroll` events don't fire immediately
         if (programmaticDebounce) clearTimeout(programmaticDebounce);
@@ -515,7 +586,7 @@ function CatalystCash() {
     let scrollDebounce = null;
     const onScroll = () => {
       if (initialScrollLock.current) return;
-      
+
       // If programmatically scrolling, extend the lock until scrolling stops
       if (isProgrammaticScroll) {
         if (programmaticDebounce) clearTimeout(programmaticDebounce);
@@ -558,9 +629,9 @@ function CatalystCash() {
     // We forcefully override it for the first 600ms to guarantee React's tab state is honored.
     const enforceInterval = setInterval(enforceInitialScroll, 50);
 
-    const lockTimer = setTimeout(() => { 
+    const lockTimer = setTimeout(() => {
       clearInterval(enforceInterval);
-      initialScrollLock.current = false; 
+      initialScrollLock.current = false;
     }, 600);
 
     return () => {
@@ -698,7 +769,7 @@ function CatalystCash() {
         console.error("Household auto-sync error:", e);
       }
     }, 16000); // 16s debounce (offset slightly from iCloud)
-    
+
     return () => clearTimeout(householdSyncTimer.current);
   }, [ready, history, renewals, cards, financialConfig, personalRules, autoBackupInterval]);
 
@@ -710,18 +781,18 @@ function CatalystCash() {
         const householdId = await db.get("household-id");
         const passcode = await db.get("household-passcode");
         if (!householdId || !passcode) return;
-        
+
         const { pullHouseholdSync, mergeHouseholdState } = await import("./modules/householdSync.js");
         const payload = await pullHouseholdSync(householdId, passcode);
         if (payload) {
           const merged = await mergeHouseholdState(payload);
           if (merged) {
-             console.log("[Household Sync] New data merged. Refreshing app state.");
-             toast.success("Household data synced. Refreshing...");
-             setTimeout(() => window.location.reload(), 1500);
+            console.log("[Household Sync] New data merged. Refreshing app state.");
+            toast.success("Household data synced. Refreshing...");
+            setTimeout(() => window.location.reload(), 1500);
           }
         }
-      } catch(e) {}
+      } catch (e) { }
     }
     doPull();
   }, [ready, online]);
@@ -738,6 +809,7 @@ function CatalystCash() {
   useEffect(() => {
     if (!bottomNavRef.current) return;
     const update = () => {
+      if (!bottomNavRef.current) return;
       const h = bottomNavRef.current.getBoundingClientRect().height || 0;
       document.documentElement.style.setProperty("--bottom-nav-h", `${Math.ceil(h)}px`);
     };
@@ -750,6 +822,7 @@ function CatalystCash() {
   useEffect(() => {
     if (!topBarRef.current) return;
     const update = () => {
+      if (!topBarRef.current) return;
       const h = topBarRef.current.getBoundingClientRect().height || 0;
       document.documentElement.style.setProperty("--top-bar-h", `${Math.ceil(h)}px`);
     };
@@ -1414,9 +1487,13 @@ function CatalystCash() {
 
       {showGuide && <GuideModal onClose={() => setShowGuide(false)} swipeHook={overlaySwipeGuide} />}
       {isLocked && <LockScreen />}
-      {showTransactionFeed && (
+      {transactionFeedTab === tab && (
         <Suspense fallback={<TabFallback />}>
-          <TransactionFeed onClose={() => setShowTransactionFeed(false)} proEnabled={proEnabled} />
+          <TransactionFeed
+            onClose={() => setTransactionFeedTab(null)}
+            proEnabled={proEnabled}
+            onConnectPlaid={handleConnectAccount}
+          />
         </Suspense>
       )}
       {/* Skip-to-content link for a11y */}
@@ -1456,6 +1533,10 @@ function CatalystCash() {
           backdropFilter: "blur(24px) saturate(1.8)",
           WebkitBackdropFilter: "blur(24px) saturate(1.8)",
           borderBottom: `1px solid ${T.border.subtle}`,
+          transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
+          marginBottom: headerHidden ? "-56px" : "0",
+          transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          willChange: "transform",
         }}
       >
         <div style={{
@@ -1528,13 +1609,13 @@ function CatalystCash() {
             }}
           >
             {tab === "dashboard" ? "Command Center" :
-             tab === "input" ? "New Audit" :
-             tab === "audit" ? "Audit" :
-             tab === "chat" ? "Catalyst AI" :
-             tab === "cashflow" ? "Cashflow" :
-             tab === "portfolio" ? "Portfolio" :
-             tab === "results" ? "Results" :
-             tab === "history" ? "History" : ""}
+              tab === "input" ? "New Audit" :
+                tab === "audit" ? "Audit" :
+                  tab === "chat" ? "Catalyst AI" :
+                    tab === "cashflow" ? "Cashflow" :
+                      tab === "portfolio" ? "Portfolio" :
+                        tab === "results" ? "Results" :
+                          tab === "history" ? "History" : ""}
           </div>
         </div>
 
@@ -1599,8 +1680,25 @@ function CatalystCash() {
             data-tabid={t}
             style={{
               overflowY: t === "chat" ? "hidden" : "auto",
-              paddingBottom: t === "chat" ? 0 : 20, // Visual breathing room at scroll bottom (nav clearance handled by container)
+              paddingBottom: t === "chat" ? 0 : "calc(env(safe-area-inset-bottom, 20px) + 90px)",
               background: t === "chat" ? T.bg.base : undefined,
+            }}
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              const scrollTop = el.scrollTop;
+              const delta = scrollTop - (lastScrollY.current || 0);
+              lastScrollY.current = scrollTop;
+
+              // Ignore iOS rubber-banding overscroll out of bounds
+              if (scrollTop <= 0 || scrollTop + el.clientHeight >= el.scrollHeight - 1) return;
+
+              if (scrollTop < 40) {
+                setHeaderHidden(false);
+              } else if (delta > 8) {
+                setHeaderHidden(true);
+              } else if (delta < -8) {
+                setHeaderHidden(false);
+              }
             }}
           >
             {t === "dashboard" && (
@@ -1610,7 +1708,7 @@ function CatalystCash() {
                   proEnabled={proEnabled}
                   onRefreshDashboard={handleRefreshDashboard}
                   onDemoAudit={handleDemoAudit}
-                  onViewTransactions={() => setShowTransactionFeed(true)}
+                  onViewTransactions={() => setTransactionFeedTab(t)}
                   onDiscussWithCFO={prompt => {
                     setChatInitialPrompt(prompt);
                     navTo("chat");
@@ -1650,9 +1748,9 @@ function CatalystCash() {
             {t === "portfolio" && (
               <ErrorBoundary name="Portfolio">
                 <Suspense fallback={<TabFallback />}>
-                  <PortfolioTab 
-                    onViewTransactions={() => setShowTransactionFeed(true)} 
-                    proEnabled={proEnabled} 
+                  <PortfolioTab
+                    onViewTransactions={() => setTransactionFeedTab(t)}
+                    proEnabled={proEnabled}
                   />
                 </Suspense>
               </ErrorBoundary>
@@ -1669,57 +1767,7 @@ function CatalystCash() {
         ))}
       </main>
 
-      {/* ERROR OVERLAY */}
-      {error && (
-        <div style={{ position: "absolute", top: 60, left: 16, right: 16, zIndex: 50 }}>
-          <Card
-            style={{
-              borderColor: `${T.status.red}20`,
-              background: T.status.redDim,
-              borderLeft: `3px solid ${T.status.red}`,
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                <AlertTriangle size={14} color={T.status.red} strokeWidth={2.5} />
-                <span style={{ fontSize: 12, fontWeight: 700, color: T.status.red }}>Error</span>
-              </div>
-              <button
-                onClick={() => setError(null)}
-                style={{ background: "none", border: "none", color: T.text.dim, cursor: "pointer", padding: 4 }}
-              >
-                <X size={14} />
-              </button>
-            </div>
-            <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5 }}>{error}</p>
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button
-                onClick={() => {
-                  setError(null);
-                  navTo("input");
-                }}
-                style={{
-                  flex: 1, padding: "10px 14px", borderRadius: T.radius.md,
-                  border: `1px solid ${T.accent.primary}40`, background: T.accent.primaryDim,
-                  color: T.accent.primary, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                  fontFamily: T.font.mono,
-                }}
-              >
-                GO TO INPUT
-              </button>
-              <button
-                onClick={() => setError(null)}
-                style={{
-                  padding: "10px 14px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`,
-                  background: "transparent", color: T.text.secondary, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                }}
-              >
-                DISMISS
-              </button>
-            </div>
-          </Card>
-        </div>
-      )}
+      {/* ERROR OVERLAY REMOVED (Handled uniquely by Toasts) */}
 
       {/* FULL SCREEN DEDICATED OVERLAYS (Results, History, Input) */}
       {tab === "input" && (
@@ -1775,7 +1823,7 @@ function CatalystCash() {
                   onToggleMove={toggleMove}
                   streak={trendContext?.length || 0}
                   onBack={() => {
-                    const target = resultsBackTarget === "history" ? "history" : "dashboard";
+                    const target = resultsBackTarget === "history" ? "history" : "audit";
                     setResultsBackTarget(null);
                     navTo(target);
                   }}
@@ -2053,7 +2101,11 @@ function CatalystCash() {
                 onClick={
                   !isCenter
                     ? () => {
-                      if (tab !== n.id) {
+                      if (tab === n.id) {
+                        if (transactionFeedTab === n.id) {
+                          setTransactionFeedTab(null);
+                        }
+                      } else {
                         haptic.light();
                         navTo(n.id);
                       }
@@ -2110,16 +2162,16 @@ function CatalystCash() {
                     <Icon size={20} strokeWidth={active ? 2.5 : 2.0} />
                   </div>
                 )}
-                
-                {/* Text only reveals on active for clean UI (unless it is the central button) */}
+
+                {/* Text only reveals on active for clean UI (skip for center button — glow is enough) */}
                 <div style={{
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  height: active ? 18 : 0, 
-                  overflow: "hidden", 
+                  height: (active && !isCenter) ? 18 : 0,
+                  overflow: "hidden",
                   transition: "height .3s cubic-bezier(0.16, 1, 0.3, 1), opacity .2s",
-                  opacity: active ? 1 : 0
+                  opacity: (active && !isCenter) ? 1 : 0
                 }}>
                   <span
                     style={{

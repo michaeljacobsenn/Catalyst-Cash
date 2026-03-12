@@ -23,6 +23,24 @@ import { useSettings } from "../contexts/SettingsContext.jsx";
 import { useAudit } from "../contexts/AuditContext.jsx";
 import { useNavigation } from "../contexts/NavigationContext.jsx";
 
+const ReportSection = ({ title, icon: Icon, content, accentColor, badge, isLast }) => {
+  if (!content || !content.trim()) return null;
+  return (
+    <div style={{ padding: "28px 0", borderBottom: isLast ? "none" : `1px solid ${T.border.subtle}` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
+        {Icon && (
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: `${accentColor}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Icon size={18} color={accentColor} strokeWidth={2.5} />
+          </div>
+        )}
+        <h2 style={{ fontSize: 20, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em", margin: 0 }}>{title}</h2>
+        {badge}
+      </div>
+      <Md text={content} />
+    </div>
+  );
+};
+
 export default memo(function ResultsView({ audit, moveChecks, onToggleMove, streak = 0, onBack }) {
   const { history } = useAudit();
   const { navTo } = useNavigation();
@@ -227,123 +245,135 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
           );
         })()}
 
+      {/* ── THE FINANCIAL REPORT DOCUMENT ── */}
+      <Card
+        className="slide-up"
+        style={{
+          padding: "8px 20px 20px",
+          marginTop: 16,
+          background: T.bg.card,
+          border: `1px solid ${T.border.default}`,
+          boxShadow: `0 12px 40px ${T.shadow.base}`,
+        }}
+      >
       {sections.alerts &&
         !/^\s*(no\s*alerts|omit|none|\[\])\s*$/i.test(sections.alerts) &&
         sections.alerts.length > 5 && (
-          <Card
-            animate
+          <div
             style={{
-              borderColor: `${T.status.amber}18`,
+              padding: "20px 24px",
+              margin: "24px -4px",
+              borderRadius: T.radius.lg,
               background: T.status.amberDim,
-              borderLeft: `3px solid ${T.status.amber}`,
+              borderLeft: `4px solid ${T.status.amber}`,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <div
                 style={{
-                  width: 28,
-                  height: 28,
+                  width: 32,
+                  height: 32,
                   borderRadius: 8,
-                  background: `${T.status.amber}15`,
+                  background: `${T.status.amber}20`,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <AlertTriangle size={14} color={T.status.amber} strokeWidth={2.5} />
+                <AlertTriangle size={16} color={T.status.amber} strokeWidth={2.5} />
               </div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: T.status.amber }}>Alerts</span>
+              <span style={{ fontSize: 16, fontWeight: 800, color: T.status.amber }}>Critical Alerts</span>
             </div>
             <Md text={sections.alerts} />
-          </Card>
+          </div>
         )}
+
       {sections.nextAction && (
-        <Card className="slide-up" style={{ animationDelay: "0.075s" }} variant="accent">
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <div style={{ padding: "28px 0", borderBottom: `1px solid ${T.border.subtle}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
             <div
               style={{
-                width: 28,
-                height: 28,
-                borderRadius: 8,
+                width: 32,
+                height: 32,
+                borderRadius: 10,
                 background: T.accent.primaryDim,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Zap size={14} color={T.accent.primary} strokeWidth={2.5} />
+              <Zap size={16} color={T.accent.primary} strokeWidth={2.5} />
             </div>
-            <span style={{ fontSize: 12, fontWeight: 700, color: T.accent.primary }}>Next Action</span>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: T.accent.primary, margin: 0, letterSpacing: "-0.01em" }}>Immediate Next Action</h2>
           </div>
           <Md text={stripPaycheckParens(sections.nextAction)} />
-        </Card>
+        </div>
       )}
-      <Section
-        title="Dashboard"
+
+      <ReportSection
+        title="Executive Summary"
         icon={Activity}
         content={sections.dashboard}
         accentColor={T.accent.primary}
-        delay={50}
-        badge={<Badge variant="teal">CORE</Badge>}
+        badge={<Badge variant="teal">STATE OF THE UNION</Badge>}
       />
       {p.moveItems?.length > 0 && (
-        <Card className="slide-up" style={{ animationDelay: "0.1s" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ padding: "28px 0", borderBottom: `1px solid ${T.border.subtle}` }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div
                 style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 8,
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
                   background: T.accent.primaryDim,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <CheckSquare size={14} color={T.accent.primary} strokeWidth={2.5} />
+                <CheckSquare size={18} color={T.accent.primary} strokeWidth={2.5} />
               </div>
-              <span style={{ fontSize: 13, fontWeight: 700 }}>Weekly Moves</span>
+              <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>Tactical Playbook</h2>
             </div>
-            <Mono size={10} color={T.text.dim}>
-              {Object.values(moveChecks).filter(Boolean).length}/{p.moveItems.length}
+            <Mono size={12} color={T.text.dim}>
+              {Object.values(moveChecks).filter(Boolean).length}/{p.moveItems.length} Complete
             </Mono>
           </div>
-          {p.moveItems.map((m, i) => (
-            <MoveRow key={i} item={m} index={i} checked={moveChecks[i] || false} onToggle={() => onToggleMove(i)} />
-          ))}
-        </Card>
+          <div style={{ background: `${T.bg.elevated}50`, borderRadius: T.radius.lg, padding: "8px 16px" }}>
+            {p.moveItems.map((m, i) => (
+              <MoveRow key={i} item={m} index={i} checked={moveChecks[i] || false} onToggle={() => onToggleMove(i)} />
+            ))}
+          </div>
+        </div>
       )}
-      <Section
+
+      <ReportSection
         title="Radar — 90 Days"
         icon={Target}
         content={sections.radar}
         accentColor={T.status.amber}
-        delay={150}
       />
-      <Section
+      <ReportSection
         title="Long-Range Radar"
         icon={Clock}
         content={sections.longRange}
         accentColor={T.text.secondary}
-        defaultOpen={false}
-        delay={200}
       />
-      <Section
+      <ReportSection
         title="Forward Radar"
         icon={TrendingUp}
         content={sections.forwardRadar}
         accentColor={T.status.blue}
-        defaultOpen={false}
-        delay={250}
       />
-      <Section
+      <ReportSection
         title="Investments & Roth"
         icon={TrendingUp}
         content={sections.investments}
         accentColor={T.accent.primary}
-        delay={300}
+        isLast={true}
       />
+      </Card>
 
       {/* ── FREEDOM JOURNEY SUMMARY ── */}
       <Card
@@ -533,24 +563,37 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
       </Card>
 
       {sections.qualityScore && (
-        <Section
-          title="Quality Score"
-          icon={CheckCircle}
-          content={sections.qualityScore}
-          accentColor={T.status.green}
-          defaultOpen={false}
-          delay={400}
-        />
+        <Card
+          style={{ marginTop: 16 }}
+        >
+          <ReportSection
+            title="Quality Score"
+            icon={CheckCircle}
+            content={sections.qualityScore}
+            accentColor={T.status.green}
+            isLast={!sections.autoUpdates}
+          />
+          {sections.autoUpdates && (
+            <ReportSection
+              title="Auto-Updates"
+              icon={RefreshCw}
+              content={sections.autoUpdates}
+              accentColor={T.text.dim}
+              isLast={true}
+            />
+          )}
+        </Card>
       )}
-      {sections.autoUpdates && (
-        <Section
-          title="Auto-Updates"
-          icon={RefreshCw}
-          content={sections.autoUpdates}
-          accentColor={T.text.dim}
-          defaultOpen={false}
-          delay={450}
-        />
+      {!sections.qualityScore && sections.autoUpdates && (
+        <Card style={{ marginTop: 16 }}>
+          <ReportSection
+            title="Auto-Updates"
+            icon={RefreshCw}
+            content={sections.autoUpdates}
+            accentColor={T.text.dim}
+            isLast={true}
+          />
+        </Card>
       )}
       <Card style={{ background: T.bg.elevated }}>
         <div

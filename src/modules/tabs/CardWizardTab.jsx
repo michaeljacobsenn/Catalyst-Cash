@@ -14,6 +14,7 @@ import { MERCHANT_DATABASE, extractCategoryByKeywords } from "../merchantDatabas
 import { T } from "../constants.js";
 import { shouldShowGating } from "../subscription.js";
 import ProBanner from "./ProBanner.jsx";
+import GeoSuggestWidget from "../dashboard/GeoSuggestWidget.jsx";
 
 const LazyProPaywall = lazy(() => import("./ProPaywall.jsx"));
 
@@ -302,7 +303,8 @@ export default function CardWizardTab({ proEnabled }) {
       const issuerCategory = getIssuerCategoryOverride(merchantName, card.institution);
       const effectiveCategory = issuerCategory || resolvedCategory;
       const rewardInfo = getCardMultiplier(card.name, effectiveCategory, customValuations);
-      const utilization = (card.balance && card.limit && card.limit > 0) ? (card.balance / card.limit) : 0;
+      // Business cards don't report utilization to personal bureaus; treat as 0% for tie-breakers to protect personal scores
+      const utilization = (card.type !== "business" && card.balance && card.limit && card.limit > 0) ? (card.balance / card.limit) : 0;
 
       let finalYield = rewardInfo.effectiveYield;
       let blendedMsg = null;
@@ -378,16 +380,16 @@ export default function CardWizardTab({ proEnabled }) {
 
   if (activeCreditCards.length === 0) {
     return (
-      <div className="safe-scroll-body page-body" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
-        <Card variant="elevated" animate delay={50} style={{ maxWidth: 400, textAlign: "center", padding: 32 }}>
-          <div style={{ width: 64, height: 64, borderRadius: 32, background: T.bg.surface, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+      <div className="safe-scroll-body page-body" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", width: "100%", flex: 1 }}>
+        <div className="fade-in" style={{ maxWidth: 400, textAlign: "center", padding: 32, margin: "0 auto", borderRadius: 24, border: `1px solid ${T.border.default}`, background: "transparent" }}>
+          <div style={{ width: 64, height: 64, borderRadius: 32, background: T.bg.elevated, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
             <CreditCard size={32} color={T.text.muted} />
           </div>
           <h2 style={{ fontSize: 20, fontWeight: 800, color: T.text.primary, marginBottom: 12 }}>Empty Wallet</h2>
           <p style={{ fontSize: 14, color: T.text.secondary, lineHeight: 1.5 }}>
             The Card Wizard needs to know what cards you have to mathematically deduce the best one. Add your credit cards in the Portfolio tab to unlock intelligent AI sorting.
           </p>
-        </Card>
+        </div>
       </div>
     );
   }
@@ -429,7 +431,7 @@ export default function CardWizardTab({ proEnabled }) {
   const runnersToShow = showAllRunners ? recommendations.slice(1) : recommendations.slice(1, 4);
 
   return (
-    <div ref={scrollRef} className="safe-scroll-body scroll-area hide-scrollbar" style={{ display: "flex", flexDirection: "column", alignItems: "center", height: "100%", width: "100%", flex: 1, overflowY: "auto", overflowX: "hidden" }}>
+    <div ref={scrollRef} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", flex: 1 }}>
       <div className="page-body" style={{ maxWidth: 768, margin: "0 auto", width: "100%", display: "flex", flexDirection: "column", gap: 24 }}>
 
         {/* Pro Banner Removed - Teaser is now in the results section */}
@@ -575,18 +577,21 @@ export default function CardWizardTab({ proEnabled }) {
           )}
         </form>
 
-        {/* Global Point Valuation Settings Toggle */}
+        {/* Nearby Suggest + Point Valuations */}
         {(!resolvedCategory || showValuations) && !categorizing && (
           <div className="fade-in">
-            <button
-              className="hover-btn"
-              onClick={() => { haptic.selection(); setShowValuations(!showValuations); }}
-              style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 20, background: T.bg.surface, border: `1px solid ${T.border.subtle}`, margin: "0 auto", color: T.text.secondary, fontSize: 12, fontWeight: 700 }}
-            >
-              <Settings2 size={14} />
-              {showValuations ? "Hide Point Valuations" : "Edit Point Valuations"}
-              <ChevronDown size={14} style={{ transform: showValuations ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }} />
-            </button>
+            <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 8 }}>
+              <GeoSuggestWidget />
+              <button
+                className="hover-btn"
+                onClick={() => { haptic.selection(); setShowValuations(!showValuations); }}
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 20, background: T.bg.surface, border: `1px solid ${T.border.subtle}`, color: T.text.secondary, fontSize: 12, fontWeight: 700 }}
+              >
+                <Settings2 size={14} />
+                {showValuations ? "Hide Point Valuations" : "Edit Point Valuations"}
+                <ChevronDown size={14} style={{ transform: showValuations ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }} />
+              </button>
+            </div>
 
             <div className="collapse-section" data-collapsed={!showValuations} style={{ marginTop: 16 }}>
               <FormGroup label="Cents Per Point (CPP) Overrides">
@@ -664,8 +669,8 @@ export default function CardWizardTab({ proEnabled }) {
                   className="card-press"
                   style={{
                     height: 96, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                    padding: 8, borderRadius: 16, background: T.bg.elevated, border: `1px solid ${T.border.default}`,
-                    boxShadow: T.shadow.sm, animationDelay: `${idx * 0.05}s`
+                    padding: 8, borderRadius: 16, background: "transparent", border: `1px solid ${T.border.subtle}`,
+                    animationDelay: `${idx * 0.05}s`
                   }}
                 >
                   <div style={{ padding: 10, borderRadius: 12, background: cat.bg, marginBottom: 8, pointerEvents: "none" }}>
@@ -767,110 +772,90 @@ export default function CardWizardTab({ proEnabled }) {
               )}
             </div>
 
-            {/* Premium Holographic Winner Card */}
+            {/* Minimalist Winner Card */}
             <div style={{ position: "relative" }}>
-              <div
-                className="pulse-alert"
-                style={{
-                  position: "absolute", inset: -4,
-                  background: getCardThemeColors(recommendations[0].name).gradient,
-                  borderRadius: 24, opacity: 0.3, filter: "blur(16px)", pointerEvents: "none", zIndex: 0
-                }}
-              />
-
               <Card
-                animate delay={50}
+                className="slide-up"
                 style={{
-                  position: "relative", zIndex: 1, padding: "24px 28px", borderRadius: 20, overflow: "hidden",
-                  border: `1px solid ${getCardThemeColors(recommendations[0].name).border || 'rgba(255,255,255,0.2)'}`,
-                  background: getCardThemeColors(recommendations[0].name).gradient,
-                  boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
-                  display: "flex", flexDirection: "column", minHeight: 240
+                  position: "relative", zIndex: 1, padding: "20px 24px", borderRadius: 24, overflow: "hidden",
+                  border: `1px solid ${T.border.default}`,
+                  background: T.bg.card,
+                  display: "flex", flexDirection: "column", gap: 16
                 }}
               >
-                <div className="shimmer-bg" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, opacity: 0.1, pointerEvents: "none", background: "linear-gradient(135deg, rgba(255,255,255,0.4) 0%, transparent 50%, rgba(0,0,0,0.2) 100%)" }} />
-
                 {/* Top Row: Institution + Chip */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", position: "relative", zIndex: 10 }}>
-                  <div>
-                    <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: getCardThemeColors(recommendations[0].name).text, opacity: 0.9, letterSpacing: "0.02em", textShadow: "0 1px 2px rgba(0,0,0,0.1)" }}>
-                      {recommendations[0].institution || "Credit Card"}
-                    </h3>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 12, padding: "4px 10px", backdropFilter: "blur(8px)" }}>
-                      <Check size={12} color="#fff" />
-                      <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#fff" }}>Optimal for {resolvedMerchant?.name ? resolvedMerchant.name : resolvedCategory.replace(/_/g, " ")}</span>
-                    </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, margin: 0, color: T.text.secondary, letterSpacing: "0.02em" }}>
+                    {recommendations[0].institution || "Credit Card"}
+                  </h3>
+                  <Badge variant="teal" style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase" }}>
+                    <Check size={10} style={{ marginRight: 4 }} />
+                    Optimal Choice
+                  </Badge>
+                </div>
+
+                {/* Middle: Card Name & Yields */}
+                <div style={{ padding: "8px 0" }}>
+                  <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 4px 0", color: T.text.primary, lineHeight: 1.2 }}>
+                    {recommendations[0].name}
+                  </h2>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600, color: T.text.secondary }}>
+                    <Sparkles size={14} color={T.accent.emerald} />
+                    <span>{recommendations[0].multiplier}x {recommendations[0].currency === "CASH" ? "Cash Back" : "Points"}</span>
                   </div>
                 </div>
 
-                {/* Middle Row: Chip Logo */}
-                <div style={{ marginTop: 24, marginBottom: "auto", position: "relative", zIndex: 10 }}>
-                  <div style={{ width: 44, height: 32, borderRadius: 6, background: "linear-gradient(135deg, #eaddcf, #c2a382)", border: "1px solid rgba(255,255,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "inset 0 1px 4px rgba(0,0,0,0.2)" }}>
-                    <div style={{ width: 24, height: 18, border: "1px solid rgba(0,0,0,0.15)", borderRadius: 4, display: "flex", gap: 2, padding: 2 }}>
-                       <div style={{ flex: 1, border: "1px solid rgba(0,0,0,0.1)", borderRadius: 2 }} />
-                       <div style={{ flex: 1, border: "1px solid rgba(0,0,0,0.1)", borderRadius: 2 }} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bottom Half: Card Name & Yields */}
-                <div style={{ marginTop: 24, position: "relative", zIndex: 10, display: "flex", flexDirection: "column", gap: 12 }}>
-                  <div>
-                    <h2 style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", margin: "0 0 6px 0", color: getCardThemeColors(recommendations[0].name).text, textShadow: "0 2px 8px rgba(0,0,0,0.15)", lineHeight: 1.1 }}>
-                      {recommendations[0].name}
-                    </h2>
-                    <button
-                      type="button"
-                      className="hover-btn"
+                {/* Bottom: Yield Badge */}
+                <div>
+                  <button
+                    type="button"
+                    className="hover-btn"
                       onClick={(e) => handleToggleSubTarget(e, recommendations[0].id)}
                       style={{
                         padding: "6px 12px", borderRadius: 8,
-                        background: recommendations[0].id === subTargetId ? getCardThemeColors(recommendations[0].name).text : "rgba(0,0,0,0.15)",
-                        color: recommendations[0].id === subTargetId ? getCardThemeColors(recommendations[0].name).gradient.split(", ")[1] : getCardThemeColors(recommendations[0].name).text,
-                        border: recommendations[0].id === subTargetId ? "none" : `1px solid ${getCardThemeColors(recommendations[0].name).text}40`, 
+                        background: recommendations[0].id === subTargetId ? T.accent.primary : T.bg.elevated,
+                        color: recommendations[0].id === subTargetId ? "#fff" : T.text.secondary,
+                        border: recommendations[0].id === subTargetId ? "none" : `1px solid ${T.border.default}`, 
                         fontSize: 11, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6,
                         boxShadow: recommendations[0].id === subTargetId ? T.shadow.sm : "none",
-                        transition: "all 0.2s ease",
-                        textShadow: "none"
+                        transition: "all 0.2s ease"
                       }}
                     >
-                       <Package size={12} fill={recommendations[0].id === subTargetId ? "currentColor" : "none"} />
-                       {recommendations[0].id === subTargetId ? "Working on Sign-Up Bonus" : "Targeting Sign-Up Bonus?"}
+                      <Package size={12} fill={recommendations[0].id === subTargetId ? "currentColor" : "none"} />
+                      {recommendations[0].id === subTargetId ? "Working on Sign-Up Bonus" : "Targeting Sign-Up Bonus?"}
                     </button>
                   </div>
 
                   <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
                     <div>
-                      <p style={{ fontSize: 11, fontWeight: 800, margin: "0 0 2px 0", opacity: 0.8, textTransform: "uppercase", letterSpacing: "0.05em", color: getCardThemeColors(recommendations[0].name).text, textShadow: "0 1px 2px rgba(0,0,0,0.1)" }}>
+                      <p style={{ fontSize: 11, fontWeight: 700, margin: "0 0 4px 0", color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                         {recommendations[0].id === subTargetId ? "Priority Override" : "Effective Yield"}
                       </p>
-                      <div className="score-pop" style={{ fontSize: recommendations[0].id === subTargetId ? 32 : 44, fontWeight: 900, letterSpacing: "-0.04em", margin: 0, lineHeight: 1, filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.15))", color: getCardThemeColors(recommendations[0].name).text }}>
+                      <div className="score-pop" style={{ fontSize: recommendations[0].id === subTargetId ? 32 : 44, fontWeight: 900, letterSpacing: "-0.04em", margin: 0, lineHeight: 1, filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.08))", color: recommendations[0].id === subTargetId ? T.accent.primary : T.status.green }}>
                         {recommendations[0].id === subTargetId ? "SUB TARGET" : `${recommendations[0].effectiveYield}%`}
                       </div>
-                      <p style={{ fontSize: 13, fontWeight: 700, opacity: 0.9, marginTop: 6, color: getCardThemeColors(recommendations[0].name).text, textShadow: "0 1px 2px rgba(0,0,0,0.1)" }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, marginTop: 8, color: T.text.secondary }}>
                         {recommendations[0].currentMultiplier}x {(recommendations[0].effectiveCategory || resolvedCategory).replace(/_/g, " ")}{recommendations[0].cpp !== 1.0 ? ` × ${recommendations[0].cpp}cpp` : ""}
                         {recommendations[0].issuerCategory && recommendations[0].issuerCategory !== resolvedCategory && (
-                          <span style={{ fontSize: 10, opacity: 0.75, fontWeight: 600 }}> (coded as {recommendations[0].issuerCategory.replace(/_/g, " ")} at {recommendations[0].institution})</span>
+                          <span style={{ fontSize: 10, color: T.text.dim, fontWeight: 500 }}> (coded as {recommendations[0].issuerCategory.replace(/_/g, " ")} at {recommendations[0].institution})</span>
                         )}
                       </p>
                       {dollarReturn(recommendations[0].effectiveYield) && recommendations[0].id !== subTargetId && (
-                        <p style={{ fontSize: 15, fontWeight: 800, marginTop: 4, color: getCardThemeColors(recommendations[0].name).text, textShadow: "0 1px 2px rgba(0,0,0,0.1)" }}>
+                        <p style={{ fontSize: 15, fontWeight: 800, marginTop: 4, color: T.text.primary }}>
                           ${dollarReturn(recommendations[0].effectiveYield)} back
                         </p>
                       )}
                     </div>
 
                     {recommendations[0].utilization > 0 && recommendations.length > 1 && recommendations[0].effectiveYield === recommendations[1].effectiveYield && (
-                      <div style={{ background: "rgba(0,0,0,0.2)", backdropFilter: "blur(8px)", padding: "6px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", display: "flex", alignItems: "center", gap: 6, color: getCardThemeColors(recommendations[0].name).text }}>
-                         <Info size={12} color={getCardThemeColors(recommendations[0].name).text} />
+                      <div style={{ background: T.bg.surface, padding: "6px 10px", borderRadius: 8, border: `1px solid ${T.border.subtle}`, display: "flex", alignItems: "center", gap: 6, color: T.text.secondary }}>
+                         <Info size={12} color={T.text.dim} />
                          <span style={{ fontSize: 10, fontWeight: 700 }}>Low Util.</span>
                       </div>
                     )}
                   </div>
-                </div>
               </Card>
+            </div>
 
               {/* Disclosures */}
               <div>
@@ -971,7 +956,6 @@ export default function CardWizardTab({ proEnabled }) {
                   );
                 })()}
               </div>
-            </div>
 
             {/* Runners Up Teaser (Free) */}
             {!proEnabled && recommendations.length > 1 && (
@@ -981,14 +965,14 @@ export default function CardWizardTab({ proEnabled }) {
                 {/* Blurred mock up */}
                 <div style={{ opacity: 0.25, filter: "blur(6px)", pointerEvents: "none", userSelect: "none", display: "flex", flexDirection: "column", gap: 8 }}>
                   {[1, 2].map(i => (
-                    <Card key={i} variant="elevated" style={{ height: 86, background: T.bg.surface, border: `1px solid ${T.border.default}` }} />
+                    <div key={i} style={{ height: 86, borderBottom: `1px solid ${T.border.subtle}` }} />
                   ))}
                 </div>
                 
                 {/* Centered CTA */}
                 <div style={{ position: "absolute", top: 40, left: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 10 }}>
-                  <div style={{ padding: 24, textAlign: "center", width: "100%", maxWidth: 320, background: T.bg.elevated, border: `1px solid ${T.accent.primary}40`, borderRadius: 24, boxShadow: `0 16px 32px rgba(0,0,0,0.5), 0 0 0 1px ${T.accent.primary}20` }}>
-                     <div style={{ width: 48, height: 48, borderRadius: 24, background: T.accent.primary, margin: "0 auto 12px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 8px 16px ${T.accent.primary}40` }}>
+                  <div style={{ padding: 24, textAlign: "center", width: "100%", maxWidth: 320, background: T.bg.elevated, border: `1px solid ${T.accent.primary}40`, borderRadius: 24 }}>
+                     <div style={{ width: 48, height: 48, borderRadius: 24, background: T.accent.primary, margin: "0 auto 12px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                        <Lock size={24} color="#FFF" />
                      </div>
                      <h4 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, margin: "0 0 8px 0", letterSpacing: "-0.02em" }}>Unlock All Rankers</h4>
@@ -996,7 +980,7 @@ export default function CardWizardTab({ proEnabled }) {
                      <button
                        onClick={() => { haptic.medium(); setShowPaywall(true); }}
                        className="hover-lift"
-                       style={{ background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`, color: "#fff", border: "none", padding: "14px 24px", borderRadius: 16, fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: `0 8px 16px ${T.accent.primary}40`, width: "100%", textShadow: "0 1px 2px rgba(0,0,0,0.2)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                       style={{ background: T.accent.primary, color: "#fff", border: "none", padding: "14px 24px", borderRadius: 16, fontSize: 14, fontWeight: 800, cursor: "pointer", width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
                      >
                        <Zap size={16} fill="#fff" />
                        View Pro Plans
@@ -1010,12 +994,17 @@ export default function CardWizardTab({ proEnabled }) {
             {proEnabled && recommendations.length > 1 && (
               <div style={{ marginTop: 8 }}>
                 <h3 style={{ fontSize: 12, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12, paddingLeft: 4 }}>Runner Up Options</h3>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
                   {runnersToShow.map((card, idx) => (
-                    <Card key={card.id + idx} variant="elevated" animate delay={200 + (idx * 50)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px" }}>
+                    <div key={card.id + idx} className="fade-in" style={{ 
+                        display: "flex", alignItems: "center", justifyContent: "space-between", 
+                        padding: "16px 16px",
+                        borderBottom: idx === runnersToShow.length - 1 ? "none" : `1px solid ${T.border.subtle}`,
+                        animationDelay: `${idx * 0.05}s`
+                      }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                          {/* Rank Badge */}
-                         <div style={{ width: 24, height: 24, borderRadius: 12, background: T.bg.surface, border: `1px solid ${T.border.default}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: T.text.secondary, flexShrink: 0 }}>
+                         <div style={{ width: 24, height: 24, borderRadius: 12, background: "transparent", border: `1px solid ${T.border.subtle}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: T.text.secondary, flexShrink: 0 }}>
                            {idx + 2}
                          </div>
                          <div>
@@ -1068,7 +1057,7 @@ export default function CardWizardTab({ proEnabled }) {
                           {card.id === subTargetId ? "Remove SUB target" : "Set as SUB target"}
                         </button>
                       </div>
-                    </Card>
+                    </div>
                   ))}
                 </div>
                 {/* Show All Toggle */}

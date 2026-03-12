@@ -41,10 +41,10 @@ function getBucketId(name) {
   return "personal";
 }
 
-export default function BudgetTab({ onRunAudit }) {
+export default function BudgetTab({ onRunAudit, embedded }) {
   const { envelopes, monthlyIncome, updateMonthlyIncome, allocateToEnvelope, getReadyToAssign } = useBudget();
   const { current } = useAudit();
-  
+
   const [editingIncome, setEditingIncome] = useState(false);
   const [incomeInput, setIncomeInput] = useState("");
   const [showPaywall, setShowPaywall] = useState(false);
@@ -54,7 +54,7 @@ export default function BudgetTab({ onRunAudit }) {
   }, [editingIncome, monthlyIncome]);
 
   const readyToAssign = getReadyToAssign();
-  
+
   const spendTracking = useMemo(() => {
     if (!current?.parsed?.categories) return {};
     const tracking = {};
@@ -87,199 +87,202 @@ export default function BudgetTab({ onRunAudit }) {
     <div className="page-body stagger-container" style={{ paddingBottom: 100, display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
       <style>{STRIPE_CSS}</style>
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
-      {/* ═══ Header ═══ */}
-      <div style={{ paddingTop: 20, paddingBottom: 16 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 900, marginBottom: 8, color: T.text.primary }}>Active Budget</h1>
-        <p style={{ fontSize: 13, color: T.text.secondary, margin: 0 }}>
-          Give every dollar a job. Allocate your income across your envelopes to stay ahead of spending.
-        </p>
-      </div>
-
-      {shouldShowGating() && (
-        <ProBanner
-          onUpgrade={() => setShowPaywall(true)}
-          label="⚡ AI Budget Insights"
-          sublabel="Pro unlocks AI-powered spending patterns and smart alerts"
-        />
-      )}
-      {showPaywall && (
-        <Suspense fallback={null}>
-          <LazyProPaywall onClose={() => setShowPaywall(false)} />
-        </Suspense>
-      )}
-
-      {/* ═══ Ready to Assign Block ═══ */}
-      <Card
-        variant="glass"
-        style={{
-          padding: 24,
-          marginBottom: 24,
-          background: readyToAssign > 0 
-            ? `linear-gradient(135deg, ${T.status.green}15, ${T.status.green}05)` 
-            : readyToAssign < 0 
-              ? `linear-gradient(135deg, ${T.status.red}15, ${T.status.red}05)`
-              : T.bg.elevated,
-          border: `1px solid ${readyToAssign > 0 ? T.status.green : readyToAssign < 0 ? T.status.red : T.border.default}`,
-          textAlign: "center"
-        }}
-      >
-        <div style={{ fontSize: 14, fontWeight: 900, color: readyToAssign === 0 ? T.status.green : readyToAssign > 0 ? T.status.green : T.status.red, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
-          {readyToAssign > 0 ? "Unassigned Cash" : readyToAssign < 0 ? "Overassigned" : "Zero-Based Budget Complete!"}
-        </div>
-        <div style={{ fontSize: 48, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.04em", display: "flex", alignItems: "baseline", justifyContent: "center" }}>
-          <span style={{ fontSize: 24, color: T.text.dim, marginRight: 4, transform: "translateY(-6px)" }}>$</span>
-          {Math.abs(readyToAssign).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-        </div>
-        {readyToAssign > 0 && (
-          <div style={{ fontSize: 13, fontWeight: 600, color: T.status.green, marginTop: 8 }}>
-            Give every dollar a job! Assign this cash to an envelope below.
+      <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
+        {/* ═══ Header ═══ */}
+        {!embedded && (
+          <div style={{ paddingTop: 20, paddingBottom: 16 }}>
+            <h1 style={{ fontSize: 24, fontWeight: 900, marginBottom: 8, color: T.text.primary }}>Active Budget</h1>
+            <p style={{ fontSize: 13, color: T.text.secondary, margin: 0 }}>
+              Give every dollar a job. Allocate your income across your envelopes to stay ahead of spending.
+            </p>
           </div>
         )}
-        {readyToAssign === 0 && (
-          <div style={{ fontSize: 13, fontWeight: 600, color: T.text.secondary, marginTop: 8 }}>
-            Every dollar is assigned to an envelope. Your budget is airtight.
-          </div>
+
+        {shouldShowGating() && (
+          <ProBanner
+            onUpgrade={() => setShowPaywall(true)}
+            label="⚡ AI Budget Insights"
+            sublabel="Pro unlocks AI-powered spending patterns and smart alerts"
+          />
         )}
-        
-        
-        <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${T.border.subtle}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-           <span style={{ fontSize: 12, color: T.text.dim }}>Monthly Income</span>
-           {editingIncome ? (
+        {showPaywall && (
+          <Suspense fallback={null}>
+            <LazyProPaywall onClose={() => setShowPaywall(false)} />
+          </Suspense>
+        )}
+
+        {/* ═══ Ready to Assign Block ═══ */}
+        <Card
+          className="slide-up"
+          style={{
+            padding: "24px 20px",
+            marginBottom: 24,
+            background: T.bg.card,
+            border: `1px solid ${T.border.subtle}`,
+            borderRadius: 24,
+            textAlign: "center"
+          }}
+        >
+          <div style={{ fontSize: 13, fontWeight: 800, color: readyToAssign === 0 ? T.status.green : readyToAssign > 0 ? T.status.green : T.status.red, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+            {readyToAssign > 0 ? "Unassigned Cash" : readyToAssign < 0 ? "Overassigned" : "Zero-Based Budget Complete!"}
+          </div>
+          <div style={{ fontSize: 52, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.04em", display: "flex", alignItems: "baseline", justifyContent: "center", lineHeight: 1 }}>
+            <span style={{ fontSize: 24, color: T.text.dim, marginRight: 4, transform: "translateY(-4px)" }}>$</span>
+            {Math.abs(readyToAssign).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+          </div>
+          {readyToAssign > 0 && (
+            <div style={{ fontSize: 13, fontWeight: 600, color: T.text.secondary, marginTop: 12 }}>
+              Give every dollar a job. Assign this cash below.
+            </div>
+          )}
+          {readyToAssign === 0 && (
+            <div style={{ fontSize: 13, fontWeight: 600, color: T.text.secondary, marginTop: 12 }}>
+              Every dollar is assigned to an envelope. Your budget is airtight.
+            </div>
+          )}
+
+          <div style={{ marginTop: 24, paddingTop: 16, borderTop: `1px solid ${T.border.subtle}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: T.text.dim }}>Monthly Income</span>
+            {editingIncome ? (
               <form onSubmit={handleIncomeSubmit} style={{ display: "flex", gap: 8 }}>
-                 <input 
-                   autoFocus
-                   type="number"
-                   value={incomeInput}
-                   onChange={e => setIncomeInput(e.target.value)}
-                   style={{
-                     background: T.bg.base,
-                     border: `1px solid ${T.accent.primary}50`,
-                     color: T.text.primary,
-                     borderRadius: 6,
-                     padding: "4px 8px",
-                     width: 100,
-                     fontSize: 14,
-                     outline: "none"
-                   }}
-                 />
-                 <button type="submit" style={{ background: T.accent.primary, color: "#fff", border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>Save</button>
+                <input
+                  autoFocus
+                  type="number"
+                  value={incomeInput}
+                  onChange={e => setIncomeInput(e.target.value)}
+                  style={{
+                    background: T.bg.elevated,
+                    border: `1px solid ${T.border.default}`,
+                    color: T.text.primary,
+                    borderRadius: 8,
+                    padding: "6px 10px",
+                    width: 100,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    outline: "none"
+                  }}
+                />
+                <button type="submit" className="hover-btn" style={{ background: T.accent.primary, color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Save</button>
               </form>
-           ) : (
-             <div 
-               onClick={() => { haptic.light(); setEditingIncome(true); }}
-               style={{ fontSize: 15, fontWeight: 700, color: T.text.primary, borderBottom: `1px dashed ${T.border.default}`, cursor: "pointer" }}
+            ) : (
+              <div
+                onClick={() => { haptic.light(); setEditingIncome(true); }}
+                style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
               >
-               ${(monthlyIncome || 0).toLocaleString()}
-             </div>
-           )}
-        </div>
-      </Card>
+                ${(monthlyIncome || 0).toLocaleString()}
+                <span style={{ fontSize: 11, color: T.accent.primary, fontWeight: 700, padding: "2px 6px", background: T.accent.primaryDim, borderRadius: 6, marginLeft: 4 }}>Edit</span>
+              </div>
+            )}
+          </div>
+        </Card>
 
-      {/* ═══ Envelopes List ═══ */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {BUDGET_CATEGORIES.map((cat, idx) => {
-          const allocation = envelopes[cat.id] || 0;
-          const spent = spendTracking[cat.id] || 0;
-          const remaining = allocation - spent;
-          const progress = allocation > 0 ? Math.min(spent / allocation, 1) : 0;
-          
-          return (
-            <Card
-              key={cat.id}
-              animate
-              delay={idx * 50}
-              style={{
-                padding: 0,
-                overflow: "hidden",
-                borderLeft: `3px solid ${cat.color}`
-              }}
-            >
-              <div 
-                style={{ 
-                  display: "flex", 
-                  alignItems: "center", 
-                  justifyContent: "space-between",
-                  padding: "16px",
-                  background: `${cat.color}08`,
-                  borderBottom: `1px solid ${T.border.subtle}`
+        {/* ═══ Envelopes List ═══ */}
+        <div style={{ display: "flex", flexDirection: "column", background: T.bg.card, borderRadius: 24, padding: "8px 0", overflow: "hidden", border: `1px solid ${T.border.subtle}` }}>
+          {BUDGET_CATEGORIES.map((cat, idx) => {
+            const allocation = envelopes[cat.id] || 0;
+            const spent = spendTracking[cat.id] || 0;
+            const remaining = allocation - spent;
+            const progress = allocation > 0 ? Math.min(spent / allocation, 1) : 0;
+
+            return (
+              <div
+                key={cat.id}
+                style={{
+                  padding: "16px 20px",
+                  borderBottom: idx === BUDGET_CATEGORIES.length - 1 ? "none" : `1px solid ${T.border.subtle}`,
+                  background: "transparent",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ fontSize: 20 }}>{cat.icon}</div>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: T.text.primary }}>{cat.label}</span>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: 12
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: `${cat.color}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{cat.icon}</div>
+                    <span style={{ fontSize: 15, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>{cat.label}</span>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                      <span style={{ fontSize: 10, color: T.text.dim, textTransform: "uppercase", fontWeight: 800, letterSpacing: "0.05em", marginBottom: 2 }}>Assigned</span>
+                      <div style={{ position: "relative" }}>
+                        <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: T.text.muted, fontSize: 13 }}>$</span>
+                        <input
+                          type="number"
+                          placeholder="0"
+                          value={allocation || ""}
+                          onChange={(e) => onAllocate(cat.id, e.target.value)}
+                          style={{
+                            background: T.bg.surface,
+                            border: "none",
+                            padding: "6px 8px 6px 20px",
+                            borderRadius: 8,
+                            width: 80,
+                            textAlign: "right",
+                            color: T.accent.primary,
+                            fontSize: 14,
+                            fontWeight: 800,
+                            outline: "none",
+                            WebkitAppearance: "none",
+                            boxShadow: `inset 0 1px 3px rgba(0,0,0,.05)`
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", marginRight: 12 }}>
-                     <span style={{ fontSize: 10, color: T.text.dim, textTransform: "uppercase", fontWeight: 700 }}>Assigned</span>
-                     <input
-                        type="number"
-                        placeholder="0"
-                        value={allocation || ""}
-                        onChange={(e) => onAllocate(cat.id, e.target.value)}
-                        style={{
-                           background: T.bg.elevated,
-                           border: `1px solid ${T.border.default}`,
-                           padding: "4px 8px",
-                           borderRadius: 6,
-                           width: 80,
-                           textAlign: "right",
-                           color: T.accent.primary,
-                           fontSize: 14,
-                           fontWeight: 800,
-                           outline: "none"
-                        }}
-                     />
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+                  <div>
+                    <span style={{ fontSize: 22, fontWeight: 800, color: remaining < 0 ? T.status.red : T.text.primary, letterSpacing: "-0.02em" }}>
+                      ${Math.abs(remaining).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    </span>
+                    <span style={{ fontSize: 11, color: T.text.dim, marginLeft: 6, textTransform: "uppercase", fontWeight: 800, letterSpacing: "0.05em" }}>
+                      {remaining < 0 ? "Overspent" : "Left"}
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: 13, color: T.text.secondary, fontWeight: 600 }}>
+                    ${spent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} spent
+                  </div>
+                </div>
+
+                <div style={{ width: "100%", height: 4, borderRadius: 2, background: T.bg.surface, overflow: "hidden", position: "relative" }}>
+                  {/* Background track */}
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${progress * 100}%`,
+                      background: remaining < 0 ? T.status.red : progress > 0.85 ? T.status.orange : cat.color,
+                      transition: "width 0.5s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease",
+                      borderRadius: 2,
+                      position: "relative",
+                      overflow: "hidden"
+                    }}
+                  >
+                    {/* Warning stripes when overspent or near limit */}
+                    {progress > 0.85 && (
+                      <div style={{
+                        position: "absolute",
+                        top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundImage: "linear-gradient(45deg, rgba(255,255,255,.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.15) 75%, transparent 75%, transparent)",
+                        backgroundSize: "20px 20px",
+                        animation: "progress-stripe 2s linear infinite",
+                        opacity: remaining < 0 ? 0.8 : 0.4
+                      }} />
+                    )}
                   </div>
                 </div>
               </div>
-
-              <div style={{ padding: "16px" }}>
-                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                    <div>
-                       <span style={{ fontSize: 20, fontWeight: 800, color: remaining < 0 ? T.status.red : T.text.primary, letterSpacing: "-0.02em" }}>
-                          ${remaining.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                       </span>
-                       <span style={{ fontSize: 12, color: T.text.dim, marginLeft: 6 }}>Available</span>
-                    </div>
-                    
-                    <div style={{ fontSize: 12, color: T.text.secondary, fontWeight: 600 }}>
-                       ${spent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} spent
-                    </div>
-                 </div>
-
-                 <div style={{ width: "100%", height: 8, borderRadius: 4, background: `${T.border.default}80`, overflow: "hidden", position: "relative" }}>
-                    {/* Background track */}
-                    <div 
-                      style={{ 
-                        height: "100%", 
-                        width: `${progress * 100}%`, 
-                        background: remaining < 0 ? T.status.red : progress > 0.85 ? T.status.orange : cat.color,
-                        transition: "width 0.5s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease",
-                        borderRadius: 4,
-                        position: "relative",
-                        overflow: "hidden"
-                      }}
-                    >
-                      {/* Warning stripes when overspent or near limit */}
-                      {progress > 0.85 && (
-                        <div style={{
-                          position: "absolute",
-                          top: 0, left: 0, right: 0, bottom: 0,
-                          backgroundImage: "linear-gradient(45deg, rgba(255,255,255,.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.15) 75%, transparent 75%, transparent)",
-                          backgroundSize: "20px 20px",
-                          animation: "progress-stripe 2s linear infinite",
-                          opacity: remaining < 0 ? 0.8 : 0.4
-                        }} />
-                      )}
-                    </div>
-                 </div>
-              </div>
-            </Card>
-          )
-        })}
-      </div>
-      </div>
+            )
+          })}
+        </div>
+        </div>
+    </div>
     </div>
   );
 }

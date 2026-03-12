@@ -688,8 +688,9 @@ async function _fetchMarketPricesImpl(symbols, forceRefresh) {
         const batchResults = await Promise.allSettled(
           batch.map(async sym => {
             try {
-              const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=1d`;
-              const yRes = await fetch(yUrl, { headers: { "User-Agent": "CatalystCash/1.5" } });
+              // corsproxy.io is generally faster and more reliable than allorigins
+              const yUrl = `https://corsproxy.io/?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`)}`;
+              const yRes = await fetch(yUrl);
               if (yRes.status === 429) {
                 console.warn(`[MarketData] Yahoo rate limited on ${sym}`);
                 return null;

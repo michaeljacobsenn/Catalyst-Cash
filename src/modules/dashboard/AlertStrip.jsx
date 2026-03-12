@@ -29,22 +29,31 @@ export default function AlertStrip({ alerts }) {
           key={i}
           className="alert-pill"
           style={{
-            background: `${a.color}10`,
-            border: `1px solid ${a.color}25`,
+            background: T.bg.glass,
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            border: `1px solid ${T.border.subtle}`,
+            boxShadow: `0 2px 6px ${a.color}08`,
             animationDelay: `${i * 0.08}s`,
             animation: a.pulse
               ? `slideInRight .4s ease-out ${i * 0.08}s both, alertPulse 2s ease-in-out infinite`
               : `slideInRight .4s ease-out ${i * 0.08}s both`,
+            display: "flex",
+            alignItems: "center",
+            padding: "8px 12px",
+            borderRadius: T.radius.lg,
+            minWidth: "max-content",
+            gap: 8,
           }}
         >
           <span style={{ fontSize: 13, flexShrink: 0 }}>{a.icon}</span>
           <div>
             <div
-              style={{ fontSize: 9, fontWeight: 800, color: a.color, fontFamily: T.font.mono, letterSpacing: "0.03em" }}
+              style={{ fontSize: 9, fontWeight: 700, color: T.text.secondary, fontFamily: T.font.mono, letterSpacing: "0.04em", textTransform: "uppercase" }}
             >
               {a.title}
             </div>
-            <div style={{ fontSize: 10, color: T.text.secondary, marginTop: 1 }}>{a.text}</div>
+            <div style={{ fontSize: 10, color: T.text.primary, marginTop: 1, fontWeight: 500 }}>{a.text}</div>
           </div>
         </div>
       ))}

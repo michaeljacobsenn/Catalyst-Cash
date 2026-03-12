@@ -55,7 +55,7 @@ export default function HealthGauge({ score, grade, scoreColor, percentile }) {
           r={radius}
           fill="none"
           stroke={`${T.border.default} `}
-          strokeWidth="8"
+          strokeWidth="4"
           strokeLinecap="round"
           strokeDasharray={`${circumference * 0.75} ${circumference * 0.25} `}
           transform="rotate(135,55,55)"
@@ -66,7 +66,7 @@ export default function HealthGauge({ score, grade, scoreColor, percentile }) {
           r={radius}
           fill="none"
           stroke={scoreColor}
-          strokeWidth="8"
+          strokeWidth="5"
           strokeLinecap="round"
           strokeDasharray={`${arcLength} ${circumference - arcLength}`}
           transform="rotate(135,55,55)"
@@ -78,9 +78,9 @@ export default function HealthGauge({ score, grade, scoreColor, percentile }) {
           r={radius}
           fill="none"
           stroke={scoreColor}
-          strokeWidth="12"
+          strokeWidth="8"
           strokeLinecap="round"
-          opacity="0.12"
+          opacity="0.08"
           strokeDasharray={`${arcLength} ${circumference - arcLength}`}
           transform="rotate(135,55,55)"
           style={{ animation: "gaugePulseRing 3s infinite alternate cubic-bezier(0.4, 0, 0.2, 1)" }}
@@ -100,10 +100,10 @@ export default function HealthGauge({ score, grade, scoreColor, percentile }) {
           zIndex: 10,
         }}
       >
-        <div style={{ fontSize: 32, fontWeight: 900, color: scoreColor, fontFamily: T.font.sans, lineHeight: 1 }}>
+        <div style={{ fontSize: 26, fontWeight: 800, color: scoreColor, fontFamily: T.font.sans, lineHeight: 1, letterSpacing: "-0.02em" }}>
           {grade}
         </div>
-        <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, fontFamily: T.font.mono, marginTop: 2 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: T.text.secondary, fontFamily: T.font.mono, marginTop: 2 }}>
           {displayScore}/100
         </div>
         {percentile > 0 && (

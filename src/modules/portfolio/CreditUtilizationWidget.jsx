@@ -48,13 +48,19 @@ export default function CreditUtilizationWidget() {
     if (creditCards.length === 0) return null;
 
     return (
-        <Card animate style={{ marginTop: 16 }}>
-            <div style={{ padding: "16px 20px" }}>
+        <div style={{ marginTop: 16 }}>
+            <div style={{
+                padding: "16px 20px",
+                background: T.bg.card,
+                border: `1px solid ${T.border.subtle}`,
+                borderRadius: T.radius.md,
+                boxShadow: `0 2px 8px rgba(0,0,0,0.12)`,
+            }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
+                    <div style={{ flex: 1 }}>
                         <h3
                             style={{
-                                fontSize: 14,
+                                fontSize: 13,
                                 fontWeight: 800,
                                 color: T.text.primary,
                                 display: "flex",
@@ -67,7 +73,7 @@ export default function CreditUtilizationWidget() {
                                 <HelpCircle size={14} color={T.text.dim} />
                             </InlineTooltip>
                         </h3>
-                        <p style={{ fontSize: 13, color: T.text.dim, marginTop: 4, fontWeight: 500 }}>
+                        <p style={{ fontSize: 12, color: T.text.dim, marginTop: 4, fontWeight: 500 }}>
                             {totalCreditLimit === 0 ? (
                                 "No credit limits set"
                             ) : (
@@ -78,15 +84,15 @@ export default function CreditUtilizationWidget() {
                             )}
                         </p>
                     </div>
-                    <div style={{ position: "relative", width: 48, height: 48 }}>
-                        <svg height="48" width="48">
+                    <div style={{ position: "relative", width: 44, height: 44, marginLeft: 16 }}>
+                        <svg height="44" width="44">
                             <circle
                                 stroke={T.border.default}
                                 fill="transparent"
                                 strokeWidth={stroke}
                                 r={normalizedRadius}
-                                cx={24}
-                                cy={24}
+                                cx={22}
+                                cy={22}
                             />
                             <circle
                                 stroke={utilColor}
@@ -96,9 +102,9 @@ export default function CreditUtilizationWidget() {
                                 style={{ strokeDashoffset, transition: "stroke-dashoffset 0.5s ease-in-out" }}
                                 strokeLinecap="round"
                                 r={normalizedRadius}
-                                cx={24}
-                                cy={24}
-                                transform="rotate(-90 24 24)"
+                                cx={22}
+                                cy={22}
+                                transform="rotate(-90 22 22)"
                             />
                         </svg>
                         <div
@@ -111,7 +117,7 @@ export default function CreditUtilizationWidget() {
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                fontSize: 12,
+                                fontSize: 11,
                                 fontWeight: 800,
                                 color: T.text.primary,
                             }}
@@ -121,26 +127,26 @@ export default function CreditUtilizationWidget() {
                     </div>
                 </div>
                 {totalCreditLimit > 0 && (
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, paddingTop: 16, borderTop: `1px solid ${T.border.subtle}` }}>
                         <div>
-                            <p style={{ fontSize: 11, color: T.text.dim, fontWeight: 600, textTransform: "uppercase" }}>
+                            <p style={{ fontSize: 10, color: T.text.dim, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                                 Total Balances
                             </p>
-                            <Mono size={15} weight={800} color={T.text.primary}>
+                            <Mono size={15} weight={800} color={T.text.primary} style={{ marginTop: 4 }}>
                                 {totalCreditBalance > 0 ? fmt(totalCreditBalance) : "$0"}
                             </Mono>
                         </div>
                         <div style={{ textAlign: "right" }}>
-                            <p style={{ fontSize: 11, color: T.text.dim, fontWeight: 600, textTransform: "uppercase" }}>
+                            <p style={{ fontSize: 10, color: T.text.dim, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                                 Total Credit
                             </p>
-                            <Mono size={15} weight={800} color={T.text.primary}>
+                            <Mono size={15} weight={800} color={T.text.primary} style={{ marginTop: 4 }}>
                                 {fmt(totalCreditLimit)}
                             </Mono>
                         </div>
                     </div>
                 )}
             </div>
-        </Card>
+        </div>
     );
 }

@@ -121,14 +121,14 @@ const TrendSparkline = ({ history }) => {
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
         <defs>
           <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={trendColor} stopOpacity="0.25" />
+            <stop offset="0%" stopColor={trendColor} stopOpacity="0.15" />
             <stop offset="100%" stopColor={trendColor} stopOpacity="0" />
           </linearGradient>
         </defs>
         <path d={`${d} L${pts[pts.length - 1].x},${H} L${pts[0].x},${H} Z`} fill="url(#sparkGrad)" />
-        <path d={d} fill="none" stroke={trendColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={d} fill="none" stroke={trendColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         {pts.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={i === pts.length - 1 ? 3.5 : 2} fill={i === pts.length - 1 ? trendColor : `${trendColor}60`} />
+          <circle key={i} cx={p.x} cy={p.y} r={i === pts.length - 1 ? 3.5 : 0} fill={trendColor} />
         ))}
       </svg>
     </Card>
@@ -223,82 +223,64 @@ export default memo(function AuditTab({ proEnabled = false, toast }) {
               </span>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              {/* Score ring */}
-              {score != null && (() => {
-                const circumference = 2 * Math.PI * 18;
-                const offset = circumference - (circumference * score) / 100;
-                return (
-                  <div style={{ position: "relative", flexShrink: 0 }}>
-                    <svg viewBox="0 0 44 44" width={52} height={52}>
-                      <circle cx="22" cy="22" r="18" fill="none" stroke={`${T.border.default}`} strokeWidth="3" />
-                      <circle
-                        cx="22" cy="22" r="18" fill="none" stroke={cHex} strokeWidth="3"
-                        strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={offset}
-                        transform="rotate(-90 22 22)"
-                        style={{ transition: "stroke-dashoffset 0.8s ease" }}
-                      />
-                    </svg>
-                    <div style={{
-                      position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 14, fontWeight: 900, color: cHex, fontFamily: T.font.mono,
-                    }}>
-                      {score}
-                    </div>
-                  </div>
-                );
-              })()}
+             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+               {/* Score + Grade inline pill */}
+               <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                 {score != null && (
+                   <div style={{
+                     display: "flex", alignItems: "center", gap: 5,
+                     padding: "4px 10px", borderRadius: 99,
+                     background: `${cHex}12`, border: `1px solid ${cHex}30`,
+                   }}>
+                     <div style={{ width: 6, height: 6, borderRadius: "50%", background: cHex }} />
+                     <span style={{ fontSize: 13, fontWeight: 800, color: cHex, fontFamily: T.font.mono }}>
+                       {grade} · {score}
+                     </span>
+                   </div>
+                 )}
+               </div>
 
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                  {grade && (
-                    <span style={{
-                      fontSize: 13, fontWeight: 900, color: cHex,
-                      background: `${cHex}15`, border: `1px solid ${cHex}30`,
-                      padding: "2px 10px", borderRadius: 99, fontFamily: T.font.mono,
-                    }}>
-                      {grade}
-                    </span>
-                  )}
-                  <span style={{
-                    fontSize: 10, fontWeight: 700, color: cHex,
-                    background: `${cHex}10`, border: `1px solid ${cHex}25`,
-                    padding: "2px 8px", borderRadius: 99, fontFamily: T.font.mono,
-                    letterSpacing: "0.04em",
-                  }}>
-                    {statusColor}
-                  </span>
-                  <span style={{ fontSize: 10, color: T.text.dim }}>
-                    {fmtDate(current?.date)}
-                  </span>
-                </div>
+               <div style={{ flex: 1, minWidth: 0 }}>
+                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                   <span style={{
+                     fontSize: 10, fontWeight: 700, color: cHex,
+                     background: `${cHex}10`, border: `1px solid ${cHex}25`,
+                     padding: "2px 8px", borderRadius: 99, fontFamily: T.font.mono,
+                     letterSpacing: "0.04em",
+                   }}>
+                     {statusColor}
+                   </span>
+                   <span style={{ fontSize: 10, color: T.text.dim }}>
+                     {fmtDate(current?.date)}
+                   </span>
+                 </div>
 
-                {p?.netWorth != null && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                    <Mono size={14} weight={700} color={T.accent.primary}>{fmt(p.netWorth)}</Mono>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em" }}>NET WORTH</span>
-                  </div>
-                )}
+                 {p?.netWorth != null && (
+                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                     <Mono size={14} weight={700} color={T.text.primary}>{fmt(p.netWorth)}</Mono>
+                     <span style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em" }}>NET WORTH</span>
+                   </div>
+                 )}
 
-                {movesTotal > 0 && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-                    <div style={{ flex: 1, height: 3, background: T.bg.elevated, borderRadius: 99, overflow: "hidden" }}>
-                      <div style={{
-                        width: `${(movesDone / movesTotal) * 100}%`,
-                        height: "100%",
-                        background: `linear-gradient(90deg, ${T.accent.primary}, ${T.accent.emerald})`,
-                        borderRadius: 99,
-                        transition: "width 0.4s ease",
-                      }} />
-                    </div>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, fontFamily: T.font.mono, whiteSpace: "nowrap" }}>
-                      {movesDone}/{movesTotal} moves
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </Card>
+                 {movesTotal > 0 && (
+                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                     <div style={{ flex: 1, height: 3, background: T.bg.elevated, borderRadius: 99, overflow: "hidden" }}>
+                       <div style={{
+                         width: `${(movesDone / movesTotal) * 100}%`,
+                         height: "100%",
+                         background: cHex,
+                         borderRadius: 99,
+                         transition: "width 0.4s ease",
+                       }} />
+                     </div>
+                     <span style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, fontFamily: T.font.mono, whiteSpace: "nowrap" }}>
+                       {movesDone}/{movesTotal} moves
+                     </span>
+                   </div>
+                 )}
+               </div>
+             </div>
+           </Card>
         ) : (
           /* Empty state when no audits */
           <Card style={{ padding: "32px 20px", textAlign: "center" }}>
@@ -533,53 +515,51 @@ export default memo(function AuditTab({ proEnabled = false, toast }) {
             </div>
           )}
 
-          {/* Audit list */}
           {filteredAudits.length === 0 && audits.length > 0 ? (
             <EmptyState icon={Filter} title={`No ${statusFilter} Audits`} message="Try a different filter or run a new audit." />
           ) : audits.length === 0 ? null : (
-            (() => {
-              let lastMonth = null;
-              return filteredAudits.map((a, i) => {
-                const monthKey = getMonthKey(a.date || a.ts);
-                const showMonthHeader = monthKey !== lastMonth;
-                lastMonth = monthKey;
-                const isConfirming = confirmDelete === i;
-                const rawStatus = a.parsed?.status || "UNKNOWN";
-                let sColor = "UNKNOWN";
-                let sText = rawStatus;
-                const m = rawStatus.match(/^(GREEN|YELLOW|RED)[\s:;-]*(.*)$/i);
-                if (m) { sColor = m[1].toUpperCase(); sText = m[2] ? m[2].trim() : ""; }
-                else if (rawStatus.toUpperCase().includes("GREEN")) { sColor = "GREEN"; sText = rawStatus.replace(/GREEN/i, "").trim(); }
-                else if (rawStatus.toUpperCase().includes("YELLOW")) { sColor = "YELLOW"; sText = rawStatus.replace(/YELLOW/i, "").trim(); }
-                else if (rawStatus.toUpperCase().includes("RED")) { sColor = "RED"; sText = rawStatus.replace(/RED/i, "").trim(); }
-                if (sText.startsWith(":") || sText.startsWith("-")) sText = sText.slice(1).trim();
-                const cardHex = colorFor(sColor);
+            <Card style={{ padding: 0, overflow: "hidden" }}>
+              {(() => {
+                let lastMonth = null;
+                return filteredAudits.map((a, i) => {
+                  const monthKey = getMonthKey(a.date || a.ts);
+                  const showMonthHeader = monthKey !== lastMonth;
+                  lastMonth = monthKey;
+                  const isConfirming = confirmDelete === i;
+                  const rawStatus = a.parsed?.status || "UNKNOWN";
+                  let sColor = "UNKNOWN";
+                  let sText = rawStatus;
+                  const m = rawStatus.match(/^(GREEN|YELLOW|RED)[\s:;-]*(.*)$/i);
+                  if (m) { sColor = m[1].toUpperCase(); sText = m[2] ? m[2].trim() : ""; }
+                  else if (rawStatus.toUpperCase().includes("GREEN")) { sColor = "GREEN"; sText = rawStatus.replace(/GREEN/i, "").trim(); }
+                  else if (rawStatus.toUpperCase().includes("YELLOW")) { sColor = "YELLOW"; sText = rawStatus.replace(/YELLOW/i, "").trim(); }
+                  else if (rawStatus.toUpperCase().includes("RED")) { sColor = "RED"; sText = rawStatus.replace(/RED/i, "").trim(); }
+                  if (sText.startsWith(":") || sText.startsWith("-")) sText = sText.slice(1).trim();
+                  const cardHex = colorFor(sColor);
 
-                return (
-                  <div key={a.ts || i}>
-                    {showMonthHeader && (
-                      <div style={{ padding: "6px 0 8px", marginBottom: 4, marginTop: i > 0 ? 10 : 0, display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontSize: 11, fontWeight: 800, color: T.text.secondary, fontFamily: T.font.mono, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                          {monthKey}
-                        </span>
-                        <div style={{ flex: 1, height: 1, background: T.border.subtle }} />
-                      </div>
-                    )}
-                    <Card
-                      animate
-                      delay={Math.min(i * 40, 400)}
-                      onClick={selMode ? () => toggle(i) : isConfirming ? undefined : () => onViewResult(a)}
-                      style={{
-                        padding: "14px",
-                        position: "relative",
-                        overflow: "hidden",
-                        ...(sel.has(i) ? { borderColor: `${T.accent.primary}35`, background: `${T.accent.primary}08` } : {}),
-                        ...(isConfirming ? { borderColor: `${T.status.red}30`, background: `${T.status.red}06` } : {}),
-                      }}
-                    >
-                      {/* Left color strip */}
-                      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: cardHex, opacity: 0.8 }} />
-                      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 60, background: `linear-gradient(90deg, ${cardHex}15, transparent)`, pointerEvents: "none" }} />
+                  return (
+                    <div key={a.ts || i}>
+                      {showMonthHeader && (
+                        <div style={{ padding: "10px 16px", background: T.bg.surface, borderBottom: `1px solid ${T.border.subtle}`, borderTop: i > 0 ? `1px solid ${T.border.subtle}` : "none", display: "flex", alignItems: "center" }}>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: T.text.secondary, fontFamily: T.font.mono, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                            {monthKey}
+                          </span>
+                        </div>
+                      )}
+                      <div
+                        onClick={selMode ? () => toggle(i) : isConfirming ? undefined : () => onViewResult(a)}
+                        className="hover-card-row"
+                        style={{
+                          padding: "16px 20px",
+                          position: "relative",
+                          cursor: "pointer",
+                          background: T.bg.card,
+                          borderBottom: i === filteredAudits.length - 1 ? "none" : `1px solid ${T.border.subtle}`,
+                          transition: "background 0.2s ease",
+                          ...(sel.has(i) ? { background: `${T.accent.primary}08` } : {}),
+                          ...(isConfirming ? { background: `${T.status.red}06` } : {}),
+                        }}
+                      >
 
                       {isConfirming ? (
                         <div>
@@ -593,145 +573,102 @@ export default memo(function AuditTab({ proEnabled = false, toast }) {
                           </div>
                         </div>
                       ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                          {/* Top row */}
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                              {selMode && (
-                                <div style={{
-                                  width: 18, height: 18, borderRadius: 5, flexShrink: 0,
-                                  border: `2px solid ${sel.has(i) ? "transparent" : T.text.dim}`,
-                                  background: sel.has(i) ? T.accent.primary : "transparent",
-                                  display: "flex", alignItems: "center", justifyContent: "center",
-                                }}>
-                                  {sel.has(i) && <CheckCircle size={11} color={T.bg.base} strokeWidth={3} />}
-                                </div>
-                              )}
-                              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                  <span style={{ fontSize: 15, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
-                                    {fmtDate(a.date)}
-                                  </span>
-                                  <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono }}>
-                                    {relativeTime(a.date || a.ts)}
-                                  </span>
-                                  {a.isTest && <Badge variant="amber" style={{ padding: "2px 6px" }}>TEST</Badge>}
-                                </div>
-                                {a.parsed?.netWorth != null && (
-                                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 1 }}>
-                                    <Mono size={13} weight={700} color={T.accent.primary}>{fmt(a.parsed.netWorth)}</Mono>
-                                    <span style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em" }}>NET WORTH</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                          {/* Left Value / Score Pill */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4, width: 44, flexShrink: 0 }}>
+                            {a.parsed?.healthScore?.score != null ? (() => {
+                                const s = a.parsed.healthScore.score;
+                                const sc = s >= 80 ? T.status.green : s >= 60 ? T.status.amber : T.status.red;
+                                return (
+                                  <div style={{
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    height: 24, borderRadius: 12, background: `${sc}15`, border: `1px solid ${sc}40`,
+                                    color: sc, fontSize: 11, fontWeight: 800, fontFamily: T.font.mono
+                                  }}>
+                                    {s}
                                   </div>
-                                )}
+                                )
+                            })() : (
+                              <div style={{
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                height: 24, borderRadius: 12, background: `${cardHex}15`, border: `1px solid ${cardHex}40`,
+                                color: cardHex, fontSize: 10, fontWeight: 800, fontFamily: T.font.mono
+                              }}>
+                                {sColor.slice(0, 3)}
                               </div>
+                            )}
+                          </div>
+
+                          {/* Center Content */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 2 }}>
+                               <span style={{ fontSize: 15, fontWeight: 600, color: T.text.primary, letterSpacing: "-0.01em" }}>
+                                  {fmtDate(a.date)}
+                               </span>
+                               {a.isTest && <Badge variant="amber" style={{ padding: "1px 4px", fontSize: 8 }}>TEST</Badge>}
+                               {selMode && (
+                                  <div style={{
+                                    width: 14, height: 14, borderRadius: 4, flexShrink: 0, marginLeft: 'auto',
+                                    border: `1px solid ${sel.has(i) ? "transparent" : T.text.dim}`,
+                                    background: sel.has(i) ? T.accent.primary : "transparent",
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                  }}>
+                                    {sel.has(i) && <CheckCircle size={10} color={T.bg.base} strokeWidth={3} />}
+                                  </div>
+                               )}
                             </div>
-                            <div style={{ display: "flex", gap: 5, position: "relative", zIndex: 2 }}>
+
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 11, color: T.text.secondary }}>
+                              {a.parsed?.netWorth != null && (
+                                <span style={{ fontWeight: 500, color: T.text.primary }}>NW: <span style={{ fontFamily: T.font.mono, fontWeight: 600 }}>{fmt(a.parsed.netWorth)}</span></span>
+                              )}
+                              {a.form?.checking != null && (
+                                <span>Chk: <span style={{ fontFamily: T.font.mono }}>{fmt(parseFloat(a.form.checking) || 0)}</span></span>
+                              )}
+                              {a.form?.debts?.length > 0 && (
+                                <span style={{ color: T.status.red }}>Debt: <span style={{ fontFamily: T.font.mono }}>{fmt(a.form.debts.reduce((s, d) => s + (parseFloat(d.balance) || 0), 0))}</span></span>
+                              )}
+                            </div>
+
+                            {/* Status subtitle stripped down */}
+                            {sText && (
+                              <div style={{
+                                fontSize: 11, color: T.text.dim, lineHeight: 1.4, marginTop: 4,
+                                overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box",
+                                WebkitLineClamp: 1, WebkitBoxOrient: "vertical"
+                              }}>
+                                {sText}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Right actions (if any) */}
+                           <div style={{ display: "flex", gap: 8, alignItems: "center", opacity: 0.4 }}>
                               {!selMode && (
                                 <button
                                   onClick={e => { e.stopPropagation(); exportAudit(a); }}
-                                  style={{
-                                    width: 30, height: 30, borderRadius: T.radius.md,
-                                    border: `1px solid ${T.border.subtle}`, background: T.bg.elevated,
-                                    color: T.text.secondary, cursor: "pointer", display: "flex",
-                                    alignItems: "center", justifyContent: "center",
-                                  }}
+                                  style={{ background: "none", border: "none", color: T.text.dim, cursor: "pointer", padding: 4 }}
                                 >
-                                  <Download size={13} strokeWidth={2.5} />
+                                  <Download size={14} />
                                 </button>
                               )}
                               {!selMode && (
                                 <button
                                   onClick={e => { e.stopPropagation(); setConfirmDelete(i); haptic.warning(); }}
-                                  style={{
-                                    width: 30, height: 30, borderRadius: T.radius.md,
-                                    border: `1px solid ${T.status.red}20`, background: T.status.redDim,
-                                    color: T.status.red, cursor: "pointer", display: "flex",
-                                    alignItems: "center", justifyContent: "center",
-                                  }}
+                                  style={{ background: "none", border: "none", color: T.status.red, cursor: "pointer", padding: 4 }}
                                 >
-                                  <Trash2 size={13} strokeWidth={2.5} />
+                                  <Trash2 size={14} />
                                 </button>
                               )}
-                            </div>
-                          </div>
-
-                          {/* Health Score + Model Badge */}
-                          {(a.parsed?.healthScore?.score != null || a.model) && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                              {a.parsed?.healthScore?.score != null && (() => {
-                                const s = a.parsed.healthScore.score;
-                                const g = getGradeLetter(s);
-                                const sc = s >= 80 ? T.status.green : s >= 60 ? T.status.amber : T.status.red;
-                                const circ = 2 * Math.PI * 11;
-                                const off = circ - (circ * s) / 100;
-                                return (
-                                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                    <svg viewBox="0 0 28 28" width={22} height={22} style={{ flexShrink: 0 }}>
-                                      <circle cx="14" cy="14" r="11" fill="none" stroke={T.border.default} strokeWidth="2.5" />
-                                      <circle cx="14" cy="14" r="11" fill="none" stroke={sc} strokeWidth="2.5"
-                                        strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={off}
-                                        transform="rotate(-90 14 14)" style={{ transition: "stroke-dashoffset 0.8s ease" }} />
-                                    </svg>
-                                    <span style={{
-                                      fontSize: 10, fontWeight: 800, color: sc,
-                                      background: `${sc}15`, border: `1px solid ${sc}30`,
-                                      padding: "2px 8px", borderRadius: 99, fontFamily: T.font.mono, letterSpacing: "0.04em",
-                                    }}>
-                                      {s} · {g}
-                                    </span>
-                                  </div>
-                                );
-                              })()}
-                              {a.model && (
-                                <span style={{
-                                  fontSize: 9, fontWeight: 700, color: T.text.dim,
-                                  background: `${T.text.dim}12`, border: `1px solid ${T.text.dim}20`,
-                                  padding: "2px 7px", borderRadius: 99, fontFamily: T.font.mono,
-                                  letterSpacing: "0.03em", textTransform: "uppercase",
-                                }}>
-                                  {a.model}
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Key Metrics */}
-                          {a.form && (
-                            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                              {a.form.checking != null && (
-                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                  <span style={{ fontSize: 9, fontWeight: 700, color: T.text.secondary, letterSpacing: "0.08em", textTransform: "uppercase" }}>CHK</span>
-                                  <Mono size={11} weight={600} color={T.text.secondary}>{fmt(parseFloat(a.form.checking) || 0)}</Mono>
-                                </div>
-                              )}
-                              {a.form.debts?.length > 0 && (
-                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                  <span style={{ fontSize: 9, fontWeight: 700, color: T.text.secondary, letterSpacing: "0.08em", textTransform: "uppercase" }}>DEBT</span>
-                                  <Mono size={11} weight={600} color={T.status.red}>
-                                    {fmt(a.form.debts.reduce((s, d) => s + (parseFloat(d.balance) || 0), 0))}
-                                  </Mono>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Status text */}
-                          {sText && (
-                            <div style={{
-                              fontSize: 11, color: T.text.secondary, lineHeight: 1.5,
-                              overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box",
-                              WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
-                            }}>
-                              {sText}
-                            </div>
-                          )}
+                           </div>
                         </div>
                       )}
-                    </Card>
-                  </div>
-                );
-              });
-            })()
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </Card>
           )}
         </div>
 

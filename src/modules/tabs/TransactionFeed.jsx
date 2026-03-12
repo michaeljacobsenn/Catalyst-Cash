@@ -151,7 +151,7 @@ function buildCSV(transactions) {
 // ═══════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
-export default function TransactionFeed({ onClose, proEnabled = false }) {
+export default function TransactionFeed({ onClose, proEnabled = false, onConnectPlaid }) {
   const { cards } = useContext(PortfolioContext);
   const { financialConfig } = useSettings();
   
@@ -577,6 +577,9 @@ export default function TransactionFeed({ onClose, proEnabled = false }) {
 
         <span
           style={{
+            position: "absolute",
+            left: "50%",
+            transform: "translateX(-50%)",
             fontSize: 13,
             fontWeight: 700,
             color: T.text.secondary,
@@ -1131,7 +1134,13 @@ export default function TransactionFeed({ onClose, proEnabled = false }) {
               }
               action={
                 <button
-                  onClick={onClose}
+                  onClick={async () => {
+                    haptic.light();
+                    if (onConnectPlaid) {
+                      await onConnectPlaid();
+                      handleRefresh();
+                    }
+                  }}
                   className="hover-lift btn-secondary"
                   style={{
                     padding: "12px 28px",
@@ -1140,7 +1149,7 @@ export default function TransactionFeed({ onClose, proEnabled = false }) {
                     fontWeight: 800,
                   }}
                 >
-                  Go to Settings
+                  Connect with Plaid
                 </button>
               }
             />

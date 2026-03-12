@@ -22,7 +22,7 @@ async function getPlugin() {
   securePluginPromise = Promise.race([
     import("capacitor-secure-storage-plugin")
       .then(mod => mod.SecureStoragePlugin || mod.default?.SecureStoragePlugin || mod.default || null)
-      .catch(() => null),
+      .catch((e) => null),
     new Promise(resolve => setTimeout(() => resolve(null), 3000)), // 3s timeout — never hang
   ]).then(plugin => {
     // Security warning: if on native but plugin unavailable, data falls back to Preferences.

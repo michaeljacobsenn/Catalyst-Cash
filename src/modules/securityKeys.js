@@ -11,6 +11,12 @@ const EXACT_SECURITY_KEYS = new Set([
   "cc-audit-state",
   "plaid-connections", // Handled via sanitizePlaidForBackup() — never raw-exported
   "plaid-transactions", // Financial PII (merchant names, amounts) — re-fetch from Plaid
+  "market-data-cache", // Transient cache
+  "market-data-ts",    // Transient cache
+  "ota_rotating_categories", // Transient cache
+  "last-backup-ts",    // Transient cache
+  "household-id",      // Sync credentials
+  "household-passcode",// Sync credentials
 ]);
 
 const SAFE_IMPORT_KEY_RE = /^[a-z0-9-]+$/;

@@ -185,4 +185,18 @@ describe("getChatSystemPrompt — expanded coverage", () => {
     expect(prompt).toContain("Social Security Timing");
     expect(prompt).toContain("Required Minimum Distributions");
   });
+
+  it("includes PROACTIVE DIRECTIVE and IDLE CASH INTOLERANCE across all models", () => {
+    const geminiPrompt = getChatSystemPrompt(null, chatConfig, [], [], [], null, "", null, null, "gemini", "");
+    const openaiPrompt = getChatSystemPrompt(null, chatConfig, [], [], [], null, "", null, null, "openai", "");
+    const claudePrompt = getChatSystemPrompt(null, chatConfig, [], [], [], null, "", null, null, "claude", "");
+
+    const directives = ["PROACTIVE DIRECTIVE", "IDLE CASH INTOLERANCE"];
+
+    directives.forEach(directive => {
+      expect(geminiPrompt).toContain(directive);
+      expect(openaiPrompt).toContain(directive);
+      expect(claudePrompt).toContain(directive);
+    });
+  });
 });

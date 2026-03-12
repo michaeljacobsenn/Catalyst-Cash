@@ -200,6 +200,17 @@ function renderInline(text) {
   });
 }
 
+// ── Strip internal <thought_process> blocks from AI output ──
+function stripThoughtProcess(text) {
+  if (!text) return text;
+  // Remove complete <thought_process>...</thought_process> blocks (including multiline)
+  let cleaned = text.replace(/<thought_process>[\s\S]*?<\/thought_process>/gi, "");
+  // If an opening tag exists but is not yet closed (still streaming), hide everything from it onward
+  const openIdx = cleaned.search(/<thought_process>/i);
+  if (openIdx !== -1) cleaned = cleaned.slice(0, openIdx);
+  return cleaned.trimStart();
+}
+
 // ── Typing indicator (accessible) ──
 function TypingIndicator() {
   return (
@@ -536,16 +547,16 @@ export default memo(function AIChatTab({ proEnabled = false, initialPrompt = nul
         for await (const chunk of stream) {
           if (abort.signal.aborted) break;
           accumulated += chunk;
-          assistantMsg.content = accumulated;
+          assistantMsg.content = stripThoughtProcess(accumulated);
           assistantMsg.ts = Date.now();
           setMessages([...newMsgs, { ...assistantMsg }]);
         }
 
         // Finalize
         if (accumulated.trim()) {
-          // Extract REMEMBER tags before persisting/displaying
+          // Extract REMEMBER tags and strip thought_process blocks before persisting/displaying
           const { cleanText, newFacts } = extractMemoryTags(accumulated);
-          const displayText = cleanText || accumulated;
+          const displayText = stripThoughtProcess(cleanText || accumulated);
           const finalMsgs = [...newMsgs, { ...assistantMsg, content: displayText }];
           setMessages(finalMsgs);
           persistMessages(finalMsgs);
@@ -972,8 +983,9 @@ RULES: Be punchy, confident, and ruthlessly practical. Give EXACT words to say, 
                 >
                   <div
                     style={{
-                      maxWidth: isUser ? "82%" : "95%", // Allow assistant to take more width so markdown tables fit better
-                      padding: isUser ? "12px 18px" : "12px 14px", // Tighter padding for markdown 
+                      maxWidth: isUser ? "80%" : "88%", // More balanced constraints for both sides
+                      minWidth: isUser ? "unset" : "60%", // Ensure AI messages don't get too squished
+                      padding: isUser ? "12px 18px" : "14px 18px", // Tighter padding for markdown 
                       borderRadius: borderRadius,
                       background: isUser ? T.accent.gradient : T.bg.elevated,
                       border: isUser ? "none" : `1px solid ${T.border.subtle}`,

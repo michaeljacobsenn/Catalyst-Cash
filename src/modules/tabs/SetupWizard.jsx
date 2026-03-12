@@ -292,15 +292,18 @@ export default function SetupWizard() {
       setActiveCurrencyCode(merged.currencyCode || "USD");
 
       // Force context flush
-      if (bankAccounts.length > 0) setContextBankAccounts(bankAccounts);
-      if (cards.length > 0) setContextCards(cards);
-      if (renewals.length > 0) setContextRenewals(renewals);
-
-      await Promise.all([
-        db.set("bank-accounts", bankAccounts),
-        db.set("card-portfolio", cards),
-        db.set("renewals", renewals),
-      ]);
+      if (bankAccounts.length > 0) {
+        setContextBankAccounts(bankAccounts);
+        await db.set("bank-accounts", bankAccounts);
+      }
+      if (cards.length > 0) {
+        setContextCards(cards);
+        await db.set("card-portfolio", cards);
+      }
+      if (renewals.length > 0) {
+        setContextRenewals(renewals);
+        await db.set("renewals", renewals);
+      }
 
       // AI provider + model
       await db.set("ai-provider", ai.aiProvider);
