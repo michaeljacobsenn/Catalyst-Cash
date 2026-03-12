@@ -1661,14 +1661,7 @@ function CatalystCash() {
             {t === "audit" && (
               <ErrorBoundary name="Audit">
                 <Suspense fallback={<TabFallback />}>
-                  <AuditTab
-                    proEnabled={proEnabled}
-                    onRunAudit={() => navTo("input")}
-                    onViewResult={() => navTo("results")}
-                    onUpgrade={() => setShowPaywall(true)}
-                    history={history}
-                    current={current}
-                  />
+                  <AuditTab proEnabled={proEnabled} toast={toast} />
                 </Suspense>
               </ErrorBoundary>
             )}
