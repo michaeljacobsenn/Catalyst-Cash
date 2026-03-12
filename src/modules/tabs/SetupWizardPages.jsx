@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 // xlsx is loaded dynamically to reduce initial bundle size
 import { T } from "../constants.js";
 import { AI_PROVIDERS } from "../providers.js";
@@ -1581,11 +1581,11 @@ export function PagePass3({
   const isNative = Capacitor.getPlatform() !== "web";
 
   // Check existing Plaid connections on mount
-  useState(() => {
+  useEffect(() => {
     getConnections()
       .then(c => setPlaidCount(c?.length || 0))
       .catch(() => { });
-  });
+  }, []);
 
   const handlePlaidConnect = async () => {
     setPlaidConnecting(true);
@@ -2109,7 +2109,7 @@ export function PageDone({ onFinish }) {
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 28, textAlign: "left" }}>
         {[
-          ["⚡", "Run Your First Audit", "Tap the center button to get personalized AI guidance"],
+          ["⚡", "Run Your First Audit", "Tap the ⚡ Audit tab for personalized AI guidance"],
           ["🤖", "Ask AI Anything", "Open the chat tab for contextual financial conversation"],
           ["🏦", "Bank Connections", "Auto-sync balances via Plaid in Settings"],
           ["💳", "Card Portfolio", "Add your credit cards with limits and APRs"],
