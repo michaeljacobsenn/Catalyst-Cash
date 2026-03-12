@@ -3,7 +3,7 @@ import { fmt, extractDashboardMetrics } from "../utils.js";
 import { T } from "../constants.js";
 import { computeFireProjection } from "../fire.js";
 import { useAudit } from "../contexts/AuditContext.jsx";
-import { useSettings } from "../contexts/SettingsContext.jsx";
+import { useSettings } from "../contexts/SettingsContext";
 import { usePortfolio } from "../contexts/PortfolioContext.jsx";
 
 function summarizeTrend(data, key, formatter) {

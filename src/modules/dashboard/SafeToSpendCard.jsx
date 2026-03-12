@@ -3,7 +3,7 @@ import { T } from "../constants.js";
 import { Card } from "../ui.jsx";
 import { ShieldCheck, AlertTriangle } from "lucide-react";
 import { usePortfolio } from "../contexts/PortfolioContext.jsx";
-import { useSettings } from "../contexts/SettingsContext.jsx";
+import { useSettings } from "../contexts/SettingsContext";
 
 function getDaysUntil(nextDueStr) {
   if (!nextDueStr || nextDueStr.length !== 5) return 999;

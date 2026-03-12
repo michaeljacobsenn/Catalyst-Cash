@@ -66,7 +66,7 @@ const loadCloudSync = () => import("../cloudSync.js");
 const loadRevenueCat = () => import("../revenuecat.js");
 
 import { useAudit } from "../contexts/AuditContext.jsx";
-import { useSettings } from "../contexts/SettingsContext.jsx";
+import { useSettings } from "../contexts/SettingsContext";
 import { useSecurity } from "../contexts/SecurityContext.jsx";
 import { usePortfolio } from "../contexts/PortfolioContext.jsx";
 import { useNavigation } from "../contexts/NavigationContext.jsx";

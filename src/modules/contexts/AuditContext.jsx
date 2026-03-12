@@ -12,7 +12,7 @@ import { getSystemPrompt } from "../prompts.js";
 import { log } from "../logger.js";
 import { getHistoryLimit, getOrCreateDeviceId, recordAuditUsage } from "../subscription.js";
 import { loadMemory, extractAuditMilestones, addMilestones, getMemoryBlock } from "../memory.js";
-import { useSettings } from "./SettingsContext.jsx";
+import { useSettings } from "./SettingsContext";
 import { usePortfolio } from "./PortfolioContext.jsx";
 import { useNavigation } from "./NavigationContext.jsx";
 

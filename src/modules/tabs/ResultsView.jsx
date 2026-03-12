@@ -19,7 +19,7 @@ import { Card, Badge, InlineTooltip } from "../ui.jsx";
 import { Mono, Section, MoveRow, Md } from "../components.jsx";
 import { haptic } from "../haptics.js";
 
-import { useSettings } from "../contexts/SettingsContext.jsx";
+import { useSettings } from "../contexts/SettingsContext";
 import { useAudit } from "../contexts/AuditContext.jsx";
 import { useNavigation } from "../contexts/NavigationContext.jsx";
 

@@ -236,17 +236,22 @@ export interface IncomeSource {
 }
 
 export interface BudgetCategory {
-  id: string;
+  id?: string;
   name: string;
-  allocated: number;
-  group: string;
+  allocated?: number;
+  group?: string;
+  monthlyTarget?: number;
+  icon?: string;
 }
 
 export interface SavingsGoal {
-  id: string;
+  id?: string;
   name: string;
-  target: number;
-  saved: number;
+  target?: number;
+  saved?: number;
+  targetAmount?: number;
+  currentAmount?: number;
+  targetDate?: string;
 }
 
 export interface NonCardDebt {
@@ -258,30 +263,161 @@ export interface NonCardDebt {
 }
 
 export interface OtherAsset {
-  id: string;
+  id?: string;
   name: string;
   value: number;
 }
 
-export type FinancialConfigScalar = string | number | boolean | null;
+export type PayFrequency = "weekly" | "bi-weekly" | "semi-monthly" | "monthly";
+export type Payday =
+  | "Sunday"
+  | "Monday"
+  | "Tuesday"
+  | "Wednesday"
+  | "Thursday"
+  | "Friday"
+  | "Saturday";
+export type IncomeType = "salary" | "hourly" | "variable";
+export type HousingType = "" | "rent" | "own";
+export type PaycheckDepositAccount = "checking" | "savings";
+export type InvestmentBucket = "roth" | "k401" | "brokerage" | "crypto" | "hsa";
 
-export type FinancialConfigValue =
-  | FinancialConfigScalar
-  | IncomeSource[]
-  | BudgetCategory[]
-  | SavingsGoal[]
-  | NonCardDebt[]
-  | OtherAsset[];
-
-export interface FinancialConfig {
-  incomeSources?: IncomeSource[];
-  budgetCategories?: BudgetCategory[];
-  savingsGoals?: SavingsGoal[];
-  nonCardDebts?: NonCardDebt[];
-  otherAssets?: OtherAsset[];
-  _fromSetupWizard?: boolean;
-  [key: string]: FinancialConfigValue | undefined;
+export interface InvestmentHolding {
+  symbol: string;
+  shares: number | string;
+  lastKnownPrice?: number;
 }
+
+export interface InvestmentHoldings {
+  roth?: InvestmentHolding[];
+  k401?: InvestmentHolding[];
+  brokerage?: InvestmentHolding[];
+  crypto?: InvestmentHolding[];
+  hsa?: InvestmentHolding[];
+}
+
+export interface InsuranceDeductible {
+  name: string;
+  amount: number;
+}
+
+export interface BigTicketItem {
+  name: string;
+  cost: number;
+  targetDate?: string;
+}
+
+export interface PlaidInvestmentAccount {
+  id: string;
+  institution: string;
+  name: string;
+  bucket: InvestmentBucket;
+  _plaidBalance: number;
+  _plaidAccountId: string;
+  _plaidConnectionId: string;
+}
+
+export interface CustomValuations {
+  [rewardCurrency: string]: number | undefined;
+}
+
+export interface CatalystCashConfigCore {
+  payday: Payday;
+  paycheckTime: string;
+  paycheckStandard: number;
+  paycheckFirstOfMonth: number;
+  payFrequency: PayFrequency;
+  weeklySpendAllowance: number;
+  emergencyFloor: number;
+  checkingBuffer: number;
+  heavyHorizonStart: number;
+  heavyHorizonEnd: number;
+  heavyHorizonThreshold: number;
+  greenStatusTarget: number;
+  emergencyReserveTarget: number;
+  habitName: string;
+  habitRestockCost: number;
+  habitCheckThreshold: number;
+  habitCriticalThreshold: number;
+  trackHabits: boolean;
+  defaultAPR: number;
+  arbitrageTargetAPR: number;
+  fireExpectedReturnPct: number;
+  fireInflationPct: number;
+  fireSafeWithdrawalPct: number;
+  investmentBrokerage: number;
+  investmentRoth: number;
+  investmentsAsOfDate: string;
+  trackRothContributions: boolean;
+  rothContributedYTD: number;
+  rothAnnualLimit: number;
+  autoTrackRothYTD: boolean;
+  track401k: boolean;
+  k401Balance: number;
+  k401ContributedYTD: number;
+  k401AnnualLimit: number;
+  autoTrack401kYTD: boolean;
+  k401EmployerMatchPct: number;
+  k401EmployerMatchLimit: number;
+  k401VestingPct: number;
+  k401StockPct: number;
+  overrideBrokerageValue: boolean;
+  overrideRothValue: boolean;
+  override401kValue: boolean;
+  trackHSA: boolean;
+  hsaBalance: number;
+  hsaContributedYTD: number;
+  hsaAnnualLimit: number;
+  overrideHSAValue: boolean;
+  paydayReminderEnabled: boolean;
+  trackBrokerage: boolean;
+  trackRoth: boolean;
+  brokerageStockPct: number;
+  rothStockPct: number;
+  budgetCategories: BudgetCategory[];
+  savingsGoals: SavingsGoal[];
+  nonCardDebts: NonCardDebt[];
+  incomeSources: IncomeSource[];
+  creditScore: number | null;
+  creditScoreDate: string;
+  creditUtilization: number | null;
+  taxWithholdingRate: number;
+  quarterlyTaxEstimate: number;
+  isContractor: boolean;
+  homeEquity: number;
+  vehicleValue: number;
+  otherAssets: OtherAsset[];
+  otherAssetsLabel: string;
+  insuranceDeductibles: InsuranceDeductible[];
+  bigTicketItems: BigTicketItem[];
+  plaidInvestments: PlaidInvestmentAccount[];
+  customValuations: CustomValuations;
+  currencyCode: string;
+  stateCode: string;
+  birthYear: number | null;
+  housingType: HousingType;
+  monthlyRent: number;
+  mortgagePayment: number;
+}
+
+export interface CatalystCashConfig extends CatalystCashConfigCore {
+  incomeType?: IncomeType;
+  hourlyRateNet?: number;
+  typicalHours?: number;
+  averagePaycheck?: number;
+  paycheckDepositAccount?: PaycheckDepositAccount;
+  taxBracketPercent?: number;
+  trackCrypto?: boolean;
+  trackChecking?: boolean;
+  trackSavings?: boolean;
+  checkingBalance?: number;
+  vaultBalance?: number;
+  holdings?: InvestmentHoldings;
+  enableHoldings?: boolean;
+  _fromSetupWizard?: boolean;
+}
+
+export type FinancialConfig = CatalystCashConfig;
 
 export interface SanitizedPlaidAccount {
   plaidAccountId: string;

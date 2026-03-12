@@ -4,7 +4,7 @@ import {
   Fuel, Plane, Train, Package, Store, Pill, AlertCircle, Info, Settings2, ChevronDown, Check, X, RefreshCw, Tv, DollarSign, Smartphone, RotateCw, Clock, Lock, Zap
 } from "lucide-react";
 import { PortfolioContext } from "../contexts/PortfolioContext.jsx";
-import { useSettings } from "../contexts/SettingsContext.jsx";
+import { useSettings } from "../contexts/SettingsContext";
 import { getCardMultiplier, VALUATIONS } from "../rewardsCatalog.js";
 import { classifyMerchant } from "../api.js";
 import { db } from "../utils.js";
