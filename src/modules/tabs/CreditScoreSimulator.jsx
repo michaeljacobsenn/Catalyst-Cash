@@ -48,6 +48,9 @@ export default function CreditScoreSimulator({ cards = [], financialConfig = {} 
   const analysis = useMemo(() => {
     // Aggregate all revolving credit from card portfolio
     const activeCards = cards.filter(c => {
+      // Business cards do not report utilization to personal credit bureaus
+      if (c.type === "business") return false;
+
       const bal = parseFloat(c._plaidBalance ?? c.balance) || 0;
       const lim = parseFloat(c._plaidLimit ?? c.creditLimit ?? c.limit) || 0;
       return lim > 0 || bal > 0;

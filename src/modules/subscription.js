@@ -584,7 +584,7 @@ export async function isModelAvailable(modelId) {
  * When GATING_MODE is "off", always returns unlimited.
  */
 export async function checkAuditQuota() {
-  if (_effectiveGatingMode === "off") {
+  if (getGatingMode() === "off") {
     return { allowed: true, remaining: Infinity, limit: Infinity, used: 0, monthlyUsed: 0, monthlyCap: Infinity };
   }
 
@@ -610,7 +610,7 @@ export async function checkAuditQuota() {
   }
 
   // In "soft" mode, show limits but don't block
-  if (_effectiveGatingMode === "soft") {
+  if (getGatingMode() === "soft") {
     result.allowed = true;
     result.softBlocked = remaining <= 0 && limit !== Infinity;
   }
@@ -647,7 +647,7 @@ export async function recordAuditUsage() {
  * When GATING_MODE is "off", always returns unlimited.
  */
 export async function checkChatQuota() {
-  if (_effectiveGatingMode === "off") {
+  if (getGatingMode() === "off") {
     return { allowed: true, remaining: Infinity, limit: Infinity, used: 0 };
   }
 
@@ -671,7 +671,7 @@ export async function checkChatQuota() {
   }
 
   // In "soft" mode, show limits but don't block
-  if (_effectiveGatingMode === "soft") {
+  if (getGatingMode() === "soft") {
     result.allowed = true;
     result.softBlocked = remaining <= 0 && limit !== Infinity;
   }
@@ -763,7 +763,7 @@ export async function deactivatePro() {
  * In "live" mode, checks the actual RevenueCat subscription.
  */
 export async function isPro() {
-  if (!isGatingEnforced()) return true;
+  if (getGatingMode() === "off") return true;
   const state = await getSubscriptionState();
   return state.tier === "pro";
 }

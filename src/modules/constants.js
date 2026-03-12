@@ -19,10 +19,10 @@ const DARK_TOKENS = {
     navGlass: "rgba(5,8,15,0.88)",
   },
   border: {
-    subtle: "rgba(160,140,220,0.06)",
-    default: "rgba(160,140,220,0.09)",
-    focus: "rgba(110,75,180,0.60)",
-    glow: "rgba(110,75,180,0.16)",
+    subtle: "rgba(160,140,220,0.04)",
+    default: "rgba(160,140,220,0.07)",
+    focus: "rgba(110,75,180,0.40)",
+    glow: "rgba(110,75,180,0.08)",
   },
   text: {
     primary: "#E4E6F0",
@@ -33,7 +33,7 @@ const DARK_TOKENS = {
   accent: {
     primary: "#7B5EA7",
     primaryDim: "rgba(123,94,167,0.12)",
-    primaryGlow: "rgba(123,94,167,0.24)",
+    primaryGlow: "rgba(123,94,167,0.15)",
     primarySoft: "rgba(123,94,167,0.18)",
     emerald: "#2ECC71",
     emeraldDim: "rgba(46,204,113,0.10)",
@@ -57,10 +57,10 @@ const DARK_TOKENS = {
   },
   shadow: {
     sm: "0 1px 2px rgba(0,0,0,0.4)",
-    card: "0 2px 8px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3)",
-    elevated: "0 8px 24px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)",
-    glow: "0 0 24px rgba(123,94,167,0.20), 0 0 8px rgba(123,94,167,0.15)",
-    navBtn: "0 4px 20px rgba(123,94,167,0.35), 0 2px 8px rgba(0,0,0,0.6), 0 0 30px rgba(46,204,113,0.15)",
+    card: "0 4px 16px rgba(0,0,0,0.2), 0 1px 3px rgba(0,0,0,0.15)",
+    elevated: "0 12px 32px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2)",
+    glow: "0 0 32px rgba(123,94,167,0.10), 0 0 12px rgba(123,94,167,0.08)",
+    navBtn: "0 4px 20px rgba(123,94,167,0.25), 0 2px 8px rgba(0,0,0,0.5), 0 0 24px rgba(46,204,113,0.10)",
   },
 };
 
@@ -75,10 +75,10 @@ const LIGHT_TOKENS = {
     navGlass: "rgba(246,246,249,0.92)",
   },
   border: {
-    subtle: "rgba(90,70,130,0.06)",
-    default: "rgba(90,70,130,0.12)",
-    focus: "rgba(121,72,214,0.50)",
-    glow: "rgba(121,72,214,0.12)",
+    subtle: "rgba(90,70,130,0.04)",
+    default: "rgba(90,70,130,0.08)",
+    focus: "rgba(121,72,214,0.30)",
+    glow: "rgba(121,72,214,0.06)",
   },
   text: {
     primary: "#14121A", // Rich slate, replacing harsh black
@@ -89,7 +89,7 @@ const LIGHT_TOKENS = {
   accent: {
     primary: "#7948D6", // Highly saturated violet for maximum pop
     primaryDim: "rgba(121,72,214,0.08)",
-    primaryGlow: "rgba(121,72,214,0.16)",
+    primaryGlow: "rgba(121,72,214,0.10)",
     primarySoft: "rgba(121,72,214,0.12)",
     emerald: "#0E9E56", // Darker, richer emerald for light backgrounds
     emeraldDim: "rgba(14,158,86,0.08)",
@@ -113,10 +113,10 @@ const LIGHT_TOKENS = {
   },
   shadow: {
     sm: "0 1px 2px rgba(90,70,130,0.04)",
-    card: "0 4px 12px rgba(90,70,130,0.04), 0 1px 3px rgba(90,70,130,0.03)", // Diffused, tinted elevation
-    elevated: "0 8px 24px rgba(90,70,130,0.06), 0 2px 6px rgba(90,70,130,0.04)",
-    glow: "0 0 20px rgba(121,72,214,0.15), 0 0 6px rgba(121,72,214,0.08)",
-    navBtn: "0 4px 16px rgba(121,72,214,0.15), 0 2px 6px rgba(90,70,130,0.06)",
+    card: "0 8px 24px rgba(90,70,130,0.03), 0 2px 6px rgba(90,70,130,0.02)", // Diffused, tinted elevation
+    elevated: "0 16px 48px rgba(90,70,130,0.06), 0 4px 12px rgba(90,70,130,0.04)",
+    glow: "0 0 32px rgba(121,72,214,0.08), 0 0 12px rgba(121,72,214,0.05)",
+    navBtn: "0 4px 16px rgba(121,72,214,0.10), 0 2px 6px rgba(90,70,130,0.04)",
   },
 };
 

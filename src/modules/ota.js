@@ -99,8 +99,8 @@ export function injectCachedOTA() {
 export async function syncOTAData() {
   try {
     const results = await Promise.allSettled([
-      fetch(OTA_ENDPOINTS.CATALOG, { headers: { 'Cache-Control': 'no-cache' } }).then(res => res.json()),
-      fetch(OTA_ENDPOINTS.MERCHANTS, { headers: { 'Cache-Control': 'no-cache' } }).then(res => res.json())
+      fetch(OTA_ENDPOINTS.CATALOG).then(res => res.ok ? res.json() : null).catch(() => null),
+      fetch(OTA_ENDPOINTS.MERCHANTS).then(res => res.ok ? res.json() : null).catch(() => null)
     ]);
 
     const catalogResult = results[0];

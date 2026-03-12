@@ -494,124 +494,88 @@ export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel
     }
   }, [streamText]);
 
-  // ── Multi-phase progress with smooth interpolation ──
-  // Phase 1 (0-3s):  0-15%  — Bundling
-  // Phase 2 (3-6s):  15-35% — Connecting
-  // Phase 3 (6-12s): 35-65% — Analyzing
-  // Phase 4 (12-25s): 65-92% — Generating
-  // Phase 5 (25s+):  92-95% — Capped (waiting)
+  // ── Multi-phase progress with smooth interpolation (90s scale) ──
+  // Phase 1 (0-5s):  0-15%  — Bundling
+  // Phase 2 (5-15s): 15-30% — Connecting
+  // Phase 3 (15-40s): 30-65% — Analyzing
+  // Phase 4 (40-75s): 65-90% — Generating
+  // Phase 5 (75s+):  90-95% — Refining
   // Receiving:       100%   — Complete
   let baseProgress;
-  if (elapsed <= 3) baseProgress = (elapsed / 3) * 15;
-  else if (elapsed <= 6) baseProgress = 15 + ((elapsed - 3) / 3) * 20;
-  else if (elapsed <= 12) baseProgress = 35 + ((elapsed - 6) / 6) * 30;
-  else if (elapsed <= 25) baseProgress = 65 + ((elapsed - 12) / 13) * 27;
-  else baseProgress = 92 + Math.min((elapsed - 25) / 20, 1) * 3;
+  if (elapsed <= 5) baseProgress = (elapsed / 5) * 15;
+  else if (elapsed <= 15) baseProgress = 15 + ((elapsed - 5) / 10) * 15;
+  else if (elapsed <= 40) baseProgress = 30 + ((elapsed - 15) / 25) * 35;
+  else if (elapsed <= 75) baseProgress = 65 + ((elapsed - 40) / 35) * 25;
+  else baseProgress = 90 + Math.min((elapsed - 75) / 20, 1) * 5;
   const progress = isReceiving ? 100 : Math.min(baseProgress, 95);
 
   // ── Status messages ──
   let currentMsg;
   if (isReceiving) currentMsg = "Streaming audit results...";
-  else if (elapsed > 12) currentMsg = "Generating tactical recommendations...";
-  else if (elapsed > 6) currentMsg = "Analyzing transactions & balances...";
-  else if (elapsed > 3) currentMsg = "Connecting to AI engine...";
+  else if (elapsed > 75) currentMsg = "Refining AI CFO insights...";
+  else if (elapsed > 40) currentMsg = "Generating tactical recommendations...";
+  else if (elapsed > 15) currentMsg = "Analyzing transactions & balances...";
+  else if (elapsed > 5) currentMsg = "Connecting to AI engine...";
   else if (elapsed > 0) currentMsg = "Bundling financial profile...";
   else currentMsg = "Preparing audit...";
 
   // ── Estimated time ──
   const eta = isReceiving
     ? "< 5s"
-    : elapsed < 5
-      ? "~15-20s"
-      : elapsed < 12
-        ? "~10-15s"
-        : elapsed < 20
-          ? "~5-10s"
+    : elapsed < 15
+      ? "~1m 15s"
+      : elapsed < 40
+        ? "~45s"
+        : elapsed < 75
+          ? "~15-30s"
           : "Almost done...";
 
-  const showCancel = elapsed >= 3 && !isReceiving;
-  const showCancelProminent = elapsed >= 10 && !isReceiving;
+  const showCancel = elapsed >= 5 && !isReceiving;
+  const showCancelProminent = elapsed >= 20 && !isReceiving;
 
   return (
-    <div style={{ padding: "24px 16px", animation: "fadeIn .4s ease-out forwards" }}>
-      <div style={{ textAlign: "center", marginBottom: isReceiving ? 16 : 28, transition: "margin .4s ease" }}>
-        {/* ── App Icon with ambient glow ── */}
+    <div style={{ padding: "32px 16px", animation: "fadeIn .4s ease-out forwards", maxWidth: 400, margin: "0 auto" }}>
+      <div style={{ textAlign: "center", marginBottom: isReceiving ? 24 : 36, transition: "margin .4s ease" }}>
+        
+        {/* ── App Icon ── */}
         <div
           style={{
-            position: "relative",
-            width: isReceiving ? 52 : 72,
-            height: isReceiving ? 52 : 72,
-            margin: "0 auto 18px",
-            transition: "all .5s cubic-bezier(.16,1,.3,1)",
+            width: isReceiving ? 48 : 64,
+            height: isReceiving ? 48 : 64,
+            margin: "0 auto 20px",
+            borderRadius: isReceiving ? 12 : 16,
+            overflow: "hidden",
+            boxShadow: `0 8px 16px ${T.accent.emerald}20`,
+            transition: "all .4s cubic-bezier(.16,1,.3,1)",
+            background: T.bg.card
           }}
         >
-          {/* Animated glow ring */}
-          {!isReceiving && (
-            <div
-              style={{
-                position: "absolute",
-                inset: -8,
-                borderRadius: "50%",
-                background: `conic-gradient(from ${(elapsed * 30) % 360}deg, transparent 0%, ${T.accent.primary}40 20%, ${T.accent.emerald}30 40%, transparent 60%)`,
-                animation: "spin 3s linear infinite",
-                opacity: 0.6,
-                mask: "radial-gradient(farthest-side, transparent calc(100% - 2px), #fff calc(100% - 1.5px))",
-                WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 2px), #fff calc(100% - 1.5px))",
-              }}
-            />
-          )}
-          {/* Static ring track */}
-          <div
-            style={{
-              position: "absolute",
-              inset: -8,
-              borderRadius: "50%",
-              border: `1px solid ${T.border.subtle}`,
-              pointerEvents: "none",
-            }}
-          />
-          {/* Icon */}
-          <div
+          <img
+            src="/icon-192.png"
+            alt="Catalyst Cash Icon"
             style={{
               width: "100%",
               height: "100%",
-              borderRadius: isReceiving ? 16 : 22,
-              background: isReceiving ? `${T.status.green}15` : "transparent",
-              boxShadow: isReceiving ? `0 0 24px ${T.status.green}40` : `0 0 30px ${T.accent.emerald}15`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              overflow: "hidden",
-              transition: "all .5s cubic-bezier(.16,1,.3,1)",
+              objectFit: "cover",
+              animation: isReceiving ? "none" : "pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
             }}
-          >
-            <img
-              src="/icon-192.png"
-              alt=""
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                animation: isReceiving ? "none" : "pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-                borderRadius: "inherit",
-              }}
-            />
-          </div>
+          />
         </div>
 
         {/* ── Title + Status Badge ── */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 6 }}>
-          <p
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}>
+          <h2
             style={{
-              fontSize: isReceiving ? 16 : 20,
+              fontSize: 22,
               fontWeight: 800,
-              transition: "font-size .4s ease",
               letterSpacing: "-0.02em",
+              margin: 0,
+              color: T.text.primary
             }}
           >
             Running Audit
-          </p>
-          {isTest && <Badge variant="amber">TEST</Badge>}
+          </h2>
+          {isTest && <Badge variant="amber" style={{ height: "fit-content" }}>TEST</Badge>}
         </div>
 
         {/* ── Metadata line ── */}
@@ -620,44 +584,33 @@ export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            gap: 8,
-            marginBottom: 16,
-            flexWrap: "wrap",
+            gap: 12,
+            marginBottom: 24,
+            opacity: 0.8
           }}
         >
-          <Mono size={11} color={T.text.dim}>
+          <Mono size={12} color={T.text.dim}>
             {elapsed}s elapsed
           </Mono>
-          <span style={{ width: 3, height: 3, borderRadius: "50%", background: T.text.dim, flexShrink: 0 }} />
-          <Mono size={11} color={T.accent.primary}>
-            {modelName || "AI"}
+          <span style={{ width: 4, height: 4, borderRadius: "50%", background: T.border.subtle, flexShrink: 0 }} />
+          <Mono size={12} color={T.text.dim}>
+            {modelName || "AI Engine"}
           </Mono>
-          {isTest && (
-            <>
-              <span style={{ width: 3, height: 3, borderRadius: "50%", background: T.text.dim, flexShrink: 0 }} />
-              <Mono size={11} color={T.status.amber}>
-                NOT SAVED
-              </Mono>
-            </>
-          )}
         </div>
 
         {/* ── Progress Bar ── */}
-        <div style={{ maxWidth: 320, margin: "0 auto", textAlign: "left" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div style={{ maxWidth: 360, margin: "0 auto", textAlign: "left" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 10 }}>
             <span
               style={{
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: "0.02em",
-                color: isReceiving ? T.status.green : T.accent.primary,
-                fontFamily: T.font.mono,
-                transition: "color .4s ease",
+                fontSize: 13,
+                fontWeight: 600,
+                color: T.text.secondary,
               }}
             >
               {currentMsg}
             </span>
-            <span style={{ fontSize: 11, fontWeight: 800, color: T.text.secondary, fontFamily: T.font.mono }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, fontFamily: T.font.mono }}>
               {Math.floor(progress)}%
             </span>
           </div>
@@ -666,37 +619,33 @@ export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel
             aria-valuenow={Math.floor(progress)}
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-label={`Audit progress: ${Math.floor(progress)}%. ${currentMsg}`}
             style={{
-              height: 6,
-              background: T.bg.elevated,
-              borderRadius: 6,
+              height: 4,
+              background: T.border.subtle,
+              borderRadius: 2,
               overflow: "hidden",
-              border: `1px solid ${T.border.subtle}`,
             }}
           >
             <div
               style={{
                 height: "100%",
                 width: `${progress}%`,
-                background: isReceiving
-                  ? `linear-gradient(90deg,${T.status.green}AA,${T.status.green})`
-                  : `linear-gradient(90deg,${T.accent.emerald}99,${T.accent.primary})`,
-                borderRadius: 6,
-                transition: "width 1.2s cubic-bezier(.16,1,.3,1), background .5s ease",
-                boxShadow: isReceiving ? `0 0 8px ${T.status.green}60` : "none",
+                background: T.accent.primary,
+                borderRadius: 2,
+                transition: "width 0.8s cubic-bezier(.16,1,.3,1)"
               }}
             />
           </div>
           {/* Estimated time */}
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-            <Mono size={9} color={T.text.dim}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+            <span style={{ fontSize: 11, color: T.text.dim, fontWeight: 500 }}>
               Est. {eta}
-            </Mono>
+            </span>
             {isReceiving && (
-              <Mono size={9} color={T.status.green}>
-                Receiving data
-              </Mono>
+              <span style={{ fontSize: 11, color: T.status.green, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ width: 4, height: 4, borderRadius: "50%", background: T.status.green, animation: "pulse 1.5s infinite" }} />
+                Receiving
+              </span>
             )}
           </div>
         </div>

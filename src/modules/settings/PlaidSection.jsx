@@ -28,6 +28,7 @@ export default function PlaidSection({
 }) {
   const [plaidConnections, setPlaidConnections] = useState([]);
   const [isPlaidConnecting, setIsPlaidConnecting] = useState(false);
+  const [confirmingDisconnect, setConfirmingDisconnect] = useState(null);
 
   // Load connections on mount
   useEffect(() => {
@@ -37,12 +38,8 @@ export default function PlaidSection({
   }, []);
 
   const handleDisconnect = async conn => {
-    if (
-      !window.confirm(
-        `Disconnect ${conn.institutionName || "this bank"}? This will also remove all accounts imported from this connection.`
-      )
-    )
-      return;
+    // We already confirmed inline, just proceed to delete
+    setConfirmingDisconnect(null);
     await removeConnection(conn.id);
     // Remove Plaid-imported cards/accounts that belonged to this connection
     const connId = conn.id;
@@ -128,7 +125,11 @@ export default function PlaidSection({
         },
         err => {
           console.error(err);
-          if (window.toast) window.toast.error("Failed to link bank");
+          if (window.toast) {
+            const msg = err?.message || "Failed to link bank";
+            if (msg === "cancelled") return;
+            window.toast.error(msg);
+          }
         }
       );
     } catch (err) {
@@ -210,24 +211,63 @@ export default function PlaidSection({
                     </span>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleDisconnect(conn)}
-                  aria-label={`Disconnect ${conn.institutionName || "bank"}`}
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: T.radius.sm,
-                    border: "none",
-                    background: T.status.redDim,
-                    color: T.status.red,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Unplug size={16} />
-                </button>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {confirmingDisconnect === conn.id ? (
+                    <>
+                      <button
+                        onClick={() => setConfirmingDisconnect(null)}
+                        style={{
+                          padding: "0 12px",
+                          height: 36,
+                          borderRadius: T.radius.sm,
+                          border: `1px solid ${T.border.default}`,
+                          background: T.bg.card,
+                          color: T.text.secondary,
+                          cursor: "pointer",
+                          fontSize: 12,
+                          fontWeight: 600,
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => handleDisconnect(conn)}
+                        style={{
+                          padding: "0 12px",
+                          height: 36,
+                          borderRadius: T.radius.sm,
+                          border: "none",
+                          background: T.status.red,
+                          color: "white",
+                          cursor: "pointer",
+                          fontSize: 12,
+                          fontWeight: 700,
+                        }}
+                      >
+                        Confirm Delete
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmingDisconnect(conn.id)}
+                      aria-label={`Disconnect ${conn.institutionName || "bank"}`}
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: T.radius.sm,
+                        border: "none",
+                        background: T.status.redDim,
+                        color: T.status.red,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Unplug size={16} />
+                    </button>
+                  )}
+                </div>
               </div>
             ))
         )}

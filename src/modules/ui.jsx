@@ -340,6 +340,17 @@ export const GlobalStyles = () => (
       }
     }
 
+    /* ── Landscape mode: constrain to a centered 520px pillar ── */
+    @media (orientation:landscape) and (max-height:600px){
+      #root{
+        max-width:520px;
+        margin-left:auto;
+        margin-right:auto;
+        border-left:1px solid rgba(255,255,255,0.04);
+        border-right:1px solid rgba(255,255,255,0.04);
+      }
+    }
+
     /* Shrinks snap-container height so snap-pages live above the floating nav pill */
     .snap-container-clearance{
       padding-bottom:calc(var(--bottom-nav-h,72px) + env(safe-area-inset-bottom,16px) + 20px);
@@ -362,24 +373,24 @@ export const Card = ({ children, style, animate, delay = 0, onClick, variant = "
     default: {
       background: T.bg.card,
       border: `1px solid ${T.border.subtle}`,
-      boxShadow: T.shadow.card,
+      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), ${T.shadow.card}`,
     },
     elevated: {
       background: T.bg.elevated,
       border: `1px solid ${T.border.default}`,
-      boxShadow: T.shadow.elevated,
+      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.08), ${T.shadow.elevated}`,
     },
     glass: {
       background: T.bg.glass,
       border: `1px solid ${T.border.default}`,
-      backdropFilter: "blur(16px)",
-      WebkitBackdropFilter: "blur(16px)",
-      boxShadow: T.shadow.card,
+      backdropFilter: "blur(24px)",
+      WebkitBackdropFilter: "blur(24px)",
+      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), ${T.shadow.card}`,
     },
     accent: {
       background: `linear-gradient(135deg,${T.accent.primaryDim},${T.bg.card})`,
       border: `1px solid ${T.accent.primarySoft}`,
-      boxShadow: `${T.shadow.card}, 0 0 12px ${T.accent.primaryDim}`,
+      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.1), ${T.shadow.card}, 0 0 24px rgba(123,94,167,0.06)`,
     },
   };
   const v = variants[variant] || variants.default;

@@ -29,7 +29,7 @@ export async function pushHouseholdSync(householdId, passcode) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ householdId, encryptedBlob })
-    });
+    }).catch(() => ({ ok: false }));
     
     if (res.ok) {
         await db.set("household-last-sync-ts", payload.timestamp);
@@ -46,7 +46,7 @@ export async function pullHouseholdSync(householdId, passcode) {
   if (!householdId || !passcode) return null;
 
   try {
-    const res = await fetch(`${WORKER_URL}?householdId=${encodeURIComponent(householdId)}`);
+    const res = await fetch(`${WORKER_URL}?householdId=${encodeURIComponent(householdId)}`).catch(() => ({ ok: false }));
     if (!res.ok) return null;
     
     const data = await res.json();

@@ -24,6 +24,7 @@ export default function SearchableSelect({
   placeholder = "Select…",
   style = {},
   maxHeight = 240,
+  displayValue,
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -257,7 +258,7 @@ export default function SearchableSelect({
         }}
       >
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-          {selectedLabel || placeholder}
+          {displayValue || selectedLabel || placeholder}
         </span>
         <span style={{ fontSize: 10, color: T.text.dim, marginLeft: 6, flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
       </button>

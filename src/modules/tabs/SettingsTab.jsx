@@ -1235,205 +1235,223 @@ export default function SettingsTab({
           )}
 
           <div style={{ display: activeMenu && activeSegment === "app" ? "block" : "none" }}>
-            {/* ── NEW FINANCIAL PROFILE SUB-MENU ── */}
-            <div style={{ display: activeMenu === "finance" ? "block" : "none" }}>
-              <Card style={{ padding: 0, overflow: 'hidden', borderLeft: `3px solid ${T.accent.primary}40`, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTop: "none" }}>
-                <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 24 }}>
-                  {/* Currency */}
-                  <div>
-                    <Label>Base Currency</Label>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg.elevated, padding: "12px 16px", borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle}` }}>
-                      <span style={{ fontSize: 14, color: T.text.primary, fontWeight: 600 }}>Currency</span>
-                      <select
-                        value={financialConfig?.currencyCode || "USD"}
-                        onChange={e => setFinancialConfig(prev => ({ ...prev, currencyCode: e.target.value }))}
-                        style={{ background: "transparent", border: "none", color: T.accent.primary, fontSize: 14, fontWeight: 700, cursor: "pointer", outline: "none", textAlign: "right", appearance: "none" }}
-                      >
-                        <option value="USD">USD ($)</option>
-                        <option value="EUR">EUR (€)</option>
-                        <option value="GBP">GBP (£)</option>
-                        <option value="CAD">CAD ($)</option>
-                        <option value="AUD">AUD ($)</option>
-                        <option value="JPY">JPY (¥)</option>
-                        <option value="INR">INR (₹)</option>
-                      </select>
-                    </div>
+            {/* ── FINANCIAL PROFILE SUB-MENU ── */}
+            <div style={{ display: activeMenu === "finance" ? "flex" : "none", flexDirection: "column", gap: 32, padding: "20px 0" }}>
+              
+              {/* Currency */}
+              <div>
+                <Label style={{ marginLeft: 16, marginBottom: 8, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.03em" }}>Base Currency</Label>
+                <div style={{ margin: "0 16px", background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, overflow: "hidden" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px" }}>
+                    <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Currency</span>
+                    <select
+                      value={financialConfig?.currencyCode || "USD"}
+                      onChange={e => setFinancialConfig(prev => ({ ...prev, currencyCode: e.target.value }))}
+                      style={{ background: "transparent", border: "none", color: T.accent.primary, fontSize: 15, fontWeight: 700, cursor: "pointer", outline: "none", textAlign: "right", appearance: "none" }}
+                    >
+                      <option value="USD">USD ($)</option>
+                      <option value="EUR">EUR (€)</option>
+                      <option value="GBP">GBP (£)</option>
+                      <option value="CAD">CAD ($)</option>
+                      <option value="AUD">AUD ($)</option>
+                      <option value="JPY">JPY (¥)</option>
+                      <option value="INR">INR (₹)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Income Profile */}
+              <div>
+                <Label style={{ marginLeft: 16, marginBottom: 8, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.03em" }}>Income Profile</Label>
+                <div style={{ margin: "0 16px", background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, overflow: "hidden" }}>
+                  
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${T.border.subtle}` }}>
+                    <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Pay Frequency</span>
+                    <select
+                      value={financialConfig?.payFrequency || "bi-weekly"}
+                      onChange={e => setFinancialConfig(prev => ({ ...prev, payFrequency: e.target.value }))}
+                      style={{ background: "transparent", border: "none", color: T.accent.primary, fontSize: 15, fontWeight: 700, cursor: "pointer", outline: "none", textAlign: "right", appearance: "none" }}
+                    >
+                      <option value="weekly">Weekly</option>
+                      <option value="bi-weekly">Bi-Weekly</option>
+                      <option value="semi-monthly">Semi-Monthly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
                   </div>
 
-                  {/* Income Profile */}
-                  <div>
-                    <Label>Income Profile</Label>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg.elevated, padding: "12px 16px", borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle}` }}>
-                        <span style={{ fontSize: 14, color: T.text.primary, fontWeight: 600 }}>Pay Frequency</span>
-                        <select
-                          value={financialConfig?.payFrequency || "bi-weekly"}
-                          onChange={e => setFinancialConfig(prev => ({ ...prev, payFrequency: e.target.value }))}
-                          style={{ background: "transparent", border: "none", color: T.accent.primary, fontSize: 14, fontWeight: 700, cursor: "pointer", outline: "none", textAlign: "right", appearance: "none" }}
-                        >
-                          <option value="weekly">Weekly</option>
-                          <option value="bi-weekly">Bi-Weekly</option>
-                          <option value="semi-monthly">Semi-Monthly</option>
-                          <option value="monthly">Monthly</option>
-                        </select>
-                      </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${T.border.subtle}` }}>
+                    <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Payday</span>
+                    <select
+                      value={financialConfig?.payday || "Friday"}
+                      onChange={e => setFinancialConfig(prev => ({ ...prev, payday: e.target.value }))}
+                      style={{ background: "transparent", border: "none", color: T.accent.primary, fontSize: 15, fontWeight: 700, cursor: "pointer", outline: "none", textAlign: "right", appearance: "none" }}
+                    >
+                      <option value="Monday">Monday</option>
+                      <option value="Tuesday">Tuesday</option>
+                      <option value="Wednesday">Wednesday</option>
+                      <option value="Thursday">Thursday</option>
+                      <option value="Friday">Friday</option>
+                      <option value="Saturday">Saturday</option>
+                      <option value="Sunday">Sunday</option>
+                    </select>
+                  </div>
 
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg.elevated, padding: "12px 16px", borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle}` }}>
-                        <span style={{ fontSize: 14, color: T.text.primary, fontWeight: 600 }}>Payday</span>
-                        <select
-                          value={financialConfig?.payday || "Friday"}
-                          onChange={e => setFinancialConfig(prev => ({ ...prev, payday: e.target.value }))}
-                          style={{ background: "transparent", border: "none", color: T.accent.primary, fontSize: 14, fontWeight: 700, cursor: "pointer", outline: "none", textAlign: "right", appearance: "none" }}
-                        >
-                          <option value="Monday">Monday</option>
-                          <option value="Tuesday">Tuesday</option>
-                          <option value="Wednesday">Wednesday</option>
-                          <option value="Thursday">Thursday</option>
-                          <option value="Friday">Friday</option>
-                          <option value="Saturday">Saturday</option>
-                          <option value="Sunday">Sunday</option>
-                        </select>
-                      </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${T.border.subtle}` }}>
+                    <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Income Type</span>
+                    <select
+                      value={financialConfig?.incomeType || "salary"}
+                      onChange={e => setFinancialConfig(prev => ({ ...prev, incomeType: e.target.value }))}
+                      style={{ background: "transparent", border: "none", color: T.accent.primary, fontSize: 15, fontWeight: 700, cursor: "pointer", outline: "none", textAlign: "right", appearance: "none" }}
+                    >
+                      <option value="salary">Salary</option>
+                      <option value="hourly">Hourly</option>
+                      <option value="variable">Variable</option>
+                    </select>
+                  </div>
 
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg.elevated, padding: "12px 16px", borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle}` }}>
-                        <span style={{ fontSize: 14, color: T.text.primary, fontWeight: 600 }}>Income Type</span>
-                        <select
-                          value={financialConfig?.incomeType || "salary"}
-                          onChange={e => setFinancialConfig(prev => ({ ...prev, incomeType: e.target.value }))}
-                          style={{ background: "transparent", border: "none", color: T.accent.primary, fontSize: 14, fontWeight: 700, cursor: "pointer", outline: "none", textAlign: "right", appearance: "none" }}
-                        >
-                          <option value="salary">Salary</option>
-                          <option value="hourly">Hourly</option>
-                          <option value="variable">Variable</option>
-                        </select>
-                      </div>
-
-                      {(!financialConfig?.incomeType || financialConfig?.incomeType === "salary") && (
-                        <>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg.elevated, padding: "12px 16px", borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle}` }}>
-                            <span style={{ fontSize: 14, color: T.text.primary, fontWeight: 600 }}>Standard Paycheck</span>
-                            <div style={{ display: "flex", alignItems: "center" }}>
-                              <span style={{ color: T.text.muted, fontSize: 14, marginRight: 4 }}>$</span>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={financialConfig?.paycheckStandard || ""}
-                                onChange={e => setFinancialConfig(prev => ({ ...prev, paycheckStandard: sanitizeDollar(e.target.value) }))}
-                                placeholder="0"
-                                style={{ background: "transparent", border: "none", color: T.text.secondary, fontSize: 14, fontWeight: 600, outline: "none", textAlign: "right", width: 80 }}
-                              />
-                            </div>
-                          </div>
-
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg.elevated, padding: "12px 16px", borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle}` }}>
-                            <span style={{ fontSize: 14, color: T.text.primary, fontWeight: 600 }}>1st of Month Paycheck</span>
-                            <div style={{ display: "flex", alignItems: "center" }}>
-                              <span style={{ color: T.text.muted, fontSize: 14, marginRight: 4 }}>$</span>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={financialConfig?.paycheckFirstOfMonth || ""}
-                                onChange={e => setFinancialConfig(prev => ({ ...prev, paycheckFirstOfMonth: sanitizeDollar(e.target.value) }))}
-                                placeholder="Optional"
-                                style={{ background: "transparent", border: "none", color: T.text.secondary, fontSize: 14, fontWeight: 600, outline: "none", textAlign: "right", width: 80 }}
-                              />
-                            </div>
-                          </div>
-                        </>
-                      )}
-
-                      {financialConfig?.incomeType === "hourly" && (
-                        <>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg.elevated, padding: "12px 16px", borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle}` }}>
-                            <span style={{ fontSize: 14, color: T.text.primary, fontWeight: 600 }}>Hourly Rate (Net)</span>
-                            <div style={{ display: "flex", alignItems: "center" }}>
-                              <span style={{ color: T.text.muted, fontSize: 14, marginRight: 4 }}>$</span>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={financialConfig?.hourlyRateNet || ""}
-                                onChange={e => setFinancialConfig(prev => ({ ...prev, hourlyRateNet: sanitizeDollar(e.target.value) }))}
-                                placeholder="0.00"
-                                style={{ background: "transparent", border: "none", color: T.text.secondary, fontSize: 14, fontWeight: 600, outline: "none", textAlign: "right", width: 80 }}
-                              />
-                            </div>
-                          </div>
-
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg.elevated, padding: "12px 16px", borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle}` }}>
-                            <span style={{ fontSize: 14, color: T.text.primary, fontWeight: 600 }}>Typical Hours</span>
-                            <div style={{ display: "flex", alignItems: "center" }}>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={financialConfig?.typicalHours || ""}
-                                onChange={e => setFinancialConfig(prev => ({ ...prev, typicalHours: sanitizeDollar(e.target.value) }))}
-                                placeholder="80"
-                                style={{ background: "transparent", border: "none", color: T.text.secondary, fontSize: 14, fontWeight: 600, outline: "none", textAlign: "right", width: 80 }}
-                              />
-                              <span style={{ color: T.text.muted, fontSize: 14, marginLeft: 4 }}>hrs</span>
-                            </div>
-                          </div>
-                        </>
-                      )}
-
-                      {financialConfig?.incomeType === "variable" && (
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg.elevated, padding: "12px 16px", borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle}` }}>
-                          <span style={{ fontSize: 14, color: T.text.primary, fontWeight: 600 }}>Average Paycheck</span>
-                          <div style={{ display: "flex", alignItems: "center" }}>
-                            <span style={{ color: T.text.muted, fontSize: 14, marginRight: 4 }}>$</span>
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              value={financialConfig?.averagePaycheck || ""}
-                              onChange={e => setFinancialConfig(prev => ({ ...prev, averagePaycheck: sanitizeDollar(e.target.value) }))}
-                              placeholder="0"
-                              style={{ background: "transparent", border: "none", color: T.text.secondary, fontSize: 14, fontWeight: 600, outline: "none", textAlign: "right", width: 80 }}
-                            />
-                          </div>
+                  {(!financialConfig?.incomeType || financialConfig?.incomeType === "salary") && (
+                    <>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${T.border.subtle}` }}>
+                        <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Standard Paycheck</span>
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          <span style={{ color: T.text.muted, fontSize: 15, marginRight: 4 }}>$</span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={financialConfig?.paycheckStandard || ""}
+                            onChange={e => {
+                               const val = e.target.value.replace(/[^0-9.]/g, '');
+                               setFinancialConfig(prev => ({ ...prev, paycheckStandard: val ? parseFloat(val) : 0 }));
+                            }}
+                            placeholder="0"
+                            style={{ background: "transparent", border: "none", color: T.text.secondary, fontSize: 15, fontWeight: 600, outline: "none", textAlign: "right", width: 90 }}
+                          />
                         </div>
-                      )}
-                    </div>
-                  </div>
+                      </div>
 
-                  {/* Demographics */}
-                  <div>
-                    <Label>Demographics</Label>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg.elevated, padding: "12px 16px", borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle}` }}>
-                        <span style={{ fontSize: 14, color: T.text.primary, fontWeight: 600 }}>Birth Year</span>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px" }}>
+                        <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>1st of Month Paycheck</span>
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          <span style={{ color: T.text.muted, fontSize: 15, marginRight: 4 }}>$</span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={financialConfig?.paycheckFirstOfMonth || ""}
+                            onChange={e => {
+                               const val = e.target.value.replace(/[^0-9.]/g, '');
+                               setFinancialConfig(prev => ({ ...prev, paycheckFirstOfMonth: val ? parseFloat(val) : 0 }));
+                            }}
+                            placeholder="Optional"
+                            style={{ background: "transparent", border: "none", color: T.text.secondary, fontSize: 15, fontWeight: 600, outline: "none", textAlign: "right", width: 90 }}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {financialConfig?.incomeType === "hourly" && (
+                    <>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${T.border.subtle}` }}>
+                        <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Hourly Rate (Net)</span>
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          <span style={{ color: T.text.muted, fontSize: 15, marginRight: 4 }}>$</span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={financialConfig?.hourlyRateNet || ""}
+                            onChange={e => {
+                               const val = e.target.value.replace(/[^0-9.]/g, '');
+                               setFinancialConfig(prev => ({ ...prev, hourlyRateNet: val ? parseFloat(val) : 0 }));
+                            }}
+                            placeholder="0.00"
+                            style={{ background: "transparent", border: "none", color: T.text.secondary, fontSize: 15, fontWeight: 600, outline: "none", textAlign: "right", width: 90 }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px" }}>
+                        <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Typical Hours</span>
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={financialConfig?.typicalHours || ""}
+                            onChange={e => {
+                               const val = e.target.value.replace(/[^0-9.]/g, '');
+                               setFinancialConfig(prev => ({ ...prev, typicalHours: val ? parseFloat(val) : 0 }));
+                            }}
+                            placeholder="80"
+                            style={{ background: "transparent", border: "none", color: T.text.secondary, fontSize: 15, fontWeight: 600, outline: "none", textAlign: "right", width: 60 }}
+                          />
+                          <span style={{ color: T.text.muted, fontSize: 15, marginLeft: 6 }}>hrs</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {financialConfig?.incomeType === "variable" && (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px" }}>
+                      <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Average Paycheck</span>
+                      <div style={{ display: "flex", alignItems: "center" }}>
+                        <span style={{ color: T.text.muted, fontSize: 15, marginRight: 4 }}>$</span>
                         <input
-                          type="number"
-                          value={financialConfig?.birthYear || ""}
-                          onChange={e => setFinancialConfig(prev => ({ ...prev, birthYear: e.target.value ? parseInt(e.target.value) : null }))}
-                          placeholder="e.g. 1990"
-                          style={{ background: "transparent", border: "none", color: T.text.secondary, fontSize: 14, fontWeight: 600, outline: "none", textAlign: "right", width: 80 }}
+                          type="text"
+                          inputMode="decimal"
+                          value={financialConfig?.averagePaycheck || ""}
+                          onChange={e => {
+                              const val = e.target.value.replace(/[^0-9.]/g, '');
+                              setFinancialConfig(prev => ({ ...prev, averagePaycheck: val ? parseFloat(val) : 0 }));
+                          }}
+                          placeholder="0"
+                          style={{ background: "transparent", border: "none", color: T.text.secondary, fontSize: 15, fontWeight: 600, outline: "none", textAlign: "right", width: 90 }}
                         />
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg.elevated, padding: "12px 16px", borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle}` }}>
-                        <span style={{ fontSize: 14, color: T.text.primary, fontWeight: 600 }}>State</span>
-                        <select
-                          value={financialConfig?.stateCode || ""}
-                          onChange={e => setFinancialConfig(prev => ({ ...prev, stateCode: e.target.value }))}
-                          style={{ background: "transparent", border: "none", color: T.accent.primary, fontSize: 14, fontWeight: 700, cursor: "pointer", outline: "none", textAlign: "right", appearance: "none", maxWidth: 120 }}
-                        >
-                          <option value="">— Not in US —</option>
-                          <option value="AL">AL</option><option value="AK">AK 🟢</option><option value="AZ">AZ</option><option value="AR">AR</option>
-                          <option value="CA">CA</option><option value="CO">CO</option><option value="CT">CT</option><option value="DE">DE</option>
-                          <option value="DC">DC</option><option value="FL">FL 🟢</option><option value="GA">GA</option><option value="HI">HI</option>
-                          <option value="ID">ID</option><option value="IL">IL</option><option value="IN">IN</option><option value="IA">IA</option>
-                          <option value="KS">KS</option><option value="KY">KY</option><option value="LA">LA</option><option value="ME">ME</option>
-                          <option value="MD">MD</option><option value="MA">MA</option><option value="MI">MI</option><option value="MN">MN</option>
-                          <option value="MS">MS</option><option value="MO">MO</option><option value="MT">MT</option><option value="NE">NE</option>
-                          <option value="NV">NV 🟢</option><option value="NH">NH 🟢</option><option value="NJ">NJ</option><option value="NM">NM</option>
-                          <option value="NY">NY</option><option value="NC">NC</option><option value="ND">ND</option><option value="OH">OH</option>
-                          <option value="OK">OK</option><option value="OR">OR</option><option value="PA">PA</option><option value="RI">RI</option>
-                          <option value="SC">SC</option><option value="SD">SD 🟢</option><option value="TN">TN 🟢</option><option value="TX">TX 🟢</option>
-                          <option value="UT">UT</option><option value="VT">VT</option><option value="VA">VA</option><option value="WA">WA 🟢</option>
-                          <option value="WV">WV</option><option value="WI">WI</option><option value="WY">WY 🟢</option>
-                        </select>
-                      </div>
                     </div>
+                  )}
+
+                </div>
+              </div>
+
+              {/* Demographics */}
+              <div>
+                <Label style={{ marginLeft: 16, marginBottom: 8, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.03em" }}>Demographics</Label>
+                <div style={{ margin: "0 16px", background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, overflow: "hidden" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${T.border.subtle}` }}>
+                    <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Birth Year</span>
+                    <input
+                      type="number"
+                      value={financialConfig?.birthYear || ""}
+                      onChange={e => setFinancialConfig(prev => ({ ...prev, birthYear: e.target.value ? parseInt(e.target.value) : null }))}
+                      placeholder="e.g. 1990"
+                      style={{ background: "transparent", border: "none", color: T.text.secondary, fontSize: 15, fontWeight: 600, outline: "none", textAlign: "right", width: 80 }}
+                    />
                   </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px" }}>
+                    <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>State</span>
+                    <select
+                      value={financialConfig?.stateCode || ""}
+                      onChange={e => setFinancialConfig(prev => ({ ...prev, stateCode: e.target.value }))}
+                      style={{ background: "transparent", border: "none", color: T.accent.primary, fontSize: 15, fontWeight: 700, cursor: "pointer", outline: "none", textAlign: "right", appearance: "none" }}
+                    >
+                      <option value="">— Not in US —</option>
+                      <option value="AL">AL</option><option value="AK">AK 🟢</option><option value="AZ">AZ</option><option value="AR">AR</option>
+                      <option value="CA">CA</option><option value="CO">CO</option><option value="CT">CT</option><option value="DE">DE</option>
+                      <option value="DC">DC</option><option value="FL">FL 🟢</option><option value="GA">GA</option><option value="HI">HI</option>
+                      <option value="ID">ID</option><option value="IL">IL</option><option value="IN">IN</option><option value="IA">IA</option>
+                      <option value="KS">KS</option><option value="KY">KY</option><option value="LA">LA</option><option value="ME">ME</option>
+                      <option value="MD">MD</option><option value="MA">MA</option><option value="MI">MI</option><option value="MN">MN</option>
+                      <option value="MS">MS</option><option value="MO">MO</option><option value="MT">MT</option><option value="NE">NE</option>
+                      <option value="NV">NV 🟢</option><option value="NH">NH 🟢</option><option value="NJ">NJ</option><option value="NM">NM</option>
+                      <option value="NY">NY</option><option value="NC">NC</option><option value="ND">ND</option><option value="OH">OH</option>
+                      <option value="OK">OK</option><option value="OR">OR</option><option value="PA">PA</option><option value="RI">RI</option>
+                      <option value="SC">SC</option><option value="SD">SD 🟢</option><option value="TN">TN 🟢</option><option value="TX">TX 🟢</option>
+                      <option value="UT">UT</option><option value="VT">VT</option><option value="VA">VA</option><option value="WA">WA 🟢</option>
+                      <option value="WV">WV</option><option value="WI">WI</option><option value="WY">WY 🟢</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
 
                   {/* ═══ "WHAT-IF" SCENARIO ENGINE (Pro Tier Power Feature 3) ═══ */}
                   <div style={{ marginTop: 24 }}>
@@ -1510,61 +1528,66 @@ export default function SettingsTab({
                     </Card>
                   </div>
 
-                  {/* Housing */}
-                  <div>
-                    <Label>Housing Situation</Label>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg.elevated, padding: "12px 16px", borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle}` }}>
-                        <span style={{ fontSize: 14, color: T.text.primary, fontWeight: 600 }}>Type</span>
-                        <select
-                          value={financialConfig?.housingType || ""}
-                          onChange={e => setFinancialConfig(prev => ({ ...prev, housingType: e.target.value }))}
-                          style={{ background: "transparent", border: "none", color: T.accent.primary, fontSize: 14, fontWeight: 700, cursor: "pointer", outline: "none", textAlign: "right", appearance: "none" }}
-                        >
-                          <option value="">Unspecified</option>
-                          <option value="rent">Renting</option>
-                          <option value="own">Homeowner</option>
-                          <option value="other">Other / Living with family</option>
-                        </select>
-                      </div>
-
-                      {financialConfig?.housingType === "rent" && (
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg.elevated, padding: "12px 16px", borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle}` }}>
-                          <span style={{ fontSize: 14, color: T.text.primary, fontWeight: 600 }}>Monthly Rent</span>
-                          <div style={{ display: "flex", alignItems: "center" }}>
-                            <span style={{ color: T.text.muted, fontSize: 14, marginRight: 4 }}>$</span>
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              value={financialConfig?.monthlyRent || ""}
-                              onChange={e => setFinancialConfig(prev => ({ ...prev, monthlyRent: sanitizeDollar(e.target.value) }))}
-                              placeholder="0"
-                              style={{ background: "transparent", border: "none", color: T.text.secondary, fontSize: 14, fontWeight: 600, outline: "none", textAlign: "right", width: 80 }}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {financialConfig?.housingType === "own" && (
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg.elevated, padding: "12px 16px", borderRadius: T.radius.lg, border: `1px solid ${T.border.subtle}` }}>
-                          <span style={{ fontSize: 14, color: T.text.primary, fontWeight: 600 }}>Mortgage (PITI)</span>
-                          <div style={{ display: "flex", alignItems: "center" }}>
-                            <span style={{ color: T.text.muted, fontSize: 14, marginRight: 4 }}>$</span>
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              value={financialConfig?.mortgagePayment || ""}
-                              onChange={e => setFinancialConfig(prev => ({ ...prev, mortgagePayment: sanitizeDollar(e.target.value) }))}
-                              placeholder="0"
-                              style={{ background: "transparent", border: "none", color: T.text.secondary, fontSize: 14, fontWeight: 600, outline: "none", textAlign: "right", width: 80 }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
+              {/* Housing */}
+              <div>
+                <Label style={{ marginLeft: 16, marginBottom: 8, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.03em" }}>Housing Situation</Label>
+                <div style={{ margin: "0 16px", background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, overflow: "hidden" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${T.border.subtle}` }}>
+                    <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Type</span>
+                    <select
+                      value={financialConfig?.housingType || ""}
+                      onChange={e => setFinancialConfig(prev => ({ ...prev, housingType: e.target.value }))}
+                      style={{ background: "transparent", border: "none", color: T.accent.primary, fontSize: 15, fontWeight: 700, cursor: "pointer", outline: "none", textAlign: "right", appearance: "none" }}
+                    >
+                      <option value="">Unspecified</option>
+                      <option value="rent">Renting</option>
+                      <option value="own">Homeowner</option>
+                      <option value="other">Other</option>
+                    </select>
                   </div>
+
+                  {financialConfig?.housingType === "rent" && (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px" }}>
+                      <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Monthly Rent</span>
+                      <div style={{ display: "flex", alignItems: "center" }}>
+                        <span style={{ color: T.text.muted, fontSize: 15, marginRight: 4 }}>$</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={financialConfig?.monthlyRent || ""}
+                          onChange={e => {
+                               const val = e.target.value.replace(/[^0-9.]/g, '');
+                               setFinancialConfig(prev => ({ ...prev, monthlyRent: val ? parseFloat(val) : 0 }));
+                          }}
+                          placeholder="0"
+                          style={{ background: "transparent", border: "none", color: T.text.secondary, fontSize: 15, fontWeight: 600, outline: "none", textAlign: "right", width: 90 }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {financialConfig?.housingType === "own" && (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px" }}>
+                      <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Mortgage (PITI)</span>
+                      <div style={{ display: "flex", alignItems: "center" }}>
+                        <span style={{ color: T.text.muted, fontSize: 15, marginRight: 4 }}>$</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={financialConfig?.mortgagePayment || ""}
+                          onChange={e => {
+                               const val = e.target.value.replace(/[^0-9.]/g, '');
+                               setFinancialConfig(prev => ({ ...prev, mortgagePayment: val ? parseFloat(val) : 0 }));
+                          }}
+                          placeholder="0"
+                          style={{ background: "transparent", border: "none", color: T.text.secondary, fontSize: 15, fontWeight: 600, outline: "none", textAlign: "right", width: 90 }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </Card>
+              </div>
+
             </div>
 
             {/* ── APPEARANCE (Moved to Profile) ── */}
@@ -2105,26 +2128,6 @@ export default function SettingsTab({
                     <Download size={14} /> EXPORT LOG
                   </button>
                   <button
-                    onClick={() => setConfirmFactoryReset(true)}
-                    style={{
-                      padding: "10px 14px",
-                      borderRadius: T.radius.md,
-                      border: `1px solid ${T.status.red}30`,
-                      background: `${T.status.red}15`,
-                      color: T.status.red,
-                      fontSize: 12,
-                      fontWeight: 700,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontFamily: T.font.mono,
-                      cursor: "pointer",
-                      transition: "all .2s",
-                    }}
-                  >
-                    DELETE ALL DATA
-                  </button>
-                  <button
                     onClick={async () => {
                       await clearLogs();
                       await clearErrorLog();
@@ -2151,65 +2154,6 @@ export default function SettingsTab({
                 </div>
               </div>
 
-              {/* Confirmation dialog for Data Deletion */}
-              {confirmFactoryReset && (
-                <div
-                  style={{
-                    marginTop: 16,
-                    padding: 16,
-                    borderRadius: T.radius.md,
-                    background: T.status.redDim,
-                    border: `1px solid ${T.status.red}40`,
-                    animation: "fadeIn .3s ease-out",
-                  }}
-                >
-                  <p
-                    style={{ fontSize: 12, color: T.status.red, fontWeight: 600, margin: "0 0 12px", lineHeight: 1.5 }}
-                  >
-                    This will permanently delete all financial data, API keys, rules, and history from your device. Are
-                    you sure?
-                  </p>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      onClick={() => setConfirmFactoryReset(false)}
-                      style={{
-                        flex: 1,
-                        padding: "10px 0",
-                        borderRadius: T.radius.md,
-                        border: "none",
-                        background: "transparent",
-                        color: T.status.red,
-                        opacity: 0.8,
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => {
-                        setConfirmFactoryReset(false);
-                        haptic.medium();
-                        if (onFactoryReset) onFactoryReset();
-                      }}
-                      style={{
-                        flex: 2,
-                        padding: "10px 0",
-                        borderRadius: T.radius.md,
-                        border: "none",
-                        background: T.status.red,
-                        color: "white",
-                        fontSize: 12,
-                        fontWeight: 800,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Yes, Delete All Data
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {/* ── Auto-Backup ────────────────────────────────────── */}
               <div style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid ${T.border.subtle}` }}>

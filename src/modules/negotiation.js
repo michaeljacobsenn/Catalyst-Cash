@@ -821,6 +821,12 @@ export function getNegotiableMerchant(itemName) {
   if (!itemName) return null;
   const normalized = itemName.toLowerCase().trim();
 
+  // Explicit exclusionary rules for physical goods / false positives
+  const exclusions = ["subscribe", "save", "delivery", "order", "shampoo", "pens", "paper", "amazon.com", "amzn", "marketplace", "whole foods"];
+  if (exclusions.some(ex => normalized.includes(ex))) {
+    return null;
+  }
+
   // ── Pass 1: Exact substring match (fastest) ──
   for (const merchant of NEGOTIABLE_MERCHANTS) {
     for (const alias of merchant.aliases) {
@@ -831,7 +837,6 @@ export function getNegotiableMerchant(itemName) {
   }
 
   // ── Pass 2: Fuzzy match — split input into words, check each against aliases ──
-  // Max edit distance: 2 for aliases ≥ 5 chars, 1 for shorter aliases
   const words = normalized.replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length >= 3);
   let bestMatch = null;
   let bestDistance = Infinity;
@@ -842,31 +847,31 @@ export function getNegotiableMerchant(itemName) {
       const aliasWords = aliasLower.split(/\s+/);
       const maxDist = aliasLower.length >= 5 ? 2 : 1;
 
-      // Check each input word against each alias word
-      for (const word of words) {
-        for (const aw of aliasWords) {
-          if (aw.length < 3) continue; // skip tiny alias fragments
-          // Length guard: words must be within ±2 chars of each other
+      // Only check single words if the alias itself is a single word
+      if (aliasWords.length === 1) {
+        const aw = aliasWords[0];
+        if (aw.length < 3) continue;
+
+        for (const word of words) {
           if (Math.abs(word.length - aw.length) > 2) continue;
           const dist = levenshtein(word, aw);
-          // Match ratio: require ≥70% similarity to avoid short-word false positives
           const maxLen = Math.max(word.length, aw.length);
           const ratio = 1 - dist / maxLen;
+          
           if (dist <= maxDist && ratio >= 0.7 && dist < bestDistance) {
             bestDistance = dist;
             bestMatch = merchant;
           }
         }
-      }
-
-      // Also check full multi-word aliases against joined input words
-      if (aliasWords.length > 1) {
-        // Try sliding window of N words across input
+      } 
+      // If the alias is multi-word, ONLY use the sliding window of N words
+      else if (aliasWords.length > 1) {
         for (let i = 0; i <= words.length - aliasWords.length; i++) {
           const joined = words.slice(i, i + aliasWords.length).join(" ");
           const dist = levenshtein(joined, aliasLower);
           const maxLen = Math.max(joined.length, aliasLower.length);
           const ratio = 1 - dist / maxLen;
+          
           if (dist <= maxDist && ratio >= 0.7 && dist < bestDistance) {
             bestDistance = dist;
             bestMatch = merchant;

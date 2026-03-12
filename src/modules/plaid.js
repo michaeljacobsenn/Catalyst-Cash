@@ -22,7 +22,7 @@
 import { db } from "./utils.js";
 import { getIssuerCards } from "./issuerCards.js";
 import { fetchWithRetry } from "./fetchWithRetry.js";
-import { getSubscriptionState, INSTITUTION_LIMITS } from "./subscription.js";
+import { getSubscriptionState, INSTITUTION_LIMITS, isGatingEnforced } from "./subscription.js";
 import { categorizeBatch, learn } from "./merchantMap.js";
 import { batchCategorizeTransactions } from "./api.js";
 
@@ -129,7 +129,7 @@ export async function openPlaidLink() {
   const subState = await getSubscriptionState();
   const limit = INSTITUTION_LIMITS[subState.tier] || INSTITUTION_LIMITS.free;
 
-  if (conns.length >= limit) {
+  if (isGatingEnforced() && conns.length >= limit) {
     throw new Error(`Institution limit reached. Your ${subState.tier === "pro" ? "Pro" : "Free"} plan allows up to ${limit} bank connections.`);
   }
 

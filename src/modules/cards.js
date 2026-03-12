@@ -13,7 +13,7 @@ export function getCardLabel(cards, card) {
   if (!card) return "";
   const name = card.name || "";
   const nick = (card.nickname || "").trim();
-  const base = nick ? `${name} · ${nick}` : name;
+  const base = nick ? `${nick} (${name})` : name;
   const dupes = cards.filter(c => c.institution === card.institution && c.name === card.name);
   if (dupes.length <= 1) return base;
   const index = dupes.findIndex(c => c.id === card.id);
@@ -44,7 +44,7 @@ export function getShortCardLabel(cards, card) {
   // Abbreviate "Business" → "Biz" for business cards
   if (name.length > 28) name = name.replace(/\bBusiness\b/g, "Biz");
   const nick = (card.nickname || "").trim();
-  const base = nick ? `${name} · ${nick}` : name;
+  const base = nick ? `${nick} (${name})` : name;
   const dupes = cards.filter(c => c.institution === card.institution && c.name === card.name);
   if (dupes.length <= 1) return base;
   const index = dupes.findIndex(c => c.id === card.id);

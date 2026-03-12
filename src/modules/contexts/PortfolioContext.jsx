@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { db, advanceExpiredDate } from "../utils.js";
-import { ensureCardIds, getCardLabel } from "../cards.js";
+import { ensureCardIds, getCardLabel, getShortCardLabel } from "../cards.js";
 import { loadCardCatalog } from "../issuerCards.js";
 import { scheduleBillReminders } from "../notifications.js";
 import { fetchMarketPrices } from "../marketData.js";
@@ -108,19 +108,35 @@ export function PortfolioProvider({ children }) {
     if (isPortfolioReady) db.set("bank-accounts", bankAccounts);
   }, [bankAccounts, isPortfolioReady]);
 
-  // Map chargedToIds logic
+  // Map chargedToIds logic and sync renamed cards
   useEffect(() => {
     if (!isPortfolioReady || !cards.length) return;
     let changed = false;
     const next = (renewals || []).map(r => {
-      if (r.chargedToId || !r.chargedTo) return r;
-      const match = cards.find(
-        c => c.name === r.chargedTo || getCardLabel(cards, c) === r.chargedTo || r.chargedTo.endsWith(c.name)
-      );
-      if (!match) return r;
-      changed = true;
-      return { ...r, chargedToId: match.id, chargedTo: getCardLabel(cards, match) };
+      if (!r.chargedToId && !r.chargedTo) return r; // nothing to map
+
+      let match = null;
+      if (r.chargedToId) {
+        match = cards.find(c => c.id === r.chargedToId);
+      }
+      
+      // Fallback: try to match by name if missing ID or if the ID is orphaned
+      if (!match && r.chargedTo) {
+        match = cards.find(
+          c => c.name === r.chargedTo || getCardLabel(cards, c) === r.chargedTo || r.chargedTo.endsWith(c.name)
+        );
+      }
+
+      if (!match) return r; // Card couldn't be found
+
+      const newLabel = getShortCardLabel(cards, match);
+      if (r.chargedToId !== match.id || r.chargedTo !== newLabel) {
+        changed = true;
+        return { ...r, chargedToId: match.id, chargedTo: newLabel };
+      }
+      return r;
     });
+    
     if (changed) setRenewals(next);
   }, [cards, isPortfolioReady]);
 

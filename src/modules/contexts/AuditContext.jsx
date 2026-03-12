@@ -236,7 +236,8 @@ export function AuditProvider({ children }) {
           let chatContext = null;
           if (chatSummary?.text || chatHistory?.length) {
             // Only include messages from the last 24 hours to keep context fresh
-            const recent = (chatHistory || []).filter(m => Date.now() - (m.ts || 0) < 24 * 60 * 60 * 1000).slice(-10);
+            const histArr = Array.isArray(chatHistory) ? chatHistory : [];
+            const recent = histArr.filter(m => Date.now() - (m.ts || 0) < 24 * 60 * 60 * 1000).slice(-10);
             chatContext = { summary: chatSummary?.text, recent };
           }
 

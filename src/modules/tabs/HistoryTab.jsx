@@ -630,15 +630,15 @@ export default memo(function HistoryTab({ toast }) {
                               )}
                             </div>
                             {a.parsed?.netWorth != null && (
-                              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-                                <Mono size={14} weight={700} color={T.accent.primary}>
-                                  {fmt(a.parsed.netWorth)}
-                                </Mono>
+                              <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 2 }}>
                                 <span
                                   style={{ fontSize: 10, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em" }}
                                 >
-                                  NET WORTH
+                                  NET WORTH:
                                 </span>
+                                <Mono size={13} weight={600} color={T.text.primary}>
+                                  {fmt(a.parsed.netWorth)}
+                                </Mono>
                               </div>
                             )}
                           </div>
@@ -705,43 +705,19 @@ export default memo(function HistoryTab({ toast }) {
                               const scoreColor =
                                 score >= 80 ? T.status.green : score >= 60 ? T.status.amber : T.status.red;
                               const circumference = 2 * Math.PI * 11;
-                              const offset = circumference - (circumference * score) / 100;
                               return (
                                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                  <svg viewBox="0 0 28 28" width={24} height={24} style={{ flexShrink: 0 }}>
-                                    <circle
-                                      cx="14"
-                                      cy="14"
-                                      r="11"
-                                      fill="none"
-                                      stroke={`${T.border.default}`}
-                                      strokeWidth="2.5"
-                                    />
-                                    <circle
-                                      cx="14"
-                                      cy="14"
-                                      r="11"
-                                      fill="none"
-                                      stroke={scoreColor}
-                                      strokeWidth="2.5"
-                                      strokeLinecap="round"
-                                      strokeDasharray={circumference}
-                                      strokeDashoffset={offset}
-                                      transform="rotate(-90 14 14)"
-                                      style={{ transition: "stroke-dashoffset 0.8s ease" }}
-                                    />
-                                  </svg>
                                   <span
                                     style={{
-                                      fontSize: 10,
+                                      fontSize: 11,
                                       fontWeight: 800,
                                       color: scoreColor,
                                       background: `${scoreColor}15`,
                                       border: `1px solid ${scoreColor}30`,
-                                      padding: "2px 8px",
+                                      padding: "3px 10px",
                                       borderRadius: 99,
                                       fontFamily: T.font.mono,
-                                      letterSpacing: "0.04em",
+                                      letterSpacing: "0.02em",
                                     }}
                                   >
                                     {score} · {grade}
@@ -772,16 +748,15 @@ export default memo(function HistoryTab({ toast }) {
 
                       {/* Key Metrics Row */}
                       {a.form && (
-                        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", paddingTop: 10, borderTop: `1px solid ${T.border.subtle}` }}>
                           {a.form.checking != null && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                               <span
                                 style={{
-                                  fontSize: 9,
+                                  fontSize: 10,
                                   fontWeight: 700,
-                                  color: T.text.secondary,
-                                  letterSpacing: "0.08em",
-                                  textTransform: "uppercase",
+                                  color: T.text.dim,
+                                  letterSpacing: "0.02em",
                                 }}
                               >
                                 CHK
@@ -792,38 +767,36 @@ export default memo(function HistoryTab({ toast }) {
                             </div>
                           )}
                           {a.form.debts?.length > 0 && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                               <span
                                 style={{
-                                  fontSize: 9,
+                                  fontSize: 10,
                                   fontWeight: 700,
-                                  color: T.text.secondary,
-                                  letterSpacing: "0.08em",
-                                  textTransform: "uppercase",
+                                  color: T.status.red,
+                                  letterSpacing: "0.02em",
                                 }}
                               >
-                                DEBT
+                                OWED
                               </span>
-                              <Mono size={11} weight={600} color={T.status.red}>
-                                {fmt(a.form.debts.reduce((s, d) => s + (parseFloat(d.balance) || 0), 0))}
+                              <Mono size={11} weight={600} color={T.text.secondary}>
+                                {fmt(a.form.debts.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0))}
                               </Mono>
                             </div>
                           )}
-                          {a.form.savings != null && parseFloat(a.form.savings) > 0 && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          {a.form.investments?.length > 0 && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                               <span
                                 style={{
-                                  fontSize: 9,
+                                  fontSize: 10,
                                   fontWeight: 700,
-                                  color: T.text.secondary,
-                                  letterSpacing: "0.08em",
-                                  textTransform: "uppercase",
+                                  color: T.status.amber,
+                                  letterSpacing: "0.02em",
                                 }}
                               >
-                                SAV
+                                INV
                               </span>
-                              <Mono size={11} weight={600} color={T.status.green}>
-                                {fmt(parseFloat(a.form.savings) || 0)}
+                              <Mono size={11} weight={600} color={T.text.secondary}>
+                                {fmt(a.form.investments.reduce((sum, iv) => sum + (parseFloat(iv.amount) || 0), 0))}
                               </Mono>
                             </div>
                           )}

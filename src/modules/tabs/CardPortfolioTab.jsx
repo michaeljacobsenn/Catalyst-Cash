@@ -309,13 +309,21 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
   const headerSection = (
     <>
       {/* ─── Premium Wealth Dashboard Hero ─── */}
-      <div style={{ paddingTop: 20, paddingBottom: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{
+        paddingTop: 20, paddingBottom: 24,
+        display: "flex", flexDirection: "column", gap: 16,
+        background: `linear-gradient(180deg, ${T.bg.card} 0%, transparent 100%)`,
+        border: `1px solid ${T.border.subtle}`,
+        borderRadius: T.radius.lg,
+        padding: "20px 16px 24px",
+        boxShadow: `0 2px 12px rgba(0,0,0,0.1)`,
+      }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <h1 style={{ fontSize: 13, fontWeight: 700, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
               Total Net Worth
             </h1>
-            <div style={{ fontSize: 36, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.02em", textShadow: `0 2px 10px ${T.text.primary}20` }}>
+            <div style={{ fontSize: 36, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.02em", textShadow: `0 0 15px ${T.text.primary}80, 0 2px 10px ${T.text.primary}20` }}>
               {fmt(netWorth)}
             </div>
           </div>
@@ -369,35 +377,19 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
           </div>
         </div>
 
-        {/* Wealth Breakdown Cards */}
+        {/* Wealth Breakdown */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-          <div style={{ background: `${T.accent.emerald}10`, border: `1px solid ${T.accent.emerald}20`, borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 4 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 4, color: T.accent.emerald }}>
-              <Landmark size={12} />
-              <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase" }}>Liquid Cash</span>
-            </div>
-            <span style={{ fontSize: 16, fontWeight: 800, color: T.text.primary }}>{fmt(totalCash)}</span>
+          <div style={{ background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: "12px 10px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4 }}>Liquid Cash</div>
+            <span style={{ fontSize: 16, fontWeight: 800, color: T.accent.emerald, fontFamily: T.font.mono }}>{fmt(totalCash)}</span>
           </div>
-
-          <div style={{ background: `${T.status.blue}10`, border: `1px solid ${T.status.blue}20`, borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 4 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 4, color: T.status.blue }}>
-              <TrendingUp size={12} />
-              <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase" }}>Investments</span>
-            </div>
-            <span style={{ fontSize: 16, fontWeight: 800, color: T.text.primary }}>{fmt(investTotalValue + totalOtherAssets)}</span>
-            {totalOtherAssets > 0 && (
-              <span style={{ fontSize: 9, color: T.text.dim, fontWeight: 600, fontFamily: T.font.mono }}>
-                incl. {fmt(totalOtherAssets)} other assets
-              </span>
-            )}
+          <div style={{ background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: "12px 10px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4 }}>Investments</div>
+            <span style={{ fontSize: 16, fontWeight: 800, color: T.status.blue, fontFamily: T.font.mono }}>{fmt(investTotalValue + totalOtherAssets)}</span>
           </div>
-
-          <div style={{ background: `${T.status.red}10`, border: `1px solid ${T.status.red}20`, borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 4 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 4, color: T.status.red }}>
-              <AlertTriangle size={12} />
-              <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase" }}>Liabilities</span>
-            </div>
-            <span style={{ fontSize: 16, fontWeight: 800, color: T.text.primary }}>{fmt(-totalDebtBalance)}</span>
+          <div style={{ background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: "12px 10px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4 }}>Liabilities</div>
+            <span style={{ fontSize: 16, fontWeight: 800, color: T.status.red, fontFamily: T.font.mono }}>{fmt(-totalDebtBalance)}</span>
           </div>
         </div>
       </div>
@@ -453,14 +445,14 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
     </>
   );
 
-  const creditCardsSection = <CreditCardsSection />;
+  const creditCardsSection = <CreditCardsSection collapsedSections={collapsedSections} setCollapsedSections={setCollapsedSections} />;
 
   // Split bank accounts by type for separate sections
   const checkingAccounts = useMemo(() => bankAccounts.filter(a => a.accountType === "checking"), [bankAccounts]);
   const savingsAccounts = useMemo(() => bankAccounts.filter(a => a.accountType === "savings"), [bankAccounts]);
 
   // ─── Bank Accounts Section (Render) ──────────────────────────────────
-  const bankAccountsSectionContent = <BankAccountsSection />;
+  const bankAccountsSectionContent = <BankAccountsSection collapsedSections={collapsedSections} setCollapsedSections={setCollapsedSections} />;
 
   // ─── Investment Accounts Section (JSX) ─────────────────────────────────
 
