@@ -1,14 +1,14 @@
 :root {
   /* Catalyst Cash App Theme Tokens */
-  --bg: #0B0A14;
-  --bg-elevated: #15141F;
-  --bg-panel: rgba(28, 27, 41, 0.7);
-  --bg-card: #1C1B29;
+  --bg: #06080F;
+  --bg-elevated: #0F1423;
+  --bg-panel: rgba(11, 14, 23, 0.7);
+  --bg-card: #0B0E17;
   
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.15);
+  --line: rgba(255, 255, 255, 0.06);
+  --line-strong: rgba(255, 255, 255, 0.12);
   
-  --text: #F8FAFC;
+  --text: #FFFFFF;
   --muted: #94A3B8;
   --dim: #64748B;
   
