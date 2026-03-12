@@ -423,7 +423,7 @@ function CatalystCash() {
 
   // Create swipe-back instances for overlay panes
   const overlaySwipeResults = useSwipeBack(useCallback(() => {
-    const target = resultsBackTarget === "history" ? "history" : "dashboard";
+    const target = resultsBackTarget === "history" ? "history" : "audit";
     setResultsBackTarget(null);
     navTo(target);
   }, [resultsBackTarget, navTo]));
