@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#06080F" />
+  <title>Catalyst Cash · System Guide</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #06080F;
+      --bg2: #0C0F1A;
+      --bg3: #111420;
+      --border: rgba(255,255,255,0.07);
+      --border2: rgba(255,255,255,0.12);
+      --green: #2ECC71;
+      --green2: rgba(46,204,113,0.08);
+      --green3: rgba(46,204,113,0.15);
+      --purple: #7B5EA7;
+      --purple2: rgba(123,94,167,0.12);
+      --purple3: rgba(123,94,167,0.25);
+      --amber: #F5A623;
+      --amber2: rgba(245,166,35,0.10);
+      --blue: #4A9EFF;
+      --text: #F8FAFC;
+      --text2: #94A3B8;
+      --text3: #475569;
+      --mono: 'IBM Plex Mono', monospace;
+      --sans: 'Space Grotesk', -apple-system, sans-serif;
+      --pro-gold: #C9A84C;
+      --pro-gold2: rgba(201,168,76,0.12);
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 15px;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: 80px;
+    }
+
+    /* ── HEADER ── */
+    .guide-header {
+      padding: 48px 20px 36px;
+      text-align: center;
+      background: linear-gradient(180deg, #0a0c18 0%, var(--bg) 100%);
+      border-bottom: 1px solid var(--border);
+    }
+    .guide-header img { width: 64px; height: 64px; border-radius: 16px; margin-bottom: 16px; }
+    .guide-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--green); border: 1px solid rgba(46,204,113,0.3);
+      background: var(--green2); padding: 4px 12px; border-radius: 99px;
+      font-family: var(--mono); margin-bottom: 16px;
+    }
+    .guide-header h1 { font-size: clamp(24px, 5vw, 36px); font-weight: 800; letter-spacing: -0.03em; margin-bottom: 8px; }
+    .guide-header p { color: var(--text2); font-size: 14px; max-width: 360px; margin: 0 auto; }
+
+    /* ── CONTAINER ── */
+    .container { max-width: 680px; margin: 0 auto; padding: 0 16px; }
+
+    /* ── SECTION ── */
+    .section { margin-top: 36px; }
+    .section-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text3); font-family: var(--mono); margin-bottom: 6px;
+    }
+    .section-num {
+      font-size: 10px; font-weight: 600; color: var(--green);
+      font-family: var(--mono); letter-spacing: 1px;
+    }
+    h2 { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); margin-bottom: 12px; line-height: 1.3; }
+    p, li { color: var(--text2); font-size: 14px; line-height: 1.7; }
+    strong { color: var(--text); font-weight: 600; }
+
+    /* ── CARD ── */
+    .card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 14px; padding: 20px; margin-top: 14px;
+    }
+    .card h3 { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+    .card p { font-size: 13px; color: var(--text2); }
+
+    /* ── FEATURE GRID ── */
+    .feat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+    @media(max-width:480px) { .feat-grid { grid-template-columns: 1fr; } }
+    .feat-item {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px; position: relative;
+    }
+    .feat-icon { font-size: 22px; margin-bottom: 8px; display: block; }
+    .feat-item h4 { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+    .feat-item p { font-size: 12px; color: var(--text2); }
+
+    /* ── PRO BADGE ── */
+    .pro-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--pro-gold); background: var(--pro-gold2);
+      border: 1px solid rgba(201,168,76,0.3);
+      padding: 2px 8px; border-radius: 99px; font-family: var(--mono);
+      position: absolute; top: 12px; right: 12px;
+    }
+
+    /* ── LOCKED FEATURE ── */
+    .feat-item.locked {
+      border-color: rgba(201,168,76,0.2);
+      background: linear-gradient(135deg, var(--bg2) 0%, rgba(201,168,76,0.04) 100%);
+    }
+    .feat-item.locked h4 { color: rgba(255,255,255,0.5); }
+    .feat-item.locked p  { color: rgba(255,255,255,0.3); }
+
+    /* ── PRO CALLOUT ── */
+    .pro-callout {
+      margin-top: 20px;
+      background: linear-gradient(135deg, var(--bg2) 0%, rgba(201,168,76,0.06) 100%);
+      border: 1px solid rgba(201,168,76,0.25);
+      border-radius: 14px; padding: 20px;
+    }
+    .pro-callout-label {
+      font-size: 9px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--pro-gold); font-family: var(--mono); margin-bottom: 10px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .pro-callout-label::before { content: ''; display: block; width: 14px; height: 1px; background: var(--pro-gold); }
+    .pro-callout h3 { font-size: 15px; font-weight: 800; color: var(--text); margin-bottom: 6px; }
+    .pro-callout p { font-size: 13px; color: var(--text2); margin-bottom: 12px; }
+    .pro-callout .upg-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.3);
+      color: var(--pro-gold); font-size: 12px; font-weight: 700;
+      padding: 8px 16px; border-radius: 8px; text-decoration: none;
+      font-family: var(--mono); letter-spacing: 0.5px; cursor: pointer;
+      transition: background 0.2s;
+    }
+    .pro-callout .upg-btn:hover { background: rgba(201,168,76,0.2); }
+
+    /* ── STEPS ── */
+    .steps { margin-top: 14px; display: flex; flex-direction: column; gap: 12px; }
+    .step { display: flex; gap: 14px; align-items: flex-start; }
+    .step-num {
+      width: 28px; height: 28px; min-width: 28px; border-radius: 50%;
+      background: var(--green2); border: 1px solid rgba(46,204,113,0.25);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 800; color: var(--green); font-family: var(--mono);
+    }
+    .step-body h4 { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+    .step-body p { font-size: 13px; color: var(--text2); }
+
+    /* ── DIVIDER ── */
+    .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+    /* ── TIER TABLE ── */
+    .tier-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 11px 0; border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .tier-row:last-child { border-bottom: none; }
+    .tier-row .label { color: var(--text2); }
+    .tier-row .free-val { color: var(--green); font-weight: 600; font-family: var(--mono); font-size: 12px; }
+    .tier-row .pro-val  { color: var(--pro-gold); font-weight: 600; font-family: var(--mono); font-size: 12px; }
+
+    /* ── INSIGHT BOX ── */
+    .insight {
+      background: var(--green2); border: 1px solid rgba(46,204,113,0.2);
+      border-radius: 12px; padding: 16px; margin-top: 14px;
+    }
+    .insight-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--green); font-family: var(--mono); margin-bottom: 6px; }
+    .insight p { font-size: 13px; color: var(--text2); }
+
+    /* ── LIST ── */
+    ul.guide-list { list-style: none; padding: 0; margin-top: 10px; }
+    ul.guide-list li { padding: 8px 0 8px 22px; position: relative; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--text2); }
+    ul.guide-list li::before { content: '→'; position: absolute; left: 0; color: var(--green); font-size: 11px; top: 9px; }
+    ul.guide-list li:last-child { border-bottom: none; }
+
+    /* ── DANGER ZONE ── */
+    .danger-box {
+      background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 12px; padding: 16px; margin-top: 14px;
+    }
+    .danger-box .dlabel { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #EF4444; font-family: var(--mono); margin-bottom: 8px; }
+    .danger-box p { font-size: 13px; color: var(--text2); }
+
+    /* ── FOOTER ── */
+    .guide-footer { text-align: center; padding: 32px 20px; border-top: 1px solid var(--border); margin-top: 40px; }
+    .guide-footer p { font-size: 11px; color: var(--text3); max-width: 420px; margin: 0 auto 10px; line-height: 1.6; }
+    .guide-footer .version { font-size: 9px; color: var(--text3); font-family: var(--mono); letter-spacing: 1px; }
+
+    @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+    .section { animation: fadeUp 0.4s ease both; }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="guide-header">
+    <img src="/icon-512.png" alt="Catalyst Cash" />
+    <div class="guide-badge">Free Plan · System Guide</div>
+    <h1>Catalyst Cash</h1>
+    <p>Your weekly AI-powered money audit. Understand what you have, what's coming, and what to do next.</p>
+  </div>
+
+  <div class="container">
+
+    <!-- 01 WHAT IS IT -->
+    <div class="section">
+      <div class="section-num">01 / OVERVIEW</div>
+      <h2>What is Catalyst Cash?</h2>
+      <p>Catalyst Cash is a <strong>privacy-first AI finance app</strong> powered exclusively by <strong>OpenAI</strong>. It gives you the kind of advice usually reserved for people with financial advisors — instant, automatic, and entirely on your iPhone.</p>
+      <p style="margin-top:10px;">All AI requests travel through our secure backend proxy with PII scrubbing before reaching OpenAI. Your core financial data stays on your device. Raw payloads are never retained on our servers.</p>
+
+      <div class="feat-grid" style="margin-top:16px;">
+        <div class="feat-item">
+          <span class="feat-icon">🛡️</span>
+          <h4>Privacy-First</h4>
+          <p>Local-first storage. Secure AI proxy. GDPR/CCPA compliant deletion.</p>
+        </div>
+        <div class="feat-item">
+          <span class="feat-icon">🤖</span>
+          <h4>OpenAI-Powered</h4>
+          <p>Uses OpenAI models exclusively. Your data is scrubbed before every request.</p>
+        </div>
+        <div class="feat-item">
+          <span class="feat-icon">⚡</span>
+          <h4>Weekly Audit</h4>
+          <p>One weekly check-in gives you clarity on cash, debt, and next moves.</p>
+        </div>
+        <div class="feat-item">
+          <span class="feat-icon">📊</span>
+          <h4>Full Portfolio</h4>
+          <p>Cards, banks, debts, investments, crypto, and assets — one view.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- 02 WHAT YOU CAN TRACK -->
+    <div class="section">
+      <div class="section-num">02 / YOUR PORTFOLIO</div>
+      <h2>Everything You Can Track</h2>
+      <p>The more Catalyst knows, the smarter its advice gets.</p>
+
+      <ul class="guide-list">
+        <li><strong>Checking &amp; Savings</strong> — Connect via Plaid or enter manually. Catalyst monitors your runway and cash safety floor.</li>
+        <li><strong>Credit Cards</strong> — Track balances, limits, APRs, annual fees, and due dates. Get alerted on utilization spikes.</li>
+        <li><strong>Debts &amp; Loans</strong> — Auto loans, student loans, mortgages, personal debt. The built-in Debt Simulator shows exact payoff fastest paths.</li>
+        <li><strong>Investments</strong> — Sync brokerage, Roth IRA, 401(k) via Plaid — or add manually — for your complete net worth.</li>
+        <li><strong>Crypto</strong> — Add holdings with live prices pulled automatically.</li>
+        <li><strong>Other Assets</strong> — Real estate, vehicles, valuables. Classify each as Liquid or Locked.</li>
+      </ul>
+
+      <div class="insight">
+        <div class="insight-label">💡 Safety Floor</div>
+        <p>Set a minimum Emergency Floor for your checking account. If upcoming bills would push you below it, Catalyst warns you immediately — before it's too late.</p>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- 03 FREE FEATURES -->
+    <div class="section">
+      <div class="section-num">03 / YOUR FREE FEATURES</div>
+      <h2>Everything You Get on Free</h2>
+      <p>The free plan is full-featured — not crippleware. Here's what you have access to right now.</p>
+
+      <div class="feat-grid">
+        <div class="feat-item">
+          <span class="feat-icon">📋</span>
+          <h4>2 Weekly AI Audits</h4>
+          <p>Full audit reports each week. Green / Yellow / Red week status with actionable next moves.</p>
+        </div>
+        <div class="feat-item">
+          <span class="feat-icon">💬</span>
+          <h4>15 AskAI Chats/Day</h4>
+          <p>Chat your AI coach anytime. "Can I afford this?" answers in seconds.</p>
+        </div>
+        <div class="feat-item">
+          <span class="feat-icon">📈</span>
+          <h4>Debt Simulator</h4>
+          <p>Model payoff strategies. See exactly how extra payments save you thousands in interest.</p>
+        </div>
+        <div class="feat-item">
+          <span class="feat-icon">🏆</span>
+          <h4>Credit Score Simulator</h4>
+          <p>Estimate how specific actions affect your score before you act.</p>
+        </div>
+        <div class="feat-item">
+          <span class="feat-icon">🔥</span>
+          <h4>FIRE Calculator</h4>
+          <p>Calculate your path to financial independence based on your actual numbers.</p>
+        </div>
+        <div class="feat-item">
+          <span class="feat-icon">📅</span>
+          <h4>Cash Flow Calendar</h4>
+          <p>Visualize when money comes in and goes out across the month.</p>
+        </div>
+        <div class="feat-item">
+          <span class="feat-icon">💼</span>
+          <h4>Zero-Based Budgeting</h4>
+          <p>Every dollar gets a job. Use Unassigned Cash math to plan with precision.</p>
+        </div>
+        <div class="feat-item">
+          <span class="feat-icon">⏱️</span>
+          <h4>Spending Pace</h4>
+          <p>See how your spending tracks against your weekly allowance in real time.</p>
+        </div>
+        <div class="feat-item">
+          <span class="feat-icon">📍</span>
+          <h4>Card Wizard (Preview)</h4>
+          <p>Get best-card suggestions for merchants. Full geo-optimizer unlocks in Pro.</p>
+        </div>
+        <div class="feat-item">
+          <span class="feat-icon">🏦</span>
+          <h4>Plaid Bank Linking</h4>
+          <p>2 manual balance snapshots per week via Plaid. Background auto-sync unlocks in Pro.</p>
+        </div>
+        <div class="feat-item">
+          <span class="feat-icon">☁️</span>
+          <h4>iCloud Backup</h4>
+          <p>Cross-device backup through your private iCloud container. Always available.</p>
+        </div>
+        <div class="feat-item">
+          <span class="feat-icon">🔒</span>
+          <h4>Face ID Lock</h4>
+          <p>Biometric app lock, passcode protection, and GDPR/CCPA data deletion controls.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRO CALLOUT #1 -->
+    <div class="pro-callout">
+      <div class="pro-callout-label">Pro Exclusive</div>
+      <h3>The OpenAI Reasoning Upgrade</h3>
+      <p>Free users get standard OpenAI models — fast, accurate, and genuinely useful. Pro users unlock <strong>OpenAI o-series reasoning models</strong>: deeper analysis, multi-step financial logic, and answers that think through your situation the way a CFO would — not just a chatbot.</p>
+      <button class="upg-btn" onclick="window.parent.postMessage({type:'OPEN_UPGRADE'}, '*')">✦ Unlock Pro in Settings →</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- 04 WEEKLY ROUTINE -->
+    <div class="section">
+      <div class="section-num">04 / WEEKLY ROUTINE</div>
+      <h2>Your 5-Minute Money Ritual</h2>
+      <p>Spend 5 minutes once a week. That's it. Here's the routine that makes Catalyst work best.</p>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h4>Sync Your Accounts</h4>
+            <p>Tap Sync if you use Plaid to refresh balances. Otherwise, update your checking amount manually. Takes 30 seconds.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h4>Run Your Audit</h4>
+            <p>Tap the Audit button. OpenAI analyzes your cash flow, upcoming bills, debt load, and spending pace — then hands you a priority-ranked action plan.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <h4>Check Your Dashboard</h4>
+            <p>Your Health Score, Safe-to-Spend, and Net Worth all update. Green means you have room. Red means act now.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <h4>Ask Follow-Up Questions</h4>
+            <p>Use AskAI for anything specific: "Should I pay off my Visa or car loan first?" Get instant, personalized answers (up to 15/day on Free).</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="insight" style="margin-top:16px;">
+        <div class="insight-label">🔐 Privacy</div>
+        <p>All AI chat conversations auto-delete after 24 hours. Your financial data is scrubbed from prompts before any processing occurs on OpenAI's infrastructure.</p>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- 05 PRO FEATURES -->
+    <div class="section">
+      <div class="section-num">05 / PRO EXCLUSIVE</div>
+      <h2>What Pro Unlocks</h2>
+      <p>Pro removes the limits, upgrades the AI, and adds the power-user tools.</p>
+
+      <div class="feat-grid">
+        <div class="feat-item locked">
+          <span class="pro-badge">✦ PRO</span>
+          <span class="feat-icon">🧠</span>
+          <h4>OpenAI o-series Reasoning</h4>
+          <p>Multi-step financial logic. The AI plans, thinks, and then answers.</p>
+        </div>
+        <div class="feat-item locked">
+          <span class="pro-badge">✦ PRO</span>
+          <span class="feat-icon">📒</span>
+          <h4>Transaction Ledger</h4>
+          <p>Search, filter, and export your full transaction history. Local Edge AI categorization on-device.</p>
+        </div>
+        <div class="feat-item locked">
+          <span class="pro-badge">✦ PRO</span>
+          <span class="feat-icon">🏦</span>
+          <h4>10-Bank Live Sync</h4>
+          <p>Connect up to 10 institutions with background auto-refresh. Always accurate, zero effort.</p>
+        </div>
+        <div class="feat-item locked">
+          <span class="pro-badge">✦ PRO</span>
+          <span class="feat-icon">💬</span>
+          <h4>50 AskAI Chats/Day</h4>
+          <p>3× more daily conversations. Ask more, plan more, optimize more.</p>
+        </div>
+        <div class="feat-item locked">
+          <span class="pro-badge">✦ PRO</span>
+          <span class="feat-icon">📅</span>
+          <h4>31 Audits/Month</h4>
+          <p>Daily audits if you want them. Never run out of check-ins.</p>
+        </div>
+        <div class="feat-item locked">
+          <span class="pro-badge">✦ PRO</span>
+          <span class="feat-icon">📍</span>
+          <h4>Geo Card Optimizer</h4>
+          <p>Full geolocation card ranking. Know exactly which card to swipe before you enter any merchant.</p>
+        </div>
+      </div>
+
+      <div class="pro-callout" style="margin-top:20px;">
+        <div class="pro-callout-label">Upgrade</div>
+        <h3>$9.99/mo · $89.99/yr (save 25%)</h3>
+        <p>Billed securely via Apple In-App Purchases. Cancel anytime in iPhone Settings. Your data is never monetized — every subscriber keeps the app ad-free for everyone.</p>
+        <button class="upg-btn" onclick="window.parent.postMessage({type:'OPEN_UPGRADE'}, '*')">✦ Start 7-Day Free Trial →</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- 06 FREE vs PRO TABLE -->
+    <div class="section">
+      <div class="section-num">06 / PLANS</div>
+      <h2>Free vs Pro at a Glance</h2>
+
+      <div class="card" style="padding:4px 16px;">
+        <div class="tier-row">
+          <span class="label" style="font-weight:700;color:var(--text);">Feature</span>
+          <span style="display:flex;gap:32px;">
+            <span class="free-val">FREE</span>
+            <span class="pro-val">PRO</span>
+          </span>
+        </div>
+        <div class="tier-row">
+          <span class="label">Weekly Audits</span>
+          <span style="display:flex;gap:32px;">
+            <span class="free-val">2/wk</span>
+            <span class="pro-val">31/mo</span>
+          </span>
+        </div>
+        <div class="tier-row">
+          <span class="label">AskAI Chats</span>
+          <span style="display:flex;gap:32px;">
+            <span class="free-val">15/day</span>
+            <span class="pro-val">50/day</span>
+          </span>
+        </div>
+        <div class="tier-row">
+          <span class="label">AI Model</span>
+          <span style="display:flex;gap:32px;">
+            <span class="free-val">Standard</span>
+            <span class="pro-val">o-series</span>
+          </span>
+        </div>
+        <div class="tier-row">
+          <span class="label">Plaid Sync</span>
+          <span style="display:flex;gap:32px;">
+            <span class="free-val">2 snaps</span>
+            <span class="pro-val">10 auto</span>
+          </span>
+        </div>
+        <div class="tier-row">
+          <span class="label">Transaction Ledger</span>
+          <span style="display:flex;gap:32px;">
+            <span class="free-val" style="color:var(--text3)">—</span>
+            <span class="pro-val">✓</span>
+          </span>
+        </div>
+        <div class="tier-row">
+          <span class="label">Geo Card Optimizer</span>
+          <span style="display:flex;gap:32px;">
+            <span class="free-val" style="color:var(--text3)">Preview</span>
+            <span class="pro-val">Full</span>
+          </span>
+        </div>
+        <div class="tier-row">
+          <span class="label">Debt Sim / FIRE / Budget</span>
+          <span style="display:flex;gap:32px;">
+            <span class="free-val">✓</span>
+            <span class="pro-val">✓</span>
+          </span>
+        </div>
+        <div class="tier-row">
+          <span class="label">iCloud Backup</span>
+          <span style="display:flex;gap:32px;">
+            <span class="free-val">✓</span>
+            <span class="pro-val">✓</span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- 07 PRIVACY & BACKUP -->
+    <div class="section">
+      <div class="section-num">07 / PRIVACY &AMP; BACKUP</div>
+      <h2>Your Data, Your Rules</h2>
+      <p>Catalyst gives you complete control.</p>
+
+      <div class="feat-grid">
+        <div class="feat-item">
+          <span class="feat-icon">☁️</span>
+          <h4>iCloud Backup</h4>
+          <p>Auto-syncs to your private iCloud container. Restored automatically on a new device.</p>
+        </div>
+        <div class="feat-item">
+          <span class="feat-icon">📊</span>
+          <h4>Spreadsheet Export</h4>
+          <p>Export your portfolio as .xlsx. Edit in Excel or Google Sheets, then import back.</p>
+        </div>
+        <div class="feat-item">
+          <span class="feat-icon">🔐</span>
+          <h4>Encrypted Backup</h4>
+          <p>Password-protected .enc file. Passcodes, API keys, and subscription state excluded automatically.</p>
+        </div>
+        <div class="feat-item">
+          <span class="feat-icon">🗑️</span>
+          <h4>Full Deletion</h4>
+          <p>Request complete account and data deletion instantly from Settings → GDPR/CCPA.</p>
+        </div>
+      </div>
+
+      <div class="danger-box">
+        <div class="dlabel">⚠ Danger Zone</div>
+        <p><strong>Clear History</strong> — Deletes all past audit results. Accounts and settings are kept.</p>
+        <p style="margin-top:8px;"><strong>Factory Reset</strong> — Permanently erases all data, credentials, and settings. Back up first.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <div class="guide-footer">
+    <p>⚠️ Catalyst Cash provides AI-generated educational and informational content only. It is <strong>not</strong> professional financial, tax, legal, or investment advice. Always consult a licensed financial advisor before making financial decisions.</p>
+    <div class="version">CATALYST CASH · YOUR DATA STAYS ON YOUR DEVICE</div>
+  </div>
+
+</body>
+</html>

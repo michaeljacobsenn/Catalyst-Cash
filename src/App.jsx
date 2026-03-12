@@ -1485,7 +1485,7 @@ function CatalystCash() {
         </div>
       )}
 
-      {showGuide && <GuideModal onClose={() => setShowGuide(false)} swipeHook={overlaySwipeGuide} />}
+      {showGuide && <GuideModal onClose={() => setShowGuide(false)} swipeHook={overlaySwipeGuide} proEnabled={proEnabled} />}
       {isLocked && <LockScreen />}
       {transactionFeedTab === tab && (
         <Suspense fallback={<TabFallback />}>
@@ -1838,7 +1838,7 @@ function CatalystCash() {
         <div ref={overlaySwipeHistory.paneRef} onTouchStart={overlaySwipeHistory.onTouchStart} onTouchMove={overlaySwipeHistory.onTouchMove} onTouchEnd={overlaySwipeHistory.onTouchEnd} className="slide-pane safe-scroll-body" style={{ flex: 1, overflowY: "auto", position: "relative", zIndex: 20 }}>
           <ErrorBoundary name="History">
             <Suspense fallback={<TabFallback />}>
-              <HistoryTab toast={toast} />
+              <HistoryTab toast={toast} proEnabled={proEnabled} />
             </Suspense>
           </ErrorBoundary>
         </div>

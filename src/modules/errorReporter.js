@@ -58,6 +58,20 @@ export async function reportError(error, context = {}) {
     userAgent: navigator.userAgent.slice(0, 200),
   };
 
+  // Attempt to POST error to our telemetry endpoint for production tracking
+  try {
+    // Only send in production environment to avoid noise
+    if (import.meta.env.PROD) {
+       fetch("https://api.catalystcash.app/api/v1/telemetry/errors", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(entry),
+          // fire-and-forget, keepalive true so payload sends even if page unloads
+          keepalive: true,
+       }).catch(e => console.warn("Failed to send telemetry:", e));
+    }
+  } catch(e) { /* ignore */ }
+
   try {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, "readwrite");

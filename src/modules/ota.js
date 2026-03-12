@@ -2,8 +2,8 @@ import { injectOTACatalog } from "./rewardsCatalog.js";
 import { injectOTAMerchants } from "./merchantDatabase.js";
 
 const OTA_ENDPOINTS = {
-  CATALOG: "https://api.catalystcash.app/data/catalog.json",
-  MERCHANTS: "https://api.catalystcash.app/data/merchants.json"
+  CATALOG: "https://catalystcash.app/data/catalog.json",
+  MERCHANTS: "https://catalystcash.app/data/merchants.json"
 };
 
 // ── OTA Payload Validation ──────────────────────────────────

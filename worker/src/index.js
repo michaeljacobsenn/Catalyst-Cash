@@ -215,26 +215,55 @@ export async function resolveEffectiveTier(request, env) {
   }
 }
 
-function getRateLimitCacheKey(deviceId, tier, isChat, periodKey) {
-  const type = isChat ? "chat" : "audit";
-  return `https://rate-limit.internal/${tier}/${deviceId}/${type}/${periodKey}`;
-}
-
-// ─── Rate Limiting (per-device, using Cache API) ─────────────
-export async function peekRateLimit(deviceId, tier, isChat) {
-  const cache = caches.default;
-  const { limit, periodKey, resetAt } = getQuotaWindow(tier, isChat);
-  const key = getRateLimitCacheKey(deviceId, tier, isChat, periodKey);
-  const cached = await cache.match(key);
-
-  let count = 0;
-  if (cached) {
-    count = parseInt(await cached.text(), 10) || 0;
+// ─── Rate Limiting (per-device, using Durable Objects) ─────────────
+export class RateLimiter {
+  constructor(state, env) {
+    this.state = state;
   }
 
+  async fetch(request) {
+    const url = new URL(request.url);
+    const periodKey = url.searchParams.get("periodKey");
+    const commit = url.searchParams.get("commit") === "true";
+
+    let storedKey = await this.state.storage.get("periodKey");
+    let count = await this.state.storage.get("count") || 0;
+
+    if (storedKey !== periodKey) {
+      count = 0;
+      await this.state.storage.put("periodKey", periodKey);
+      await this.state.storage.put("count", 0);
+    }
+
+    if (commit) {
+      count += 1;
+      await this.state.storage.put("count", count);
+    }
+
+    return new Response(JSON.stringify({ count }));
+  }
+}
+
+export async function peekRateLimit(deviceId, tier, isChat, env) {
+  const { limit, periodKey, resetAt } = getQuotaWindow(tier, isChat);
+  const type = isChat ? "chat" : "audit";
+  const limitName = `${tier}-${deviceId}-${type}`;
+
   const retryAfter = Math.max(1, Math.ceil((resetAt.getTime() - Date.now()) / 1000));
+
+  if (!env.RATE_LIMITER) {
+    // Fallback if DO is not bound
+    return { allowed: true, remaining: limit, limit, retryAfter, count: 0, key: limitName, periodKey };
+  }
+
+  const id = env.RATE_LIMITER.idFromName(limitName);
+  const stub = env.RATE_LIMITER.get(id);
+
+  const res = await stub.fetch(`http://internal/?periodKey=${encodeURIComponent(periodKey)}&commit=false`);
+  const { count } = await res.json();
+
   if (count >= limit) {
-    return { allowed: false, remaining: 0, limit, retryAfter, count, key };
+    return { allowed: false, remaining: 0, limit, retryAfter, count, key: limitName, periodKey };
   }
 
   return {
@@ -243,21 +272,27 @@ export async function peekRateLimit(deviceId, tier, isChat) {
     limit,
     retryAfter,
     count,
-    key,
+    key: limitName,
+    periodKey,
   };
 }
 
-export async function commitRateLimit(rateResult) {
-  const newCount = rateResult.count + 1;
-  const res = new Response(String(newCount), {
-    headers: { "Cache-Control": `max-age=${rateResult.retryAfter}` },
-  });
-  await caches.default.put(rateResult.key, res);
+export async function commitRateLimit(rateResult, env) {
+  if (!env.RATE_LIMITER) {
+    const newCount = rateResult.count + 1;
+    return { ...rateResult, count: newCount, remaining: Math.max(0, rateResult.limit - newCount) };
+  }
+
+  const id = env.RATE_LIMITER.idFromName(rateResult.key);
+  const stub = env.RATE_LIMITER.get(id);
+
+  const res = await stub.fetch(`http://internal/?periodKey=${encodeURIComponent(rateResult.periodKey)}&commit=true`);
+  const { count } = await res.json();
 
   return {
     ...rateResult,
-    count: newCount,
-    remaining: Math.max(0, rateResult.limit - newCount),
+    count,
+    remaining: Math.max(0, rateResult.limit - count),
   };
 }
 
@@ -423,7 +458,7 @@ function getProviderHandler(provider) {
 
 // ─── Main Handler ────────────────────────────────────────────
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const origin = request.headers.get("Origin") || "";
     const cors = corsHeaders(origin, env);
 
@@ -637,9 +672,8 @@ export default {
               console.log(`[Plaid Webhook] Background balance sync complete for item ${itemId}, user ${user_id}`);
             };
 
-            // Handled via ExecutionContext waitUntil in real environments (mocked directly via await here)
-            // In CF Workers you would explicitly call ctx.waitUntil() but we'll queue a promised floating block
-            new Promise(r => setTimeout(r, 0)).then(() => performSync().catch(console.error));
+            // Use ctx.waitUntil to keep the worker alive for the async sync
+            ctx.waitUntil(performSync().catch(console.error));
           }
 
           return new Response(
@@ -995,7 +1029,7 @@ export default {
     // ─── Rate Limit Check ─────────────────────────────────
     const deviceId = request.headers.get("X-Device-ID") || request.headers.get("CF-Connecting-IP") || "unknown";
 
-    const rateResult = await peekRateLimit(deviceId, subscriptionTier, isChat);
+    const rateResult = await peekRateLimit(deviceId, subscriptionTier, isChat, env);
     if (!rateResult.allowed) {
       const limitName = isChat ? "chats" : "audits";
       return new Response(
@@ -1080,7 +1114,7 @@ export default {
         stream: shouldStream,
         responseFormat: responseFormat || "json",
       });
-      const committedRateResult = await commitRateLimit(rateResult);
+      const committedRateResult = await commitRateLimit(rateResult, env);
 
       // Streaming: pipe raw response through
       if (shouldStream && result instanceof Response) {
