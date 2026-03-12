@@ -23,7 +23,7 @@
         href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap"
         rel="stylesheet" />
     <meta name="robots" content="index, follow" />
-    <link rel="stylesheet" href="/style.css?v=2.8" />
+    <link rel="stylesheet" href="/style.css?v=2.9" />
 
     <!-- JSON-LD Structured Data -->
     <script type="application/ld+json">
@@ -120,15 +120,8 @@
         }
 
         @keyframes pulse-badge {
-
-            0%,
-            100% {
-                box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.4);
-            }
-
-            50% {
-                box-shadow: 0 0 12px 4px rgba(46, 204, 113, 0.15);
-            }
+            0%, 100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.4); }
+            50% { box-shadow: 0 0 12px 4px rgba(46, 204, 113, 0.15); }
         }
 
         .comp-card .comp-name {
@@ -166,100 +159,11 @@
             font-family: "IBM Plex Mono", monospace;
         }
 
-        .tag-ai {
-            background: rgba(123, 94, 167, 0.12);
-            color: #D4C4FB;
-            border: 1px solid rgba(123, 94, 167, 0.22);
-        }
-
-        .tag-budget {
-            background: rgba(107, 163, 232, 0.1);
-            color: var(--blue);
-            border: 1px solid rgba(107, 163, 232, 0.18);
-        }
-
-        .tag-tracking {
-            background: rgba(224, 168, 77, 0.1);
-            color: var(--amber);
-            border: 1px solid rgba(224, 168, 77, 0.18);
-        }
-
-        .tag-free {
-            background: rgba(46, 204, 113, 0.1);
-            color: var(--green);
-            border: 1px solid rgba(46, 204, 113, 0.18);
-        }
-
-        .tag-sub {
-            background: rgba(232, 92, 106, 0.1);
-            color: var(--red);
-            border: 1px solid rgba(232, 92, 106, 0.18);
-        }
-
-        /* ── Yearly Savings Callout ── */
-        .yearly-callout {
-            border-radius: var(--radius-lg);
-            border: 1px solid rgba(46, 204, 113, 0.2);
-            background: linear-gradient(135deg, rgba(46, 204, 113, 0.06), rgba(107, 163, 232, 0.04));
-            padding: 24px 32px;
-            display: flex;
-            align-items: center;
-            gap: 28px;
-            margin-bottom: 56px;
-        }
-
-        .yearly-callout .big-num {
-            font-size: clamp(2.4rem, 4vw, 3.6rem);
-            font-weight: 800;
-            letter-spacing: -0.06em;
-            color: var(--green);
-            line-height: 1;
-            white-space: nowrap;
-        }
-
-        .yearly-callout .big-num small {
-            font-size: 0.5em;
-            color: var(--dim);
-            font-weight: 500;
-            display: block;
-            margin-top: 4px;
-            letter-spacing: 0;
-        }
-
-        .yearly-callout .savings-detail {
-            flex: 1;
-        }
-
-        .yearly-callout h3 {
-            font-size: 1.1rem;
-            margin-bottom: 6px;
-            letter-spacing: -0.03em;
-        }
-
-        .yearly-callout p {
-            font-size: 13px;
-            color: var(--muted);
-            line-height: 1.55;
-            margin: 0;
-        }
-
-        .savings-chips {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 12px;
-        }
-
-        .savings-chip {
-            font-size: 11px;
-            font-family: "IBM Plex Mono", monospace;
-            font-weight: 600;
-            padding: 4px 10px;
-            border-radius: 6px;
-            background: rgba(46, 204, 113, 0.08);
-            color: var(--green);
-            border: 1px solid rgba(46, 204, 113, 0.12);
-        }
+        .tag-ai { background: rgba(123, 94, 167, 0.12); color: #D4C4FB; border: 1px solid rgba(123, 94, 167, 0.22); }
+        .tag-budget { background: rgba(107, 163, 232, 0.1); color: var(--blue); border: 1px solid rgba(107, 163, 232, 0.18); }
+        .tag-tracking { background: rgba(224, 168, 77, 0.1); color: var(--amber); border: 1px solid rgba(224, 168, 77, 0.18); }
+        .tag-free { background: rgba(46, 204, 113, 0.1); color: var(--green); border: 1px solid rgba(46, 204, 113, 0.18); }
+        .tag-sub { background: rgba(232, 92, 106, 0.1); color: var(--red); border: 1px solid rgba(232, 92, 106, 0.18); }
 
         /* ── Feature Table ── */
         .feature-table-wrap {
@@ -280,7 +184,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 13px;
-            min-width: 860px;
+            min-width: 750px;
         }
 
         .feature-table thead th {
@@ -341,21 +245,10 @@
             color: var(--text);
         }
 
-        .feature-table tbody tr:hover td {
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        .feature-table tbody tr:hover td.td-highlight {
-            background: rgba(16, 185, 129, 0.2);
-        }
-
-        .feature-table tbody tr:hover td:first-child {
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        .feature-table tbody tr:last-child td {
-            border-bottom: none;
-        }
+        .feature-table tbody tr:hover td { background: rgba(255, 255, 255, 0.02); }
+        .feature-table tbody tr:hover td.td-highlight { background: rgba(16, 185, 129, 0.2); }
+        .feature-table tbody tr:hover td:first-child { background: rgba(255, 255, 255, 0.02); }
+        .feature-table tbody tr:last-child td { border-bottom: none; }
 
         .feature-table tbody tr.cat-row td {
             padding: 18px 12px 9px 22px;
@@ -369,68 +262,47 @@
             background: rgba(107, 163, 232, 0.03);
         }
 
-        .feature-table tbody tr.cat-row td.td-highlight {
-            background: rgba(16, 185, 129, 0.2);
-        }
+        .feature-table tbody tr.cat-row td.td-highlight { background: rgba(16, 185, 129, 0.2); }
 
-        .yes {
-            color: var(--green);
-            font-weight: 700;
-        }
+        .yes { color: var(--green); font-weight: 700; }
+        .no { color: var(--dim); opacity: 0.5; }
+        .partial { color: var(--amber); }
 
-        .no {
-            color: var(--dim);
-            opacity: 0.5;
-        }
-
-        .partial {
-            color: var(--amber);
-        }
-
-        /* ── Product Screenshots ── */
-        .product-showcase {
+        /* ── App Screenshots ── */
+        .screenshots-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 28px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
             margin-bottom: 56px;
-            align-items: start;
         }
 
-        .showcase-panel {
-            border-radius: var(--radius-xl);
+        .screenshot-item {
+            border-radius: var(--radius-lg);
             border: 1px solid var(--line);
             background: var(--bg-panel);
             overflow: hidden;
             transition: transform 0.3s, box-shadow 0.3s;
         }
 
-        .showcase-panel:hover {
+        .screenshot-item:hover {
             transform: translateY(-3px);
             box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
         }
 
-        .showcase-panel img {
+        .screenshot-item img {
             width: 100%;
             height: auto;
             display: block;
         }
 
-        .showcase-caption {
-            padding: 18px 22px;
+        .screenshot-item .caption {
+            padding: 10px 14px;
             border-top: 1px solid var(--line);
-        }
-
-        .showcase-caption h3 {
-            font-size: 1rem;
-            margin-bottom: 4px;
-            letter-spacing: -0.02em;
-        }
-
-        .showcase-caption p {
-            font-size: 12.5px;
+            font-size: 11px;
+            font-weight: 700;
             color: var(--muted);
-            margin: 0;
-            line-height: 1.5;
+            text-align: center;
+            letter-spacing: -0.01em;
         }
 
         /* ── Advantages Section ── */
@@ -507,47 +379,6 @@
             color: var(--muted);
         }
 
-        /* ── Social Proof ── */
-        .social-proof-strip {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 36px;
-            padding: 28px;
-            border-radius: var(--radius-lg);
-            border: 1px solid var(--line);
-            background: var(--bg-panel);
-            margin-bottom: 56px;
-            flex-wrap: wrap;
-        }
-
-        .proof-stat {
-            text-align: center;
-        }
-
-        .proof-stat .num {
-            font-size: 1.6rem;
-            font-weight: 800;
-            letter-spacing: -0.04em;
-            color: var(--green);
-        }
-
-        .proof-stat .label {
-            font-size: 11px;
-            color: var(--dim);
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            font-family: "IBM Plex Mono", monospace;
-            font-weight: 600;
-            margin-top: 2px;
-        }
-
-        .proof-sep {
-            width: 1px;
-            height: 36px;
-            background: var(--line);
-        }
-
         /* ── Scroll Animations ── */
         .fade-up {
             opacity: 0;
@@ -563,41 +394,14 @@
 
         /* ── Responsive ── */
         @media (max-width: 900px) {
-            .competitor-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
-
-            .yearly-callout {
-                flex-direction: column;
-                text-align: center;
-                padding: 20px;
-            }
-
-            .savings-chips {
-                justify-content: center;
-            }
-
-            .product-showcase {
-                grid-template-columns: 1fr;
-            }
+            .competitor-grid { grid-template-columns: repeat(3, 1fr); }
+            .screenshots-grid { grid-template-columns: repeat(2, 1fr); }
         }
 
         @media (max-width: 600px) {
-            .competitor-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-
-            .compare-hero {
-                padding: 72px 0 32px;
-            }
-
-            .social-proof-strip {
-                gap: 20px;
-            }
-
-            .proof-sep {
-                display: none;
-            }
+            .competitor-grid { grid-template-columns: repeat(2, 1fr); }
+            .compare-hero { padding: 72px 0 32px; }
+            .screenshots-grid { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
 </head>
@@ -635,43 +439,10 @@
                 <div class="eyebrow">March 2026 pricing &bull; verified feature data</div>
                 <h1>How does Catalyst Cash stack up?</h1>
                 <p class="hero-sub">
-                    An honest, feature-by-feature breakdown against the biggest names in personal finance.
+                    An honest, side-by-side breakdown against the biggest names in personal finance.
                     Real pricing, real capabilities — no spin.
                 </p>
             </section>
-
-            <!-- ── Social Proof Strip ── -->
-            <div class="social-proof-strip fade-up">
-                <div class="proof-stat">
-                    <div class="num">3</div>
-                    <div class="label">AI Models</div>
-                </div>
-                <div class="proof-sep"></div>
-                <div class="proof-stat">
-                    <div class="num">25+</div>
-                    <div class="label">Features</div>
-                </div>
-                <div class="proof-sep"></div>
-                <div class="proof-stat">
-                    <div class="num">$7.50</div>
-                    <div class="label">Effective/mo</div>
-                </div>
-                <div class="proof-sep"></div>
-                <div class="proof-stat">
-                    <div class="num">298</div>
-                    <div class="label">Tests Passing</div>
-                </div>
-                <div class="proof-sep"></div>
-                <div class="proof-stat">
-                    <div class="num">AES-256</div>
-                    <div class="label">Encryption</div>
-                </div>
-                <div class="proof-sep"></div>
-                <div class="proof-stat">
-                    <div class="num">0</div>
-                    <div class="label">Ads. Zero.</div>
-                </div>
-            </div>
 
             <!-- ── Price at a Glance ── -->
             <section class="section fade-up" style="padding-top: 0;">
@@ -686,7 +457,7 @@
                         <div class="comp-name">Catalyst Cash Pro</div>
                         <div class="comp-price">$9.99</div>
                         <div class="comp-sub">/ month</div>
-                        <p>All features. 50 AI Chats/day. Plaid auto-sync. Advanced tools. No ads.</p>
+                        <p>All features. 50 AI Chats/day. Plaid auto-sync. No ads.</p>
                     </div>
                     <div class="comp-card">
                         <div class="comp-name">Empower</div>
@@ -739,32 +510,12 @@
                 </div>
             </section>
 
-            <!-- ── Yearly Savings Callout ── -->
-            <div class="yearly-callout fade-up">
-                <div class="big-num">$7.50<small>effective / month</small></div>
-                <div class="term">billed as $89.99 yearly</div>
-                <div class="savings-detail">
-                    <h3>Annual plan: the real price comparison.</h3>
-                    <p>
-                        At $89.99/year, Catalyst Cash Pro costs less per month than Copilot, Monarch, and YNAB, while
-                        including Catalyst AI, reasoning models, and 50 AskAI chats per day.
-                    </p>
-                    <div class="savings-chips">
-                        <span class="savings-chip">vs Origin $8.25/mo</span>
-                        <span class="savings-chip">vs Copilot $7.92/mo</span>
-                        <span class="savings-chip">vs YNAB $9.08/mo</span>
-                        <span class="savings-chip">vs Monarch $8.33/mo</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ── Feature-by-Feature Table ── -->
+            <!-- ── Feature-by-Feature Table (Simplified) ── -->
             <section class="section fade-up" style="padding-top: 0;">
                 <div class="section-head">
                     <div class="micro-label">Feature Matrix</div>
-                    <h2>The full breakdown.</h2>
-                    <p>Every feature, every app. Verified against each competitor's current offering as of March 2026.
-                    </p>
+                    <h2>The features that matter.</h2>
+                    <p>Key differentiators, verified against each competitor's current offering as of March 2026.</p>
                 </div>
 
                 <div class="feature-table-wrap">
@@ -774,64 +525,40 @@
                                 <tr>
                                     <th scope="col">Feature</th>
                                     <th scope="col" class="th-highlight">Catalyst Cash</th>
-                                    <th scope="col">Empower</th>
-                                    <th scope="col">MaxRewards</th>
-                                    <th scope="col">Rocket Money</th>
-                                    <th scope="col">Origin</th>
                                     <th scope="col">Copilot</th>
-                                    <th scope="col">YNAB</th>
                                     <th scope="col">Monarch</th>
-                                    <th scope="col">Credit Karma</th>
+                                    <th scope="col">YNAB</th>
+                                    <th scope="col">Origin</th>
+                                    <th scope="col">Rocket Money</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <!-- AI -->
                                 <tr class="cat-row">
-                                    <td colspan="10">Artificial Intelligence</td>
+                                    <td colspan="7">AI & Intelligence</td>
                                 </tr>
                                 <tr>
                                     <td>AI Financial Analysis</td>
                                     <td class="td-highlight"><span class="yes">✓ Multi-model</span></td>
                                     <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="partial">Basic companion</span></td>
-                                    <td><span class="yes">✓ Proprietary</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
                                     <td><span class="partial">Basic</span></td>
                                     <td><span class="no">—</span></td>
+                                    <td><span class="yes">✓ Proprietary</span></td>
+                                    <td><span class="partial">Basic companion</span></td>
                                 </tr>
                                 <tr>
-                                    <td>AI Chat (Ask Questions)</td>
-                                    <td class="td-highlight"><span class="yes">✓ 15/day (Free)<br /><span style="font-size:10px;color:var(--text-muted)">✓ 100/day (Pro)</span></span></td>
+                                    <td>AI Chat</td>
+                                    <td class="td-highlight"><span class="yes">✓ 5/day Free<br /><span style="font-size:10px;color:var(--text-muted)">50/day Pro</span></span></td>
                                     <td><span class="no">—</span></td>
+                                    <td><span class="yes">✓</span></td>
                                     <td><span class="no">—</span></td>
+                                    <td><span class="yes">✓</span></td>
                                     <td><span class="partial">Premium only</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="no">—</span></td>
                                 </tr>
                                 <tr>
                                     <td>Choose AI Model</td>
-                                    <td class="td-highlight"><span class="yes">✓ Gemini, GPT, Claude</span></td>
+                                    <td class="td-highlight"><span class="yes">✓ Gemini · GPT · Claude</span></td>
                                     <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                </tr>
-                                <tr>
-                                    <td>AI Memory (Learns You)</td>
-                                    <td class="td-highlight"><span class="yes">✓ Cross-session</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="partial">Limited</span></td>
                                     <td><span class="no">—</span></td>
                                     <td><span class="no">—</span></td>
                                     <td><span class="no">—</span></td>
@@ -840,98 +567,48 @@
 
                                 <!-- Core Finance -->
                                 <tr class="cat-row">
-                                    <td colspan="10">Core Finance</td>
+                                    <td colspan="7">Core Finance</td>
                                 </tr>
                                 <tr>
                                     <td>Bank Sync (Plaid)</td>
-                                    <td class="td-highlight"><span class="yes">✓ Manual (Free)<br /><span
-                                                style="font-size:10px;color:var(--text-muted)">✓ Auto-Background
-                                                (Pro)</span></span></td>
-                                    <td><span class="yes">✓ Yodlee</span></td>
-                                    <td><span class="yes">✓ Plaid/Custom</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓ Multi-provider</span></td>
+                                    <td class="td-highlight"><span class="yes">✓ Auto (Pro)</span></td>
                                     <td><span class="yes">✓</span></td>
                                     <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓ Multi-provider</span></td>
+                                    <td><span class="yes">✓</span></td>
+                                    <td><span class="yes">✓</span></td>
                                     <td><span class="yes">✓</span></td>
                                 </tr>
                                 <tr>
-                                    <td>Budget Tracking</td>
-                                    <td class="td-highlight"><span class="yes">✓ Category-based</span></td>
-                                    <td><span class="partial">Basic limits</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="yes">✓ Unlimited (Premium)</span></td>
-                                    <td><span class="yes">✓ AI-built</span></td>
+                                    <td>Budgeting</td>
+                                    <td class="td-highlight"><span class="yes">✓ Zero-based</span></td>
                                     <td><span class="yes">✓ Adaptive</span></td>
-                                    <td><span class="yes">✓ Envelope (best)</span></td>
-                                    <td><span class="yes">✓ Flex + Category</span></td>
-                                    <td><span class="partial">Basic</span></td>
-                                </tr>
-                                <tr>
-                                    <td>Transaction Categorization</td>
-                                    <td class="td-highlight"><span class="yes">✓ Merchant-mapped</span></td>
-                                    <td><span class="yes">✓ Rules</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="yes">✓ Custom rules</span></td>
-                                    <td><span class="yes">✓ AI</span></td>
-                                    <td><span class="yes">✓ AI (best)</span></td>
-                                    <td><span class="yes">✓ Rules-based</span></td>
-                                    <td><span class="yes">✓ AI</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                </tr>
-                                <tr>
-                                    <td>Subscription Management</td>
-                                    <td class="td-highlight"><span class="yes">✓ Track, Forecast &amp; Cancel Scripts (Pro)</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="yes">✓ Auto-cancel (best)</span></td>
-                                    <td><span class="partial">Detection only</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="partial">Detection only</span></td>
-                                    <td><span class="no">—</span></td>
-                                </tr>
-                                <tr>
-                                    <td>Bill Negotiation</td>
-                                    <td class="td-highlight"><span class="yes">✓ AI Scripts (Pro, $0 fee)</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="yes">✓ 35–60% fee</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
+                                    <td><span class="yes">✓ Flex</span></td>
+                                    <td><span class="yes">✓ Envelope</span></td>
+                                    <td><span class="yes">✓ AI-built</span></td>
+                                    <td><span class="yes">✓ Premium</span></td>
                                 </tr>
                                 <tr>
                                     <td>Investment Tracking</td>
                                     <td class="td-highlight"><span class="yes">✓ Live prices</span></td>
-                                    <td><span class="yes">✓ Premium analytics</span></td>
-                                    <td><span class="no">—</span></td>
+                                    <td><span class="yes">✓</span></td>
+                                    <td><span class="yes">✓</span></td>
+                                    <td><span class="no">Manual</span></td>
+                                    <td><span class="yes">✓</span></td>
                                     <td><span class="partial">Net worth only</span></td>
-                                    <td><span class="yes">✓ Full portfolio</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="no">Manual only</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="no">—</span></td>
                                 </tr>
                                 <tr>
-                                    <td>Net Worth Dashboard</td>
-                                    <td class="td-highlight"><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓ Best-in-class</span></td>
+                                    <td>Subscription Tracking</td>
+                                    <td class="td-highlight"><span class="yes">✓ 1-Click Cancel Links</span></td>
                                     <td><span class="no">—</span></td>
-                                    <td><span class="yes">✓ Premium</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="partial">Limited</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="partial">Basic</span></td>
+                                    <td><span class="partial">Detection</span></td>
+                                    <td><span class="no">—</span></td>
+                                    <td><span class="partial">Detection</span></td>
+                                    <td><span class="partial">Auto-cancel (needs login)</span></td>
                                 </tr>
 
-                                <!-- Unique Differentiators -->
+                                <!-- Unique -->
                                 <tr class="cat-row">
-                                    <td colspan="10">Unique to Catalyst Cash</td>
+                                    <td colspan="7">Unique to Catalyst Cash</td>
                                 </tr>
                                 <tr>
                                     <td>Weekly AI Audit</td>
@@ -941,6 +618,12 @@
                                     <td><span class="no">—</span></td>
                                     <td><span class="partial">Daily recaps</span></td>
                                     <td><span class="no">—</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Card Wizard (Points Optimizer)</td>
+                                    <td class="td-highlight"><span class="yes">✓ Geo-aware</span></td>
+                                    <td><span class="no">—</span></td>
+                                    <td><span class="no">—</span></td>
                                     <td><span class="no">—</span></td>
                                     <td><span class="no">—</span></td>
                                     <td><span class="no">—</span></td>
@@ -949,102 +632,33 @@
                                     <td>Debt Payoff Simulator</td>
                                     <td class="td-highlight"><span class="yes">✓ Compound + promo APR</span></td>
                                     <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
                                     <td><span class="partial">Goal tracking</span></td>
-                                    <td><span class="partial">Recommendations</span></td>
+                                    <td><span class="no">—</span></td>
+                                    <td><span class="no">—</span></td>
+                                    <td><span class="no">—</span></td>
                                 </tr>
                                 <tr>
                                     <td>FIRE Calculator</td>
                                     <td class="td-highlight"><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓ Retirement planner</span></td>
+                                    <td><span class="no">—</span></td>
                                     <td><span class="no">—</span></td>
                                     <td><span class="no">—</span></td>
                                     <td><span class="partial">Retirement forecast</span></td>
                                     <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
                                 </tr>
                                 <tr>
-                                    <td>Credit Score Simulator</td>
-                                    <td class="td-highlight"><span class="yes">✓</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="yes">✓ Full report</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓ Best</span></td>
-                                </tr>
-                                <tr>
-                                    <td>Card Portfolio Manager</td>
-                                    <td class="td-highlight"><span class="yes">✓ APR, limits, promos</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="yes">✓ Best</span></td>
+                                    <td>Bill Negotiation Scripts</td>
+                                    <td class="td-highlight"><span class="yes">✓ AI Scripts ($0 fee)</span></td>
                                     <td><span class="no">—</span></td>
                                     <td><span class="no">—</span></td>
                                     <td><span class="no">—</span></td>
                                     <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="partial">Card recs</span></td>
-                                </tr>
-                                <tr>
-                                    <td>Card Wizard (Points Optimizer)</td>
-                                    <td class="td-highlight"><span class="yes">✓ Teaser (Free)<br /><span style="font-size:10px;color:var(--text-muted)">✓ Full (Pro)</span></span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="yes">✓ Pro</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                </tr>
-                                <tr>
-                                    <td>Searchable Ledgers</td>
-                                    <td class="td-highlight"><span class="yes">✓ Teaser (Free)<br /><span style="font-size:10px;color:var(--text-muted)">✓ Full (Pro)</span></span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                </tr>
-                                <tr>
-                                    <td>Cash Flow Calendar</td>
-                                    <td class="td-highlight"><span class="yes">✓</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="yes">✓ Bill tracking</span></td>
-                                    <td><span class="yes">✓ Forecasts</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="no">—</span></td>
-                                </tr>
-                                <tr>
-                                    <td>Gamification &amp; Badges</td>
-                                    <td class="td-highlight"><span class="yes">✓ Challenges, streaks</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
+                                    <td><span class="yes">✓ 35–60% fee</span></td>
                                 </tr>
 
-                                <!-- Privacy & Security -->
+                                <!-- Privacy -->
                                 <tr class="cat-row">
-                                    <td colspan="10">Privacy &amp; Security</td>
+                                    <td colspan="7">Privacy & Platform</td>
                                 </tr>
                                 <tr>
                                     <td>On-Device Storage</td>
@@ -1054,122 +668,33 @@
                                     <td><span class="no">Cloud</span></td>
                                     <td><span class="no">Cloud</span></td>
                                     <td><span class="no">Cloud</span></td>
-                                    <td><span class="no">Cloud</span></td>
-                                    <td><span class="no">Cloud</span></td>
-                                    <td><span class="no">Cloud</span></td>
                                 </tr>
                                 <tr>
-                                    <td>Encrypted Backups</td>
-                                    <td class="td-highlight"><span class="yes">✓ AES-256-GCM</span></td>
-                                    <td><span class="partial">Server-side</span></td>
-                                    <td><span class="partial">Server-side</span></td>
-                                    <td><span class="partial">Server-side</span></td>
-                                    <td><span class="partial">Server-side</span></td>
-                                    <td><span class="partial">Server-side</span></td>
-                                    <td><span class="partial">Server-side</span></td>
-                                    <td><span class="partial">Server-side</span></td>
-                                    <td><span class="partial">Server-side</span></td>
-                                </tr>
-                                <tr>
-                                    <td>Face ID / Biometric Lock</td>
+                                    <td>No Ads / No Data Selling</td>
                                     <td class="td-highlight"><span class="yes">✓</span></td>
                                     <td><span class="yes">✓</span></td>
                                     <td><span class="yes">✓</span></td>
                                     <td><span class="yes">✓</span></td>
                                     <td><span class="yes">✓</span></td>
                                     <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                </tr>
-                                <tr>
-                                    <td>No Ads</td>
-                                    <td class="td-highlight"><span class="yes">✓</span></td>
-                                    <td><span class="no">Ad-supported</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="no">Ad-supported</span></td>
-                                </tr>
-                                <tr>
-                                    <td>No Data Selling</td>
-                                    <td class="td-highlight"><span class="yes">✓</span></td>
-                                    <td><span class="no">Monetized</span></td>
-                                    <td><span class="no">Monetized</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="no">Monetized</span></td>
-                                </tr>
-
-                                <!-- Platform -->
-                                <tr class="cat-row">
-                                    <td colspan="10">Platform &amp; Extras</td>
                                 </tr>
                                 <tr>
                                     <td>Free Tier</td>
                                     <td class="td-highlight"><span class="yes">✓ Full-featured</span></td>
-                                    <td><span class="yes">✓ Full app</span></td>
-                                    <td><span class="yes">✓ Basic app</span></td>
-                                    <td><span class="yes">✓ Limited</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">34-day trial</span></td>
+                                    <td><span class="no">30-day trial</span></td>
                                     <td><span class="no">7-day trial</span></td>
-                                    <td><span class="yes">✓</span></td>
+                                    <td><span class="no">34-day trial</span></td>
+                                    <td><span class="no">—</span></td>
+                                    <td><span class="yes">✓ Limited</span></td>
                                 </tr>
                                 <tr>
-                                    <td>Pricing (Yearly)</td>
-                                    <td class="td-highlight"><span class="yes">$89.99 ($7.50)</span></td>
-                                    <td>$0 (Upsells)</td>
-                                    <td>$108/yr ($9.00)</td>
-                                    <td>$95.00/yr ($7.91)</td>
-                                    <td>$99/yr ($8.25)</td>
-                                    <td>$95/yr ($7.91)</td>
-                                    <td>$109/yr ($9.08)</td>
-                                    <td>$99.99/yr ($8.33)</td>
-                                    <td>$0 (with ads)</td>
-                                </tr>
-                                <tr>
-                                    <td>Household Sharing</td>
-                                    <td class="td-highlight"><span class="no">Roadmap</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="partial">Premium</span></td>
-                                    <td><span class="yes">✓ Free</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="yes">✓ 6 users</span></td>
-                                    <td><span class="yes">✓ Unlimited</span></td>
-                                    <td><span class="no">—</span></td>
-                                </tr>
-                                <tr>
-                                    <td>Android</td>
-                                    <td class="td-highlight"><span class="no">iOS only (now)</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="no">iOS/Mac/Web</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                    <td><span class="yes">✓</span></td>
-                                </tr>
-                                <tr>
-                                    <td>CFP® Access</td>
-                                    <td class="td-highlight"><span class="no">—</span></td>
-                                    <td><span class="yes">✓ Wealth clients</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="partial">Chat expert</span></td>
-                                    <td><span class="yes">✓ 1:1 Meetings</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
-                                    <td><span class="no">—</span></td>
+                                    <td>Yearly Price</td>
+                                    <td class="td-highlight"><span class="yes">$89.99 ($7.50/mo)</span></td>
+                                    <td>$95 ($7.92)</td>
+                                    <td>$99.99 ($8.33)</td>
+                                    <td>$109 ($9.08)</td>
+                                    <td>$99 ($8.25)</td>
+                                    <td>$95 ($7.91)</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1177,35 +702,30 @@
                 </div>
             </section>
 
-            <!-- ── Product Screenshots ── -->
+            <!-- ── Real App Screenshots ── -->
             <section class="section fade-up" style="padding-top: 0;">
                 <div class="section-head">
                     <div class="micro-label">See It in Action</div>
-                    <h2>AI that actually works for your money.</h2>
-                    <p>Weekly audits with actionable strategies. An AI that remembers your goals and gets smarter over
-                        time.</p>
+                    <h2>Real screenshots. Real app.</h2>
+                    <p>What you actually get — no mockups, no renders.</p>
                 </div>
 
-                <div class="product-showcase">
-                    <div class="showcase-panel">
-                        <img src="/img/app-audit.png"
-                            alt="Catalyst Cash Weekly AI Audit showing health score, signal cards, and action items"
-                            width="512" height="512" loading="lazy" />
-                        <div class="showcase-caption">
-                            <h3>Weekly Money Audit</h3>
-                            <p>Health score, signal cards, and AI-generated action items — every week, automatically.
-                            </p>
-                        </div>
+                <div class="screenshots-grid">
+                    <div class="screenshot-item">
+                        <img src="/img/app-dashboard.png" alt="Catalyst Cash Dashboard — Command Center with health score, net worth, and AI insights" loading="lazy" />
+                        <div class="caption">Dashboard</div>
                     </div>
-                    <div class="showcase-panel">
-                        <img src="/img/app-askai.png"
-                            alt="Catalyst Cash Ask AI chat showing a debt vs savings conversation" width="512"
-                            height="512" loading="lazy" />
-                        <div class="showcase-caption">
-                            <h3>Ask AI Anything</h3>
-                            <p>Get personalized answers about your finances. Choose Gemini, GPT, or Claude for each
-                                conversation.</p>
-                        </div>
+                    <div class="screenshot-item">
+                        <img src="/img/app-chat.png" alt="Catalyst Cash Ask AI — private financial Q&A with multiple AI models" loading="lazy" />
+                        <div class="caption">Ask AI</div>
+                    </div>
+                    <div class="screenshot-item">
+                        <img src="/img/app-cashflow.png" alt="Catalyst Cash Cashflow — budget tracking and expense management" loading="lazy" />
+                        <div class="caption">Cashflow</div>
+                    </div>
+                    <div class="screenshot-item">
+                        <img src="/img/app-audit-tab.png" alt="Catalyst Cash Audit Tab — weekly AI audit with health trend and history" loading="lazy" />
+                        <div class="caption">AI Audit</div>
                     </div>
                 </div>
             </section>
@@ -1221,41 +741,22 @@
                     <div class="adv-card">
                         <div class="adv-icon" style="background: rgba(123, 94, 167, 0.12); color: #D4C4FB;">AI</div>
                         <h3>Multi-Model AI Engine</h3>
-                        <p>Choose between Gemini, GPT, and Claude for your financial analysis. No other app
-                            lets you pick your AI model — or even uses multiple providers.</p>
+                        <p>Choose Gemini, GPT, or Claude for your analysis. No other app lets you pick your AI — or even uses multiple providers.</p>
                     </div>
                     <div class="adv-card">
-                        <div class="adv-icon" style="background: rgba(46, 204, 113, 0.12); color: var(--green);">🔒
-                        </div>
+                        <div class="adv-icon" style="background: rgba(46, 204, 113, 0.12); color: var(--green);">🔒</div>
                         <h3>True Privacy-First</h3>
-                        <p>Your data lives on your device. Competitors store everything in their cloud.
-                            Catalyst Cash uses AES-256-GCM encryption with on-device keys — not server-side.</p>
+                        <p>Your data lives on your device with AES-256-GCM encryption. Competitors store everything in their cloud.</p>
                     </div>
                     <div class="adv-card">
                         <div class="adv-icon" style="background: rgba(224, 168, 77, 0.12); color: var(--amber);">$</div>
                         <h3>Better Value</h3>
-                        <p>At $9.99/mo, Catalyst Cash absolutely destroys the $13–15/mo industry standards. Our
-                            $89.99/yr plan cements us as the premium budget alternative, offering superior AI
-                            capabilities for less ground-floor cost.</p>
+                        <p>At $7.50/mo (yearly), Catalyst Cash undercuts every AI-powered competitor while offering superior multi-model capabilities.</p>
                     </div>
                     <div class="adv-card">
                         <div class="adv-icon" style="background: rgba(107, 163, 232, 0.12); color: var(--blue);">⚡</div>
-                        <h3>Deterministic Money Math</h3>
-                        <p>Critical financial calculations run client-side in integer cents — not through an AI.
-                            Zero hallucination risk for numbers that matter.</p>
-                    </div>
-                    <div class="adv-card">
-                        <div class="adv-icon" style="background: rgba(232, 92, 106, 0.12); color: var(--red);">📊</div>
                         <h3>All-in-One Platform</h3>
-                        <p>Budget + Debt Simulator + Investments + FIRE Calculator + Credit Score +
-                            AI Chat + Card Portfolio. No competitor covers all of these.</p>
-                    </div>
-                    <div class="adv-card">
-                        <div class="adv-icon" style="background: rgba(46, 204, 113, 0.12); color: var(--green);">🧠
-                        </div>
-                        <h3>AI That Remembers</h3>
-                        <p>Persistent cross-session memory means the AI learns your goals, preferences, and
-                            financial context. It gets smarter the more you use it.</p>
+                        <p>Budget + Debt Simulator + Investments + FIRE Calculator + Credit Score + AI Chat + Card Portfolio. No competitor covers all of these.</p>
                     </div>
                 </div>
             </section>
@@ -1265,35 +766,25 @@
                 <div class="section-head">
                     <div class="micro-label">Honest Transparency</div>
                     <h2>Where the competition edges us — for now.</h2>
-                    <p>We believe in honesty over hype. Here's where some competitors genuinely excel.</p>
+                    <p>We believe in honesty over hype.</p>
                 </div>
 
                 <div class="honesty-grid">
                     <div class="honesty-card">
                         <div class="comp-name">YNAB</div>
-                        <p>Best-in-class envelope budgeting methodology with a passionate community. If zero-based
-                            budgeting is your philosophy, YNAB wrote the book on it. Also supports 6-person family
-                            sharing.</p>
+                        <p>A legacy pioneer of envelope budgeting with a dedicated community. If strict, manual zero-sum budgeting is your thing, YNAB paved the way.</p>
                     </div>
                     <div class="honesty-card">
                         <div class="comp-name">Monarch Money</div>
-                        <p>Superior collaborative finance tools — unlimited partner sharing, joint budgets, and
-                            transaction ownership tagging. Best choice for couples managing money together.</p>
+                        <p>Superior collaborative tools — unlimited partner sharing and joint budgets. Best for couples managing money together.</p>
                     </div>
                     <div class="honesty-card">
                         <div class="comp-name">Origin</div>
-                        <p>Access to CFP® professionals for 1:1 financial planning. Plus SOC-2 compliance and
-                            estate planning tools. Best for users who want a human advisor alongside AI.</p>
+                        <p>Access to real human CFP® professionals for 1:1 financial planning meetings. Best if you want to talk to a certified advisor.</p>
                     </div>
                     <div class="honesty-card">
                         <div class="comp-name">Copilot</div>
-                        <p>Apple Design Award winner with the most polished iOS/Mac experience. Superior automatic
-                            transaction categorization powered by AI. Best raw UX in the category.</p>
-                    </div>
-                    <div class="honesty-card">
-                        <div class="comp-name">Rocket Money</div>
-                        <p>The only app that will cancel subscriptions and negotiate bills on your behalf.
-                            Unmatched for users who want hands-off savings on recurring charges.</p>
+                        <p>Apple Design Award winner with incredible iOS animations. Beautiful design — though categorization sends raw data to their cloud.</p>
                     </div>
                 </div>
             </section>
@@ -1305,7 +796,7 @@
                         <div class="micro-label">The Bottom Line</div>
                         <h2>More AI. More features. Half the price. Your data stays yours.</h2>
                         <p>
-                            Catalyst Cash is the only personal finance app with multi-model AI audits,
+                            The only personal finance app with multi-model AI audits,
                             on-device privacy, and a real free tier — at the lowest Pro price in the category.
                         </p>
                     </div>
