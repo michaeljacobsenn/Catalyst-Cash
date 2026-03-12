@@ -236,10 +236,117 @@ const BASELINE = {
   paypal: "Transfer",
   "cash app": "Transfer",
   atm: "ATM Withdrawal",
+
+  // Childcare
+  kindercare: "Childcare",
+  "bright horizons": "Childcare",
+  "goddard school": "Childcare",
+  daycare: "Childcare",
+  montessori: "Childcare",
+  preschool: "Childcare",
+
+  // Pet Care
+  banfield: "Pet Care",
+  vca: "Pet Care",
+  petco: "Pet Care",
+  petsmart: "Pet Care",
+  chewy: "Pet Care",
+  veterinar: "Pet Care",
+  grooming: "Pet Care",
+
+  // Gym / Fitness
+  "planet fitness": "Gym",
+  "la fitness": "Gym",
+  equinox: "Gym",
+  orangetheory: "Gym",
+  "anytime fitness": "Gym",
+  crossfit: "Gym",
+  ymca: "Gym",
+  "crunch fitness": "Gym",
+  "24 hour fitness": "Gym",
+  "gold gym": "Gym",
+  "life time": "Gym",
+  soulcycle: "Gym",
+  peloton: "Gym",
+  classpass: "Gym",
+
+  // More Shopping
+  "dollar general": "Shopping",
+  "dollar tree": "Shopping",
+  "five below": "Shopping",
+  "family dollar": "Shopping",
+  "micro center": "Shopping",
+  "b&h photo": "Shopping",
+  samsung: "Shopping",
+  dell: "Shopping",
+  lenovo: "Shopping",
+  "barnes noble": "Shopping",
+  "half price books": "Shopping",
+  "bath body": "Shopping",
+  "hobby lobby": "Shopping",
+  "container store": "Shopping",
+  "bed bath": "Shopping",
+  "ashley furniture": "Shopping",
+  "rooms to go": "Shopping",
+  staples: "Shopping",
+  "office depot": "Shopping",
+  "fedex office": "Shopping",
+
+  // More Health
+  noom: "Health",
+  calm: "Health",
+  headspace: "Health",
+  "massage envy": "Health",
+  "vitamin shoppe": "Health",
+  lenscrafters: "Health",
+  "warby parker": "Health",
+
+  // More Subscriptions
+  "adobe creative": "Subscriptions",
+  "creative cloud": "Subscriptions",
+  chatgpt: "Subscriptions",
+  notion: "Subscriptions",
+  canva: "Subscriptions",
+  "google one": "Subscriptions",
+  "apple music": "Subscriptions",
+  hellofresh: "Subscriptions",
+  "blue apron": "Subscriptions",
+  factor: "Subscriptions",
+  noom: "Subscriptions",
+  classpass: "Subscriptions",
+  "bark box": "Subscriptions",
+  "fab fit fun": "Subscriptions",
+
+  // More Entertainment
+  "amc theatre": "Entertainment",
+  cinemark: "Entertainment",
+  "six flags": "Entertainment",
+  "cedar fair": "Entertainment",
+  "universal studios": "Entertainment",
+  "disney park": "Entertainment",
+  topgolf: "Entertainment",
+  bowlero: "Entertainment",
+  "dave buster": "Entertainment",
+  "escape room": "Entertainment",
+  seatgeek: "Entertainment",
+  "vivid seats": "Entertainment",
+
+  // More Gas & Auto
+  autozone: "Gas & Auto",
+  "o'reilly auto": "Gas & Auto",
+  "advance auto": "Gas & Auto",
+  napa: "Gas & Auto",
+  firestone: "Gas & Auto",
+  goodyear: "Gas & Auto",
+  "discount tire": "Gas & Auto",
+  midas: "Gas & Auto",
+  safelite: "Gas & Auto",
+  carmax: "Gas & Auto",
+  carvana: "Gas & Auto",
 };
 
 // ── Standard Budget Categories (aligned with BASELINE) ──
-// These 12 categories match merchant auto-categorization 1:1.
+// These categories match merchant auto-categorization 1:1.
 // Travel, Insurance, Transfer, ATM Withdrawal excluded — they
 // are irregular or non-discretionary and don't fit weekly budgets.
 export const STANDARD_CATEGORIES = [
@@ -255,6 +362,9 @@ export const STANDARD_CATEGORIES = [
   "Entertainment",
   "Education",
   "Personal Care",
+  "Childcare",
+  "Pet Care",
+  "Gym",
 ];
 
 // ── User-learned overrides — loaded from DB ──
