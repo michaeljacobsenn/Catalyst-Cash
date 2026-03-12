@@ -723,140 +723,15 @@ export default memo(function DashboardTab({
           </div>
 
 
-          <DashboardSection title="Wealth & Strategy">
-          {/* ═══ WIDE ROW: NET WORTH TREND ═══ */}
-          <Card
-            animate
-            delay={150}
-            style={{
-              padding: "20px 20px",
-              marginBottom: 12,
-              background: T.bg.card,
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
-              border: `1px solid ${T.border.subtle}`,
-              position: "relative",
-              overflow: "hidden"
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
-                <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.14em", color: T.text.secondary, margin: "0 0 4px", fontFamily: T.font.mono, fontWeight: 800 }}>
-                  Net Worth
-                </p>
-                <CountUp
-                  value={p?.netWorth ?? 0}
-                  size={32}
-                  weight={900}
-                  color={p?.netWorth != null && p.netWorth >= 0 ? T.text.primary : T.status.red}
-                />
-                
-                {p?.netWorthDelta && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 4 }}>
-                    {String(p.netWorthDelta).includes("+") ? (
-                      <ArrowUpRight size={14} color={T.status.green} strokeWidth={3} />
-                    ) : (
-                      <ArrowDownRight size={14} color={T.status.red} strokeWidth={3} />
-                    )}
-                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: T.font.mono, color: String(p.netWorthDelta).includes("+") ? T.status.green : T.status.red }}>
-                      {p.netWorthDelta}
-                    </span>
-                  </div>
-                )}
-              </div>
-              
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
-                <StatusDot status={cleanStatus} size="sm" />
-                <Mono size={10} color={T.text.dim}>{fmtDate(current.date)}</Mono>
-                {streak > 1 && (
-                  <div title="Weekly Audit Streak" style={{ display: "flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 12, background: `${T.accent.emerald}15`, border: `1px solid ${T.status.green}25` }}>
-                    <span style={{ fontSize: 10 }}>📅</span>
-                    <span style={{ fontSize: 9, fontWeight: 800, color: T.status.green, fontFamily: T.font.mono }}>W{streak}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            <div style={{ marginTop: 16 }}>
-              <MetricsBar quickMetrics={quickMetrics} privacyMode={privacyMode} />
-            </div>
-          </Card>
-
-          {/* ═══ SINKING FUNDS ═══ */}
-          <SinkingFundsRing paceData={p?.paceData} />
-
-          {/* ═══ INVESTMENT SNAPSHOT ═══ */}
-          {investmentSnapshot.accounts.length > 0 && (
-            <Card
-              animate
-              delay={250}
-              style={{
-                background: `linear-gradient(160deg, ${T.bg.card}, ${T.accent.emerald}06)`,
-                borderColor: `${T.accent.emerald}15`,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div
-                    style={{
-                      width: 26,
-                      height: 26,
-                      borderRadius: 7,
-                      background: `${T.accent.emerald}15`,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <TrendingUp size={13} color={T.accent.emerald} strokeWidth={2.5} />
-                  </div>
-                  <span style={{ fontSize: 12, fontWeight: 700 }}>Investment Portfolio</span>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <Mono size={16} weight={900} color={T.accent.emerald}>
-                    {fmt(Math.round(investmentSnapshot.total))}
-                  </Mono>
-                </div>
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {investmentSnapshot.accounts.map((a, idx) => (
-                  <div
-                    key={a.key}
-                    style={{
-                      flex: "1 1 45%",
-                      minWidth: 120,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "8px 10px",
-                      background: `${a.color}08`,
-                      borderRadius: T.radius.sm,
-                      border: `1px solid ${a.color}18`,
-                      animation: `fadeInUp .35s ease-out ${idx * 0.06}s both`,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: a.color }} />
-                      <span style={{ fontSize: 10, fontWeight: 700, color: T.text.secondary }}>{a.label}</span>
-                    </div>
-                    <Mono size={11} weight={800} color={a.total > 0 ? a.color : T.text.muted}>
-                      {a.total > 0 ? fmt(Math.round(a.total)) : "—"}
-                    </Mono>
-                  </div>
-                ))}
-              </div>
+          <DashboardSection title="AI CFO & Next Steps">
+          {/* ═══ EMPTY STATE — no audit yet ═══ */}
+          {!p && !summary && !hs.narrative && (
+            <Card style={{ padding: '20px', textAlign: 'center', border: `1px dashed ${T.border.default}` }}>
+              <Zap size={20} color={T.text.muted} style={{ marginBottom: 8 }} />
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.text.secondary, marginBottom: 4 }}>No Insights Yet</div>
+              <div style={{ fontSize: 11, color: T.text.dim, lineHeight: 1.5 }}>Run your first audit on the ⚡ tab to unlock AI-powered CFO insights and action items.</div>
             </Card>
           )}
-
-          {/* ═══ DEBT FREEDOM COUNTDOWN ═══ */}
-          <DebtFreedomCard cards={cards} freedomStats={freedomStats} />
-
-          {/* ═══ FIRE PROJECTION ═══ */}
-          <FireCard fireProjection={fireProjection} />
-
-          </DashboardSection>
-
-          <DashboardSection title="AI CFO & Next Steps">
           {/* AI Insights Action Hub */}
           {(summary || hs.narrative) && (
             <Card
@@ -1004,6 +879,139 @@ export default memo(function DashboardTab({
               Discuss with CFO
             </button>
           )}
+
+          </DashboardSection>
+
+          <DashboardSection title="Wealth & Strategy">
+          {/* ═══ WIDE ROW: NET WORTH TREND ═══ */}
+          <Card
+            animate
+            delay={150}
+            style={{
+              padding: "20px 20px",
+              marginBottom: 12,
+              background: T.bg.card,
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              border: `1px solid ${T.border.subtle}`,
+              position: "relative",
+              overflow: "hidden"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.14em", color: T.text.secondary, margin: "0 0 4px", fontFamily: T.font.mono, fontWeight: 800 }}>
+                  Net Worth
+                </p>
+                <CountUp
+                  value={p?.netWorth ?? 0}
+                  size={32}
+                  weight={900}
+                  color={p?.netWorth != null && p.netWorth >= 0 ? T.text.primary : T.status.red}
+                />
+                
+                {p?.netWorthDelta && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 4 }}>
+                    {String(p.netWorthDelta).includes("+") ? (
+                      <ArrowUpRight size={14} color={T.status.green} strokeWidth={3} />
+                    ) : (
+                      <ArrowDownRight size={14} color={T.status.red} strokeWidth={3} />
+                    )}
+                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: T.font.mono, color: String(p.netWorthDelta).includes("+") ? T.status.green : T.status.red }}>
+                      {p.netWorthDelta}
+                    </span>
+                  </div>
+                )}
+              </div>
+              
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+                <StatusDot status={cleanStatus} size="sm" />
+                <Mono size={10} color={T.text.dim}>{fmtDate(current.date)}</Mono>
+                {streak > 1 && (
+                  <div title="Weekly Audit Streak" style={{ display: "flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 12, background: `${T.accent.emerald}15`, border: `1px solid ${T.status.green}25` }}>
+                    <span style={{ fontSize: 10 }}>📅</span>
+                    <span style={{ fontSize: 9, fontWeight: 800, color: T.status.green, fontFamily: T.font.mono }}>W{streak}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div style={{ marginTop: 16 }}>
+              <MetricsBar quickMetrics={quickMetrics} privacyMode={privacyMode} />
+            </div>
+          </Card>
+
+          {/* ═══ SINKING FUNDS ═══ */}
+          <SinkingFundsRing paceData={p?.paceData} />
+
+          {/* ═══ INVESTMENT SNAPSHOT ═══ */}
+          {investmentSnapshot.accounts.length > 0 && (
+            <Card
+              animate
+              delay={250}
+              style={{
+                background: `linear-gradient(160deg, ${T.bg.card}, ${T.accent.emerald}06)`,
+                borderColor: `${T.accent.emerald}15`,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 7,
+                      background: `${T.accent.emerald}15`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <TrendingUp size={13} color={T.accent.emerald} strokeWidth={2.5} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700 }}>Investment Portfolio</span>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <Mono size={16} weight={900} color={T.accent.emerald}>
+                    {fmt(Math.round(investmentSnapshot.total))}
+                  </Mono>
+                </div>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {investmentSnapshot.accounts.map((a, idx) => (
+                  <div
+                    key={a.key}
+                    style={{
+                      flex: "1 1 45%",
+                      minWidth: 120,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "8px 10px",
+                      background: `${a.color}08`,
+                      borderRadius: T.radius.sm,
+                      border: `1px solid ${a.color}18`,
+                      animation: `fadeInUp .35s ease-out ${idx * 0.06}s both`,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: a.color }} />
+                      <span style={{ fontSize: 10, fontWeight: 700, color: T.text.secondary }}>{a.label}</span>
+                    </div>
+                    <Mono size={11} weight={800} color={a.total > 0 ? a.color : T.text.muted}>
+                      {a.total > 0 ? fmt(Math.round(a.total)) : "—"}
+                    </Mono>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* ═══ DEBT FREEDOM COUNTDOWN ═══ */}
+          <DebtFreedomCard cards={cards} freedomStats={freedomStats} />
+
+          {/* ═══ FIRE PROJECTION ═══ */}
+          {fireProjection?.annualIncome > 0 && <FireCard fireProjection={fireProjection} />}
 
           </DashboardSection>
 
