@@ -62,7 +62,6 @@ import BadgeStrip from "../dashboard/BadgeStrip.jsx";
 import DebtFreedomCard from "../dashboard/DebtFreedomCard.jsx";
 import EmptyDashboard from "../dashboard/EmptyDashboard.jsx";
 import { SafeToSpendCard } from "../dashboard/SafeToSpendCard.jsx";
-import GeoSuggestWidget from "../dashboard/GeoSuggestWidget.jsx";
 
 const SYNC_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
 let _autoSyncDone = false; // Survives component remounts — only auto-sync once per app session
@@ -340,24 +339,18 @@ export default memo(function DashboardTab({
         </div>
       )}
 
-      {/* ═══ Header ═══ */}
-      <div style={{ paddingTop: 20, paddingBottom: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 900, letterSpacing: getTracking(24, 900), margin: 0 }}>Dashboard</h1>
+      {/* ═══ Header + inline greeting ═══ */}
+      <div style={{ paddingTop: 16, paddingBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 900, letterSpacing: getTracking(22, 900), margin: 0 }}>Dashboard</h1>
+          <p style={{ fontSize: 11, color: T.text.dim, margin: "2px 0 0", fontWeight: 500, letterSpacing: "0.01em" }}>{greeting}</p>
         </div>
-      </div>
-
-      {/* Welcome-back Greeting */}
-      <div
-        style={{
-          padding: "8px 14px",
-          marginBottom: 10,
-          borderRadius: T.radius.md,
-          background: `linear-gradient(135deg, ${T.accent.primary}06, ${T.accent.emerald}06)`,
-          border: `1px solid ${T.border.subtle}`,
-        }}
-      >
-        <span style={{ fontSize: 12, color: T.text.secondary, fontWeight: 600 }}>{greeting}</span>
+        {streak > 1 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: `${T.accent.emerald}12`, border: `1px solid ${T.status.green}25`, flexShrink: 0 }}>
+            <span style={{ fontSize: 12 }}>🔥</span>
+            <span style={{ fontSize: 10, fontWeight: 800, color: T.status.green, fontFamily: T.font.mono }}>W{streak}</span>
+          </div>
+        )}
       </div>
 
       {/* ═══ BACKUP NUDGE ═══ */}
@@ -456,9 +449,6 @@ export default memo(function DashboardTab({
         </Card>
       )}
 
-      {/* ═══ GEO SUGGEST WIDGET ═══ */}
-      <GeoSuggestWidget />
-
       {/* ═══ COMMAND CENTER ═══ */}
       <>
           {/* Demo Banner */}
@@ -517,14 +507,7 @@ export default memo(function DashboardTab({
             </Card>
           )}
 
-          {/* Pro Upgrade Banner */}
-          {shouldShowGating() && (
-            <ProBanner
-              onUpgrade={() => setShowPaywall(true)}
-              label="Upgrade to Pro"
-              sublabel="50 audits/mo · Premium AI · Full history"
-            />
-          )}
+          {/* Pro Upgrade Banner — slim strip, placed after hero so data leads */}
           {showPaywall && (
             <Suspense fallback={null}>
               <LazyProPaywall onClose={() => setShowPaywall(false)} />
@@ -535,26 +518,23 @@ export default memo(function DashboardTab({
           <AlertStrip alerts={alerts} />
 
           {/* ═══ COMMAND HEADER — Bento Grid ═══ */}
-          {/* Top Row: Health Score (Left) & Available Cash (Right) */}
+          {/* Top Row: Audit Score Teaser (Left) & Available Cash (Right) */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-            
-            {/* Health Score Square */}
+
+            {/* Audit Score Teaser — taps to Audit tab */}
             <Card
               animate
               delay={50}
               className="hover-card a11y-hit-target"
-              onClick={() => {
-                haptic.selection();
-                onViewResult();
-              }}
+              onClick={() => { haptic.selection(); navTo("audit"); }}
               style={{
-                padding: "20px 16px",
+                padding: "16px",
                 position: "relative",
                 background: T.bg.card,
                 backdropFilter: "blur(20px)",
                 WebkitBackdropFilter: "blur(20px)",
-                border: `1px solid ${scoreColor}25`,
-                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 24px -8px ${scoreColor}15`,
+                border: hs.score != null ? `1px solid ${scoreColor}25` : `1px solid ${T.border.subtle}`,
+                boxShadow: hs.score != null ? `inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 24px -8px ${scoreColor}15` : "none",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
@@ -564,27 +544,24 @@ export default memo(function DashboardTab({
                 minHeight: 160,
               }}
             >
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  background: `radial-gradient(circle at center, ${scoreColor}15 0%, transparent 70%)`,
-                  opacity: 0.5,
-                  zIndex: 0,
-                }}
-              />
-              <div style={{ position: "relative", zIndex: 1, transform: "scale(0.9)" }}>
+              {hs.score != null && (
+                <div style={{ position: "absolute", inset: 0, background: `radial-gradient(circle at center, ${scoreColor}15 0%, transparent 70%)`, opacity: 0.5, zIndex: 0, pointerEvents: "none" }} />
+              )}
+              <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
                 {hs.score != null ? (
-                  <HealthGauge score={score} grade={grade} scoreColor={scoreColor} percentile={percentile} />
+                  <>
+                    <HealthGauge score={score} grade={grade} scoreColor={scoreColor} percentile={percentile} />
+                    <div style={{ fontSize: 11, color: scoreColor, fontWeight: 700, letterSpacing: "0.04em", fontFamily: T.font.mono }}>{cleanStatus}</div>
+                  </>
                 ) : (
-                  <div style={{ width: 80, height: 80, borderRadius: "50%", background: `${T.border.default}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Activity color={T.text.dim} />
-                  </div>
+                  <>
+                    <div style={{ width: 52, height: 52, borderRadius: "50%", background: `${T.accent.primary}12`, border: `1px dashed ${T.accent.primary}40`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Zap size={22} color={T.accent.primary} strokeWidth={2} />
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: T.text.secondary, textAlign: "center", lineHeight: 1.3 }}>Run First Audit</div>
+                  </>
                 )}
-              </div>
-              <div style={{ marginTop: -10, textAlign: "center", zIndex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary }}>Health Score</div>
-                <div style={{ fontSize: 11, color: scoreColor, fontWeight: 600, marginTop: 2 }}>{cleanStatus}</div>
+                <div style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono, letterSpacing: "0.04em", marginTop: 2 }}>VIEW AUDIT →</div>
               </div>
             </Card>
 
@@ -725,186 +702,159 @@ export default memo(function DashboardTab({
             </button>
           )}
 
-          {/* ═══ AUDIT ACTION HUB ═══ */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+          {/* Pro upsell — compact strip for free users */}
+          {shouldShowGating() && (
+            <ProBanner compact onUpgrade={() => setShowPaywall(true)} label="Unlock Catalyst Pro" sublabel="50 AI chats/day · Plaid sync · Card Wizard" />
+          )}
+
+          {/* Ledger quick access (financial data tool — stays on dashboard) */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
             <button
-              onClick={() => {
-                haptic.medium();
-                onRunAudit();
-              }}
+              onClick={() => { haptic.light(); if (proEnabled) { onViewTransactions?.(); } else { setShowPaywall(true); } }}
               className="hover-btn"
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                padding: "14px 6px",
-                borderRadius: T.radius.md,
-                border: `1px solid ${T.accent.primary}30`,
-                background: `linear-gradient(145deg, ${T.bg.elevated}, ${T.accent.primary}0A)`,
-                color: T.text.primary,
-                cursor: "pointer",
-                transition: "all .2s",
-                boxShadow: `0 4px 12px ${T.accent.primary}10`,
-              }}
-            >
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  background: `${T.accent.primary}15`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Plus size={16} color={T.accent.primary} strokeWidth={3} />
-              </div>
-              <span style={{ fontSize: 10, fontWeight: 800, fontFamily: T.font.mono, letterSpacing: "0.02em" }}>
-                NEW AUDIT
-              </span>
-            </button>
-            <button
-              onClick={() => {
-                haptic.light();
-                onViewResult();
-              }}
-              className="hover-btn"
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                padding: "14px 6px",
-                borderRadius: T.radius.md,
-                border: `1px solid ${T.border.subtle}`,
-                background: T.bg.elevated,
-                color: T.text.primary,
-                cursor: "pointer",
-                transition: "all .2s",
-              }}
-            >
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  background: `${T.text.dim}10`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Target size={16} color={T.text.secondary} strokeWidth={2.5} />
-              </div>
-              <span style={{ fontSize: 10, fontWeight: 800, fontFamily: T.font.mono, letterSpacing: "0.02em" }}>
-                RESULTS
-              </span>
-            </button>
-            <button
-              onClick={() => {
-                haptic.light();
-                navTo("history");
-              }}
-              className="hover-btn"
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                padding: "14px 6px",
-                borderRadius: T.radius.md,
-                border: `1px solid ${T.border.subtle}`,
-                background: T.bg.elevated,
-                color: T.text.primary,
-                cursor: "pointer",
-                transition: "all .2s",
-              }}
-            >
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  background: `${T.text.dim}10`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Activity size={16} color={T.text.secondary} strokeWidth={2.5} />
-              </div>
-              <span style={{ fontSize: 10, fontWeight: 800, fontFamily: T.font.mono, letterSpacing: "0.02em" }}>
-                HISTORY
-              </span>
-            </button>
-            <button
-              onClick={() => {
-                haptic.light();
-                if (proEnabled) {
-                  onViewTransactions?.();
-                } else {
-                  setShowPaywall(true);
-                }
-              }}
-              className="hover-btn"
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                padding: "14px 6px",
-                borderRadius: T.radius.md,
-                border: `1px solid ${T.border.subtle}`,
-                background: T.bg.elevated,
-                color: T.text.primary,
-                cursor: "pointer",
-                transition: "all .2s",
-                position: "relative",
-              }}
+              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px 14px", borderRadius: T.radius.md, border: `1px solid ${T.accent.emerald}20`, background: `${T.accent.emerald}06`, color: T.accent.emerald, cursor: "pointer", transition: "all .2s", position: "relative", fontSize: 11, fontWeight: 700, fontFamily: T.font.mono }}
             >
               {!proEnabled && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: 6,
-                    right: 6,
-                    fontSize: 8,
-                    fontWeight: 800,
-                    background: T.accent.primary,
-                    color: "#fff",
-                    padding: "1px 5px",
-                    borderRadius: 6,
-                    fontFamily: T.font.mono,
-                  }}
-                >
-                  PRO
-                </div>
+                <div style={{ position: "absolute", top: 4, right: 4, fontSize: 7, fontWeight: 800, background: T.accent.primary, color: "#fff", padding: "1px 4px", borderRadius: 5, fontFamily: T.font.mono }}>PRO</div>
               )}
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  background: `${T.accent.emerald}12`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <ReceiptText size={16} color={T.accent.emerald} strokeWidth={2.5} />
-              </div>
-              <span style={{ fontSize: 10, fontWeight: 800, fontFamily: T.font.mono, letterSpacing: "0.02em" }}>
-                LEDGER
-              </span>
+              <ReceiptText size={13} color={T.accent.emerald} strokeWidth={2.5} />
+              LEDGER
             </button>
           </div>
 
+
+          <DashboardSection title="Wealth & Strategy">
+          {/* ═══ WIDE ROW: NET WORTH TREND ═══ */}
+          <Card
+            animate
+            delay={150}
+            style={{
+              padding: "20px 20px",
+              marginBottom: 12,
+              background: T.bg.card,
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              border: `1px solid ${T.border.subtle}`,
+              position: "relative",
+              overflow: "hidden"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.14em", color: T.text.secondary, margin: "0 0 4px", fontFamily: T.font.mono, fontWeight: 800 }}>
+                  Net Worth
+                </p>
+                <CountUp
+                  value={p?.netWorth ?? 0}
+                  size={32}
+                  weight={900}
+                  color={p?.netWorth != null && p.netWorth >= 0 ? T.text.primary : T.status.red}
+                />
+                
+                {p?.netWorthDelta && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 4 }}>
+                    {String(p.netWorthDelta).includes("+") ? (
+                      <ArrowUpRight size={14} color={T.status.green} strokeWidth={3} />
+                    ) : (
+                      <ArrowDownRight size={14} color={T.status.red} strokeWidth={3} />
+                    )}
+                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: T.font.mono, color: String(p.netWorthDelta).includes("+") ? T.status.green : T.status.red }}>
+                      {p.netWorthDelta}
+                    </span>
+                  </div>
+                )}
+              </div>
+              
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+                <StatusDot status={cleanStatus} size="sm" />
+                <Mono size={10} color={T.text.dim}>{fmtDate(current.date)}</Mono>
+                {streak > 1 && (
+                  <div title="Weekly Audit Streak" style={{ display: "flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 12, background: `${T.accent.emerald}15`, border: `1px solid ${T.status.green}25` }}>
+                    <span style={{ fontSize: 10 }}>📅</span>
+                    <span style={{ fontSize: 9, fontWeight: 800, color: T.status.green, fontFamily: T.font.mono }}>W{streak}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div style={{ marginTop: 16 }}>
+              <MetricsBar quickMetrics={quickMetrics} privacyMode={privacyMode} />
+            </div>
+          </Card>
+
+          {/* ═══ SINKING FUNDS ═══ */}
+          <SinkingFundsRing paceData={p?.paceData} />
+
+          {/* ═══ INVESTMENT SNAPSHOT ═══ */}
+          {investmentSnapshot.accounts.length > 0 && (
+            <Card
+              animate
+              delay={250}
+              style={{
+                background: `linear-gradient(160deg, ${T.bg.card}, ${T.accent.emerald}06)`,
+                borderColor: `${T.accent.emerald}15`,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 7,
+                      background: `${T.accent.emerald}15`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <TrendingUp size={13} color={T.accent.emerald} strokeWidth={2.5} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700 }}>Investment Portfolio</span>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <Mono size={16} weight={900} color={T.accent.emerald}>
+                    {fmt(Math.round(investmentSnapshot.total))}
+                  </Mono>
+                </div>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {investmentSnapshot.accounts.map((a, idx) => (
+                  <div
+                    key={a.key}
+                    style={{
+                      flex: "1 1 45%",
+                      minWidth: 120,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "8px 10px",
+                      background: `${a.color}08`,
+                      borderRadius: T.radius.sm,
+                      border: `1px solid ${a.color}18`,
+                      animation: `fadeInUp .35s ease-out ${idx * 0.06}s both`,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: a.color }} />
+                      <span style={{ fontSize: 10, fontWeight: 700, color: T.text.secondary }}>{a.label}</span>
+                    </div>
+                    <Mono size={11} weight={800} color={a.total > 0 ? a.color : T.text.muted}>
+                      {a.total > 0 ? fmt(Math.round(a.total)) : "—"}
+                    </Mono>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* ═══ DEBT FREEDOM COUNTDOWN ═══ */}
+          <DebtFreedomCard cards={cards} freedomStats={freedomStats} />
+
+          {/* ═══ FIRE PROJECTION ═══ */}
+          <FireCard fireProjection={fireProjection} />
+
+          </DashboardSection>
 
           <DashboardSection title="AI CFO & Next Steps">
           {/* AI Insights Action Hub */}
@@ -932,24 +882,29 @@ export default memo(function DashboardTab({
               )}
               
               {hs.narrative && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {hs.narrative
                     .split(/(?<=[.?!])\s+/)
                     .filter(Boolean)
-                    .map((sentence, i) => (
-                      <div key={i} style={{ display: "flex", gap: 10, alignItems: "start", background: T.bg.surface, padding: "10px 12px", borderRadius: T.radius.md }}>
-                        <div style={{ marginTop: 2, flexShrink: 0 }}>
-                          {score >= 80 ? (
-                            <CheckCircle size={14} color={T.status.green} />
-                          ) : (
-                            <AlertTriangle size={14} color={scoreColor} />
-                          )}
+                    .map((sentence, i) => {
+                      // First sentence = positive/summary; subsequent = action/advisory
+                      const isPositive = i === 0;
+                      const iconColor = isPositive ? T.status.green : T.status.blue;
+                      return (
+                        <div key={i} style={{ display: "flex", gap: 10, alignItems: "start", background: T.bg.surface, padding: "10px 12px", borderRadius: T.radius.md, borderLeft: `2px solid ${iconColor}30` }}>
+                          <div style={{ marginTop: 2, flexShrink: 0 }}>
+                            {isPositive ? (
+                              <CheckCircle size={13} color={T.status.green} />
+                            ) : (
+                              <ArrowUpRight size={13} color={T.status.blue} />
+                            )}
+                          </div>
+                          <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5, margin: 0 }}>
+                            {sentence.trim()}
+                          </p>
                         </div>
-                        <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5, margin: 0 }}>
-                          {sentence.trim()}
-                        </p>
-                      </div>
-                    ))}
+                      );
+                    })}
                 </div>
               )}
             </Card>
@@ -1348,138 +1303,7 @@ export default memo(function DashboardTab({
 
           </DashboardSection>
 
-          <DashboardSection title="Wealth & Strategy">
-          {/* ═══ WIDE ROW: NET WORTH TREND ═══ */}
-          <Card
-            animate
-            delay={150}
-            style={{
-              padding: "20px 20px",
-              marginBottom: 12,
-              background: T.bg.card,
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
-              border: `1px solid ${T.border.subtle}`,
-              position: "relative",
-              overflow: "hidden"
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
-                <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.14em", color: T.text.secondary, margin: "0 0 4px", fontFamily: T.font.mono, fontWeight: 800 }}>
-                  Net Worth
-                </p>
-                <CountUp
-                  value={p?.netWorth ?? 0}
-                  size={32}
-                  weight={900}
-                  color={p?.netWorth != null && p.netWorth >= 0 ? T.text.primary : T.status.red}
-                />
-                
-                {p?.netWorthDelta && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 4 }}>
-                    {String(p.netWorthDelta).includes("+") ? (
-                      <ArrowUpRight size={14} color={T.status.green} strokeWidth={3} />
-                    ) : (
-                      <ArrowDownRight size={14} color={T.status.red} strokeWidth={3} />
-                    )}
-                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: T.font.mono, color: String(p.netWorthDelta).includes("+") ? T.status.green : T.status.red }}>
-                      {p.netWorthDelta}
-                    </span>
-                  </div>
-                )}
-              </div>
-              
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
-                <StatusDot status={cleanStatus} size="sm" />
-                <Mono size={10} color={T.text.dim}>{fmtDate(current.date)}</Mono>
-                {streak > 1 && (
-                  <div title="Weekly Audit Streak" style={{ display: "flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 12, background: `${T.accent.emerald}15`, border: `1px solid ${T.status.green}25` }}>
-                    <span style={{ fontSize: 10 }}>📅</span>
-                    <span style={{ fontSize: 9, fontWeight: 800, color: T.status.green, fontFamily: T.font.mono }}>W{streak}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            <div style={{ marginTop: 16 }}>
-              <MetricsBar quickMetrics={quickMetrics} privacyMode={privacyMode} />
-            </div>
-          </Card>
 
-          {/* ═══ INVESTMENT SNAPSHOT ═══ */}
-          {investmentSnapshot.accounts.length > 0 && (
-            <Card
-              animate
-              delay={250}
-              style={{
-                background: `linear-gradient(160deg, ${T.bg.card}, ${T.accent.emerald}06)`,
-                borderColor: `${T.accent.emerald}15`,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div
-                    style={{
-                      width: 26,
-                      height: 26,
-                      borderRadius: 7,
-                      background: `${T.accent.emerald}15`,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <TrendingUp size={13} color={T.accent.emerald} strokeWidth={2.5} />
-                  </div>
-                  <span style={{ fontSize: 12, fontWeight: 700 }}>Investment Portfolio</span>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <Mono size={16} weight={900} color={T.accent.emerald}>
-                    {fmt(Math.round(investmentSnapshot.total))}
-                  </Mono>
-                </div>
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {investmentSnapshot.accounts.map((a, idx) => (
-                  <div
-                    key={a.key}
-                    style={{
-                      flex: "1 1 45%",
-                      minWidth: 120,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "8px 10px",
-                      background: `${a.color}08`,
-                      borderRadius: T.radius.sm,
-                      border: `1px solid ${a.color}18`,
-                      animation: `fadeInUp .35s ease-out ${idx * 0.06}s both`,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: a.color }} />
-                      <span style={{ fontSize: 10, fontWeight: 700, color: T.text.secondary }}>{a.label}</span>
-                    </div>
-                    <Mono size={11} weight={800} color={a.total > 0 ? a.color : T.text.muted}>
-                      {a.total > 0 ? fmt(Math.round(a.total)) : "—"}
-                    </Mono>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-
-          {/* ═══ DEBT FREEDOM COUNTDOWN ═══ */}
-          <DebtFreedomCard cards={cards} freedomStats={freedomStats} />
-
-          {/* ═══ SINKING FUNDS ═══ */}
-          <SinkingFundsRing paceData={p?.paceData} />
-
-          {/* ═══ FIRE PROJECTION ═══ */}
-          <FireCard fireProjection={fireProjection} />
-
-          </DashboardSection>
 
           <DashboardSection title="Simulators & Tools">
           {/* ═══ CREDIT SCORE SIMULATOR ═══ */}
@@ -1524,220 +1348,7 @@ export default memo(function DashboardTab({
 
           </DashboardSection>
 
-          {/* ═══ BOTTOM CTAs ═══ */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-            <button
-              onClick={onViewResult}
-              style={{
-                flex: 1,
-                padding: "12px 14px",
-                borderRadius: T.radius.lg,
-                border: `1px solid ${T.border.default}`,
-                background: T.bg.card,
-                color: T.text.secondary,
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                boxShadow: T.shadow.card,
-              }}
-            >
-              <Activity size={14} />
-              Latest Result
-            </button>
-
-            {p?.healthScore && (
-              <button
-                onClick={async () => {
-                  const W = 440,
-                    H = 600;
-                  const canvas = document.createElement("canvas");
-                  canvas.width = W;
-                  canvas.height = H;
-                  const ctx = canvas.getContext("2d");
-                  const bg = ctx.createLinearGradient(0, 0, W, H);
-                  bg.addColorStop(0, "#0B0A14");
-                  bg.addColorStop(0.5, "#0F0D1A");
-                  bg.addColorStop(1, "#14122A");
-                  ctx.fillStyle = bg;
-                  ctx.beginPath();
-                  ctx.roundRect(0, 0, W, H, 24);
-                  ctx.fill();
-                  const glow = ctx.createRadialGradient(W / 2, 200, 20, W / 2, 200, 130);
-                  glow.addColorStop(0, scoreColor + "20");
-                  glow.addColorStop(1, "transparent");
-                  ctx.fillStyle = glow;
-                  ctx.fillRect(0, 50, W, 300);
-                  ctx.strokeStyle = `${scoreColor}25`;
-                  ctx.lineWidth = 1.5;
-                  ctx.beginPath();
-                  ctx.roundRect(1, 1, W - 2, H - 2, 24);
-                  ctx.stroke();
-                  ctx.beginPath();
-                  ctx.arc(W / 2, 200, 82, Math.PI * 0.75, Math.PI * 2.25);
-                  ctx.strokeStyle = "rgba(255,255,255,0.06)";
-                  ctx.lineWidth = 7;
-                  ctx.lineCap = "round";
-                  ctx.stroke();
-                  const endAngle = Math.PI * 0.75 + (score / 100) * Math.PI * 1.5;
-                  ctx.beginPath();
-                  ctx.arc(W / 2, 200, 82, Math.PI * 0.75, endAngle);
-                  const ringGrad = ctx.createLinearGradient(W / 2 - 82, 200, W / 2 + 82, 200);
-                  ringGrad.addColorStop(0, scoreColor);
-                  ringGrad.addColorStop(1, scoreColor + "CC");
-                  ctx.strokeStyle = ringGrad;
-                  ctx.lineWidth = 7;
-                  ctx.lineCap = "round";
-                  ctx.stroke();
-                  ctx.fillStyle = scoreColor;
-                  ctx.font = "bold 60px -apple-system, BlinkMacSystemFont, sans-serif";
-                  ctx.textAlign = "center";
-                  ctx.textBaseline = "middle";
-                  ctx.fillText(hs.grade || "?", W / 2, 190);
-                  ctx.fillStyle = "#9CA3AF";
-                  ctx.font = "700 17px -apple-system, sans-serif";
-                  ctx.fillText(`${hs.score || 0}/100`, W / 2, 228);
-                  if (percentile > 0) {
-                    ctx.fillStyle = scoreColor + "18";
-                    ctx.beginPath();
-                    ctx.roundRect(W / 2 - 50, 258, 100, 22, 11);
-                    ctx.fill();
-                    ctx.strokeStyle = scoreColor + "30";
-                    ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    ctx.roundRect(W / 2 - 50, 258, 100, 22, 11);
-                    ctx.stroke();
-                    ctx.fillStyle = scoreColor;
-                    ctx.font = "800 10px -apple-system, sans-serif";
-                    ctx.fillText(`Top ${100 - percentile}% of users`, W / 2, 271);
-                  }
-                  ctx.strokeStyle = "rgba(255,255,255,0.06)";
-                  ctx.lineWidth = 1;
-                  ctx.beginPath();
-                  ctx.moveTo(40, 300);
-                  ctx.lineTo(W - 40, 300);
-                  ctx.stroke();
-                  ctx.fillStyle = "#E5E7EB";
-                  ctx.font = "800 13px -apple-system, sans-serif";
-                  ctx.fillText("WEEKLY HEALTH SCORE", W / 2, 330);
-                  ctx.fillStyle = sc;
-                  ctx.font = "700 15px -apple-system, sans-serif";
-                  ctx.fillText(cleanStatus, W / 2, 358);
-                  const dateText = fmtDate(current.date);
-                  if (streak > 1) {
-                    ctx.fillStyle = "#FF8C00";
-                    ctx.font = "700 12px -apple-system, sans-serif";
-                    ctx.fillText(`🔥 W${streak} Streak`, W / 2 - 50, 388);
-                    ctx.fillStyle = "#6B7280";
-                    ctx.font = "600 12px -apple-system, sans-serif";
-                    ctx.fillText(`  ·  ${dateText}`, W / 2 + 50, 388);
-                  } else {
-                    ctx.fillStyle = "#6B7280";
-                    ctx.font = "600 13px -apple-system, sans-serif";
-                    ctx.fillText(dateText, W / 2, 388);
-                  }
-                  if (hs.summary) {
-                    ctx.fillStyle = "#8890A6";
-                    ctx.font = "400 13px -apple-system, sans-serif";
-                    const words = hs.summary.split(" ");
-                    const lines = [];
-                    let line = "";
-                    for (const w of words) {
-                      if ((line + " " + w).length > 44) {
-                        lines.push(line);
-                        line = w;
-                      } else {
-                        line = line ? line + " " + w : w;
-                      }
-                    }
-                    if (line) lines.push(line);
-                    lines.slice(0, 3).forEach((l, i) => ctx.fillText(l, W / 2, 425 + i * 20));
-                  }
-                  ctx.strokeStyle = "rgba(255,255,255,0.04)";
-                  ctx.lineWidth = 1;
-                  ctx.beginPath();
-                  ctx.moveTo(40, H - 60);
-                  ctx.lineTo(W - 40, H - 60);
-                  ctx.stroke();
-                  const brandGrad = ctx.createLinearGradient(W / 2 - 80, 0, W / 2 + 80, 0);
-                  brandGrad.addColorStop(0, "#7B5EA7");
-                  brandGrad.addColorStop(1, "#2ECC71");
-                  ctx.fillStyle = brandGrad;
-                  ctx.font = "800 12px -apple-system, sans-serif";
-                  ctx.fillText("Catalyst Cash", W / 2, H - 32);
-                  ctx.fillStyle = "rgba(255,255,255,0.2)";
-                  ctx.font = "500 9px -apple-system, sans-serif";
-                  ctx.fillText("CatalystCash.app", W / 2, H - 16);
-                  canvas.toBlob(async blob => {
-                    try {
-                      const file = new File([blob], "health-score.png", { type: "image/png" });
-                      if (navigator.share && navigator.canShare?.({ files: [file] })) {
-                        await navigator.share({ files: [file], title: "My Weekly Health Score" });
-                      } else {
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = "health-score.png";
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
-                      }
-                    } catch (e) {
-                      if (e.name !== "AbortError") console.error("Share failed:", e);
-                    }
-                  }, "image/png");
-                  unlockBadge("shared_score").catch(() => { });
-                }}
-                style={{
-                  flex: 1,
-                  padding: "12px 14px",
-                  borderRadius: T.radius.lg,
-                  border: `1px solid ${T.accent.primary}25`,
-                  background: `${T.accent.primary}08`,
-                  color: T.accent.primary,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                }}
-              >
-                <ExternalLink size={14} />
-                Share Score
-              </button>
-            )}
-          </div>
-
-          {/* Primary CTA */}
-          <button
-            onClick={onRunAudit}
-            style={{
-              width: "100%",
-              padding: "16px",
-              borderRadius: T.radius.lg,
-              border: "none",
-              background: `linear-gradient(135deg, ${T.accent.emerald}, #10B981)`,
-              color: "#fff",
-              fontSize: 15,
-              fontWeight: 800,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              boxShadow: `0 8px 24px ${T.accent.emerald}40`,
-            }}
-          >
-            <Plus size={18} strokeWidth={2.5} />
-            Input Weekly Data
-          </button>
-
+          {/* Audit content moved to dedicated Audit tab */}
           <p
             style={{
               fontSize: 9,
