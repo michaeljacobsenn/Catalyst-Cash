@@ -62,6 +62,7 @@ const AIChatTab = lazy(() => import("./modules/tabs/AIChatTab.jsx"));
 const SettingsTab = lazy(() => import("./modules/tabs/SettingsTab.jsx"));
 const CashflowTab = lazy(() => import("./modules/tabs/CashflowTab.jsx"));
 const PortfolioTab = lazy(() => import("./modules/tabs/PortfolioTab.jsx"));
+const AuditTab = lazy(() => import("./modules/tabs/AuditTab.jsx"));
 const TransactionFeed = lazy(() => import("./modules/tabs/TransactionFeed.jsx"));
 import GuideModal from "./modules/tabs/GuideModal.jsx";
 import LockScreen from "./modules/LockScreen.jsx";
@@ -1014,7 +1015,7 @@ function CatalystCash() {
   const navItems = [
     { id: "dashboard", label: "Home", icon: Home },
     { id: "cashflow", label: "Cashflow", icon: Wallet },
-    { id: "input", label: "", icon: Plus, isCenter: true },
+    { id: "audit", label: "Audit", icon: Zap, isCenter: true },
     { id: "portfolio", label: "Portfolio", icon: CreditCard },
     { id: "chat", label: "Ask AI", icon: MessageCircle },
   ].filter(Boolean);
@@ -1649,6 +1650,21 @@ function CatalystCash() {
                   <PortfolioTab 
                     onViewTransactions={() => setShowTransactionFeed(true)} 
                     proEnabled={proEnabled} 
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            )}
+
+            {t === "audit" && (
+              <ErrorBoundary name="Audit">
+                <Suspense fallback={<TabFallback />}>
+                  <AuditTab
+                    proEnabled={proEnabled}
+                    onRunAudit={() => navTo("input")}
+                    onViewResult={() => navTo("results")}
+                    onUpgrade={() => setShowPaywall(true)}
+                    history={history}
+                    current={current}
                   />
                 </Suspense>
               </ErrorBoundary>
