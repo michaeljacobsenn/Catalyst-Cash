@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getIsoWeekKey, getQuotaWindow, isRevenueCatEntitlementActive } from "./index.js";
+import { getIsoWeekKey, getQuotaWindow, isRevenueCatEntitlementActive, resolveEffectiveTier } from "./index.js";
 
 describe("worker quota windows", () => {
   it("uses ISO weeks for free audit windows", () => {
@@ -55,5 +55,47 @@ describe("RevenueCat entitlement verification", () => {
     ).toBe(false);
 
     expect(isRevenueCatEntitlementActive({ entitlements: {} }, "Catalyst Cash Pro")).toBe(false);
+  });
+});
+
+describe("tier resolution hardening", () => {
+  it("fails closed to free when verification inputs are missing", async () => {
+    const request = new Request("https://example.com/audit", {
+      headers: {
+        "X-Subscription-Tier": "pro",
+      },
+    });
+
+    await expect(resolveEffectiveTier(request, {})).resolves.toMatchObject({
+      tier: "free",
+      verified: false,
+      source: "unverified",
+    });
+  });
+
+  it("fails closed to free when RevenueCat verification throws", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response("boom", { status: 500 });
+
+    const request = new Request("https://example.com/audit", {
+      headers: {
+        "X-Subscription-Tier": "pro",
+        "X-RC-App-User-ID": "rc_user_123",
+      },
+    });
+
+    try {
+      await expect(
+        resolveEffectiveTier(request, {
+          REVENUECAT_SECRET_KEY: "test_secret",
+        })
+      ).resolves.toMatchObject({
+        tier: "free",
+        verified: false,
+        source: "verification_failed",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

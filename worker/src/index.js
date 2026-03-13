@@ -191,10 +191,9 @@ async function fetchRevenueCatSubscriber(appUserId, env) {
 }
 
 export async function resolveEffectiveTier(request, env) {
-  const requestedTier = getRequestedTier(request);
   const revenueCatAppUserId = getRevenueCatAppUserId(request);
   if (!env.REVENUECAT_SECRET_KEY || !revenueCatAppUserId) {
-    return { tier: requestedTier, verified: false, source: "client" };
+    return { tier: "free", verified: false, source: "unverified" };
   }
 
   try {
@@ -207,9 +206,9 @@ export async function resolveEffectiveTier(request, env) {
     };
   } catch (error) {
     return {
-      tier: requestedTier,
+      tier: "free",
       verified: false,
-      source: "fallback",
+      source: "verification_failed",
       verificationError: error?.message || "verification_failed",
     };
   }
