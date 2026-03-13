@@ -47,6 +47,8 @@ export interface PortfolioContextValue {
   setMarketPrices: Dispatch<SetStateAction<MarketPriceMap>>;
   cardAnnualFees: Renewal[];
   isPortfolioReady: boolean;
+  liabilitySum?: number;
+  refreshLiabilities?: () => Promise<void>;
 }
 
 const PortfolioContext = createContext<PortfolioContextValue | null>(null);

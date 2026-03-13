@@ -3,13 +3,13 @@ import { ChevronDown, ChevronUp, AlertTriangle, X, Plus, Check, CheckCircle2, Ca
 import { T, RENEWAL_CATEGORIES, formatInterval } from "../constants.js";
 import { fmt } from "../utils.js";
 import { resolveCardLabel, getShortCardLabel } from "../cards.js";
-import { Card as UICard, Label as UILabel, Badge as UIBadge, FormGroup as UIFormGroup, FormRow as UIFormRow } from "../ui.jsx";
-import { Mono as UIMono, EmptyState as UIEmptyState } from "../components.jsx";
-import SearchableSelectBase from "../SearchableSelect.jsx";
+import { Card as UICard, Label as UILabel, Badge as UIBadge, FormGroup as UIFormGroup, FormRow as UIFormRow } from "../ui.js";
+import { Mono as UIMono, EmptyState as UIEmptyState } from "../components.js";
+import SearchableSelectBase from "../SearchableSelect.js";
 import { haptic } from "../haptics.js";
 import { shouldShowGating } from "../subscription.js";
-import ProBanner from "./ProBanner.jsx";
-const LazyProPaywall = React.lazy(() => import("./ProPaywall.jsx"));
+import ProBanner from "./ProBanner.js";
+const LazyProPaywall = React.lazy(() => import("./ProPaywall.js"));
 
 // Interval options for dropdowns
 const WEEK_OPTIONS = Array.from({ length: 52 }, (_, i) => i + 1);
@@ -22,7 +22,7 @@ import { useAudit } from "../contexts/AuditContext.js";
 import { useSubscriptions } from "../useSubscriptions.js";
 import { Zap, ExternalLink, Bot } from "lucide-react";
 import { getNegotiableMerchant } from "../negotiation.js";
-import { useNavigation } from "../contexts/NavigationContext.jsx";
+import { useNavigation } from "../contexts/NavigationContext.js";
 import type { CatalystCashConfig, Card, Renewal } from "../../types/index.js";
 
 interface RenewalsTabProps {

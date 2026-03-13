@@ -26,8 +26,8 @@ import {
 } from "lucide-react";
 import { T } from "../constants.js";
 import { validateSnapshot } from "../validation.js";
-import { Card as UICard, Label as UILabel, Badge } from "../ui.jsx";
-import { Mono as UIMono, DI as UIDI, CustomSelect as UICustomSelect } from "../components.jsx";
+import { Card as UICard, Label as UILabel, Badge } from "../ui.js";
+import { Mono as UIMono, DI as UIDI, CustomSelect as UICustomSelect } from "../components.js";
 import { getSystemPrompt } from "../prompts.js";
 import { generateStrategy, mergeSnapshotDebts } from "../engine.js";
 import { resolveCardLabel, getShortCardLabel } from "../cards.js";

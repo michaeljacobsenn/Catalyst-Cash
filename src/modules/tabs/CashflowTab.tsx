@@ -1,7 +1,7 @@
 import React, { useState, type Dispatch, type SetStateAction } from "react";
 import { T } from "../constants.js";
-import { ViewToggle } from "../ui.jsx";
-import BudgetTab from "./BudgetTab.jsx";
+import { ViewToggle } from "../ui.js";
+import BudgetTab from "./BudgetTab.js";
 import RenewalsTab from "./RenewalsTab.js";
 import type { BankAccount, Card, CatalystCashConfig, Renewal } from "../../types/index.js";
 

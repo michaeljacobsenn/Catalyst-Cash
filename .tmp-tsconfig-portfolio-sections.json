@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/modules/portfolio/InvestmentsSection.tsx",
+    "src/modules/portfolio/OtherAssetsSection.tsx",
+    "src/modules/portfolio/TransactionsSection.tsx"
+  ]
+}

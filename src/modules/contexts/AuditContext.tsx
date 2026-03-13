@@ -16,14 +16,14 @@ import { generateStrategy, mergeSnapshotDebts } from "../engine.js";
 import { buildScrubber } from "../scrubber.js";
 import { evaluateBadges, BADGE_DEFINITIONS } from "../badges.js";
 import { haptic } from "../haptics.js";
-import { useToast } from "../Toast.jsx";
+import { useToast } from "../Toast.js";
 import { getProvider } from "../providers.js";
 import { getSystemPrompt } from "../prompts.js";
 import { getHistoryLimit, getOrCreateDeviceId, recordAuditUsage } from "../subscription.js";
 import { loadMemory, extractAuditMilestones, addMilestones, getMemoryBlock } from "../memory.js";
 import { useSettings } from "./SettingsContext.js";
 import { usePortfolio } from "./PortfolioContext.js";
-import { useNavigation } from "./NavigationContext.jsx";
+import { useNavigation } from "./NavigationContext.js";
 import type {
   AuditFormData,
   AuditRecord,
@@ -99,6 +99,7 @@ interface AuditContextValue {
   handleManualImport: (resultText: string) => Promise<void>;
   isTest: boolean;
   historyLimit: number;
+  quota?: unknown;
 }
 
 const AuditContext = createContext<AuditContextValue | null>(null);

@@ -11,17 +11,17 @@ import React, {
 import { Calendar, Download, CheckCircle, Trash2, Edit3, Plus, Filter, type LucideIcon } from "lucide-react";
 import { T } from "../constants.js";
 import { fmt, fmtDate, exportAudit, exportAllAudits, exportSelectedAudits, exportAuditCSV } from "../utils.js";
-import { Card as UICard, Badge as UIBadge } from "../ui.jsx";
-import { Mono as UIMono, EmptyState as UIEmptyState } from "../components.jsx";
+import { Card as UICard, Badge as UIBadge } from "../ui.js";
+import { Mono as UIMono, EmptyState as UIEmptyState } from "../components.js";
 import { haptic } from "../haptics.js";
 import { shouldShowGating } from "../subscription.js";
-import ProBannerBase from "./ProBanner.jsx";
+import ProBannerBase from "./ProBanner.js";
 
 import { useAudit } from "../contexts/AuditContext.js";
-import { useNavigation } from "../contexts/NavigationContext.jsx";
+import { useNavigation } from "../contexts/NavigationContext.js";
 import type { AuditFormDebt, AuditFormInvestment, AuditRecord } from "../../types/index.js";
 
-const LazyProPaywall = lazy(() => import("./ProPaywall.jsx"));
+const LazyProPaywall = lazy(() => import("./ProPaywall.js"));
 
 type AuditStatusFilter = "GREEN" | "YELLOW" | "RED" | null;
 

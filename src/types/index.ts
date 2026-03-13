@@ -22,6 +22,15 @@ export interface RateLimitUpdate {
   isChat: boolean;
 }
 
+export interface ChatQuotaState {
+  allowed: boolean;
+  remaining: number;
+  limit: number;
+  used: number;
+  dailyCapReached?: boolean;
+  softBlocked?: boolean;
+}
+
 export interface BackendHeaders {
   "Content-Type": "application/json";
   "X-Device-ID": string;
@@ -34,6 +43,28 @@ export interface ChatHistoryMessage {
   role: "user" | "assistant" | "system";
   content: string;
   ts?: number;
+}
+
+export interface AskAiNegotiationPayload {
+  merchant: string;
+  amount: number;
+  tactic: string;
+}
+
+export interface AiMemoryFact {
+  fact: string;
+  category: "goal" | "preference" | "context" | "milestone" | string;
+  ts: number;
+}
+
+export interface AiMemoryMilestone {
+  text: string;
+  ts: number;
+}
+
+export interface AiMemory {
+  facts: AiMemoryFact[];
+  milestones: AiMemoryMilestone[];
 }
 
 export interface GeminiHistoryPart {
@@ -181,6 +212,8 @@ export interface ParsedAudit {
   structured: AuditStructuredResponse;
   sections: ParsedAuditSections;
   moveItems: ParsedMoveItem[];
+  topMoves?: ParsedMoveItem[];
+  categories?: Record<string, unknown>;
   paceData: PaceDataPoint[];
   negotiationTargets: NegotiationTarget[];
   dashboardData: ParsedAuditDashboardData;
@@ -322,7 +355,7 @@ export interface BudgetCategory {
 
 export interface SavingsGoal {
   id?: string;
-  name: string;
+  name?: string;
   target?: number;
   saved?: number;
   targetAmount?: number;
@@ -331,17 +364,23 @@ export interface SavingsGoal {
 }
 
 export interface NonCardDebt {
-  id: string;
+  id?: string;
   name: string;
   balance: number;
   minPayment: number;
   apr: number;
+  minimum?: number;
+  dueDay?: number;
+  type?: string;
+  linkedAssetId?: string | null;
 }
 
 export interface OtherAsset {
   id?: string;
-  name: string;
-  value: number;
+  name?: string;
+  value?: number;
+  liquid?: boolean;
+  linkedDebtId?: string | null;
 }
 
 export type PayFrequency = "weekly" | "bi-weekly" | "semi-monthly" | "monthly";
@@ -388,7 +427,9 @@ export interface Card {
   institution: string;
   name: string;
   nickname?: string;
+  issuer?: string;
   limit?: number | null;
+  creditLimit?: number | null;
   balance?: number | string | null;
   mask?: string | null;
   last4?: string | null;
@@ -404,6 +445,9 @@ export interface Card {
   paymentDueDay?: number | null;
   minPayment?: number | null;
   type?: string;
+  cardType?: string;
+  dueDay?: number;
+  _plaidLimit?: number | null;
   _plaidAccountId?: string;
   _plaidConnectionId?: string;
   _plaidBalance?: number | null;

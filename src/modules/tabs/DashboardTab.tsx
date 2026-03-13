@@ -27,41 +27,41 @@ import { T } from "../constants.js";
 
 import { fmt, fmtDate, exportAudit, shareAudit, stripPaycheckParens, db } from "../utils.js";
 import { uploadToICloud } from "../cloudSync.js";
-import { Card as UICard, Label, Badge, ProgressBar, InlineTooltip, getTracking } from "../ui.jsx";
-import { Mono, StatusDot, PaceBar, Md, CountUp, Section } from "../components.jsx";
+import { Card as UICard, Label, Badge, ProgressBar, InlineTooltip, getTracking } from "../ui.js";
+import { Mono, StatusDot, PaceBar, Md, CountUp, Section } from "../components.js";
 import { unlockBadge } from "../badges.js";
-import DebtSimulator from "./DebtSimulator.jsx";
-import FIReSimulator from "./FIReSimulator.jsx";
-import WeeklyChallenges from "./WeeklyChallenges.jsx";
-import CashFlowCalendar from "./CashFlowCalendar.jsx";
-import CreditScoreSimulator from "./CreditScoreSimulator.jsx";
-import BillNegotiationCard from "./BillNegotiationCard.jsx";
+import DebtSimulator from "./DebtSimulator.js";
+import FIReSimulator from "./FIReSimulator.js";
+import WeeklyChallenges from "./WeeklyChallenges.js";
+import CashFlowCalendar from "./CashFlowCalendar.js";
+import CreditScoreSimulator from "./CreditScoreSimulator.js";
+import BillNegotiationCard from "./BillNegotiationCard.js";
 import { haptic } from "../haptics.js";
 import { shouldShowGating, getCurrentTier, isGatingEnforced, getGatingMode } from "../subscription.js";
-import { useSecurity } from "../contexts/SecurityContext.jsx";
-import ProBanner from "./ProBanner.jsx";
-import ErrorBoundary from "../ErrorBoundary.jsx";
+import { useSecurity } from "../contexts/SecurityContext.js";
+import ProBanner from "./ProBanner.js";
+import ErrorBoundary from "../ErrorBoundary.js";
 import { usePlaidSync } from "../usePlaidSync.js";
 import "./DashboardTab.css";
 import { useCoachmark, COACHMARKS } from "../coachmarks.js";
-import Coachmark from "../Coachmark.jsx";
+import Coachmark from "../Coachmark.js";
 
 import { useAudit } from "../contexts/AuditContext.js";
 import { useSettings } from "../contexts/SettingsContext.js";
 import { usePortfolio } from "../contexts/PortfolioContext.js";
-import { useNavigation } from "../contexts/NavigationContext.jsx";
+import { useNavigation } from "../contexts/NavigationContext.js";
 import type { BankAccount, Card as CardType, CatalystCashConfig, HealthScore } from "../../types/index.js";
 
 // ── Extracted dashboard components ──
 import useDashboardData from "../dashboard/useDashboardData.js";
-import HealthGauge from "../dashboard/HealthGauge.jsx";
-import AlertStrip from "../dashboard/AlertStrip.jsx";
-import MetricsBar from "../dashboard/MetricsBar.jsx";
-import { SafeToSpendCard } from "../dashboard/SafeToSpendCard.jsx";
+import HealthGauge from "../dashboard/HealthGauge.js";
+import AlertStrip from "../dashboard/AlertStrip.js";
+import MetricsBar from "../dashboard/MetricsBar.js";
+import { SafeToSpendCard } from "../dashboard/SafeToSpendCard.js";
 
 const SYNC_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
 let _autoSyncDone = false; // Survives component remounts — only auto-sync once per app session
-const LazyProPaywall = lazy(() => import("./ProPaywall.jsx"));
+const LazyProPaywall = lazy(() => import("./ProPaywall.js"));
 
 interface DashboardSectionProps {
   children: ReactNode;
@@ -136,12 +136,6 @@ interface DashboardCardProps {
   onClick?: () => void;
   variant?: string;
   className?: string;
-}
-
-declare global {
-  interface Window {
-    toast?: ToastApi;
-  }
 }
 
 const Card = UICard as unknown as (props: DashboardCardProps) => ReactNode;
@@ -273,7 +267,7 @@ export default memo(function DashboardTab({
           await db.set(key, true);
           setRunConfetti(true);
           setTimeout(() => setRunConfetti(false), 6000);
-          if (window.toast) window.toast.success(`${m.emoji} W${streak}: ${m.label}`);
+          window.toast?.success?.(`${m.emoji} W${streak}: ${m.label}`);
         }
       })();
     }
@@ -313,10 +307,10 @@ export default memo(function DashboardTab({
       await uploadToICloud(backup, appPasscode || null);
       await db.set("last-backup-ts", Date.now());
       setShowBackupNudge(false);
-      if (window.toast) window.toast.success("✅ Backed up to iCloud");
+      window.toast?.success?.("✅ Backed up to iCloud");
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      if (window.toast) window.toast.error("Backup failed: " + message);
+      window.toast?.error?.("Backup failed: " + message);
     }
     setBackingUp(false);
   };
