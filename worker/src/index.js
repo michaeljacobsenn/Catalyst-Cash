@@ -6,12 +6,12 @@
 
 const ANTHROPIC_VERSION = "2023-06-01";
 const MAX_BODY_SIZE = 512_000; // 512KB max request body (system prompt alone is ~110KB)
-const VALID_PROVIDERS = ["gemini", "openai", "claude"];
+const VALID_PROVIDERS = ["gemini", "openai", "claude", "anthropic"];
 const PLAID_ENV = "production"; // "sandbox", "development", or "production"
 const FREE_AUDITS_PER_WEEK = 2;
-const PRO_AUDITS_PER_MONTH = 31;
+const PRO_AUDITS_PER_MONTH = 20;
 const FREE_CHATS_PER_DAY = 10;
-const PRO_CHATS_PER_DAY = 50;
+const PRO_CHATS_PER_DAY = 25;
 const PROVIDER_TIMEOUT_MS = 240_000; // 4 min for all models (client has a cancel button)
 const PLAID_TIMEOUT_MS = 15_000;
 const MARKET_TIMEOUT_MS = 10_000;
@@ -25,14 +25,14 @@ const SECURITY_HEADERS = {
   "Content-Security-Policy": "frame-ancestors 'none'",
 };
 const MODEL_ALLOWLIST = {
-  free: new Set(["gemini-2.5-flash", "gpt-4o-mini"]),
+  free: new Set(["gemini-2.5-flash"]),
   pro: new Set([
     "gemini-2.5-flash",
-    "gpt-4o-mini",
     "gemini-2.5-pro",
-    "gpt-4o",
-    "o3-mini",
-    "claude-sonnet-4-20250514",
+    "gpt-4.1",
+    "o3",
+    "claude-sonnet-4-6",
+    "claude-opus-4-6",
     "claude-haiku-4-5",
   ]),
 };
@@ -40,9 +40,18 @@ const MODEL_ALLOWLIST = {
 // Model defaults per provider
 const DEFAULTS = {
   gemini: "gemini-2.5-flash",
-  openai: "gpt-4o-mini",
-  claude: "claude-sonnet-4-20250514",
+  openai: "gpt-4.1",
+  claude: "claude-haiku-4-5",
+  anthropic: "claude-haiku-4-5",
 };
+
+function getWorkerGatingMode(env) {
+  return env.GATING_MODE || "off";
+}
+
+function isWorkerGatingEnforced(env) {
+  return getWorkerGatingMode(env) === "live";
+}
 
 // ─── CORS ────────────────────────────────────────────────────
 function corsHeaders(origin, env) {
@@ -135,8 +144,9 @@ export function getQuotaWindow(tier, isChat, now = new Date()) {
 }
 
 function getDefaultModelForTier(provider, tier) {
-  if (provider === "openai") return tier === "pro" ? "o3-mini" : "gpt-4o-mini";
+  if (provider === "openai") return tier === "pro" ? "o3" : DEFAULTS.gemini;
   if (provider === "gemini") return tier === "pro" ? "gemini-2.5-pro" : "gemini-2.5-flash";
+  if (provider === "anthropic" || provider === "claude") return tier === "pro" ? "claude-haiku-4-5" : DEFAULTS.gemini;
   return DEFAULTS[provider] || DEFAULTS.gemini;
 }
 
@@ -216,30 +226,44 @@ export async function resolveEffectiveTier(request, env) {
 
 // ─── Rate Limiting (per-device, using Durable Objects) ─────────────
 export class RateLimiter {
-  constructor(state, env) {
+  constructor(state) {
     this.state = state;
+    this.sql = state.storage.sql;
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS counts (
+        period_key TEXT PRIMARY KEY,
+        count INTEGER NOT NULL DEFAULT 0
+      )
+    `);
   }
 
   async fetch(request) {
     const url = new URL(request.url);
-    const periodKey = url.searchParams.get("periodKey");
+    const periodKey = url.searchParams.get("periodKey") || "";
     const commit = url.searchParams.get("commit") === "true";
 
-    let storedKey = await this.state.storage.get("periodKey");
-    let count = await this.state.storage.get("count") || 0;
-
-    if (storedKey !== periodKey) {
-      count = 0;
-      await this.state.storage.put("periodKey", periodKey);
-      await this.state.storage.put("count", 0);
-    }
-
     if (commit) {
-      count += 1;
-      await this.state.storage.put("count", count);
+      this.sql.exec(
+        `INSERT INTO counts (period_key, count) VALUES (?, 1)
+         ON CONFLICT(period_key) DO UPDATE SET count = count + 1`,
+        periodKey
+      );
     }
 
-    return new Response(JSON.stringify({ count }));
+    const row = this.sql.exec("SELECT count FROM counts WHERE period_key = ?", periodKey).one();
+    const count = row ? row.count : 0;
+
+    // GC stale period keys to prevent unbounded growth
+    const rows = [...this.sql.exec("SELECT period_key FROM counts ORDER BY period_key DESC")];
+    if (rows.length > 2) {
+      for (const r of rows.slice(2)) {
+        this.sql.exec("DELETE FROM counts WHERE period_key = ?", r.period_key);
+      }
+    }
+
+    return new Response(JSON.stringify({ count }), {
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
 
@@ -295,6 +319,163 @@ export async function commitRateLimit(rateResult, env) {
   };
 }
 
+function generateAuditLogId() {
+  return crypto.randomUUID();
+}
+
+function trimResponsePreview(text) {
+  return String(text || "").slice(0, 600);
+}
+
+function buildUsage(promptTokens = 0, completionTokens = 0) {
+  return {
+    promptTokens: Number.isFinite(promptTokens) ? promptTokens : 0,
+    completionTokens: Number.isFinite(completionTokens) ? completionTokens : 0,
+  };
+}
+
+function extractSSEText(parsed) {
+  if (parsed?.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
+    return parsed.delta.text || "";
+  }
+  if (parsed?.choices?.[0]?.delta?.content) {
+    return parsed.choices[0].delta.content;
+  }
+  if (parsed?.candidates?.[0]?.content?.parts?.[0]?.text) {
+    return parsed.candidates[0].content.parts[0].text;
+  }
+  return "";
+}
+
+function mergeUsage(provider, parsed, usage) {
+  if (!parsed || !usage) return usage;
+
+  if (provider === "openai" && parsed.usage) {
+    return buildUsage(parsed.usage.prompt_tokens || 0, parsed.usage.completion_tokens || 0);
+  }
+
+  if (provider === "anthropic" || provider === "claude") {
+    const inputTokens = parsed.message?.usage?.input_tokens ?? parsed.usage?.input_tokens ?? usage.promptTokens;
+    const outputTokens = parsed.usage?.output_tokens ?? parsed.message?.usage?.output_tokens ?? usage.completionTokens;
+    return buildUsage(inputTokens, outputTokens);
+  }
+
+  if (provider === "gemini" && parsed.usageMetadata) {
+    const promptTokens = parsed.usageMetadata.promptTokenCount || usage.promptTokens;
+    const completionTokens =
+      parsed.usageMetadata.candidatesTokenCount ??
+      Math.max(0, (parsed.usageMetadata.totalTokenCount || 0) - (parsed.usageMetadata.promptTokenCount || 0));
+    return buildUsage(promptTokens, completionTokens);
+  }
+
+  return usage;
+}
+
+async function insertAuditLogRow(db, row) {
+  if (!db) return;
+
+  await db.prepare(
+    `INSERT INTO audit_log (
+      id, provider, model, user_id, prompt_tokens, completion_tokens,
+      parse_succeeded, hit_degraded_fallback, response_preview, confidence, drift_warning, drift_details
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    row.id,
+    row.provider,
+    row.model,
+    row.userId,
+    row.promptTokens || 0,
+    row.completionTokens || 0,
+    row.parseSucceeded ? 1 : 0,
+    row.hitDegradedFallback ? 1 : 0,
+    trimResponsePreview(row.responsePreview),
+    row.confidence || "medium",
+    row.driftWarning ? 1 : 0,
+    JSON.stringify(Array.isArray(row.driftDetails) ? row.driftDetails : [])
+  ).run();
+}
+
+async function updateAuditLogRow(db, logId, updates = {}) {
+  if (!db || !logId) return;
+
+  const existing = await getDbFirstResult(db, "SELECT * FROM audit_log WHERE id = ?", [logId]);
+  if (!existing) return;
+
+  const promptTokens =
+    updates.promptTokens == null ? Number(existing.prompt_tokens || 0) : Number(updates.promptTokens || 0);
+  const completionTokens =
+    updates.completionTokens == null ? Number(existing.completion_tokens || 0) : Number(updates.completionTokens || 0);
+  const parseSucceeded =
+    updates.parseSucceeded == null ? Number(existing.parse_succeeded || 0) : updates.parseSucceeded ? 1 : 0;
+  const hitDegradedFallback =
+    updates.hitDegradedFallback == null
+      ? Number(existing.hit_degraded_fallback || 0)
+      : updates.hitDegradedFallback
+        ? 1
+        : 0;
+  const responsePreview =
+    updates.responsePreview == null ? existing.response_preview || "" : trimResponsePreview(updates.responsePreview);
+  const confidence = typeof updates.confidence === "string" ? updates.confidence : existing.confidence || "medium";
+  const driftWarning =
+    updates.driftWarning == null ? Number(existing.drift_warning || 0) : updates.driftWarning ? 1 : 0;
+  const driftDetails =
+    updates.driftDetails == null
+      ? existing.drift_details || "[]"
+      : JSON.stringify(Array.isArray(updates.driftDetails) ? updates.driftDetails : []);
+
+  await db.prepare(
+    `UPDATE audit_log
+        SET prompt_tokens = ?,
+            completion_tokens = ?,
+            parse_succeeded = ?,
+            hit_degraded_fallback = ?,
+            response_preview = ?,
+            confidence = ?,
+            drift_warning = ?,
+            drift_details = ?
+      WHERE id = ?`
+  ).bind(
+    promptTokens,
+    completionTokens,
+    parseSucceeded,
+    hitDegradedFallback,
+    responsePreview,
+    confidence,
+    driftWarning,
+    driftDetails,
+    logId
+  ).run();
+}
+
+async function captureStreamAuditLog(db, logId, provider, response) {
+  if (!db || !logId || !response) return;
+
+  const rawBody = await response.text().catch(() => "");
+  let preview = "";
+  let usage = buildUsage();
+
+  for (const line of rawBody.split("\n")) {
+    if (!line.startsWith("data: ")) continue;
+    const payload = line.slice(6).trim();
+    if (!payload || payload === "[DONE]") continue;
+    try {
+      const parsed = JSON.parse(payload);
+      usage = mergeUsage(provider, parsed, usage);
+      if (preview.length < 600) {
+        preview += extractSSEText(parsed);
+      }
+    } catch {
+      // Ignore malformed stream chunks for logging.
+    }
+  }
+
+  await updateAuditLogRow(db, logId, {
+    promptTokens: usage.promptTokens,
+    completionTokens: usage.completionTokens,
+    responsePreview: preview,
+  });
+}
+
 // ─── Gemini Provider ─────────────────────────────────────────
 async function callGemini(apiKey, { snapshot, systemPrompt, history, model, stream, responseFormat }) {
   const m = model || DEFAULTS.gemini;
@@ -345,7 +526,14 @@ async function callGemini(apiKey, { snapshot, systemPrompt, history, model, stre
   }
 
   const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.map(p => p.text).join("") || "";
+  return {
+    text: data.candidates?.[0]?.content?.parts?.map(p => p.text).join("") || "",
+    usage: buildUsage(
+      data.usageMetadata?.promptTokenCount || 0,
+      data.usageMetadata?.candidatesTokenCount ??
+        Math.max(0, (data.usageMetadata?.totalTokenCount || 0) - (data.usageMetadata?.promptTokenCount || 0))
+    ),
+  };
 }
 
 // ─── OpenAI Provider ─────────────────────────────────────────
@@ -361,6 +549,9 @@ async function callOpenAI(apiKey, { snapshot, systemPrompt, history, model, stre
 
   if (isReasoning) {
     body.max_completion_tokens = 12000;
+    if (stream) {
+      body.stream_options = { include_usage: true };
+    }
     // Reasoning models don't support response_format — inject explicit JSON instruction
     if (responseFormat !== "text") {
       const jsonSuffix =
@@ -371,6 +562,9 @@ async function callOpenAI(apiKey, { snapshot, systemPrompt, history, model, stre
     body.max_tokens = 12000;
     body.temperature = 0.1;
     body.top_p = 0.95;
+    if (stream) {
+      body.stream_options = { include_usage: true };
+    }
     // Only force JSON output for audits — chat needs natural language
     if (responseFormat !== "text") {
       body.response_format = { type: "json_object" };
@@ -400,7 +594,10 @@ async function callOpenAI(apiKey, { snapshot, systemPrompt, history, model, stre
   }
 
   const data = await res.json();
-  return data.choices?.[0]?.message?.content || "";
+  return {
+    text: data.choices?.[0]?.message?.content || "",
+    usage: buildUsage(data.usage?.prompt_tokens || 0, data.usage?.completion_tokens || 0),
+  };
 }
 
 // ─── Claude Provider ─────────────────────────────────────────
@@ -438,7 +635,10 @@ async function callClaude(apiKey, { snapshot, systemPrompt, history, model, stre
   }
 
   const data = await res.json();
-  return data.content?.[0]?.text || "";
+  return {
+    text: data.content?.[0]?.text || "",
+    usage: buildUsage(data.usage?.input_tokens || 0, data.usage?.output_tokens || 0),
+  };
 }
 
 // ─── Provider Router ─────────────────────────────────────────
@@ -449,10 +649,180 @@ function getProviderHandler(provider) {
     case "openai":
       return { handler: callOpenAI, keyName: "OPENAI_API_KEY" };
     case "claude":
+    case "anthropic":
       return { handler: callClaude, keyName: "ANTHROPIC_API_KEY" };
     default:
       return { handler: callGemini, keyName: "GOOGLE_API_KEY" };
   }
+}
+
+function parseStoredJson(value, fallback = {}) {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeStoredTransactionsPayload(payload) {
+  if (!payload || typeof payload !== "object") {
+    return { transactions: [], total_transactions: 0 };
+  }
+
+  const transactions = Array.isArray(payload.transactions) ? payload.transactions.filter(Boolean) : [];
+  return {
+    ...payload,
+    transactions,
+    total_transactions: transactions.length,
+  };
+}
+
+function comparePlaidTransactions(a, b) {
+  const dateA = typeof a?.date === "string" ? a.date : "";
+  const dateB = typeof b?.date === "string" ? b.date : "";
+  if (dateA !== dateB) return dateB.localeCompare(dateA);
+  const pendingA = a?.pending ? 1 : 0;
+  const pendingB = b?.pending ? 1 : 0;
+  if (pendingA !== pendingB) return pendingA - pendingB;
+  const idA = a?.transaction_id || "";
+  const idB = b?.transaction_id || "";
+  return idA.localeCompare(idB);
+}
+
+export function mergePlaidTransactions(existingPayload, syncPayload) {
+  const existing = normalizeStoredTransactionsPayload(existingPayload);
+  const byId = new Map(
+    existing.transactions
+      .filter(transaction => transaction?.transaction_id)
+      .map(transaction => [transaction.transaction_id, transaction])
+  );
+
+  for (const transaction of syncPayload?.added || []) {
+    if (!transaction?.transaction_id) continue;
+    byId.set(transaction.transaction_id, transaction);
+  }
+
+  for (const transaction of syncPayload?.modified || []) {
+    if (!transaction?.transaction_id) continue;
+    byId.set(transaction.transaction_id, transaction);
+  }
+
+  for (const transaction of syncPayload?.removed || []) {
+    if (!transaction?.transaction_id) continue;
+    byId.delete(transaction.transaction_id);
+  }
+
+  const transactions = [...byId.values()].sort(comparePlaidTransactions);
+  return {
+    transactions,
+    total_transactions: transactions.length,
+  };
+}
+
+async function fetchPlaidJson(plaidDomain, endpoint, env, body) {
+  const plaidRes = await fetchWithTimeout(
+    `${plaidDomain}${endpoint}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: env.PLAID_CLIENT_ID,
+        secret: env.PLAID_SECRET,
+        ...body,
+      }),
+    },
+    PLAID_TIMEOUT_MS
+  );
+
+  if (!plaidRes.ok) {
+    const errorText = await plaidRes.text().catch(() => "");
+    throw new Error(`Plaid ${endpoint} failed (${plaidRes.status})${errorText ? `: ${errorText}` : ""}`);
+  }
+
+  return plaidRes.json();
+}
+
+async function getDbFirstResult(db, sql, params = []) {
+  const { results } = await db.prepare(sql).bind(...params).all();
+  return results?.[0] || null;
+}
+
+async function getStoredSyncRow(db, userId, itemId) {
+  if (!db) return null;
+  return getDbFirstResult(db, "SELECT * FROM sync_data WHERE user_id = ? AND item_id = ?", [userId, itemId]);
+}
+
+async function writeSyncRow(db, userId, itemId, updates = {}) {
+  if (!db) return;
+
+  const existing = (await getStoredSyncRow(db, userId, itemId)) || {};
+  const balancesJson = updates.balancesJson ?? existing.balances_json ?? "{}";
+  const liabilitiesJson = updates.liabilitiesJson ?? existing.liabilities_json ?? "{}";
+  const transactionsJson = updates.transactionsJson ?? existing.transactions_json ?? "{}";
+
+  await db.prepare(
+    `INSERT INTO sync_data (user_id, item_id, balances_json, liabilities_json, transactions_json)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, item_id) DO UPDATE SET
+       balances_json = excluded.balances_json,
+       liabilities_json = excluded.liabilities_json,
+       transactions_json = excluded.transactions_json,
+       last_synced_at = CURRENT_TIMESTAMP`
+  ).bind(userId, itemId, balancesJson, liabilitiesJson, transactionsJson).run();
+}
+
+export async function fetchAllPlaidTransactionsSync(plaidDomain, env, accessToken, initialCursor = null) {
+  let cursor = initialCursor || null;
+  let nextCursor = initialCursor || null;
+  let hasMore = true;
+  const aggregate = {
+    added: [],
+    modified: [],
+    removed: [],
+  };
+
+  while (hasMore) {
+    const response = await fetchPlaidJson(plaidDomain, "/transactions/sync", env, {
+      access_token: accessToken,
+      ...(cursor ? { cursor } : {}),
+    });
+
+    aggregate.added.push(...(response.added || []));
+    aggregate.modified.push(...(response.modified || []));
+    aggregate.removed.push(...(response.removed || []));
+    nextCursor = response.next_cursor || nextCursor;
+    hasMore = Boolean(response.has_more);
+    cursor = nextCursor;
+  }
+
+  return {
+    syncPayload: aggregate,
+    nextCursor: nextCursor || initialCursor || null,
+  };
+}
+
+async function syncTransactionsForItem({ db, userId, itemId, accessToken, plaidDomain, env }) {
+  const itemRow = db ? await getDbFirstResult(db, "SELECT transactions_cursor FROM plaid_items WHERE item_id = ?", [itemId]) : null;
+  const currentCursor = itemRow?.transactions_cursor || null;
+  const existingSyncRow = db ? await getStoredSyncRow(db, userId, itemId) : null;
+  const existingTransactions = normalizeStoredTransactionsPayload(parseStoredJson(existingSyncRow?.transactions_json, {}));
+  const { syncPayload, nextCursor } = await fetchAllPlaidTransactionsSync(plaidDomain, env, accessToken, currentCursor);
+  const mergedTransactions = mergePlaidTransactions(existingTransactions, syncPayload);
+
+  if (db) {
+    await writeSyncRow(db, userId, itemId, {
+      transactionsJson: JSON.stringify(mergedTransactions),
+    });
+    await db.prepare(
+      "UPDATE plaid_items SET transactions_cursor = ?, updated_at = CURRENT_TIMESTAMP WHERE item_id = ?"
+    ).bind(nextCursor, itemId).run();
+  }
+
+  return {
+    mergedTransactions,
+    nextCursor,
+  };
 }
 
 // ─── Main Handler ────────────────────────────────────────────
@@ -488,7 +858,7 @@ export default {
     if (url.pathname === "/config" && request.method === "GET") {
       return new Response(
         JSON.stringify({
-          gatingMode: env.GATING_MODE || "live",
+          gatingMode: getWorkerGatingMode(env),
           minVersion: env.MIN_VERSION || "2.0.0",
           entitlementVerification: Boolean(env.REVENUECAT_SECRET_KEY),
           rotatingCategories: {
@@ -503,8 +873,69 @@ export default {
       );
     }
 
+    if (url.pathname === "/api/admin/audit-log" && request.method === "GET") {
+      const authHeader = request.headers.get("Authorization") || "";
+      const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+      if (!env.ADMIN_TOKEN || bearerToken !== env.ADMIN_TOKEN) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+        });
+      }
+
+      if (!env.DB) {
+        return new Response(JSON.stringify({ error: "DB not configured" }), {
+          status: 500,
+          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+        });
+      }
+
+      const { results } = await env.DB.prepare(
+        `SELECT id, created_at, provider, model, user_id, prompt_tokens, completion_tokens,
+                parse_succeeded, hit_degraded_fallback, response_preview, confidence, drift_warning, drift_details
+           FROM audit_log
+          ORDER BY created_at DESC
+          LIMIT 50`
+      ).bind().all();
+
+      return new Response(JSON.stringify({ rows: results || [] }), {
+        status: 200,
+        headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+      });
+    }
+
+    if (url.pathname === "/api/audit-log/outcome" && request.method === "POST") {
+      if (!env.DB) {
+        return new Response(JSON.stringify({ error: "DB not configured" }), {
+          status: 500,
+          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+        });
+      }
+
+      const { auditLogId, parseSucceeded, hitDegradedFallback, confidence, driftWarning, driftDetails } = await request.json().catch(() => ({}));
+      if (!auditLogId) {
+        return new Response(JSON.stringify({ error: "Missing auditLogId" }), {
+          status: 400,
+          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+        });
+      }
+
+      await updateAuditLogRow(env.DB, auditLogId, {
+        parseSucceeded: Boolean(parseSucceeded),
+        hitDegradedFallback: Boolean(hitDegradedFallback),
+        confidence: typeof confidence === "string" ? confidence : "medium",
+        driftWarning: Boolean(driftWarning),
+        driftDetails: Array.isArray(driftDetails) ? driftDetails : [],
+      });
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+      });
+    }
+
     // ─── Plaid Endpoints ─────────────────────────────────────
-    if (url.pathname.startsWith("/plaid/")) {
+    if (url.pathname.startsWith("/plaid/") || url.pathname.startsWith("/api/sync/")) {
       if (request.method !== "POST") {
         return new Response(JSON.stringify({ error: "Method not allowed" }), {
           status: 405,
@@ -561,14 +992,19 @@ export default {
           const userId = reqBody.userId || "catalyst-user";
           if (env.DB) {
             await env.DB.prepare(
-              "INSERT OR REPLACE INTO plaid_items (item_id, user_id, access_token) VALUES (?, ?, ?)"
-            ).bind(plaidData.item_id, userId, plaidData.access_token).run();
+              "INSERT OR REPLACE INTO plaid_items (item_id, user_id, access_token, transactions_cursor) VALUES (?, ?, ?, ?)"
+            ).bind(plaidData.item_id, userId, plaidData.access_token, null).run();
           }
 
-          return new Response(JSON.stringify(plaidData), {
+          return new Response(
+            JSON.stringify({
+              item_id: plaidData.item_id,
+            }),
+            {
             status: 200,
             headers: buildHeaders(cors, { "Content-Type": "application/json" }),
-          });
+            }
+          );
         } else if (url.pathname === "/plaid/balances") {
           plaidEndpoint = "/accounts/get";
           plaidBody = {
@@ -584,29 +1020,65 @@ export default {
             access_token: reqBody.accessToken,
           };
         } else if (url.pathname === "/plaid/disconnect") {
+          let accessToken = reqBody.accessToken || "";
+          const itemId = reqBody.itemId || "";
+
+          if (!accessToken && itemId && env.DB) {
+            const itemRow = await getDbFirstResult(env.DB, "SELECT user_id, access_token FROM plaid_items WHERE item_id = ?", [itemId]);
+            accessToken = itemRow?.access_token || "";
+            if (itemRow?.user_id) {
+              await env.DB.prepare("DELETE FROM sync_data WHERE user_id = ? AND item_id = ?").bind(itemRow.user_id, itemId).run();
+            }
+            await env.DB.prepare("DELETE FROM plaid_items WHERE item_id = ?").bind(itemId).run();
+          }
+
+          if (!accessToken) {
+            return new Response(JSON.stringify({ error: "Missing Plaid item reference" }), {
+              status: 400,
+              headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+            });
+          }
+
           plaidEndpoint = "/item/remove";
           plaidBody = {
             client_id: env.PLAID_CLIENT_ID,
             secret: env.PLAID_SECRET,
-            access_token: reqBody.accessToken,
+            access_token: accessToken,
           };
         } else if (url.pathname === "/plaid/transactions") {
-          plaidEndpoint = "/transactions/get";
-          plaidBody = {
-            client_id: env.PLAID_CLIENT_ID,
-            secret: env.PLAID_SECRET,
-            access_token: reqBody.accessToken,
-            start_date: reqBody.startDate,
-            end_date: reqBody.endDate,
-            options: { count: 500, offset: 0 },
-          };
+          const userId = reqBody.userId || "catalyst-user";
+          const itemId =
+            reqBody.itemId ||
+            (await getDbFirstResult(env.DB, "SELECT item_id FROM plaid_items WHERE access_token = ?", [reqBody.accessToken]))?.item_id;
+
+          if (!itemId) {
+            const { syncPayload } = await fetchAllPlaidTransactionsSync(plaidDomain, env, reqBody.accessToken, null);
+            return new Response(JSON.stringify(mergePlaidTransactions({ transactions: [] }, syncPayload)), {
+              status: 200,
+              headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+            });
+          }
+
+          const { mergedTransactions } = await syncTransactionsForItem({
+            db: env.DB,
+            userId,
+            itemId,
+            accessToken: reqBody.accessToken,
+            plaidDomain,
+            env,
+          });
+
+          return new Response(JSON.stringify(mergedTransactions), {
+            status: 200,
+            headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+          });
         } else if (url.pathname === "/plaid/webhook") {
           // ── Plaid Webhook Receiver ────────────────────────
           const webhookType = reqBody.webhook_type || "UNKNOWN";
           const webhookCode = reqBody.webhook_code || "UNKNOWN";
           const itemId = reqBody.item_id || "";
 
-          console.log(`[Plaid Webhook] ${webhookType}.${webhookCode} for item ${itemId}`);
+          // Webhook received — process below
 
           // Trigger async sync logic using waitUntil
           if (env.DB && (webhookCode === "SYNC_UPDATES_AVAILABLE" || webhookCode === "DEFAULT_UPDATE" || webhookCode === "INITIAL_UPDATE")) {
@@ -628,14 +1100,13 @@ export default {
                 lastSyncTime = new Date(syncResults[0].last_synced_at + "Z").getTime();
               }
 
-              // Let's check if the user is a pro user. In a real app we'd fetch this from RevenueCat API
-              // or a users table. For now, since user_id is hardcoded natively, we'll allow all.
-              // We'll enforce the 24h / 12h logic here conceptually where possible.
-              // Assuming all dev users are "pro" for testing if their ID is catalyst-user
+              // Heuristic tier fallback until Plaid item ownership is joined to verified entitlements.
+              // In soft launch, gating remains intentionally unenforced and all users may sync.
               if (user_id === "catalyst-user" || user_id.includes("pro")) tierId = "pro";
+              if (!isWorkerGatingEnforced(env)) tierId = "pro";
 
-              if (tierId === "free") {
-                console.log(`[Plaid Webhook] Aborting sync for Free user ${user_id} (Manual Sync Only)`);
+              if (isWorkerGatingEnforced(env) && tierId === "free") {
+                // Free users: manual sync only — ignore webhook
                 return; // Completely ignore webhooks for free users
               }
 
@@ -648,27 +1119,29 @@ export default {
               }
               const now = Date.now();
               if (itemLastSync > 0 && (now - itemLastSync) < ITEM_COOLDOWN) {
-                console.log(`[Plaid Webhook] Skipping item ${itemId} for ${user_id}. Last sync was less than 48h ago.`);
+                // Item cooldown not elapsed — skip
                 return;
               }
               // --------------------------
 
               // Background sync: Use free /accounts/get since webhook means data is fresh
-              const balRes = await fetch(`${plaidDomain}/accounts/get`, {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ client_id: env.PLAID_CLIENT_ID, secret: env.PLAID_SECRET, access_token })
+              const balances = await fetchPlaidJson(plaidDomain, "/accounts/get", env, {
+                access_token: access_token,
               });
-              const balances = await balRes.json();
+              const { mergedTransactions } = await syncTransactionsForItem({
+                db: env.DB,
+                userId: user_id,
+                itemId,
+                accessToken: access_token,
+                plaidDomain,
+                env,
+              });
 
-              // Save to D1 (item-level)
-              await env.DB.prepare(
-                `INSERT INTO sync_data (user_id, item_id, balances_json) 
-                   VALUES (?, ?, ?)
-                   ON CONFLICT(user_id, item_id) DO UPDATE SET 
-                   balances_json=excluded.balances_json, 
-                   last_synced_at=CURRENT_TIMESTAMP`
-              ).bind(user_id, itemId, JSON.stringify(balances)).run();
-              console.log(`[Plaid Webhook] Background balance sync complete for item ${itemId}, user ${user_id}`);
+              await writeSyncRow(env.DB, user_id, itemId, {
+                balancesJson: JSON.stringify(balances),
+                transactionsJson: JSON.stringify(mergedTransactions),
+              });
+              // Balance sync persisted to D1
             };
 
             // Use ctx.waitUntil to keep the worker alive for the async sync
@@ -682,13 +1155,14 @@ export default {
         } else if (url.pathname === "/api/sync/force") {
           // Manually trigger a sync for a user, respecting the tier cooldown.
           if (request.method !== "POST") return new Response("{}", { status: 405 });
-          const { userId } = await request.json();
+          const { userId } = reqBody;
           if (!env.DB) return new Response(JSON.stringify({ error: "DB not configured" }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
 
           let tierId = "free";
           if (userId === "catalyst-user" || (userId && userId.includes("pro"))) tierId = "pro";
+          if (!isWorkerGatingEnforced(env)) tierId = "pro";
 
-          if (tierId === "free") {
+          if (isWorkerGatingEnforced(env) && tierId === "free") {
             return new Response(JSON.stringify({ error: "upgrade_required", message: "Live Syncing is a Pro feature." }), { status: 403, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
 
@@ -718,16 +1192,13 @@ export default {
             const { access_token, item_id: syncItemId } = item;
             try {
               // Manual sync: use free /accounts/get and rely on background product updates ($0.30/mo flat)
-              const balRes = await fetch(`${plaidDomain}/accounts/get`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ client_id: env.PLAID_CLIENT_ID, secret: env.PLAID_SECRET, access_token }) });
-              const balances = await balRes.json();
+              const balances = await fetchPlaidJson(plaidDomain, "/accounts/get", env, {
+                access_token,
+              });
 
-              await env.DB.prepare(
-                `INSERT INTO sync_data (user_id, item_id, balances_json) 
-                   VALUES (?, ?, ?)
-                   ON CONFLICT(user_id, item_id) DO UPDATE SET 
-                   balances_json=excluded.balances_json, 
-                   last_synced_at=CURRENT_TIMESTAMP`
-              ).bind(userId || "catalyst-user", syncItemId || "default", JSON.stringify(balances)).run();
+              await writeSyncRow(env.DB, userId || "catalyst-user", syncItemId || "default", {
+                balancesJson: JSON.stringify(balances),
+              });
               anySuccess = true;
             } catch (err) { console.error("[Manual Sync] Error syncing item", err); }
           }
@@ -738,10 +1209,18 @@ export default {
             return new Response(JSON.stringify({ error: "Failed to sync items" }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
         } else if (url.pathname === "/api/sync/deep") {
-          // On-demand deep sync: fetch transactions + liabilities (Pro only, 7-day cooldown)
+          // On-demand deep sync: fetch transactions + liabilities.
+          // In soft launch, this remains available to all users. In live gating, free users are blocked.
           if (request.method !== "POST") return new Response("{}", { status: 405 });
-          const { userId: deepUserId } = await request.json();
+          const { userId: deepUserId } = reqBody;
           if (!env.DB) return new Response(JSON.stringify({ error: "DB not configured" }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+
+          let deepTierId = "free";
+          if (deepUserId === "catalyst-user" || (deepUserId && deepUserId.includes("pro"))) deepTierId = "pro";
+
+          if (isWorkerGatingEnforced(env) && deepTierId === "free") {
+            return new Response(JSON.stringify({ error: "upgrade_required", message: "Deep sync is a Pro feature when live gating is enabled." }), { status: 403, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+          }
 
           const { results: deepSyncResults } = await env.DB.prepare("SELECT last_synced_at FROM sync_data WHERE user_id = ? AND item_id = 'deep_sync_meta'").bind(deepUserId || "catalyst-user").all();
           let lastDeepSync = 0;
@@ -760,17 +1239,22 @@ export default {
 
           for (const dItem of deepItems) {
             try {
-              const liabRes = await fetch(`${plaidDomain}/liabilities/get`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ client_id: env.PLAID_CLIENT_ID, secret: env.PLAID_SECRET, access_token: dItem.access_token }) });
-              const liabilities = await liabRes.json();
+              const liabilities = await fetchPlaidJson(plaidDomain, "/liabilities/get", env, {
+                access_token: dItem.access_token,
+              });
+              const { mergedTransactions } = await syncTransactionsForItem({
+                db: env.DB,
+                userId: deepUserId || "catalyst-user",
+                itemId: dItem.item_id || "default",
+                accessToken: dItem.access_token,
+                plaidDomain,
+                env,
+              });
 
-              const dStart = new Date(); dStart.setDate(dStart.getDate() - 30);
-              const dEnd = new Date();
-              const txRes = await fetch(`${plaidDomain}/transactions/get`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ client_id: env.PLAID_CLIENT_ID, secret: env.PLAID_SECRET, access_token: dItem.access_token, start_date: dStart.toISOString().split("T")[0], end_date: dEnd.toISOString().split("T")[0] }) });
-              const transactions = await txRes.json();
-
-              await env.DB.prepare(
-                `UPDATE sync_data SET liabilities_json = ?, transactions_json = ? WHERE user_id = ? AND item_id = ?`
-              ).bind(JSON.stringify(liabilities), JSON.stringify(transactions), deepUserId || "catalyst-user", dItem.item_id || "default").run();
+              await writeSyncRow(env.DB, deepUserId || "catalyst-user", dItem.item_id || "default", {
+                liabilitiesJson: JSON.stringify(liabilities),
+                transactionsJson: JSON.stringify(mergedTransactions),
+              });
             } catch (err) { console.error("[Deep Sync] Error", err); }
           }
 
@@ -992,6 +1476,26 @@ export default {
       });
     }
 
+    // ─── Telemetry: Client Error Reports ────────────────────
+    if (url.pathname === "/api/v1/telemetry/errors" && request.method === "POST") {
+      try {
+        const payload = await request.json();
+        // Validate shape — accept only expected fields, drop everything else
+        const entry = {
+          timestamp: typeof payload.timestamp === "string" ? payload.timestamp.slice(0, 30) : new Date().toISOString(),
+          component: String(payload.component || "unknown").slice(0, 100),
+          action: String(payload.action || "").slice(0, 200),
+          message: String(payload.message || "").slice(0, 2000),
+          stack: String(payload.stack || "").slice(0, 4000),
+          userAgent: String(payload.userAgent || "").slice(0, 200),
+        };
+        // Log to Worker analytics (visible in Cloudflare dashboard Tail logs)
+        console.error("[telemetry]", JSON.stringify(entry));
+      } catch { /* discard malformed payloads silently */ }
+      // Always 204 — never leak info back to client, never block the app
+      return new Response(null, { status: 204, headers: buildHeaders(cors) });
+    }
+
     if (url.pathname !== "/audit") {
       return new Response(JSON.stringify({ error: "Not found" }), {
         status: 404,
@@ -1059,14 +1563,19 @@ export default {
     }
 
     // ─── Resolve Provider ─────────────────────────────────
-    const selectedProvider = provider || "gemini";
-    if (!VALID_PROVIDERS.includes(selectedProvider)) {
+    const requestedProvider = provider || "gemini";
+    if (!VALID_PROVIDERS.includes(requestedProvider)) {
       return new Response(JSON.stringify({ error: "Invalid provider" }), {
         status: 400,
         headers: buildHeaders(cors, { "Content-Type": "application/json", ...tierHeaders }),
       });
     }
-    const resolvedModel = model || getDefaultModelForTier(selectedProvider, subscriptionTier);
+    let selectedProvider = requestedProvider;
+    let resolvedModel = model || getDefaultModelForTier(selectedProvider, subscriptionTier);
+    if (subscriptionTier !== "pro") {
+      selectedProvider = "gemini";
+      resolvedModel = "gemini-2.5-flash";
+    }
     if (!isModelAllowedForTier(resolvedModel, subscriptionTier)) {
       return new Response(
         JSON.stringify({
@@ -1104,6 +1613,8 @@ export default {
     // ─── Execute Provider Call ─────────────────────────────
     try {
       const shouldStream = stream !== false;
+      const auditLogId = generateAuditLogId();
+      const auditUserId = getRevenueCatAppUserId(request) || deviceId;
 
       const result = await handler(apiKey, {
         snapshot,
@@ -1117,11 +1628,28 @@ export default {
 
       // Streaming: pipe raw response through
       if (shouldStream && result instanceof Response) {
+        await insertAuditLogRow(env.DB, {
+          id: auditLogId,
+          provider: selectedProvider,
+          model: resolvedModel,
+          userId: auditUserId,
+          promptTokens: 0,
+          completionTokens: 0,
+          parseSucceeded: false,
+          hitDegradedFallback: false,
+          responsePreview: "",
+          confidence: "medium",
+          driftWarning: false,
+          driftDetails: [],
+        });
+        ctx.waitUntil(captureStreamAuditLog(env.DB, auditLogId, selectedProvider, result.clone()));
+
         return new Response(result.body, {
           status: 200,
           headers: buildHeaders(cors, {
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache",
+            "X-Audit-Log-ID": auditLogId,
             "X-RateLimit-Remaining": String(committedRateResult.remaining),
             "X-RateLimit-Limit": String(committedRateResult.limit),
             ...tierHeaders,
@@ -1129,11 +1657,29 @@ export default {
         });
       }
 
+      const resultText = typeof result === "string" ? result : result?.text || "";
+      const usage = typeof result === "string" ? buildUsage() : buildUsage(result?.usage?.promptTokens, result?.usage?.completionTokens);
+      await insertAuditLogRow(env.DB, {
+        id: auditLogId,
+        provider: selectedProvider,
+        model: resolvedModel,
+        userId: auditUserId,
+        promptTokens: usage.promptTokens,
+        completionTokens: usage.completionTokens,
+        parseSucceeded: false,
+        hitDegradedFallback: false,
+        responsePreview: resultText,
+        confidence: "medium",
+        driftWarning: false,
+        driftDetails: [],
+      });
+
       // Non-streaming: wrap text in JSON
-      return new Response(JSON.stringify({ result }), {
+      return new Response(JSON.stringify({ result: resultText }), {
         status: 200,
         headers: buildHeaders(cors, {
           "Content-Type": "application/json",
+          "X-Audit-Log-ID": auditLogId,
           "X-RateLimit-Remaining": String(committedRateResult.remaining),
           "X-RateLimit-Limit": String(committedRateResult.limit),
           ...tierHeaders,

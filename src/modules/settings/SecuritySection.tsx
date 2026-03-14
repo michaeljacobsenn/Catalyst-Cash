@@ -6,9 +6,10 @@ import { haptic } from "../haptics.js";
 import { getConnections, removeConnection } from "../plaid.js";
 import { deleteSecureItem } from "../secureStore.js";
 
-const Toggle = ({ value, onChange }) => (
+const Toggle = ({ value, onChange, ariaLabel }) => (
   <button
     onClick={() => onChange(!value)}
+    aria-label={ariaLabel}
     style={{
       width: 48,
       height: 28,
@@ -122,7 +123,7 @@ export default function SecuritySection({
             Lock app natively on launch or background
           </p>
         </div>
-        <Toggle value={requireAuth} onChange={handleRequireAuthToggle} />
+        <Toggle value={requireAuth} onChange={handleRequireAuthToggle} ariaLabel="Require Passcode" />
       </div>
 
       {requireAuth && (
@@ -144,7 +145,7 @@ export default function SecuritySection({
                 Use biometrics for faster unlocking
               </p>
             </div>
-            <Toggle value={useFaceId} onChange={handleUseFaceIdToggle} />
+            <Toggle value={useFaceId} onChange={handleUseFaceIdToggle} ariaLabel="Enable Face ID / Touch ID" />
           </div>
           <div
             style={{

@@ -1,6 +1,6 @@
 import { db } from "./utils.js";
 import { encrypt, decrypt } from "./crypto.js";
-import { isSecuritySensitiveKey } from "./securityKeys.js";
+import { isSecuritySensitiveKey, sanitizePlaidForBackup } from "./securityKeys.js";
 
 const WORKER_URL = "https://api.catalystcash.app/api/household/sync";
 
@@ -18,7 +18,6 @@ export async function pushHouseholdSync(householdId, passcode) {
 
   const plaidConns = await db.get("plaid-connections");
   if (Array.isArray(plaidConns) && plaidConns.length > 0) {
-    const { sanitizePlaidForBackup } = await import("./securityKeys.js");
     payload.data["plaid-connections-sanitized"] = sanitizePlaidForBackup(plaidConns);
   }
 

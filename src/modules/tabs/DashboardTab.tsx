@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Repeat,
   Activity,
+  AlertTriangle,
   ReceiptText,
   ExternalLink,
   MessageCircle,
@@ -51,13 +52,12 @@ import { useSettings } from "../contexts/SettingsContext.js";
 import { usePortfolio } from "../contexts/PortfolioContext.js";
 import { useNavigation } from "../contexts/NavigationContext.js";
 import type { BankAccount, Card as CardType, CatalystCashConfig, HealthScore } from "../../types/index.js";
+import { isSecuritySensitiveKey, sanitizePlaidForBackup } from "../securityKeys.js";
 
 // ── Extracted dashboard components ──
 import useDashboardData from "../dashboard/useDashboardData.js";
 import HealthGauge from "../dashboard/HealthGauge.js";
 import AlertStrip from "../dashboard/AlertStrip.js";
-import MetricsBar from "../dashboard/MetricsBar.js";
-import { SafeToSpendCard } from "../dashboard/SafeToSpendCard.js";
 
 const SYNC_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
 let _autoSyncDone = false; // Survives component remounts — only auto-sync once per app session
@@ -108,11 +108,6 @@ interface CompactMetric {
   label: string;
   value: number;
   color: string;
-}
-
-interface SecurityKeysModule {
-  isSecuritySensitiveKey: (key: string) => boolean;
-  sanitizePlaidForBackup: (connections: unknown[]) => unknown;
 }
 
 interface BackupEnvelope {
@@ -220,6 +215,7 @@ export default memo(function DashboardTab({
     chartA11y,
     freedomStats,
     alerts,
+    safetySnapshot,
     portfolioMetrics,
   } = useDashboardData();
 
@@ -291,7 +287,6 @@ export default memo(function DashboardTab({
   const handleBackupNow = async () => {
     setBackingUp(true);
     try {
-      const { isSecuritySensitiveKey, sanitizePlaidForBackup } = (await import("../securityKeys.js")) as SecurityKeysModule;
       const backup: BackupEnvelope = { app: "Catalyst Cash", version: "2.0", exportedAt: new Date().toISOString(), data: {} };
       const keys = (await db.keys()) as string[];
       for (const key of keys) {
@@ -387,6 +382,26 @@ export default memo(function DashboardTab({
   const grade = hs?.grade || "?";
   const summary = hs?.summary || "";
   const scoreColor = score >= 80 ? T.status.green : score >= 60 ? T.status.amber : T.status.red;
+  const safetyColor =
+    safetySnapshot.level === "urgent"
+      ? T.status.red
+      : safetySnapshot.level === "caution"
+        ? T.status.amber
+        : T.status.green;
+  const safetyLabel =
+    safetySnapshot.level === "urgent" ? "URGENT"
+    : safetySnapshot.level === "caution" ? "CAUTION"
+    : "SAFE";
+  const safetyIcon =
+    safetySnapshot.level === "urgent" ? <AlertTriangle size={14} color={safetyColor} strokeWidth={2.5} />
+    : <Shield size={14} color={safetyColor} strokeWidth={2.5} />;
+  const primaryRiskLabel =
+    safetySnapshot.primaryRisk === "floor-gap" ? "Floor coverage is the issue"
+    : safetySnapshot.primaryRisk === "pending" ? "Pending charges are the issue"
+    : safetySnapshot.primaryRisk === "bills" ? "Upcoming bills are the issue"
+    : safetySnapshot.primaryRisk === "card-minimums" ? "Card minimums are the issue"
+    : safetySnapshot.primaryRisk === "score" ? "Overall audit health is the issue"
+    : "No major near-term issue detected";
 
   // ── Synthetic Percentile (client-side, no real user data) ──
   const percentile = (() => {
@@ -600,7 +615,157 @@ export default memo(function DashboardTab({
              </Suspense>
            )}
 
-           {/* ═══ HERO CARD — Net Worth + Health Score ═══ */}
+           {/* ═══ SAFETY SNAPSHOT — top priority, native and deterministic ═══ */}
+           {p && (
+             <Card
+               animate
+               style={{
+                 padding: "22px 20px",
+                 marginBottom: 12,
+                 background: `linear-gradient(180deg, ${safetyColor}10 0%, ${T.bg.card} 55%)`,
+                 border: `1px solid ${safetyColor}28`,
+                 boxShadow: `0 12px 32px ${safetyColor}12`,
+                 overflow: "hidden",
+               }}
+             >
+               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                   <div
+                     style={{
+                       width: 28,
+                       height: 28,
+                       borderRadius: 10,
+                       background: `${safetyColor}14`,
+                       border: `1px solid ${safetyColor}22`,
+                       display: "flex",
+                       alignItems: "center",
+                       justifyContent: "center",
+                       flexShrink: 0,
+                     }}
+                   >
+                     {safetyIcon}
+                   </div>
+                   <div>
+                     <div style={{ fontSize: 11, fontWeight: 800, color: safetyColor, fontFamily: T.font.mono, letterSpacing: "0.05em" }}>
+                       THIS WEEK
+                     </div>
+                     <div style={{ fontSize: 18, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.02em" }}>
+                       Am I safe right now?
+                     </div>
+                   </div>
+                 </div>
+                 <div
+                   style={{
+                     padding: "5px 10px",
+                     borderRadius: 999,
+                     background: `${safetyColor}14`,
+                     border: `1px solid ${safetyColor}22`,
+                     color: safetyColor,
+                     fontSize: 11,
+                     fontWeight: 800,
+                     fontFamily: T.font.mono,
+                     letterSpacing: "0.04em",
+                     flexShrink: 0,
+                   }}
+                 >
+                   {safetyLabel}
+                 </div>
+               </div>
+
+               <div style={{ display: "flex", gap: 18, alignItems: "center" }}>
+                 <div style={{ flex: 1, minWidth: 0 }}>
+                   <div style={{ fontSize: 24, fontWeight: 900, color: safetyColor, letterSpacing: "-0.03em", marginBottom: 4 }}>
+                     {safetySnapshot.headline}
+                   </div>
+                   <p style={{ fontSize: 13, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 14px" }}>
+                     {safetySnapshot.summary}
+                   </p>
+
+                   <div
+                     style={{
+                       padding: "12px 14px",
+                       borderRadius: T.radius.lg,
+                       background: `${T.bg.elevated}`,
+                       border: `1px solid ${T.border.subtle}`,
+                       marginBottom: 12,
+                     }}
+                   >
+                     <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 6 }}>
+                       SAFE TO SPEND
+                     </div>
+                     <div style={{ fontSize: 28, fontWeight: 900, color: privacyMode ? T.text.dim : safetyColor, letterSpacing: "-0.04em", fontFamily: T.font.mono }}>
+                       {privacyMode ? "••••••" : fmt(Math.max(0, safetySnapshot.safeToSpend))}
+                     </div>
+                     <div style={{ fontSize: 11, color: T.text.dim, marginTop: 4 }}>
+                       Protected cash need this cycle: {privacyMode ? "••••" : fmt(safetySnapshot.protectedNeed)}
+                     </div>
+                   </div>
+
+                   <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+                     <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}` }}>
+                       <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 4 }}>
+                         RUNWAY
+                       </div>
+                       <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary }}>
+                         {safetySnapshot.runwayWeeks != null ? `${safetySnapshot.runwayWeeks.toFixed(1)} weeks` : "No allowance set"}
+                       </div>
+                     </div>
+                     <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}` }}>
+                       <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 4 }}>
+                         PRIMARY RISK
+                       </div>
+                       <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary }}>
+                         {primaryRiskLabel}
+                       </div>
+                     </div>
+                     <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}` }}>
+                       <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 4 }}>
+                         PENDING
+                       </div>
+                       <div style={{ fontSize: 14, fontWeight: 800, color: privacyMode ? T.text.dim : T.text.primary }}>
+                         {privacyMode ? "••••" : fmt(safetySnapshot.pendingCharges)}
+                       </div>
+                     </div>
+                     <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}` }}>
+                       <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 4 }}>
+                         30-DAY BILLS
+                       </div>
+                       <div style={{ fontSize: 14, fontWeight: 800, color: privacyMode ? T.text.dim : T.text.primary }}>
+                         {privacyMode ? "••••" : fmt(safetySnapshot.upcomingBills30d)}
+                       </div>
+                     </div>
+                   </div>
+
+                   {p?.sections?.nextAction && (
+                     <div
+                       style={{
+                         marginTop: 12,
+                         padding: "12px 14px",
+                         borderRadius: T.radius.lg,
+                         background: `${safetyColor}10`,
+                         border: `1px solid ${safetyColor}20`,
+                       }}
+                     >
+                       <div style={{ fontSize: 10, fontWeight: 800, color: safetyColor, fontFamily: T.font.mono, letterSpacing: "0.05em", marginBottom: 6 }}>
+                         NEXT MOVE
+                       </div>
+                       <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.45 }}>
+                         {stripPaycheckParens(p.sections.nextAction)}
+                       </div>
+                     </div>
+                   )}
+                 </div>
+
+                 {hs?.score != null && (
+                   <div style={{ display: "flex", justifyContent: "center", flexShrink: 0 }}>
+                     <HealthGauge score={score} grade={grade} scoreColor={scoreColor} percentile={percentile} />
+                   </div>
+                 )}
+               </div>
+             </Card>
+           )}
+
+           {/* ═══ HERO CARD — Balance Sheet + Score ═══ */}
            <Card
              animate
              className="hover-card a11y-hit-target"
@@ -618,7 +783,7 @@ export default memo(function DashboardTab({
              {/* Top row: label + health pill */}
              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                <span style={{ fontSize: 12, fontWeight: 600, color: T.text.dim, letterSpacing: "0.02em" }}>
-                 Net Worth
+                 Balance Sheet
                </span>
                {hs?.score != null ? (
                  <div
@@ -696,17 +861,13 @@ export default memo(function DashboardTab({
 
            {/* ═══ QUICK METRICS ROW ═══ */}
            {(() => {
-             const safeToSpend = (() => {
-               const cash = portfolioMetrics?.spendableCash ?? 0;
-               const ccMin = (portfolioMetrics?.ccDebt ?? 0) > 0 ? Math.max((portfolioMetrics.ccDebt) * 0.01, 25) : 0;
-               return cash - ccMin - floor;
-             })();
-             const safeColor = safeToSpend <= 0 ? T.status.red : safeToSpend < (portfolioMetrics?.spendableCash ?? 0) * 0.2 ? T.status.amber : T.status.green;
+             const safeToSpend = Math.max(0, safetySnapshot.safeToSpend);
+             const safeColor = safetySnapshot.level === "urgent" ? T.status.red : safetySnapshot.level === "caution" ? T.status.amber : T.status.green;
              const metrics: CompactMetric[] = [
                { label: "Safe to Spend", value: Math.max(0, safeToSpend), color: safeColor },
+               { label: "Protected Need", value: safetySnapshot.protectedNeed, color: T.text.primary },
                { label: "Checking", value: portfolioMetrics?.spendableCash ?? 0, color: T.text.primary },
                (portfolioMetrics?.ccDebt ?? 0) > 0 ? { label: "CC Debt", value: portfolioMetrics.ccDebt, color: T.status.red } : null,
-               (portfolioMetrics?.savingsCash ?? 0) > 0 ? { label: "Savings", value: portfolioMetrics.savingsCash, color: T.text.primary } : null,
              ].filter((metric): metric is CompactMetric => metric !== null);
 
              return (
@@ -810,7 +971,7 @@ export default memo(function DashboardTab({
 
            {/* Pro upsell — compact strip for free users only */}
            {shouldShowGating() && !proEnabled && (
-             <ProBanner compact onUpgrade={() => setShowPaywall(true)} label="Unlock Catalyst Pro" sublabel="50 AI chats/day · Plaid sync · Card Wizard" />
+             <ProBanner compact onUpgrade={() => setShowPaywall(true)} label="Unlock Catalyst Cash Pro" sublabel="50 AI chats/day · Plaid sync · Smart card matches" />
            )}
 
            {/* 📋 SETUP CHECKLIST — Minimalist & Premium */}
@@ -908,6 +1069,32 @@ export default memo(function DashboardTab({
 
 
           <DashboardSection title="AI CFO & Next Steps">
+          {typeof onDemoAudit === "function" && (
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+              <button
+                onClick={() => {
+                  haptic.light();
+                  onDemoAudit();
+                }}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 999,
+                  border: `1px solid ${T.border.default}`,
+                  background: "transparent",
+                  color: T.text.secondary,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Zap size={12} strokeWidth={2.2} />
+                {current?.isTest ? "Reload Demo Data" : "Load Demo Data"}
+              </button>
+            </div>
+          )}
           {/* ═══ EMPTY STATE — no audit yet ═══ */}
           {!p && !summary && !hs?.narrative && (
              <Card

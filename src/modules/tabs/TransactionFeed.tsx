@@ -4,7 +4,7 @@
 // filtering, and CSV/JSON export.
 // ═══════════════════════════════════════════════════════════════
 
-import { useState, useContext, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import type { TouchEvent } from "react";
 import {
   ArrowLeft,
@@ -51,8 +51,8 @@ import { T } from "../constants.js";
 import { Card } from "../ui.js";
 import { EmptyState } from "../components.js";
 import { nativeExport } from "../utils.js";
-import { getStoredTransactions, fetchAllTransactions } from "../plaid.js";
-import { PortfolioContext } from "../contexts/PortfolioContext.js";
+import { getStoredTransactions, fetchAllTransactions, getConnections } from "../plaid.js";
+import { usePortfolio } from "../contexts/PortfolioContext.js";
 import { useSettings } from "../contexts/SettingsContext.js";
 import { getOptimalCard } from "../rewardsCatalog.js";
 import { haptic } from "../haptics.js";
@@ -95,6 +95,15 @@ interface LegacyTransactionResult {
   transactions?: TransactionRecord[];
   data?: TransactionRecord[];
   fetchedAt: string;
+}
+
+interface PlaidConnection {
+  id: string;
+  institutionName?: string;
+  institutionId?: string;
+  lastSync?: string;
+  accounts?: unknown[];
+  _needsReconnect?: boolean;
 }
 
 interface SwipeState {
@@ -210,12 +219,13 @@ function normalizeTransactionResult(result: LegacyTransactionResult | null | und
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
 export default function TransactionFeed({ onClose, proEnabled = false, onConnectPlaid }: TransactionFeedProps) {
-  const { cards } = useContext(PortfolioContext);
+  const { cards } = usePortfolio();
   const { financialConfig } = useSettings();
   const appWindow = window as Window & { toast?: ToastApi };
   
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
+  const [plaidConnections, setPlaidConnections] = useState<PlaidConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -235,10 +245,12 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
 
   // ── Swipe-from-edge-to-dismiss (iOS native feel) ──
   const handleOverlayTouchStart = useCallback((e: TouchEvent<HTMLDivElement>) => {
-    const x = e.touches[0].clientX;
+    const touch = e.touches[0];
+    if (!touch) return;
+    const x = touch.clientX;
     if (x < 40) {
       // Left edge only
-      swipeRef.current = { x, y: e.touches[0].clientY, t: Date.now() };
+      swipeRef.current = { x, y: touch.clientY, t: Date.now() };
     } else {
       swipeRef.current = null;
     }
@@ -250,6 +262,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
         // Pull-to-refresh logic (tolerance for momentum scroll artifacts)
         if (scrollRef.current && scrollRef.current.scrollTop <= 2 && !refreshing) {
           const touch = e.touches[0];
+          if (!touch) return;
           if (!pullRef.current) {
             pullRef.current = { y: touch.clientY, hapticFired: false };
             setIsPulling(true);
@@ -265,7 +278,9 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
         }
         return;
       }
-      const dx = e.touches[0].clientX - swipeRef.current.x;
+      const touch = e.touches[0];
+      if (!touch) return;
+      const dx = touch.clientX - swipeRef.current.x;
       if (dx > 0) {
         setSlideOffset(dx);
         e.preventDefault();
@@ -290,7 +305,12 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
         setSlideOffset(0);
         return;
       }
-      const dx = e.changedTouches[0].clientX - swipeRef.current.x;
+      const touch = e.changedTouches[0];
+      if (!touch) {
+        setSlideOffset(0);
+        return;
+      }
+      const dx = touch.clientX - swipeRef.current.x;
       const dt = Date.now() - swipeRef.current.t;
       const velocity = dx / dt;
       swipeRef.current = null;
@@ -311,8 +331,10 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
     haptic.light();
     try {
       const result = normalizeTransactionResult((await fetchAllTransactions(30)) as LegacyTransactionResult);
+      const connections = (await getConnections()) as PlaidConnection[];
       setTransactions(result.data);
       setFetchedAt(result.fetchedAt);
+      setPlaidConnections(connections || []);
       appWindow.toast?.success?.(`Synced ${result.data.length} transactions`);
     } catch (e) {
       console.warn("[TransactionFeed] Pull refresh failed:", e);
@@ -326,11 +348,16 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
   useEffect(() => {
     (async () => {
       try {
-        const stored = normalizeTransactionResult((await getStoredTransactions()) as LegacyTransactionResult | null);
+        const [storedTransactions, connections] = await Promise.all([
+          getStoredTransactions(),
+          getConnections(),
+        ]);
+        const stored = normalizeTransactionResult(storedTransactions as LegacyTransactionResult | null);
         if (stored?.data?.length) {
           setTransactions(stored.data);
           setFetchedAt(stored.fetchedAt);
         }
+        setPlaidConnections((connections || []) as PlaidConnection[]);
       } catch (e) {
         console.warn("[TransactionFeed] Failed to load:", e);
       } finally {
@@ -345,8 +372,10 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
     haptic.light();
     try {
       const result = normalizeTransactionResult((await fetchAllTransactions(30)) as LegacyTransactionResult);
+      const connections = (await getConnections()) as PlaidConnection[];
       setTransactions(result.data);
       setFetchedAt(result.fetchedAt);
+      setPlaidConnections(connections || []);
       appWindow.toast?.success?.(`Synced ${result.data.length} transactions`);
     } catch (e) {
       console.warn("[TransactionFeed] Refresh failed:", e);
@@ -355,6 +384,19 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
       setRefreshing(false);
     }
   }, [appWindow]);
+
+  const hasPlaidConnections = plaidConnections.length > 0;
+  const needsReconnectOnly = hasPlaidConnections && plaidConnections.every(connection => connection._needsReconnect);
+  const emptyStateTitle = needsReconnectOnly
+    ? "Reconnect Required"
+    : hasPlaidConnections
+      ? "No Synced Transactions Yet"
+      : "No Transactions Yet";
+  const emptyStateMessage = needsReconnectOnly
+    ? "Your linked bank connections need to be reconnected in Settings before Catalyst can sync transactions again."
+    : hasPlaidConnections
+      ? "Your accounts are already linked. Sync the ledger to pull recent Plaid transactions, or connect another bank."
+      : "Connect a bank account via Plaid in Settings to see your transaction history here.";
 
   // ── Derived: unique categories & accounts ──
   const categories = useMemo(() => {
@@ -445,7 +487,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
     const analyzableTxns = filtered.filter(t => !t.isCredit && t.category && t.amount > 0);
     
     for (const txn of analyzableTxns) {
-      const bestCard = getOptimalCard(cards as PortfolioCard[], txn.category, financialConfig?.customValuations as CustomValuations | undefined);
+      const bestCard = getOptimalCard(cards as PortfolioCard[], txn.category || "catch-all", financialConfig?.customValuations as CustomValuations | undefined);
       if (!bestCard) continue;
       
       const optimalYield = bestCard.effectiveYield;
@@ -460,7 +502,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
       let actualYield = 1.0; // Assume 1% baseline if we can't identify the card
       if (usedCard) {
         // If we know the card they used, calculate its true yield for this category
-        const usedCardData = getOptimalCard([usedCard], txn.category, financialConfig?.customValuations as CustomValuations | undefined);
+        const usedCardData = getOptimalCard([usedCard], txn.category || "catch-all", financialConfig?.customValuations as CustomValuations | undefined);
         if (usedCardData) {
           actualYield = usedCardData.effectiveYield;
         }
@@ -1186,31 +1228,49 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
           <div style={{ minHeight: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <EmptyState
               icon={CreditCard}
-              title="No Transactions Yet"
-              message={
-                <>
-                  Connect a bank account via <strong>Plaid</strong> in Settings to see your transaction history here.
-                </>
-              }
+              title={emptyStateTitle}
+              message={emptyStateMessage}
               action={
-                <button
-                  onClick={async () => {
-                    haptic.light();
-                    if (onConnectPlaid) {
-                      await onConnectPlaid();
-                      handleRefresh();
-                    }
-                  }}
-                  className="hover-lift btn-secondary"
-                  style={{
-                    padding: "12px 28px",
-                    borderRadius: T.radius.md,
-                    fontSize: 13,
-                    fontWeight: 800,
-                  }}
-                >
-                  Connect with Plaid
-                </button>
+                <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 10 }}>
+                  {hasPlaidConnections && !needsReconnectOnly && (
+                    <button
+                      onClick={handleRefresh}
+                      disabled={refreshing}
+                      className="hover-lift btn-secondary"
+                      style={{
+                        padding: "12px 20px",
+                        borderRadius: T.radius.md,
+                        fontSize: 13,
+                        fontWeight: 800,
+                        opacity: refreshing ? 0.7 : 1,
+                      }}
+                    >
+                      {refreshing ? "Syncing..." : "Sync Transactions"}
+                    </button>
+                  )}
+                  {onConnectPlaid && (
+                    <button
+                      onClick={async () => {
+                        haptic.light();
+                        await onConnectPlaid();
+                        const connections = (await getConnections()) as PlaidConnection[];
+                        setPlaidConnections(connections || []);
+                        if ((connections || []).length > 0) {
+                          void handleRefresh();
+                        }
+                      }}
+                      className="hover-lift btn-secondary"
+                      style={{
+                        padding: "12px 20px",
+                        borderRadius: T.radius.md,
+                        fontSize: 13,
+                        fontWeight: 800,
+                      }}
+                    >
+                      {hasPlaidConnections ? "Connect Another Bank" : "Connect with Plaid"}
+                    </button>
+                  )}
+                </div>
               }
             />
           </div>
@@ -1420,7 +1480,10 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                             }}>
                               <Sparkles size={10} />
                               {txn.usedOptimal ? "Used Best Card: " : "Should've Used: "} 
-                              {txn.optimalCard.name.length > 18 ? txn.optimalCard.name.substring(0, 15) + "..." : txn.optimalCard.name} ({txn.optimalCard.effectiveYield}x)
+                              {(() => {
+                                const optimalCardName = txn.optimalCard.name || "Best Card";
+                                return optimalCardName.length > 18 ? `${optimalCardName.substring(0, 15)}...` : optimalCardName;
+                              })()} ({txn.optimalCard.effectiveYield}x)
                             </span>
                           </div>
                         )}
@@ -1436,7 +1499,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                           color: txn.isCredit ? T.status.green : T.text.primary,
                         }}
                       >
-                        {formatMoney(txn.amount, txn.isCredit)}
+                        {formatMoney(txn.amount, !!txn.isCredit)}
                       </span>
                     </div>
                   );

@@ -141,6 +141,41 @@ export interface NegotiationTarget {
   estimatedAnnualSavings: number;
 }
 
+export interface AuditFlag {
+  code: string;
+  severity: "low" | "medium" | "high";
+  message: string;
+  meta?: Record<string, unknown>;
+}
+
+export interface AuditConsistencyInfo {
+  gradeCorrected?: boolean;
+  originalGrade?: string | null;
+  nonCanonicalDashboardCategories?: string[];
+  weeklyMoveDollarTotal?: number;
+  expectedOperationalSurplus?: number;
+  nativeScoreAnchor?: number;
+  nativeScoreDelta?: number;
+  nativeRiskFlags?: string[];
+  scoreAnchoredToNative?: boolean;
+  statusCorrected?: boolean;
+}
+
+export interface DegradedSafetyState {
+  level: "stable" | "caution" | "urgent";
+  headline: string;
+  summary: string;
+}
+
+export interface DegradedAuditInfo {
+  isDegraded: boolean;
+  narrativeAvailable: boolean;
+  reason: string;
+  retryAttempted: boolean;
+  riskFlags: string[];
+  safetyState: DegradedSafetyState;
+}
+
 export interface InvestmentsSummary {
   balance: string;
   asOf: string;
@@ -174,6 +209,7 @@ export interface AuditStructuredResponse {
   negotiationTargets: NegotiationTarget[];
   paceData?: PaceDataPoint[];
   rotatingCategories?: string[];
+  riskFlags?: string[];
   [key: string]: unknown;
 }
 
@@ -205,10 +241,16 @@ export interface ParsedAuditDashboardData {
 export interface ParsedAudit {
   raw: string;
   status: AuditStatus;
-  mode: "FULL";
+  mode: "FULL" | "DEGRADED";
+  liquidNetWorth: number | null;
   netWorth: number | null;
   netWorthDelta: string | number | null;
   healthScore: HealthScore | null;
+  alertsCard: string[];
+  dashboardCard: DashboardCardRow[];
+  weeklyMoves: string[];
+  investments?: InvestmentsSummary;
+  spendingAnalysis?: SpendingAnalysis | null;
   structured: AuditStructuredResponse;
   sections: ParsedAuditSections;
   moveItems: ParsedMoveItem[];
@@ -217,6 +259,9 @@ export interface ParsedAudit {
   paceData: PaceDataPoint[];
   negotiationTargets: NegotiationTarget[];
   dashboardData: ParsedAuditDashboardData;
+  auditFlags?: AuditFlag[];
+  consistency?: AuditConsistencyInfo;
+  degraded?: DegradedAuditInfo | null;
 }
 
 export interface AuditFormDebt {

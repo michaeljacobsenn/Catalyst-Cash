@@ -1,0 +1,128 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("./logger.js", () => ({
+  log: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
+vi.mock("./constants.js", () => ({
+  APP_VERSION: "2.0.0-test",
+}));
+
+vi.mock("./subscription.js", () => ({
+  isPro: vi.fn(async () => false),
+}));
+
+vi.mock("./revenuecat.js", () => ({
+  getRevenueCatAppUserId: vi.fn(async () => null),
+}));
+
+vi.mock("./fetchWithRetry.js", () => ({
+  fetchWithRetry: vi.fn(),
+}));
+
+import { streamAudit } from "./api.js";
+
+function makeStreamingResponse(reader) {
+  return {
+    ok: true,
+    headers: {
+      get: () => null,
+    },
+    body: {
+      getReader: () => reader,
+    },
+  };
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("streamAudit stream cleanup", () => {
+  it("cancels the reader after normal stream completion", async () => {
+    const cancel = vi.fn(async () => undefined);
+    const encoder = new TextEncoder();
+    const reader = {
+      read: vi
+        .fn()
+        .mockResolvedValueOnce({
+          done: false,
+          value: encoder.encode('data: {"choices":[{"delta":{"content":"hello"}}]}\n'),
+        })
+        .mockResolvedValueOnce({ done: true, value: undefined }),
+      cancel,
+    };
+
+    vi.stubGlobal("fetch", vi.fn(async () => makeStreamingResponse(reader)));
+
+    const chunks = [];
+    for await (const chunk of streamAudit("", "snapshot", "backend", "gpt-4.1", "sys", [], "device-1")) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toEqual(["hello"]);
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels the reader when the consumer exits early", async () => {
+    const cancel = vi.fn(async () => undefined);
+    const encoder = new TextEncoder();
+    const reader = {
+      read: vi
+        .fn()
+        .mockResolvedValueOnce({
+          done: false,
+          value: encoder.encode('data: {"choices":[{"delta":{"content":"partial"}}]}\n'),
+        })
+        .mockResolvedValueOnce({
+          done: false,
+          value: encoder.encode('data: {"choices":[{"delta":{"content":"ignored"}}]}\n'),
+        }),
+      cancel,
+    };
+
+    vi.stubGlobal("fetch", vi.fn(async () => makeStreamingResponse(reader)));
+
+    for await (const chunk of streamAudit("", "snapshot", "backend", "gpt-4.1", "sys", [], "device-1")) {
+      expect(chunk).toBe("partial");
+      break;
+    }
+
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels the reader when an abort interrupts the stream", async () => {
+    const controller = new AbortController();
+    const cancel = vi.fn(async () => undefined);
+    const encoder = new TextEncoder();
+    const abortError = new Error("The operation was aborted.");
+    abortError.name = "AbortError";
+    const reader = {
+      read: vi.fn(async () => {
+        if (controller.signal.aborted) throw abortError;
+        controller.abort();
+        return {
+          done: false,
+          value: encoder.encode('data: {"choices":[{"delta":{"content":"chunk"}}]}\n'),
+        };
+      }),
+      cancel,
+    };
+
+    vi.stubGlobal("fetch", vi.fn(async () => makeStreamingResponse(reader)));
+
+    const generator = streamAudit("", "snapshot", "backend", "gpt-4.1", "sys", [], "device-1", controller.signal);
+
+    await expect((async () => {
+      for await (const _chunk of generator) {
+        // Abort is triggered by the reader mock before the next iteration.
+      }
+    })()).rejects.toThrow(/aborted/i);
+
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+});

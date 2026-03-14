@@ -1,20 +1,43 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { db } from "../utils.js";
 import { deleteSecureItem, migrateToSecureItem, setSecureItem } from "../secureStore.js";
 
-const SecurityContext = createContext(null);
+interface SecurityProviderProps {
+  children?: ReactNode;
+}
 
-export function SecurityProvider({ children }) {
+interface SecurityContextValue {
+  requireAuth: boolean;
+  setRequireAuth: Dispatch<SetStateAction<boolean>>;
+  appPasscode: string;
+  setAppPasscode: Dispatch<SetStateAction<string>>;
+  useFaceId: boolean;
+  setUseFaceId: Dispatch<SetStateAction<boolean>>;
+  isLocked: boolean;
+  setIsLocked: Dispatch<SetStateAction<boolean>>;
+  privacyMode: boolean;
+  setPrivacyMode: Dispatch<SetStateAction<boolean>>;
+  lockTimeout: number;
+  setLockTimeout: Dispatch<SetStateAction<number>>;
+  appleLinkedId: string | null;
+  setAppleLinkedId: Dispatch<SetStateAction<string | null>>;
+  isSecurityReady: boolean;
+}
+
+const SecurityContext = createContext<SecurityContextValue | null>(null);
+
+export function SecurityProvider({ children }: SecurityProviderProps) {
   const [requireAuth, setRequireAuth] = useState(false);
   const [appPasscode, setAppPasscode] = useState("");
   const [useFaceId, setUseFaceId] = useState(false);
   const [isLocked, setIsLocked] = useState(true);
   const [privacyMode, setPrivacyMode] = useState(false);
   const [lockTimeout, setLockTimeout] = useState(0);
-  const [appleLinkedId, setAppleLinkedId] = useState(null);
+  const [appleLinkedId, setAppleLinkedId] = useState<string | null>(null);
   const [isSecurityReady, setIsSecurityReady] = useState(false);
 
-  const lastBackgrounded = useRef(null);
+  const lastBackgrounded = useRef<number | null>(null);
 
   useEffect(() => {
     const initSecurity = async () => {
@@ -41,7 +64,7 @@ export function SecurityProvider({ children }) {
 
         if (pin) setAppPasscode(pin);
         if (uf) setUseFaceId(true);
-        if (lt !== null) setLockTimeout(lt);
+        if (lt !== null) setLockTimeout(Number(lt));
         if (appLinked) setAppleLinkedId(appLinked);
         if (pm) setPrivacyMode(true);
       } catch (e) {
@@ -102,7 +125,7 @@ export function SecurityProvider({ children }) {
     else void deleteSecureItem("apple-linked-id");
   }, [appleLinkedId, isSecurityReady]);
 
-  const value = {
+  const value: SecurityContextValue = {
     requireAuth,
     setRequireAuth,
     appPasscode,
@@ -123,7 +146,7 @@ export function SecurityProvider({ children }) {
   return <SecurityContext.Provider value={value}>{children}</SecurityContext.Provider>;
 }
 
-export const useSecurity = () => {
+export const useSecurity = (): SecurityContextValue => {
   const context = useContext(SecurityContext);
   if (!context) throw new Error("useSecurity must be used within a SecurityProvider");
   return context;

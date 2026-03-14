@@ -475,7 +475,7 @@ The production backend lives in `worker/src/index.js`. Exposes these endpoints a
 | `/plaid/disconnect` | POST | Revoke access token |
 | `/cards` | GET | Serve `cards.json` card catalog |
 
-**Rate limiting:** per device, tracked by `X-Device-ID` header. Free plan: 2 audits/week and 10 chats/day. Pro plan: 60 audits/month and 50 chats/day. Returns `429` with `Retry-After` on limit breach.
+**Rate limiting:** per device, tracked by `X-Device-ID` header. Free plan: 2 audits/week and 10 chats/day. Pro plan: 20 audits/month and 25 chats/day. Returns `429` with `Retry-After` on limit breach.
 
 **Entitlement trust:** when RevenueCat credentials are configured on the worker, the app forwards its RevenueCat app user ID and the backend verifies Pro access server-side instead of trusting the client tier header alone.
 

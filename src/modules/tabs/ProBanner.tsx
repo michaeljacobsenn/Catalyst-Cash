@@ -25,10 +25,10 @@ const SHIMMER_CSS = `
 
 /* Benefit pills shown inside the card */
 const BENEFITS = [
-  { emoji: "📊", text: "31 audits/mo" },
+  { emoji: "📊", text: "20 audits/mo" },
   { emoji: "🤖", text: "Premium AI" },
-  { emoji: "📈", text: "Full history" },
-  { emoji: "💳", text: "Card Wizard" },
+  { emoji: "📈", text: "Full archive" },
+  { emoji: "💳", text: "Smart card matches" },
 ];
 
 export default function ProBanner({ onUpgrade, label, sublabel, compact = false }) {
@@ -165,10 +165,10 @@ export default function ProBanner({ onUpgrade, label, sublabel, compact = false 
             }}>⚡</div>
             <div>
               <div style={{ fontSize: 16, fontWeight: 900, color: "#fff", letterSpacing: "-0.02em" }}>
-                {label || "Unlock Catalyst Pro"}
+                {label || "Unlock Catalyst Cash Pro"}
               </div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 2, fontWeight: 500 }}>
-                {sublabel || "Take full control of your financial future"}
+                {sublabel || "20 audits/month, premium AI, and full financial history"}
               </div>
             </div>
           </div>
@@ -219,12 +219,12 @@ export default function ProBanner({ onUpgrade, label, sublabel, compact = false 
               animation: "pro-shimmer 2.5s ease-in-out 0.8s infinite",
               pointerEvents: "none",
             }} />
-            Upgrade to Pro  ✦
+            Upgrade to Pro →
           </div>
 
           {/* Social proof */}
           <div style={{ textAlign: "center", fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: -6 }}>
-            Join thousands of users building real financial freedom
+            Trusted by thousands for smarter financial decisions
           </div>
         </button>
       </div>

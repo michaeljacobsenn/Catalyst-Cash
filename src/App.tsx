@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from "react";
+import type { FocusEvent as ReactFocusEvent, TouchEvent as ReactTouchEvent } from "react";
 import { App as CapApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { SplashScreen } from "@capacitor/splash-screen";
@@ -31,33 +32,24 @@ import { DEFAULT_PROVIDER_ID, DEFAULT_MODEL_ID, getProvider, getModel } from "./
 import {
   db,
   parseAudit,
-  exportAllAudits,
-  exportSelectedAudits,
-  exportAuditCSV,
   advanceExpiredDate,
   cyrb53,
 } from "./modules/utils.js";
 import { ensureCardIds, getCardLabel } from "./modules/cards.js";
-import { loadCardCatalog } from "./modules/issuerCards.js";
 import { GlobalStyles, Card, ErrorBoundary, useGlobalHaptics, Badge, getTracking } from "./modules/ui.js";
 import { StreamingView } from "./modules/components.js";
 import { streamAudit, callAudit } from "./modules/api.js";
-import { getSystemPrompt } from "./modules/prompts.js";
-import { generateStrategy } from "./modules/engine.js";
-import { POPULAR_STOCKS } from "./modules/marketData.js";
-import { buildScrubber } from "./modules/scrubber.js";
 import { extractCategoryByKeywords } from "./modules/merchantDatabase.js";
 import { getOptimalCard } from "./modules/rewardsCatalog.js";
 import { haptic } from "./modules/haptics.js";
-import { connectBank, autoMatchAccounts, saveConnectionLinks, fetchBalancesAndLiabilities, applyBalanceSync, getConnections } from "./modules/plaid.js";
 import { installGlobalHandlers } from "./modules/errorReporter.js";
 // Payday reminder scheduling is handled in SettingsContext
 installGlobalHandlers();
-import { ToastProvider, useToast } from "./modules/Toast.js";
+import { useToast } from "./modules/Toast.js";
 import { getDemoAuditPayload } from "./modules/demoAudit.js";
-import DashboardTab from "./modules/tabs/DashboardTab.js";
-import InputForm from "./modules/tabs/InputForm.js";
-import ResultsView from "./modules/tabs/ResultsView.js";
+const DashboardTab = lazy(() => import("./modules/tabs/DashboardTab.js"));
+const InputForm = lazy(() => import("./modules/tabs/InputForm.js"));
+const ResultsView = lazy(() => import("./modules/tabs/ResultsView.js"));
 // Code-split: lazy-load tabs that aren't visible on initial render
 const HistoryTab = lazy(() => import("./modules/tabs/HistoryTab.js"));
 const AIChatTab = lazy(() => import("./modules/tabs/AIChatTab.js"));
@@ -66,31 +58,44 @@ const CashflowTab = lazy(() => import("./modules/tabs/CashflowTab.js"));
 const PortfolioTab = lazy(() => import("./modules/tabs/PortfolioTab.js"));
 const AuditTab = lazy(() => import("./modules/tabs/AuditTab.js"));
 const TransactionFeed = lazy(() => import("./modules/tabs/TransactionFeed.js"));
-import GuideModal from "./modules/tabs/GuideModal.js";
-import LockScreen from "./modules/LockScreen.js";
-import SetupWizard from "./modules/tabs/SetupWizard.js";
-import { SecurityProvider, useSecurity } from "./modules/contexts/SecurityContext.js";
-import { SettingsProvider, useSettings } from "./modules/contexts/SettingsContext.js";
-import { PortfolioProvider, usePortfolio } from "./modules/contexts/PortfolioContext.js";
-import { NavigationProvider, useNavigation } from "./modules/contexts/NavigationContext.js";
-import { AuditProvider, useAudit } from "./modules/contexts/AuditContext.js";
-import { BudgetProvider } from "./modules/contexts/BudgetContext.js";
+const GuideModal = lazy(() => import("./modules/tabs/GuideModal.js"));
+const LockScreen = lazy(() => import("./modules/LockScreen.js"));
+const SetupWizard = lazy(() => import("./modules/tabs/SetupWizard.js"));
+import { useSecurity } from "./modules/contexts/SecurityContext.js";
+import { useSettings } from "./modules/contexts/SettingsContext.js";
+import { usePortfolio } from "./modules/contexts/PortfolioContext.js";
+import { useNavigation } from "./modules/contexts/NavigationContext.js";
+import type { AppTab } from "./modules/contexts/NavigationContext.js";
+import { useAudit } from "./modules/contexts/AuditContext.js";
 import { isPro, getGatingMode, syncRemoteGatingMode } from "./modules/subscription.js";
 import { initRevenueCat } from "./modules/revenuecat.js";
 import { syncOTAData } from "./modules/ota.js";
-import { isSecuritySensitiveKey } from "./modules/securityKeys.js";
+import { isSecuritySensitiveKey, sanitizePlaidForBackup } from "./modules/securityKeys.js";
 import { evaluateBadges, unlockBadge, BADGE_DEFINITIONS } from "./modules/badges.js";
 import "./modules/tabs/DashboardTab.css"; // Global animations, skeleton loaders, utility classes
 import { deleteSecureItem } from "./modules/secureStore.js";
 import { uploadToICloud } from "./modules/cloudSync.js";
-import type { BankAccount, Card as CardType, PlaidInvestmentAccount } from "./types/index.js";
+import type { AuditRecord, BankAccount, Card as CardType, ParsedAudit, PlaidInvestmentAccount, Renewal } from "./types/index.js";
 
 type AppToastApi = Window["toast"];
+const uploadToICloudTyped = uploadToICloud as (payload: unknown, passphrase?: string | null) => Promise<boolean>;
 
 interface AppFinancialConfigExtras {
   valuations?: Record<string, unknown>;
   isDemoConfig?: boolean;
   _preDemoSnapshot?: Record<string, unknown>;
+}
+
+interface TouchGestureState {
+  startX: number;
+  startY: number;
+  startTime: number;
+}
+
+interface SimulatedNotification {
+  title: string;
+  body: string;
+  store: string;
 }
 
 function flattenSeedRenewals() {
@@ -129,30 +134,7 @@ const TabFallback = () => (
   </div>
 );
 
-// ═══════════════════════════════════════════════════════════════
-// APP ROOT — wraps with ToastProvider
-// ═══════════════════════════════════════════════════════════════
-export default function AppRoot() {
-  return (
-    <ToastProvider>
-      <SettingsProvider>
-        <SecurityProvider>
-          <PortfolioProvider>
-            <BudgetProvider>
-              <NavigationProvider>
-                <AuditProvider>
-                  <CatalystCash />
-                </AuditProvider>
-              </NavigationProvider>
-            </BudgetProvider>
-          </PortfolioProvider>
-        </SecurityProvider>
-      </SettingsProvider>
-    </ToastProvider>
-  );
-}
-
-function CatalystCash() {
+export default function CatalystCash() {
   const toast = useToast();
   const appToast = toast as AppToastApi | undefined;
   useEffect(() => {
@@ -240,11 +222,17 @@ function CatalystCash() {
     setInstructionHash,
     handleSubmit,
     handleCancelAudit,
+    abortActiveAudit,
     clearAll,
     deleteHistoryItem,
     isAuditReady,
     handleManualImport,
     isTest,
+    recoverableAuditDraft,
+    activeAuditDraftView,
+    checkRecoverableAuditDraft,
+    openRecoverableAuditDraft,
+    dismissRecoverableAuditDraft,
   } = useAudit();
   const {
     tab,
@@ -264,19 +252,21 @@ function CatalystCash() {
     inputMounted,
     lastCenterTab,
     inputBackTarget,
+    abortActiveChatStream,
     SWIPE_TAB_ORDER,
   } = useNavigation();
 
-  const scrollRef = useRef(null);
-  const bottomNavRef = useRef(null);
-  const topBarRef = useRef(null);
+  const scrollRef = useRef<HTMLElement | null>(null);
+  const bottomNavRef = useRef<HTMLElement | null>(null);
+  const topBarRef = useRef<HTMLElement | null>(null);
   const [headerHidden, setHeaderHidden] = useState(false);
   const lastScrollY = useRef(0);
-  const [transactionFeedTab, setTransactionFeedTab] = useState(null);
-  const swipeStart = useRef(null);
-  const longPressTimer = useRef(null);
+  const [transactionFeedTab, setTransactionFeedTab] = useState<AppTab | null>(null);
+  const swipeStart = useRef<TouchGestureState | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartTime = useRef(0);
-  const [chatInitialPrompt, setChatInitialPrompt] = useState(null);
+  const [chatInitialPrompt, setChatInitialPrompt] = useState<string | null>(null);
+  const lastPromptedAuditDraftRef = useRef<string | null>(null);
 
   function mergeUniqueById<T extends { id?: string | null }>(existing: T[] = [], incoming: T[] = []): T[] {
     const ids = new Set(existing.map((item) => item.id).filter(Boolean));
@@ -285,6 +275,14 @@ function CatalystCash() {
 
   const handleConnectAccount = async () => {
     try {
+      const {
+        connectBank,
+        autoMatchAccounts,
+        saveConnectionLinks,
+        fetchBalancesAndLiabilities,
+        applyBalanceSync,
+      } = await import("./modules/plaid.js");
+
       await connectBank(
         async connection => {
           try {
@@ -351,24 +349,26 @@ function CatalystCash() {
   };
 
   // ── iOS-native interactive swipe-back for overlay panes ──
-  const useSwipeBack = (onDismiss) => {
-    const paneRef = useRef(null);
-    const touchRef = useRef(null);
+  const useSwipeBack = (onDismiss: () => void) => {
+    const paneRef = useRef<HTMLDivElement | null>(null);
+    const touchRef = useRef<TouchGestureState | null>(null);
     const isDragging = useRef(false);
 
-    const onTouchStart = useCallback(e => {
+    const onTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
       const touch = e.touches[0];
       // Only start from the left 40px edge zone
-      if (touch.clientX > 40) return;
+      if (!touch || touch.clientX > 40) return;
       touchRef.current = { startX: touch.clientX, startY: touch.clientY, startTime: Date.now() };
       isDragging.current = false;
     }, []);
 
-    const onTouchMove = useCallback(e => {
-      if (!touchRef.current) return;
+    const onTouchMove = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
+      const touchState = touchRef.current;
+      if (!touchState) return;
       const touch = e.touches[0];
-      const dx = touch.clientX - touchRef.current.startX;
-      const dy = Math.abs(touch.clientY - touchRef.current.startY);
+      if (!touch) return;
+      const dx = touch.clientX - touchState.startX;
+      const dy = Math.abs(touch.clientY - touchState.startY);
 
       // Only engage if horizontal movement > vertical (prevents hijacking scroll)
       if (!isDragging.current) {
@@ -385,16 +385,18 @@ function CatalystCash() {
       }
     }, []);
 
-    const onTouchEnd = useCallback(e => {
-      if (!touchRef.current || !isDragging.current) {
+    const onTouchEnd = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
+      const touchState = touchRef.current;
+      if (!touchState || !isDragging.current) {
         touchRef.current = null;
         isDragging.current = false;
         return;
       }
 
       const touch = e.changedTouches[0];
-      const dx = touch.clientX - touchRef.current.startX;
-      const elapsed = Date.now() - touchRef.current.startTime;
+      if (!touch) return;
+      const dx = touch.clientX - touchState.startX;
+      const elapsed = Date.now() - touchState.startTime;
       const velocity = dx / Math.max(elapsed, 1);
       const pane = paneRef.current;
 
@@ -429,27 +431,30 @@ function CatalystCash() {
   };
 
   // ── iOS-native interactive swipe-down for modal panes ──
-  const useSwipeDown = (onDismiss) => {
-    const paneRef = useRef(null);
-    const touchRef = useRef(null);
+  const useSwipeDown = (onDismiss: () => void) => {
+    const paneRef = useRef<HTMLDivElement | null>(null);
+    const touchRef = useRef<TouchGestureState | null>(null);
     const isDragging = useRef(false);
 
-    const onTouchStart = useCallback(e => {
+    const onTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
       // Don't start swipe-down if the user is scrolling the content
       // We check if the scroll area is already scrolled down
-      const scrollBody = document.querySelector('.modal-pane .page-body, .modal-pane iframe');
+      const scrollBody = document.querySelector<HTMLElement>(".modal-pane .page-body");
       if (scrollBody && scrollBody.scrollTop > 5) return;
 
       const touch = e.touches[0];
+      if (!touch) return;
       touchRef.current = { startX: touch.clientX, startY: touch.clientY, startTime: Date.now() };
       isDragging.current = false;
     }, []);
 
-    const onTouchMove = useCallback(e => {
-      if (!touchRef.current) return;
+    const onTouchMove = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
+      const touchState = touchRef.current;
+      if (!touchState) return;
       const touch = e.touches[0];
-      const dx = Math.abs(touch.clientX - touchRef.current.startX);
-      const dy = touch.clientY - touchRef.current.startY; // positive = downward
+      if (!touch) return;
+      const dx = Math.abs(touch.clientX - touchState.startX);
+      const dy = touch.clientY - touchState.startY; // positive = downward
 
       // Only engage if vertical movement > horizontal, and moving DOWN
       if (!isDragging.current) {
@@ -466,16 +471,18 @@ function CatalystCash() {
       }
     }, []);
 
-    const onTouchEnd = useCallback(e => {
-      if (!touchRef.current || !isDragging.current) {
+    const onTouchEnd = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
+      const touchState = touchRef.current;
+      if (!touchState || !isDragging.current) {
         touchRef.current = null;
         isDragging.current = false;
         return;
       }
 
       const touch = e.changedTouches[0];
-      const dy = touch.clientY - touchRef.current.startY;
-      const elapsed = Date.now() - touchRef.current.startTime;
+      if (!touch) return;
+      const dy = touch.clientY - touchState.startY;
+      const elapsed = Date.now() - touchState.startTime;
       const velocity = dy / Math.max(elapsed, 1);
       const pane = paneRef.current;
 
@@ -546,13 +553,13 @@ function CatalystCash() {
   const [showQuickMenu, setShowQuickMenu] = useState(false);
 
   // ── GEO-FENCING SIMULATOR ──
-  const [simulatedNotification, setSimulatedNotification] = useState(null);
+  const [simulatedNotification, setSimulatedNotification] = useState<SimulatedNotification | null>(null);
 
   useEffect(() => {
-    const handleSimulate = (e) => {
-      const store = e.detail?.store || "Store";
+    const handleSimulate = (e: Event) => {
+      const detail = (e as CustomEvent<{ store?: string }>).detail;
+      const store = detail?.store || "Store";
       const categoryStr = extractCategoryByKeywords(store) || "other";
-      // Need valuations to map strings correctly if custom ones exist, but getOptimalCard uses defaults gracefully
       const optimal = getOptimalCard(cards || [], categoryStr, extendedFinancialConfig.valuations || {});
 
       let recText = `Open Catalyst to see your best card.`;
@@ -563,9 +570,8 @@ function CatalystCash() {
       setSimulatedNotification({
         title: store + " Nearby",
         body: recText,
-        store
+        store,
       });
-      // Auto-dismiss
       setTimeout(() => setSimulatedNotification(null), 6000);
     };
     window.addEventListener("simulate-geo-fence", handleSimulate);
@@ -575,19 +581,25 @@ function CatalystCash() {
 
 
   // --- NATIVE SCROLL SNAP OBSERVER ---
-  const snapContainerRef = useRef(null);
+  const snapContainerRef = useRef<HTMLDivElement | null>(null);
   const initialScrollLock = useRef(true);
+  const currentTabRef = useRef(tab);
+
+  useEffect(() => {
+    currentTabRef.current = tab;
+  }, [tab]);
 
   useEffect(() => {
     const container = snapContainerRef.current;
     if (!container) return;
+    initialScrollLock.current = true;
 
     let isProgrammaticScroll = false;
     let programmaticDebounce: ReturnType<typeof setTimeout> | null = null;
 
     // Listen for manual navTo programmatic scrolls
-    const onScrollToTab = (e) => {
-      const targetTab = e.detail;
+    const onScrollToTab = (e: Event) => {
+      const targetTab = (e as CustomEvent<AppTab>).detail;
       const idx = SWIPE_TAB_ORDER.indexOf(targetTab);
       if (idx !== -1) {
         isProgrammaticScroll = true;
@@ -631,7 +643,7 @@ function CatalystCash() {
 
     // On mount, snap to the initial tab - wait for layout
     const enforceInitialScroll = () => {
-      const initialIdx = SWIPE_TAB_ORDER.indexOf(tab);
+      const initialIdx = SWIPE_TAB_ORDER.indexOf(currentTabRef.current);
       if (initialIdx !== -1) {
         const width = container.clientWidth || window.innerWidth;
         const target = initialIdx * Math.max(width, 0);
@@ -668,16 +680,16 @@ function CatalystCash() {
     const container = snapContainerRef.current;
     if (!container) return;
 
-    const isEditable = (el) =>
-      el?.tagName === "INPUT" || el?.tagName === "TEXTAREA" || el?.isContentEditable;
+    const isEditable = (el: EventTarget | null) =>
+      el instanceof HTMLElement && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
 
-    const onFocusIn = (e) => {
+    const onFocusIn = (e: FocusEvent) => {
       if (isEditable(e.target)) {
         container.style.scrollSnapType = "none";
         container.style.overflowX = "hidden";
       }
     };
-    const onFocusOut = (e) => {
+    const onFocusOut = (e: FocusEvent) => {
       if (isEditable(e.target)) {
         // Small delay to avoid snap-back during field-to-field focus changes
         setTimeout(() => {
@@ -707,7 +719,7 @@ function CatalystCash() {
   // container via native ICloudSyncPlugin. Survives app deletion
   // and restores on new devices with the same Apple ID.
   // ═══════════════════════════════════════════════════════════════
-  const iCloudSyncTimer = useRef(null);
+  const iCloudSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!ready || !appleLinkedId) return;
     if (autoBackupInterval === "off") return;
@@ -745,29 +757,30 @@ function CatalystCash() {
         // Include sanitized Plaid metadata (no access tokens) for reconnect deduplication
         const plaidConns = await db.get("plaid-connections");
         if (Array.isArray(plaidConns) && plaidConns.length > 0) {
-          const { sanitizePlaidForBackup } = await import("./modules/securityKeys.js");
           backup.data["plaid-connections-sanitized"] = sanitizePlaidForBackup(plaidConns);
         }
 
-        const success = await uploadToICloud(backup, appPasscode || null);
+        const success = await uploadToICloudTyped(backup, appPasscode || null);
         if (success) {
           await db.set("last-backup-ts", now);
           // Settings UI polls this key on mount or relies on local state update which is handled there.
           // We just need it perfectly accurately persisted to the DB on success.
-          console.log("[iCloud] Auto-backup schedule completed successfully.");
+          // success — silent
         }
       } catch (e) {
         console.error("iCloud auto-sync error:", e);
       }
     }, 15000); // 15 second debounce — avoid writing on every keystroke
 
-    return () => clearTimeout(iCloudSyncTimer.current);
+    return () => {
+      if (iCloudSyncTimer.current) clearTimeout(iCloudSyncTimer.current);
+    };
   }, [ready, history, renewals, cards, financialConfig, personalRules, appleLinkedId, autoBackupInterval]);
 
   // ═══════════════════════════════════════════════════════════════
   // HOUSEHOLD CLOUD SYNC — Syncs to Cloudflare D1
   // ═══════════════════════════════════════════════════════════════
-  const householdSyncTimer = useRef(null);
+  const householdSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!ready || autoBackupInterval === "off") return;
 
@@ -782,14 +795,16 @@ function CatalystCash() {
         const { pushHouseholdSync } = await import("./modules/householdSync.js");
         const success = await pushHouseholdSync(householdId, passcode);
         if (success) {
-          console.log("[Household Sync] Auto-sync completed successfully.");
+          // success — silent
         }
       } catch (e) {
         console.error("Household auto-sync error:", e);
       }
     }, 16000); // 16s debounce (offset slightly from iCloud)
 
-    return () => clearTimeout(householdSyncTimer.current);
+    return () => {
+      if (householdSyncTimer.current) clearTimeout(householdSyncTimer.current);
+    };
   }, [ready, history, renewals, cards, financialConfig, personalRules, autoBackupInterval]);
 
   useEffect(() => {
@@ -806,7 +821,7 @@ function CatalystCash() {
         if (payload) {
           const merged = await mergeHouseholdState(payload);
           if (merged) {
-            console.log("[Household Sync] New data merged. Refreshing app state.");
+            // New data merged — refresh below
             toast.success("Household data synced. Refreshing...");
             setTimeout(() => window.location.reload(), 1500);
           }
@@ -823,6 +838,8 @@ function CatalystCash() {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
+    setHeaderHidden(false);
+    lastScrollY.current = 0;
   }, [tab]);
 
   useEffect(() => {
@@ -923,18 +940,32 @@ function CatalystCash() {
     }
 
     const { audit, nh, demoConfig, demoCards, demoRenewals } = payload;
+    const safeAuditDate = audit.date ?? new Date().toISOString().split("T")[0] ?? "";
+    const safeAudit = {
+      ...audit,
+      parsed: audit.parsed as ParsedAudit,
+      date: safeAuditDate,
+      form: {
+        ...audit.form,
+        date: audit.form?.date ?? safeAuditDate,
+      },
+    } as AuditRecord;
+    const safeRenewals: Renewal[] = demoRenewals.map((renewal) => {
+      const { nextDue, ...rest } = renewal;
+      return nextDue ? { ...rest, nextDue } : rest;
+    });
 
     // ── 6. SET ALL REACT STATE SYNCHRONOUSLY (before awaits) ───
     // This ensures the dashboard renders immediately with full data
-    setCurrent(audit);
+    setCurrent(safeAudit);
     setViewing(null);
     setHistory(nh);
     setFinancialConfig(demoConfig);
     if (cards.length === 0) setCards(demoCards);
-    if ((renewals || []).length === 0) setRenewals(demoRenewals);
+    if ((renewals || []).length === 0) setRenewals(safeRenewals);
 
     // ── 7. PERSIST TO DB (async, non-blocking) ─────────────────
-    await db.set("current-audit", audit);
+    await db.set("current-audit", safeAudit);
     await db.set("audit-history", nh);
 
     // Seed demo badges
@@ -1020,7 +1051,7 @@ function CatalystCash() {
   };
 
   const [isResetting, setIsResetting] = useState(false);
-  const resetTimerRef = useRef(null);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const factoryReset = async () => {
     haptic.warning();
     toast.success("App securely erased. Restarting...");
@@ -1112,6 +1143,56 @@ function CatalystCash() {
   const display = viewing || current;
   const displayMoveChecks = viewing ? viewing.moveChecks || {} : moveChecks;
 
+  const surfaceRecoverableAuditPrompt = useCallback((draft = recoverableAuditDraft) => {
+    if (!draft?.sessionTs || !draft?.raw?.trim()) return;
+    lastPromptedAuditDraftRef.current = draft.sessionTs;
+    toast.warning("Previous audit was interrupted. Recover the partial draft or rerun the audit.", {
+      duration: 9000,
+      action: {
+        label: "Recover",
+        fn: () => {
+          openRecoverableAuditDraft();
+          setResultsBackTarget("audit");
+          navTo("results");
+        },
+      },
+    });
+  }, [navTo, openRecoverableAuditDraft, recoverableAuditDraft, setResultsBackTarget, toast]);
+
+  useEffect(() => {
+    if (!recoverableAuditDraft?.sessionTs) return;
+    if (lastPromptedAuditDraftRef.current === recoverableAuditDraft.sessionTs) return;
+    surfaceRecoverableAuditPrompt(recoverableAuditDraft);
+  }, [recoverableAuditDraft, surfaceRecoverableAuditPrompt]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    let pauseHandle: { remove: () => Promise<void> } | null = null;
+    let resumeHandle: { remove: () => Promise<void> } | null = null;
+
+    const register = async () => {
+      pauseHandle = await CapApp.addListener("pause", async () => {
+        abortActiveAudit("background-pause");
+        abortActiveChatStream();
+      });
+
+      resumeHandle = await CapApp.addListener("resume", async () => {
+        const draft = await checkRecoverableAuditDraft();
+        if (draft?.sessionTs) {
+          surfaceRecoverableAuditPrompt(draft);
+        }
+      });
+    };
+
+    register().catch(() => {});
+
+    return () => {
+      pauseHandle?.remove().catch(() => {});
+      resumeHandle?.remove().catch(() => {});
+    };
+  }, [abortActiveAudit, abortActiveChatStream, checkRecoverableAuditDraft, surfaceRecoverableAuditPrompt]);
+
   const investmentsTabVisible = useMemo(() => {
     const holdings = financialConfig?.holdings || {};
     return (
@@ -1123,13 +1204,13 @@ function CatalystCash() {
     );
   }, [financialConfig]);
 
-  const navItems = [
+  const navItems: Array<{ id: AppTab; label: string; icon: typeof Home; isCenter?: boolean }> = [
     { id: "dashboard", label: "Home", icon: Home },
     { id: "cashflow", label: "Cashflow", icon: Wallet },
     { id: "audit", label: "Audit", icon: Zap, isCenter: true },
     { id: "portfolio", label: "Portfolio", icon: CreditCard },
     { id: "chat", label: "Ask AI", icon: MessageCircle },
-  ].filter(Boolean);
+  ];
 
   // Native iOS swipe-back is handled via WKWebView allowsBackForwardNavigationGestures
   // (set in capacitor.config.ts). The popstate listener (above) handles the navigation.
@@ -1425,8 +1506,30 @@ function CatalystCash() {
     return (
       <>
         <GlobalStyles />
-        <SetupWizard />
+        <Suspense fallback={<TabFallback />}>
+          <SetupWizard />
+        </Suspense>
       </>
+    );
+
+  if (isLocked)
+    return (
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          maxWidth: 800,
+          margin: "0 auto",
+          background: T.bg.base,
+          fontFamily: T.font.sans,
+          overflow: "hidden",
+        }}
+      >
+        <GlobalStyles />
+        <Suspense fallback={<TabFallback />}>
+          <LockScreen />
+        </Suspense>
+      </div>
     );
 
   return (
@@ -1523,8 +1626,11 @@ function CatalystCash() {
         </div>
       )}
 
-      {showGuide && <GuideModal onClose={() => setShowGuide(false)} swipeHook={overlaySwipeGuide} proEnabled={proEnabled} />}
-      {isLocked && <LockScreen />}
+      {showGuide && (
+        <Suspense fallback={null}>
+          <GuideModal onClose={() => setShowGuide(false)} swipeHook={overlaySwipeGuide} proEnabled={proEnabled} />
+        </Suspense>
+      )}
       {transactionFeedTab === tab && (
         <Suspense fallback={<TabFallback />}>
           <TransactionFeed
@@ -1550,8 +1656,8 @@ function CatalystCash() {
           fontSize: 13,
           transition: "top .2s ease",
         }}
-        onFocus={e => (e.target.style.top = "8px")}
-        onBlur={e => (e.target.style.top = "-60px")}
+        onFocus={(e: ReactFocusEvent<HTMLAnchorElement>) => (e.currentTarget.style.top = "8px")}
+        onBlur={(e: ReactFocusEvent<HTMLAnchorElement>) => (e.currentTarget.style.top = "-60px")}
       >
         Skip to content
       </a>
@@ -1560,7 +1666,8 @@ function CatalystCash() {
         role="banner"
         ref={topBarRef}
         style={{
-          position: "relative",
+          position: "sticky",
+          top: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -1741,17 +1848,18 @@ function CatalystCash() {
           >
             {t === "dashboard" && (
               <ErrorBoundary name="Dashboard">
-                <DashboardTab
-                  onRestore={handleRestoreFromHome}
-                  proEnabled={proEnabled}
-                  onRefreshDashboard={handleRefreshDashboard}
-                  onDemoAudit={handleDemoAudit}
-                  onViewTransactions={() => setTransactionFeedTab(t)}
-                  onDiscussWithCFO={prompt => {
-                    setChatInitialPrompt(prompt);
-                    navTo("chat");
-                  }}
-                />
+                <Suspense fallback={<TabFallback />}>
+                  <DashboardTab
+                    proEnabled={proEnabled}
+                    onRefreshDashboard={handleRefreshDashboard}
+                    onDemoAudit={handleDemoAudit}
+                    onViewTransactions={() => setTransactionFeedTab(t)}
+                    onDiscussWithCFO={prompt => {
+                      setChatInitialPrompt(prompt);
+                      navTo("chat");
+                    }}
+                  />
+                </Suspense>
               </ErrorBoundary>
             )}
             {t === "chat" && (
@@ -1763,7 +1871,6 @@ function CatalystCash() {
                     clearInitialPrompt={() => setChatInitialPrompt(null)}
                     onBack={() => {
                       navTo("dashboard");
-                      haptic.light();
                     }}
                     embedded
                   />
@@ -1797,7 +1904,7 @@ function CatalystCash() {
             {t === "audit" && (
               <ErrorBoundary name="Audit">
                 <Suspense fallback={<TabFallback />}>
-                  <AuditTab proEnabled={proEnabled} toast={toast} />
+                  <AuditTab proEnabled={proEnabled} toast={toast} onDemoAudit={handleDemoAudit} />
                 </Suspense>
               </ErrorBoundary>
             )}
@@ -1811,28 +1918,30 @@ function CatalystCash() {
       {tab === "input" && (
         <div className="slide-pane safe-scroll-body" style={{ flex: 1, overflowY: "auto", position: "relative", zIndex: 20 }}>
           <ErrorBoundary name="InputForm">
-            <InputForm
-              onSubmit={handleSubmit}
-              isLoading={loading}
-              lastAudit={current}
-              renewals={renewals}
-              cardAnnualFees={cardAnnualFees}
-              cards={cards}
-              bankAccounts={bankAccounts}
-              onManualImport={handleManualImport}
-              toast={toast}
-              financialConfig={financialConfig}
-              setFinancialConfig={setFinancialConfig}
-              aiProvider={aiProvider}
-              personalRules={personalRules}
-              setPersonalRules={setPersonalRules}
-              persona={persona}
-              instructionHash={instructionHash}
-              setInstructionHash={setInstructionHash}
-              db={inputFormDb}
-              proEnabled={proEnabled}
-              onBack={() => navTo("dashboard")}
-            />
+            <Suspense fallback={<TabFallback />}>
+              <InputForm
+                onSubmit={handleSubmit}
+                isLoading={loading}
+                lastAudit={current}
+                renewals={renewals}
+                cardAnnualFees={cardAnnualFees}
+                cards={cards}
+                bankAccounts={bankAccounts}
+                onManualImport={handleManualImport}
+                toast={toast}
+                financialConfig={financialConfig}
+                setFinancialConfig={setFinancialConfig}
+                aiProvider={aiProvider}
+                personalRules={personalRules}
+                setPersonalRules={setPersonalRules}
+                persona={persona}
+                instructionHash={instructionHash}
+                setInstructionHash={value => setInstructionHash(value == null ? null : String(value))}
+                db={inputFormDb}
+                proEnabled={proEnabled}
+                onBack={() => navTo("dashboard")}
+              />
+            </Suspense>
           </ErrorBoundary>
         </div>
       )}
@@ -1847,6 +1956,19 @@ function CatalystCash() {
               modelName={getModel(aiProvider, aiModel)?.name ?? aiModel}
               onCancel={handleCancelAudit}
             />
+          ) : activeAuditDraftView ? (
+            <StreamingView
+              streamText={`${activeAuditDraftView.raw}\n\n[Recovered interrupted draft — rerun the audit to finish.]`}
+              elapsed={0}
+              isTest={false}
+              modelName={getModel(aiProvider, aiModel)?.name ?? aiModel}
+              onCancel={() => {
+                dismissRecoverableAuditDraft().catch(() => {});
+                const target = resultsBackTarget === "history" ? "history" : "audit";
+                setResultsBackTarget(null);
+                navTo(target);
+              }}
+            />
           ) : !display ? (
             (() => {
               setTimeout(() => navTo("dashboard"), 0);
@@ -1855,17 +1977,19 @@ function CatalystCash() {
           ) : (
             <>
               <ErrorBoundary name="Results">
-                <ResultsView
-                  audit={display}
-                  moveChecks={displayMoveChecks}
-                  onToggleMove={toggleMove}
-                  streak={trendContext?.length || 0}
-                  onBack={() => {
-                    const target = resultsBackTarget === "history" ? "history" : "audit";
-                    setResultsBackTarget(null);
-                    navTo(target);
-                  }}
-                />
+                <Suspense fallback={<TabFallback />}>
+                  <ResultsView
+                    audit={display}
+                    moveChecks={displayMoveChecks}
+                    onToggleMove={toggleMove}
+                    streak={trendContext?.length || 0}
+                    onBack={() => {
+                      const target = resultsBackTarget === "history" ? "history" : "audit";
+                      setResultsBackTarget(null);
+                      navTo(target);
+                    }}
+                  />
+                </Suspense>
               </ErrorBoundary>
             </>
           )}
@@ -1887,37 +2011,11 @@ function CatalystCash() {
         <ErrorBoundary name="Settings">
           <Suspense fallback={<TabFallback />}>
             <SettingsTab
-              apiKey={apiKey}
-              setApiKey={setApiKey}
-              aiProvider={aiProvider}
-              setAiProvider={setAiProvider}
-              aiModel={aiModel}
-              setAiModel={setAiModel}
               onClear={clearAll}
               onFactoryReset={factoryReset}
-              useStreaming={useStreaming}
-              setUseStreaming={setUseStreaming}
-              financialConfig={financialConfig}
-              setFinancialConfig={setFinancialConfig}
-              personalRules={personalRules}
-              setPersonalRules={setPersonalRules}
               onClearDemoData={handleRefreshDashboard}
-              requireAuth={requireAuth}
-              setRequireAuth={setRequireAuth}
-              appPasscode={appPasscode}
-              setAppPasscode={setAppPasscode}
-              useFaceId={useFaceId}
-              setUseFaceId={setUseFaceId}
-              lockTimeout={lockTimeout}
-              setLockTimeout={setLockTimeout}
-              appleLinkedId={appleLinkedId}
-              setAppleLinkedId={setAppleLinkedId}
-              notifPermission={notifPermission}
-              persona={persona}
-              setPersona={setPersona}
               proEnabled={proEnabled}
               onShowGuide={() => setShowGuide(true)}
-              navTo={navTo}
               onBack={() => {
                 if (setupReturnTab) {
                   navTo(setupReturnTab);
@@ -1925,7 +2023,6 @@ function CatalystCash() {
                 } else {
                   navTo(lastCenterTab.current);
                 }
-                haptic.light();
               }}
               onRestoreComplete={() => window.location.reload()}
             />
@@ -2144,7 +2241,6 @@ function CatalystCash() {
                           setTransactionFeedTab(null);
                         }
                       } else {
-                        haptic.light();
                         navTo(n.id);
                       }
                     }

@@ -26,17 +26,17 @@ interface LocalToastApi {
 
 // ── Feature comparison: generous Free vs premium Pro ──────────
 const FEATURES = [
-  { label: "AI Audits", free: "2 / week", pro: "31 / month (1/day)", icon: "📊" },
-  { label: "AskAI Chat", free: "10 / day", pro: "50 / day", icon: "💬" },
-  { label: "AI Models", free: "Catalyst AI", pro: "Pro · Reasoning", icon: "🧠" },
+  { label: "AI Audits", free: "2 / week", pro: "20 / month", icon: "📊" },
+  { label: "AskAI Chat", free: "10 / day", pro: "25 / day", icon: "💬" },
+  { label: "AI Models", free: "Standard AI", pro: "Fast AI + Precision AI", icon: "🧠" },
   { label: "Audit History", free: "Last 12", pro: "Full archive", icon: "📜" },
   { label: "Dashboard & Charts", free: "✓ Full", pro: "✓ Full", icon: "📈" },
   { label: "Debt & Tax Simulator", free: "✓ Full", pro: "✓ Full", icon: "⚠️" },
   { label: "Cash Flow Calendar", free: "✓ Full", pro: "✓ Full", icon: "📅" },
-  { label: "AI Bill Negotiation", free: "—", pro: "Drafts Scripts (0 Fee)", icon: "🗣️" },
-  { label: "Bank Sync (Plaid)", free: "2 Banks Live Sync", pro: "10 Banks Live Sync", icon: "🏦" },
-  { label: "Auto Background Sync", free: "—", pro: "✓", icon: "🔁" },
-  { label: "Transaction Ledger", free: "—", pro: "✓ Full", icon: "📒" },
+  { label: "AI Bill Negotiation", free: "—", pro: "Drafts negotiation scripts", icon: "🗣️" },
+  { label: "Bank Sync (Plaid)", free: "2 manual snapshots", pro: "5 institutions live", icon: "🏦" },
+  { label: "Automatic Account Updates", free: "—", pro: "✓ Live sync", icon: "🔁" },
+  { label: "Transaction Ledger", free: "—", pro: "✓", icon: "📒" },
   { label: "Categories & Rules", free: "✓", pro: "✓", icon: "🏷️" },
   { label: "Multi-Currency (28)", free: "✓", pro: "✓", icon: "🌍" },
   { label: "Share Score Card", free: "Branded", pro: "Clean", icon: "🎴" },
@@ -71,12 +71,16 @@ export default function ProPaywall({ onClose }: ProPaywallProps) {
     // Only track if at the top of scroll
     const el = sheetRef.current;
     if (el && el.scrollTop > 5) return;
-    touchStart.current = e.touches[0].clientY;
+    const touch = e.touches[0];
+    if (!touch) return;
+    touchStart.current = touch.clientY;
   }, []);
 
   const onTouchMove = useCallback((e: TouchEvent<HTMLDivElement>) => {
     if (touchStart.current === null) return;
-    const delta = e.touches[0].clientY - touchStart.current;
+    const touch = e.touches[0];
+    if (!touch) return;
+    const delta = touch.clientY - touchStart.current;
     if (delta > 0) {
       setDragY(delta);
       e.preventDefault();
@@ -221,7 +225,7 @@ export default function ProPaywall({ onClose }: ProPaywallProps) {
           <div style={{ fontSize: 36, marginBottom: 8 }}>⚡</div>
           <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 6px", color: T.text.primary }}>Upgrade to Pro</h2>
           <p style={{ fontSize: 13, color: T.text.dim, margin: "0 0 10px", lineHeight: 1.4 }}>
-            31 audits/month, premium AI models, and advanced financial tools.
+            20 audits/month, premium AI models, and advanced financial tools.
           </p>
           {/* Social proof / positioning */}
           <div
@@ -405,7 +409,7 @@ export default function ProPaywall({ onClose }: ProPaywallProps) {
 
         {/* ── Plan Selector ── */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-          {["monthly", "yearly"].map(p => {
+          {(["monthly", "yearly"] as const).map(p => {
             const pricing = IAP_PRICING[p];
             const active = plan === p;
             const isYearly = p === "yearly";
@@ -532,7 +536,7 @@ export default function ProPaywall({ onClose }: ProPaywallProps) {
           >
             <span style={{ fontSize: 14, flexShrink: 0 }}>💡</span>
             <span style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>
-              Annual plan saves {IAP_PRICING.yearly.savings} — that's {IAP_PRICING.yearly.perMonth}/mo for CFO-level
+              Annual plan includes {IAP_PRICING.yearly.savings} — that's {IAP_PRICING.yearly.perMonth}/mo for professional-grade
               financial intelligence.
             </span>
           </div>

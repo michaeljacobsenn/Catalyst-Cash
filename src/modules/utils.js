@@ -7,6 +7,7 @@ import { Share } from "@capacitor/share";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
 import { APP_VERSION } from "./constants.js";
+import { buildDashboardSafetyModel } from "./dashboard/safetyModel.js";
 
 import { registerPlugin } from "@capacitor/core";
 
@@ -240,6 +241,165 @@ export function parseCurrency(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getGradeLetter(score) {
+  if (score >= 97) return "A+";
+  if (score >= 93) return "A";
+  if (score >= 90) return "A-";
+  if (score >= 87) return "B+";
+  if (score >= 83) return "B";
+  if (score >= 80) return "B-";
+  if (score >= 77) return "C+";
+  if (score >= 73) return "C";
+  if (score >= 70) return "C-";
+  if (score >= 67) return "D+";
+  if (score >= 63) return "D";
+  if (score >= 60) return "D-";
+  return "F";
+}
+
+const CANONICAL_DASHBOARD_CATEGORIES = new Map([
+  ["checking", "Checking"],
+  ["vault", "Vault"],
+  ["pending", "Pending"],
+  ["debts", "Debts"],
+  ["available", "Available"],
+]);
+
+function formatRiskFlag(flag) {
+  return String(flag || "")
+    .split("-")
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function extractDollarAmountTotal(lines) {
+  if (!Array.isArray(lines)) return 0;
+  return lines.reduce((sum, line) => {
+    if (typeof line !== "string") return sum;
+    const matches = line.match(/\$[\d,]+(?:\.\d{1,2})?/g) || [];
+    return (
+      sum +
+      matches.reduce((lineSum, match) => {
+        const amount = parseCurrency(match);
+        return lineSum + (amount != null ? Math.max(0, amount) : 0);
+      }, 0)
+    );
+  }, 0);
+}
+
+function normalizeTrend(value) {
+  return value === "up" || value === "down" || value === "flat" ? value : "flat";
+}
+
+function normalizeHealthScore(rawHealthScore) {
+  if (!rawHealthScore || typeof rawHealthScore !== "object") {
+    return { value: null, gradeCorrected: false, originalGrade: null };
+  }
+  const numericScore = Number(rawHealthScore.score);
+  if (!Number.isFinite(numericScore)) {
+    return { value: null, gradeCorrected: false, originalGrade: null };
+  }
+  const score = clamp(Math.round(numericScore), 0, 100);
+  const originalGrade = typeof rawHealthScore.grade === "string" ? rawHealthScore.grade.trim() : null;
+  const normalizedGrade = getGradeLetter(score);
+  return {
+    value: {
+      ...rawHealthScore,
+      score,
+      grade: normalizedGrade,
+      trend: normalizeTrend(rawHealthScore.trend),
+      summary: typeof rawHealthScore.summary === "string" ? rawHealthScore.summary.trim() : "",
+    },
+    gradeCorrected: !!originalGrade && originalGrade !== normalizedGrade,
+    originalGrade,
+  };
+}
+
+function normalizeStringArray(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(item => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean);
+}
+
+const DASHBOARD_ROW_ORDER = ["Checking", "Vault", "Pending", "Debts", "Available"];
+
+function normalizeDashboardCard(value) {
+  const rows = Array.isArray(value) ? value : [];
+  const byCategory = new Map();
+  const nonCanonicalCategories = [];
+  for (const row of rows) {
+    const rawCategory = typeof row?.category === "string" ? row.category.trim() : "";
+    if (!rawCategory) continue;
+    const category = CANONICAL_DASHBOARD_CATEGORIES.get(rawCategory.toLowerCase());
+    if (!category) {
+      nonCanonicalCategories.push(rawCategory);
+      continue;
+    }
+    if (byCategory.has(category)) continue;
+    byCategory.set(category, {
+      category,
+      amount: typeof row?.amount === "string" ? row.amount : "$0.00",
+      status: typeof row?.status === "string" ? row.status : "",
+    });
+  }
+  return {
+    rows: DASHBOARD_ROW_ORDER.map(category => byCategory.get(category) || { category, amount: "$0.00", status: "" }),
+    nonCanonicalCategories: [...new Set(nonCanonicalCategories)],
+  };
+}
+
+function normalizeInvestmentsSummary(value) {
+  if (!value || typeof value !== "object") return undefined;
+  return {
+    balance: typeof value.balance === "string" ? value.balance : "N/A",
+    asOf: typeof value.asOf === "string" ? value.asOf : "N/A",
+    gateStatus: typeof value.gateStatus === "string" ? value.gateStatus : "N/A",
+    cryptoValue:
+      typeof value.cryptoValue === "string" || value.cryptoValue === null ? value.cryptoValue : null,
+    netWorth: typeof value.netWorth === "string" ? value.netWorth : undefined,
+  };
+}
+
+function normalizeNegotiationTargets(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(item => item && typeof item === "object")
+    .map(item => ({
+      target: typeof item.target === "string" ? item.target.trim() : "",
+      strategy: typeof item.strategy === "string" ? item.strategy.trim() : "",
+      estimatedAnnualSavings: Number.isFinite(Number(item.estimatedAnnualSavings))
+        ? Number(item.estimatedAnnualSavings)
+        : 0,
+    }))
+    .filter(item => item.target && item.strategy);
+}
+
+function normalizeSpendingAnalysis(value) {
+  if (!value || typeof value !== "object") return null;
+  return {
+    totalSpent: typeof value.totalSpent === "string" ? value.totalSpent : "N/A",
+    dailyAverage: typeof value.dailyAverage === "string" ? value.dailyAverage : "N/A",
+    vsAllowance: typeof value.vsAllowance === "string" ? value.vsAllowance : "N/A",
+    topCategories: Array.isArray(value.topCategories)
+      ? value.topCategories
+          .filter(item => item && typeof item === "object")
+          .map(item => ({
+            category: typeof item.category === "string" ? item.category : "Other",
+            amount: typeof item.amount === "string" ? item.amount : "$0.00",
+            pctOfTotal: typeof item.pctOfTotal === "string" ? item.pctOfTotal : "0%",
+          }))
+      : [],
+    alerts: normalizeStringArray(value.alerts),
+    debtImpact: typeof value.debtImpact === "string" ? value.debtImpact : "",
+  };
+}
+
 export function parseJSON(raw) {
   let j;
   try {
@@ -292,18 +452,43 @@ export function parseJSON(raw) {
   }
 
   // Map to the internal structure expected by ResultsView/Dashboard
+  const weeklyMoves = normalizeStringArray(j.weeklyMoves);
+  const alertsCard = normalizeStringArray(j.alertsCard);
+  const { rows: dashboardCard, nonCanonicalCategories } = normalizeDashboardCard(j.dashboardCard);
+  const investments = normalizeInvestmentsSummary(j.investments);
+  const spendingAnalysis = normalizeSpendingAnalysis(j.spendingAnalysis);
+  const negotiationTargets = normalizeNegotiationTargets(j.negotiationTargets);
+  const normalizedHealthScore = normalizeHealthScore(j.healthScore);
+  const auditFlags = [];
+  if (normalizedHealthScore.gradeCorrected && normalizedHealthScore.value) {
+    auditFlags.push({
+      code: "health-score-grade-corrected",
+      severity: "low",
+      message: `Health score grade corrected to ${normalizedHealthScore.value.grade} from ${normalizedHealthScore.originalGrade}.`,
+      meta: {
+        score: normalizedHealthScore.value.score,
+        originalGrade: normalizedHealthScore.originalGrade,
+      },
+    });
+  }
   return {
     raw,
     status: j.headerCard?.status || j.status || j.headerCard?.headline || "UNKNOWN",
     mode: "FULL", // Implicit in the new architecture unless overridden
+    liquidNetWorth: parseCurrency(j.liquidNetWorth),
     netWorth:
       parseCurrency(j.netWorth) ?? parseCurrency(j.investments?.netWorth) ?? parseCurrency(j.investments?.balance),
     netWorthDelta: j.netWorthDelta ?? j.investments?.netWorthDelta ?? null,
-    healthScore: j.healthScore || null, // { score, grade, trend, summary }
+    healthScore: normalizedHealthScore.value, // { score, grade, trend, summary }
+    alertsCard,
+    dashboardCard,
+    weeklyMoves,
+    investments,
+    spendingAnalysis,
     structured: j,
     sections: {
       header: `**${new Date().toISOString().split("T")[0]}** · FULL · ${j.headerCard?.status || "UNKNOWN"}`,
-      alerts: (j.alertsCard || [])
+      alerts: alertsCard
         .map(
           a =>
             `⚠️ ${String(a)
@@ -311,32 +496,445 @@ export function parseJSON(raw) {
               .trim()}`
         )
         .join("\n"),
-      dashboard: (j.dashboardCard || [])
+      dashboard: dashboardCard
         .map(d => `**${d.category}:** ${d.amount} ${d.status ? `(${d.status})` : ""}`)
         .join("\n"),
-      moves: (j.weeklyMoves || []).join("\n"),
+      moves: weeklyMoves.join("\n"),
       radar: (j.radar || []).map(r => `**${r.date}** ${r.item} ${r.amount}`).join("\n"),
       longRange: (j.longRangeRadar || []).map(r => `**${r.date}** ${r.item} ${r.amount}`).join("\n"),
       forwardRadar: (j.milestones || []).join("\n"), // Re-mapped milestones to forward radar slot for now
-      investments: `**Balance:** ${j.investments?.balance || "N/A"}\n**As Of:** ${j.investments?.asOf || "N/A"}\n**Gate:** ${j.investments?.gateStatus || "N/A"}`,
+      investments: `**Balance:** ${investments?.balance || "N/A"}\n**As Of:** ${investments?.asOf || "N/A"}\n**Gate:** ${investments?.gateStatus || "N/A"}`,
       nextAction: j.nextAction || "",
       autoUpdates: "Handled natively via JSON output",
       qualityScore: "Strict JSON Mode Active",
     },
     // Map moves to actionable checkboxes
-    moveItems: (j.weeklyMoves || []).map(m => ({ tag: null, text: m, done: false })),
+    moveItems: weeklyMoves.map(m => ({ tag: null, text: m, done: false })),
     paceData: Array.isArray(j.paceData) ? j.paceData : [], // Extracted from JSON if present, kept for backwards compat
-    negotiationTargets: Array.isArray(j.negotiationTargets) ? j.negotiationTargets : [],
+    negotiationTargets,
     dashboardData: {
       checkingBalance: null, // Extracted from dashboardCard dynamically on demand
       savingsVaultTotal: null,
     },
+    auditFlags,
+    consistency: {
+      gradeCorrected: normalizedHealthScore.gradeCorrected,
+      originalGrade: normalizedHealthScore.originalGrade,
+      nonCanonicalDashboardCategories: nonCanonicalCategories,
+    },
+    degraded: null,
   };
 }
 
 export function parseAudit(raw) {
   // We ONLY parse JSON now. Fallback markdown parsing is officially deprecated.
   return parseJSON(raw);
+}
+
+function extractAuditSafetyLevel(parsed) {
+  const degradedLevel = parsed?.degraded?.safetyState?.level;
+  if (degradedLevel === "stable" || degradedLevel === "caution" || degradedLevel === "urgent") {
+    return degradedLevel;
+  }
+
+  const normalizedStatus = String(parsed?.status || "").toUpperCase();
+  if (normalizedStatus === "RED") return "urgent";
+  if (normalizedStatus === "YELLOW") return "caution";
+  return "stable";
+}
+
+function extractAuditRiskCategories(parsed) {
+  const rawRiskFlags = Array.isArray(parsed?.degraded?.riskFlags)
+    ? parsed.degraded.riskFlags
+    : Array.isArray(parsed?.structured?.riskFlags)
+      ? parsed.structured.riskFlags
+      : [];
+
+  return rawRiskFlags
+    .map(flag => String(flag || "").trim())
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+export function detectAuditDrift(previousParsed, nextParsed) {
+  if (!previousParsed || !nextParsed) {
+    return {
+      driftDetected: false,
+      reasons: [],
+      scoreDelta: 0,
+      safetyFlip: false,
+      riskCategoriesChangedCompletely: false,
+    };
+  }
+
+  const previousScore = Number(previousParsed?.healthScore?.score);
+  const nextScore = Number(nextParsed?.healthScore?.score);
+  const scoreDelta =
+    Number.isFinite(previousScore) && Number.isFinite(nextScore) ? Math.abs(nextScore - previousScore) : 0;
+
+  const previousSafety = extractAuditSafetyLevel(previousParsed);
+  const nextSafety = extractAuditSafetyLevel(nextParsed);
+  const safetyFlip = previousSafety !== nextSafety;
+
+  const previousRiskCategories = extractAuditRiskCategories(previousParsed);
+  const nextRiskCategories = extractAuditRiskCategories(nextParsed);
+  const overlap = previousRiskCategories.filter(flag => nextRiskCategories.includes(flag));
+  const riskCategoriesChangedCompletely =
+    previousRiskCategories.length > 0 && nextRiskCategories.length > 0 && overlap.length === 0;
+
+  const reasons = [];
+  if (scoreDelta > 8) reasons.push(`health-score-drift:${scoreDelta}`);
+  if (safetyFlip) reasons.push(`safety-state-flip:${previousSafety}->${nextSafety}`);
+  if (riskCategoriesChangedCompletely) {
+    reasons.push(`risk-categories-shift:${previousRiskCategories.join(",") || "none"}->${nextRiskCategories.join(",") || "none"}`);
+  }
+
+  return {
+    driftDetected: reasons.length > 0,
+    reasons,
+    scoreDelta,
+    safetyFlip,
+    riskCategoriesChangedCompletely,
+    previousSafety,
+    nextSafety,
+    previousRiskCategories,
+    nextRiskCategories,
+  };
+}
+
+function inferAuditStatusFromSignals(score, riskFlags = []) {
+  const numericScore = Number(score);
+  const normalizedRiskFlags = Array.isArray(riskFlags) ? riskFlags.filter(Boolean) : [];
+  const severeFlags = new Set(["floor-breach-risk", "transfer-needed", "toxic-apr", "high-utilization"]);
+
+  if (
+    (Number.isFinite(numericScore) && numericScore < 70) ||
+    normalizedRiskFlags.some(flag => severeFlags.has(String(flag)))
+  ) {
+    return "RED";
+  }
+  if ((Number.isFinite(numericScore) && numericScore < 80) || normalizedRiskFlags.length > 0) {
+    return "YELLOW";
+  }
+  return "GREEN";
+}
+
+/**
+ * @param {import("../types/index.js").ParsedAudit | null} parsed
+ * @param {{
+ *   operationalSurplus?: number | null;
+ *   nativeScore?: number | null;
+ *   nativeRiskFlags?: string[] | null;
+ * }} [options]
+ * @returns {import("../types/index.js").ParsedAudit | null}
+ */
+export function validateParsedAuditConsistency(parsed, options = {}) {
+  if (!parsed) return null;
+
+  const {
+    operationalSurplus = null,
+    nativeScore = null,
+    nativeRiskFlags = null,
+  } = options;
+
+  const auditFlags = Array.isArray(parsed.auditFlags) ? [...parsed.auditFlags] : [];
+  const consistency = { ...(parsed.consistency || {}) };
+  const normalizedNativeRiskFlags = Array.isArray(nativeRiskFlags)
+    ? nativeRiskFlags.filter(flag => typeof flag === "string" && flag.trim())
+    : [];
+
+  if (normalizedNativeRiskFlags.length > 0) {
+    consistency.nativeRiskFlags = normalizedNativeRiskFlags;
+  }
+
+  if (Array.isArray(consistency.nonCanonicalDashboardCategories) && consistency.nonCanonicalDashboardCategories.length > 0) {
+    console.warn(
+      "[audit] Non-canonical dashboard categories detected:",
+      consistency.nonCanonicalDashboardCategories.join(", ")
+    );
+  }
+
+  if (parsed.healthScore) {
+    const expectedGrade = getGradeLetter(parsed.healthScore.score);
+    if (parsed.healthScore.grade !== expectedGrade) {
+      parsed.healthScore = {
+        ...parsed.healthScore,
+        grade: expectedGrade,
+      };
+      consistency.gradeCorrected = true;
+      auditFlags.push({
+        code: "health-score-grade-corrected",
+        severity: "low",
+        message: `Health score grade corrected to ${expectedGrade}.`,
+        meta: { score: parsed.healthScore.score },
+      });
+    }
+  }
+
+  if (parsed.healthScore && nativeScore != null && Number.isFinite(Number(nativeScore))) {
+    const expectedNativeScore = clamp(Math.round(Number(nativeScore)), 0, 100);
+    const scoreDelta = parsed.healthScore.score - expectedNativeScore;
+    consistency.nativeScoreAnchor = expectedNativeScore;
+    consistency.nativeScoreDelta = scoreDelta;
+
+    if (Math.abs(scoreDelta) > 12) {
+      const originalScore = parsed.healthScore.score;
+      const correctedGrade = getGradeLetter(expectedNativeScore);
+      parsed.healthScore = {
+        ...parsed.healthScore,
+        score: expectedNativeScore,
+        grade: correctedGrade,
+      };
+      consistency.scoreAnchoredToNative = true;
+      console.warn(
+        `[audit] Health score deviated materially from native anchor (${scoreDelta > 0 ? "+" : ""}${scoreDelta}). Re-anchoring to ${expectedNativeScore}.`
+      );
+      auditFlags.push({
+        code: "health-score-reanchored-to-native",
+        severity: "medium",
+        message: `Health score was re-anchored to the native score of ${expectedNativeScore}/100 to keep the audit aligned with deterministic engine signals.`,
+        meta: { nativeScore: expectedNativeScore, originalScore, scoreDelta },
+      });
+    }
+  }
+
+  const derivedStatus = inferAuditStatusFromSignals(parsed.healthScore?.score, normalizedNativeRiskFlags);
+  if (parsed.status !== derivedStatus && (consistency.scoreAnchoredToNative || normalizedNativeRiskFlags.length > 0)) {
+    parsed.status = derivedStatus;
+    if (parsed.structured?.headerCard && typeof parsed.structured.headerCard === "object") {
+      parsed.structured.headerCard = {
+        ...parsed.structured.headerCard,
+        status: derivedStatus,
+      };
+    }
+    if (parsed.sections && typeof parsed.sections.header === "string") {
+      const prefix = parsed.sections.header.split("·").slice(0, -1).join("·").trim();
+      parsed.sections = {
+        ...parsed.sections,
+        header: prefix ? `${prefix} · ${derivedStatus}` : `**${new Date().toISOString().split("T")[0]}** · FULL · ${derivedStatus}`,
+      };
+    }
+    consistency.statusCorrected = true;
+    auditFlags.push({
+      code: "status-corrected-to-native-risk",
+      severity: "medium",
+      message: `Audit status was corrected to ${derivedStatus} to stay aligned with deterministic risk signals.`,
+      meta: { nativeRiskFlags: normalizedNativeRiskFlags },
+    });
+  }
+
+  if (Number.isFinite(Number(operationalSurplus))) {
+    const expectedOperationalSurplus = Math.max(0, Number(operationalSurplus));
+    const weeklyMoveDollarTotal = extractDollarAmountTotal(parsed.weeklyMoves);
+    consistency.weeklyMoveDollarTotal = weeklyMoveDollarTotal;
+    consistency.expectedOperationalSurplus = expectedOperationalSurplus;
+
+    if (expectedOperationalSurplus - weeklyMoveDollarTotal > 50) {
+      const shortfall = Number((expectedOperationalSurplus - weeklyMoveDollarTotal).toFixed(2));
+      console.warn(
+        `[audit] Weekly moves under-allocate operational surplus by $${shortfall.toFixed(2)}.`,
+      );
+      auditFlags.push({
+        code: "weekly-moves-underallocated",
+        severity: "low",
+        message: `Weekly moves only allocate $${weeklyMoveDollarTotal.toFixed(2)} of the $${expectedOperationalSurplus.toFixed(2)} operational surplus.`,
+        meta: { shortfall, weeklyMoveDollarTotal, expectedOperationalSurplus },
+      });
+    }
+  }
+
+  return {
+    ...parsed,
+    auditFlags,
+    consistency,
+  };
+}
+
+/**
+ * @param {{
+ *   raw?: string;
+ *   reason?: string;
+ *   retryAttempted?: boolean;
+ *   computedStrategy?: Record<string, unknown>;
+ *   financialConfig?: import("../types/index.js").CatalystCashConfig | null;
+ *   formData?: import("../types/index.js").AuditFormData;
+ *   renewals?: import("../types/index.js").Renewal[];
+ *   cards?: import("../types/index.js").Card[];
+ * }} [options]
+ * @returns {import("../types/index.js").ParsedAudit}
+ */
+export function buildDegradedParsedAudit({
+  raw = "",
+  reason = "Full AI narrative unavailable.",
+  retryAttempted = false,
+  computedStrategy = {},
+  financialConfig = {},
+  formData = {},
+  renewals = [],
+  cards = [],
+} = {}) {
+  const nativeScore = computedStrategy?.auditSignals?.nativeScore?.score ?? 0;
+  const nativeGrade = computedStrategy?.auditSignals?.nativeScore?.grade ?? getGradeLetter(nativeScore);
+  const riskFlags = Array.isArray(computedStrategy?.auditSignals?.riskFlags)
+    ? computedStrategy.auditSignals.riskFlags.filter(Boolean)
+    : [];
+  const checking = Number(formData?.checking || 0) || 0;
+  const savings = Number(formData?.savings || formData?.ally || 0) || 0;
+  const pendingCharges = Array.isArray(formData?.pendingCharges)
+    ? formData.pendingCharges.reduce((sum, charge) => sum + (parseCurrency(charge?.amount) || 0), 0)
+    : 0;
+  const floor = Number(financialConfig?.weeklySpendAllowance || 0) + Number(financialConfig?.emergencyFloor || 0);
+  const operationalSurplus = Math.max(0, Number(computedStrategy?.operationalSurplus || 0));
+
+  const provisionalStatus =
+    nativeScore < 70 || riskFlags.includes("floor-breach-risk") || riskFlags.includes("transfer-needed")
+      ? "RED"
+      : nativeScore < 80 || riskFlags.length > 0
+        ? "YELLOW"
+        : "GREEN";
+
+  const safetySnapshot = buildDashboardSafetyModel({
+    spendableCash: checking,
+    pendingCharges,
+    savingsCash: savings,
+    floor,
+    weeklySpendAllowance: Number(financialConfig?.weeklySpendAllowance || 0),
+    renewals,
+    cards,
+    healthScore: nativeScore,
+    auditStatus: provisionalStatus,
+    todayStr: formData?.date,
+  });
+
+  const status =
+    safetySnapshot.level === "urgent"
+      ? "RED"
+      : safetySnapshot.level === "caution"
+        ? "YELLOW"
+        : "GREEN";
+
+  const weeklyMoves = [];
+  if ((computedStrategy?.requiredTransfer || 0) > 0) {
+    weeklyMoves.push(
+      `Transfer $${Number(computedStrategy.requiredTransfer).toFixed(2)} from savings to checking to protect your floor.`
+    );
+  }
+  if (computedStrategy?.debtStrategy?.target && (computedStrategy?.debtStrategy?.amount || 0) > 0) {
+    weeklyMoves.push(
+      `Route $${Number(computedStrategy.debtStrategy.amount).toFixed(2)} to ${computedStrategy.debtStrategy.target} this week.`
+    );
+  }
+  if (weeklyMoves.length === 0) {
+    if (riskFlags.length > 0) {
+      weeklyMoves.push(`Prioritize ${formatRiskFlag(riskFlags[0]).toLowerCase()} before optional spending this week.`);
+    } else {
+      weeklyMoves.push("Hold spending to preserve your cash buffer this week.");
+    }
+  }
+
+  const alertsCard = [
+    "Full AI narrative unavailable — showing deterministic engine output only.",
+    ...riskFlags.slice(0, 3).map(flag => `Risk flag: ${formatRiskFlag(flag)}`),
+  ];
+
+  const dashboardCard = [
+    { category: "Checking", amount: fmt(checking), status: safetySnapshot.level === "urgent" ? "At risk" : "Tracked" },
+    { category: "Vault", amount: fmt(savings), status: savings > 0 ? "Tracked" : "Empty" },
+    { category: "Pending", amount: fmt(pendingCharges), status: pendingCharges > 0 ? "Watch" : "Clear" },
+    { category: "Debts", amount: fmt(computedStrategy?.auditSignals?.debt?.total || 0), status: riskFlags.includes("toxic-apr") ? "Urgent" : "Tracked" },
+    { category: "Available", amount: fmt(operationalSurplus), status: operationalSurplus > 0 ? "Deploy" : "Protected" },
+  ];
+
+  const nextAction = weeklyMoves[0] || safetySnapshot.summary;
+  const dateLabel = formData?.date || new Date().toISOString().split("T")[0];
+  const riskSummary = riskFlags.length > 0 ? riskFlags.slice(0, 3).map(formatRiskFlag).join(", ") : "No acute risk flags";
+
+  return {
+    raw,
+    status,
+    mode: "DEGRADED",
+    liquidNetWorth: checking + savings,
+    netWorth: checking + savings - Number(computedStrategy?.auditSignals?.debt?.total || 0),
+    netWorthDelta: null,
+    healthScore: {
+      score: nativeScore,
+      grade: nativeGrade,
+      trend: "flat",
+      summary: safetySnapshot.summary,
+      narrative: safetySnapshot.headline,
+    },
+    alertsCard,
+    dashboardCard,
+    weeklyMoves,
+    spendingAnalysis: null,
+    structured: {
+      headerCard: {
+        status,
+        headline: "Deterministic fallback active",
+        details: [safetySnapshot.headline, riskSummary],
+      },
+      healthScore: {
+        score: nativeScore,
+        grade: nativeGrade,
+        trend: "flat",
+        summary: safetySnapshot.summary,
+        narrative: safetySnapshot.headline,
+      },
+      dashboardCard,
+      weeklyMoves,
+      alertsCard,
+      longRangeRadar: [],
+      milestones: [],
+      negotiationTargets: [],
+      nextAction,
+      riskFlags,
+    },
+    sections: {
+      header: `**${dateLabel}** · DEGRADED · ${status}`,
+      alerts: alertsCard.map(item => `⚠️ ${item}`).join("\n"),
+      dashboard: dashboardCard.map(row => `**${row.category}:** ${row.amount} (${row.status})`).join("\n"),
+      moves: weeklyMoves.join("\n"),
+      radar: "",
+      longRange: "",
+      forwardRadar: riskSummary,
+      investments: "Native fallback active",
+      nextAction,
+      autoUpdates: "Deterministic fallback active",
+      qualityScore: "Full AI narrative unavailable",
+    },
+    moveItems: weeklyMoves.map(text => ({ tag: null, text, done: false })),
+    paceData: [],
+    negotiationTargets: [],
+    dashboardData: {
+      checkingBalance: checking,
+      savingsVaultTotal: savings,
+    },
+    auditFlags: [
+      {
+        code: "degraded-audit-state",
+        severity: "medium",
+        message: reason,
+        meta: { retryAttempted, riskFlags },
+      },
+    ],
+    consistency: {
+      weeklyMoveDollarTotal: extractDollarAmountTotal(weeklyMoves),
+      expectedOperationalSurplus: operationalSurplus,
+      nonCanonicalDashboardCategories: [],
+    },
+    degraded: {
+      isDegraded: true,
+      narrativeAvailable: false,
+      reason,
+      retryAttempted,
+      riskFlags,
+      safetyState: {
+        level: safetySnapshot.level,
+        headline: safetySnapshot.headline,
+        summary: safetySnapshot.summary,
+      },
+    },
+  };
 }
 
 export function extractDashboardMetrics(parsed) {
@@ -347,7 +945,11 @@ export function extractDashboardMetrics(parsed) {
   const legacyPending = parseCurrency(legacy.next7DaysNeed);
   const legacyAvailable = parseCurrency(legacy.checkingProjEnd);
 
-  const cardRows = Array.isArray(structured.dashboardCard) ? structured.dashboardCard : [];
+  const cardRows = Array.isArray(parsed?.dashboardCard)
+    ? parsed.dashboardCard
+    : Array.isArray(structured.dashboardCard)
+      ? structured.dashboardCard
+      : [];
   if (!cardRows.length) {
     return {
       checking: legacyChecking,

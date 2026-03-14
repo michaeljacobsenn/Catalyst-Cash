@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { CreditCard, ChevronDown, CheckCircle2, Check, Edit3 } from "lucide-react";
 import { Card, Badge } from "../ui.js";
 import SearchableSelect from "../SearchableSelect.js";
@@ -9,16 +10,57 @@ import { fmt } from "../utils.js";
 import { haptic } from "../haptics.js";
 import { getIssuerCards, getPinnedForIssuer } from "../issuerCards.js";
 import { getCardLabel } from "../cards.js";
+import type { Card as CardRecord } from "../../types/index.js";
+import type { PortfolioCollapsedSections } from "./types.js";
 
-export default function CreditCardsSection({ collapsedSections: propCollapsed, setCollapsedSections: propSetCollapsed }) {
+interface EditCardForm {
+    institution: string;
+    name: string;
+    limit: string;
+    annualFee: string;
+    annualFeeDue: string;
+    annualFeeWaived: boolean;
+    notes: string;
+    apr: string;
+    nickname: string;
+    hasPromoApr: boolean;
+    promoAprAmount: string;
+    promoAprExp: string;
+    statementCloseDay: string;
+    paymentDueDay: string;
+    minPayment: string;
+}
+
+interface CreditCardsSectionProps {
+    collapsedSections?: PortfolioCollapsedSections;
+    setCollapsedSections?: Dispatch<SetStateAction<PortfolioCollapsedSections>>;
+}
+
+export default function CreditCardsSection({ collapsedSections: propCollapsed, setCollapsedSections: propSetCollapsed }: CreditCardsSectionProps) {
     const { cards, setCards, cardCatalog } = usePortfolio();
 
     const [internalCollapsed, internalSetCollapsed] = useState({ creditCards: false });
     const collapsedSections = propCollapsed || internalCollapsed;
     const setCollapsedSections = propSetCollapsed || internalSetCollapsed;
-    const [editingCard, setEditingCard] = useState(null);
+    const [editingCard, setEditingCard] = useState<string | null>(null);
     const [editStep, setEditStep] = useState(0);
-    const [editForm, setEditForm] = useState({});
+    const [editForm, setEditForm] = useState<EditCardForm>({
+        institution: "",
+        name: "",
+        limit: "",
+        annualFee: "",
+        annualFeeDue: "",
+        annualFeeWaived: false,
+        notes: "",
+        apr: "",
+        nickname: "",
+        hasPromoApr: false,
+        promoAprAmount: "",
+        promoAprExp: "",
+        statementCloseDay: "",
+        paymentDueDay: "",
+        minPayment: "",
+    });
 
     const sortedCards = useMemo(() =>
         [...cards].sort((a, b) => {
@@ -27,7 +69,7 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
         }),
     [cards]);
 
-    const startEdit = card => {
+    const startEdit = (card: CardRecord) => {
         setEditingCard(card.id);
         setEditStep(0);
         setEditForm({
@@ -49,7 +91,7 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
         });
     };
 
-    const saveEdit = cardId => {
+    const saveEdit = (cardId: string) => {
         setCards(
             cards.map(c =>
                 c.id === cardId
@@ -59,14 +101,14 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
                         name: (editForm.name || "").trim() || c.name,
                         limit: editForm.limit === "" ? null : parseFloat(editForm.limit) || null,
                         annualFee: editForm.annualFee === "" ? null : parseFloat(editForm.annualFee) || null,
-                        annualFeeDue: editForm.annualFeeDue,
+                        ...(editForm.annualFeeDue ? { annualFeeDue: editForm.annualFeeDue } : {}),
                         annualFeeWaived: editForm.annualFeeWaived,
-                        notes: editForm.notes,
+                        ...(editForm.notes ? { notes: editForm.notes } : {}),
                         apr: editForm.apr === "" ? null : parseFloat(editForm.apr) || null,
-                        nickname: editForm.nickname || "",
+                        ...(editForm.nickname ? { nickname: editForm.nickname } : {}),
                         hasPromoApr: editForm.hasPromoApr,
                         promoAprAmount: editForm.promoAprAmount === "" ? null : parseFloat(editForm.promoAprAmount) || null,
-                        promoAprExp: editForm.promoAprExp,
+                        ...(editForm.promoAprExp ? { promoAprExp: editForm.promoAprExp } : {}),
                         statementCloseDay: editForm.statementCloseDay === "" ? null : parseInt(editForm.statementCloseDay) || null,
                         paymentDueDay: editForm.paymentDueDay === "" ? null : parseInt(editForm.paymentDueDay) || null,
                         minPayment: editForm.minPayment === "" ? null : parseFloat(editForm.minPayment) || null,
@@ -77,7 +119,7 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
         setEditingCard(null);
     };
 
-    const removeCard = cardId => {
+    const removeCard = (cardId: string) => {
         const card = cards.find(c => c.id === cardId);
         if (card?._plaidAccountId) {
             if (!window.confirm(
@@ -87,15 +129,15 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
         setCards(cards.filter(c => c.id !== cardId));
     };
 
-    const ic = inst =>
-        ISSUER_COLORS[inst] || {
+    const ic = (inst: string) =>
+        ISSUER_COLORS[inst as keyof typeof ISSUER_COLORS] || {
             bg: "rgba(110,118,129,0.08)",
             border: "rgba(110,118,129,0.15)",
             text: T.text.secondary,
             accent: T.text.dim,
         };
 
-    const WaivedCheckbox = ({ checked, onChange }) => (
+    const WaivedCheckbox = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => (
         <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 0" }}>
             <div
                 style={{
@@ -115,7 +157,7 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
         </label>
     );
 
-    const PromoCheckbox = ({ checked, onChange }) => (
+    const PromoCheckbox = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => (
         <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 0" }}>
             <div
                 style={{
@@ -171,6 +213,10 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
                     <div style={{ padding: "4px 8px 8px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
                         {sortedCards.map((card) => {
                             const colors = ic(card.institution);
+                            const annualFee = typeof card.annualFee === "number" ? card.annualFee : Number(card.annualFee || 0);
+                            const apr = card.apr ?? 0;
+                            const limit = card.limit ?? 0;
+                            const minPayment = card.minPayment ?? 0;
                             return (
                                 <div key={card.id} style={{ background: T.bg.glass, borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
                                     <div style={{ padding: "10px 16px" }}>
@@ -311,10 +357,10 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
                                                 <Mono size={10} color={T.text.dim} style={{ display: "block", marginTop: 3, lineHeight: 1.4 }}>
                                                     {[
                                                         card.nickname && card.name,
-                                                        card.annualFee > 0 && (card.annualFeeWaived ? "AF waived" : `AF ${fmt(card.annualFee)}${card.annualFeeDue ? ` · ${card.annualFeeDue}` : ""}`),
-                                                        card.apr > 0 && `${card.apr}% APR`,
+                                                        annualFee > 0 && (card.annualFeeWaived ? "AF waived" : `AF ${fmt(annualFee)}${card.annualFeeDue ? ` · ${card.annualFeeDue}` : ""}`),
+                                                        apr > 0 && `${apr}% APR`,
                                                         card.hasPromoApr && `Promo ${card.promoAprAmount}%${card.promoAprExp ? ` till ${card.promoAprExp}` : ""}`,
-                                                        card.paymentDueDay && `Due day ${card.paymentDueDay}${card.minPayment ? ` · min ${fmt(card.minPayment)}` : ""}`,
+                                                        card.paymentDueDay && `Due day ${card.paymentDueDay}${minPayment ? ` · min ${fmt(minPayment)}` : ""}`,
                                                         card._plaidAccountId && `⚡ ···${(card.notes || "").match(/···(\d+)/)?.[1] || "Plaid"}`,
                                                     ].filter(Boolean).join("  ·  ")}
                                                 </Mono>
@@ -325,7 +371,7 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
                                                         <Mono size={14} weight={900} color={T.status.red}>{fmt(card._plaidBalance)}</Mono>
                                                     )}
                                                     <Mono size={card._plaidBalance != null ? 10 : 13} weight={700} color={card._plaidBalance != null ? T.text.dim : colors.text}>
-                                                        {card._plaidBalance != null ? "Limit " : ""}{fmt(card.limit)}
+                                                        {card._plaidBalance != null ? "Limit " : ""}{fmt(limit)}
                                                     </Mono>
                                                 </div>
                                                 <button onClick={() => startEdit(card)} style={{ width: 32, height: 32, borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={11} /></button>

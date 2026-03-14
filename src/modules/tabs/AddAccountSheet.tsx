@@ -2,7 +2,7 @@
 // ADD ACCOUNT SHEET — Unified bottom sheet for adding accounts
 // Extracted from CardPortfolioTab.jsx for maintainability.
 // ═══════════════════════════════════════════════════════════════
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import {
   Plus,
@@ -128,7 +128,7 @@ export default function AddAccountSheet({
     },
   });
 
-  const inputStyle = {
+  const inputStyle: CSSProperties = {
     padding: "12px 14px",
     borderRadius: T.radius.md,
     border: `1.5px solid ${T.border.default}`,
@@ -139,7 +139,7 @@ export default function AddAccountSheet({
     transition: "all 0.2s",
   };
 
-  const formInputStyle = {
+  const formInputStyle: CSSProperties = {
     flex: 1,
     border: "none",
     background: "transparent",
@@ -932,7 +932,7 @@ export default function AddAccountSheet({
               <button
                 className="hover-btn"
                 onClick={() => {
-                  const canAdd = !!(investSym?.trim() && parseFloat(investShares || 0) > 0);
+                  const canAdd = !!(investSym?.trim() && Number(investShares) > 0);
                   if (!canAdd) return;
                   haptic.success();
                   const finalSym = investSym.toUpperCase().replace("-USD", "") + (investKey === "crypto" ? "-USD" : "");
@@ -942,9 +942,9 @@ export default function AddAccountSheet({
                   setInvestShares("");
                   onClose();
                 }}
-                disabled={!(investSym?.trim() && parseFloat(investShares || 0) > 0)}
+                disabled={!(investSym?.trim() && Number(investShares) > 0)}
                 style={submitBtnStyle(
-                  !!(investSym?.trim() && parseFloat(investShares || 0) > 0),
+                  !!(investSym?.trim() && Number(investShares) > 0),
                   `linear-gradient(135deg, ${T.accent.emerald}, #0ca678)`
                 )}
               >

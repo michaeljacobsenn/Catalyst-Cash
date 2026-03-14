@@ -1,14 +1,26 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { db } from "../utils.js";
-import { haptic } from "../haptics.js";
+import type { AuditRecord } from "../../types/index.js";
 
-type AppTab = "dashboard" | "cashflow" | "audit" | "portfolio" | "chat" | "settings" | "results" | "history" | "guide" | "input";
+export type AppTab =
+  | "dashboard"
+  | "cashflow"
+  | "audit"
+  | "portfolio"
+  | "chat"
+  | "settings"
+  | "results"
+  | "history"
+  | "guide"
+  | "input";
 
-interface NavViewState {
-  ts?: number | null;
+interface NavViewStateRecord {
+  ts?: string | number | null;
   [key: string]: unknown;
 }
+
+export type NavViewState = AuditRecord | NavViewStateRecord;
 
 interface NavigationContextValue {
   tab: AppTab;
@@ -30,6 +42,8 @@ interface NavigationContextValue {
   setInputMounted: Dispatch<SetStateAction<boolean>>;
   lastCenterTab: React.MutableRefObject<AppTab>;
   inputBackTarget: React.MutableRefObject<AppTab>;
+  registerChatStreamAbort: (handler: (() => void) | null) => void;
+  abortActiveChatStream: () => void;
   SWIPE_TAB_ORDER: readonly AppTab[];
 }
 
@@ -56,6 +70,7 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
 
   const lastCenterTab = useRef<AppTab>("dashboard");
   const inputBackTarget = useRef<AppTab>("audit");
+  const chatStreamAbortRef = useRef<(() => void) | null>(null);
 
   // Onboarding initialization
   useEffect(() => {
@@ -73,6 +88,14 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
       }
     };
     initOnboarding();
+  }, []);
+
+  const registerChatStreamAbort = useCallback((handler: (() => void) | null) => {
+    chatStreamAbortRef.current = handler;
+  }, []);
+
+  const abortActiveChatStream = useCallback(() => {
+    chatStreamAbortRef.current?.();
   }, []);
 
   const navTo = useCallback((newTab: AppTab, viewState: NavViewState | null = null) => {
@@ -105,7 +128,6 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
     if (newTab === "input") inputBackTarget.current = "dashboard";
 
     window.history.pushState({ tab: newTab, viewingTs: viewState?.ts }, "", "");
-    haptic.light();
   }, [tab]);
 
   // SyncTab is purely for the IntersectionObserver to tell the state:
@@ -134,7 +156,6 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
       if (nextTab === "input") setInputMounted(true);
       if (nextTab === "dashboard" || nextTab === "input") lastCenterTab.current = nextTab;
       window.history.pushState({ tab: nextTab, viewingTs: null }, "", "");
-      haptic.light();
       return nextTab;
     });
   }, []);
@@ -182,6 +203,8 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
     setInputMounted,
     lastCenterTab,
     inputBackTarget,
+    registerChatStreamAbort,
+    abortActiveChatStream,
     SWIPE_TAB_ORDER,
   };
 

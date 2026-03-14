@@ -6,9 +6,9 @@ import { log } from "./logger.js";
 const ENTITLEMENT_ID = "Catalyst Cash Pro";
 const RC_ENTITLEMENT_VERIFICATION_MODE = "INFORMATIONAL";
 const RC_VERIFICATION_FAILED = "FAILED";
-// ⚠️ IMPORTANT: Replace with your PRODUCTION RevenueCat API key before App Store submission.
-// Test Store keys will cause instant rejection during App Review.
-const API_KEY_APPLE = "appl_UFEFNlCGlZqaIPTiQzwObGdTdwG";
+// RevenueCat public API key — safe to embed (designed for client-side use).
+// Prefer VITE_REVENUECAT_KEY env var for easy rotation without code changes.
+const API_KEY_APPLE = import.meta.env.VITE_REVENUECAT_KEY || "appl_UFEFNlCGlZqaIPTiQzwObGdTdwG";
 
 // We keep a local cache of whether we are running on native iOS
 const isNative = Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";

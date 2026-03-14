@@ -50,6 +50,11 @@ function triggerHaptic(type: "selection" | "light") {
   void haptic[type]();
 }
 
+const PAYOFF_STRATEGIES = [
+  { id: "avalanche", label: "Avalanche", sub: "Highest APR First" },
+  { id: "snowball", label: "Snowball", sub: "Lowest Balance First" },
+] as const;
+
 function sortDebtsForStrategy(strategy: "avalanche" | "snowball", list: Array<{ name: string; balanceCents: number; aprBps: number; minPaymentCents: number }>) {
   const sorted = [...list];
   if (strategy === "avalanche") {
@@ -272,10 +277,7 @@ export default function DebtSimulator({ cards = [], financialConfig }: DebtSimul
 
       {/* Strategy Toggle */}
       <div style={{ display: "flex", background: T.bg.elevated, padding: 4, borderRadius: T.radius.lg, marginBottom: 16, border: `1px solid ${T.border.subtle}` }}>
-        {[
-          { id: "avalanche", label: "Avalanche", sub: "Highest APR First" },
-          { id: "snowball", label: "Snowball", sub: "Lowest Balance First" }
-        ].map(s => (
+        {PAYOFF_STRATEGIES.map(s => (
           <button
             key={s.id}
             onClick={() => {

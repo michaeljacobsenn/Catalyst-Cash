@@ -37,6 +37,10 @@
     "checkJs": false,
     "strict": false,
     "strictNullChecks": true,
+    "strictBindCallApply": true,
+    "strictFunctionTypes": true,
+    "alwaysStrict": true,
+    "useUnknownInCatchVariables": true,
     "jsx": "react-jsx",
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
@@ -44,5 +48,5 @@
     "moduleDetection": "force",
     "skipLibCheck": true,
   },
-  "exclude": ["dist", "ios/App/App/public/assets"]
+  "exclude": ["dist", "ios/App/App/public/assets", "ios/App/App/public/assets*"]
 }

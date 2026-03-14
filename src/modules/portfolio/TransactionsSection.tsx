@@ -5,11 +5,7 @@ import { Card, Badge } from "../ui.js";
 import { Mono } from "../components.js";
 import { T } from "../constants.js";
 import { getStoredTransactions } from "../plaid.js";
-
-interface CollapsedSections {
-    transactions: boolean;
-    [key: string]: boolean;
-}
+import type { PortfolioCollapsedSections } from "./types.js";
 
 interface StoredTransaction {
     id?: string;
@@ -26,8 +22,8 @@ interface StoredTransactionsPayload {
 }
 
 interface TransactionsSectionProps {
-    collapsedSections: CollapsedSections;
-    setCollapsedSections: Dispatch<SetStateAction<CollapsedSections>>;
+    collapsedSections: PortfolioCollapsedSections;
+    setCollapsedSections: Dispatch<SetStateAction<PortfolioCollapsedSections>>;
 }
 
 export default function TransactionsSection({ collapsedSections, setCollapsedSections }: TransactionsSectionProps) {

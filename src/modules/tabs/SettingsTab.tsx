@@ -43,7 +43,7 @@ import { getErrorLog, clearErrorLog } from "../errorReporter.js";
 import { Card, Label, InlineTooltip } from "../ui.js";
 import { Mono } from "../components.js";
 import { db, FaceId, nativeExport, fmt } from "../utils.js";
-import { isSecuritySensitiveKey } from "../securityKeys.js";
+import { isSecuritySensitiveKey, sanitizePlaidForBackup } from "../securityKeys.js";
 import { CURRENCIES } from "../currency.js";
 
 import { haptic } from "../haptics.js";
@@ -71,9 +71,19 @@ import { useSettings } from "../contexts/SettingsContext.js";
 import { useSecurity } from "../contexts/SecurityContext.js";
 import { usePortfolio } from "../contexts/PortfolioContext.js";
 import { useNavigation } from "../contexts/NavigationContext.js";
+import type { AppTab } from "../contexts/NavigationContext.js";
+import type { HousingType, IncomeType, PayFrequency, Payday } from "../../types/index.js";
 
 type ProviderModel = (typeof AI_PROVIDERS)[number]["models"][number];
 type ProviderConfig = (typeof AI_PROVIDERS)[number];
+type SettingsActiveSegment = "app";
+type SettingsMenu = "finance" | "profile" | "ai" | "backup" | "dev" | "security" | "plaid" | null;
+type SetupStep = {
+  label: string;
+  done: boolean;
+  nav?: AppTab;
+  menu?: Exclude<SettingsMenu, null>;
+};
 
 interface PassphraseModalState {
   open: boolean;
@@ -152,6 +162,7 @@ export default function SettingsTab({
     db.get("last-backup-ts").then(ts => setLastBackupTS(ts)).catch(() => { });
     db.get("household-id").then(val => { setHouseholdId(val || ""); setHsInputId(val || ""); }).catch(() => {});
     db.get("household-passcode").then(val => { setHouseholdPasscode(val || ""); setHsInputPasscode(val || ""); }).catch(() => {});
+    getRawTier().then(tier => setRawTierId(tier.id === "pro" ? "pro" : "free")).catch(() => setRawTierId("free"));
   }, []);
 
   // ── Auto-backup scheduling ──────────────────────────────────
@@ -190,7 +201,6 @@ export default function SettingsTab({
           // Include sanitized Plaid metadata for reconnect deduplication
           const plaidConns = await db.get("plaid-connections");
           if (Array.isArray(plaidConns) && plaidConns.length > 0) {
-            const { sanitizePlaidForBackup } = await import("../securityKeys.js");
             backup.data["plaid-connections-sanitized"] = sanitizePlaidForBackup(plaidConns);
           }
           const success = await uploadToICloud(backup, appPasscode || null);
@@ -257,15 +267,13 @@ export default function SettingsTab({
   const [deletionInProgress, setDeletionInProgress] = useState(false);
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
   const [restoreStatus, setRestoreStatus] = useState<string | null>(null);
-  const [activeSegment, setActiveSegment] = useState("app"); // Kept for logic
-  const [appTab, setAppTab] = useState("ai"); // Kept for logic
-  const [financeTab, setFinanceTab] = useState("income"); // Kept for logic
-  const [activeMenu, setActiveMenu] = useState<string | null>(null); // null means root menu, otherwise string ID of the menu
+  const [activeSegment] = useState<SettingsActiveSegment>("app");
+  const [activeMenu, setActiveMenu] = useState<SettingsMenu>(null);
   const [showModelPicker, setShowModelPicker] = useState(false);
+  const [rawTierId, setRawTierId] = useState<"free" | "pro">("free");
   const [ppModal, setPpModal] = useState<PassphraseModalState>({ open: false, mode: "export", label: "", resolve: null, value: "" });
   const [setupDismissed, setSetupDismissed] = useState(() => !!localStorage.getItem("setup-progress-dismissed"));
   const [showApiSetup, setShowApiSetup] = useState(Boolean((apiKey || "").trim()));
-  const [editingSection, setEditingSection] = useState(null);
   const [showPaywall, setShowPaywall] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -291,7 +299,6 @@ export default function SettingsTab({
       // Include sanitized Plaid metadata for reconnect deduplication
       const plaidConns2 = await db.get("plaid-connections");
       if (Array.isArray(plaidConns2) && plaidConns2.length > 0) {
-        const { sanitizePlaidForBackup } = await import("../securityKeys.js");
         backup.data["plaid-connections-sanitized"] = sanitizePlaidForBackup(plaidConns2);
       }
       const success = await uploadToICloud(backup, appPasscode || null);
@@ -313,6 +320,7 @@ export default function SettingsTab({
 
   const handleSwipeTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
     const touch = e.touches[0];
+    if (!touch) return;
     swipeTouchStart.current = { x: touch.clientX, y: touch.clientY };
   }, []);
 
@@ -320,6 +328,7 @@ export default function SettingsTab({
     (e: ReactTouchEvent<HTMLDivElement>) => {
       if (!swipeTouchStart.current) return;
       const touch = e.changedTouches[0];
+      if (!touch) return;
       const dx = touch.clientX - swipeTouchStart.current.x;
       const dy = Math.abs(touch.clientY - swipeTouchStart.current.y);
       // Swipe right at least 60px, starting from left 80px, not too vertical
@@ -342,7 +351,7 @@ export default function SettingsTab({
     if (scrollRef.current) {
       scrollRef.current.scrollTop = 0;
     }
-  }, [activeMenu, activeSegment, appTab, financeTab]);
+  }, [activeMenu, activeSegment]);
 
   const showPassphraseModal = (mode: "export" | "import"): Promise<string> =>
     new Promise((resolve) => {
@@ -438,6 +447,45 @@ export default function SettingsTab({
   const selectedModel: ProviderModel = currentModels.find(m => m.id === aiModel) || currentModels[0]!;
   const isNonGemini = (aiProvider || "gemini") !== "gemini";
   const hasApiKey = Boolean((apiKey || "").trim());
+  const currencyLabel = CURRENCIES.find(currency => currency.code === (financialConfig?.currencyCode || "USD"))?.label || "USD ($)";
+  const payFrequencyLabel =
+    financialConfig?.payFrequency === "weekly"
+      ? "Weekly"
+      : financialConfig?.payFrequency === "semi-monthly"
+        ? "Semi-monthly"
+        : financialConfig?.payFrequency === "monthly"
+          ? "Monthly"
+          : "Bi-weekly";
+  const incomeSummary =
+    financialConfig?.incomeType === "hourly"
+      ? financialConfig?.hourlyRateNet
+        ? `$${financialConfig.hourlyRateNet}/hr`
+        : "Hourly profile"
+      : financialConfig?.incomeType === "variable"
+        ? financialConfig?.averagePaycheck
+          ? `Avg $${financialConfig.averagePaycheck}`
+          : "Variable income"
+        : financialConfig?.paycheckStandard
+          ? `$${financialConfig.paycheckStandard}/check`
+          : "Salary profile";
+  const housingSummary =
+    financialConfig?.housingType === "own"
+      ? financialConfig?.mortgagePayment
+        ? `Own · $${financialConfig.mortgagePayment}/mo`
+        : "Own"
+      : financialConfig?.housingType === "rent"
+        ? financialConfig?.monthlyRent
+          ? `Rent · $${financialConfig.monthlyRent}/mo`
+          : "Rent"
+        : "Not set";
+  const financeSummaryItems = [
+    { label: "Income", value: incomeSummary },
+    { label: "Pay cadence", value: `${payFrequencyLabel}${financialConfig?.payday ? ` · ${financialConfig.payday}` : ""}` },
+    { label: "Housing", value: housingSummary },
+    { label: "Region", value: financialConfig?.stateCode || "Not in US" },
+    { label: "Currency", value: currencyLabel },
+    { label: "Profile", value: financialConfig?.birthYear ? `Born ${financialConfig.birthYear}` : "Demographics light" },
+  ];
 
   useEffect(() => {
     if ((apiKey || "").trim()) setShowApiSetup(true);
@@ -543,22 +591,6 @@ export default function SettingsTab({
       }
       setRestoreStatus("error");
       setStatusMsg(message);
-    }
-  };
-
-  const handleProviderSelect = (prov: ProviderConfig) => {
-    setAiProvider(prov.id);
-    setAiModel(prov.defaultModel);
-    // Load that provider's stored key
-    if (prov.keyStorageKey) {
-      getSecureItem(prov.keyStorageKey).then(k => {
-        const nextKey = typeof k === "string" ? k.trim() : "";
-        setApiKey(nextKey);
-        setShowApiSetup(Boolean(nextKey));
-      });
-    } else {
-      setApiKey("");
-      setShowApiSetup(false);
     }
   };
 
@@ -835,21 +867,15 @@ export default function SettingsTab({
                 ? "Backup & Data"
                 : activeMenu === "finance"
                   ? "Financial Profile"
-                  : activeMenu === "appearance"
-                    ? "Appearance"
-                    : activeMenu === "plaid"
-                      ? "Bank Connections"
-                      : activeMenu === "security"
-                        ? "Security"
-                        : activeMenu === "income"
-                          ? "Income & Cash Flow"
-                          : activeMenu === "debts"
-                            ? "Debts & Liabilities"
-                            : activeMenu === "targets"
-                              ? "Savings Targets"
-                              : activeMenu === "rules"
-                                ? "Custom Rules"
-                                : "Settings"}
+                  : activeMenu === "plaid"
+                    ? "Bank Connections"
+                    : activeMenu === "security"
+                      ? "Security"
+                      : activeMenu === "profile"
+                        ? "Appearance"
+                        : activeMenu === "dev"
+                          ? "Developer Tools"
+                          : "Settings"}
           </h1>
           {!activeMenu && (
             <p style={{ fontSize: 10, color: T.text.dim, marginTop: 2, fontFamily: T.font.mono, margin: 0 }}>
@@ -901,10 +927,10 @@ export default function SettingsTab({
                   Preferences
                 </span>
                 <div style={{ background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}` }}>
-                  {[
-                    { id: "finance", label: "Financial Profile", icon: Target, color: T.accent.emerald, desc: "Region, housing, demographics" },
+                  {([
+                    { id: "finance", label: "Financial Profile", icon: Target, color: T.accent.emerald, desc: "Income, region, housing, demographics" },
                     { id: "ai", label: "Assistant Persona", icon: Cpu, color: T.status.blue, desc: "Model routing & behavior" },
-                  ].map((item, i, arr) => (
+                  ] as const).map((item, i, arr) => (
                     <button
                       key={item.id}
                       className="settings-row"
@@ -935,16 +961,16 @@ export default function SettingsTab({
               {/* Data & Integrations */}
               <div>
                 <span style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginLeft: 16, marginBottom: 8, display: "block", letterSpacing: "0.03em", textTransform: "uppercase" }}>
-                  Integrations
+                  Data & Security
                 </span>
                 <div style={{ background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}` }}>
-                  {[
+                  {([
                     ...(ENABLE_PLAID ? [{ id: "plaid", label: "Bank Connections", icon: Building2, color: T.status.purple || "#8a2be2", desc: "Manage synced accounts" }] : []),
-                    { id: "backup", label: "Backup & Sync", icon: Database, color: T.status.green, desc: "iCloud, exports, config" },
+                    { id: "backup", label: "Backup & Sync", icon: Database, color: T.status.green, desc: "Backup data, restore, export history" },
                     { id: "security", label: "App Security", icon: Lock, color: T.status.red, desc: "Passcodes, Face ID" },
                     { id: "guide", label: "Help & Guide", icon: Info, color: T.text.secondary, desc: "Learn how Catalyst works" },
                     { id: "dev", label: "Developer Tools", icon: Terminal, color: T.text.dim, desc: "Simulators & testing" },
-                  ].map((item, i, arr) => (
+                  ] as const).map((item, i, arr) => (
                     <button
                       key={item.id}
                       className="settings-row"
@@ -953,7 +979,7 @@ export default function SettingsTab({
                           if (typeof onShowGuide === "function") onShowGuide();
                           return;
                         }
-                        setActiveMenu(item.id);
+                        setActiveMenu(item.id as Exclude<SettingsMenu, null>);
                         navDir.current = "forward";
                         haptic.light();
                       }}
@@ -1037,7 +1063,7 @@ export default function SettingsTab({
                 if (!installTs) localStorage.setItem("app-install-ts", String(Date.now()));
                 const daysSinceInstall = installTs ? (Date.now() - installTs) / 86400000 : 0;
                 const fc = financialConfig || {};
-                const steps = [
+                const steps: SetupStep[] = [
                   {
                     label: "Connect your income",
                     done: !!(fc.paycheckStandard || fc.hourlyRateNet || fc.averagePaycheck),
@@ -1045,8 +1071,8 @@ export default function SettingsTab({
                   },
                   { label: "Set weekly spending limit", done: !!fc.weeklySpendAllowance, nav: "input" },
                   { label: "Set a minimum cash floor", done: !!fc.emergencyFloor, nav: "input" },
-                  { label: "Track your credit cards", done: (cards || []).length > 0, nav: "cards" },
-                  { label: "Add recurring bills", done: (renewals || []).length > 0, nav: "renewals" },
+                  { label: "Track your credit cards", done: (cards || []).length > 0, nav: "portfolio" },
+                  { label: "Add recurring bills", done: (renewals || []).length > 0, nav: "portfolio" },
                 ];
                 const done = steps.filter(s => s.done).length;
                 const total = steps.length;
@@ -1232,7 +1258,8 @@ export default function SettingsTab({
                             {!s.done && s.nav && (
                               <button
                                 onClick={() => {
-                                  if (navTo) navTo(s.nav);
+                                  if (s.nav) navTo(s.nav);
+                                  if (s.menu) setActiveMenu(s.menu);
                                   haptic.light();
                                 }}
                                 style={{
@@ -1262,8 +1289,64 @@ export default function SettingsTab({
 
           <div style={{ display: activeMenu && activeSegment === "app" ? "block" : "none" }}>
             {/* ── FINANCIAL PROFILE SUB-MENU ── */}
-            <div style={{ display: activeMenu === "finance" ? "flex" : "none", flexDirection: "column", gap: 32, padding: "20px 0" }}>
-              
+            <div style={{ display: activeMenu === "finance" ? "flex" : "none", flexDirection: "column", gap: 20, padding: "20px 0 28px" }}>
+              <div style={{ margin: "0 16px" }}>
+                <Card
+                  variant="glass"
+                  style={{
+                    padding: "18px 18px 16px",
+                    border: `1px solid ${T.border.subtle}`,
+                    background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.surface})`,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em" }}>
+                        Keep this profile lean
+                      </div>
+                      <p style={{ margin: "6px 0 0", fontSize: 12, lineHeight: 1.55, color: T.text.secondary }}>
+                        Only the inputs that change audit math belong here. If a value does not affect cash flow, leave it blank.
+                      </p>
+                    </div>
+                    <div
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 999,
+                        border: `1px solid ${T.accent.primary}30`,
+                        background: `${T.accent.primary}12`,
+                        color: T.accent.primary,
+                        fontSize: 10,
+                        fontWeight: 800,
+                        letterSpacing: "0.04em",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      PROFILE SNAPSHOT
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+                    {financeSummaryItems.map((item) => (
+                      <div
+                        key={item.label}
+                        style={{
+                          padding: "12px 12px 11px",
+                          borderRadius: T.radius.lg,
+                          border: `1px solid ${T.border.subtle}`,
+                          background: T.bg.elevated,
+                        }}
+                      >
+                        <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                          {item.label}
+                        </div>
+                        <div style={{ marginTop: 5, fontSize: 13, fontWeight: 700, color: T.text.primary, lineHeight: 1.35 }}>
+                          {item.value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              </div>
+
               {/* Currency */}
               <div>
                 <Label style={{ marginLeft: 16, marginBottom: 8, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.03em" }}>Base Currency</Label>
@@ -1296,7 +1379,13 @@ export default function SettingsTab({
                     <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Pay Frequency</span>
                     <select
                       value={financialConfig?.payFrequency || "bi-weekly"}
-                      onChange={e => setFinancialConfig(prev => ({ ...prev, payFrequency: e.target.value }))}
+                      onChange={e =>
+                        setFinancialConfig({
+                          type: "SET_FIELD",
+                          field: "payFrequency",
+                          value: e.target.value as PayFrequency,
+                        })
+                      }
                       style={{ background: "transparent", border: "none", color: T.accent.primary, fontSize: 15, fontWeight: 700, cursor: "pointer", outline: "none", textAlign: "right", appearance: "none" }}
                     >
                       <option value="weekly">Weekly</option>
@@ -1310,7 +1399,13 @@ export default function SettingsTab({
                     <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Payday</span>
                     <select
                       value={financialConfig?.payday || "Friday"}
-                      onChange={e => setFinancialConfig(prev => ({ ...prev, payday: e.target.value }))}
+                      onChange={e =>
+                        setFinancialConfig({
+                          type: "SET_FIELD",
+                          field: "payday",
+                          value: e.target.value as Payday,
+                        })
+                      }
                       style={{ background: "transparent", border: "none", color: T.accent.primary, fontSize: 15, fontWeight: 700, cursor: "pointer", outline: "none", textAlign: "right", appearance: "none" }}
                     >
                       <option value="Monday">Monday</option>
@@ -1327,7 +1422,13 @@ export default function SettingsTab({
                     <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Income Type</span>
                     <select
                       value={financialConfig?.incomeType || "salary"}
-                      onChange={e => setFinancialConfig(prev => ({ ...prev, incomeType: e.target.value }))}
+                      onChange={e =>
+                        setFinancialConfig({
+                          type: "SET_FIELD",
+                          field: "incomeType",
+                          value: e.target.value as IncomeType,
+                        })
+                      }
                       style={{ background: "transparent", border: "none", color: T.accent.primary, fontSize: 15, fontWeight: 700, cursor: "pointer", outline: "none", textAlign: "right", appearance: "none" }}
                     >
                       <option value="salary">Salary</option>
@@ -1480,28 +1581,26 @@ export default function SettingsTab({
               </div>
 
                   {/* ═══ "WHAT-IF" SCENARIO ENGINE (Pro Tier Power Feature 3) ═══ */}
-                  <div style={{ marginTop: 24 }}>
+                  <div style={{ marginTop: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                       <Label style={{ margin: 0 }}>"What-If" Scenarios</Label>
-                      {!proEnabled && <div style={{ fontSize: 10, fontWeight: 800, padding: "2px 6px", background: T.accent.primary, color: "#fff", borderRadius: 4 }}>PRO</div>}
+                      {!proEnabled && <div style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", background: `${T.accent.primary}14`, color: T.accent.primary, border: `1px solid ${T.accent.primary}30`, borderRadius: 999 }}>PRO</div>}
                     </div>
                     <Card
-                      variant="elevated"
+                      variant="glass"
                       style={{
                         padding: "16px",
-                        border: `1px solid ${T.accent.emerald}40`,
-                        background: `linear-gradient(135deg, ${T.bg.card}, ${T.accent.emerald}0A)`,
-                        position: "relative",
-                        overflow: "hidden"
+                        border: `1px solid ${T.border.subtle}`,
+                        background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.surface})`,
                       }}
                     >
                       <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: 10, background: `${T.accent.emerald}20`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 10, background: `${T.accent.emerald}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                           <Layers size={18} color={T.accent.emerald} strokeWidth={2.5} />
                         </div>
-                        <div style={{ flex: 1, filter: !proEnabled ? "blur(3px)" : "none", pointerEvents: !proEnabled ? "none" : "auto", transition: "filter 0.3s" }}>
+                        <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary, marginBottom: 2 }}>Scenario Sandbox</div>
-                          <div style={{ fontSize: 11, color: T.text.secondary, marginBottom: 12 }}>
+                          <div style={{ fontSize: 11, color: T.text.secondary, marginBottom: 12, lineHeight: 1.5 }}>
                             Test a new salary, relocation, or massive expense without losing your baseline configuration.
                           </div>
 
@@ -1512,7 +1611,8 @@ export default function SettingsTab({
                                 localStorage.setItem("catalyst_baseline_config", JSON.stringify(financialConfig));
                                 window.toast?.success?.("Baseline snapshot saved.");
                               }}
-                              style={{ flex: 1, padding: "10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.surface, color: T.text.primary, fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                              disabled={!proEnabled}
+                              style={{ flex: 1, padding: "10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.surface, color: proEnabled ? T.text.primary : T.text.dim, fontSize: 11, fontWeight: 700, cursor: proEnabled ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: proEnabled ? 1 : 0.6 }}
                               className="hover-btn"
                             >
                               <Save size={14} color={T.text.secondary} />
@@ -1531,26 +1631,29 @@ export default function SettingsTab({
                                   window.toast?.error?.("No baseline saved.");
                                 }
                               }}
-                              style={{ flex: 1, padding: "10px", borderRadius: T.radius.md, border: `1px dashed ${T.accent.emerald}50`, background: "transparent", color: T.accent.emerald, fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                              disabled={!proEnabled}
+                              style={{ flex: 1, padding: "10px", borderRadius: T.radius.md, border: `1px dashed ${T.accent.emerald}50`, background: "transparent", color: proEnabled ? T.accent.emerald : T.text.dim, fontSize: 11, fontWeight: 700, cursor: proEnabled ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: proEnabled ? 1 : 0.6 }}
                               className="hover-btn"
                             >
                               <RefreshCw size={14} />
                               Restore
                             </button>
                           </div>
+                          {!proEnabled && (
+                            <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                              <span style={{ fontSize: 11, color: T.text.muted, lineHeight: 1.45 }}>
+                                Keep one clean baseline, then pressure-test changes without touching your live profile.
+                              </span>
+                              <button
+                                onClick={() => setShowPaywall(true)}
+                                style={{ padding: "8px 14px", borderRadius: 999, background: T.accent.primary, color: "#fff", border: "none", fontSize: 11, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}
+                              >
+                                Unlock Pro
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
-
-                      {!proEnabled && (
-                        <div style={{ position: "absolute", inset: 0, zIndex: 10, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(11, 10, 20, 0.4)", backdropFilter: "blur(2px)" }}>
-                          <button
-                            onClick={() => setShowPaywall(true)}
-                            style={{ padding: "8px 16px", borderRadius: 20, background: T.accent.primary, color: "#fff", border: "none", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: `0 4px 12px ${T.accent.primary}40` }}
-                          >
-                            Unlock Pro
-                          </button>
-                        </div>
-                      )}
                     </Card>
                   </div>
 
@@ -1562,7 +1665,13 @@ export default function SettingsTab({
                     <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Type</span>
                     <select
                       value={financialConfig?.housingType || ""}
-                      onChange={e => setFinancialConfig(prev => ({ ...prev, housingType: e.target.value }))}
+                      onChange={e =>
+                        setFinancialConfig({
+                          type: "SET_FIELD",
+                          field: "housingType",
+                          value: e.target.value as HousingType,
+                        })
+                      }
                       style={{ background: "transparent", border: "none", color: T.accent.primary, fontSize: 15, fontWeight: 700, cursor: "pointer", outline: "none", textAlign: "right", appearance: "none" }}
                     >
                       <option value="">Unspecified</option>
@@ -1646,10 +1755,10 @@ export default function SettingsTab({
                currentProvider={currentProvider}
                selectedModel={selectedModel}
                proEnabled={proEnabled}
+               showModelSelector={rawTierId === "pro"}
                setShowPaywall={setShowPaywall}
                apiKey={apiKey}
                setApiKey={setApiKey}
-               handleProviderSelect={handleProviderSelect}
                handleKeyChange={handleKeyChange}
                isNonGemini={isNonGemini}
                hasApiKey={hasApiKey}
@@ -1661,7 +1770,40 @@ export default function SettingsTab({
 
             <BackupSection 
               activeMenu={activeMenu}
-              toast={window.toast}
+              backupStatus={backupStatus}
+              setBackupStatus={setBackupStatus}
+              restoreStatus={restoreStatus}
+              setRestoreStatus={setRestoreStatus}
+              statusMsg={statusMsg}
+              setStatusMsg={setStatusMsg}
+              handleExport={handleExport}
+              handleExportSheet={handleExportSheet}
+              handleImport={handleImport}
+              householdId={householdId}
+              setHouseholdId={setHouseholdId}
+              householdPasscode={householdPasscode}
+              setHouseholdPasscode={setHouseholdPasscode}
+              showHouseholdModal={showHouseholdModal}
+              setShowHouseholdModal={setShowHouseholdModal}
+              hsInputId={hsInputId}
+              setHsInputId={setHsInputId}
+              hsInputPasscode={hsInputPasscode}
+              setHsInputPasscode={setHsInputPasscode}
+              appleLinkedId={appleLinkedId}
+              handleAppleSignIn={handleAppleSignIn}
+              unlinkApple={unlinkApple}
+              autoBackupInterval={autoBackupInterval}
+              setAutoBackupInterval={setAutoBackupInterval}
+              lastBackupTS={lastBackupTS}
+              isForceSyncing={isForceSyncing}
+              forceICloudSync={forceICloudSync}
+              onClear={onClear}
+              onClearDemoData={onClearDemoData}
+              onFactoryReset={onFactoryReset}
+              confirmClear={confirmClear}
+              setConfirmClear={setConfirmClear}
+              confirmFactoryReset={confirmFactoryReset}
+              setConfirmFactoryReset={setConfirmFactoryReset}
             />
 
             {/* ── Developer Tools ───────────────────────────────────────── */}

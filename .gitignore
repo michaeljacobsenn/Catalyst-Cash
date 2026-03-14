@@ -67,3 +67,4 @@ refactor_card_portfolio.py
 .agent/
 
 .vite/
+test-results/

@@ -7,17 +7,11 @@ import { T } from "../constants.js";
 import { fmt } from "../utils.js";
 import { useSettings } from "../contexts/SettingsContext.js";
 import type { NonCardDebt, OtherAsset, SavingsGoal } from "../../types/index.js";
-
-interface CollapsedSections {
-    savingsGoals: boolean;
-    otherAssets: boolean;
-    debts: boolean;
-    [key: string]: boolean;
-}
+import type { PortfolioCollapsedSections } from "./types.js";
 
 interface OtherAssetsSectionProps {
-    collapsedSections: CollapsedSections;
-    setCollapsedSections: Dispatch<SetStateAction<CollapsedSections>>;
+    collapsedSections: PortfolioCollapsedSections;
+    setCollapsedSections: Dispatch<SetStateAction<PortfolioCollapsedSections>>;
     openSheet: (step: "goal" | "asset" | "debt") => void;
 }
 

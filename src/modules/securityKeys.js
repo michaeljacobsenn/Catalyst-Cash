@@ -65,6 +65,6 @@ export function sanitizePlaidForBackup(connections = []) {
     })),
     lastSync: null,
     _needsReconnect: true, // Flag: user must re-link via Plaid
-    // accessToken is intentionally omitted — never leaves the device
+    // accessToken is intentionally omitted — tokens remain worker-side only
   }));
 }

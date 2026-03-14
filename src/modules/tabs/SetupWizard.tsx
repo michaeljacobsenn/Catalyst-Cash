@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { T } from "../constants.js";
 import { AI_PROVIDERS } from "../providers.js";
 import { db } from "../utils.js";
@@ -8,7 +8,7 @@ import { useSecurity } from "../contexts/SecurityContext.js";
 import { useNavigation } from "../contexts/NavigationContext.js";
 import { useSettings, type ThemeMode } from "../contexts/SettingsContext.js";
 import { usePortfolio } from "../contexts/PortfolioContext.js";
-import { isPro } from "../subscription.js";
+import { getPreferredModelForTier, getRawTier, normalizeModelForTier } from "../subscription.js";
 import { useToast } from "../Toast.js";
 import { setSecureItem } from "../secureStore.js";
 import type {
@@ -111,9 +111,9 @@ const PAGES: WizardPageMeta[] = [
   { id: "welcome", emoji: "👋", title: "Welcome", subtitle: "AI-powered financial intelligence." },
   { id: "import", emoji: "📥", title: "Import Data", subtitle: "Already have a backup? Skip manual entry." },
   { id: "profile", emoji: "🧑‍💻", title: "Your Profile", subtitle: "Region, demographics, and housing status." },
-  { id: "pass1", emoji: "⚡️", title: "Phase 1: Cash Flow", subtitle: "Income, pay schedule, and spending baselines." },
-  { id: "pass2", emoji: "🎯", title: "Phase 2: Wealth Targets", subtitle: "Floor limits, reserves, and tax optimization." },
-  { id: "pass3", emoji: "⚙️", title: "Phase 3: Integrations", subtitle: "Bank sync, retirement, AI engine, and security." },
+  { id: "pass1", emoji: "⚡️", title: "Your Cash Flow", subtitle: "Income, pay schedule, and spending baselines." },
+  { id: "pass2", emoji: "🎯", title: "Your Goals", subtitle: "Safety minimums, emergency reserves, and tax optimization." },
+  { id: "pass3", emoji: "⚙️", title: "Your Setup", subtitle: "Connect accounts, choose your AI assistant, and set security." },
   { id: "done", emoji: "🎉", title: "All Set!", subtitle: "" },
 ];
 const TOTAL = PAGES.length;
@@ -159,25 +159,22 @@ function StepHeader({ step }: { step: number }) {
 export default function SetupWizard() {
   const { setAppleLinkedId, appleLinkedId } = useSecurity() as SecurityContextValue;
   const { setOnboardingComplete } = useNavigation() as NavigationContextValue;
-  const { themeMode, setThemeMode } = useSettings();
+  const { themeMode, setThemeMode, setFinancialConfig } = useSettings();
   const [userIsPro, setUserIsPro] = useState<boolean>(false);
   const toast = useToast() as ToastApi;
 
   const {
     isPortfolioReady,
-    cards: contextCards,
     setCards: setContextCards,
-    bankAccounts: contextBankAccounts,
     setBankAccounts: setContextBankAccounts,
-    renewals: contextRenewals,
     setRenewals: setContextRenewals,
   } = usePortfolio();
 
   const [step, setStep] = useState<number>(0);
   const [saving, setSaving] = useState<boolean>(false);
-  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>(contextBankAccounts || []);
-  const [cards, setCards] = useState<Card[]>(contextCards || []);
-  const [renewals, setRenewals] = useState<Renewal[]>(contextRenewals || []);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [cards, setCards] = useState<Card[]>([]);
+  const [renewals, setRenewals] = useState<Renewal[]>([]);
   const [isExiting, setIsExiting] = useState<boolean>(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -218,7 +215,7 @@ export default function SetupWizard() {
   });
   const [ai, setAi] = useState<SetupWizardAiState>({
     aiProvider: "backend",
-    aiModel: "gpt-4o-mini",
+    aiModel: getPreferredModelForTier("free"),
     apiKey: "",
   });
   const [security, setSecurity] = useState<SetupWizardSecurityState>({
@@ -228,19 +225,31 @@ export default function SetupWizard() {
     useFaceId: false,
   });
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo(0, 0);
-  }, [step]);
+  const hydrateWizardFromStorage = useCallback(
+    async (options: { syncContexts?: boolean } = {}): Promise<void> => {
+      const [
+        config,
+        prov,
+        mod,
+        storedBankAccounts,
+        storedCards,
+        storedRenewals,
+        storedBackupInterval,
+      ] = await Promise.all([
+        db.get("financial-config"),
+        db.get("ai-provider"),
+        db.get("ai-model"),
+        db.get("bank-accounts"),
+        db.get("card-portfolio"),
+        db.get("renewals"),
+        db.get("auto-backup-interval"),
+      ]);
 
-  useEffect(() => {
-    void isPro().then(setUserIsPro).catch(() => setUserIsPro(false));
-  }, []);
-
-  useEffect(() => {
-    if (!isPortfolioReady) return;
-
-    void Promise.all([db.get("financial-config"), db.get("ai-provider"), db.get("ai-model")]).then(([config, prov, mod]) => {
       const typedConfig = (config || null) as CatalystCashConfig | null;
+      const nextBankAccounts = Array.isArray(storedBankAccounts) ? (storedBankAccounts as BankAccount[]) : [];
+      const nextCards = Array.isArray(storedCards) ? (storedCards as Card[]) : [];
+      const nextRenewals = Array.isArray(storedRenewals) ? (storedRenewals as Renewal[]) : [];
+
       if (typedConfig) {
         setIncome((prev) => ({
           ...prev,
@@ -279,17 +288,51 @@ export default function SetupWizard() {
           trackHSA: typedConfig.trackHSA ?? prev.trackHSA,
           trackCrypto: typedConfig.trackCrypto ?? prev.trackCrypto,
         }));
+        if (options.syncContexts) {
+          setFinancialConfig(typedConfig);
+        }
       }
-      setBankAccounts(contextBankAccounts || []);
-      setCards(contextCards || []);
-      setRenewals(contextRenewals || []);
+
+      setBankAccounts(nextBankAccounts);
+      setCards(nextCards);
+      setRenewals(nextRenewals);
+      if (typeof storedBackupInterval === "string") {
+        setSecurity((prev) => ({
+          ...prev,
+          autoBackupInterval: storedBackupInterval as NonNullable<SetupWizardSecurityState["autoBackupInterval"]>,
+        }));
+      }
+
+      if (options.syncContexts) {
+        setContextBankAccounts(nextBankAccounts);
+        setContextCards(nextCards);
+        setContextRenewals(nextRenewals);
+      }
+
+      const tierId = userIsPro ? "pro" : "free";
       setAi((prev) => ({
         ...prev,
         aiProvider: (prov as string | null) ?? prev.aiProvider,
-        aiModel: (mod as string | null) ?? prev.aiModel,
+        aiModel: normalizeModelForTier(tierId, (mod as string | null) ?? prev.aiModel, (prov as string | null) ?? prev.aiProvider),
       }));
-    });
-  }, [isPortfolioReady, contextBankAccounts, contextCards, contextRenewals]);
+    },
+    [setContextBankAccounts, setContextCards, setContextRenewals, setFinancialConfig, userIsPro]
+  );
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo(0, 0);
+  }, [step]);
+
+  useEffect(() => {
+    void getRawTier()
+      .then(tier => setUserIsPro(tier.id === "pro"))
+      .catch(() => setUserIsPro(false));
+  }, []);
+
+  useEffect(() => {
+    if (!isPortfolioReady) return;
+    void hydrateWizardFromStorage();
+  }, [hydrateWizardFromStorage, isPortfolioReady]);
 
   const updateIncome: SetupWizardUpdate<SetupWizardIncomeState> = (key, value) =>
     setIncome((prev) => ({ ...prev, [key]: value }));
@@ -299,8 +342,7 @@ export default function SetupWizard() {
     setAi((prev) => {
       const next = { ...prev, [key]: value };
       if (key === "aiProvider") {
-        const provider = typedProviders.find((item) => item.id === value);
-        if (provider) next.aiModel = provider.defaultModel;
+        next.aiModel = getPreferredModelForTier(userIsPro ? "pro" : "free");
       }
       return next;
     });
@@ -317,6 +359,7 @@ export default function SetupWizard() {
       await db.set("ai-provider", ai.aiProvider);
       await db.set("ai-model", ai.aiModel);
       await db.set("onboarding-complete", true);
+      setOnboardingComplete(true);
       setIsExiting(true);
       setTimeout(() => window.location.reload(), 300);
     } catch (error: unknown) {
@@ -397,6 +440,7 @@ export default function SetupWizard() {
         await db.set("auto-backup-interval", security.autoBackupInterval);
       }
       await db.set("onboarding-complete", true);
+      setOnboardingComplete(true);
       next();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "unknown error";
@@ -414,6 +458,7 @@ export default function SetupWizard() {
     try {
       await db.set("lock-timeout", security.lockTimeout);
       await db.set("onboarding-complete", true);
+      setOnboardingComplete(true);
       next();
     } catch {
       // ignore
@@ -422,6 +467,8 @@ export default function SetupWizard() {
   };
 
   const handleFinish = (): void => {
+    void db.set("onboarding-complete", true);
+    setOnboardingComplete(true);
     setIsExiting(true);
     setTimeout(() => window.location.reload(), 300);
   };
@@ -476,6 +523,7 @@ export default function SetupWizard() {
                 onNext={next}
                 toast={toast}
                 onComplete={skipToDashboard}
+                onImported={() => hydrateWizardFromStorage({ syncContexts: true })}
                 appleLinkedId={appleLinkedId ?? null}
                 setAppleLinkedId={setAppleLinkedId}
                 security={security}

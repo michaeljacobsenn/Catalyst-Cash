@@ -5,6 +5,7 @@ import { computeFireProjection } from "../fire.js";
 import { useAudit } from "../contexts/AuditContext.js";
 import { useSettings } from "../contexts/SettingsContext.js";
 import { usePortfolio } from "../contexts/PortfolioContext.js";
+import { buildDashboardSafetyModel } from "./safetyModel.js";
 
 function summarizeTrend(data, key, formatter) {
   if (!Array.isArray(data) || data.length < 2) {
@@ -174,6 +175,34 @@ export default function useDashboardData() {
       asOfDate: current?.date || new Date().toISOString().split("T")[0],
     });
   }, [financialConfig, renewals, cards, investmentSnapshot.total, current?.date, current?.isTest]);
+
+  const safetySnapshot = useMemo(
+    () =>
+      buildDashboardSafetyModel({
+        spendableCash: portfolioMetrics?.spendableCash,
+        pendingCharges: dashboardMetrics?.pending,
+        savingsCash: portfolioMetrics?.savingsCash,
+        floor,
+        weeklySpendAllowance: financialConfig?.weeklySpendAllowance,
+        renewals,
+        cards,
+        healthScore: current?.parsed?.healthScore?.score ?? null,
+        auditStatus: current?.parsed?.status || "UNKNOWN",
+        todayStr: current?.date || new Date().toISOString().split("T")[0],
+      }),
+    [
+      portfolioMetrics?.spendableCash,
+      portfolioMetrics?.savingsCash,
+      dashboardMetrics?.pending,
+      floor,
+      financialConfig?.weeklySpendAllowance,
+      renewals,
+      cards,
+      current?.parsed?.healthScore?.score,
+      current?.parsed?.status,
+      current?.date,
+    ]
+  );
 
   // Weekly streak counter (existing)
   const streak = useMemo(() => {
@@ -627,6 +656,7 @@ export default function useDashboardData() {
     chartA11y,
     freedomStats,
     alerts,
+    safetySnapshot,
     portfolioMetrics, // Unified top-level live metrics
   };
 }

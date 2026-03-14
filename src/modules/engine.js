@@ -131,6 +131,154 @@ function getCfiThreshold(payFrequency, daysToNextPaycheck) {
   return 25;
 }
 
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getScoreGrade(score) {
+  if (score >= 97) return "A+";
+  if (score >= 93) return "A";
+  if (score >= 90) return "A-";
+  if (score >= 87) return "B+";
+  if (score >= 83) return "B";
+  if (score >= 80) return "B-";
+  if (score >= 77) return "C+";
+  if (score >= 73) return "C";
+  if (score >= 70) return "C-";
+  if (score >= 67) return "D+";
+  if (score >= 63) return "D";
+  if (score >= 60) return "D-";
+  return "F";
+}
+
+function round1(value) {
+  return Math.round(value * 10) / 10;
+}
+
+function buildAuditSignals(
+  config,
+  {
+    snapshotDate,
+    cards = [],
+    debtEntries = [],
+    checkingBalanceCents = 0,
+    savingsTotalCents = 0,
+    totalCheckingFloorCents = 0,
+    timeCriticalAmountCents = 0,
+    requiredTransferCents = 0,
+    operationalSurplusCents = 0,
+  }
+) {
+  const emergencyReserveTargetCents = Math.max(0, toCents(config?.emergencyReserveTarget || 0));
+  const weeklySpendAllowanceCents = Math.max(0, toCents(config?.weeklySpendAllowance || 0));
+  const totalDebtCents = debtEntries.reduce((sum, debt) => sum + Math.max(0, debt.balanceCents || 0), 0);
+  const revolvingDebtCents = (cards || []).reduce((sum, card) => sum + Math.max(0, toCents(card?.balance || 0)), 0);
+  const totalCardLimitCents = (cards || []).reduce((sum, card) => {
+    const limitCents = toCents(card?.limit || 0);
+    return limitCents > 0 ? sum + limitCents : sum;
+  }, 0);
+  const utilizationPct =
+    totalCardLimitCents > 0 ? round1((revolvingDebtCents / totalCardLimitCents) * 100) : null;
+  const emergencyCoverageWeeks =
+    weeklySpendAllowanceCents > 0 ? round1(savingsTotalCents / weeklySpendAllowanceCents) : null;
+  const liquidityBufferCents = checkingBalanceCents - totalCheckingFloorCents - timeCriticalAmountCents;
+  const toxicDebtCount = debtEntries.filter(debt => (debt.aprBps || 0) > 3600).length;
+  const highAprCount = debtEntries.filter(debt => (debt.aprBps || 0) >= 2500).length;
+  const promoExpiryCount = debtEntries.filter(debt => {
+    if (!debt.hasPromoApr || !debt.promoAprExp) return false;
+    const daysToExp = daysBetween(snapshotDate, debt.promoAprExp);
+    return daysToExp > 0 && daysToExp <= 90;
+  }).length;
+
+  const liquidityScore =
+    liquidityBufferCents >= weeklySpendAllowanceCents
+      ? 20
+      : liquidityBufferCents >= 0
+        ? 15
+        : requiredTransferCents > 0
+          ? 5
+          : 8;
+  const emergencyScore =
+    emergencyReserveTargetCents > 0
+      ? clamp(Math.round((savingsTotalCents / emergencyReserveTargetCents) * 20), 0, 20)
+      : savingsTotalCents >= totalCheckingFloorCents
+        ? 16
+        : savingsTotalCents > 0
+          ? 8
+          : 0;
+  const cashFlowScore =
+    operationalSurplusCents > 0
+      ? 20
+      : liquidityBufferCents >= 0
+        ? 12
+        : 4;
+  const debtScore = clamp(
+    20 -
+      toxicDebtCount * 10 -
+      highAprCount * 3 -
+      (totalDebtCents > Math.max(checkingBalanceCents + savingsTotalCents, totalCheckingFloorCents * 2) ? 4 : 0),
+    0,
+    20
+  );
+  const utilizationScore =
+    utilizationPct == null
+      ? 12
+      : utilizationPct <= 10
+        ? 20
+        : utilizationPct <= 30
+          ? 15
+          : utilizationPct <= 50
+            ? 10
+            : utilizationPct <= 85
+              ? 5
+              : 0;
+
+  const nativeScore = clamp(
+    liquidityScore + emergencyScore + cashFlowScore + debtScore + utilizationScore,
+    0,
+    100
+  );
+
+  const riskFlags = [];
+  if (requiredTransferCents > 0) riskFlags.push("transfer-needed");
+  if (liquidityBufferCents < 0) riskFlags.push("floor-breach-risk");
+  if (toxicDebtCount > 0) riskFlags.push("toxic-apr");
+  if (promoExpiryCount > 0) riskFlags.push("promo-expiry");
+  if (utilizationPct != null && utilizationPct >= 85) riskFlags.push("high-utilization");
+  else if (utilizationPct != null && utilizationPct >= 30) riskFlags.push("elevated-utilization");
+  if (emergencyCoverageWeeks != null && emergencyCoverageWeeks < 4) riskFlags.push("thin-emergency-fund");
+
+  return {
+    nativeScore: {
+      score: nativeScore,
+      grade: getScoreGrade(nativeScore),
+    },
+    liquidity: {
+      checkingAfterFloorAndBills: fromCents(liquidityBufferCents),
+      transferNeeded: fromCents(requiredTransferCents),
+      timeCriticalBills: fromCents(timeCriticalAmountCents),
+    },
+    emergencyFund: {
+      current: fromCents(savingsTotalCents),
+      target: fromCents(emergencyReserveTargetCents),
+      coverageWeeks: emergencyCoverageWeeks,
+    },
+    debt: {
+      total: fromCents(totalDebtCents),
+      toxicDebtCount,
+      highAprCount,
+      recommendedSurplusTarget:
+        operationalSurplusCents > 0 ? fromCents(operationalSurplusCents) : 0,
+    },
+    utilization: {
+      pct: utilizationPct,
+      revolvingDebt: fromCents(revolvingDebtCents),
+      totalLimits: fromCents(totalCardLimitCents),
+    },
+    riskFlags,
+  };
+}
+
 function normalizeSnapshotDebt(card, snapshotDebt, defaultAprBps) {
   const debt = snapshotDebt || {};
   const cardAprBps = toBps(card?.apr ?? 0);
@@ -555,6 +703,18 @@ export function generateStrategy(config, snapshot) {
     };
   }
 
+  const auditSignals = buildAuditSignals(config, {
+    snapshotDate,
+    cards,
+    debtEntries,
+    checkingBalanceCents,
+    savingsTotalCents,
+    totalCheckingFloorCents,
+    timeCriticalAmountCents,
+    requiredTransferCents,
+    operationalSurplusCents,
+  });
+
   return {
     snapshotDate,
     nextPayday,
@@ -570,5 +730,6 @@ export function generateStrategy(config, snapshot) {
       method: strategyMethod,
     },
     debtPayoff,
+    auditSignals,
   };
 }

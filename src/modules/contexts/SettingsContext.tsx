@@ -11,19 +11,16 @@ import React, {
 } from "react";
 import { db } from "../utils.js";
 import { applyTheme } from "../constants.js";
-import { DEFAULT_PROVIDER_ID, DEFAULT_MODEL_ID, getProvider, getModel } from "../providers.js";
+import { DEFAULT_PROVIDER_ID, DEFAULT_MODEL_ID, getProvider } from "../providers.js";
 import { schedulePaydayReminder, cancelPaydayReminder, getNotificationPermission } from "../notifications.js";
 import { migrateToSecureItem } from "../secureStore.js";
 import { setActiveCurrencyCode } from "../currency.js";
+import { getPreferredModelForTier, getRawTier, normalizeModelForTier } from "../subscription.js";
 import type { CatalystCashConfig } from "../../types/index.js";
 
 interface ProviderConfig {
   id: string;
   keyStorageKey?: string | null;
-}
-
-interface ModelConfig {
-  id: string;
 }
 
 export type PersonaMode = "coach" | "friend" | "nerd" | null;
@@ -227,7 +224,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     } else if (valueOrFn && typeof valueOrFn === "object" && "type" in valueOrFn) {
       dispatchFinConfig(valueOrFn as FinancialConfigAction);
     } else {
-      dispatchFinConfig({ type: "MERGE", payload: valueOrFn });
+      dispatchFinConfig({ type: "MERGE", payload: valueOrFn ?? {} });
     }
   }, []);
 
@@ -237,7 +234,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     const initSettings = async (): Promise<void> => {
       try {
         const notifPromise: Promise<boolean> = getNotificationPermission()
-          .then((status: NotificationPermissionState) => status === "granted")
+          .then((status) => status === "granted")
           .catch(() => false);
 
         const [
@@ -277,10 +274,18 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
 
         setNotifPermission(notifGranted ? "granted" : "denied");
 
+        const rawTier = await getRawTier();
         const validProvider = getProvider(provId || DEFAULT_PROVIDER_ID) as ProviderConfig;
-        const validModel = getModel(validProvider.id, modId || DEFAULT_MODEL_ID) as ModelConfig;
+        const validModelId = normalizeModelForTier(
+          rawTier.id,
+          modId || getPreferredModelForTier(rawTier.id) || DEFAULT_MODEL_ID,
+          validProvider.id
+        );
         setAiProvider(validProvider.id);
-        setAiModel(validModel.id);
+        setAiModel(validModelId);
+        if (modId !== validModelId) {
+          await db.set("ai-model", validModelId);
+        }
 
         const provKey = validProvider.keyStorageKey
           ? ((await migrateToSecureItem(validProvider.keyStorageKey, legacyKey, () => db.del("api-key"))) as string | null)

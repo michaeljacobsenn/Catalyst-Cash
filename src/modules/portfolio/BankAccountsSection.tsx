@@ -1,25 +1,62 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { Landmark, ChevronDown, Edit3, Check, DollarSign } from "lucide-react";
 import { Card, Badge } from "../ui.js";
 import { Mono } from "../components.js";
 import { T, ISSUER_COLORS } from "../constants.js";
 import { usePortfolio } from "../contexts/PortfolioContext.js";
 import { fmt } from "../utils.js";
+import { getConnections } from "../plaid.js";
+import type { BankAccount } from "../../types/index.js";
+import type { PortfolioCollapsedSections } from "./types.js";
 
-export default function BankAccountsSection({ collapsedSections: propCollapsed, setCollapsedSections: propSetCollapsed }) {
+interface EditBankForm {
+    bank: string;
+    accountType: string;
+    name: string;
+    apy: string;
+    notes: string;
+}
+
+interface BankAccountsSectionProps {
+    collapsedSections?: PortfolioCollapsedSections;
+    setCollapsedSections?: Dispatch<SetStateAction<PortfolioCollapsedSections>>;
+}
+
+export default function BankAccountsSection({ collapsedSections: propCollapsed, setCollapsedSections: propSetCollapsed }: BankAccountsSectionProps) {
     const { bankAccounts, setBankAccounts } = usePortfolio();
 
-    const [internalCollapsed, internalSetCollapsed] = useState({});
+    const [internalCollapsed, internalSetCollapsed] = useState<PortfolioCollapsedSections>({});
     const collapsedSections = propCollapsed || internalCollapsed;
     const setCollapsedSections = propSetCollapsed || internalSetCollapsed;
-    const [editingBank, setEditingBank] = useState(null);
-    const [editBankForm, setEditBankForm] = useState({});
+    const [editingBank, setEditingBank] = useState<string | null>(null);
+    const [editBankForm, setEditBankForm] = useState<EditBankForm>({ bank: "", accountType: "", name: "", apy: "", notes: "" });
+    const [reconnectConnectionIds, setReconnectConnectionIds] = useState<Set<string>>(new Set());
 
-    const removeBankAccount = id => {
+    useEffect(() => {
+        let active = true;
+        getConnections()
+            .then(connections => {
+                if (!active) return;
+                const nextReconnectIds = new Set(
+                    (connections || [])
+                        .filter(connection => connection?._needsReconnect)
+                        .map(connection => connection.id)
+                        .filter(Boolean)
+                );
+                setReconnectConnectionIds(new Set<string>(Array.from(nextReconnectIds) as string[]));
+            })
+            .catch(() => { });
+        return () => {
+            active = false;
+        };
+    }, [bankAccounts]);
+
+    const removeBankAccount = (id: string) => {
         setBankAccounts(bankAccounts.filter(a => a.id !== id));
     };
 
-    const startEditBank = acct => {
+    const startEditBank = (acct: BankAccount) => {
         setEditingBank(acct.id);
         setEditBankForm({
             bank: acct.bank,
@@ -30,7 +67,7 @@ export default function BankAccountsSection({ collapsedSections: propCollapsed, 
         });
     };
 
-    const saveEditBank = id => {
+    const saveEditBank = (id: string) => {
         setBankAccounts(
             bankAccounts.map(a =>
                 a.id === id
@@ -48,8 +85,8 @@ export default function BankAccountsSection({ collapsedSections: propCollapsed, 
         setEditingBank(null);
     };
 
-    const ic = inst =>
-        ISSUER_COLORS[inst] || {
+    const ic = (inst: string) =>
+        ISSUER_COLORS[inst as keyof typeof ISSUER_COLORS] || {
             bg: "rgba(110,118,129,0.08)",
             border: "rgba(110,118,129,0.15)",
             text: T.text.secondary,
@@ -76,8 +113,10 @@ export default function BankAccountsSection({ collapsedSections: propCollapsed, 
 
     if (bankAccounts.length === 0) return null;
 
-    const renderAccountRow = (acct, i, total, sectionColor) => {
+    const renderAccountRow = (acct: BankAccount, i: number, total: number, sectionColor: string) => {
         const colors = ic(acct.bank);
+        const liveBalance = acct._plaidBalance != null ? acct._plaidBalance : Number(acct.balance || 0);
+        const needsReconnect = !!(acct._plaidConnectionId && reconnectConnectionIds.has(acct._plaidConnectionId));
         return (
             <div
                 key={acct.id}
@@ -131,14 +170,18 @@ export default function BankAccountsSection({ collapsedSections: propCollapsed, 
                                     return name;
                                 })()}</span>
                             </div>
-                            {(acct.apy > 0 || acct._plaidAccountId || (acct.notes && !acct._plaidAccountId)) && (
+                            {((acct.apy ?? 0) > 0 || acct._plaidAccountId || (acct.notes && !acct._plaidAccountId)) && (
                                 <Mono size={10} color={T.text.dim} style={{ display: "block" }}>
-                                    {[acct.apy > 0 && `${acct.apy}% APY`, acct._plaidAccountId && `⚡ Plaid`].filter(Boolean).join("  ·  ") || (acct.notes && !acct._plaidAccountId ? acct.notes : "")}
+                                    {[
+                                        needsReconnect && "Reconnect required",
+                                        (acct.apy ?? 0) > 0 && `${acct.apy}% APY`,
+                                        acct._plaidAccountId && `⚡ Plaid`,
+                                    ].filter(Boolean).join("  ·  ") || (acct.notes && !acct._plaidAccountId ? acct.notes : "")}
                                 </Mono>
                             )}
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                            <Mono size={13} weight={800} color={acct._plaidBalance != null ? sectionColor : T.text.muted}>{fmt(acct._plaidBalance != null ? acct._plaidBalance : (parseFloat(acct.balance) || 0))}</Mono>
+                            <Mono size={13} weight={800} color={acct._plaidBalance != null ? sectionColor : T.text.muted}>{fmt(liveBalance)}</Mono>
                             <button onClick={() => startEditBank(acct)} style={{ width: 28, height: 28, borderRadius: T.radius.md, border: "none", background: "transparent", color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} className="hover-btn"><Edit3 size={11} /></button>
                         </div>
                     </div>

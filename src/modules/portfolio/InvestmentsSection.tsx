@@ -9,15 +9,11 @@ import { fetchMarketPrices } from "../marketData.js";
 import { usePortfolio } from "../contexts/PortfolioContext.js";
 import { useSettings } from "../contexts/SettingsContext.js";
 import type { CatalystCashConfig, InvestmentBucket, InvestmentHolding, InvestmentHoldings, MarketPriceMap, PlaidInvestmentAccount } from "../../types/index.js";
-
-interface CollapsedSections {
-    investments: boolean;
-    [key: string]: boolean;
-}
+import type { PortfolioCollapsedSections } from "./types.js";
 
 interface InvestmentsSectionProps {
-    collapsedSections: CollapsedSections;
-    setCollapsedSections: Dispatch<SetStateAction<CollapsedSections>>;
+    collapsedSections: PortfolioCollapsedSections;
+    setCollapsedSections: Dispatch<SetStateAction<PortfolioCollapsedSections>>;
 }
 
 interface InvestmentSectionMeta {
@@ -368,7 +364,7 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                                                     <Mono size={11} weight={700} color={color}>
                                                                                         {fmt(price.price * (Number(h.shares) || 0))}
                                                                                     </Mono>
-                                                                                    {price.changePct != null && (
+                                                                            {typeof price.changePct === "number" && (
                                                                                         <span
                                                                                             style={{
                                                                                                 fontSize: 8,

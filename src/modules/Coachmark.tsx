@@ -1,11 +1,19 @@
 import { memo } from "react";
+import type { CSSProperties } from "react";
 import { T } from "./constants.js";
 
 /**
  * Coachmark tooltip component — appears as a floating callout
  * with an arrow pointing to the target element.
  */
-const Coachmark = memo(function Coachmark({ text, onDismiss, position = "below", style }) {
+interface CoachmarkProps {
+  text: string;
+  onDismiss: () => void;
+  position?: "above" | "below";
+  style?: CSSProperties;
+}
+
+const Coachmark = memo(function Coachmark({ text, onDismiss, position = "below", style }: CoachmarkProps) {
   const isAbove = position === "above";
 
   return (

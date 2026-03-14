@@ -81,7 +81,7 @@ export default function FIReSimulator({ currentNetWorth = 0, annualIncome = 0, a
     const [withdrawalRate, setWithdrawalRate] = useState(4.0); // 4% rule
     const [marketReturn, setMarketReturn] = useState(7.0); // 7% real return
     const [extraSavings, setExtraSavings] = useState(0);
-    const [hoveredYear, setHoveredYear] = useState(null);
+    const [hoveredYear, setHoveredYear] = useState<number | null>(null);
     const [showSandbox, setShowSandbox] = useState(false);
 
     // Use props as base, but allow tweaking
