@@ -7,11 +7,11 @@
 //
 // ─── AI MODEL COST MATRIX (per audit, ~3K tokens in / ~2K out) ──
 //   gemini-2.5-flash  $0.30/$2.50/M  ≈ $0.006/audit  → Free (Catalyst AI)
-//   gemini-2.5-pro    $1.25/$10.0/M  ≈ $0.024/audit  → Pro  (Catalyst AI Pro)
-//   o4-mini           $1.10/$4.40/M  ≈ $0.012/audit  → Pro  (Catalyst AI Reasoning)
+//   gpt-4.1           $2.00/$8.00/M  ≈ $0.022/audit  → Pro  (Catalyst AI Precision)
+//   o3                premium reasoning spend         → Pro  (Catalyst AI Reasoning)
 //
 //   Free: 2 audits/wk on Flash  → ~$0.05/user/month
-//   Pro worst case: 31 audits/mo on o3-mini → ~$0.74/user/month
+//   Pro worst case: 20 audits/mo on premium models → bounded premium compute
 //   Pro @ $9.99/mo (after Apple 30%): $6.99 net → ~$5.79+ profit/user
 // ═══════════════════════════════════════════════════════════════
 
@@ -19,7 +19,14 @@ import { db } from "./utils.js";
 import { Capacitor } from "@capacitor/core";
 import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
 import { APP_VERSION } from "./constants.js";
-import { AI_PROVIDERS, isModelSelectable } from "./providers.js";
+import {
+  AI_PROVIDERS,
+  DEFAULT_FREE_MODEL_ID,
+  DEFAULT_PRO_MODEL_ID,
+  getDefaultModelIdForTier,
+  getModel,
+  isModelSelectable,
+} from "./providers.js";
 
 // ── Gating Mode ─────────────────────────────────────────────
 // Controls whether subscription limits are enforced.
@@ -30,9 +37,9 @@ import { AI_PROVIDERS, isModelSelectable } from "./providers.js";
 // SECURITY: This hardcoded default can be overridden by the remote
 // config from fetchGatingConfig(). When we go live, the backend
 // returns gatingMode:"live" and ALL app versions enforce it —
-// even old builds that have "soft" hardcoded here.
+// even old builds that have "off" hardcoded here.
 // ────────────────────────────────────────────────────────────
-const GATING_MODE_DEFAULT = "soft";
+const GATING_MODE_DEFAULT = "off";
 let _effectiveGatingMode = GATING_MODE_DEFAULT;
 
 /**
@@ -83,8 +90,8 @@ export function getServerRateLimit() {
 /**
  * Sync gating mode from remote config.
  * Call on app boot. If the backend says "live" or a newer minVersion,
- * the client respects it — even if the hardcoded default is "soft".
- * This is the anti-downgrade mechanism: old app versions with "soft"
+ * the client respects it — even if the hardcoded default is "off".
+ * This is the anti-downgrade mechanism: old app versions with "off"
  * hardcoded will still get overridden to "live" when we flip the switch.
  */
 export async function syncRemoteGatingMode() {
@@ -131,7 +138,7 @@ export async function syncRemoteGatingMode() {
 // ABUSE PREVENTION:
 //   - Device fingerprint (UUID stored in Keychain) persists across
 //     app reinstalls to prevent free-tier resets.
-//   - Pro has a monthly cap (31 ≈ 1/day) to control API cost.
+//   - Pro has a monthly cap (20/month) to control API cost.
 //   - Backend rate-limiting via X-Device-ID header provides server-side
 //     protection even if client storage is tampered with.
 //
@@ -140,7 +147,7 @@ export async function syncRemoteGatingMode() {
 //   AskAI:  Light (~300 tokens in, ~500 out, natural language). Daily cap.
 //
 //   Free AskAI: 10/day — enough to experience the value proposition.
-//   Pro AskAI: 50/day — generous but bounded to prevent abuse.
+//   Pro AskAI: 25/day — generous but bounded to prevent abuse.
 //   These limits match the Cloudflare Worker enforcement exactly.
 //
 // ── BILLING CYCLE ANCHORING ─────────────────────────────────────
@@ -149,8 +156,8 @@ export async function syncRemoteGatingMode() {
 //   For months shorter than the anchor day (e.g. anchor=31, Feb),
 //   the last day of the month is used. All dates are UTC.
 // ──────────────────────────────────────────────────────────────
-export const PRO_MONTHLY_AUDIT_CAP = 31; // 1/day, $0.74/mo max API cost at $0.024/audit
-export const PRO_DAILY_CHAT_CAP = 50; // ~3/hr, prevents abuse while feeling generous
+export const PRO_MONTHLY_AUDIT_CAP = 20; // Keeps premium model usage bounded
+export const PRO_DAILY_CHAT_CAP = 25; // Generous daily ceiling without abuse risk
 
 export const TIERS = {
   free: {
@@ -160,7 +167,7 @@ export const TIERS = {
     chatMessagesPerDay: 10, // Enough to experience value (matches worker enforcement)
     marketRefreshMs: 60 * 60 * 1000, // 60 minutes
     historyLimit: 12, // ~3 months of trends (quarterly)
-    models: ["gpt-4o-mini"], // Catalyst AI — fast, free
+    models: [DEFAULT_FREE_MODEL_ID], // Standard AI
     features: [
       "basic_audit", // Core AI audit
       "health_score", // Financial health scoring
@@ -183,14 +190,18 @@ export const TIERS = {
   pro: {
     id: "pro",
     name: "Pro",
-    auditsPerWeek: Infinity, // No weekly cap (monthly cap of 31 applies)
-    chatMessagesPerDay: Infinity, // No daily cap enforced at tier level (PRO_DAILY_CHAT_CAP = 50 applies)
+    auditsPerWeek: Infinity, // No weekly cap (monthly cap applies)
+    chatMessagesPerDay: Infinity, // No daily cap enforced at tier level (PRO_DAILY_CHAT_CAP applies)
     marketRefreshMs: 5 * 60 * 1000, // 5 minutes
     historyLimit: Infinity, // All history
     models: [
-      "gpt-4o-mini", // Catalyst AI (free)
-      "gpt-4o", // Catalyst AI Chat
-      "o3-mini", // Catalyst AI Reasoning
+      DEFAULT_PRO_MODEL_ID, // Fast AI default for Pro
+      DEFAULT_FREE_MODEL_ID, // Standard AI fallback
+      "gpt-4.1", // Catalyst AI Precision
+      "o3", // Catalyst AI Reasoning
+      "claude-sonnet-4-6", // Catalyst AI Sonnet
+      "claude-opus-4-6", // Catalyst AI Opus
+      "gemini-2.5-pro", // Catalyst AI Vision
     ],
     features: [
       // ── Everything in Free ──
@@ -210,15 +221,15 @@ export const TIERS = {
       "basic_alerts",
 
       // ── Pro Exclusives ──
-      "31_audits_per_month", // 31/mo monthly cap (1/day)
-      "premium_models", // Access to o3-mini / GPT-4o
+      "monthly_audit_cap", // 20/mo monthly cap
+      "premium_models", // Access to GPT-4.1 / o3 / Claude / Gemini Pro
       "unlimited_history", // Full audit archive
       "share_card_clean", // Share without branding
       "export_csv", // CSV / XLSX export
       "export_pdf", // PDF report export
       "advanced_alerts", // Score change drivers, trend warnings
       "priority_refresh", // 15-min market data
-      "daily_50_chat", // 50/day AskAI messages (vs 10/day free)
+      "daily_pro_chat_cap", // 25/day AskAI messages (vs 10/day free)
       "card_wizard", // Card Wizard feature
       "bill_negotiation", // AI Bill Negotiation scripts
 
@@ -241,27 +252,41 @@ export const TIERS = {
 // ── IAP Product IDs (Apple App Store) ─────────────────────────
 export const IAP_PRODUCTS = {
   monthly: "com.catalystcash.pro.monthly.v2", // $9.99/mo
-  yearly: "com.catalystcash.pro.yearly.v2", // $89.99/yr ($7.50/mo)
+  yearly: "com.catalystcash.pro.yearly.v2", // $69.99/yr ($5.83/mo)
 };
 
 // ── IAP Display Pricing (for UI — no StoreKit dependency) ─────
 //
 // PRICING RATIONALE (Frozen Account Pivot):
 //   $9.99/mo → "Under $10" premium at exact psychological threshold
-//   $89.99/yr → $7.50/mo effective, 25% savings anchors yearly
+//   $69.99/yr → $5.83/mo effective with 4 months free positioning
 //   Apple takes 30% → $6.99 net/mo (monthly), $5.25 net/mo (yearly)
 //   Free COGS is strictly bounded as 1-time snapshot. Pro max COGS is ~$4.80/mo.
 // ──────────────────────────────────────────────────────────────
 export const IAP_PRICING = {
   monthly: { price: "$9.99", period: "month", savings: false },
-  yearly: { price: "$89.99", period: "year", savings: "SAVE 25%", perMonth: "$7.50", original: "$119.88", trial: "7-day free trial" },
+  yearly: { price: "$69.99", period: "year", savings: "4 months free", perMonth: "$5.83", original: "$119.88", trial: "7-day free trial" },
 };
 
 // ── Institution Limits (Plaid bank connections per tier) ───────
 export const INSTITUTION_LIMITS = {
   free: 2, // Checking + 1 credit card — enough to demo value
-  pro: 10, // Power users with multiple banks, credit cards, and investment accounts
+  pro: 5, // Five connected institutions with live sync
 };
+
+export function getPreferredModelForTier(tierId = "free") {
+  return getDefaultModelIdForTier(tierId);
+}
+
+export function normalizeModelForTier(tierId = "free", modelId, providerId = "backend") {
+  if (tierId !== "pro") return DEFAULT_FREE_MODEL_ID;
+  const candidateId = modelId || DEFAULT_PRO_MODEL_ID;
+  const resolved = getModel(providerId, candidateId);
+  if (!resolved || !isModelSelectable(resolved) || !TIERS.pro.models.includes(resolved.id)) {
+    return DEFAULT_PRO_MODEL_ID;
+  }
+  return resolved.id;
+}
 
 // ── State Management ──────────────────────────────────────────
 const STATE_KEY = "subscription-state";

@@ -239,6 +239,9 @@ export default function LockScreen() {
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="App lock screen"
       style={{
         position: "fixed",
         inset: 0,

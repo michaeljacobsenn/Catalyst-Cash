@@ -27,6 +27,18 @@ import "./DashboardTab.css";
 
 const LazyProPaywall = lazy(() => import("./ProPaywall.js"));
 
+interface ToastApi {
+  success?: (message: string) => void;
+  error?: (message: string) => void;
+  info?: (message: string) => void;
+}
+
+interface AuditTabProps {
+  proEnabled?: boolean;
+  toast?: ToastApi;
+  onDemoAudit?: () => void;
+}
+
 // ── Helpers ──
 const relativeTime = d => {
   if (!d) return "";
@@ -139,7 +151,7 @@ const TrendSparkline = ({ history }) => {
 // ═══════════════════════════════════════════════════════════════
 // AuditTab
 // ═══════════════════════════════════════════════════════════════
-export default memo(function AuditTab({ proEnabled = false, toast }) {
+export default memo(function AuditTab({ proEnabled = false, toast, onDemoAudit }: AuditTabProps) {
   const { current, history: audits, deleteHistoryItem: onDelete, handleManualImport, quota } = useAudit();
   const { navTo, setResultsBackTarget } = useNavigation();
   const [showPaywall, setShowPaywall] = useState(false);
@@ -166,6 +178,7 @@ export default memo(function AuditTab({ proEnabled = false, toast }) {
   };
 
   const p = current?.parsed;
+  const demoActive = !!current?.isTest;
   const score = p?.healthScore?.score;
   const grade = getGradeLetter(score);
   const statusColor = getAuditColor(current || {});
@@ -187,13 +200,48 @@ export default memo(function AuditTab({ proEnabled = false, toast }) {
             compact
             onUpgrade={() => setShowPaywall(true)}
             label="Upgrade to Pro"
-            sublabel="Unlimited audits · Full history · Card Wizard"
+            sublabel="20 audits/month · Full archive · Smart card matches"
           />
         )}
         {showPaywall && (
           <Suspense fallback={null}>
             <LazyProPaywall onClose={() => setShowPaywall(false)} />
           </Suspense>
+        )}
+
+        {demoActive && (
+          <Card
+            style={{
+              marginBottom: 12,
+              padding: "12px 14px",
+              borderLeft: `3px solid ${T.status.amber}`,
+              background: `${T.status.amber}10`,
+              borderColor: `${T.status.amber}35`,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+              <div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 800,
+                    color: T.status.amber,
+                    fontFamily: T.font.mono,
+                    letterSpacing: "0.06em",
+                    marginBottom: 4,
+                  }}
+                >
+                  DEMO MODE ACTIVE
+                </div>
+                <p style={{ margin: 0, fontSize: 11, color: T.text.secondary, lineHeight: 1.5 }}>
+                  You are viewing sample finances. Reset demo data from Dashboard or Settings to return to your real numbers.
+                </p>
+              </div>
+              <Badge variant="outline" style={{ color: T.status.amber, borderColor: `${T.status.amber}40`, flexShrink: 0 }}>
+                Sample data
+              </Badge>
+            </div>
+          </Card>
         )}
 
         {/* ═══ LATEST AUDIT CARD ═══ */}
@@ -330,6 +378,32 @@ export default memo(function AuditTab({ proEnabled = false, toast }) {
         {remaining != null && limit != null && (
           <div style={{ textAlign: "center", marginTop: 6, fontSize: 10, fontWeight: 600, color: T.text.dim, fontFamily: T.font.mono }}>
             {remaining} of {limit} weekly audits remaining
+          </div>
+        )}
+        {typeof onDemoAudit === "function" && (
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 8 }}>
+            <button
+              onClick={() => {
+                haptic.light();
+                onDemoAudit();
+              }}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 999,
+                border: `1px solid ${T.border.default}`,
+                background: "transparent",
+                color: T.text.secondary,
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <Zap size={12} strokeWidth={2.2} />
+              {demoActive ? "Reload Demo Data" : "Load Demo Data"}
+            </button>
           </div>
         )}
 

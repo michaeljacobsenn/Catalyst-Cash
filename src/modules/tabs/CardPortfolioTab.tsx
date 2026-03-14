@@ -76,8 +76,17 @@ import { useSettings } from "../contexts/SettingsContext.js";
 import { useAudit } from "../contexts/AuditContext.js";
 import { uploadToICloud } from "../cloudSync.js";
 import useDashboardData from "../dashboard/useDashboardData.js";
+import type { PortfolioCollapsedSections } from "../portfolio/types.js";
 
-export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled = false }) {
+type AddSheetStep = "goal" | "asset" | "debt" | null;
+type PlaidConnectResult = "success" | "error" | null;
+
+interface CardPortfolioTabProps {
+  onViewTransactions?: (() => void) | null;
+  proEnabled?: boolean;
+}
+
+export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled = false }: CardPortfolioTabProps) {
   const { current } = useAudit();
   const portfolioContext = usePortfolio();
   const isTest = current?.isTest;
@@ -105,13 +114,13 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
     };
   }, [isTest, portfolioContext, cards, bankAccounts, renewals]);
 
-  const [activeAddForm, setActiveAddForm] = useState(null); // kept for legacy compat
+  const [activeAddForm, setActiveAddForm] = useState<AddSheetStep>(null); // kept for legacy compat
   const [showAddSheet, setShowAddSheet] = useState(false);
-  const [addSheetStep, setAddSheetStep] = useState(null);
+  const [addSheetStep, setAddSheetStep] = useState<AddSheetStep>(null);
   const [plaidLoading, setPlaidLoading] = useState(false);
-  const [plaidResult, setPlaidResult] = useState(null);
-  const [plaidError, setPlaidError] = useState(null);
-  const openSheet = (step: "goal" | "asset" | "debt" | null = null) => {
+  const [plaidResult, setPlaidResult] = useState<PlaidConnectResult>(null);
+  const [plaidError, setPlaidError] = useState<string | null>(null);
+  const openSheet = (step: AddSheetStep = null) => {
     setShowAddSheet(true);
     setAddSheetStep(step);
     setPlaidResult(null);
@@ -236,7 +245,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
     autoFetchTransactions: true,
   });
   // Master collapsible sections (all collapsed by default for a clean, compact view)
-  const [collapsedSections, setCollapsedSections] = useState({
+  const [collapsedSections, setCollapsedSections] = useState<PortfolioCollapsedSections>({
     creditCards: true,
     bankAccounts: true,
     savingsAccounts: true,
@@ -244,6 +253,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
     savingsGoals: true,
     otherAssets: true,
     debts: true,
+    transactions: true,
   });
 
   const removeBank = bankId => {

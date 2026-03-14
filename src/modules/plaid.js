@@ -4,9 +4,9 @@
 // Complete scaffolding for Plaid Link bank connection.
 // When activated, this module:
 //   1. Opens Plaid Link to connect the user's bank
-//   2. Exchanges the public token for an access token via our Worker
+//   2. Exchanges the public token for a Worker-side item/token record
 //   3. Fetches balances and auto-maps them to existing cards/accounts
-//   4. Stores the connection state locally (encrypted)
+//   4. Stores non-sensitive connection metadata locally
 //
 // ACTIVATION CHECKLIST (for the developer):
 //   □ Create a Plaid account at https://dashboard.plaid.com
@@ -15,8 +15,9 @@
 //   □ Deploy the Worker Plaid endpoints (see worker-plaid-routes.md)
 //   □ Uncomment the Plaid section in SettingsTab.jsx
 //
-// PRIVACY: Access tokens are stored locally on-device only.
-//          Balances are fetched on-demand and never cached on any server.
+// PRIVACY: Plaid access tokens are stored only in the Cloudflare Worker D1 database.
+//          The client stores non-sensitive metadata only: item ID, institution details,
+//          account masks, linkage state, and last-sync timestamps.
 // ═══════════════════════════════════════════════════════════════
 
 import { db } from "./utils.js";
@@ -33,17 +34,40 @@ const API_BASE = "https://api.catalystcash.app";
 
 /**
  * Get all stored Plaid connections.
- * Each connection: { id, institutionName, institutionId, accessToken, accounts[], lastSync }
+ * Each connection: { id, institutionName, institutionId, accounts[], lastSync }
+ * @returns {Promise<any[]>}
  */
 export async function getConnections() {
-  return (await db.get(PLAID_STORAGE_KEY)) || [];
+  const stored = (await db.get(PLAID_STORAGE_KEY)) || [];
+  if (!Array.isArray(stored) || stored.length === 0) return [];
+
+  const sanitized = stored.map(sanitizeConnectionForStorage);
+  if (stored.some(connection => connection && "accessToken" in connection)) {
+    console.warn("[Plaid] Removed legacy access tokens from local connection storage.");
+    await db.set(PLAID_STORAGE_KEY, sanitized);
+  }
+  return sanitized;
 }
 
 /**
  * Save connections array.
+ * @param {any[]} conns
  */
 async function saveConnections(conns) {
-  await db.set(PLAID_STORAGE_KEY, conns);
+  await db.set(PLAID_STORAGE_KEY, (conns || []).map(sanitizeConnectionForStorage));
+}
+
+/**
+ * Remove any legacy token field before persisting metadata locally.
+ * @param {any} connection
+ * @returns {any}
+ */
+function sanitizeConnectionForStorage(connection = {}) {
+  const { accessToken: _accessToken, ...rest } = connection;
+  return {
+    ...rest,
+    accounts: (connection.accounts || []).map(account => ({ ...account })),
+  };
 }
 
 /**
@@ -53,13 +77,13 @@ export async function removeConnection(connectionId) {
   const conns = await getConnections();
   const conn = conns.find(c => c.id === connectionId);
 
-  // Revoke access token on the server side
-  if (conn?.accessToken) {
+  // Revoke the item on the server side using the worker-stored access token.
+  if (conn?.id) {
     try {
       await fetchWithRetry(`${API_BASE}/plaid/disconnect`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessToken: conn.accessToken }),
+        body: JSON.stringify({ itemId: conn.id }),
       });
     } catch {
       /* best-effort cleanup */
@@ -70,14 +94,13 @@ export async function removeConnection(connectionId) {
 }
 
 /**
- * Purge connections that are missing an access token or ID.
- * These are broken connections created by the snake_case bug in exchangeToken.
+ * Purge connections that are missing an item ID.
+ * Metadata-only rows remain valid after the token-storage migration.
  * Should be called once on app startup.
  */
 export async function purgeBrokenConnections() {
   const conns = await getConnections();
-  // Broken = missing accessToken AND not a restored/sanitized connection awaiting reconnect
-  const broken = conns.filter(c => (!c.accessToken && !c._needsReconnect) || !c.id);
+  const broken = conns.filter(c => !c.id);
   if (broken.length > 0) {
     console.warn(
       `[Plaid] Purging ${broken.length} broken connection(s): ${broken.map(c => c.institutionName).join(", ")}`
@@ -185,7 +208,7 @@ export async function openPlaidLink() {
 }
 
 /**
- * Step 3: Exchange public_token for access_token via our backend.
+ * Step 3: Exchange public_token for a worker-side Plaid item record.
  * The backend calls Plaid's /item/public_token/exchange.
  */
 export async function exchangeToken(publicToken) {
@@ -196,8 +219,7 @@ export async function exchangeToken(publicToken) {
   });
   if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`);
   const data = await res.json();
-  // Plaid returns snake_case (access_token, item_id); map to camelCase
-  return { accessToken: data.access_token, itemId: data.item_id };
+  return { itemId: data.item_id };
 }
 
 /**
@@ -207,13 +229,12 @@ export async function exchangeToken(publicToken) {
 export async function connectBank(onSuccess, onError) {
   try {
     const { publicToken, metadata } = await openPlaidLink();
-    const { accessToken, itemId } = await exchangeToken(publicToken);
+    const { itemId } = await exchangeToken(publicToken);
 
     const connection = {
       id: itemId,
       institutionName: metadata.institution?.name || "Unknown Bank",
       institutionId: metadata.institution?.institution_id || null,
-      accessToken,
       accounts: (metadata.accounts || []).map(a => ({
         plaidAccountId: a.id,
         name: a.name,
@@ -291,8 +312,6 @@ export async function fetchBalances(connectionId) {
   const conns = await getConnections();
   const conn = conns.find(c => c.id === connectionId);
   if (!conn) throw new Error(`Connection ${connectionId} not found`);
-  if (!conn.accessToken)
-    throw new Error(`No access token for ${conn.institutionName} — please disconnect and reconnect via Plaid`);
 
   const res = await fetchWithRetry(`${API_BASE}/api/sync/status`, {
     method: "POST",
@@ -437,9 +456,9 @@ export async function fetchAllBalancesAndLiabilities() {
     if (!seen.has(key)) {
       seen.set(key, conn);
     } else {
-      // Keep the one with an accessToken; if both have one, keep the later entry
+      // Keep the later metadata row when duplicate institutions appear.
       const prev = seen.get(key);
-      if (conn.accessToken && (!prev.accessToken || conns.indexOf(conn) > conns.indexOf(prev))) {
+      if (conns.indexOf(conn) > conns.indexOf(prev)) {
         seen.set(key, conn);
       }
     }
@@ -487,7 +506,6 @@ export async function fetchTransactions(connectionId, days = 30) {
   const conns = await getConnections();
   const conn = conns.find(c => c.id === connectionId);
   if (!conn) throw new Error(`Connection ${connectionId} not found`);
-  if (!conn.accessToken) throw new Error(`No access token for ${conn.institutionName}`);
 
   const res = await fetchWithRetry(`${API_BASE}/api/sync/status`, {
     method: "POST",

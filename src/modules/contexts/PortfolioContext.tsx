@@ -220,22 +220,25 @@ export function PortfolioProvider({ children }: PortfolioProviderProps) {
   const cardAnnualFees = useMemo<Renewal[]>(() => {
     return cards
       .filter((card: Card) => card.annualFee && card.annualFeeDue)
-      .map((card: Card) => ({
-        id: card.id,
-        linkedCardId: card.id,
-        cardName: card.name,
-        name: `${getCardLabel(cards, card)} Annual Fee`,
-        amount: typeof card.annualFee === "number" ? card.annualFee : parseFloat(card.annualFee || "0") || 0,
-        nextDue: card.annualFeeDue,
-        interval: 1,
-        intervalUnit: "years",
-        chargedToId: card.id,
-        chargedTo: getCardLabel(cards, card),
-        category: "af",
-        isCardAF: true,
-        isAnnualFee: true,
-        isWaived: !!card.annualFeeWaived,
-      }));
+      .map((card: Card) => {
+        const nextDue = card.annualFeeDue!;
+        return {
+          id: card.id,
+          linkedCardId: card.id,
+          cardName: card.name,
+          name: `${getCardLabel(cards, card)} Annual Fee`,
+          amount: typeof card.annualFee === "number" ? card.annualFee : parseFloat(card.annualFee || "0") || 0,
+          nextDue,
+          interval: 1,
+          intervalUnit: "years",
+          chargedToId: card.id,
+          chargedTo: getCardLabel(cards, card),
+          category: "af",
+          isCardAF: true,
+          isAnnualFee: true,
+          isWaived: !!card.annualFeeWaived,
+        };
+      });
   }, [cards]);
 
   const value: PortfolioContextValue = {

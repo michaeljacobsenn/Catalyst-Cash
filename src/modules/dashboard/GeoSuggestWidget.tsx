@@ -1,21 +1,32 @@
-import React, { useState, useContext } from "react";
+import React, { useState } from "react";
 import { Navigation, MapPin, RefreshCw, AlertCircle, Sparkles, X } from "lucide-react";
 import { Badge } from "../ui.js";
 import { T } from "../constants.js";
-import { PortfolioContext } from "../contexts/PortfolioContext.js";
+import { usePortfolio } from "../contexts/PortfolioContext.js";
 import { getCardMultiplier } from "../rewardsCatalog.js";
 import { classifyMerchant } from "../api.js";
 import { haptic } from "../haptics.js";
 import { useSettings } from "../contexts/SettingsContext.js";
+import type { Card } from "../../types/index.js";
+
+type GeoSuggestStatus = "idle" | "locating" | "fetching" | "categorizing" | "success" | "error";
+
+interface RewardSuggestion {
+  multiplier: number;
+  currency: string;
+  effectiveYield: number;
+}
+
+type SuggestedCard = Card & RewardSuggestion;
 
 export default function GeoSuggestWidget() {
-  const { cards } = useContext(PortfolioContext);
+  const { cards } = usePortfolio();
   const { financialConfig } = useSettings();
-  const [status, setStatus] = useState("idle"); // idle, locating, fetching, categorizing, success, error
+  const [status, setStatus] = useState<GeoSuggestStatus>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [locationName, setLocationName] = useState("");
   const [category, setCategory] = useState("");
-  const [bestCard, setBestCard] = useState(null);
+  const [bestCard, setBestCard] = useState<SuggestedCard | null>(null);
 
   const activeCreditCards = cards.filter(c => c.type === "credit" || !c.type);
   const customValuations = financialConfig?.customValuations || {};
@@ -53,21 +64,21 @@ export default function GeoSuggestWidget() {
           const resolvedCategory = await classifyMerchant(placeName);
           setCategory(resolvedCategory);
 
-          let best = null;
+          let best: SuggestedCard | null = null;
           let bestYield = -1;
           for (const card of activeCreditCards) {
             const rewardInfo = getCardMultiplier(card.name, resolvedCategory, customValuations);
             if (rewardInfo.effectiveYield > bestYield) {
               bestYield = rewardInfo.effectiveYield;
-              best = { ...card, ...rewardInfo };
+              best = { ...card, ...rewardInfo } as SuggestedCard;
             }
           }
 
           setBestCard(best);
           setStatus("success");
           haptic.success();
-        } catch (err) {
-          setErrorMsg(err.message || "Location failed.");
+        } catch (err: unknown) {
+          setErrorMsg(err instanceof Error ? err.message : "Location failed.");
           setStatus("error");
         }
       },

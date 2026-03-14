@@ -19,8 +19,15 @@ const BACKEND_URL = "https://api.catalystcash.app";
 // in every response. This callback allows subscription.js or UI
 // to sync the authoritative server-side count.
 let _rateLimitCallback = null;
+let _lastAuditLogId = null;
 export function onRateLimitUpdate(cb) {
   _rateLimitCallback = cb;
+}
+
+export function consumeLastAuditLogId() {
+  const logId = _lastAuditLogId;
+  _lastAuditLogId = null;
+  return logId;
 }
 
 function emitRateLimit(res, isChat) {
@@ -73,10 +80,21 @@ async function buildBackendHeaders(deviceId) {
 }
 
 function resolveProvider(model, fallbackProvider) {
-  if (model.includes("gpt") || model.includes("o3") || model.includes("o1") || model.includes("o4")) {
+  const normalizedModel = String(model || "").toLowerCase();
+  const normalizedFallback = String(fallbackProvider || "").toLowerCase();
+
+  if (normalizedModel.includes("claude")) {
+    return "anthropic";
+  }
+  if (
+    normalizedModel.includes("gpt") ||
+    normalizedModel.includes("o3") ||
+    normalizedModel.includes("o1") ||
+    normalizedModel.includes("o4")
+  ) {
     return "openai";
   }
-  return fallbackProvider || "gemini";
+  return normalizedFallback || "gemini";
 }
 
 async function* streamBackend(snapshot, model, sysText, history, deviceId, backendProvider, signal, responseFormat) {
@@ -112,31 +130,36 @@ async function* streamBackend(snapshot, model, sysText, history, deviceId, backe
     throw new Error(e.error || `Backend error: HTTP ${res.status}`);
   }
 
+  _lastAuditLogId = res.headers.get("X-Audit-Log-ID") || null;
   emitRateLimit(res, responseFormat === "text");
 
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    const lines = buf.split("\n");
-    buf = lines.pop() || "";
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      const d = line.slice(6).trim();
-      if (!d || d === "[DONE]") continue;
-      try {
-        const parsed = JSON.parse(d);
-        const text = extractSSEText(parsed);
-        if (text) yield text;
-      } catch {
-        // Don't log chunk content — may contain partial financial data
-        log.warn("api", "Backend SSE parse error — skipping malformed chunk");
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop() || "";
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const d = line.slice(6).trim();
+        if (!d || d === "[DONE]") continue;
+        try {
+          const parsed = JSON.parse(d);
+          const text = extractSSEText(parsed);
+          if (text) yield text;
+        } catch {
+          // Don't log chunk content — may contain partial financial data
+          log.warn("api", "Backend SSE parse error — skipping malformed chunk");
+        }
       }
     }
+  } finally {
+    await reader.cancel().catch(() => {});
   }
 }
 
@@ -170,9 +193,29 @@ async function callBackend(snapshot, model, sysText, history, deviceId, backendP
     throw new Error(e.error || `Backend error: HTTP ${res.status}`);
   }
 
+  _lastAuditLogId = res.headers.get("X-Audit-Log-ID") || null;
   emitRateLimit(res, responseFormat === "text");
   const data = await res.json();
   return data.result || "";
+}
+
+export async function reportAuditLogOutcome(auditLogId, parseSucceeded, hitDegradedFallback, metadata = {}) {
+  if (!auditLogId) return;
+
+  await fetchWithRetry(`${BACKEND_URL}/api/audit-log/outcome`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      auditLogId,
+      parseSucceeded: Boolean(parseSucceeded),
+      hitDegradedFallback: Boolean(hitDegradedFallback),
+      driftWarning: Boolean(metadata?.driftWarning),
+      driftDetails: Array.isArray(metadata?.driftDetails) ? metadata.driftDetails : [],
+      confidence: typeof metadata?.confidence === "string" ? metadata.confidence : "medium",
+    }),
+  }).catch(() => {});
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -212,8 +255,8 @@ export async function callAudit(
   return callBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), responseFormat);
 }
 
-/** 
- * Rapidly classify a merchant into a rewards category using gpt-4o-mini. 
+/**
+ * Rapidly classify a merchant into a rewards category using gemini-2.5-flash.
  * This uses the standard /audit backend but passes a targeted categorization prompt.
  */
 export async function classifyMerchant(merchantName) {
@@ -224,14 +267,14 @@ export async function classifyMerchant(merchantName) {
     const deviceId = await getOrCreateDeviceId();
     const sysText = getLocationCategorizationPrompt();
     
-    // We intentionally force gpt-4o-mini to keep costs near-zero for rapid classification.
+    // We intentionally force Gemini Flash to keep costs near-zero for rapid classification.
     const rawJSON = await callBackend(
       merchantName, // "snapshot" becomes the user query
-      "gpt-4o-mini",
+      "gemini-2.5-flash",
       sysText,
       [], // no history needed
       deviceId,
-      "openai",
+      "gemini",
       "json"
     );
     
@@ -263,7 +306,7 @@ export async function classifyMerchant(merchantName) {
 }
 
 /**
- * Batch classify multiple unknown merchant strings at once using gpt-4o-mini.
+ * Batch classify multiple unknown merchant strings at once using gemini-2.5-flash.
  * @param {Array<string>} merchantNames - Array of raw merchant string descriptions.
  * @returns {Record<string, string>} Mapping of merchantName -> Category
  */
@@ -276,14 +319,14 @@ export async function batchCategorizeTransactions(merchantNames) {
     const deviceId = await getOrCreateDeviceId();
     const sysText = getBatchCategorizationPrompt();
     
-    // We intentionally force gpt-4o-mini to keep costs near-zero for rapid classification.
+    // We intentionally force Gemini Flash to keep costs near-zero for rapid classification.
     const rawJSON = await callBackend(
       JSON.stringify(merchantNames), // User query is the array of strings
-      "gpt-4o-mini",
+      "gemini-2.5-flash",
       sysText,
       [], // no history needed
       deviceId,
-      "openai",
+      "gemini",
       "json"
     );
     
@@ -336,7 +379,7 @@ export async function fetchGatingConfig() {
     if (!res.ok) return _cachedConfig;
     const data = await res.json();
     _cachedConfig = {
-      gatingMode: data.gatingMode || "soft",
+      gatingMode: data.gatingMode || "off",
       minVersion: data.minVersion || "1.0.0",
     };
     if (data.rotatingCategories) {

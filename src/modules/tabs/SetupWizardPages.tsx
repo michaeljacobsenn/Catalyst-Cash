@@ -629,6 +629,9 @@ export function PageWelcome({ onNext }: { onNext: () => void }) {
         <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
           <div
             onClick={() => setAccepted(!accepted)}
+            role="checkbox"
+            aria-checked={accepted}
+            aria-label="Accept legal disclaimer"
             style={{
               width: 22,
               height: 22,
@@ -669,13 +672,14 @@ interface PageImportProps {
   onNext: () => void;
   toast?: ToastApi;
   onComplete?: (() => void) | null;
+  onImported?: (() => Promise<void> | void) | null;
   appleLinkedId?: string | null;
   setAppleLinkedId?: ((value: string | null) => void) | undefined;
   security: SetupWizardSecurityState;
   updateSecurity: SetupWizardUpdate<SetupWizardSecurityState>;
 }
 
-export function PageImport({ onNext, toast, onComplete, appleLinkedId, setAppleLinkedId, security, updateSecurity }: PageImportProps) {
+export function PageImport({ onNext, toast, onComplete, onImported, appleLinkedId, setAppleLinkedId, security, updateSecurity }: PageImportProps) {
   const [importing, setImporting] = useState<boolean>(false);
   const [passphrase, setPassphrase] = useState<string>("");
   const [needsPass, setNeedsPass] = useState<boolean>(false);
@@ -709,6 +713,7 @@ export function PageImport({ onNext, toast, onComplete, appleLinkedId, setAppleL
       const existing = ((await db.get("financial-config")) || {}) as Record<string, unknown>;
       await db.set("financial-config", { ...existing, ...config, _fromSetupWizard: true });
       toast?.success?.(`✅ Imported ${Object.keys(config).length} fields from spreadsheet backup`);
+      await onImported?.();
       setImported(true);
       return true;
     }
@@ -773,7 +778,10 @@ export function PageImport({ onNext, toast, onComplete, appleLinkedId, setAppleL
         setImporting(false);
         return;
       }
-      await applyBackup(parsed);
+      const success = await applyBackup(parsed);
+      if (success) {
+        await onImported?.();
+      }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Import failed";
       toast?.error?.(message);
@@ -786,7 +794,10 @@ export function PageImport({ onNext, toast, onComplete, appleLinkedId, setAppleL
     setImporting(true);
     try {
       const plain = await decrypt(pendingParsed, passphrase);
-      await applyBackup(JSON.parse(plain));
+      const success = await applyBackup(JSON.parse(plain));
+      if (success) {
+        await onImported?.();
+      }
       setNeedsPass(false);
       setPendingParsed(null);
       setPassphrase("");
@@ -901,6 +912,7 @@ export function PageImport({ onNext, toast, onComplete, appleLinkedId, setAppleL
         const existing = ((await db.get("financial-config")) || {}) as Record<string, unknown>;
         await db.set("financial-config", { ...existing, ...config, _fromSetupWizard: true });
         toast?.success?.(`✅ Imported ${Object.keys(config).length} fields — existing values overwritten`);
+        await onImported?.();
         setImported(true);
       } else {
         toast?.error?.("No filled fields found — enter values in the 'Your Value' column");
@@ -975,7 +987,8 @@ export function PageImport({ onNext, toast, onComplete, appleLinkedId, setAppleL
         accept="*/*"
         style={{ display: "none" }}
         onChange={e => {
-          if (e.target.files[0]) handleBackupFile(e.target.files[0]);
+          const file = e.target.files?.[0];
+          if (file) handleBackupFile(file);
           e.target.value = "";
         }}
       />
@@ -985,7 +998,8 @@ export function PageImport({ onNext, toast, onComplete, appleLinkedId, setAppleL
         accept="*/*"
         style={{ display: "none" }}
         onChange={e => {
-          if (e.target.files[0]) handleSpreadsheet(e.target.files[0]);
+          const file = e.target.files?.[0];
+          if (file) handleSpreadsheet(file);
           e.target.value = "";
         }}
       />
@@ -1090,12 +1104,12 @@ export function PageImport({ onNext, toast, onComplete, appleLinkedId, setAppleL
                   // Explicitly check for iCloud backup immediately after linking
                   const backup = await downloadFromICloud(null);
                   if (backup?.data && typeof backup.data === "object") {
-                    await applyBackup(backup);
+                    const success = await applyBackup(backup);
 
                     // Handle Plaid connections from older backups that don't have
                     // the newer `plaid-connections-sanitized` key. For new backups,
                     // `applyBackup()` already handled this via the sanitized key.
-                    if (!backup.data["plaid-connections-sanitized"]) {
+                    if (success && !backup.data["plaid-connections-sanitized"]) {
                       const plaidConnections = backup.data["plaid-connections"];
                       const hadPlaid = Array.isArray(plaidConnections) && plaidConnections.length > 0;
 
@@ -1114,8 +1128,9 @@ export function PageImport({ onNext, toast, onComplete, appleLinkedId, setAppleL
                         }, 2000);
                       }
                     }
-
-                    setTimeout(() => window.location.reload(), 2000);
+                    if (success) {
+                      await onImported?.();
+                    }
                   }
                 }
               } catch (error: unknown) {
@@ -1422,7 +1437,7 @@ export function PageProfile({ data, onChange, onNext, onBack }: PageProfileProps
                 pattern="[0-9]*"
                 value={data.monthlyRent || ""}
                 onChange={v => onChange("monthlyRent", v)}
-                placeholder="e.g. 1800"
+                placeholder="e.g. 1500"
               />
             </WizField>
           )}
@@ -1467,7 +1482,7 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }: PagePassSh
             letterSpacing: "-0.01em",
           }}
         >
-          Phase 1: Your Income Story
+          Your Income Story
         </h3>
         <p style={{ fontSize: 13, color: T.text.secondary, margin: 0, lineHeight: 1.5 }}>
           Let's start with the fun part—when you get paid! This framing helps Catalyst build your customized weekly
@@ -1656,7 +1671,7 @@ export function PagePass2({ data, onChange, onNext, onBack, onSkip }: PagePassSh
             letterSpacing: "-0.01em",
           }}
         >
-          Phase 2: Wealth Targets
+          Your Wealth Targets
         </h3>
         <p style={{ fontSize: 13, color: T.text.secondary, margin: 0, lineHeight: 1.5 }}>
           Let's set up some guardrails. This helps the AI know when to save extra cash versus when it's safe to invest
@@ -1899,7 +1914,7 @@ export function PagePass3({
                 letterSpacing: "-0.01em",
               }}
             >
-              Phase 3: Connect Your Accounts
+              Connect Your Accounts
             </h3>
             <p style={{ fontSize: 13, color: T.text.secondary, margin: 0, lineHeight: 1.5 }}>
               Let's link the plumbing. We need secure access to your live data to provide real-time optimization and
@@ -2104,7 +2119,7 @@ export function PagePass3({
       <div style={{ margin: "24px 0 12px", borderTop: `1px solid ${T.border.subtle}`, paddingTop: 20 }}>
         <h3 style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, margin: "0 0 4px 0" }}>AI Intelligence</h3>
         <p style={{ fontSize: 11, color: T.text.muted, margin: "0 0 16px 0" }}>
-          Select the brain that powers your audits.
+          Choose how your audits are powered.
         </p>
       </div>
 
@@ -2139,89 +2154,107 @@ export function PagePass3({
           </p>
         </div>
       </WizField>
-      <WizField label="Model" hint="Upgrade to Pro to unlock premium AI models.">
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {provider.models.map(m => {
-            const active = ai.aiModel === m.id;
-            const isProModel = m.tier === "pro";
-            const locked = (isProModel && !isPro) || m.disabled;
-            return (
-              <button
-                key={m.id}
-                onClick={() => {
-                  if (!locked) {
-                    updateAi("aiProvider", "backend");
-                    updateAi("aiModel", m.id);
-                  }
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "12px 14px",
-                  borderRadius: T.radius.md,
-                  cursor: locked ? "default" : "pointer",
-                  opacity: m.disabled ? 0.4 : (isProModel && !isPro) ? 0.5 : 1,
-                  background: active ? T.accent.primaryDim : T.bg.elevated,
-                  border: `1.5px solid ${active ? T.accent.primary : T.border.default}`,
-                  textAlign: "left",
-                }}
-              >
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: T.text.primary }}>{m.name}</span>
-                    {m.comingSoon ? (
-                      <span
-                        style={{
-                          fontSize: 8,
-                          fontWeight: 800,
-                          color: T.text.muted,
-                          background: `${T.text.muted}15`,
-                          border: `1px solid ${T.text.muted}30`,
-                          padding: "1px 6px",
-                          borderRadius: 99,
-                        }}
-                      >
-                        SOON
-                      </span>
-                    ) : isProModel ? (
-                      <span
-                        style={{
-                          fontSize: 8,
-                          fontWeight: 800,
-                          color: "#FFD700",
-                          background: "linear-gradient(135deg, #FFD70020, #FFA50020)",
-                          border: "1px solid #FFD70030",
-                          padding: "1px 6px",
-                          borderRadius: 99,
-                        }}
-                      >
-                        PRO
-                      </span>
-                    ) : (
-                      <span
-                        style={{
-                          fontSize: 8,
-                          fontWeight: 800,
-                          color: T.status.green,
-                          background: `${T.status.green}15`,
-                          border: `1px solid ${T.status.green}30`,
-                          padding: "1px 6px",
-                          borderRadius: 99,
-                        }}
-                      >
-                        FREE
-                      </span>
-                    )}
+      {isPro ? (
+        <WizField label="Model" hint="Fast AI is selected by default. Switch anytime.">
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {provider.models.map(m => {
+              const active = ai.aiModel === m.id;
+              const isProModel = m.tier === "pro";
+              const locked = (isProModel && !isPro) || m.disabled;
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => {
+                    if (!locked) {
+                      updateAi("aiProvider", "backend");
+                      updateAi("aiModel", m.id);
+                    }
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "12px 14px",
+                    borderRadius: T.radius.md,
+                    cursor: locked ? "default" : "pointer",
+                    opacity: m.disabled ? 0.4 : (isProModel && !isPro) ? 0.5 : 1,
+                    background: active ? T.accent.primaryDim : T.bg.elevated,
+                    border: `1.5px solid ${active ? T.accent.primary : T.border.default}`,
+                    textAlign: "left",
+                  }}
+                >
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: T.text.primary }}>{m.name}</span>
+                      {m.comingSoon ? (
+                        <span
+                          style={{
+                            fontSize: 8,
+                            fontWeight: 800,
+                            color: T.text.muted,
+                            background: `${T.text.muted}15`,
+                            border: `1px solid ${T.text.muted}30`,
+                            padding: "1px 6px",
+                            borderRadius: 99,
+                          }}
+                        >
+                          SOON
+                        </span>
+                      ) : isProModel ? (
+                        <span
+                          style={{
+                            fontSize: 8,
+                            fontWeight: 800,
+                            color: "#FFD700",
+                            background: "linear-gradient(135deg, #FFD70020, #FFA50020)",
+                            border: "1px solid #FFD70030",
+                            padding: "1px 6px",
+                            borderRadius: 99,
+                          }}
+                        >
+                          PRO
+                        </span>
+                      ) : (
+                        <span
+                          style={{
+                            fontSize: 8,
+                            fontWeight: 800,
+                            color: T.status.green,
+                            background: `${T.status.green}15`,
+                            border: `1px solid ${T.status.green}30`,
+                            padding: "1px 6px",
+                            borderRadius: 99,
+                          }}
+                        >
+                          FREE
+                        </span>
+                      )}
+                    </div>
+                    <span style={{ fontSize: 11, color: T.text.dim }}>{m.comingSoon ? "Coming soon" : m.note}</span>
                   </div>
-                  <span style={{ fontSize: 11, color: T.text.dim }}>{m.comingSoon ? "Coming soon" : m.note}</span>
-                </div>
-                {active && <div style={{ width: 8, height: 8, borderRadius: "50%", background: T.accent.primary }} />}
-              </button>
-            );
-          })}
-        </div>
-      </WizField>
+                  {active && <div style={{ width: 8, height: 8, borderRadius: "50%", background: T.accent.primary }} />}
+                </button>
+              );
+            })}
+          </div>
+        </WizField>
+      ) : (
+        <WizField label="AI Model" hint="Free includes Standard AI. Upgrade later for Fast AI and Precision AI.">
+          <div
+            style={{
+              padding: "14px 16px",
+              borderRadius: T.radius.md,
+              border: `1px solid ${T.border.default}`,
+              background: T.bg.elevated,
+              fontSize: 12,
+              color: T.text.secondary,
+              lineHeight: 1.5,
+            }}
+          >
+            Standard AI is enabled automatically on Free. You can unlock Fast AI and Precision AI anytime after setup.
+          </div>
+        </WizField>
+      )}
 
       {/* SECURITY & BACKUP */}
       <div style={{ margin: "24px 0 12px", borderTop: `1px solid ${T.border.subtle}`, paddingTop: 20 }}>

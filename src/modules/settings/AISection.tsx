@@ -10,6 +10,7 @@ type ProviderModel = {
   name: string;
   note?: string;
   tier?: string;
+  badge?: string;
   disabled?: boolean;
   comingSoon?: boolean;
   poweredBy?: string;
@@ -32,6 +33,7 @@ interface AISectionProps {
   currentProvider: ProviderConfig;
   selectedModel: ProviderModel;
   proEnabled: boolean;
+  showModelSelector: boolean;
   setShowPaywall: Dispatch<SetStateAction<boolean>>;
   apiKey?: string;
   setApiKey?: Dispatch<SetStateAction<string>>;
@@ -94,8 +96,23 @@ export default function AISection({
   currentProvider,
   selectedModel,
   proEnabled,
+  showModelSelector,
   setShowPaywall
 }: AISectionProps) {
+  const selectedModelTierLabel = selectedModel.tier === "pro" ? "PRO" : "FREE";
+  const selectedModelTierStyle =
+    selectedModel.tier === "pro"
+      ? {
+          color: "#FFD700",
+          background: "linear-gradient(135deg, #FFD70020, #FFA50020)",
+          border: "1px solid #FFD70030",
+        }
+      : {
+          color: T.status.green,
+          background: `${T.status.green}15`,
+          border: `1px solid ${T.status.green}30`,
+        };
+
   return (
     <Card
       style={{
@@ -144,141 +161,186 @@ export default function AISection({
         </div>
       </div>
 
-      {/* Model picker */}
-      <span
-        style={{
-          fontSize: 11,
-          color: T.text.dim,
-          fontFamily: T.font.mono,
-          fontWeight: 600,
-          display: "block",
-          marginBottom: 8,
-        }}
-      >
-        AI MODEL
-      </span>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8 }}>
-        {currentProvider.models.map(m => {
-          const active = aiModel === m.id;
-          const isPro = m.tier === "pro";
-          const locked = (isPro && !proEnabled) || m.disabled || m.comingSoon;
-          return (
-            <button
-              key={m.id}
-              onClick={() => {
-                if (locked) {
-                  haptic.medium();
-                  setShowPaywall(true);
-                } else {
-                  haptic.light();
-                  setAiModel(m.id);
-                  setAiProvider("backend");
-                }
-              }}
-              style={{
-                padding: "10px 14px",
-                borderRadius: T.radius.md,
-                border: `1.5px solid ${active ? T.accent.primary : T.border.default}`,
-                background: active ? T.accent.primaryDim : T.bg.elevated,
-                textAlign: "left",
-                cursor: "pointer",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                transition: "all .2s ease",
-              }}
-            >
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: active ? 700 : 600,
-                      color: active ? T.accent.primary : T.text.primary,
-                    }}
-                  >
-                    {m.name}
-                  </span>
-                  {m.comingSoon ? (
-                    <span
-                      style={{
-                        fontSize: 8,
-                        fontWeight: 800,
-                        color: T.text.muted,
-                        background: `${T.text.muted}15`,
-                        border: `1px solid ${T.text.muted}30`,
-                        padding: "1px 6px",
-                        borderRadius: 99,
-                        letterSpacing: "0.06em",
-                      }}
-                    >
-                      SOON
-                    </span>
-                  ) : isPro ? (
-                    <span
-                      style={{
-                        fontSize: 8,
-                        fontWeight: 800,
+      {showModelSelector ? (
+        <>
+          <span
+            style={{
+              fontSize: 11,
+              color: T.text.dim,
+              fontFamily: T.font.mono,
+              fontWeight: 600,
+              display: "block",
+              marginBottom: 8,
+            }}
+          >
+            AI MODEL
+          </span>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8 }}>
+            {currentProvider.models.map(m => {
+              const active = aiModel === m.id;
+              const isPro = m.tier === "pro";
+              const locked = (isPro && !proEnabled) || m.disabled || m.comingSoon;
+              const badgeLabel = m.comingSoon ? "SOON" : m.badge || (isPro ? "PRO" : "FREE");
+              const badgeStyle = m.comingSoon
+                ? {
+                    color: T.text.muted,
+                    background: `${T.text.muted}15`,
+                    border: `1px solid ${T.text.muted}30`,
+                  }
+                : badgeLabel === "PREMIUM"
+                  ? {
+                      color: "#F8E7A1",
+                      background: "linear-gradient(135deg, #F8E7A120, #D4AF3720)",
+                      border: "1px solid #D4AF3740",
+                    }
+                  : isPro
+                    ? {
                         color: "#FFD700",
                         background: "linear-gradient(135deg, #FFD70020, #FFA50020)",
                         border: "1px solid #FFD70030",
-                        padding: "1px 6px",
-                        borderRadius: 99,
-                        letterSpacing: "0.06em",
-                      }}
-                    >
-                      PRO
-                    </span>
-                  ) : (
-                    <span
-                      style={{
-                        fontSize: 8,
-                        fontWeight: 800,
+                      }
+                    : {
                         color: T.status.green,
                         background: `${T.status.green}15`,
                         border: `1px solid ${T.status.green}30`,
-                        padding: "1px 6px",
-                        borderRadius: 99,
-                        letterSpacing: "0.06em",
-                      }}
-                    >
-                      FREE
-                    </span>
-                  )}
-                </div>
-                <span style={{ fontSize: 10, color: T.text.dim, marginTop: 2, display: "block" }}>
-                  {m.comingSoon ? "Coming soon" : m.note}
-                </span>
-                {m.poweredBy && (
-                  <span
-                    style={{
-                      fontSize: 9,
-                      color: T.text.muted,
-                      marginTop: 1,
-                      display: "block",
-                      fontFamily: T.font.mono,
-                      opacity: 0.7,
-                    }}
-                  >
-                    Powered by {m.poweredBy}
-                  </span>
-                )}
-              </div>
-              {active && (
-                <div
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    background: T.accent.primary,
-                    boxShadow: `0 0 8px ${T.accent.primary}80`,
+                      };
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => {
+                    if (locked) {
+                      haptic.medium();
+                      setShowPaywall(true);
+                    } else {
+                      haptic.light();
+                      setAiModel(m.id);
+                      setAiProvider("backend");
+                    }
                   }}
-                />
-              )}
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: T.radius.md,
+                    border: `1.5px solid ${active ? T.accent.primary : T.border.default}`,
+                    background: active ? T.accent.primaryDim : T.bg.elevated,
+                    textAlign: "left",
+                    cursor: "pointer",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    transition: "all .2s ease",
+                  }}
+                >
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span
+                        style={{
+                          fontSize: 13,
+                          fontWeight: active ? 700 : 600,
+                          color: active ? T.accent.primary : T.text.primary,
+                        }}
+                      >
+                        {m.name}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 8,
+                          fontWeight: 800,
+                          padding: "1px 6px",
+                          borderRadius: 99,
+                          letterSpacing: "0.06em",
+                          ...badgeStyle,
+                        }}
+                      >
+                        {badgeLabel}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: 10, color: T.text.dim, marginTop: 2, display: "block" }}>
+                      {m.comingSoon ? "Coming soon" : m.note}
+                    </span>
+                    {m.poweredBy && (
+                      <span
+                        style={{
+                          fontSize: 9,
+                          color: T.text.muted,
+                          marginTop: 1,
+                          display: "block",
+                          fontFamily: T.font.mono,
+                          opacity: 0.7,
+                        }}
+                      >
+                        Powered by {m.poweredBy}
+                      </span>
+                    )}
+                  </div>
+                  {active && (
+                    <div
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        background: T.accent.primary,
+                        boxShadow: `0 0 8px ${T.accent.primary}80`,
+                      }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <div
+          style={{
+            padding: "14px 16px",
+            background: T.bg.elevated,
+            border: `1px solid ${T.border.default}`,
+            borderRadius: T.radius.md,
+            marginBottom: 4,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: T.text.primary }}>{selectedModel.name}</div>
+                <span
+                  style={{
+                    fontSize: 8,
+                    fontWeight: 800,
+                    padding: "1px 6px",
+                    borderRadius: 99,
+                    letterSpacing: "0.06em",
+                    ...selectedModelTierStyle,
+                  }}
+                >
+                  {selectedModelTierLabel}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: T.text.dim, marginTop: 4 }}>
+                Your current plan uses our default model automatically. Upgrade to unlock Fast AI and Precision AI.
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                haptic.light();
+                setShowPaywall(true);
+              }}
+              style={{
+                border: `1px solid ${T.accent.primary}30`,
+                background: `${T.accent.primary}12`,
+                color: T.accent.primary,
+                borderRadius: 999,
+                padding: "8px 12px",
+                fontSize: 11,
+                fontWeight: 800,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Upgrade
             </button>
-          );
-        })}
-      </div>
+          </div>
+        </div>
+      )}
       
       <div style={{ paddingTop: 16 }}>
         <Label>Engine Options</Label>
@@ -309,7 +371,7 @@ export default function AISection({
         {[
           ["Version", "v1"],
           ["Provider", currentProvider.name],
-          ["Model", selectedModel.name],
+          ["Model", `${selectedModel.name} · ${selectedModelTierLabel}`],
           ["Tokens", "12,000"],
           ["Output", "JSON"],
           ["Stream", useStreaming ? "ON" : "OFF"],

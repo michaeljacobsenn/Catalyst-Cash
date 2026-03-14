@@ -1,9 +1,9 @@
-import React, { useState, useContext, useMemo, useEffect, useRef, lazy, Suspense } from "react";
+import React, { useState, useMemo, useEffect, useRef, lazy, Suspense } from "react";
 import {
   Search, Sparkles, CreditCard, Coffee, ShoppingCart,
   Fuel, Plane, Train, Package, Store, Pill, AlertCircle, Info, Settings2, ChevronDown, Check, X, RefreshCw, Tv, DollarSign, Smartphone, RotateCw, Clock, Lock, Zap
 } from "lucide-react";
-import { PortfolioContext } from "../contexts/PortfolioContext.js";
+import { usePortfolio } from "../contexts/PortfolioContext.js";
 import { useSettings } from "../contexts/SettingsContext.js";
 import { getCardMultiplier, VALUATIONS } from "../rewardsCatalog.js";
 import { classifyMerchant } from "../api.js";
@@ -107,6 +107,7 @@ interface RewardInfo {
 }
 
 type Recommendation = Omit<PortfolioCard, "notes"> & {
+  multiplier: number;
   currentMultiplier: number;
   effectiveYield: number;
   isFlexible: boolean;
@@ -153,7 +154,7 @@ interface CardWizardTabProps {
 type UsedCaps = Record<string, number | "">;
 
 export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps) {
-  const { cards } = useContext(PortfolioContext);
+  const { cards } = usePortfolio();
   const { financialConfig, setFinancialConfig } = useSettings();
 
   const [showPaywall, setShowPaywall] = useState(false);
@@ -185,7 +186,7 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
 
   const handleUpdateUsedCap = (cardId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    const newCaps = { ...usedCaps, [cardId]: val === "" ? "" : parseFloat(val) };
+    const newCaps: UsedCaps = { ...usedCaps, [cardId]: val === "" ? "" : parseFloat(val) };
     setUsedCaps(newCaps);
     db.set("cw-used-caps", newCaps);
   };
@@ -358,7 +359,9 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
       const effectiveCategory = issuerCategory || resolvedCategory;
       const rewardInfo = getCardMultiplier(card.name, effectiveCategory, customValuations) as RewardInfo;
       // Business cards don't report utilization to personal bureaus; treat as 0% for tie-breakers to protect personal scores
-      const utilization = (card.type !== "business" && card.balance && card.limit && card.limit > 0) ? (card.balance / card.limit) : 0;
+      const balance = Number(card.balance) || 0;
+      const limit = Number(card.limit) || 0;
+      const utilization = card.type !== "business" && limit > 0 ? balance / limit : 0;
 
       let finalYield = rewardInfo.effectiveYield;
       let blendedMsg: string | null = null;
@@ -389,8 +392,9 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
         }
       }
 
-      return {
+      const recommendation: Recommendation = {
         ...card,
+        multiplier: rewardInfo.multiplier,
         currentMultiplier: isCappedOut ? rewardInfo.base : rewardInfo.multiplier,
         effectiveYield: finalYield,
         isFlexible: rewardInfo.isFlexible,
@@ -403,13 +407,13 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
         isCappedOut,
         cpp: rewardInfo.cpp,
         utilization,
-        notes: rewardInfo.notes,
         rotating: rewardInfo.rotating,
         mobileWallet: rewardInfo.mobileWallet,
         // Issuer-specific category scoring
         issuerCategory: issuerCategory || null,
         effectiveCategory,
       };
+      return rewardInfo.notes ? { ...recommendation, notes: rewardInfo.notes } : recommendation;
     });
 
     scored.sort((a, b) => {
@@ -483,6 +487,8 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
   };
 
   const runnersToShow = showAllRunners ? recommendations.slice(1) : recommendations.slice(1, 4);
+  const winner = recommendations[0];
+  const runnerUp = recommendations[1];
 
   return (
     <div ref={scrollRef} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", flex: 1 }}>
@@ -601,7 +607,7 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
                     borderBottom: idx < filteredMerchants.length - 1 ? `1px solid ${T.border.subtle}` : "none", cursor: "pointer", textAlign: "left"
                   }}
                 >
-                  <div style={{ width: 12, height: 12, borderRadius: "50%", background: m.color, marginRight: 12, flexShrink: 0 }} />
+                  <div style={{ width: 12, height: 12, borderRadius: "50%", background: m.color || T.border.subtle, marginRight: 12, flexShrink: 0 }} />
                   <span style={{ fontSize: 14, fontWeight: 600, color: T.text.primary }}>{m.name}</span>
                 </button>
               ))}
@@ -777,7 +783,7 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
         )}
 
         {/* ═══ RESULTS ═══ */}
-        {resolvedCategory && recommendations.length > 0 && !isTyping && !categorizing && (
+        {resolvedCategory && recommendations.length > 0 && winner && !isTyping && !categorizing && (
           <div className="stagger-container" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 4px" }}>
@@ -840,7 +846,7 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
                 {/* Top Row: Institution + Chip */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <h3 style={{ fontSize: 13, fontWeight: 700, margin: 0, color: T.text.secondary, letterSpacing: "0.02em" }}>
-                    {recommendations[0].institution || "Credit Card"}
+                    {winner.institution || "Credit Card"}
                   </h3>
                   <Badge variant="teal" style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase" }}>
                     <Check size={10} style={{ marginRight: 4 }} />
@@ -851,11 +857,11 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
                 {/* Middle: Card Name & Yields */}
                 <div style={{ padding: "8px 0" }}>
                   <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 4px 0", color: T.text.primary, lineHeight: 1.2 }}>
-                    {recommendations[0].name}
+                    {winner.name}
                   </h2>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600, color: T.text.secondary }}>
                     <Sparkles size={14} color={T.accent.emerald} />
-                    <span>{recommendations[0].multiplier}x {recommendations[0].currency === "CASH" ? "Cash Back" : "Points"}</span>
+                    <span>{winner.multiplier}x {winner.currency === "CASH" ? "Cash Back" : "Points"}</span>
                   </div>
                 </div>
 
@@ -864,44 +870,44 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
                   <button
                     type="button"
                     className="hover-btn"
-                      onClick={(e) => handleToggleSubTarget(e, recommendations[0].id)}
+                      onClick={(e) => handleToggleSubTarget(e, winner.id)}
                       style={{
                         padding: "6px 12px", borderRadius: 8,
-                        background: recommendations[0].id === subTargetId ? T.accent.primary : T.bg.elevated,
-                        color: recommendations[0].id === subTargetId ? "#fff" : T.text.secondary,
-                        border: recommendations[0].id === subTargetId ? "none" : `1px solid ${T.border.default}`, 
+                        background: winner.id === subTargetId ? T.accent.primary : T.bg.elevated,
+                        color: winner.id === subTargetId ? "#fff" : T.text.secondary,
+                        border: winner.id === subTargetId ? "none" : `1px solid ${T.border.default}`, 
                         fontSize: 11, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6,
-                        boxShadow: recommendations[0].id === subTargetId ? T.shadow.sm : "none",
+                        boxShadow: winner.id === subTargetId ? T.shadow.sm : "none",
                         transition: "all 0.2s ease"
                       }}
                     >
-                      <Package size={12} fill={recommendations[0].id === subTargetId ? "currentColor" : "none"} />
-                      {recommendations[0].id === subTargetId ? "Working on Sign-Up Bonus" : "Targeting Sign-Up Bonus?"}
+                      <Package size={12} fill={winner.id === subTargetId ? "currentColor" : "none"} />
+                      {winner.id === subTargetId ? "Working on Sign-Up Bonus" : "Targeting Sign-Up Bonus?"}
                     </button>
                   </div>
 
                   <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
                     <div>
                       <p style={{ fontSize: 11, fontWeight: 700, margin: "0 0 4px 0", color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                        {recommendations[0].id === subTargetId ? "Priority Override" : "Effective Yield"}
+                        {winner.id === subTargetId ? "Priority Override" : "Effective Yield"}
                       </p>
-                      <div className="score-pop" style={{ fontSize: recommendations[0].id === subTargetId ? 32 : 44, fontWeight: 900, letterSpacing: "-0.04em", margin: 0, lineHeight: 1, filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.08))", color: recommendations[0].id === subTargetId ? T.accent.primary : T.status.green }}>
-                        {recommendations[0].id === subTargetId ? "SUB TARGET" : `${recommendations[0].effectiveYield}%`}
+                      <div className="score-pop" style={{ fontSize: winner.id === subTargetId ? 32 : 44, fontWeight: 900, letterSpacing: "-0.04em", margin: 0, lineHeight: 1, filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.08))", color: winner.id === subTargetId ? T.accent.primary : T.status.green }}>
+                        {winner.id === subTargetId ? "SUB TARGET" : `${winner.effectiveYield}%`}
                       </div>
                       <p style={{ fontSize: 13, fontWeight: 600, marginTop: 8, color: T.text.secondary }}>
-                        {recommendations[0].currentMultiplier}x {(recommendations[0].effectiveCategory || resolvedCategory).replace(/_/g, " ")}{recommendations[0].cpp !== 1.0 ? ` × ${recommendations[0].cpp}cpp` : ""}
-                        {recommendations[0].issuerCategory && recommendations[0].issuerCategory !== resolvedCategory && (
-                          <span style={{ fontSize: 10, color: T.text.dim, fontWeight: 500 }}> (coded as {recommendations[0].issuerCategory.replace(/_/g, " ")} at {recommendations[0].institution})</span>
+                        {winner.currentMultiplier}x {(winner.effectiveCategory || resolvedCategory).replace(/_/g, " ")}{winner.cpp !== 1.0 ? ` × ${winner.cpp}cpp` : ""}
+                        {winner.issuerCategory && winner.issuerCategory !== resolvedCategory && (
+                          <span style={{ fontSize: 10, color: T.text.dim, fontWeight: 500 }}> (coded as {winner.issuerCategory.replace(/_/g, " ")} at {winner.institution})</span>
                         )}
                       </p>
-                      {dollarReturn(recommendations[0].effectiveYield) && recommendations[0].id !== subTargetId && (
+                      {dollarReturn(winner.effectiveYield) && winner.id !== subTargetId && (
                         <p style={{ fontSize: 15, fontWeight: 800, marginTop: 4, color: T.text.primary }}>
-                          ${dollarReturn(recommendations[0].effectiveYield)} back
+                          ${dollarReturn(winner.effectiveYield)} back
                         </p>
                       )}
                     </div>
 
-                    {recommendations[0].utilization > 0 && recommendations.length > 1 && recommendations[0].effectiveYield === recommendations[1].effectiveYield && (
+                    {winner.utilization > 0 && runnerUp && winner.effectiveYield === runnerUp.effectiveYield && (
                       <div style={{ background: T.bg.surface, padding: "6px 10px", borderRadius: 8, border: `1px solid ${T.border.subtle}`, display: "flex", alignItems: "center", gap: 6, color: T.text.secondary }}>
                          <Info size={12} color={T.text.dim} />
                          <span style={{ fontSize: 10, fontWeight: 700 }}>Low Util.</span>
@@ -913,32 +919,32 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
 
               {/* Disclosures */}
               <div>
-                {recommendations[0].cpp !== 1.0 && (
+                {winner.cpp !== 1.0 && (
                   <p className="fade-in" style={{ fontSize: 12, fontWeight: 500, color: T.text.secondary, display: "flex", alignItems: "center", gap: 6, margin: "16px 0 12px 12px", animationDelay: "0.3s" }}>
                      <Info size={14} color={T.text.dim} />
-                     Yield applies <span style={{ color: T.text.primary, fontWeight: 700 }}>{recommendations[0].cpp}¢</span> point valuation ({recommendations[0].currentMultiplier}x base).
+                     Yield applies <span style={{ color: T.text.primary, fontWeight: 700 }}>{winner.cpp}¢</span> point valuation ({winner.currentMultiplier}x base).
                   </p>
                 )}
                 <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-                  {recommendations[0].blendedMsg && (
+                  {winner.blendedMsg && (
                     <div className="fade-in" style={{ padding: 12, borderRadius: 12, background: T.bg.surface, border: `1px solid ${T.status.amber}`, display: "flex", alignItems: "flex-start", gap: 10, animationDelay: "0.35s" }}>
                       <AlertCircle size={16} color={T.status.amber} style={{ marginTop: 2, flexShrink: 0 }} />
-                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: T.status.amber }}>{recommendations[0].blendedMsg}</p>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: T.status.amber }}>{winner.blendedMsg}</p>
                     </div>
                   )}
-                  {recommendations[0].cap && !recommendations[0].isCappedOut && (
+                  {winner.cap && !winner.isCappedOut && (
                     <div className="fade-in" style={{ padding: 12, borderRadius: 12, background: T.status.blueDim, border: `1px solid rgba(107, 163, 232, 0.2)`, display: "flex", flexDirection: "column", gap: 6, animationDelay: "0.4s" }}>
                       <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                         <Info size={16} color={T.status.blue} style={{ marginTop: 2, flexShrink: 0 }} />
-                        <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: T.status.blue }}>Spending Cap: High multiplier limited to <InlineTooltip term={"Spending Cap"}>${recommendations[0].cap.toLocaleString()}</InlineTooltip> per cycle.</p>
+                        <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: T.status.blue }}>Spending Cap: High multiplier limited to <InlineTooltip term={"Spending Cap"}>${winner.cap.toLocaleString()}</InlineTooltip> per cycle.</p>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 26 }}>
                         <span style={{ fontSize: 11, color: T.status.blue, fontWeight: 500 }}>Already spent: $</span>
                         <input
                           type="number"
                           placeholder="0"
-                          value={usedCaps[recommendations[0].id] || ""}
-                          onChange={(e) => handleUpdateUsedCap(recommendations[0].id, e)}
+                          value={usedCaps[winner.id] || ""}
+                          onChange={(e) => handleUpdateUsedCap(winner.id, e)}
                           style={{
                             background: "rgba(255,255,255,0.5)", border: `1px solid rgba(107, 163, 232, 0.4)`,
                             borderRadius: 6, padding: "4px 8px", width: 80, fontSize: 12, color: T.text.primary, fontWeight: 600
@@ -947,44 +953,43 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
                       </div>
                     </div>
                   )}
-                  {recommendations[0].isFlexible && (
+                  {winner.isFlexible && (
                     <div className="fade-in" style={{ padding: 12, borderRadius: 12, background: T.status.amberDim, border: `1px solid rgba(224, 168, 77, 0.2)`, display: "flex", alignItems: "flex-start", gap: 10, animationDelay: "0.5s" }}>
                       <AlertCircle size={16} color={T.status.amber} style={{ marginTop: 2, flexShrink: 0 }} />
                       <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: T.status.amber }}>
-                        Conditional Max: Could earn up to {recommendations[0].potentialMax || recommendations[0].currentMultiplier}x
-                        ({parseFloat(((recommendations[0].potentialMax || recommendations[0].currentMultiplier) * recommendations[0].cpp).toFixed(2))}% yield)
+                        Conditional Max: Could earn up to {winner.potentialMax || winner.currentMultiplier}x
+                        ({parseFloat(((winner.potentialMax || winner.currentMultiplier) * winner.cpp).toFixed(2))}% yield)
                         if {resolvedCategory.replace(/_/g, " ")} is your top spend category.
-                        Otherwise {parseFloat((recommendations[0].baseMultiplier * recommendations[0].cpp).toFixed(2))}%.
+                        Otherwise {parseFloat((winner.baseMultiplier * winner.cpp).toFixed(2))}%.
                       </p>
                     </div>
                   )}
-                  {recommendations[0].rotating && (
+                  {winner.rotating && (
                     <div className="fade-in" style={{ padding: 12, borderRadius: 12, background: T.status.purpleDim, border: `1px solid rgba(155, 111, 212, 0.2)`, display: "flex", alignItems: "flex-start", gap: 10, animationDelay: "0.5s" }}>
                       <RotateCw size={16} color={T.status.purple} style={{ marginTop: 2, flexShrink: 0 }} />
                       <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: T.status.purple }}>
-                        Rotating Category: This card offers {recommendations[0].rotating}% on quarterly rotating categories. Check if {resolvedCategory.replace(/_/g, " ")} qualifies this quarter.
+                        Rotating Category: This card offers {winner.rotating}% on quarterly rotating categories. Check if {resolvedCategory.replace(/_/g, " ")} qualifies this quarter.
                       </p>
                     </div>
                   )}
-                  {recommendations[0].mobileWallet && (
+                  {winner.mobileWallet && (
                     <div className="fade-in" style={{ padding: 12, borderRadius: 12, background: T.status.blueDim, border: `1px solid rgba(107, 163, 232, 0.2)`, display: "flex", alignItems: "flex-start", gap: 10, animationDelay: "0.5s" }}>
                       <Smartphone size={16} color={T.status.blue} style={{ marginTop: 2, flexShrink: 0 }} />
                       <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: T.status.blue }}>
-                        Mobile Wallet Bonus: Earns {recommendations[0].mobileWallet}x on all purchases made via Apple Pay, Google Pay, or Samsung Pay.
+                        Mobile Wallet Bonus: Earns {winner.mobileWallet}x on all purchases made via Apple Pay, Google Pay, or Samsung Pay.
                       </p>
                     </div>
                   )}
-                  {recommendations[0].notes && (
+                  {winner.notes && (
                     <div className="fade-in" style={{ padding: 12, borderRadius: 12, background: T.bg.surface, border: `1px solid ${T.border.subtle}`, display: "flex", alignItems: "flex-start", gap: 10, animationDelay: "0.6s" }}>
                       <Info size={16} color={T.text.dim} style={{ marginTop: 2, flexShrink: 0 }} />
-                      <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: T.text.secondary }}>{recommendations[0].notes}</p>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: T.text.secondary }}>{winner.notes}</p>
                     </div>
                   )}
                 </div>
 
                 {/* ── Full Earning Profile ── */}
                 {(() => {
-                  const winner = recommendations[0];
                   const allCats = ["dining", "groceries", "gas", "travel", "transit", "online_shopping", "streaming", "wholesale_clubs", "drugstores", "catch-all"];
                   const catLabels = { dining: "Dining", groceries: "Groceries", gas: "Gas", travel: "Travel", transit: "Transit", online_shopping: "Online", streaming: "Streaming", wholesale_clubs: "Wholesale", drugstores: "Pharmacy", "catch-all": "Everything Else" };
                   const profile = allCats.map(cat => {

@@ -75,10 +75,11 @@ export function usePlaidSync({
       return;
     }
 
-    // 2. Enforce tier-based cooldown universally
+    // 2. Respect launch gating mode before blocking by tier
     const tier = await getCurrentTier();
+    const gatingEnforced = isGatingEnforced();
 
-    if (tier.id === "free") {
+    if (gatingEnforced && tier.id === "free") {
       if (window.toast) window.toast.info("Free accounts are frozen. Upgrade to Pro for Live Syncing.");
       window.dispatchEvent(new CustomEvent("open-pro-paywall"));
       return;
@@ -146,7 +147,7 @@ export function usePlaidSync({
         haptic.success();
         if (window.toast) window.toast.success(successMessage);
         // ONLY fetch transactions if autoFetchTransactions is requested AND user is on Pro tier
-        if (autoFetchTransactions && tier.id === "pro") {
+        if (autoFetchTransactions && (tier.id === "pro" || !gatingEnforced)) {
           await fetchAllTransactions(30).catch(() => { });
         }
       } else {

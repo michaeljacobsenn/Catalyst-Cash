@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { CatalystCashConfig, BankAccount, Card as PortfolioCard, PlaidInvestmentAccount } from "../../types/index.js";
+import type { SetFinancialConfig } from "../contexts/SettingsContext.js";
 import { T } from "../constants.js";
 import { Card, Label } from "../ui.js";
 import { Plus, Building2, Unplug, Loader2 } from "lucide-react";
@@ -22,6 +23,7 @@ interface PlaidConnection {
   id: string;
   institutionName?: string;
   institutionLogo?: string;
+  _needsReconnect?: boolean;
   accounts?: PlaidConnectionAccount[];
 }
 
@@ -31,7 +33,7 @@ interface PlaidSectionProps {
   bankAccounts: BankAccount[];
   setBankAccounts: Dispatch<SetStateAction<BankAccount[]>>;
   financialConfig?: CatalystCashConfig | null;
-  setFinancialConfig: (action: { type: string; field?: string; value?: unknown }) => void;
+  setFinancialConfig: SetFinancialConfig;
   cardCatalog: unknown;
 }
 
@@ -59,6 +61,7 @@ export default function PlaidSection({
   const [plaidConnections, setPlaidConnections] = useState<PlaidConnection[]>([]);
   const [isPlaidConnecting, setIsPlaidConnecting] = useState(false);
   const [confirmingDisconnect, setConfirmingDisconnect] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<{ tone: "error" | "info"; message: string } | null>(null);
 
   // Load connections on mount
   useEffect(() => {
@@ -81,11 +84,13 @@ export default function PlaidSection({
       setFinancialConfig({ type: "SET_FIELD", field: "plaidInvestments", value: filteredInvests });
     }
     setPlaidConnections(await getConnections());
+    setConnectionStatus(null);
     window.toast?.success?.("Connection and imported accounts removed");
   };
 
   const handleConnect = async () => {
     if (isPlaidConnecting) return;
+    setConnectionStatus(null);
     setIsPlaidConnecting(true);
     try {
       await connectBank(
@@ -133,6 +138,7 @@ export default function PlaidSection({
             }
 
             setPlaidConnections(await getConnections());
+            setConnectionStatus(null);
             window.toast?.success?.("Bank linked successfully!");
 
             // Prompt user to review imported accounts
@@ -158,12 +164,14 @@ export default function PlaidSection({
           console.error(err);
           const msg = err instanceof Error ? err.message : "Failed to link bank";
           if (msg === "cancelled") return;
+          setConnectionStatus({ tone: "error", message: msg });
           window.toast?.error?.(msg);
         }
       );
     } catch (err) {
       console.error(err);
       const message = err instanceof Error ? err.message : "Failed to initialize Plaid";
+      setConnectionStatus({ tone: "error", message });
       window.toast?.error?.(message);
     } finally {
       setIsPlaidConnecting(false);
@@ -174,9 +182,27 @@ export default function PlaidSection({
     <Card style={{ borderLeft: `3px solid ${T.status.purple || "#8a2be2"}40` }}>
       <Label>Bank Connections</Label>
       <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.6, marginBottom: 16 }}>
-        Securely link your bank and credit card accounts to automatically fetch balances. Credentials are never stored
-        on our servers.
+        Securely link your bank and credit card accounts to automatically fetch balances. Plaid access tokens stay on
+        the Worker; this device stores metadata only.
       </p>
+
+      {connectionStatus && (
+        <div
+          style={{
+            marginBottom: 14,
+            padding: "10px 12px",
+            borderRadius: T.radius.md,
+            border: `1px solid ${T.status.red}25`,
+            background: T.status.redDim,
+            color: T.status.red,
+            fontSize: 11,
+            fontWeight: 700,
+            lineHeight: 1.5,
+          }}
+        >
+          {connectionStatus.message}
+        </div>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
         {plaidConnections.length === 0 ? (
@@ -237,7 +263,7 @@ export default function PlaidSection({
                       {conn.institutionName || "Unknown Bank"}
                     </span>
                     <span style={{ fontSize: 11, color: T.text.muted, marginTop: 2, display: "block" }}>
-                      {conn.accounts?.length || 0} Accounts Linked
+                      {conn._needsReconnect ? "Reconnect required" : `${conn.accounts?.length || 0} Accounts Linked`}
                     </span>
                   </div>
                 </div>

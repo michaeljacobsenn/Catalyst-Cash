@@ -15,8 +15,8 @@ export default function CreditUtilizationWidget() {
         let bal = 0;
         let lim = 0;
         creditCards.forEach(c => {
-            bal += c._plaidBalance != null ? c._plaidBalance : c.balance || 0;
-            lim += c._plaidLimit != null ? c._plaidLimit : c.limit || 0;
+            bal += c._plaidBalance != null ? c._plaidBalance : Number(c.balance || 0);
+            lim += c._plaidLimit != null ? c._plaidLimit : Number(c.limit || 0);
         });
         return { totalCreditBalance: bal, totalCreditLimit: lim };
     }, [creditCards]);

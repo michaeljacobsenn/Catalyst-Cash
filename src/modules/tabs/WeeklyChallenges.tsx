@@ -177,7 +177,8 @@ export default function WeeklyChallenges() {
         // Generate new challenge for this week
         const seed = weekKey.split("-").reduce((s, p) => s + (parseInt(p.replace("W", ""), 10) || 0), 0);
         const shuffled = seededShuffle(CHALLENGE_TEMPLATES, seed);
-        const picked = shuffled[0];
+        const picked = shuffled[0] ?? CHALLENGE_TEMPLATES[0];
+        if (!picked) return;
         const newChallenge = { ...picked, week: weekKey, completed: false };
         setChallenge(newChallenge);
         await db.set("weekly-challenge", newChallenge);

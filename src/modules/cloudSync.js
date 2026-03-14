@@ -36,6 +36,10 @@ export async function isICloudAvailable() {
   }
 }
 
+/**
+ * @param {unknown} payload
+ * @param {string | null} [passphrase=null]
+ */
 export async function uploadToICloud(payload, passphrase = null) {
   try {
     let data = JSON.stringify(payload);
@@ -72,6 +76,9 @@ export async function uploadToICloud(payload, passphrase = null) {
   }
 }
 
+/**
+ * @param {string | null} [passphrase=null]
+ */
 export async function downloadFromICloud(passphrase = null) {
   try {
     let rawData;

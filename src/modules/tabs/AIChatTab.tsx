@@ -3,6 +3,7 @@ import React, {
   useRef,
   useEffect,
   useCallback,
+  useMemo,
   memo,
   Suspense,
   type FormEvent,
@@ -15,6 +16,14 @@ import { T } from "../constants.js";
 import { Skeleton as UISkeleton } from "../ui.js";
 import { streamAudit } from "../api.js";
 import { getChatSystemPrompt } from "../chatPrompts.js";
+import { evaluateChatDecisionRules } from "../decisionRules.js";
+import {
+  analyzeChatInputRisk,
+  buildDeterministicChatFallback,
+  buildPromptInjectionRefusal,
+  normalizeChatAssistantOutput,
+} from "../chatSafety.js";
+import { generateStrategy, mergeSnapshotDebts } from "../engine.js";
 import { getBackendProvider } from "../providers.js";
 import { haptic } from "../haptics.js";
 import { db } from "../utils.js";
@@ -89,6 +98,7 @@ interface NavigationState {
 interface NavigationApi {
   navState?: NavigationState | null;
   clearNavState?: (() => void) | undefined;
+  registerChatStreamAbort?: ((handler: (() => void) | null) => void) | undefined;
 }
 
 interface SecurityApi {
@@ -115,9 +125,37 @@ interface SkeletonProps {
   width: string;
 }
 
+interface DecisionRecommendation {
+  flag: string;
+  active: boolean;
+  severity: string;
+  rationale: string;
+  recommendation?: string;
+}
+
+interface ChatInputRisk {
+  blocked: boolean;
+  suspectedPromptInjection: boolean;
+  severity: string;
+  matches: Array<{ flag: string; severity?: string; rationale?: string }>;
+  rationale?: string;
+}
+
 const ProBannerTyped = ProBanner as unknown as (props: ProBannerProps) => ReactNode;
 const LazyProPaywallTyped = LazyProPaywall as unknown as (props: ProPaywallProps) => ReactNode;
 const Skeleton = UISkeleton as unknown as (props: SkeletonProps) => ReactNode;
+const analyzeChatInputRiskTyped = analyzeChatInputRisk as unknown as (text: string) => ChatInputRisk;
+const buildPromptInjectionRefusalTyped = buildPromptInjectionRefusal as unknown as () => string;
+const buildDeterministicChatFallbackTyped = buildDeterministicChatFallback as unknown as (options: {
+  current?: AuditRecord | null;
+  computedStrategy?: Record<string, unknown> | null;
+  decisionRecommendations?: DecisionRecommendation[];
+  error?: string;
+}) => string;
+const normalizeChatAssistantOutputTyped = normalizeChatAssistantOutput as unknown as (text: string) => {
+  text: string;
+  valid: boolean;
+};
 const streamAuditTyped = streamAudit as (
   apiKey: string,
   snapshot: string,
@@ -137,10 +175,12 @@ const getChatSystemPromptTyped = getChatSystemPrompt as (
   history: AuditRecord[],
   persona: PersonaProfile | null,
   personalRules?: string,
-  computedStrategy?: null,
+  computedStrategy?: Record<string, unknown> | null,
   trendContext?: TrendContextEntry[] | null,
   providerId?: string | null,
-  memoryBlock?: string
+  memoryBlock?: string,
+  decisionRecommendations?: DecisionRecommendation[],
+  chatInputRisk?: Record<string, unknown> | null
 ) => string;
 
 // ── PII Scrubber — strips sensitive patterns before persisting ──
@@ -167,6 +207,10 @@ function scrubPII(text: string | null | undefined): string {
 function pruneExpired(msgs: ChatHistoryMessage[]): ChatHistoryMessage[] {
   const cutoff = Date.now() - MESSAGE_TTL_MS;
   return msgs.filter(m => (m.ts || 0) > cutoff);
+}
+
+function createChatMessage(role: ChatHistoryMessage["role"], content: string, ts = Date.now()): ChatHistoryMessage {
+  return { role, content, ts };
 }
 
 // Suggested quick questions — rotated randomly
@@ -364,7 +408,7 @@ export default memo(function AIChatTab({
   const { apiKey, aiProvider, aiModel, financialConfig, persona, personalRules } = useSettings();
   const { cards, renewals } = usePortfolio();
   const { privacyMode } = useSecurity() as SecurityApi;
-  const { navState, clearNavState } = useNavigation() as NavigationApi;
+  const { navState, clearNavState, registerChatStreamAbort } = useNavigation() as NavigationApi;
 
   const [messages, setMessages] = useState<ChatHistoryMessage[]>([]);
   const [input, setInput] = useState<string>("");
@@ -407,6 +451,31 @@ export default memo(function AIChatTab({
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const initialPromptSent = useRef<boolean>(false);
   const lastUserMsgRef = useRef<string | null>(null);
+
+  const chatStrategy = useMemo<Record<string, unknown> | null>(() => {
+    if (!current?.form || !financialConfig) return null;
+
+    try {
+      const strategyCards = mergeSnapshotDebts(
+        cards || [],
+        Array.isArray(current.form.debts) ? current.form.debts : [],
+        financialConfig?.defaultAPR || 0
+      );
+
+      return generateStrategy(financialConfig, {
+        checkingBalance: parseFloat(String(current.form.checking || 0)),
+        savingsTotal: parseFloat(String(current.form.savings || current.form.ally || 0)),
+        cards: strategyCards,
+        renewals,
+        snapshotDate: current.form.date || new Date().toISOString().split("T")[0],
+      }) as Record<string, unknown>;
+    } catch (strategyError) {
+      log.warn("chat", "Failed to compute chat strategy context", {
+        error: strategyError instanceof Error ? strategyError.message : "unknown",
+      });
+      return null;
+    }
+  }, [current, financialConfig, cards, renewals]);
 
   // ── Load messages + session summary from DB ──
   useEffect(() => {
@@ -511,8 +580,8 @@ export default memo(function AIChatTab({
       let withMemory = allValid;
       if (sessionSummary && allValid.length <= 2) {
         withMemory = [
-          { role: "user", content: `[Context from prior sessions] ${sessionSummary}` },
-          { role: "assistant", content: "Got it — I remember our previous discussions. How can I help today?" },
+          createChatMessage("user", `[Context from prior sessions] ${sessionSummary}`),
+          createChatMessage("assistant", "Got it — I remember our previous discussions. How can I help today?"),
           ...allValid,
         ];
       }
@@ -531,11 +600,8 @@ export default memo(function AIChatTab({
         const summaryText = `[Earlier conversation summary — ${oldMsgs.length} messages]\n${summaryParts.join("\n")}`;
 
         contextMsgs = [
-          { role: "user", content: summaryText },
-          {
-            role: "assistant",
-            content: "Understood, I have the conversation context. Continuing from where we left off.",
-          },
+          createChatMessage("user", summaryText),
+          createChatMessage("assistant", "Understood, I have the conversation context. Continuing from where we left off."),
           ...recentMsgs,
         ];
       } else {
@@ -576,25 +642,54 @@ export default memo(function AIChatTab({
   // ── Send message ──
   const sendMessage = useCallback(
     async (text: string, overrideSystemPrompt: string | null = null): Promise<void> => {
-      if (!text?.trim() || isStreamingRef.current) return;
+      const trimmedText = text?.trim();
+      if (!trimmedText || isStreamingRef.current) return;
 
       // ── Quota gate — check BEFORE adding message to state ──
       if (isGatingEnforced() && !chatQuota.allowed) {
-        setError("You've reached your daily AskAI limit. Upgrade to Pro for 50 messages/day!");
+        setError("Daily message limit reached. Upgrade to Catalyst Cash Pro for 25 messages/day.");
         haptic.medium();
         return;
       }
 
-      const userMsg = { role: "user", content: text.trim(), ts: Date.now() };
+      const userMsg = createChatMessage("user", trimmedText);
       // Guard: if the last message is already this user message (e.g. after a retry),
       // don't duplicate it — just resume from the existing state.
       const lastMsg = messages[messages.length - 1];
       const alreadyPresent = lastMsg?.role === "user" && lastMsg?.content === userMsg.content;
       const newMsgs = alreadyPresent ? [...messages] : [...messages, userMsg];
-      lastUserMsgRef.current = text.trim(); // Track for safe retry
+      lastUserMsgRef.current = trimmedText; // Track for safe retry
+
+      const decisionRecommendations = evaluateChatDecisionRules({
+        current,
+        financialConfig,
+        cards,
+        renewals,
+        computedStrategy: chatStrategy,
+      }) as DecisionRecommendation[];
+      const inputRisk = analyzeChatInputRiskTyped(trimmedText);
+
       setMessages(newMsgs);
       setInput("");
       setError(null);
+
+      if (inputRisk.blocked) {
+        const blockedReply = createChatMessage(
+          "assistant",
+          `${buildPromptInjectionRefusalTyped()}\n\n${buildDeterministicChatFallbackTyped({
+            current,
+            computedStrategy: chatStrategy,
+            decisionRecommendations,
+          })}`
+        );
+        const blockedMsgs = [...newMsgs, blockedReply];
+        setMessages(blockedMsgs);
+        void persistMessages(blockedMsgs);
+        setError("Catalyst blocked a prompt override attempt. Ask a finance question instead.");
+        haptic.medium();
+        return;
+      }
+
       setIsStreaming(true);
       isStreamingRef.current = true;
       haptic.light();
@@ -631,10 +726,12 @@ export default memo(function AIChatTab({
         history,
         personaObject,
         personalRules || "",
-        null,
+        chatStrategy,
         trendContext,
         aiProvider,
-        memBlock
+        memBlock,
+        decisionRecommendations,
+        inputRisk as unknown as Record<string, unknown>
       );
 
       // Build conversation history for the API
@@ -653,7 +750,7 @@ export default memo(function AIChatTab({
         // The system prompt contains the full financial context
         const stream = streamAuditTyped(
           apiKey,
-          text.trim(),
+          trimmedText,
           aiProvider,
           aiModel,
           sysPrompt,
@@ -676,21 +773,45 @@ export default memo(function AIChatTab({
           // Extract REMEMBER tags and strip thought_process blocks before persisting/displaying
           const { cleanText, newFacts } = extractMemoryTags(accumulated);
           const displayText = stripThoughtProcess(cleanText || accumulated);
-          const finalMsgs = [...newMsgs, { ...assistantMsg, content: displayText }];
+          const normalizedResponse = normalizeChatAssistantOutputTyped(displayText);
+          const finalText = normalizedResponse.valid
+            ? normalizedResponse.text
+            : buildDeterministicChatFallbackTyped({
+                current,
+                computedStrategy: chatStrategy,
+                decisionRecommendations,
+                error: "empty-or-malformed-chat-output",
+              });
+          const finalMsgs = [...newMsgs, { ...assistantMsg, content: finalText }];
           setMessages(finalMsgs);
           void persistMessages(finalMsgs);
           // Persist any new facts the AI learned
-          if (newFacts.length > 0) {
+          if (normalizedResponse.valid && newFacts.length > 0) {
             addFacts(newFacts)
               .then((memory: AiMemory | undefined) => {
                 if (memory) setMemoryData(memory);
               })
               .catch(() => { });
           }
-          // Record usage after successful response
-          recordChatUsage().catch(() => { });
-          const q = await checkChatQuota();
-          setChatQuota(q);
+          if (normalizedResponse.valid) {
+            // Record usage after successful response
+            recordChatUsage().catch(() => { });
+            const q = await checkChatQuota();
+            setChatQuota(q);
+          } else {
+            setError("AI response was incomplete. Showing native fallback guidance instead.");
+          }
+        } else {
+          const fallbackText = buildDeterministicChatFallbackTyped({
+            current,
+            computedStrategy: chatStrategy,
+            decisionRecommendations,
+            error: "empty-chat-output",
+          });
+          const finalMsgs = [...newMsgs, createChatMessage("assistant", fallbackText)];
+          setMessages(finalMsgs);
+          void persistMessages(finalMsgs);
+          setError("AI response was empty. Showing native fallback guidance instead.");
         }
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "AbortError") {
@@ -703,10 +824,16 @@ export default memo(function AIChatTab({
         } else {
           const message = err instanceof Error ? err.message : "Unknown chat error";
           log.error("chat", "Chat error", { error: message });
-          setError(message);
-          // Still keep user message visible
-          setMessages(newMsgs);
-          void persistMessages(newMsgs);
+          const fallbackText = buildDeterministicChatFallbackTyped({
+            current,
+            computedStrategy: chatStrategy,
+            decisionRecommendations,
+            error: message,
+          });
+          const finalMsgs = [...newMsgs, createChatMessage("assistant", fallbackText)];
+          setError(`${message} Showing native fallback guidance.`);
+          setMessages(finalMsgs);
+          void persistMessages(finalMsgs);
         }
       } finally {
         setIsStreaming(false);
@@ -724,6 +851,7 @@ export default memo(function AIChatTab({
       persona,
       personalRules,
       trendContext,
+      chatStrategy,
       memoryData,
       apiKey,
       aiProvider,
@@ -741,6 +869,18 @@ export default memo(function AIChatTab({
       haptic.medium();
     }
   }, []);
+
+  const abortStreamSilently = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
+  useEffect(() => {
+    registerChatStreamAbort?.(abortStreamSilently);
+    return () => {
+      registerChatStreamAbort?.(null);
+      abortRef.current?.abort();
+    };
+  }, [abortStreamSilently, registerChatStreamAbort]);
 
   // ── Clear chat ──
   const clearChat = useCallback(() => {
@@ -785,23 +925,23 @@ export default memo(function AIChatTab({
       
       const userMessage = `Draft a negotiation script to lower my $${amount} monthly bill with ${merchant}.`;
       
-      const negotiateSysPrompt = `You are a world-class consumer advocate and retention-desk negotiation specialist. You have a 94% success rate reducing bills.
+      const negotiateSysPrompt = `You are a practical consumer advocate who writes calm, high-probability retention and billing negotiation scripts.
 
 The user wants to negotiate their $${amount}/month bill with ${merchant}.
 The proven winning tactic for ${merchant} is: "${tactic}"
 
-Generate a BATTLE-TESTED phone/chat script in markdown with these exact sections:
+Generate a concise phone/chat script in markdown with these exact sections:
 
 ## 📞 Before You Call
 - The exact phone number or chat URL (if widely known) for ${merchant}.
-- Say "Cancel my service" at the IVR to reach the retention/loyalty desk immediately — this is non-negotiable.
-- Have a competitor's current rate ready as your anchor (name the specific competitor and price).
+- A likely menu path to reach billing, loyalty, or retention if widely known. If not known, say so plainly.
+- Have a competitor's current rate ready as your anchor when relevant. If a realistic competitor is unclear, say to reference a lower market rate instead of inventing one.
 
 ## 🗣️ Opening Line
-Give them the EXACT words to say in the first 15 seconds. This must establish: (1) how long they've been a loyal customer, (2) that they've found a cheaper alternative, (3) that they are ready to cancel today unless the price is fixed.
+Give them a natural opening line for the first 15 seconds. It should usually establish: (1) loyalty or tenure if helpful, (2) price pressure or a competing offer if relevant, and (3) that they are considering cancellation unless the price improves.
 
 ## 💰 The Ask
-State the specific target price or discount percentage to demand. Use the competitor rate as anchor. Example: "I'd like to stay, but I need my bill at $X/month — that's what [Competitor] is offering me right now."
+State a realistic target price or discount range to ask for. Use the competitor rate as anchor when known. Example: "I'd like to stay, but I need my bill closer to $X/month to justify keeping the service."
 
 ## 🛡️ If They Say No
 Provide 3 escalation responses:
@@ -811,10 +951,10 @@ Provide 3 escalation responses:
 
 ## ⚡ Pro Tips
 - Best times to call (Tue-Thu morning = shorter hold, better offers).
-- Never accept the first offer — always counter once.
+- If the first offer is weak, counter once with a specific lower target.
 - If offered a "temporary" discount, ask for the duration in writing/confirmation number.
 
-RULES: Be punchy, confident, and ruthlessly practical. Give EXACT words to say, not vague advice. Do NOT discuss budgeting, tracking, or financial planning — ONLY the negotiation script. Format with clear headers and bold key phrases.`;
+RULES: Be practical, confident, and accurate. Give usable words to say, but do not fabricate phone trees, market pricing, or company policies. Do NOT discuss budgeting, tracking, or financial planning — ONLY the negotiation script. Format with clear headers and bold key phrases.`;
 
       const timer = setTimeout(() => {
         void sendMessage(userMessage, negotiateSysPrompt);
@@ -1074,8 +1214,8 @@ RULES: Be punchy, confident, and ruthlessly practical. Give EXACT words to say, 
               const isUser = msg.role === "user";
               const isLatestAssistant = !isUser && i === messages.length - 1 && isStreaming;
               // Detect if previous or next message is from the same sender to adjust corner radiuses beautifully
-              const prevIsSame = i > 0 && messages[i - 1].role === msg.role;
-              const nextIsSame = i < messages.length - 1 && messages[i + 1].role === msg.role;
+              const prevIsSame = messages[i - 1]?.role === msg.role;
+              const nextIsSame = messages[i + 1]?.role === msg.role;
 
               // Apple-style bubble radius logic:
               // For user (right): if next is same, right-bottom corner stays sharp. if prev is same, right-top stays sharp.
@@ -1389,7 +1529,7 @@ RULES: Be punchy, confident, and ruthlessly practical. Give EXACT words to say, 
             <ProBannerTyped
               onUpgrade={() => setShowPaywall(true)}
               label="⚡ Upgrade to Pro"
-              sublabel={`Only ${chatQuota.remaining} chats left today — Pro gives you 50/day`}
+              sublabel={`Only ${chatQuota.remaining} chats left today — Pro gives you 25/day`}
             />
           </div>
         )}

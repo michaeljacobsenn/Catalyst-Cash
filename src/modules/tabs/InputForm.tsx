@@ -37,7 +37,7 @@ import { fetchMarketPrices, calcPortfolioValue } from "../marketData.js";
 import { getPlaidAutoFill, getStoredTransactions } from "../plaid.js";
 import { haptic } from "../haptics.js";
 import { buildSnapshotMessage } from "../buildSnapshotMessage.js";
-import { checkAuditQuota } from "../subscription.js";
+import { checkAuditQuota, isGatingEnforced } from "../subscription.js";
 import { useAudit } from "../contexts/AuditContext.js";
 import { DEFAULT_FINANCIAL_CONFIG } from "../contexts/SettingsContext.js";
 import type { PersonaMode, SetFinancialConfig } from "../contexts/SettingsContext.js";
@@ -103,10 +103,13 @@ interface OverridePlaidState {
 }
 
 interface AuditQuota {
+  allowed: boolean;
   remaining: number;
   limit: number;
+  used?: number;
   monthlyCap?: number;
   monthlyUsed?: number;
+  softBlocked?: boolean;
 }
 
 interface PlaidTransaction {
@@ -235,6 +238,9 @@ const CustomSelect = UICustomSelect as unknown as (props: CustomSelectProps) => 
 
 // Sanitize dollar input: strip non-numeric chars except decimal point
 const sanitizeDollar = (value: string): string => value.replace(/[^0-9.]/g, "").replace(/\.(?=.*\.)/g, "");
+const toNumber = (value: MoneyInput | "" | null | undefined): number => parseFloat(String(value ?? "0")) || 0;
+const toMoneyInput = (value: unknown): MoneyInput | "" =>
+  typeof value === "number" || typeof value === "string" ? value : "";
 
 export default function InputForm({
   onSubmit,
@@ -396,8 +402,8 @@ export default function InputForm({
 
   // Compute exact strategy using current form inputs
   const computedStrategy = generateStrategy(activeConfig, {
-    checkingBalance: parseFloat(form.checking || 0),
-    savingsTotal: parseFloat(form.savings || 0),
+    checkingBalance: toNumber(form.checking),
+    savingsTotal: toNumber(form.savings),
     cards: strategyCards,
     renewals: promptRenewals,
     snapshotDate: form.date,
@@ -451,26 +457,30 @@ export default function InputForm({
           return match ? { ...d, cardId: match.id } : d;
         }) as InputDebt[];
       const plaidNow = getPlaidAutoFill(cards || [], bankAccounts || []) as PlaidAutoFillData;
-      setForm((p) => ({
-        ...p,
-        ...lastAudit.form,
-        debts:
-          plaidNow.debts?.length > 0
-            ? plaidNow.debts
-            : debtWithBalance.length
-              ? debtWithBalance
-              : [{ cardId: "", name: "", balance: "" }],
-        date: today.toISOString().split("T")[0] ?? today.toISOString().slice(0, 10),
-        time: (today.toTimeString().split(" ")[0] ?? "00:00:00").slice(0, 5),
-        // Prefer live Plaid balance > last audit > empty
-        checking: plaidNow.checking !== null ? plaidNow.checking : lastAudit?.form?.checking || "",
-        savings: plaidNow.vault !== null ? plaidNow.vault : lastAudit?.form?.savings || lastAudit?.form?.ally || "",
-        pendingCharges: [],
-        roth: lastAudit.form.roth !== undefined ? lastAudit.form.roth : p.roth || "",
-        brokerage: lastAudit.form.brokerage !== undefined ? lastAudit.form.brokerage : p.brokerage || "",
-        autoPaycheckAdd: lastAudit.form.autoPaycheckAdd !== undefined ? lastAudit.form.autoPaycheckAdd : false,
-        paycheckAddOverride: lastAudit.form.paycheckAddOverride !== undefined ? lastAudit.form.paycheckAddOverride : "",
-      }));
+      setForm((p) => {
+        const priorForm = (lastAudit.form || {}) as Record<string, unknown>;
+        return {
+          ...p,
+          ...lastAudit.form,
+          debts:
+            plaidNow.debts?.length > 0
+              ? plaidNow.debts
+              : debtWithBalance.length
+                ? debtWithBalance
+                : [{ cardId: "", name: "", balance: "" }],
+          date: today.toISOString().split("T")[0] ?? today.toISOString().slice(0, 10),
+          time: (today.toTimeString().split(" ")[0] ?? "00:00:00").slice(0, 5),
+          // Prefer live Plaid balance > last audit > empty
+          checking: plaidNow.checking !== null ? plaidNow.checking : toMoneyInput(lastAudit?.form?.checking),
+          savings: plaidNow.vault !== null ? plaidNow.vault : toMoneyInput(lastAudit?.form?.savings ?? lastAudit?.form?.ally),
+          pendingCharges: [],
+          roth: toMoneyInput(priorForm.roth ?? p.roth),
+          brokerage: toMoneyInput(priorForm.brokerage ?? p.brokerage),
+          k401Balance: toMoneyInput(priorForm.k401Balance ?? p.k401Balance),
+          autoPaycheckAdd: typeof priorForm.autoPaycheckAdd === "boolean" ? priorForm.autoPaycheckAdd : false,
+          paycheckAddOverride: typeof priorForm.paycheckAddOverride === "string" ? priorForm.paycheckAddOverride : "",
+        };
+      });
     }
   }, [lastAudit, cards, bankAccounts]);
   function s<K extends keyof InputFormState>(key: K, value: InputFormState[K]): void {
@@ -502,7 +512,19 @@ export default function InputForm({
     activeConfig.track401k && (form.k401Balance || activeConfig.k401Balance),
     form.debts.some(d => (d.name || d.cardId) && d.balance),
   ].filter(Boolean).length;
-  const canSubmit = filledFields >= 1 && !isLoading;
+  const quotaExhausted = auditQuota && isGatingEnforced() && !auditQuota.allowed;
+  const canSubmit = filledFields >= 1 && !isLoading && !quotaExhausted;
+  const pendingChargeCount = (form.pendingCharges || []).filter(charge => toNumber(charge.amount) > 0).length;
+  const activeBudgetCategoryCount = Object.values(budgetActuals || {}).filter(value => toNumber(value) > 0).length;
+  const advancedSummary = [
+    pendingChargeCount > 0 ? `${pendingChargeCount} pending` : "No pending items",
+    activeBudgetCategoryCount > 0 ? `${activeBudgetCategoryCount} category overrides` : "No spending overrides",
+  ].join(" • ");
+  const configSummary = [
+    activeConfig.incomeType ? `${activeConfig.incomeType[0]?.toUpperCase() || ""}${activeConfig.incomeType.slice(1)} income` : "Income defaults",
+    activeConfig.currencyCode || "USD",
+    personalRules?.trim() ? "Custom AI rules" : "Default AI rules",
+  ].join(" • ");
 
   const buildMsg = () =>
     buildSnapshotMessage({
@@ -1157,11 +1179,11 @@ export default function InputForm({
           ))
           }
           {
-            (form.pendingCharges || []).filter(c => parseFloat(c.amount) > 0).length > 1 && (
+            (form.pendingCharges || []).filter(c => toNumber(c.amount) > 0).length > 1 && (
               <div
                 style={{ fontSize: 10, fontFamily: T.font.mono, color: T.text.secondary, textAlign: "right", marginTop: 2 }}
               >
-                TOTAL: ${(form.pendingCharges || []).reduce((s, c) => s + (parseFloat(c.amount) || 0), 0).toFixed(2)}
+                TOTAL: ${(form.pendingCharges || []).reduce((s, c) => s + toNumber(c.amount), 0).toFixed(2)}
               </div>
             )
           }
@@ -1245,7 +1267,7 @@ export default function InputForm({
             boxShadow: showAdvanced ? `0 4px 16px ${T.accent.primary}1A, inset 0 1px 0 ${T.accent.primary}15` : "none",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
             <div
               style={{
                 width: 30,
@@ -1261,7 +1283,24 @@ export default function InputForm({
             >
               <Zap size={14} color={showAdvanced ? "#fff" : T.text.muted} strokeWidth={2.5} />
             </div>
-            <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: "-0.01em" }}>Advanced Details</span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: "-0.01em", color: T.text.primary }}>
+                Advanced Details
+              </div>
+              <div
+                style={{
+                  marginTop: 2,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: showAdvanced ? T.text.secondary : T.text.dim,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {advancedSummary}
+              </div>
+            </div>
           </div>
           <div
             style={{
@@ -1780,7 +1819,7 @@ export default function InputForm({
             boxShadow: showConfig ? `0 4px 16px ${T.accent.primary}1A, inset 0 1px 0 ${T.accent.primary}15` : "none",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
             <div
               style={{
                 width: 30,
@@ -1796,9 +1835,24 @@ export default function InputForm({
             >
               <Zap size={14} color={showConfig ? "#fff" : T.text.muted} strokeWidth={2.5} />
             </div>
-            <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: "-0.01em" }}>
-              Financial Profile & AI Rules
-            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: "-0.01em", color: T.text.primary }}>
+                Financial Profile & AI Rules
+              </div>
+              <div
+                style={{
+                  marginTop: 2,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: showConfig ? T.text.secondary : T.text.dim,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {configSummary}
+              </div>
+            </div>
           </div>
           <div
             style={{
@@ -2186,14 +2240,25 @@ export default function InputForm({
       {auditQuota && auditQuota.limit !== Infinity && (
         <div style={{ textAlign: "center", marginBottom: 16 }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: auditQuota.remaining > 0 ? T.text.secondary : T.status.red }}>
-            {auditQuota.remaining} of {auditQuota.limit} weekly audits remaining
+            {auditQuota.remaining > 0
+              ? `This will use 1 of ${auditQuota.remaining} weekly audit${auditQuota.remaining === 1 ? "" : "s"} remaining`
+              : "Weekly audit limit reached — upgrade for 20/month"}
           </span>
         </div>
       )}
-      {auditQuota && auditQuota.limit === Infinity && auditQuota.monthlyCap !== Infinity && (
+      {auditQuota && auditQuota.limit === Infinity && auditQuota.monthlyCap !== undefined && auditQuota.monthlyUsed !== undefined && auditQuota.monthlyCap !== Infinity && (
         <div style={{ textAlign: "center", marginBottom: 16 }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: (auditQuota.monthlyCap - auditQuota.monthlyUsed) > 0 ? T.text.secondary : T.status.red }}>
-            {Math.max(0, auditQuota.monthlyCap - auditQuota.monthlyUsed)} of {auditQuota.monthlyCap} monthly Pro audits remaining
+            {(auditQuota.monthlyCap - auditQuota.monthlyUsed) > 0
+              ? `This will use 1 of ${Math.max(0, auditQuota.monthlyCap - auditQuota.monthlyUsed)} monthly Pro audits remaining`
+              : "Monthly Pro audit limit reached — resets next billing cycle"}
+          </span>
+        </div>
+      )}
+      {auditQuota && auditQuota.softBlocked && (
+        <div style={{ textAlign: "center", marginBottom: 16 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: T.status.amber }}>
+            You've exceeded the free quota — upgrade to Catalyst Cash Pro for higher limits
           </span>
         </div>
       )}

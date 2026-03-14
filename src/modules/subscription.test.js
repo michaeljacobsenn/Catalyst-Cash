@@ -50,16 +50,20 @@ describe("Tier Definitions", () => {
     expect(TIERS.free.auditsPerWeek).toBe(2);
     expect(TIERS.free.marketRefreshMs).toBe(60 * 60 * 1000); // 60 min
     expect(TIERS.free.historyLimit).toBe(12);
-    expect(TIERS.free.models).toEqual(["gpt-4o-mini"]);
+    expect(TIERS.free.models).toEqual(["gemini-2.5-flash"]);
   });
 
   it("pro tier has unlimited access", () => {
     expect(TIERS.pro.auditsPerWeek).toBe(Infinity);
     expect(TIERS.pro.marketRefreshMs).toBe(5 * 60 * 1000); // 5 min
     expect(TIERS.pro.historyLimit).toBe(Infinity);
-    expect(TIERS.pro.models).toContain("gpt-4o-mini");
-    expect(TIERS.pro.models).toContain("gpt-4o");
-    expect(TIERS.pro.models).toContain("o3-mini");
+    expect(TIERS.pro.models).toContain("gemini-2.5-flash");
+    expect(TIERS.pro.models).toContain("gpt-4.1");
+    expect(TIERS.pro.models).toContain("o3");
+    expect(TIERS.pro.models).toContain("claude-sonnet-4-6");
+    expect(TIERS.pro.models).toContain("claude-opus-4-6");
+    expect(TIERS.pro.models).toContain("claude-haiku-4-5");
+    expect(TIERS.pro.models).toContain("gemini-2.5-pro");
   });
 });
 
@@ -74,8 +78,9 @@ describe("IAP Constants", () => {
 
   it("has display pricing", () => {
     expect(IAP_PRICING.monthly.price).toBe("$9.99");
-    expect(IAP_PRICING.yearly.price).toBe("$89.99");
-    expect(IAP_PRICING.yearly.savings).toBeTruthy();
+    expect(IAP_PRICING.yearly.price).toBe("$69.99");
+    expect(IAP_PRICING.yearly.perMonth).toBe("$5.83");
+    expect(IAP_PRICING.yearly.savings).toBe("4 months free");
   });
 });
 
@@ -83,48 +88,47 @@ describe("IAP Constants", () => {
 // GATING MODE
 // ═══════════════════════════════════════════════════════════════
 describe("Gating Mode", () => {
-  it('default gating mode is "soft"', () => {
-    expect(getGatingMode()).toBe("soft");
+  it('default gating mode is "off"', () => {
+    expect(getGatingMode()).toBe("off");
   });
 
-  it("isGatingEnforced returns false when soft", () => {
+  it("isGatingEnforced returns false when off", () => {
     expect(isGatingEnforced()).toBe(false);
   });
 
-  it("shouldShowGating returns true when soft", () => {
-    expect(shouldShowGating()).toBe(true);
+  it("shouldShowGating returns false when off", () => {
+    expect(shouldShowGating()).toBe(false);
   });
 });
 
 // ═══════════════════════════════════════════════════════════════
-// SOFT GATING — Free-tier limits shown (not enforced)
-// Users see banners/limits but are not hard-blocked
+// OFF GATING — soft launch unlocks Pro behavior without blocking
 // ═══════════════════════════════════════════════════════════════
-describe("Soft Gating — Free-tier limits with banners", () => {
-  it("getCurrentTier returns Free tier for unpaid users", async () => {
+describe('Off Gating — launch mode behaves like unlocked Pro access', () => {
+  it("getCurrentTier returns Pro tier for unpaid users", async () => {
     const tier = await getCurrentTier();
-    expect(tier.id).toBe("free");
+    expect(tier.id).toBe("pro");
   });
 
-  it("checkAuditQuota returns free-tier limits", async () => {
+  it("checkAuditQuota returns unlimited access", async () => {
     const quota = await checkAuditQuota();
     expect(quota.allowed).toBe(true);
-    expect(quota.limit).toBe(TIERS.free.auditsPerWeek);
+    expect(quota.limit).toBe(Infinity);
   });
 
-  it("getMarketRefreshTTL returns free-tier 60 min", async () => {
+  it("getMarketRefreshTTL returns Pro cadence", async () => {
     const ttl = await getMarketRefreshTTL();
-    expect(ttl).toBe(60 * 60 * 1000);
+    expect(ttl).toBe(5 * 60 * 1000);
   });
 
-  it("getHistoryLimit returns free-tier limit", async () => {
+  it("getHistoryLimit returns unlimited history", async () => {
     const limit = await getHistoryLimit();
-    expect(limit).toBe(TIERS.free.historyLimit);
+    expect(limit).toBe(Infinity);
   });
 
-  it("hasFeature returns false for pro-only features", async () => {
-    expect(await hasFeature("premium_models")).toBe(false);
-    expect(await hasFeature("31_audits_per_month")).toBe(false);
+  it("hasFeature returns true for Pro-only features", async () => {
+    expect(await hasFeature("premium_models")).toBe(true);
+    expect(await hasFeature("monthly_audit_cap")).toBe(true);
   });
 
   it("hasFeature returns true for free-tier features", async () => {
@@ -133,26 +137,26 @@ describe("Soft Gating — Free-tier limits with banners", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// MODEL GATING — uses raw tier (unaffected by GATING_MODE)
-// Free users should NOT have access to pro models even when
-// GATING_MODE is "off"
+// MODEL GATING — off mode unlocks the full launch lineup
 // ═══════════════════════════════════════════════════════════════
-describe("Model Gating (raw tier, not affected by GATING_MODE)", () => {
-  it("free user can access gpt-4o-mini", async () => {
-    // No subscription state = free tier
-    expect(await isModelAvailable("gpt-4o-mini")).toBe(true);
-  });
-
-  it("free user cannot access pro models", async () => {
-    expect(await isModelAvailable("gpt-4o")).toBe(false);
-    expect(await isModelAvailable("o3-mini")).toBe(false);
+describe('Model Gating (launch mode "off")', () => {
+  it("unpaid users can access the full model lineup during soft launch", async () => {
+    expect(await isModelAvailable("gemini-2.5-flash")).toBe(true);
+    expect(await isModelAvailable("gpt-4.1")).toBe(true);
+    expect(await isModelAvailable("o3")).toBe(true);
+    expect(await isModelAvailable("claude-sonnet-4-6")).toBe(true);
+    expect(await isModelAvailable("claude-opus-4-6")).toBe(true);
   });
 
   it("pro user can access all models", async () => {
     await activatePro("com.catalystcash.pro.monthly", 30);
-    expect(await isModelAvailable("gpt-4o-mini")).toBe(true);
-    expect(await isModelAvailable("gpt-4o")).toBe(true);
-    expect(await isModelAvailable("o3-mini")).toBe(true);
+    expect(await isModelAvailable("gemini-2.5-flash")).toBe(true);
+    expect(await isModelAvailable("gpt-4.1")).toBe(true);
+    expect(await isModelAvailable("o3")).toBe(true);
+    expect(await isModelAvailable("claude-sonnet-4-6")).toBe(true);
+    expect(await isModelAvailable("claude-opus-4-6")).toBe(true);
+    expect(await isModelAvailable("claude-haiku-4-5")).toBe(true);
+    expect(await isModelAvailable("gemini-2.5-pro")).toBe(true);
   });
 });
 

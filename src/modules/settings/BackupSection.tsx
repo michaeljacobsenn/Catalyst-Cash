@@ -280,8 +280,8 @@ export default function BackupSection({ activeMenu, ...props }) {
                   a.click();
                   URL.revokeObjectURL(url);
                   setStatusMsg("Debug log exported.");
-                } catch (e) {
-                  setStatusMsg("Export failed: " + e.message);
+                } catch (e: unknown) {
+                  setStatusMsg(`Export failed: ${e instanceof Error ? e.message : "Unknown error"}`);
                 }
               }}
               style={{

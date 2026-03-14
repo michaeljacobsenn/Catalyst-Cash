@@ -734,7 +734,7 @@ export function FormRow({ icon: Icon, label, children, isLast = false, onClick, 
     </>
   );
 
-  const rowStyle = {
+  const rowStyle: CSSProperties = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",

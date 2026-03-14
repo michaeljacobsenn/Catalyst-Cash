@@ -139,6 +139,8 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
     );
   const parsed = audit.parsed;
   const sections = parsed.sections;
+  const degradedInfo = parsed.degraded;
+  const isDegraded = degradedInfo?.isDegraded;
 
   const handleExitResults = (): void => {
     if (onBack) return onBack();
@@ -201,6 +203,52 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
           </button>
         </div>
       </div>
+
+      {isDegraded && (
+        <Card
+          style={{
+            marginBottom: 14,
+            padding: 18,
+            border: `1px solid ${T.status.amber}35`,
+            background: `linear-gradient(180deg, ${T.status.amberDim} 0%, ${T.bg.card} 100%)`,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: T.status.amber, fontFamily: T.font.mono, letterSpacing: "0.06em" }}>
+                DEGRADED AUDIT
+              </div>
+              <h2 style={{ margin: "6px 0 0", fontSize: 18, fontWeight: 800, color: T.text.primary }}>
+                Full AI narrative unavailable
+              </h2>
+            </div>
+            <Badge variant="amber">NATIVE FALLBACK</Badge>
+          </div>
+          <p style={{ margin: 0, fontSize: 13, color: T.text.secondary, lineHeight: 1.6 }}>
+            {degradedInfo.reason}
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginTop: 14 }}>
+            <div style={{ padding: "12px 12px 10px", borderRadius: T.radius.lg, background: T.bg.elevated, border: `1px solid ${T.border.subtle}` }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em" }}>NATIVE SCORE</div>
+              <div style={{ marginTop: 5, fontSize: 20, fontWeight: 900, color: T.text.primary }}>
+                {parsed.healthScore?.score ?? "—"}
+              </div>
+            </div>
+            <div style={{ padding: "12px 12px 10px", borderRadius: T.radius.lg, background: T.bg.elevated, border: `1px solid ${T.border.subtle}` }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em" }}>SAFETY STATE</div>
+              <div style={{ marginTop: 5, fontSize: 16, fontWeight: 800, color: T.text.primary, textTransform: "capitalize" }}>
+                {degradedInfo.safetyState.level}
+              </div>
+            </div>
+            <div style={{ padding: "12px 12px 10px", borderRadius: T.radius.lg, background: T.bg.elevated, border: `1px solid ${T.border.subtle}` }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em" }}>TOP RISK FLAGS</div>
+              <div style={{ marginTop: 5, fontSize: 12, fontWeight: 700, color: T.text.primary, lineHeight: 1.45 }}>
+                {degradedInfo.riskFlags.length > 0 ? degradedInfo.riskFlags.slice(0, 2).join(", ") : "None"}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {parsed.moveItems.length > 0 &&
         (() => {

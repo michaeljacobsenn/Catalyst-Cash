@@ -64,6 +64,21 @@ interface GroupedRenewalItem extends Renewal {
   isExpired?: boolean;
 }
 
+interface SubscriptionSuggestion {
+  id: string;
+  name: string;
+  amount: number;
+  interval: number;
+  intervalUnit: string;
+  cadence: string;
+  category?: string;
+  source?: string;
+  chargedTo?: string;
+  nextDue?: string;
+  txDate: string;
+  confidence: number;
+}
+
 interface GroupedCategory {
   id: string;
   label: string;
@@ -87,6 +102,8 @@ interface CardSelectorProps {
   value: string;
   onChange: (value: string) => void;
 }
+
+type SortMode = "type" | "date" | "amount" | "name";
 
 interface SearchableSelectProps {
   value: string;
@@ -152,6 +169,61 @@ const FormRow = UIFormRow as unknown as (props: FormRowProps) => ReactNode;
 const Mono = UIMono as unknown as (props: MonoProps) => ReactNode;
 const EmptyState = UIEmptyState as unknown as (props: EmptyStateProps) => ReactNode;
 const SearchableSelect = SearchableSelectBase as unknown as (props: SearchableSelectProps) => ReactNode;
+
+function setRenewalOptional(renewal: Renewal, key: "source" | "chargedTo" | "chargedToId" | "nextDue" | "category", value: string | undefined | null): Renewal {
+  if (value == null || value === "") return renewal;
+  return { ...renewal, [key]: value };
+}
+
+function buildRenewalDraft(base: Renewal, patch: EditRenewalState, fallbackName?: string): Renewal {
+  let next: Renewal = {
+    ...base,
+    name: (patch.name || "").trim() || fallbackName || base.name,
+    amount: parseFloat(patch.amount) || 0,
+    interval: patch.interval,
+    intervalUnit: patch.intervalUnit,
+    cadence: formatInterval(patch.interval, patch.intervalUnit),
+  };
+  next = setRenewalOptional(next, "source", patch.source);
+  next = setRenewalOptional(next, "chargedTo", patch.chargedTo);
+  next = setRenewalOptional(next, "chargedToId", patch.chargedToId);
+  next = setRenewalOptional(next, "nextDue", patch.nextDue);
+  next = setRenewalOptional(next, "category", patch.category || base.category);
+  return next;
+}
+
+function buildNewRenewal(form: AddRenewalState, chargedToLabel: string): Renewal {
+  let next: Renewal = {
+    name: form.name.trim(),
+    amount: parseFloat(form.amount) || 0,
+    interval: Number(form.interval) || 1,
+    intervalUnit: form.intervalUnit,
+    cadence: formatInterval(Number(form.interval) || 1, form.intervalUnit),
+  };
+  next = setRenewalOptional(next, "source", form.source);
+  next = setRenewalOptional(next, "chargedTo", chargedToLabel);
+  next = setRenewalOptional(next, "chargedToId", form.chargedToId);
+  next = setRenewalOptional(next, "category", form.category);
+  next = setRenewalOptional(next, "nextDue", form.nextDue);
+  return next;
+}
+
+function markRenewalCancelled(renewal: Renewal, cancelledAt: string): Renewal {
+  return { ...renewal, isCancelled: true, cancelledAt };
+}
+
+function restoreCancelledRenewal(renewal: Renewal): Renewal {
+  const { cancelledAt, ...rest } = renewal;
+  return { ...rest, isCancelled: false };
+}
+
+function toGroupedRenewalItem(renewal: Renewal, originalIndex: number, now: string): GroupedRenewalItem {
+  return {
+    ...renewal,
+    originalIndex,
+    isExpired: Boolean(renewal.intervalUnit === "one-time" && renewal.nextDue && renewal.nextDue < now && !renewal.isCancelled),
+  };
+}
 
 const CANCELLATION_LINKS = {
   // ── Streaming Video ──
@@ -442,7 +514,7 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
     category: "subs",
     nextDue: "",
   });
-  const [sortBy, setSortBy] = useState<"type" | "date" | "amount" | "name">("type");
+  const [sortBy, setSortBy] = useState<SortMode>("type");
   const [editStep, setEditStep] = useState<number>(0);
 
   const formInputStyle: CSSProperties = {
@@ -477,11 +549,7 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
   // Merge user renewals + auto-generated card annual fees
   const allItems = useMemo<GroupedRenewalItem[]>(() => {
     const now = new Date().toISOString().split("T")[0] ?? new Date().toISOString().slice(0, 10);
-    const items = [...(renewals || [])].map((r, idx) => ({
-      ...r,
-      originalIndex: idx,
-      isExpired: r.intervalUnit === "one-time" && r.nextDue && r.nextDue < now && !r.isCancelled,
-    }));
+    const items = [...(renewals || [])].map((r, idx) => toGroupedRenewalItem(r, idx, now));
     (cardAnnualFees || []).forEach(af => {
       const exists = items.some(
         r =>
@@ -489,7 +557,7 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
           r.name === af.name ||
           r.linkedCardAF === af.cardName
       );
-      if (!exists) items.push(af);
+      if (!exists) items.push(toGroupedRenewalItem(af, items.length, now));
     });
     return items;
   }, [renewals, cardAnnualFees]);
@@ -641,24 +709,9 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
       const label = editVal.chargedToId
         ? getShortCardLabel(cards || [], cards.find(c => c.id === editVal.chargedToId)) || editVal.chargedTo
         : editVal.chargedTo;
-      const newName = (editVal.name || "").trim() || fallbackName;
       setRenewals((prev) =>
         (prev || []).map((r, idx) =>
-          idx === renewalIndex
-            ? {
-              ...r,
-              name: newName,
-              amount: parseFloat(editVal.amount) || 0,
-              interval: editVal.interval,
-              intervalUnit: editVal.intervalUnit,
-              cadence: formatInterval(editVal.interval, editVal.intervalUnit),
-              source: editVal.source,
-              chargedTo: label,
-              chargedToId: editVal.chargedToId,
-              nextDue: editVal.nextDue,
-              category: editVal.category || r.category,
-            }
-            : r
+          idx === renewalIndex ? buildRenewalDraft(r, { ...editVal, chargedTo: label }, fallbackName) : r
         )
       );
       setEditing(null);
@@ -699,18 +752,13 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
           )
         )
           return;
-        setRenewals((prev) =>
-          (prev || []).map((r, idx) =>
-            idx === renewalIndex ? { ...r, isCancelled: true, cancelledAt: new Date().toISOString().split("T")[0] } : r
-          )
-        );
+        setRenewals((prev) => {
+          const cancelledAt = new Date().toISOString().split("T")[0] ?? "";
+          return (prev || []).map((r, idx) => (idx === renewalIndex ? markRenewalCancelled(r, cancelledAt) : r));
+        });
       } else {
         // Restoring
-        setRenewals((prev) =>
-          (prev || []).map((r, idx) =>
-            idx === renewalIndex ? { ...r, isCancelled: false, cancelledAt: undefined } : r
-          )
-        );
+        setRenewals((prev) => (prev || []).map((r, idx) => (idx === renewalIndex ? restoreCancelledRenewal(r) : r)));
       }
     },
     [renewals, setRenewals]
@@ -722,18 +770,7 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
     const label = addForm.chargedToId
       ? getShortCardLabel(cards || [], cards.find(c => c.id === addForm.chargedToId)) || addForm.chargedTo
       : addForm.chargedTo;
-    const newItem = {
-      name: addForm.name.trim(),
-      amount: parseFloat(addForm.amount) || 0,
-      interval: parseInt(addForm.interval),
-      intervalUnit: addForm.intervalUnit,
-      cadence: formatInterval(parseInt(addForm.interval), addForm.intervalUnit),
-      source: addForm.source,
-      chargedTo: label,
-      chargedToId: addForm.chargedToId,
-      category: addForm.category,
-      nextDue: addForm.nextDue || "",
-    };
+    const newItem = buildNewRenewal(addForm, label);
     setRenewals([...(renewals || []), newItem]);
     setAddForm({
       name: "",
@@ -847,7 +884,10 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
     { id: "onetime", label: "One-Time Expenses" },
   ];
 
-  const { detected, dismissSuggestion } = useSubscriptions(renewals, proEnabled);
+  const { detected, dismissSuggestion } = useSubscriptions(renewals, proEnabled) as {
+    detected: SubscriptionSuggestion[];
+    dismissSuggestion: (suggestionId: string) => void;
+  };
 
   return (
     <>
@@ -904,7 +944,7 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
             <div style={{ position: "relative", width: 105, minWidth: 105, maxWidth: 105, height: 32, flexShrink: 0, margin: 0, padding: 0, boxSizing: "border-box" }}>
               <select
                 value={sortBy}
-                onChange={e => setSortBy(e.target.value)}
+                onChange={e => setSortBy(e.target.value as SortMode)}
                 aria-label="Sort order"
                 style={{
                   position: "absolute",
@@ -1067,17 +1107,17 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
                     <div style={{ display: "flex", gap: 4 }}>
                       <button
                         onClick={() => {
-                          setRenewals(prev => [...(prev || []), {
+                          setRenewals(prev => [...(prev || []), buildNewRenewal({
                             name: sub.name,
-                            amount: sub.amount,
+                            amount: String(sub.amount),
                             interval: 1,
                             intervalUnit: "months",
-                            cadence: "1 month",
-                            category: sub.category,
-                            source: sub.source,
-                            chargedTo: sub.chargedTo,
-                            nextDue: sub.nextDue
-                          }]);
+                            category: sub.category || "subs",
+                            source: sub.source || "",
+                            chargedTo: sub.chargedTo || "",
+                            chargedToId: "",
+                            nextDue: sub.nextDue || "",
+                          }, sub.chargedTo || "")]);
                           dismissSuggestion(sub.id);
                           haptic.success();
                         }}
