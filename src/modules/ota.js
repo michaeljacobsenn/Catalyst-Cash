@@ -1,5 +1,5 @@
-import { injectOTACatalog } from "./rewardsCatalog.js";
-import { injectOTAMerchants } from "./merchantDatabase.js";
+  import { injectOTAMerchants } from "./merchantDatabase.js";
+  import { injectOTACatalog } from "./rewardsCatalog.js";
 
 const OTA_ENDPOINTS = {
   CATALOG: "https://catalystcash.app/data/catalog.json",

@@ -1,8 +1,8 @@
-import { T } from "../constants.js";
-import { InlineTooltip } from "../ui.js";
-import { Mono } from "../components.js";
+  import { Mono } from "../components.js";
+  import { T } from "../constants.js";
+  import { InlineTooltip } from "../ui.js";
 
-import { getActiveCurrencyCode, getCurrency } from "../currency.js";
+  import { getActiveCurrencyCode,getCurrency } from "../currency.js";
 
 /**
  * Compact formatter: $1,234 → $1.2K, $12,345 → $12.3K, $123,456 → $123K
@@ -48,7 +48,7 @@ export default function MetricsBar({ quickMetrics, privacyMode }) {
           minWidth: "100%",
         }}
       >
-        {quickMetrics.map(({ l, v, c, icon }, i) => (
+        {quickMetrics.map(({ l, v, c }, i) => (
           <div
             key={l}
             style={{

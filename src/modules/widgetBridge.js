@@ -9,8 +9,8 @@
 // Usage: call updateWidgetData() after every successful audit.
 // ═══════════════════════════════════════════════════════════════
 
-import { Capacitor } from "@capacitor/core";
-import { Preferences } from "@capacitor/preferences";
+  import { Capacitor } from "@capacitor/core";
+  import { Preferences } from "@capacitor/preferences";
 
 const WIDGET_KEY = "catalyst-widget-data";
 

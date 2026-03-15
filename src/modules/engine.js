@@ -4,7 +4,7 @@
  * natively to ensure reliable calculations without relying on LLM hallucinations.
  */
 
-import { cmpString, fromCents, monthlyInterestCents, toBps, toCents } from "./moneyMath.js";
+  import { cmpString,fromCents,monthlyInterestCents,toBps,toCents } from "./moneyMath.js";
 
 // Helper: Add days to a date string (YYYY-MM-DD)
 export function addDays(dateStr, days) {

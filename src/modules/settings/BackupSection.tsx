@@ -1,32 +1,21 @@
-import { Cloud, Download, Upload, CheckCircle, AlertTriangle, Loader2, Save } from "../icons";
-import { T } from "../constants.js";
-import { Card, Label } from "../ui.js";
-import { db } from "../utils.js";
-import { haptic } from "../haptics.js";
-import { getLogsAsText, clearLogs } from "../logger.js";
-import { getErrorLog, clearErrorLog } from "../errorReporter.js";
+  import { T } from "../constants.js";
+  import { clearErrorLog,getErrorLog } from "../errorReporter.js";
+  import { AlertTriangle,CheckCircle,Cloud,Download,Loader2,Upload } from "../icons";
+  import { clearLogs,getLogsAsText } from "../logger.js";
+  import { Card,Label } from "../ui.js";
+  import { db } from "../utils.js";
 
 export default function BackupSection({ activeMenu, ...props }) {
   const {
     backupStatus,
-    setBackupStatus,
     restoreStatus,
-    setRestoreStatus,
     statusMsg,
     setStatusMsg,
     handleExport,
     handleExportSheet,
     handleImport,
     householdId,
-    setHouseholdId,
-    householdPasscode,
-    setHouseholdPasscode,
-    showHouseholdModal,
     setShowHouseholdModal,
-    hsInputId,
-    setHsInputId,
-    hsInputPasscode,
-    setHsInputPasscode,
     appleLinkedId,
     handleAppleSignIn,
     unlinkApple,

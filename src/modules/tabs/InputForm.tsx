@@ -1,57 +1,49 @@
-import React, {
-  useState,
-  useEffect,
-  useMemo,
-  useCallback,
-  useRef,
-  type ChangeEvent,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
-import {
-  AlertCircle,
-  AlertTriangle,
-  Zap,
-  ChevronDown,
-  ChevronUp,
-  Loader2,
-  BookOpen,
-  Trash2,
-  Plus,
-  Minus,
-  CheckCircle,
-  RefreshCw,
-  TrendingUp,
-  X,
-} from "../icons";
-import { T } from "../constants.js";
-import { validateSnapshot } from "../validation.js";
-import { Card as UICard, Label as UILabel, Badge } from "../ui.js";
-import { Mono as UIMono, DI as UIDI, CustomSelect as UICustomSelect } from "../components.js";
-import { getSystemPrompt } from "../prompts.js";
-import { generateStrategy, mergeSnapshotDebts } from "../engine.js";
-import { resolveCardLabel, getShortCardLabel } from "../cards.js";
-import { nativeExport, cyrb53, fmt } from "../utils.js";
-import { fetchMarketPrices, calcPortfolioValue } from "../marketData.js";
+  import {
+    useEffect,
+    useMemo,
+    useState,
+    type ChangeEvent,
+    type CSSProperties,
+    type ReactNode,
+  } from "react";
+  import { getShortCardLabel,resolveCardLabel } from "../cards.js";
+  import { CustomSelect as UICustomSelect,DI as UIDI,Mono as UIMono } from "../components.js";
+  import { T } from "../constants.js";
+  import {
+    AlertCircle,
+    AlertTriangle,
+    CheckCircle,
+    ChevronDown,
+    ChevronUp,
+    Loader2,
+    Minus,
+    Plus,
+    Trash2,
+    TrendingUp,
+    Zap,
+  } from "../icons";
+  import { calcPortfolioValue,fetchMarketPrices } from "../marketData.js";
+  import { Badge,Card as UICard,Label as UILabel } from "../ui.js";
+  import { fmt } from "../utils.js";
+  import { validateSnapshot } from "../validation.js";
 
-import { getPlaidAutoFill, getStoredTransactions } from "../plaid.js";
-import { haptic } from "../haptics.js";
-import { buildSnapshotMessage } from "../buildSnapshotMessage.js";
-import { isLikelyNetworkError } from "../networkErrors.js";
-import { checkAuditQuota, isGatingEnforced } from "../subscription.js";
-import { useAudit } from "../contexts/AuditContext.js";
-import { DEFAULT_FINANCIAL_CONFIG } from "../contexts/SettingsContext.js";
-import type { PersonaMode, SetFinancialConfig } from "../contexts/SettingsContext.js";
-import type {
-  AuditFormData,
-  AuditFormDebt,
-  AuditRecord,
-  BankAccount,
-  Card,
-  CatalystCashConfig,
-  MarketPriceMap,
-  Renewal,
-} from "../../types/index.js";
+  import type {
+    AuditFormData,
+    AuditFormDebt,
+    AuditRecord,
+    BankAccount,
+    Card as PortfolioCard,
+    CatalystCashConfig,
+    Renewal,
+  } from "../../types/index.js";
+  import { buildSnapshotMessage } from "../buildSnapshotMessage.js";
+  import { useAudit } from "../contexts/AuditContext.js";
+  import type { PersonaMode,SetFinancialConfig } from "../contexts/SettingsContext.js";
+  import { DEFAULT_FINANCIAL_CONFIG } from "../contexts/SettingsContext.js";
+  import { haptic } from "../haptics.js";
+  import { isLikelyNetworkError } from "../networkErrors.js";
+  import { getPlaidAutoFill,getStoredTransactions } from "../plaid.js";
+  import { checkAuditQuota,isGatingEnforced } from "../subscription.js";
 
 type MoneyInput = number | string;
 
@@ -160,7 +152,7 @@ interface InputFormProps {
   lastAudit: AuditRecord | null;
   renewals: Renewal[];
   cardAnnualFees: Renewal[];
-  cards: Card[];
+  cards: PortfolioCard[];
   bankAccounts: BankAccount[];
   onManualImport: (resultText: string) => void | Promise<void>;
   toast: ToastApi;
@@ -226,10 +218,6 @@ interface CustomSelectProps {
   icon?: ReactNode;
 }
 
-interface InputFormPromptContext {
-  summary?: string;
-  recent: Array<{ role: string; content: string; ts?: number }>;
-}
 
 const Card = UICard as unknown as (props: CardComponentProps) => ReactNode;
 const Label = UILabel as unknown as (props: LabelProps) => ReactNode;
@@ -251,19 +239,11 @@ export default function InputForm({
   cardAnnualFees,
   cards,
   bankAccounts,
-  onManualImport,
-  toast,
   financialConfig,
   setFinancialConfig,
   aiProvider,
   personalRules,
   setPersonalRules,
-  persona = null,
-  instructionHash,
-  setInstructionHash,
-  db,
-  onBack,
-  proEnabled = false,
 }: InputFormProps) {
   const { error } = useAudit();
   const today = new Date();
@@ -394,47 +374,12 @@ export default function InputForm({
 
   // Identify if the generated system prompt has drifted from the last downloaded version
   const activeConfig: InputFormConfig = typedFinancialConfig;
-  const promptRenewals = [...(renewals || []), ...(cardAnnualFees || [])];
 
-  const strategyCards = useMemo(
-    () => mergeSnapshotDebts(cards || [], form.debts || [], activeConfig?.defaultAPR || 0),
-    [cards, form.debts, activeConfig?.defaultAPR]
-  );
 
   // Compute exact strategy using current form inputs
-  const computedStrategy = generateStrategy(activeConfig, {
-    checkingBalance: toNumber(form.checking),
-    savingsTotal: toNumber(form.savings),
-    cards: strategyCards,
-    renewals: promptRenewals,
-    snapshotDate: form.date,
-  });
 
-  const currentPayload = (getSystemPrompt as unknown as (
-    provider: string,
-    config: InputFormConfig,
-    cards: Card[],
-    renewals: Renewal[],
-    personalRules: string,
-    trendContext: null,
-    persona: PersonaMode,
-    computedStrategy: unknown,
-    chatContext?: InputFormPromptContext | null,
-    memBlock?: unknown
-  ) => string)(
-    aiProvider || "gemini",
-    activeConfig,
-    cards || [],
-    promptRenewals,
-    personalRules || "",
-    null,
-    persona,
-    computedStrategy
-  );
-  const liveHash = cyrb53(currentPayload);
-  const instructionsOutOfSync = instructionHash !== liveHash;
   const cardOptions = useMemo<SelectGroup[]>(() => {
-    const groupedCards = (cards || []).reduce<Record<string, Card[]>>((groups, card) => {
+    const groupedCards = (cards || []).reduce<Record<string, PortfolioCard[]>>((groups, card) => {
       (groups[card.institution] = groups[card.institution] || []).push(card);
       return groups;
     }, {});

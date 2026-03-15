@@ -1,13 +1,13 @@
-import React, { useState } from "react";
-import { Navigation, MapPin, RefreshCw, AlertCircle, Sparkles, X } from "../icons";
-import { Badge } from "../ui.js";
-import { T } from "../constants.js";
-import { usePortfolio } from "../contexts/PortfolioContext.js";
-import { getCardMultiplier } from "../rewardsCatalog.js";
-import { classifyMerchant } from "../api.js";
-import { haptic } from "../haptics.js";
-import { useSettings } from "../contexts/SettingsContext.js";
-import type { Card } from "../../types/index.js";
+  import { useState } from "react";
+  import type { Card } from "../../types/index.js";
+  import { classifyMerchant } from "../api.js";
+  import { T } from "../constants.js";
+  import { usePortfolio } from "../contexts/PortfolioContext.js";
+  import { useSettings } from "../contexts/SettingsContext.js";
+  import { haptic } from "../haptics.js";
+  import { AlertCircle,MapPin,Navigation,RefreshCw,Sparkles,X } from "../icons";
+  import { getCardMultiplier } from "../rewardsCatalog.js";
+  import { Badge } from "../ui.js";
 
 type GeoSuggestStatus = "idle" | "locating" | "fetching" | "categorizing" | "success" | "error";
 
@@ -23,7 +23,7 @@ export default function GeoSuggestWidget() {
   const { cards } = usePortfolio();
   const { financialConfig } = useSettings();
   const [status, setStatus] = useState<GeoSuggestStatus>("idle");
-  const [errorMsg, setErrorMsg] = useState("");
+  const [, setErrorMsg] = useState("");
   const [locationName, setLocationName] = useState("");
   const [category, setCategory] = useState("");
   const [bestCard, setBestCard] = useState<SuggestedCard | null>(null);

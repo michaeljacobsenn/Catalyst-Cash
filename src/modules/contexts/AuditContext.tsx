@@ -1,39 +1,37 @@
-import React, {
+import {
   createContext,
+  useCallback,
   useContext,
-  useState,
   useEffect,
   useRef,
-  useCallback,
+  useState,
   type Dispatch,
   type ReactNode,
   type SetStateAction,
 } from "react";
-import { computeStreak, getISOWeekNum } from "../dateHelpers.js";
-import { db, parseAudit, validateParsedAuditConsistency, buildDegradedParsedAudit, cyrb53, detectAuditDrift } from "../utils.js";
-import { streamAudit, callAudit, consumeLastAuditLogId, reportAuditLogOutcome } from "../api.js";
-import { generateStrategy, mergeSnapshotDebts } from "../engine.js";
-import { buildScrubber } from "../scrubber.js";
-import { evaluateBadges, BADGE_DEFINITIONS } from "../badges.js";
-import { haptic } from "../haptics.js";
-import { useToast } from "../Toast.js";
-import { getProvider } from "../providers.js";
-import { getSystemPrompt } from "../prompts.js";
-import { isLikelyAbortError, toUserFacingRequestError } from "../networkErrors.js";
-import { getHistoryLimit, getOrCreateDeviceId, recordAuditUsage } from "../subscription.js";
-import { loadMemory, extractAuditMilestones, addMilestones, getMemoryBlock } from "../memory.js";
-import { useSettings } from "./SettingsContext.js";
-import { usePortfolio } from "./PortfolioContext.js";
-import { useNavigation } from "./NavigationContext.js";
 import type {
   AuditFormData,
   AuditRecord,
-  CatalystCashConfig,
   CurrentDebtSnapshot,
   MoveCheckState,
   ParsedAudit,
   TrendContextEntry,
 } from "../../types/index.js";
+import { callAudit, consumeLastAuditLogId, reportAuditLogOutcome, streamAudit } from "../api.js";
+import { BADGE_DEFINITIONS, evaluateBadges } from "../badges.js";
+import { computeStreak, getISOWeekNum } from "../dateHelpers.js";
+import { generateStrategy, mergeSnapshotDebts } from "../engine.js";
+import { haptic } from "../haptics.js";
+import { addMilestones, extractAuditMilestones, getMemoryBlock, loadMemory } from "../memory.js";
+import { isLikelyAbortError, toUserFacingRequestError } from "../networkErrors.js";
+import { getProvider } from "../providers.js";
+import { buildScrubber } from "../scrubber.js";
+import { getHistoryLimit, getOrCreateDeviceId, recordAuditUsage } from "../subscription.js";
+import { useToast } from "../Toast.js";
+import { buildDegradedParsedAudit, cyrb53, db, detectAuditDrift, parseAudit, validateParsedAuditConsistency } from "../utils.js";
+import { useNavigation } from "./NavigationContext.js";
+import { usePortfolio } from "./PortfolioContext.js";
+import { useSettings } from "./SettingsContext.js";
 
 interface AuditProviderProps {
   children: ReactNode;
@@ -134,47 +132,19 @@ function migrateHistory(historyItems: AuditRecord[] | null): AuditRecord[] | nul
   return result;
 }
 
-function buildCriticalAuditRetryPrompt(
-  financialConfig: CatalystCashConfig | null | undefined,
-  computedStrategy: ReturnType<typeof generateStrategy>,
-  formData: AuditFormData
-): string {
-  void financialConfig;
-  const nativeScore = computedStrategy?.auditSignals?.nativeScore?.score ?? "N/A";
-  const nativeGrade = computedStrategy?.auditSignals?.nativeScore?.grade ?? "N/A";
-  const operationalSurplus = Number(computedStrategy?.operationalSurplus || 0).toFixed(2);
-  const riskFlags = Array.isArray(computedStrategy?.auditSignals?.riskFlags)
-    ? computedStrategy.auditSignals.riskFlags.join(", ")
-    : "none";
-
-  return `Return STRICT JSON ONLY. No markdown, no prose.
-
-Required top-level keys only:
-- headerCard
-- healthScore
-- weeklyMoves
-- riskFlags
-
-Constraints:
-- headerCard.status must be GREEN, YELLOW, or RED.
-- healthScore.score must be a number from 0-100.
-- healthScore.grade must match the score exactly.
-- weeklyMoves must be 1-3 concrete actions. If operational surplus is positive, at least one weekly move must assign dollars.
-- riskFlags must be an array of short kebab-case strings.
-
-Native anchors:
-- Native score anchor: ${nativeScore}/100 (${nativeGrade})
-- Operational surplus anchor: $${operationalSurplus}
-- Native risk flags: ${riskFlags}
-- Snapshot date: ${formData.date}
-
-Return this exact JSON shape:
-{
-  "headerCard": { "status": "YELLOW", "details": ["short summary"] },
-  "healthScore": { "score": 72, "grade": "C-", "trend": "flat", "summary": "one sentence" },
-  "weeklyMoves": ["Route $150 to the highest-priority target."],
-  "riskFlags": ["example-flag"]
-}`;
+function scrubPromptContext<T>(value: T, scrub: (input: string) => string): T {
+  if (typeof value === "string") {
+    return scrub(value) as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => scrubPromptContext(item, scrub)) as T;
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, scrubPromptContext(entry, scrub)])
+    ) as T;
+  }
+  return value;
 }
 
 export function AuditProvider({ children }: AuditProviderProps) {
@@ -190,7 +160,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
     setShowAiConsent,
   } = useSettings();
 
-  const { cards, bankAccounts, renewals, cardAnnualFees, setBadges } = usePortfolio();
+  const { cards, renewals, cardAnnualFees, setBadges } = usePortfolio();
   const { navTo, onboardingComplete, setResultsBackTarget } = useNavigation();
 
   const [current, setCurrent] = useState<AuditRecord | null>(null);
@@ -426,7 +396,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
       auditRawRef.current = "";
       auditAbortReasonRef.current = null;
 
-      let nextHistory: AuditRecord[] = history;
+      let nextHistory: AuditRecord[];
 
       try {
         let raw = "";
@@ -477,32 +447,24 @@ export function AuditProvider({ children }: AuditProviderProps) {
           };
           const memBlock = getMemoryBlock(memory);
 
-          const rawLivePrompt = (getSystemPrompt as unknown as (
-            provider: string,
-            financialConfig: unknown,
-            cards: unknown[],
-            promptRenewals: unknown[],
-            personalRules: string,
-            trendContext: unknown[],
-            persona: string | null,
-            computedStrategy: unknown,
-            chatContext: PromptChatContext | null,
-            memBlock: unknown
-          ) => string)(
-            aiProvider || "gemini",
-            financialConfig,
-            cards,
-            promptRenewals,
-            personalRules || "",
-            trendContext,
-            persona,
-            computedStrategy,
-            chatContext,
-            memBlock
-          );
           const activeScrubber = scrubber;
-          const livePrompt = activeScrubber.scrub(rawLivePrompt);
-          const liveHash = cyrb53(livePrompt).toString();
+          const liveContext = scrubPromptContext(
+            {
+              providerId: aiProvider || "gemini",
+              financialConfig,
+              cards,
+              renewals: promptRenewals,
+              personalRules: personalRules || "",
+              trendContext,
+              persona,
+              computedStrategy,
+              chatContext,
+              memoryBlock: memBlock,
+              aiConsent,
+            },
+            activeScrubber.scrub
+          );
+          const liveHash = cyrb53(JSON.stringify(liveContext)).toString();
           const historyKey = `api-history-${aiProvider || "gemini"}`;
           const hashKey = `api-history-hash-${aiProvider || "gemini"}`;
           const lastHash = (await db.get(hashKey)) as string | null;
@@ -532,7 +494,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
               scrubbedMsg,
               aiProvider,
               aiModel,
-              livePrompt,
+              liveContext,
               historyForProvider,
               deviceId,
               controller.signal
@@ -547,7 +509,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
               scrubbedMsg,
               aiProvider,
               aiModel,
-              livePrompt,
+              liveContext,
               historyForProvider,
               deviceId
             )) as string;
@@ -568,13 +530,21 @@ export function AuditProvider({ children }: AuditProviderProps) {
         if (!parsed && !manualResultText && computedStrategy && scrubber && deviceId) {
           console.warn("[audit] Primary parse failed. Retrying with minimal critical-field prompt.");
           await reportAuditLogOutcome(primaryAuditLogId, false, false);
-          const retryPrompt = buildCriticalAuditRetryPrompt(financialConfig, computedStrategy, formData);
           const retryRaw = await callAudit(
             trimmedApiKey,
             scrubber.scrub(msg),
             aiProvider,
             aiModel,
-            scrubber.scrub(retryPrompt),
+            scrubPromptContext(
+              {
+                variant: "critical-retry",
+                financialConfig,
+                computedStrategy,
+                formData,
+                aiConsent,
+              },
+              scrubber.scrub
+            ),
             [],
             deviceId
           );
@@ -744,7 +714,6 @@ export function AuditProvider({ children }: AuditProviderProps) {
         }
       } catch (submitError: unknown) {
         const failure = toUserFacingRequestError(submitError, { context: "audit" });
-        const message = failure.rawMessage;
         const isBackgroundAbort = auditAbortReasonRef.current === "background-pause";
         const isAbort = isBackgroundAbort || auditAbortReasonRef.current === "user-cancelled" || isLikelyAbortError(submitError);
         const partialRaw = String(auditRawRef.current || "").trim();

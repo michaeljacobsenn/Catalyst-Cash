@@ -3,12 +3,12 @@
 // Shows total debt, weekly paydown rate, projected debt-free date,
 // and an animated progress bar.
 // ═══════════════════════════════════════════════════════════════
-import { T } from "../constants.js";
-import { fmt } from "../utils.js";
-import { Card } from "../ui.js";
-import { Mono } from "../components.js";
-import { Target } from "../icons";
-import type { Card as PortfolioCard } from "../../types/index.js";
+  import type { Card as PortfolioCard } from "../../types/index.js";
+  import { Mono } from "../components.js";
+  import { T } from "../constants.js";
+  import { Target } from "../icons";
+  import { Card } from "../ui.js";
+  import { fmt } from "../utils.js";
 
 interface DebtFreedomStats {
   freeDateStr?: string;

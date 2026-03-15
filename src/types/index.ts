@@ -77,8 +77,9 @@ export interface GeminiHistoryMessage {
 }
 
 export interface AuditRequestBody {
+  type?: "audit" | "chat";
   snapshot: string;
-  systemPrompt: string;
+  context?: Record<string, unknown>;
   history: ChatHistoryMessage[] | GeminiHistoryMessage[];
   model: string;
   stream: boolean;

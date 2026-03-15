@@ -1,49 +1,47 @@
-import React, {
-  useState,
-  useRef,
-  useEffect,
-  type ButtonHTMLAttributes,
-  type ChangeEvent,
-  type CSSProperties,
-  type FormEvent,
-  type ReactNode,
-} from "react";
+  import React,{
+    useEffect,
+    useRef,
+    useState,
+    type ButtonHTMLAttributes,
+    type ChangeEvent,
+    type CSSProperties,
+    type ReactNode,
+  } from "react";
 // xlsx is loaded dynamically to reduce initial bundle size
-import { T } from "../constants.js";
-import { AI_PROVIDERS } from "../providers.js";
-import { isSecuritySensitiveKey } from "../securityKeys.js";
-import { isEncrypted, decrypt } from "../crypto.js";
-import { db, FaceId, nativeExport } from "../utils.js";
-import { Capacitor } from "@capacitor/core";
-import { SignInWithApple } from "@capacitor-community/apple-sign-in";
-import { InlineTooltip } from "../ui.js";
-import {
-  connectBank,
-  getConnections,
-  autoMatchAccounts,
-  fetchBalancesAndLiabilities,
-  applyBalanceSync,
-  saveConnectionLinks,
-} from "../plaid.js";
-import { downloadFromICloud } from "../cloudSync.js";
-import { haptic } from "../haptics.js";
-import { CURRENCIES } from "../currency.js";
-import type { BackupInterval, ThemeMode } from "../contexts/SettingsContext.js";
-import type {
-  SetupWizardAiState,
-  SetupWizardCombinedData,
-  SetupWizardSecurityState,
-  SetupWizardSpendingState,
-  SetupWizardUpdate,
-} from "./SetupWizard.js";
-import type {
-  CatalystCashConfig,
-  HousingType,
-  IncomeType,
-  PaycheckDepositAccount,
-  PayFrequency,
-  Payday,
-} from "../../types/index.js";
+  import { SignInWithApple } from "@capacitor-community/apple-sign-in";
+  import { Capacitor } from "@capacitor/core";
+  import type {
+    HousingType,
+    IncomeType,
+    PaycheckDepositAccount,
+    Payday,
+    PayFrequency,
+  } from "../../types/index.js";
+  import { downloadFromICloud } from "../cloudSync.js";
+  import { T } from "../constants.js";
+  import type { BackupInterval,ThemeMode } from "../contexts/SettingsContext.js";
+  import { decrypt,isEncrypted } from "../crypto.js";
+  import { CURRENCIES } from "../currency.js";
+  import { haptic } from "../haptics.js";
+  import {
+    applyBalanceSync,
+    autoMatchAccounts,
+    connectBank,
+    fetchBalancesAndLiabilities,
+    getConnections,
+    saveConnectionLinks,
+  } from "../plaid.js";
+  import { AI_PROVIDERS } from "../providers.js";
+  import { isSecuritySensitiveKey } from "../securityKeys.js";
+  import { InlineTooltip } from "../ui.js";
+  import { db,FaceId,nativeExport } from "../utils.js";
+  import type {
+    SetupWizardAiState,
+    SetupWizardCombinedData,
+    SetupWizardSecurityState,
+    SetupWizardSpendingState,
+    SetupWizardUpdate,
+  } from "./SetupWizard.js";
 
 const ENABLE_PLAID = true;
 
@@ -83,9 +81,6 @@ interface ConnectionWithId {
   [key: string]: unknown;
 }
 
-interface FileReaderLoadTarget extends EventTarget {
-  result: string | ArrayBuffer | null;
-}
 
 interface SpreadsheetModule {
   read: (data: ArrayBuffer, options: { type: "array" }) => {
@@ -1783,7 +1778,6 @@ export function PagePass3({
   onSkip,
   spending,
   updateSpending,
-  saving,
   isPro,
   themeMode,
   setThemeMode,
@@ -1862,7 +1856,7 @@ export function PagePass3({
             console.error("[Plaid]", err);
           }
         },
-        err => {
+        () => {
           getWindowToast()?.error?.("Failed to link bank");
         }
       );
@@ -1980,7 +1974,7 @@ export function PagePass3({
             )}
             <div style={{ display: "flex", gap: 8 }}>
               <button
-                onClick={e => {
+                onClick={() => {
                   haptic.medium();
                   void handlePlaidConnect();
                 }}

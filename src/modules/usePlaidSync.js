@@ -3,17 +3,17 @@
  * Uses module-level state so sync status persists across tab switches.
  * Used by DashboardTab and CardPortfolioTab to avoid code duplication.
  */
-import { useState, useCallback, useEffect } from "react";
-import {
-  fetchAllBalancesAndLiabilities,
-  applyBalanceSync,
-  getConnections,
-  saveConnectionLinks,
-  fetchAllTransactions,
-  forceBackendSync,
-} from "./plaid.js";
-import { getCurrentTier, isGatingEnforced } from "./subscription.js";
-import { haptic } from "./haptics.js";
+  import { useCallback,useEffect,useState } from "react";
+  import { haptic } from "./haptics.js";
+  import {
+    applyBalanceSync,
+    fetchAllBalancesAndLiabilities,
+    fetchAllTransactions,
+    forceBackendSync,
+    getConnections,
+    saveConnectionLinks,
+  } from "./plaid.js";
+  import { getCurrentTier,isGatingEnforced } from "./subscription.js";
 
 const SYNC_COOLDOWNS = {
   pro: 24 * 60 * 60 * 1000,

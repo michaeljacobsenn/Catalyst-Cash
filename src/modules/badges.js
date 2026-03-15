@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // ACHIEVEMENT BADGES — Unlockable gamification system
 // ═══════════════════════════════════════════════════════════════
-import { db } from "./utils.js";
+  import { db } from "./utils.js";
 
 export const BADGE_DEFINITIONS = [
   // Onboarding
@@ -75,7 +75,7 @@ const TIER_COLORS = {
   platinum: { bg: "#E5E4E220", border: "#E5E4E260", text: "#E5E4E2" },
 };
 
-export { TIER_COLORS };
+  export { TIER_COLORS };
 
 // ═══════════════════════════════════════════════════════════════
 // BADGE EVALUATION — checks history + state and returns newly unlocked badges

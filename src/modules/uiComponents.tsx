@@ -1,6 +1,5 @@
-import React from "react";
-import { T } from "./constants.js";
-import { haptic } from "./haptics.js";
+  import { T } from "./constants.js";
+  import { haptic } from "./haptics.js";
 
 export const ViewToggle = ({ options, active, onChange, style }) => {
   return (

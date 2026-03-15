@@ -1,17 +1,16 @@
-import { useState, useMemo } from "react";
-import type { Dispatch, SetStateAction } from "react";
-import { CreditCard, ChevronDown, CheckCircle2, Check, Edit3 } from "../icons";
-import { Card, Badge } from "../ui.js";
-import SearchableSelect from "../SearchableSelect.js";
-import { Mono } from "../components.js";
-import { T, INSTITUTIONS, ISSUER_COLORS } from "../constants.js";
-import { usePortfolio } from "../contexts/PortfolioContext.js";
-import { fmt } from "../utils.js";
-import { haptic } from "../haptics.js";
-import { getIssuerCards, getPinnedForIssuer } from "../issuerCards.js";
-import { getCardLabel } from "../cards.js";
-import type { Card as CardRecord } from "../../types/index.js";
-import type { PortfolioCollapsedSections } from "./types.js";
+  import type { Dispatch,SetStateAction } from "react";
+  import { useMemo,useState } from "react";
+  import type { Card as CardRecord } from "../../types/index.js";
+  import SearchableSelect from "../SearchableSelect.js";
+  import { Mono } from "../components.js";
+  import { INSTITUTIONS,ISSUER_COLORS,T } from "../constants.js";
+  import { usePortfolio } from "../contexts/PortfolioContext.js";
+  import { haptic } from "../haptics.js";
+  import { Check,CheckCircle2,ChevronDown,CreditCard,Edit3 } from "../icons";
+  import { getIssuerCards,getPinnedForIssuer } from "../issuerCards.js";
+  import { Badge } from "../ui.js";
+  import { fmt } from "../utils.js";
+  import type { PortfolioCollapsedSections } from "./types.js";
 
 interface EditCardForm {
     institution: string;

@@ -1,9 +1,8 @@
-import { ExternalLink } from "../icons";
-import { T } from "../constants.js";
-import { Card, Label } from "../ui.js";
-import { Mono } from "../components.js";
-import { haptic } from "../haptics.js";
-import type { Dispatch, SetStateAction } from "react";
+  import type { Dispatch,SetStateAction } from "react";
+  import { Mono } from "../components.js";
+  import { T } from "../constants.js";
+  import { haptic } from "../haptics.js";
+  import { Card,Label } from "../ui.js";
 
 type ProviderModel = {
   id: string;

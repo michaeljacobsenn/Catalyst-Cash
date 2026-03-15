@@ -6,7 +6,7 @@
 // overrides stored in IndexedDB.
 // ═══════════════════════════════════════════════════════════════
 
-import { db } from "./utils.js";
+  import { db } from "./utils.js";
 
 const USER_MAP_KEY = "merchant-category-map";
 

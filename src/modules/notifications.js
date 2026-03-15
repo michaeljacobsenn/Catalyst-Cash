@@ -1,4 +1,4 @@
-import { LocalNotifications } from "@capacitor/local-notifications";
+  import { LocalNotifications } from "@capacitor/local-notifications";
 
 const PAYDAY_REMINDER_ID = 1001;
 const WEEKLY_AUDIT_NUDGE_ID = 1002;

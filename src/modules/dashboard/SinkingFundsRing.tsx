@@ -1,8 +1,7 @@
-import { Target } from "../icons";
-import { T } from "../constants.js";
-import { fmt } from "../utils.js";
-import { Card } from "../ui.js";
-import { InlineTooltip } from "../ui.js";
+  import { T } from "../constants.js";
+  import { Target } from "../icons";
+  import { Card,InlineTooltip } from "../ui.js";
+  import { fmt } from "../utils.js";
 
 /**
  * SinkingFundsRing — SVG ring progress charts for sinking fund goals.

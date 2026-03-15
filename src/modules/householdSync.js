@@ -1,6 +1,6 @@
-import { db } from "./utils.js";
-import { encrypt, decrypt } from "./crypto.js";
-import { isSecuritySensitiveKey, sanitizePlaidForBackup } from "./securityKeys.js";
+  import { decrypt,encrypt } from "./crypto.js";
+  import { isSecuritySensitiveKey,sanitizePlaidForBackup } from "./securityKeys.js";
+  import { db } from "./utils.js";
 
 const WORKER_URL = "https://api.catalystcash.app/api/household/sync";
 

@@ -1,29 +1,26 @@
-import { useState, memo, lazy, Suspense } from "react";
-import {
-  Zap,
-  Plus,
-  Activity,
-  Target,
-  Calendar,
-  Download,
-  CheckCircle,
-  Trash2,
-  Edit3,
-  Filter,
-  ExternalLink,
-  TrendingUp,
-} from "../icons";
-import { T } from "../constants.js";
-import { fmt, fmtDate, exportAudit, exportAllAudits, exportSelectedAudits, exportAuditCSV } from "../utils.js";
-import { Card, Badge } from "../ui.js";
-import { Mono, StatusDot, EmptyState } from "../components.js";
-import { haptic } from "../haptics.js";
-import { shouldShowGating } from "../subscription.js";
-import { useAudit } from "../contexts/AuditContext.js";
-import { useNavigation } from "../contexts/NavigationContext.js";
-import type { AuditRecord } from "../../types/index.js";
-import ProBanner from "./ProBanner.js";
-import "./DashboardTab.css";
+  import { lazy,memo,Suspense,useState } from "react";
+  import type { AuditRecord } from "../../types/index.js";
+  import { EmptyState,Mono } from "../components.js";
+  import { T } from "../constants.js";
+  import { useAudit } from "../contexts/AuditContext.js";
+  import { useNavigation } from "../contexts/NavigationContext.js";
+  import { haptic } from "../haptics.js";
+  import {
+    Activity,
+    CheckCircle,
+    Download,
+    Edit3,
+    Filter,
+    Plus,
+    Trash2,
+    TrendingUp,
+    Zap
+  } from "../icons";
+  import { shouldShowGating } from "../subscription.js";
+  import { Badge,Card } from "../ui.js";
+  import { exportAllAudits,exportAudit,exportAuditCSV,exportSelectedAudits,fmt,fmtDate } from "../utils.js";
+  import "./DashboardTab.css";
+  import ProBanner from "./ProBanner.js";
 
 const LazyProPaywall = lazy(() => import("./ProPaywall.js"));
 

@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from "recharts";
-import { T } from "../constants.js";
-import { fmt } from "../utils.js";
-import { Card, Label } from "../ui.js";
-import { haptic } from "../haptics.js";
-import ErrorBoundary from "../ErrorBoundary.js";
+  import { useState } from "react";
+  import { Area,AreaChart,ResponsiveContainer,Tooltip,XAxis,YAxis } from "recharts";
+  import { T } from "../constants.js";
+  import ErrorBoundary from "../ErrorBoundary.js";
+  import { haptic } from "../haptics.js";
+  import { Card,Label } from "../ui.js";
+  import { fmt } from "../utils.js";
 
 /**
  * AnalyticsCharts — Tabbed Recharts section with Net Worth, Health, and Spending charts.
@@ -142,7 +142,7 @@ export default function AnalyticsCharts({ chartData, scoreData, spendData, chart
                     fontFamily: T.font.mono,
                     boxShadow: T.shadow.elevated,
                   }}
-                  formatter={(v, n, props) => [`${v} /100 (${props.payload.grade})`, "Health Score"]}
+                  formatter={(v, _n, props) => [`${v} /100 (${props.payload.grade})`, "Health Score"]}
                 />
                 <Area
                   type="monotone"

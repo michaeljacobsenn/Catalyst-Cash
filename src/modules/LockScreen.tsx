@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
-import { ShieldCheck, AlertCircle, Fingerprint } from "./icons";
-import { T } from "./constants.js";
-import { haptic } from "./haptics.js";
-import { Capacitor } from "@capacitor/core";
-import { FaceId } from "./utils.js";
-import { SignInWithApple } from "@capacitor-community/apple-sign-in";
+  import { Capacitor } from "@capacitor/core";
+  import { useEffect,useRef,useState } from "react";
+  import { T } from "./constants.js";
+  import { useSecurity } from "./contexts/SecurityContext.js";
+  import { haptic } from "./haptics.js";
+  import { AlertCircle,Fingerprint,ShieldCheck } from "./icons";
+  import { FaceId } from "./utils.js";
 
 export async function isBiometricAvailable() {
   if (Capacitor.getPlatform() === "web") return false;
@@ -27,57 +26,13 @@ export async function authenticateBiometric() {
   }
 }
 
-// ─── Official Apple "Sign in with Apple" button ───────────────────────────────
-interface AppleSignInButtonProps {
-  onPress: () => void;
-  label?: string;
-  disabled?: boolean;
-}
 
-function AppleSignInButton({ onPress, label = "Sign in with Apple", disabled = false }: AppleSignInButtonProps) {
-  return (
-    <button
-      onPointerDown={(e: ReactPointerEvent<HTMLButtonElement>) => {
-        e.preventDefault();
-        if (!disabled) onPress();
-      }}
-      disabled={disabled}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 10,
-        width: "100%",
-        maxWidth: 320,
-        padding: "14px 20px",
-        borderRadius: 12,
-        border: "none",
-        background: "#000000",
-        color: "#FFFFFF",
-        fontSize: 16,
-        fontWeight: 600,
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
-        cursor: disabled ? "default" : "pointer",
-        opacity: disabled ? 0.6 : 1,
-        letterSpacing: "-0.01em",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-      }}
-    >
-      {/* Official Apple logo */}
-      <svg viewBox="0 0 814 1000" width="18" height="18" fill="white">
-        <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-37.3-165.9-40.8l-1.6-.6c-67.8-2.3-113.2-63-156.5-123.1C38.5 660.9 17 570 17 479.4 17 260.9 139.3 151.1 261.7 151.1c71 0 130.5 43.3 175 43.3 42.8 0 110-45.7 192.5-45.7 31 0 108.5 4.5 168.2 55.4zm-234-181.4C505.7 101.8 557 34 557 0c0-6.4-.6-12.9-1.3-18.1-1-.3-2.1-.3-3.5-.3-44.5 0-95.8 30.2-127 71.6-27.5 34.9-49.5 83.2-49.5 131.6 0 6.4 1 12.9 1.6 15.1 2.9.6 7.1 1 11 1 40 0 87.5-27.2 115.9-60.4z" />
-      </svg>
-      {label}
-    </button>
-  );
-}
 
 const PIN_MAX_ATTEMPTS = 5;
 const PIN_LOCKOUT_SECS = 30;
-import { useSecurity } from "./contexts/SecurityContext.js";
 
 export default function LockScreen() {
-  const { appPasscode, useFaceId, appleLinkedId, setIsLocked } = useSecurity();
+  const { appPasscode, useFaceId, setIsLocked } = useSecurity();
   const onUnlock = () => setIsLocked(false);
 
   const [failed, setFailed] = useState(false);
@@ -188,26 +143,6 @@ export default function LockScreen() {
     }
   };
 
-  const tryAppleSignIn = async () => {
-    if (Capacitor.getPlatform() === "web") return;
-    setStatus("bypassing");
-    try {
-      const result = await SignInWithApple.authorize({
-        clientId: "com.jacobsen.portfoliopro",
-        redirectURI: "https://api.catalystcash.app/auth/apple/callback",
-        scopes: "email name",
-      });
-      if (result.response.user === appleLinkedId) {
-        setStatus("unlocked");
-        haptic.success();
-        setTimeout(onUnlock, 300);
-      } else {
-        showError("Apple ID does not match linked account.");
-      }
-    } catch {
-      showError("Apple Sign-In failed or was cancelled.");
-    }
-  };
 
   // Auto-trigger native auth on mount
   useEffect(() => {

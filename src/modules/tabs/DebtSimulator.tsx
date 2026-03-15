@@ -1,15 +1,15 @@
 // ═══════════════════════════════════════════════════════════════
 // DEBT PAYOFF SIMULATOR — Interactive debt payoff planner
 // ═══════════════════════════════════════════════════════════════
-import { useState, useMemo } from "react";
-import { T } from "../constants.js";
-import { Card, Label } from "../ui.js";
-import { Mono } from "../components.js";
-import { cmpString, fromCents, monthlyInterestCents, toBps, toCents } from "../moneyMath.js";
-import { Sparkles } from "../icons";
-import { haptic } from "../haptics.js";
-import ScenarioSandbox from "../dashboard/ScenarioSandbox.js";
-import type { Card as PortfolioCard, CatalystCashConfig, NonCardDebt } from "../../types/index.js";
+  import { useMemo,useState } from "react";
+  import type { CatalystCashConfig,NonCardDebt,Card as PortfolioCard } from "../../types/index.js";
+  import { Mono } from "../components.js";
+  import { T } from "../constants.js";
+  import ScenarioSandbox from "../dashboard/ScenarioSandbox.js";
+  import { haptic } from "../haptics.js";
+  import { Sparkles } from "../icons";
+  import { cmpString,fromCents,monthlyInterestCents,toBps,toCents } from "../moneyMath.js";
+  import { Card,Label } from "../ui.js";
 
 interface SimDebt {
   name: string;
@@ -175,7 +175,6 @@ export default function DebtSimulator({ cards = [], financialConfig }: DebtSimul
     return [...cardDebts, ...nonCardDebts];
   }, [cards, financialConfig]);
 
-  const baseline = useMemo(() => simulatePayoff(debts, 0, "avalanche"), [debts]);
   const avalanche = useMemo(() => simulatePayoff(debts, extraPayment, "avalanche"), [debts, extraPayment]);
   const snowball = useMemo(() => simulatePayoff(debts, extraPayment, "snowball"), [debts, extraPayment]);
 

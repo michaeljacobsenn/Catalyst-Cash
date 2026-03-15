@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
-import type { MutableRefObject, TouchEventHandler } from "react";
-import { X } from "../icons";
-import { T, APP_VERSION } from "../constants.js";
+  import type { MutableRefObject,TouchEventHandler } from "react";
+  import { useEffect,useState } from "react";
+  import { APP_VERSION,T } from "../constants.js";
+  import { X } from "../icons";
 
-import { useNavigation } from "../contexts/NavigationContext.js";
+  import { useNavigation } from "../contexts/NavigationContext.js";
 
 interface SwipeHook {
   paneRef?: MutableRefObject<HTMLDivElement | null>;

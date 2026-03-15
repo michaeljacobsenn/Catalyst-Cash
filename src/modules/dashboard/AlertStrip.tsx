@@ -1,4 +1,4 @@
-import { T } from "../constants.js";
+  import { T } from "../constants.js";
 
 /**
  * AlertStrip — Horizontal scrolling alert pill strip for predictive insights.

@@ -1,21 +1,42 @@
-import React, { useState, useMemo, useEffect, useRef, lazy, Suspense } from "react";
-import {
-  Search, Sparkles, CreditCard, Coffee, ShoppingCart,
-  Fuel, Plane, Train, Package, Store, Pill, AlertCircle, Info, Settings2, ChevronDown, Check, X, RefreshCw, Tv, DollarSign, Smartphone, RotateCw, Clock, Lock, Zap
-} from "../icons";
-import { usePortfolio } from "../contexts/PortfolioContext.js";
-import { useSettings } from "../contexts/SettingsContext.js";
-import { getCardMultiplier, VALUATIONS } from "../rewardsCatalog.js";
-import { classifyMerchant } from "../api.js";
-import { db } from "../utils.js";
-import { haptic } from "../haptics.js";
-import { Card, InlineTooltip, FormGroup, FormRow, Skeleton, Badge } from "../ui.js";
-import { MERCHANT_DATABASE, extractCategoryByKeywords } from "../merchantDatabase.js";
-import { T } from "../constants.js";
-import { shouldShowGating } from "../subscription.js";
-import ProBanner from "./ProBanner.js";
-import GeoSuggestWidget from "../dashboard/GeoSuggestWidget.js";
-import type { Card as PortfolioCard, CatalystCashConfig } from "../../types/index.js";
+  import React,{ lazy,Suspense,useEffect,useMemo,useRef,useState } from "react";
+  import type { CatalystCashConfig,Card as PortfolioCard } from "../../types/index.js";
+  import { classifyMerchant } from "../api.js";
+  import { T } from "../constants.js";
+  import { usePortfolio } from "../contexts/PortfolioContext.js";
+  import { useSettings } from "../contexts/SettingsContext.js";
+  import GeoSuggestWidget from "../dashboard/GeoSuggestWidget.js";
+  import { haptic } from "../haptics.js";
+  import {
+    AlertCircle,
+    Check,
+    ChevronDown,
+    Clock,
+    Coffee,
+    CreditCard,
+    DollarSign,
+    Fuel,
+    Info,
+    Lock,
+    Package,
+    Pill,
+    Plane,
+    RefreshCw,
+    RotateCw,
+    Search,
+    Settings2,
+    ShoppingCart,
+    Smartphone,
+    Sparkles,
+    Store,
+    Train,
+    Tv,
+    X,
+    Zap
+  } from "../icons";
+  import { extractCategoryByKeywords,MERCHANT_DATABASE } from "../merchantDatabase.js";
+  import { getCardMultiplier,VALUATIONS } from "../rewardsCatalog.js";
+  import { Badge,Card,FormGroup,FormRow,InlineTooltip,Skeleton } from "../ui.js";
+  import { db } from "../utils.js";
 
 const LazyProPaywall = lazy(() => import("./ProPaywall.js"));
 
@@ -452,39 +473,6 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
     );
   }
 
-  const getCardThemeColors = (cardName: string) => {
-    const name = (cardName || "").toLowerCase();
-    // Specific card tiers first to override generic bank matches
-    if (name.includes("sapphire reserve")) return { gradient: "linear-gradient(135deg, #111827, #1e3a8a)", border: "#3b82f6", text: "#ffffff" };
-    if (name.includes("sapphire")) return { gradient: "linear-gradient(135deg, #1e3a8a, #3b82f6)", border: "#93c5fd", text: "#ffffff" };
-    if (name.includes("freedom")) return { gradient: "linear-gradient(135deg, #bed7ed, #7baee0)", border: "#ffffff", text: "#0f172a" };
-    if (name.includes("gold")) return { gradient: "linear-gradient(135deg, #fbbf24, #d97706)", border: "#fef08a", text: "#78350f" };
-    if (name.includes("platinum")) return { gradient: "linear-gradient(135deg, #cbd5e1, #94a3b8)", border: "#e2e8f0", text: "#0f172a" };
-    if (name.includes("savor") || name.includes("venture")) return { gradient: "linear-gradient(135deg, #1e293b, #991b1b)", border: "#ef4444", text: "#ffffff" };
-    if (name.includes("quicksilver")) return { gradient: "linear-gradient(135deg, #e2e8f0, #94a3b8)", border: "#ffffff", text: "#0f172a" };
-    if (name.includes("custom cash")) return { gradient: "linear-gradient(135deg, #dbeafe, #60a5fa)", border: "#ffffff", text: "#1e3a8a" };
-    if (name.includes("double cash")) return { gradient: "linear-gradient(135deg, #f8fafc, #cbd5e1)", border: "#ffffff", text: "#0f172a" };
-    if (name.includes("apple")) return { gradient: "linear-gradient(135deg, #f4f4f5, #e4e4e7)", border: "#ffffff", text: "#18181b" };
-
-    // Bank Defaults
-    if (name.includes("chase")) return { gradient: "linear-gradient(135deg, #1d4ed8, #0ea5e9)", border: "#60a5fa", text: "#ffffff" };
-    if (name.includes("amex") || name.includes("american express")) return { gradient: "linear-gradient(135deg, #38bdf8, #0284c7)", border: "#bae6fd", text: "#ffffff" };
-    if (name.includes("citi")) return { gradient: "linear-gradient(135deg, #2563eb, #f87171)", border: "#bae6fd", text: "#ffffff" };
-    if (name.includes("capital one")) return { gradient: "linear-gradient(135deg, #0f172a, #dc2626)", border: "#f87171", text: "#ffffff" };
-    if (name.includes("discover")) return { gradient: "linear-gradient(135deg, #f97316, #f59e0b)", border: "#fdba74", text: "#ffffff" };
-    if (name.includes("hyatt")) return { gradient: "linear-gradient(135deg, #0F2D52, #1a4070)", border: "#4a90d9", text: "#ffffff" };
-    if (name.includes("hilton")) return { gradient: "linear-gradient(135deg, #003A70, #005fa3)", border: "#4a90d9", text: "#ffffff" };
-    if (name.includes("marriott")) return { gradient: "linear-gradient(135deg, #111111, #B8143F)", border: "#e87090", text: "#ffffff" };
-    if (name.includes("delta")) return { gradient: "linear-gradient(135deg, #003366, #E3132C)", border: "#6699cc", text: "#ffffff" };
-    if (name.includes("united")) return { gradient: "linear-gradient(135deg, #005DAA, #1a7acc)", border: "#4da3e0", text: "#ffffff" };
-    if (name.includes("southwest")) return { gradient: "linear-gradient(135deg, #111B54, #304878)", border: "#6080b0", text: "#ffffff" };
-    if (name.includes("jetblue")) return { gradient: "linear-gradient(135deg, #003876, #0060c0)", border: "#4090e0", text: "#ffffff" };
-    if (name.includes("alaska")) return { gradient: "linear-gradient(135deg, #01426A, #0070a0)", border: "#40a0d0", text: "#ffffff" };
-    if (name.includes("bilt")) return { gradient: "linear-gradient(135deg, #1a1a2e, #4a4a6a)", border: "#8080a0", text: "#ffffff" };
-    if (name.includes("wells fargo")) return { gradient: "linear-gradient(135deg, #D0121B, #e04040)", border: "#f08080", text: "#ffffff" };
-    if (name.includes("robinhood")) return { gradient: "linear-gradient(135deg, #00C805, #00a004)", border: "#40e040", text: "#ffffff" };
-    return { gradient: `linear-gradient(135deg, ${T.accent.primaryDim}, ${T.bg.surface})`, border: T.accent.primarySoft, text: "#ffffff" };
-  };
 
   const runnersToShow = showAllRunners ? recommendations.slice(1) : recommendations.slice(1, 4);
   const winner = recommendations[0];

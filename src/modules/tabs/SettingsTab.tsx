@@ -1,70 +1,46 @@
-import { useState, useEffect, useRef, useCallback, Suspense, lazy } from "react";
-import type { ChangeEvent, TouchEvent as ReactTouchEvent } from "react";
-import {
-  Eye,
-  EyeOff,
-  ArrowLeft,
-  Cloud,
-  Download,
-  Upload,
-  CheckCircle,
-  AlertTriangle,
-  ChevronDown,
-  Loader2,
-  ExternalLink,
-  Pencil,
-  Check,
-  ChevronRight,
-  Shield,
-  Cpu,
-  Target,
-  Briefcase,
-  Landmark,
-  Database,
-  Lock,
-  Settings,
-  Info,
-  Building2,
-  Plus,
-  Unplug,
-  Sun,
-  Moon,
-  Monitor,
-  Layers,
-  Save,
-  RefreshCw,
-  Terminal,
-  MapPin
-} from "../icons";
-import { T, APP_VERSION } from "../constants.js";
-import { AI_PROVIDERS, getProvider } from "../providers.js";
-import { log, getLogsAsText, clearLogs } from "../logger.js";
-import { getErrorLog, clearErrorLog } from "../errorReporter.js";
-import { Card, Label, InlineTooltip } from "../ui.js";
-import { Mono } from "../components.js";
-import { db, FaceId, nativeExport, fmt } from "../utils.js";
-import { isSecuritySensitiveKey, sanitizePlaidForBackup } from "../securityKeys.js";
-import { CURRENCIES } from "../currency.js";
+  import type { ChangeEvent,TouchEvent as ReactTouchEvent } from "react";
+  import { lazy,Suspense,useCallback,useEffect,useRef,useState } from "react";
+  import { APP_VERSION,T } from "../constants.js";
+  import { CURRENCIES } from "../currency.js";
+  import {
+    ArrowLeft,
+    Building2,
+    ChevronRight,
+    Cpu,
+    Database,
+    Info,
+    Layers,
+    Lock,
+    MapPin,
+    RefreshCw,
+    Save,
+    Target,
+    Terminal
+  } from "../icons";
+  import { log } from "../logger.js";
+  import { AI_PROVIDERS,getProvider } from "../providers.js";
+  import { isSecuritySensitiveKey,sanitizePlaidForBackup } from "../securityKeys.js";
+  import { Card,Label } from "../ui.js";
+  import { db,FaceId } from "../utils.js";
 
-import { haptic } from "../haptics.js";
-import { Capacitor } from "@capacitor/core";
+  import { Capacitor } from "@capacitor/core";
+  import { haptic } from "../haptics.js";
 
-import { getConnections, removeConnection } from "../plaid.js";
-import { deleteSecureItem, getSecureItem, setSecureItem } from "../secureStore.js";
+  import {
+    applyFullProfileQaSeed,
+    FULL_PROFILE_QA_BANKS,
+    FULL_PROFILE_QA_CARDS,
+    FULL_PROFILE_QA_CONFIG,
+    FULL_PROFILE_QA_LABEL,
+    FULL_PROFILE_QA_RENEWALS,
+  } from "../qaSeed.js";
+  import { deleteSecureItem,setSecureItem } from "../secureStore.js";
+  import AISection from "../settings/AISection.js";
+  import BackupSection from "../settings/BackupSection.js";
+  import SecuritySection from "../settings/SecuritySection.js";
+  import { getRawTier,shouldShowGating } from "../subscription.js";
+  import ProBanner from "./ProBanner.js";
 const LazyPlaidSection = lazy(() => import("../settings/PlaidSection.js"));
-import { shouldShowGating, checkAuditQuota, getRawTier } from "../subscription.js";
-import ProBanner from "./ProBanner.js";
-import AISection from "../settings/AISection.js";
-import BackupSection from "../settings/BackupSection.js";
-import SecuritySection from "../settings/SecuritySection.js";
-import {
-  applyFullProfileQaSeed,
-  FULL_PROFILE_QA_BANKS,
-  FULL_PROFILE_QA_CARDS,
-  FULL_PROFILE_QA_CONFIG,
-  FULL_PROFILE_QA_LABEL,
-  FULL_PROFILE_QA_RENEWALS,
-} from "../qaSeed.js";
 
 const ENABLE_PLAID = true; // Toggle to false to hide, true to show Plaid integration
 const LazyProPaywall = lazy(() => import("./ProPaywall.js"));
@@ -74,13 +50,13 @@ const loadAppleSignIn = () => import("@capacitor-community/apple-sign-in");
 const loadCloudSync = () => import("../cloudSync.js");
 const loadRevenueCat = () => import("../revenuecat.js");
 
-import { useAudit } from "../contexts/AuditContext.js";
-import { useSettings } from "../contexts/SettingsContext.js";
-import { useSecurity } from "../contexts/SecurityContext.js";
-import { usePortfolio } from "../contexts/PortfolioContext.js";
-import { useNavigation } from "../contexts/NavigationContext.js";
-import type { AppTab } from "../contexts/NavigationContext.js";
-import type { HousingType, IncomeType, PayFrequency, Payday } from "../../types/index.js";
+  import type { HousingType,IncomeType,Payday,PayFrequency } from "../../types/index.js";
+  import { useAudit } from "../contexts/AuditContext.js";
+  import type { AppTab } from "../contexts/NavigationContext.js";
+  import { useNavigation } from "../contexts/NavigationContext.js";
+  import { usePortfolio } from "../contexts/PortfolioContext.js";
+  import { useSecurity } from "../contexts/SecurityContext.js";
+  import { useSettings } from "../contexts/SettingsContext.js";
 
 type ProviderModel = (typeof AI_PROVIDERS)[number]["models"][number];
 type ProviderConfig = (typeof AI_PROVIDERS)[number];
@@ -134,12 +110,6 @@ export default function SettingsTab({
     setPersonalRules,
     autoBackupInterval,
     setAutoBackupInterval,
-    notifPermission,
-    persona,
-    setPersona,
-    themeMode,
-    setThemeMode,
-    themeTick,
   } = useSettings();
   const {
     requireAuth,
@@ -161,7 +131,6 @@ export default function SettingsTab({
     cardCatalog,
     renewals,
     setRenewals,
-    liabilitySum,
     refreshLiabilities,
   } = usePortfolio();
   const { navTo } = useNavigation();
@@ -276,9 +245,8 @@ export default function SettingsTab({
     window.toast?.success?.("Apple ID unlinked");
   };
 
-  const PRIVACY_URL = "https://catalystcash.app/privacy";
 
-  const [showKey, setShowKey] = useState(false);
+  useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmFactoryReset, setConfirmFactoryReset] = useState(false);
   const [confirmDataDeletion, setConfirmDataDeletion] = useState(false);
@@ -287,7 +255,7 @@ export default function SettingsTab({
   const [restoreStatus, setRestoreStatus] = useState<string | null>(null);
   const [activeSegment] = useState<SettingsActiveSegment>("app");
   const [activeMenu, setActiveMenu] = useState<SettingsMenu>(null);
-  const [showModelPicker, setShowModelPicker] = useState(false);
+  useState(false);
   const [rawTierId, setRawTierId] = useState<"free" | "pro">("free");
   const [ppModal, setPpModal] = useState<PassphraseModalState>({ open: false, mode: "export", label: "", resolve: null, value: "" });
   const [setupDismissed, setSetupDismissed] = useState(() => !!localStorage.getItem("setup-progress-dismissed"));
@@ -489,9 +457,17 @@ export default function SettingsTab({
   };
   const [statusMsg, setStatusMsg] = useState("");
 
-  const currentProvider: ProviderConfig = getProvider(aiProvider || "gemini") ?? AI_PROVIDERS[0]!;
+  const currentProviderCandidate = getProvider(aiProvider || "gemini") ?? AI_PROVIDERS[0];
+  if (!currentProviderCandidate) {
+    throw new Error("No AI providers configured");
+  }
+  const currentProvider: ProviderConfig = currentProviderCandidate;
   const currentModels = currentProvider.models;
-  const selectedModel: ProviderModel = currentModels.find(m => m.id === aiModel) || currentModels[0]!;
+  const selectedModelCandidate = currentModels.find(m => m.id === aiModel) || currentModels[0];
+  if (!selectedModelCandidate) {
+    throw new Error(`No models configured for provider ${currentProvider.id}`);
+  }
+  const selectedModel: ProviderModel = selectedModelCandidate;
   const isNonGemini = (aiProvider || "gemini") !== "gemini";
   const hasApiKey = Boolean((apiKey || "").trim());
   const currencyLabel = CURRENCIES.find(currency => currency.code === (financialConfig?.currencyCode || "USD"))?.label || "USD ($)";
@@ -1673,7 +1649,9 @@ export default function SettingsTab({
                                   try {
                                     setFinancialConfig(JSON.parse(saved));
                                     window.toast?.success?.("Baseline restored.");
-                                  } catch (e) { }
+                                  } catch {
+                                    void 0;
+                                  }
                                 } else {
                                   window.toast?.error?.("No baseline saved.");
                                 }

@@ -4,10 +4,10 @@
 // Includes scroll-tracking, viewport-flip, and auto-close on scroll.
 // ═══════════════════════════════════════════════════════════════
 
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import type { ChangeEvent, CSSProperties, MouseEvent as ReactMouseEvent } from "react";
-import { createPortal } from "react-dom";
-import { T } from "./constants.js";
+  import type { ChangeEvent,CSSProperties,MouseEvent as ReactMouseEvent } from "react";
+  import { useCallback,useEffect,useMemo,useRef,useState } from "react";
+  import { createPortal } from "react-dom";
+  import { T } from "./constants.js";
 
 interface SearchableOption {
   value: string;

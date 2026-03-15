@@ -1,10 +1,10 @@
-import { ExternalLink, Shield, Loader2 } from "../icons";
-import { T } from "../constants.js";
-import { Card, Label } from "../ui.js";
-import { db } from "../utils.js";
-import { haptic } from "../haptics.js";
-import { getConnections, removeConnection } from "../plaid.js";
-import { deleteSecureItem } from "../secureStore.js";
+  import { T } from "../constants.js";
+  import { haptic } from "../haptics.js";
+  import { ExternalLink,Loader2,Shield } from "../icons";
+  import { getConnections,removeConnection } from "../plaid.js";
+  import { deleteSecureItem } from "../secureStore.js";
+  import { Card,Label } from "../ui.js";
+  import { db } from "../utils.js";
 
 const Toggle = ({ value, onChange, ariaLabel }) => (
   <button
@@ -362,20 +362,28 @@ export default function SecuritySection({
                         // 3. Clear web storage
                         try {
                           localStorage.clear();
-                        } catch { }
+                        } catch {
+                          void 0;
+                        }
                         try {
                           sessionStorage.clear();
-                        } catch { }
+                        } catch {
+                          void 0;
+                        }
                         // 4. Clear secure keychain items
                         try {
                           await deleteSecureItem("app-passcode");
-                        } catch { }
+                        } catch {
+                          void 0;
+                        }
                         try {
                           await deleteSecureItem("plaid-connections");
-                        } catch { }
+                        } catch {
+                          void 0;
+                        }
                         // 5. Reload
                         window.location.reload();
-                      } catch (e) {
+                      } catch {
                         setDeletionInProgress(false);
                         setConfirmDataDeletion(false);
                       }

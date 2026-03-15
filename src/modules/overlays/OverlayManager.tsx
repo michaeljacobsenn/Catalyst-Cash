@@ -1,13 +1,13 @@
-import { Suspense, lazy, useCallback } from "react";
-import type { ToastApi } from "../Toast.js";
-import { ErrorBoundary } from "../ui.js";
-import { StreamingView } from "../components.js";
-import { getModel } from "../providers.js";
-import { useSwipeBack, useSwipeDown } from "../hooks/useSwipeGesture.js";
-import { useOverlay } from "../contexts/OverlayContext.js";
-import type { AppTab, NavViewState } from "../contexts/NavigationContext.js";
-import type { SetFinancialConfig } from "../contexts/SettingsContext.js";
-import type { AuditFormData } from "../../types/index.js";
+  import { Suspense,lazy,useCallback } from "react";
+  import type { AuditFormData } from "../../types/index.js";
+  import { StreamingView } from "../components.js";
+  import type { AppTab,NavViewState } from "../contexts/NavigationContext.js";
+  import { useOverlay } from "../contexts/OverlayContext.js";
+  import type { SetFinancialConfig } from "../contexts/SettingsContext.js";
+  import { useSwipeBack,useSwipeDown } from "../hooks/useSwipeGesture.js";
+  import { getModel } from "../providers.js";
+  import type { ToastApi } from "../Toast.js";
+  import { ErrorBoundary } from "../ui.js";
 
 const InputForm = lazy(() => import("../tabs/InputForm.js"));
 const ResultsView = lazy(() => import("../tabs/ResultsView.js"));

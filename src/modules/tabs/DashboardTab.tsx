@@ -1,65 +1,46 @@
-import { useRef, useState, useEffect, memo, lazy, Suspense, type CSSProperties, type ReactNode } from "react";
-import Confetti from "react-confetti";
-import {
-  Zap,
-  Plus,
-  Share2,
-  Shield,
-  CloudDownload,
-  RefreshCw,
-  Repeat,
-  Activity,
-  AlertTriangle,
-  ReceiptText,
-  ExternalLink,
-  MessageCircle,
-  CloudUpload,
-  ArrowUpRight,
-  ArrowDownRight,
-  Download,
-  CheckCircle,
-  Briefcase,
-  Settings,
-  Building2,
-  CalendarClock,
-  ChevronRight,
-} from "../icons";
-import { T } from "../constants.js";
+  import { lazy,memo,Suspense,useEffect,useRef,useState,type CSSProperties,type ReactNode } from "react";
+  import Confetti from "react-confetti";
+  import { T } from "../constants.js";
+  import {
+    Activity,
+    AlertTriangle,
+    ArrowUpRight,
+    Building2,
+    CalendarClock,
+    CheckCircle,
+    ChevronRight,
+    CloudUpload,
+    MessageCircle,
+    ReceiptText,
+    RefreshCw,
+    Settings,
+    Shield,
+    Zap,
+  } from "../icons";
 
-import { fmt, fmtDate, exportAudit, shareAudit, stripPaycheckParens, db } from "../utils.js";
-import { uploadToICloud } from "../cloudSync.js";
-import { Card as UICard, Label, Badge, ProgressBar, InlineTooltip, getTracking } from "../ui.js";
-import { Mono, StatusDot, PaceBar, Md, CountUp, Section } from "../components.js";
-import { unlockBadge } from "../badges.js";
-import DebtSimulator from "./DebtSimulator.js";
-import FIReSimulator from "./FIReSimulator.js";
-import WeeklyChallenges from "./WeeklyChallenges.js";
-import CashFlowCalendar from "./CashFlowCalendar.js";
-import CreditScoreSimulator from "./CreditScoreSimulator.js";
-import BillNegotiationCard from "./BillNegotiationCard.js";
-import { haptic } from "../haptics.js";
-import { shouldShowGating, getCurrentTier, isGatingEnforced, getGatingMode } from "../subscription.js";
-import { useSecurity } from "../contexts/SecurityContext.js";
-import ProBanner from "./ProBanner.js";
-import ErrorBoundary from "../ErrorBoundary.js";
-import { usePlaidSync } from "../usePlaidSync.js";
-import "./DashboardTab.css";
-import { useCoachmark, COACHMARKS } from "../coachmarks.js";
-import Coachmark from "../Coachmark.js";
+  import { uploadToICloud } from "../cloudSync.js";
+  import { Md } from "../components.js";
+  import { useSecurity } from "../contexts/SecurityContext.js";
+  import { haptic } from "../haptics.js";
+  import { isGatingEnforced,shouldShowGating } from "../subscription.js";
+  import { getTracking,Card as UICard } from "../ui.js";
+  import { usePlaidSync } from "../usePlaidSync.js";
+  import { db,fmt,stripPaycheckParens } from "../utils.js";
+  import "./DashboardTab.css";
+  import ProBanner from "./ProBanner.js";
 
-import { useAudit } from "../contexts/AuditContext.js";
-import { useSettings } from "../contexts/SettingsContext.js";
-import { usePortfolio } from "../contexts/PortfolioContext.js";
-import { useNavigation } from "../contexts/NavigationContext.js";
-import type { BankAccount, Card as CardType, CatalystCashConfig, HealthScore } from "../../types/index.js";
-import { isSecuritySensitiveKey, sanitizePlaidForBackup } from "../securityKeys.js";
+  import type { CatalystCashConfig,HealthScore } from "../../types/index.js";
+  import { useAudit } from "../contexts/AuditContext.js";
+  import { useNavigation } from "../contexts/NavigationContext.js";
+  import { usePortfolio } from "../contexts/PortfolioContext.js";
+  import { useSettings } from "../contexts/SettingsContext.js";
+  import { isSecuritySensitiveKey,sanitizePlaidForBackup } from "../securityKeys.js";
 
 // ── Extracted dashboard components ──
-import useDashboardData from "../dashboard/useDashboardData.js";
-import HealthGauge from "../dashboard/HealthGauge.js";
-import AlertStrip from "../dashboard/AlertStrip.js";
+  import AlertStrip from "../dashboard/AlertStrip.js";
+  import HealthGauge from "../dashboard/HealthGauge.js";
+  import useDashboardData from "../dashboard/useDashboardData.js";
 
-const SYNC_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
 let _autoSyncDone = false; // Survives component remounts — only auto-sync once per app session
 const LazyProPaywall = lazy(() => import("./ProPaywall.js"));
 
@@ -97,12 +78,6 @@ interface SetupStep {
   Icon: typeof Settings;
 }
 
-interface QuickMetric {
-  l: string;
-  v: number | null | undefined;
-  c: string;
-  icon: string;
-}
 
 interface CompactMetric {
   label: string;
@@ -117,11 +92,6 @@ interface BackupEnvelope {
   data: Record<string, unknown>;
 }
 
-interface ToastApi {
-  success: (message: string) => void;
-  error: (message: string) => void;
-  info?: (message: string) => void;
-}
 
 interface DashboardCardProps {
   children?: ReactNode;
@@ -144,16 +114,15 @@ const DashboardSection = ({ children, marginTop = 12 }: DashboardSectionProps) =
 );
 
 export default memo(function DashboardTab({
-  onRestore,
   proEnabled = false,
   onDemoAudit,
   onRefreshDashboard,
   onViewTransactions,
   onDiscussWithCFO,
 }: DashboardTabProps) {
-  const { current, history } = useAudit();
+  const { current } = useAudit();
   const { financialConfig, setFinancialConfig, autoBackupInterval } = useSettings();
-  const { cards, setCards, bankAccounts, setBankAccounts, renewals, badges } = usePortfolio();
+  const { cards, setCards, bankAccounts, setBankAccounts, renewals } = usePortfolio();
   const { navTo, setSetupReturnTab } = useNavigation();
   const { appPasscode, privacyMode } = useSecurity();
   const [showPaywall, setShowPaywall] = useState(false);
@@ -174,14 +143,6 @@ export default memo(function DashboardTab({
   // ── Intelligent Auto-sync ──
   // Triggers sync on app boot or whenever the app comes back to the foreground.
   useEffect(() => {
-    const trySync = () => {
-      if (document.visibilityState === "visible") {
-        const hasPlaid =
-          cards.some((card: CardType) => card._plaidAccountId) ||
-          bankAccounts.some((account: BankAccount) => account._plaidAccountId);
-        if (hasPlaid) handleSyncBalances();
-      }
-    };
 
     // Run on mount (if visible)
     if (!_autoSyncDone) {
@@ -195,7 +156,6 @@ export default memo(function DashboardTab({
   }, [cards, bankAccounts, handleSyncBalances]);
 
   const onRunAudit = () => navTo("input");
-  const onViewResult = () => navTo("results", current);
   const onGoSettings = () => {
     setSetupReturnTab("dashboard");
     navTo("settings");
@@ -203,17 +163,7 @@ export default memo(function DashboardTab({
 
   const p = current?.parsed;
   const {
-    dashboardMetrics,
-    floor,
-    investmentSnapshot,
-    fireProjection,
     streak,
-    noSpendStreak,
-    chartData,
-    scoreData,
-    spendData,
-    chartA11y,
-    freedomStats,
     alerts,
     safetySnapshot,
     portfolioMetrics,
@@ -369,14 +319,6 @@ export default memo(function DashboardTab({
       : rawStatus.includes("YELLOW")
         ? "YELLOW"
         : "UNKNOWN";
-  const sc =
-    cleanStatus === "GREEN"
-      ? T.status.green
-      : cleanStatus === "YELLOW"
-        ? T.status.amber
-        : cleanStatus === "RED"
-          ? T.status.red
-          : T.text.dim;
   const hs: HealthScore | null = p?.healthScore ?? null;
   const score = typeof hs?.score === "number" ? hs.score : 0;
   const grade = hs?.grade || "?";
@@ -413,16 +355,6 @@ export default memo(function DashboardTab({
     return Math.round(z > 0 ? (1 - phi) * 100 : phi * 100);
   })();
 
-  const quickMetrics: QuickMetric[] = [
-    { l: "Checking", v: portfolioMetrics?.spendableCash, c: T.text.primary, icon: "💳" },
-    (portfolioMetrics?.savingsCash ?? 0) > 0 ? { l: "Savings", v: portfolioMetrics.savingsCash, c: T.status.blue, icon: "🏦" } : null,
-    { l: "Net Worth", v: portfolioMetrics?.netWorth, c: T.text.primary, icon: "📊" },
-    (portfolioMetrics?.totalInvestments ?? 0) > 0 ? { l: "Investments", v: portfolioMetrics.totalInvestments, c: T.accent.emerald, icon: "📈" } : null,
-    { l: "Pending", v: dashboardMetrics.pending, c: T.status.amber, icon: "⏳" },
-    (portfolioMetrics?.ccDebt ?? 0) > 0 ? { l: "CC Debt", v: portfolioMetrics.ccDebt, c: T.status.red, icon: "💳" } : null,
-    (portfolioMetrics?.totalDebtBalance ?? 0) > 0 ? { l: "Loans", v: portfolioMetrics.totalDebtBalance, c: T.status.red, icon: "🏦" } : null,
-    (portfolioMetrics?.totalOtherAssets ?? 0) > 0 ? { l: "Other Assets", v: portfolioMetrics.totalOtherAssets, c: T.text.secondary, icon: "🏠" } : null,
-  ].filter((metric): metric is QuickMetric => metric !== null);
 
   return (
     <div className="page-body stagger-container" aria-live="polite" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
@@ -1012,7 +944,7 @@ export default memo(function DashboardTab({
                  </div>
 
                  <div style={{ display: "grid", gap: 8 }}>
-                   {steps.map((step, i) => (
+                   {steps.map((step) => (
                      <div
                        key={step.id}
                        onClick={() => { haptic.selection(); step.action(); }}

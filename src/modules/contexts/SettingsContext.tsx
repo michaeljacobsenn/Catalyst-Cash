@@ -1,21 +1,21 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useReducer,
-  useCallback,
-  type Dispatch,
-  type ReactNode,
-  type SetStateAction,
-} from "react";
-import { db } from "../utils.js";
-import { DEFAULT_PROVIDER_ID, DEFAULT_MODEL_ID, getProvider } from "../providers.js";
-import { schedulePaydayReminder, cancelPaydayReminder, getNotificationPermission } from "../notifications.js";
-import { migrateToSecureItem } from "../secureStore.js";
-import { setActiveCurrencyCode } from "../currency.js";
-import { getPreferredModelForTier, getRawTier, normalizeModelForTier } from "../subscription.js";
-import type { CatalystCashConfig } from "../../types/index.js";
+  import {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useReducer,
+    useState,
+    type Dispatch,
+    type ReactNode,
+    type SetStateAction,
+  } from "react";
+  import type { CatalystCashConfig } from "../../types/index.js";
+  import { setActiveCurrencyCode } from "../currency.js";
+  import { cancelPaydayReminder,getNotificationPermission,schedulePaydayReminder } from "../notifications.js";
+  import { DEFAULT_MODEL_ID,DEFAULT_PROVIDER_ID,getProvider } from "../providers.js";
+  import { migrateToSecureItem } from "../secureStore.js";
+  import { getPreferredModelForTier,getRawTier,normalizeModelForTier } from "../subscription.js";
+  import { db } from "../utils.js";
 
 interface ProviderConfig {
   id: string;

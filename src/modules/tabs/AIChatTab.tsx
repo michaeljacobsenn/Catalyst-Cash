@@ -1,59 +1,53 @@
-import React, {
-  useState,
-  useRef,
-  useEffect,
-  useCallback,
-  useMemo,
-  memo,
-  Suspense,
-  type FormEvent,
-  type KeyboardEvent,
-  type ReactNode,
-  type UIEvent,
+import React,{
+    memo,
+    Suspense,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type FormEvent,
+    type KeyboardEvent,
+    type ReactNode
 } from "react";
-import { Trash2, Sparkles, ArrowDown, AlertTriangle, ArrowUpRight } from "../icons";
-import { T } from "../constants.js";
-import { Skeleton as UISkeleton } from "../ui.js";
 import { streamAudit } from "../api.js";
-import { getChatSystemPrompt } from "../chatPrompts.js";
-import { evaluateChatDecisionRules } from "../decisionRules.js";
-import { isLikelyNetworkError, toUserFacingRequestError } from "../networkErrors.js";
 import {
   analyzeChatInputRisk,
   buildDeterministicChatFallback,
-  buildPromptInjectionRefusal,
-  normalizeChatAssistantOutput,
-} from "../chatSafety.js";
-import { generateStrategy, mergeSnapshotDebts } from "../engine.js";
-import { getBackendProvider } from "../providers.js";
-import { haptic } from "../haptics.js";
-import { useToast } from "../Toast.js";
-import { db } from "../utils.js";
-import { log } from "../logger.js";
-import { encryptAtRest, decryptAtRestDetailed, isEncrypted } from "../crypto.js";
-import { checkChatQuota, recordChatUsage, shouldShowGating, isGatingEnforced } from "../subscription.js";
-import { useNavigation } from "../contexts/NavigationContext.js";
-import ProBanner from "./ProBanner.js";
+    buildPromptInjectionRefusal,
+    normalizeChatAssistantOutput,
+  } from "../chatSafety.js";
+  import { T } from "../constants.js";
+  import { useNavigation } from "../contexts/NavigationContext.js";
+  import { decryptAtRestDetailed,encryptAtRest,isEncrypted } from "../crypto.js";
+  import { evaluateChatDecisionRules } from "../decisionRules.js";
+  import { generateStrategy,mergeSnapshotDebts } from "../engine.js";
+  import { haptic } from "../haptics.js";
+  import { AlertTriangle,ArrowDown,ArrowUpRight,Sparkles,Trash2 } from "../icons";
+  import { log } from "../logger.js";
+  import { addFacts,extractMemoryTags,getMemoryBlock,loadMemory } from "../memory.js";
+  import { isLikelyNetworkError,toUserFacingRequestError } from "../networkErrors.js";
+  import { getBackendProvider } from "../providers.js";
+  import { checkChatQuota,isGatingEnforced,recordChatUsage,shouldShowGating } from "../subscription.js";
+  import { useToast } from "../Toast.js";
+  import { Skeleton as UISkeleton } from "../ui.js";
+  import { db } from "../utils.js";
+  import ProBanner from "./ProBanner.js";
 const LazyProPaywall = React.lazy(() => import("./ProPaywall.js"));
-import { loadMemory, extractMemoryTags, addFacts, getMemoryBlock } from "../memory.js";
 
-import { useAudit } from "../contexts/AuditContext.js";
-import { useSettings } from "../contexts/SettingsContext.js";
-import { usePortfolio } from "../contexts/PortfolioContext.js";
-import { useSecurity } from "../contexts/SecurityContext.js";
-import type {
-  AiMemory,
-  AskAiNegotiationPayload,
-  AtRestEncryptedPayload,
-  AuditRecord,
-  CatalystCashConfig,
-  ChatHistoryMessage,
-  ChatQuotaState,
-  GeminiHistoryMessage,
-  Renewal,
-  TrendContextEntry,
-  Card,
-} from "../../types/index.js";
+  import type {
+    AiMemory,
+    AskAiNegotiationPayload,
+    AtRestEncryptedPayload,
+    AuditRecord,
+    ChatHistoryMessage,
+    ChatQuotaState,
+    GeminiHistoryMessage,
+  } from "../../types/index.js";
+  import { useAudit } from "../contexts/AuditContext.js";
+  import { usePortfolio } from "../contexts/PortfolioContext.js";
+  import { useSecurity } from "../contexts/SecurityContext.js";
+  import { useSettings } from "../contexts/SettingsContext.js";
 
 // ═══════════════════════════════════════════════════════════════
 // AI CHAT TAB — Conversational Financial AI
@@ -81,11 +75,6 @@ interface AIChatTabProps {
 interface Suggestion {
   emoji: string;
   text: string;
-}
-
-interface PersonaProfile {
-  name: string;
-  style: string;
 }
 
 interface SessionSummaryRecord {
@@ -163,27 +152,12 @@ const streamAuditTyped = streamAudit as (
   snapshot: string,
   providerId: string,
   model: string,
-  sysText: string,
+  context: Record<string, unknown>,
   history?: ChatHistoryMessage[] | GeminiHistoryMessage[],
   deviceId?: string,
   signal?: AbortSignal,
   isChat?: boolean
 ) => AsyncGenerator<string, void, unknown>;
-const getChatSystemPromptTyped = getChatSystemPrompt as (
-  current: AuditRecord | null,
-  financialConfig: CatalystCashConfig,
-  cards: Card[],
-  renewals: Renewal[],
-  history: AuditRecord[],
-  persona: PersonaProfile | null,
-  personalRules?: string,
-  computedStrategy?: Record<string, unknown> | null,
-  trendContext?: TrendContextEntry[] | null,
-  providerId?: string | null,
-  memoryBlock?: string,
-  decisionRecommendations?: DecisionRecommendation[],
-  chatInputRisk?: Record<string, unknown> | null
-) => string;
 
 // ── PII Scrubber — strips sensitive patterns before persisting ──
 const PII_PATTERNS = [
@@ -365,37 +339,6 @@ function stripThoughtProcess(text: string): string {
 }
 
 // ── Typing indicator (accessible) ──
-function TypingIndicator() {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      aria-label="AI is typing a response"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 4,
-        padding: "12px 16px",
-      }}
-    >
-      <span className="sr-only">AI is typing...</span>
-      {[0, 1, 2].map(i => (
-        <div
-          key={i}
-          aria-hidden="true"
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: "50%",
-            background: T.accent.primary,
-            animation: `pulse 1.4s ease-in-out ${i * 0.16}s infinite`,
-            opacity: 0.6,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
 
 export default memo(function AIChatTab({
   proEnabled = false,
@@ -425,14 +368,9 @@ export default memo(function AIChatTab({
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
 
   const suggestionsScrollRef = useRef<HTMLDivElement | null>(null);
-  const [canScrollRight, setCanScrollRight] = useState<boolean>(true);
-  const [canScrollLeft, setCanScrollLeft] = useState<boolean>(false);
+  const [, setCanScrollRight] = useState<boolean>(true);
+  const [, setCanScrollLeft] = useState<boolean>(false);
 
-  const handleSuggestionsScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
-    const { scrollLeft, scrollWidth, clientWidth } = event.currentTarget;
-    setCanScrollLeft(scrollLeft > 10); // Update canScrollLeft
-    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10); // Update canScrollRight
-  }, []);
 
   useEffect(() => {
     if (suggestionsScrollRef.current) {
@@ -649,7 +587,7 @@ export default memo(function AIChatTab({
 
   // ── Send message ──
   const sendMessage = useCallback(
-    async (text: string, overrideSystemPrompt: string | null = null): Promise<void> => {
+    async (text: string, extraPromptContext: Record<string, unknown> | null = null): Promise<void> => {
       const trimmedText = text?.trim();
       if (!trimmedText || isStreamingRef.current) return;
 
@@ -702,45 +640,25 @@ export default memo(function AIChatTab({
       isStreamingRef.current = true;
       haptic.light();
 
-      // Map the string persona to the object expected by getChatSystemPrompt
-      let personaObject: PersonaProfile | null = null;
-      if (persona === "coach") {
-        personaObject = {
-          name: "Coach Catalyst",
-          style:
-            "You are a tough-love financial coach. Be direct, no-nonsense, and strict about discipline. Don't sugarcoat bad habits. Push the user to be better.",
-        };
-      } else if (persona === "friend") {
-        personaObject = {
-          name: "Catalyst AI",
-          style:
-            "You are a highly supportive, empathetic financial best friend. Be warm, encouraging, and celebrate small wins. Reassure the user when they slip up.",
-        };
-      } else if (persona === "nerd") {
-        personaObject = {
-          name: "Catalyst AI",
-          style:
-            "You are an absolute data nerd. Focus heavily on stats, percentages, compounding math, and optimization strategies. Explain the math clearly.",
-        };
-      }
-
-      // Build system prompt with full financial context + persistent memory
       const memBlock = memoryData ? getMemoryBlock(memoryData) : "";
-      const sysPrompt = overrideSystemPrompt || getChatSystemPromptTyped(
+      const promptContext = {
+        variant: extraPromptContext?.variant || "default",
         current,
         financialConfig,
         cards,
         renewals,
         history,
-        personaObject,
-        personalRules || "",
-        chatStrategy,
+        persona,
+        personalRules: personalRules || "",
+        computedStrategy: chatStrategy,
         trendContext,
-        aiProvider,
-        memBlock,
+        providerId: aiProvider,
+        memoryBlock: memBlock,
         decisionRecommendations,
-        inputRisk as unknown as Record<string, unknown>
-      );
+        chatInputRisk: inputRisk,
+        aiConsent: true,
+        ...extraPromptContext,
+      };
 
       // Build conversation history for the API
       const apiHistory = buildAPIMessages(newMsgs.slice(0, -1)); // Exclude the latest user message (sent as snapshot)
@@ -761,7 +679,7 @@ export default memo(function AIChatTab({
           trimmedText,
           aiProvider,
           aiModel,
-          sysPrompt,
+          promptContext,
           apiHistory,
           undefined, // deviceId — handled by backend
           abort.signal,
@@ -935,39 +853,13 @@ export default memo(function AIChatTab({
       
       const userMessage = `Draft a negotiation script to lower my $${amount} monthly bill with ${merchant}.`;
       
-      const negotiateSysPrompt = `You are a practical consumer advocate who writes calm, high-probability retention and billing negotiation scripts.
-
-The user wants to negotiate their $${amount}/month bill with ${merchant}.
-The proven winning tactic for ${merchant} is: "${tactic}"
-
-Generate a concise phone/chat script in markdown with these exact sections:
-
-## 📞 Before You Call
-- The exact phone number or chat URL (if widely known) for ${merchant}.
-- A likely menu path to reach billing, loyalty, or retention if widely known. If not known, say so plainly.
-- Have a competitor's current rate ready as your anchor when relevant. If a realistic competitor is unclear, say to reference a lower market rate instead of inventing one.
-
-## 🗣️ Opening Line
-Give them a natural opening line for the first 15 seconds. It should usually establish: (1) loyalty or tenure if helpful, (2) price pressure or a competing offer if relevant, and (3) that they are considering cancellation unless the price improves.
-
-## 💰 The Ask
-State a realistic target price or discount range to ask for. Use the competitor rate as anchor when known. Example: "I'd like to stay, but I need my bill closer to $X/month to justify keeping the service."
-
-## 🛡️ If They Say No
-Provide 3 escalation responses:
-1. A firmness response ("I understand, but I'll need to proceed with cancellation then.")
-2. A supervisor request ("Can you connect me to someone authorized to offer loyalty pricing?")
-3. A callback play ("I'll call back tomorrow — please note my cancellation request on my account.")
-
-## ⚡ Pro Tips
-- Best times to call (Tue-Thu morning = shorter hold, better offers).
-- If the first offer is weak, counter once with a specific lower target.
-- If offered a "temporary" discount, ask for the duration in writing/confirmation number.
-
-RULES: Be practical, confident, and accurate. Give usable words to say, but do not fabricate phone trees, market pricing, or company policies. Do NOT discuss budgeting, tracking, or financial planning — ONLY the negotiation script. Format with clear headers and bold key phrases.`;
-
       const timer = setTimeout(() => {
-        void sendMessage(userMessage, negotiateSysPrompt);
+        void sendMessage(userMessage, {
+          variant: "negotiation-script",
+          merchant,
+          amount,
+          tactic,
+        });
         clearNavState?.();
         initialPromptSent.current = false;
       }, 400);
@@ -1233,12 +1125,9 @@ RULES: Be practical, confident, and accurate. Give usable words to say, but do n
               const RADIUS = 22; // Elite large radius
               const SHARP = 4;   // Small notch
 
-              let borderRadius = "22px";
-              if (isUser) {
-                borderRadius = `${RADIUS}px ${prevIsSame ? SHARP : RADIUS}px ${nextIsSame ? SHARP : RADIUS}px ${RADIUS}px`;
-              } else {
-                borderRadius = `${prevIsSame ? SHARP : RADIUS}px ${RADIUS}px ${RADIUS}px ${nextIsSame ? SHARP : RADIUS}px`;
-              }
+              const borderRadius = isUser
+                ? `${RADIUS}px ${prevIsSame ? SHARP : RADIUS}px ${nextIsSame ? SHARP : RADIUS}px ${RADIUS}px`
+                : `${prevIsSame ? SHARP : RADIUS}px ${RADIUS}px ${RADIUS}px ${nextIsSame ? SHARP : RADIUS}px`;
 
               return (
                 <div

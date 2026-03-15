@@ -2,28 +2,27 @@
 // ADD ACCOUNT SHEET — Unified bottom sheet for adding accounts
 // Extracted from CardPortfolioTab.jsx for maintainability.
 // ═══════════════════════════════════════════════════════════════
-import { useState, type CSSProperties } from "react";
-import { createPortal } from "react-dom";
-import {
-  Plus,
-  X,
-  ArrowLeft,
-  CreditCard,
-  Landmark,
-  TrendingUp,
-  AlertTriangle,
-  Target,
-  Wallet,
-  Link2,
-  CheckCircle2,
-} from "../icons";
-import { T } from "../constants.js";
-import { getIssuerCards, getPinnedForIssuer } from "../issuerCards.js";
-import { getBankNames, getBankProducts } from "../bankCatalog.js";
-import { Card, Badge, FormGroup, FormRow } from "../ui.js";
-import SearchableSelect from "../SearchableSelect.js";
-import { getTickerOptions } from "../marketData.js";
-import { haptic } from "../haptics.js";
+  import { useState,type CSSProperties } from "react";
+  import { createPortal } from "react-dom";
+  import SearchableSelect from "../SearchableSelect.js";
+  import { getBankNames,getBankProducts } from "../bankCatalog.js";
+  import { T } from "../constants.js";
+  import { haptic } from "../haptics.js";
+  import {
+    AlertTriangle,
+    ArrowLeft,
+    CheckCircle2,
+    CreditCard,
+    Landmark,
+    Link2,
+    Target,
+    TrendingUp,
+    Wallet,
+    X
+  } from "../icons";
+  import { getIssuerCards,getPinnedForIssuer } from "../issuerCards.js";
+  import { getTickerOptions } from "../marketData.js";
+  import { FormGroup,FormRow } from "../ui.js";
 
 const INSTITUTIONS = [
   "American Express",
@@ -117,27 +116,7 @@ export default function AddAccountSheet({
 
   if (!show) return null;
 
-  const focusStyle = color => ({
-    onFocus: e => {
-      e.target.style.borderColor = color;
-      e.target.style.boxShadow = `0 0 0 3px ${color}30`;
-    },
-    onBlur: e => {
-      e.target.style.borderColor = T.border.default;
-      e.target.style.boxShadow = "none";
-    },
-  });
 
-  const inputStyle: CSSProperties = {
-    padding: "12px 14px",
-    borderRadius: T.radius.md,
-    border: `1.5px solid ${T.border.default}`,
-    background: T.bg.elevated,
-    color: T.text.primary,
-    fontSize: 13,
-    outline: "none",
-    transition: "all 0.2s",
-  };
 
   const formInputStyle: CSSProperties = {
     flex: 1,

@@ -1,27 +1,27 @@
-import React, { memo, useState, type KeyboardEvent, type ReactNode } from "react";
-import {
-  TrendingUp,
-  AlertTriangle,
-  Clock,
-  ChevronDown,
-  ChevronUp,
-  Activity,
-  RefreshCw,
-  CheckSquare,
-  Target,
-  Zap,
-  CheckCircle,
-  Share2,
-  type LucideIcon,
-} from "../icons";
-import { T } from "../constants.js";
-import { fmtDate, stripPaycheckParens, exportAudit } from "../utils.js";
-import { Card as UICard, Badge as UIBadge, InlineTooltip as UIInlineTooltip } from "../ui.js";
-import { Mono as UIMono, MoveRow as UIMoveRow, Md as UIMd } from "../components.js";
+  import React,{ memo,useState,type KeyboardEvent,type ReactNode } from "react";
+  import { Md as UIMd,Mono as UIMono,MoveRow as UIMoveRow } from "../components.js";
+  import { T } from "../constants.js";
+  import {
+    Activity,
+    AlertTriangle,
+    CheckCircle,
+    CheckSquare,
+    ChevronDown,
+    ChevronUp,
+    Clock,
+    RefreshCw,
+    Share2,
+    Target,
+    TrendingUp,
+    Zap,
+    type LucideIcon,
+  } from "../icons";
+  import { Badge as UIBadge,Card as UICard,InlineTooltip as UIInlineTooltip } from "../ui.js";
+  import { exportAudit,fmtDate,stripPaycheckParens } from "../utils.js";
 
-import { useAudit } from "../contexts/AuditContext.js";
-import { useNavigation } from "../contexts/NavigationContext.js";
-import type { AuditRecord, MoveCheckState, ParsedMoveItem } from "../../types/index.js";
+  import type { AuditRecord,MoveCheckState,ParsedMoveItem } from "../../types/index.js";
+  import { useAudit } from "../contexts/AuditContext.js";
+  import { useNavigation } from "../contexts/NavigationContext.js";
 
 interface ResultsViewProps {
   audit: AuditRecord | null;

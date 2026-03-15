@@ -1,10 +1,10 @@
-import { useMemo } from "react";
-import { HelpCircle } from "../icons";
-import { Card, Badge, InlineTooltip } from "../ui.js";
-import { Mono } from "../components.js";
-import { T } from "../constants.js";
-import { usePortfolio } from "../contexts/PortfolioContext.js";
-import { fmt } from "../utils.js";
+  import { useMemo } from "react";
+  import { Mono } from "../components.js";
+  import { T } from "../constants.js";
+  import { usePortfolio } from "../contexts/PortfolioContext.js";
+  import { HelpCircle } from "../icons";
+  import { InlineTooltip } from "../ui.js";
+  import { fmt } from "../utils.js";
 
 export default function CreditUtilizationWidget() {
     const { cards } = usePortfolio();

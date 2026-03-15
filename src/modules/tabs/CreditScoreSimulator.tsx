@@ -3,13 +3,13 @@
 // Shows how balance changes affect estimated credit score via
 // utilization ratio (the #1 controllable FICO factor at ~30% weight)
 // ═══════════════════════════════════════════════════════════════
-import { useState, useMemo } from "react";
-import { T } from "../constants.js";
-import { Card } from "../ui.js";
-import { Mono } from "../components.js";
-import { fmt } from "../utils.js";
-import { Activity, TrendingUp, TrendingDown, Minus } from "../icons";
-import type { Card as PortfolioCard, CatalystCashConfig } from "../../types/index.js";
+  import { useMemo,useState } from "react";
+  import type { CatalystCashConfig,Card as PortfolioCard } from "../../types/index.js";
+  import { Mono } from "../components.js";
+  import { T } from "../constants.js";
+  import { Activity,Minus,TrendingDown,TrendingUp } from "../icons";
+  import { Card } from "../ui.js";
+  import { fmt } from "../utils.js";
 
 interface CreditScoreSimulatorProps {
   cards?: PortfolioCard[];
@@ -55,7 +55,7 @@ function utilizationTier(utilPct: number) {
   return { label: "Very Poor", color: T.status.red };
 }
 
-export default function CreditScoreSimulator({ cards = [], financialConfig = {} as CatalystCashConfig }: CreditScoreSimulatorProps) {
+export default function CreditScoreSimulator({ cards = [] }: CreditScoreSimulatorProps) {
   const [paydownAmount, setPaydownAmount] = useState("");
 
   const analysis = useMemo(() => {

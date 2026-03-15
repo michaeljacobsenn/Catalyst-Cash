@@ -1,10 +1,10 @@
-import { useState, useMemo } from "react";
-import { T } from "../constants.js";
-import { Card, Label, Badge } from "../ui.js";
-import { Mono } from "../components.js";
-import { haptic } from "../haptics.js";
-import { Sparkles } from "../icons";
-import ScenarioSandbox from "../dashboard/ScenarioSandbox.js";
+  import { useMemo,useState } from "react";
+  import { Mono } from "../components.js";
+  import { T } from "../constants.js";
+  import ScenarioSandbox from "../dashboard/ScenarioSandbox.js";
+  import { haptic } from "../haptics.js";
+  import { Sparkles } from "../icons";
+  import { Badge,Card,Label } from "../ui.js";
 
 interface FireTimelinePoint {
     year: number;
@@ -54,7 +54,7 @@ function calculateFIRE(netWorth: number, income: number, expenses: number, withd
     }
 
     // Filter timeline for rendering (keep ~10 points max)
-    const renderTimeline = timeline.filter((t, i) => {
+    const renderTimeline = timeline.filter((_t, i) => {
         if (i === 0 || i === timeline.length - 1) return true;
         if (years <= 10) return true;
         if (years <= 20) return i % 2 === 0;

@@ -1,17 +1,16 @@
-import { useState, useEffect, useRef } from "react";
-import type {
-  ChangeEvent,
-  CSSProperties,
-  FC,
-  KeyboardEvent as ReactKeyboardEvent,
-  MouseEvent as ReactMouseEvent,
-  ReactNode,
-} from "react";
-import { CheckCircle, ChevronDown, ChevronUp, Loader2, Check } from "./icons";
-import { T } from "./constants.js";
-import { fmt } from "./utils.js";
-import { Badge, Card } from "./ui.js";
-import { haptic } from "./haptics.js";
+  import type {
+    ChangeEvent,
+    CSSProperties,
+    FC,
+    MouseEvent as ReactMouseEvent,
+    ReactNode
+  } from "react";
+  import { useEffect,useRef,useState } from "react";
+  import { T } from "./constants.js";
+  import { haptic } from "./haptics.js";
+  import { Check,CheckCircle,ChevronDown,ChevronUp } from "./icons";
+  import { Badge,Card } from "./ui.js";
+  import { fmt } from "./utils.js";
 
 interface CountUpProps {
   value: number | string;

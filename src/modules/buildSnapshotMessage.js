@@ -3,8 +3,8 @@
 // sent to the AI. Extracted from InputForm.jsx for clarity.
 // Pure function: no React hooks or state.
 // ═══════════════════════════════════════════════════════════════
-import { resolveCardLabel } from "./cards.js";
-import { formatInterval } from "./constants.js";
+  import { resolveCardLabel } from "./cards.js";
+  import { formatInterval } from "./constants.js";
 
 /**
  * Build the weekly snapshot message string for the AI.

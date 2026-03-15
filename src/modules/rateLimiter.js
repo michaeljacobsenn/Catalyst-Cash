@@ -84,5 +84,5 @@ export const exportLimiter = new RateLimiter(3, 60_000);
 /** General API rate limiter: 30 requests per 60 seconds */
 export const apiLimiter = new RateLimiter(30, 60_000);
 
-export { RateLimiter };
+  export { RateLimiter };
 export default RateLimiter;

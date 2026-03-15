@@ -1,26 +1,26 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import { T } from "../constants.js";
-import { AI_PROVIDERS } from "../providers.js";
-import { db } from "../utils.js";
-import { setActiveCurrencyCode } from "../currency.js";
-import { PageWelcome, PageImport, PageProfile, PagePass1, PagePass2, PagePass3, PageDone } from "./SetupWizardPages.js";
-import { useSecurity } from "../contexts/SecurityContext.js";
-import { useNavigation } from "../contexts/NavigationContext.js";
-import { useSettings, type ThemeMode } from "../contexts/SettingsContext.js";
-import { usePortfolio } from "../contexts/PortfolioContext.js";
-import { getPreferredModelForTier, getRawTier, normalizeModelForTier } from "../subscription.js";
-import { useToast } from "../Toast.js";
-import { setSecureItem } from "../secureStore.js";
-import type {
-  BankAccount,
-  Card,
-  CatalystCashConfig,
-  HousingType,
-  IncomeType,
-  PaycheckDepositAccount,
-  PayFrequency,
-  Renewal,
-} from "../../types/index.js";
+  import { useCallback,useEffect,useRef,useState } from "react";
+  import type {
+    BankAccount,
+    Card,
+    CatalystCashConfig,
+    HousingType,
+    IncomeType,
+    PaycheckDepositAccount,
+    PayFrequency,
+    Renewal,
+  } from "../../types/index.js";
+  import { T } from "../constants.js";
+  import { useNavigation } from "../contexts/NavigationContext.js";
+  import { usePortfolio } from "../contexts/PortfolioContext.js";
+  import { useSecurity } from "../contexts/SecurityContext.js";
+  import { useSettings,type ThemeMode } from "../contexts/SettingsContext.js";
+  import { setActiveCurrencyCode } from "../currency.js";
+  import { AI_PROVIDERS } from "../providers.js";
+  import { setSecureItem } from "../secureStore.js";
+  import { getPreferredModelForTier,getRawTier,normalizeModelForTier } from "../subscription.js";
+  import { useToast } from "../Toast.js";
+  import { db } from "../utils.js";
+  import { PageDone,PageImport,PagePass1,PagePass2,PagePass3,PageProfile,PageWelcome } from "./SetupWizardPages.js";
 
 interface ToastApi {
   success?: (message: string) => void;

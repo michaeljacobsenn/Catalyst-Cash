@@ -1,5 +1,5 @@
-import { T } from "../constants.js";
-import { haptic } from "../haptics.js";
+  import { T } from "../constants.js";
+  import { haptic } from "../haptics.js";
 
 /* ─── Animations ─────────────────────────────────────────────── */
 const SHIMMER_CSS = `

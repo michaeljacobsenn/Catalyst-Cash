@@ -1,9 +1,9 @@
-import { useState, useMemo } from "react";
-import { T } from "../constants.js";
-import { Card, Label, Badge } from "../ui.js";
-import { Mono } from "../components.js";
-import { haptic } from "../haptics.js";
-import { X } from "../icons";
+  import { useMemo,useState } from "react";
+  import { Mono } from "../components.js";
+  import { T } from "../constants.js";
+  import { haptic } from "../haptics.js";
+  import { X } from "../icons";
+  import { Card,Label } from "../ui.js";
 
 interface FireTimelinePoint {
     year: number;
@@ -43,7 +43,7 @@ function calculateFIRE(netWorth: number, income: number, expenses: number, withd
         timeline.push({ year: years, nw: currentNW });
     }
 
-    const renderTimeline = timeline.filter((t, i) => {
+    const renderTimeline = timeline.filter((_t, i) => {
         if (i === 0 || i === timeline.length - 1) return true;
         if (years <= 10) return true;
         if (years <= 20) return i % 2 === 0;
@@ -64,8 +64,8 @@ interface ScenarioSandboxProps {
 export default function ScenarioSandbox({ currentNetWorth = 0, currentAnnualIncome = 0, currentAnnualExpenses = 0, onClose }: ScenarioSandboxProps) {
     const [incomeOffset, setIncomeOffset] = useState(0); // +/- Monthly
     const [expenseOffset, setExpenseOffset] = useState(0); // +/- Monthly
-    const [withdrawalRate, setWithdrawalRate] = useState(4.0);
-    const [marketReturn, setMarketReturn] = useState(7.0);
+    const [withdrawalRate] = useState(4.0);
+    const [marketReturn] = useState(7.0);
 
     const baseNW = Math.max(0, currentNetWorth);
     const baseIncome = Math.max(0, currentAnnualIncome);

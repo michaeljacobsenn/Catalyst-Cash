@@ -1,9 +1,9 @@
-import React, { useState, type Dispatch, type SetStateAction } from "react";
-import { T } from "../constants.js";
-import { ViewToggle } from "../ui.js";
-import CardPortfolioTab from "./CardPortfolioTab.js";
-import CardWizardTab from "./CardWizardTab.js";
-import type { BankAccount, Card } from "../../types/index.js";
+  import React,{ useState,type Dispatch,type SetStateAction } from "react";
+  import type { BankAccount,Card } from "../../types/index.js";
+  import { T } from "../constants.js";
+  import { ViewToggle } from "../ui.js";
+  import CardPortfolioTab from "./CardPortfolioTab.js";
+  import CardWizardTab from "./CardWizardTab.js";
 
 type PortfolioView = "vault" | "rewards";
 

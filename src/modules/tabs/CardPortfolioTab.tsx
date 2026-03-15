@@ -1,63 +1,33 @@
-import { useState, useMemo, useEffect, useCallback, memo } from "react";
-import { createPortal } from "react-dom";
-import AddAccountSheet from "./AddAccountSheet.js";
-import BankAccountsSection from "../portfolio/BankAccountsSection.js";
-import CreditUtilizationWidget from "../portfolio/CreditUtilizationWidget.js";
-import CreditCardsSection from "../portfolio/CreditCardsSection.js";
-import InvestmentsSection from "../portfolio/InvestmentsSection.js";
-import OtherAssetsSection from "../portfolio/OtherAssetsSection.js";
-import TransactionsSection from "../portfolio/TransactionsSection.js";
-import {
-  Plus,
-  X,
-  ChevronDown,
-  ChevronUp,
-  CreditCard,
-  Edit3,
-  Check,
-  DollarSign,
-  Building2,
-  Landmark,
-  TrendingUp,
-  AlertTriangle,
-  RefreshCw,
-  Target,
-  Wallet,
-  ArrowLeft,
-  Link2,
-  CheckCircle2,
-  Trash2,
-  ReceiptText,
-  Loader2,
-} from "../icons";
-import { T, ISSUER_COLORS } from "../constants.js";
-import { getIssuerCards, getPinnedForIssuer } from "../issuerCards.js";
-import { getBankNames, getBankProducts } from "../bankCatalog.js";
-import { getCardLabel } from "../cards.js";
-import { fmt } from "../utils.js";
-import { Card, Label, Badge } from "../ui.js";
-import { Mono, EmptyState } from "../components.js";
-import SearchableSelect from "../SearchableSelect.js";
-import { fetchMarketPrices, getTickerOptions } from "../marketData.js";
-import {
-  connectBank,
-  autoMatchAccounts,
-  fetchBalancesAndLiabilities,
-  fetchAllBalancesAndLiabilities,
-  fetchAllTransactions,
-  applyBalanceSync,
-  saveConnectionLinks,
-  purgeBrokenConnections,
-  getConnections,
-  getStoredTransactions,
-} from "../plaid.js";
-import { haptic } from "../haptics.js";
-import { getCurrentTier, isGatingEnforced } from "../subscription.js";
-import { usePlaidSync } from "../usePlaidSync.js";
-import type { BankAccount, Card as PortfolioCard, CatalystCashConfig, PlaidInvestmentAccount } from "../../types/index.js";
+  import { memo,useEffect,useMemo,useState } from "react";
+  import type { BankAccount,CatalystCashConfig,PlaidInvestmentAccount,Card as PortfolioCard } from "../../types/index.js";
+  import { T } from "../constants.js";
+  import { haptic } from "../haptics.js";
+  import {
+    Link2,
+    Loader2,
+    Plus,
+    ReceiptText,
+    RefreshCw,
+  } from "../icons";
+  import {
+    applyBalanceSync,
+    autoMatchAccounts,
+    connectBank,
+    fetchBalancesAndLiabilities,
+    purgeBrokenConnections,
+    saveConnectionLinks,
+  } from "../plaid.js";
+  import BankAccountsSection from "../portfolio/BankAccountsSection.js";
+  import CreditCardsSection from "../portfolio/CreditCardsSection.js";
+  import CreditUtilizationWidget from "../portfolio/CreditUtilizationWidget.js";
+  import InvestmentsSection from "../portfolio/InvestmentsSection.js";
+  import OtherAssetsSection from "../portfolio/OtherAssetsSection.js";
+  import TransactionsSection from "../portfolio/TransactionsSection.js";
+  import { usePlaidSync } from "../usePlaidSync.js";
+  import { fmt } from "../utils.js";
+  import AddAccountSheet from "./AddAccountSheet.js";
 
 const ENABLE_PLAID = true;
-const REFRESH_COOLDOWNS = { free: 60 * 60 * 1000, pro: 5 * 60 * 1000 };
 
 // One-time cleanup flag — runs once per app session
 let _purgeDone = false;
@@ -71,12 +41,11 @@ function mergeUniqueById<T extends { id?: string | null }>(existing: T[] = [], i
   return Array.from(map.values());
 }
 
-import { usePortfolio, PortfolioContext } from "../contexts/PortfolioContext.js";
-import { useSettings } from "../contexts/SettingsContext.js";
-import { useAudit } from "../contexts/AuditContext.js";
-import { uploadToICloud } from "../cloudSync.js";
-import useDashboardData from "../dashboard/useDashboardData.js";
-import type { PortfolioCollapsedSections } from "../portfolio/types.js";
+  import { useAudit } from "../contexts/AuditContext.js";
+  import { PortfolioContext,usePortfolio } from "../contexts/PortfolioContext.js";
+  import { useSettings } from "../contexts/SettingsContext.js";
+  import useDashboardData from "../dashboard/useDashboardData.js";
+  import type { PortfolioCollapsedSections } from "../portfolio/types.js";
 
 type AddSheetStep = "goal" | "asset" | "debt" | null;
 type PlaidConnectResult = "success" | "error" | null;
@@ -98,7 +67,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
   const renewals = isTest ? current.demoPortfolio?.renewals || [] : portfolioContext.renewals;
   const setRenewals = isTest ? () => { } : portfolioContext.setRenewals;
 
-  const { cardCatalog, marketPrices, setMarketPrices } = portfolioContext;
+  const { cardCatalog } = portfolioContext;
   const { financialConfig = {} as CatalystCashConfig, setFinancialConfig } = useSettings();
 
   // Bring in unified master metrics globally calculated
@@ -114,7 +83,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
     };
   }, [isTest, portfolioContext, cards, bankAccounts, renewals]);
 
-  const [activeAddForm, setActiveAddForm] = useState<AddSheetStep>(null); // kept for legacy compat
+  useState<AddSheetStep>(null); // kept for legacy compat
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [addSheetStep, setAddSheetStep] = useState<AddSheetStep>(null);
   const [plaidLoading, setPlaidLoading] = useState(false);
@@ -256,59 +225,10 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
     transactions: true,
   });
 
-  const removeBank = bankId => {
-    const b = bankAccounts.find(x => x.id === bankId);
-    if (!b) return;
-    if (b._plaidAccountId) {
-      if (!window.confirm(
-        `"${b.name}" is linked to Plaid. Deleting it will remove it from balance tracking.\n\nTo fully disconnect, go to Settings → Plaid.\n\nDelete anyway?`
-      )) return;
-    }
-    setBankAccounts(bankAccounts.filter(x => x.id !== bankId));
-  };
 
-  const PromoCheckbox = ({ checked, onChange }) => (
-    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 0" }}>
-      <div
-        style={{
-          width: 20,
-          height: 20,
-          borderRadius: 6,
-          flexShrink: 0,
-          border: checked ? "none" : `2px solid ${T.text.dim}`,
-          background: checked ? T.accent.emerald : "transparent",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          transition: "all .2s",
-        }}
-        onClick={onChange}
-      >
-        {checked && <Check size={12} color={T.bg.base} strokeWidth={3} />}
-      </div>
-      <span style={{ fontSize: 12, color: T.text.secondary }}>Active Promo APR?</span>
-    </label>
-  );
 
-  const totalAccounts = cards.length + bankAccounts.length;
-  const checkingCount = bankAccounts.filter(a => a.accountType === "checking").length;
-  const savingsCount = bankAccounts.filter(a => a.accountType === "savings").length;
 
   // ─── Early computations for Wealth Dashboard ─────────────────────
-  const holdings = financialConfig?.holdings || { roth: [], k401: [], brokerage: [], crypto: [], hsa: [] };
-  const investmentSections = [
-    { key: "roth", label: "Roth IRA", enabled: !!financialConfig?.trackRothContributions, color: T.accent.primary },
-    { key: "k401", label: "401(k)", enabled: !!financialConfig?.track401k, color: T.status.blue },
-    { key: "brokerage", label: "Brokerage", enabled: !!financialConfig?.trackBrokerage, color: T.accent.emerald },
-    { key: "hsa", label: "HSA", enabled: !!financialConfig?.trackHSA, color: "#06B6D4" },
-    {
-      key: "crypto",
-      label: "Crypto",
-      enabled: financialConfig?.trackCrypto !== false && (holdings.crypto?.length ?? 0) > 0,
-      color: T.status.amber,
-    },
-  ];
-  const enabledInvestments = investmentSections.filter(s => s.enabled || (holdings[s.key] || []).length > 0);
   // ── Unified Master Metrics (Vault Header Display) ──
   const netWorth = portfolioMetrics?.netWorth || 0;
   const totalCash = portfolioMetrics?.liquidCash || 0;
@@ -460,8 +380,6 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
   const creditCardsSection = <CreditCardsSection collapsedSections={collapsedSections} setCollapsedSections={setCollapsedSections} />;
 
   // Split bank accounts by type for separate sections
-  const checkingAccounts = useMemo(() => bankAccounts.filter(a => a.accountType === "checking"), [bankAccounts]);
-  const savingsAccounts = useMemo(() => bankAccounts.filter(a => a.accountType === "savings"), [bankAccounts]);
 
   // ─── Bank Accounts Section (Render) ──────────────────────────────────
   const bankAccountsSectionContent = <BankAccountsSection collapsedSections={collapsedSections} setCollapsedSections={setCollapsedSections} />;

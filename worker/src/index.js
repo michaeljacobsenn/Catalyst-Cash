@@ -4,6 +4,13 @@
 // API keys stored as Cloudflare secrets — never exposed to clients.
 // ═══════════════════════════════════════════════════════════════
 
+import {
+  getBatchCategorizationPrompt,
+  getLocationCategorizationPrompt,
+  getSystemPrompt,
+} from "./promptBuilders.js";
+import { getChatSystemPrompt } from "./chatPromptBuilders.js";
+
 const ANTHROPIC_VERSION = "2023-06-01";
 const MAX_BODY_SIZE = 512_000; // 512KB max request body (system prompt alone is ~110KB)
 const VALID_PROVIDERS = ["gemini", "openai", "claude", "anthropic"];
@@ -44,6 +51,153 @@ const DEFAULTS = {
   claude: "claude-haiku-4-5",
   anthropic: "claude-haiku-4-5",
 };
+
+function buildPersonaProfile(persona) {
+  if (persona === "coach") {
+    return {
+      name: "Coach Catalyst",
+      style:
+        "You are a tough-love financial coach. Be direct, no-nonsense, and strict about discipline. Don't sugarcoat bad habits. Push the user to be better.",
+    };
+  }
+  if (persona === "friend") {
+    return {
+      name: "Catalyst AI",
+      style:
+        "You are a highly supportive, empathetic financial best friend. Be warm, encouraging, and celebrate small wins. Reassure the user when they slip up.",
+    };
+  }
+  if (persona === "nerd") {
+    return {
+      name: "Catalyst AI",
+      style:
+        "You are an absolute data nerd. Focus heavily on stats, percentages, compounding math, and optimization strategies. Explain the math clearly.",
+    };
+  }
+  return null;
+}
+
+function buildCriticalRetryPrompt(context = {}) {
+  const computedStrategy = context.computedStrategy || null;
+  const formData = context.formData || {};
+  const nativeScore = computedStrategy?.auditSignals?.nativeScore?.score ?? "N/A";
+  const nativeGrade = computedStrategy?.auditSignals?.nativeScore?.grade ?? "N/A";
+  const operationalSurplus = Number(computedStrategy?.operationalSurplus || 0).toFixed(2);
+  const riskFlags = Array.isArray(computedStrategy?.auditSignals?.riskFlags)
+    ? computedStrategy.auditSignals.riskFlags.join(", ")
+    : "none";
+
+  return `Return STRICT JSON ONLY. No markdown, no prose.
+
+Required top-level keys only:
+- headerCard
+- healthScore
+- weeklyMoves
+- riskFlags
+
+Constraints:
+- headerCard.status must be GREEN, YELLOW, or RED.
+- healthScore.score must be a number from 0-100.
+- healthScore.grade must match the score exactly.
+- weeklyMoves must be 1-3 concrete actions. If operational surplus is positive, at least one weekly move must assign dollars.
+- riskFlags must be an array of short kebab-case strings.
+
+Native anchors:
+- Native score anchor: ${nativeScore}/100 (${nativeGrade})
+- Operational surplus anchor: $${operationalSurplus}
+- Native risk flags: ${riskFlags}
+- Snapshot date: ${formData.date || "unknown"}
+
+Return this exact JSON shape:
+{
+  "headerCard": { "status": "YELLOW", "details": ["short summary"] },
+  "healthScore": { "score": 72, "grade": "C-", "trend": "flat", "summary": "one sentence" },
+  "weeklyMoves": ["Route $150 to the highest-priority target."],
+  "riskFlags": ["example-flag"]
+}`;
+}
+
+function buildNegotiationPrompt(context = {}) {
+  const merchant = context.merchant || "the provider";
+  const amount = context.amount || 0;
+  const tactic = context.tactic || "ask for a retention or loyalty discount";
+  return `You are a practical consumer advocate who writes calm, high-probability retention and billing negotiation scripts.
+
+The user wants to negotiate their $${amount}/month bill with ${merchant}.
+The proven winning tactic for ${merchant} is: "${tactic}"
+
+Generate a concise phone/chat script in markdown with these exact sections:
+
+## 📞 Before You Call
+- The exact phone number or chat URL (if widely known) for ${merchant}.
+- A likely menu path to reach billing, loyalty, or retention if widely known. If not known, say so plainly.
+- Have a competitor's current rate ready as your anchor when relevant. If a realistic competitor is unclear, say to reference a lower market rate instead of inventing one.
+
+## 🗣️ Opening Line
+Give them a natural opening line for the first 15 seconds. It should usually establish: (1) loyalty or tenure if helpful, (2) price pressure or a competing offer if relevant, and (3) that they are considering cancellation unless the price improves.
+
+## 💰 The Ask
+State a realistic target price or discount range to ask for. Use the competitor rate as anchor when known. Example: "I'd like to stay, but I need my bill closer to $X/month to justify keeping the service."
+
+## 🛡️ If They Say No
+Provide 3 escalation responses:
+1. A firmness response ("I understand, but I'll need to proceed with cancellation then.")
+2. A supervisor request ("Can you connect me to someone authorized to offer loyalty pricing?")
+3. A callback play ("I'll call back tomorrow — please note my cancellation request on my account.")
+
+## ⚡ Pro Tips
+- Best times to call (Tue-Thu morning = shorter hold, better offers).
+- If the first offer is weak, counter once with a specific lower target.
+- If offered a "temporary" discount, ask for the duration in writing/confirmation number.
+
+RULES: Be practical, confident, and accurate. Give usable words to say, but do not fabricate phone trees, market pricing, or company policies. Do NOT discuss budgeting, tracking, or financial planning — ONLY the negotiation script. Format with clear headers and bold key phrases.`;
+}
+
+function buildSystemPrompt(type, context = {}, resolvedProvider = "gemini") {
+  const variant = context?.variant || "default";
+
+  if (variant === "location-categorization") {
+    return getLocationCategorizationPrompt();
+  }
+  if (variant === "batch-categorization") {
+    return getBatchCategorizationPrompt();
+  }
+  if (type === "audit" && variant === "critical-retry") {
+    return buildCriticalRetryPrompt(context);
+  }
+  if (type === "chat" && variant === "negotiation-script") {
+    return buildNegotiationPrompt(context);
+  }
+  if (type === "chat") {
+    return getChatSystemPrompt(
+      context.current || null,
+      context.financialConfig || {},
+      context.cards || [],
+      context.renewals || [],
+      context.history || [],
+      buildPersonaProfile(context.persona),
+      context.personalRules || "",
+      context.computedStrategy || null,
+      context.trendContext || null,
+      context.providerId || resolvedProvider,
+      context.memoryBlock || "",
+      context.decisionRecommendations || [],
+      context.chatInputRisk || null
+    );
+  }
+  return getSystemPrompt(
+    context.providerId || resolvedProvider,
+    context.financialConfig || {},
+    context.cards || [],
+    context.renewals || [],
+    context.personalRules || "",
+    context.trendContext || null,
+    context.persona || null,
+    context.computedStrategy || null,
+    context.chatContext || null,
+    context.memoryBlock || ""
+  );
+}
 
 function getWorkerGatingMode(env) {
   return env.GATING_MODE || "off";
@@ -1553,10 +1707,10 @@ export default {
       );
     }
 
-    const { snapshot, systemPrompt, history, model, stream, provider, responseFormat } = body;
+    const { snapshot, systemPrompt, context, type, history, model, stream, provider, responseFormat } = body;
 
-    if (!snapshot || !systemPrompt) {
-      return new Response(JSON.stringify({ error: "Missing required fields: snapshot, systemPrompt" }), {
+    if (!snapshot || (!systemPrompt && !context)) {
+      return new Response(JSON.stringify({ error: "Missing required fields: snapshot, context" }), {
         status: 400,
         headers: buildHeaders(cors, { "Content-Type": "application/json", ...tierHeaders }),
       });
@@ -1596,6 +1750,7 @@ export default {
       );
     }
     const { handler, keyName } = getProviderHandler(selectedProvider);
+    const resolvedSystemPrompt = systemPrompt || buildSystemPrompt(type || (isChat ? "chat" : "audit"), context || {}, selectedProvider);
 
     const apiKey = env[keyName];
     if (!apiKey) {
@@ -1618,7 +1773,7 @@ export default {
 
       const result = await handler(apiKey, {
         snapshot,
-        systemPrompt,
+        systemPrompt: resolvedSystemPrompt,
         history,
         model: resolvedModel,
         stream: shouldStream,

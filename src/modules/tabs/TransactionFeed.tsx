@@ -4,60 +4,59 @@
 // filtering, and CSV/JSON export.
 // ═══════════════════════════════════════════════════════════════
 
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import type { TouchEvent } from "react";
-import {
-  ArrowLeft,
-  Search,
-  X,
-  Download,
-  Filter,
-  ArrowUpRight,
-  ArrowDownLeft,
-  ShoppingCart,
-  Utensils,
-  Car,
-  Home,
-  Zap,
-  Briefcase,
-  Heart,
-  Plane,
-  GraduationCap,
-  Gamepad2,
-  Wifi,
-  CreditCard,
-  Building2,
-  Banknote,
-  HelpCircle,
-  Clock,
-  FileText,
-  FileSpreadsheet,
-  ChevronDown,
-  RefreshCw,
-  TrendingUp,
-  TrendingDown,
-  AlertCircle,
-  Landmark,
-  Stethoscope,
-  Wrench,
-  PiggyBank,
-  Gift,
-  Baby,
-  Dumbbell,
-  Sparkles,
-  Lock,
-} from "../icons";
-import { T } from "../constants.js";
-import { Card } from "../ui.js";
-import { EmptyState } from "../components.js";
-import { nativeExport } from "../utils.js";
-import { getStoredTransactions, fetchAllTransactions, getConnections } from "../plaid.js";
-import { usePortfolio } from "../contexts/PortfolioContext.js";
-import { useSettings } from "../contexts/SettingsContext.js";
-import { getOptimalCard } from "../rewardsCatalog.js";
-import { haptic } from "../haptics.js";
-import "./TransactionFeed.css";
-import type { Card as PortfolioCard, CustomValuations } from "../../types/index.js";
+  import type { TouchEvent } from "react";
+  import { useCallback,useEffect,useMemo,useRef,useState } from "react";
+  import type { CustomValuations,Card as PortfolioCard } from "../../types/index.js";
+  import { EmptyState } from "../components.js";
+  import { T } from "../constants.js";
+  import { usePortfolio } from "../contexts/PortfolioContext.js";
+  import { useSettings } from "../contexts/SettingsContext.js";
+  import { haptic } from "../haptics.js";
+  import {
+    AlertCircle,
+    ArrowDownLeft,
+    ArrowLeft,
+    ArrowUpRight,
+    Baby,
+    Banknote,
+    Briefcase,
+    Building2,
+    Car,
+    ChevronDown,
+    CreditCard,
+    Download,
+    Dumbbell,
+    FileSpreadsheet,
+    FileText,
+    Filter,
+    Gamepad2,
+    Gift,
+    GraduationCap,
+    Heart,
+    HelpCircle,
+    Home,
+    Landmark,
+    Lock,
+    PiggyBank,
+    Plane,
+    RefreshCw,
+    Search,
+    ShoppingCart,
+    Sparkles,
+    Stethoscope,
+    TrendingDown,
+    TrendingUp,
+    Utensils,
+    Wifi,
+    Wrench,
+    X,
+    Zap
+  } from "../icons";
+  import { fetchAllTransactions,getConnections,getStoredTransactions } from "../plaid.js";
+  import { getOptimalCard } from "../rewardsCatalog.js";
+  import { Card } from "../ui.js";
+  import { nativeExport } from "../utils.js";
+  import "./TransactionFeed.css";
 
 interface ToastApi {
   success?: (message: string) => void;
@@ -321,7 +320,6 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
       } else {
         setSlideOffset(0);
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     },
     [pullDistance, refreshing, onClose]
   );
@@ -550,7 +548,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
       const csv = buildCSV(filtered);
       const dateStr = new Date().toISOString().split("T")[0];
       await nativeExport(`CatalystCash_Transactions_${dateStr}.csv`, csv, "text/csv");
-    } catch (e) {
+    } catch {
       appWindow.toast?.error?.("Export failed");
     }
   }, [filtered, appWindow]);
@@ -566,7 +564,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
         JSON.stringify(payload, null, 2),
         "application/json"
       );
-    } catch (e) {
+    } catch {
       appWindow.toast?.error?.("Export failed");
     }
   }, [filtered, appWindow]);

@@ -2,10 +2,10 @@
 // backup.js — Export & Import backup logic
 // Extracted from SettingsTab.jsx for clarity and testability.
 // ═══════════════════════════════════════════════════════════════
-import { APP_VERSION } from "./constants.js";
-import { db, nativeExport } from "./utils.js";
-import { encrypt, decrypt, isEncrypted } from "./crypto.js";
-import { isSafeImportKey, isSecuritySensitiveKey, sanitizePlaidForBackup } from "./securityKeys.js";
+  import { APP_VERSION } from "./constants.js";
+  import { decrypt,encrypt,isEncrypted } from "./crypto.js";
+  import { isSafeImportKey,isSecuritySensitiveKey,sanitizePlaidForBackup } from "./securityKeys.js";
+  import { db,nativeExport } from "./utils.js";
 
 /**
  * Merge two arrays of objects with unique `id` fields, keeping existing entries.

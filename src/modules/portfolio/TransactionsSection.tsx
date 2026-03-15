@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
-import type { Dispatch, SetStateAction } from "react";
-import { DollarSign, ChevronDown } from "../icons";
-import { Card, Badge } from "../ui.js";
-import { Mono } from "../components.js";
-import { T } from "../constants.js";
-import { getStoredTransactions } from "../plaid.js";
-import type { PortfolioCollapsedSections } from "./types.js";
+  import type { Dispatch,SetStateAction } from "react";
+  import { useEffect,useState } from "react";
+  import { Mono } from "../components.js";
+  import { T } from "../constants.js";
+  import { ChevronDown,DollarSign } from "../icons";
+  import { getStoredTransactions } from "../plaid.js";
+  import { Badge,Card } from "../ui.js";
+  import type { PortfolioCollapsedSections } from "./types.js";
 
 interface StoredTransaction {
     id?: string;

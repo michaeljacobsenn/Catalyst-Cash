@@ -1,51 +1,47 @@
-import { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from "react";
-import type { FocusEvent as ReactFocusEvent } from "react";
-import { App as CapApp } from "@capacitor/app";
-import { Capacitor } from "@capacitor/core";
-import { SplashScreen } from "@capacitor/splash-screen";
-import {
-  Eye,
-  EyeOff,
-  Settings,
-  Info,
-  MapPin,
-} from "./modules/icons";
-import { T, DEFAULT_CARD_PORTFOLIO, RENEWAL_CATEGORIES, APP_VERSION } from "./modules/constants.js";
-import { getModel } from "./modules/providers.js";
-import { db } from "./modules/utils.js";
-import { GlobalStyles, Card, useGlobalHaptics, Badge, getTracking } from "./modules/ui.js";
-import { extractCategoryByKeywords } from "./modules/merchantDatabase.js";
-import { getOptimalCard } from "./modules/rewardsCatalog.js";
-import { haptic } from "./modules/haptics.js";
-import { installGlobalHandlers } from "./modules/errorReporter.js";
+  import { App as CapApp } from "@capacitor/app";
+  import { Capacitor } from "@capacitor/core";
+  import type { FocusEvent as ReactFocusEvent } from "react";
+  import { Suspense,lazy,useCallback,useEffect,useMemo,useRef,useState } from "react";
+  import { uploadToICloud } from "./modules/cloudSync.js";
+  import { APP_VERSION,T } from "./modules/constants.js";
+  import { useAudit } from "./modules/contexts/AuditContext.js";
+  import type { AppTab } from "./modules/contexts/NavigationContext.js";
+  import { useNavigation } from "./modules/contexts/NavigationContext.js";
+  import { OverlayProvider } from "./modules/contexts/OverlayContext.js";
+  import { usePortfolio } from "./modules/contexts/PortfolioContext.js";
+  import { useSecurity } from "./modules/contexts/SecurityContext.js";
+  import { useSettings } from "./modules/contexts/SettingsContext.js";
+  import { ThemeProvider } from "./modules/contexts/ThemeContext.js";
+  import { getDemoAuditPayload } from "./modules/demoAudit.js";
+  import { installGlobalHandlers } from "./modules/errorReporter.js";
+  import { haptic } from "./modules/haptics.js";
+  import {
+    Eye,
+    EyeOff,
+    Info,
+    MapPin,
+    Settings,
+  } from "./modules/icons";
+  import { extractCategoryByKeywords } from "./modules/merchantDatabase.js";
+  import BottomNavBar from "./modules/navigation/BottomNavBar.js";
+  import ScrollSnapContainer from "./modules/navigation/ScrollSnapContainer.js";
+  import TabRenderer from "./modules/navigation/TabRenderer.js";
+  import { syncOTAData } from "./modules/ota.js";
+  import OverlayManager from "./modules/overlays/OverlayManager.js";
+  import { initRevenueCat } from "./modules/revenuecat.js";
+  import { getOptimalCard } from "./modules/rewardsCatalog.js";
+  import { deleteSecureItem } from "./modules/secureStore.js";
+  import { isSecuritySensitiveKey,sanitizePlaidForBackup } from "./modules/securityKeys.js";
+  import { getGatingMode,isPro,syncRemoteGatingMode } from "./modules/subscription.js";
+  import "./modules/tabs/DashboardTab.css"; // Global animations, skeleton loaders, utility classes
+  import { useToast } from "./modules/Toast.js";
+  import { GlobalStyles,getTracking,useGlobalHaptics } from "./modules/ui.js";
+  import { db } from "./modules/utils.js";
+  import type { AuditRecord,BankAccount,Card as CardType,ParsedAudit,PlaidInvestmentAccount,Renewal } from "./types/index.js";
 // Payday reminder scheduling is handled in SettingsContext
 installGlobalHandlers();
-import { useToast } from "./modules/Toast.js";
-import { getDemoAuditPayload } from "./modules/demoAudit.js";
-const DashboardTab = lazy(() => import("./modules/tabs/DashboardTab.js"));
 const LockScreen = lazy(() => import("./modules/LockScreen.js"));
 const SetupWizard = lazy(() => import("./modules/tabs/SetupWizard.js"));
-import ScrollSnapContainer from "./modules/navigation/ScrollSnapContainer.js";
-import BottomNavBar from "./modules/navigation/BottomNavBar.js";
-import TabRenderer from "./modules/navigation/TabRenderer.js";
-import OverlayManager from "./modules/overlays/OverlayManager.js";
-import { OverlayProvider } from "./modules/contexts/OverlayContext.js";
-import { useSecurity } from "./modules/contexts/SecurityContext.js";
-import { useSettings } from "./modules/contexts/SettingsContext.js";
-import { ThemeProvider } from "./modules/contexts/ThemeContext.js";
-import { usePortfolio } from "./modules/contexts/PortfolioContext.js";
-import { useNavigation } from "./modules/contexts/NavigationContext.js";
-import type { AppTab } from "./modules/contexts/NavigationContext.js";
-import { useAudit } from "./modules/contexts/AuditContext.js";
-import { isPro, getGatingMode, syncRemoteGatingMode } from "./modules/subscription.js";
-import { initRevenueCat } from "./modules/revenuecat.js";
-import { syncOTAData } from "./modules/ota.js";
-import { isSecuritySensitiveKey, sanitizePlaidForBackup } from "./modules/securityKeys.js";
-import { evaluateBadges, unlockBadge, BADGE_DEFINITIONS } from "./modules/badges.js";
-import "./modules/tabs/DashboardTab.css"; // Global animations, skeleton loaders, utility classes
-import { deleteSecureItem } from "./modules/secureStore.js";
-import { uploadToICloud } from "./modules/cloudSync.js";
-import type { AuditRecord, BankAccount, Card as CardType, ParsedAudit, PlaidInvestmentAccount, Renewal } from "./types/index.js";
 
 type AppToastApi = Window["toast"];
 const uploadToICloudTyped = uploadToICloud as (payload: unknown, passphrase?: string | null) => Promise<boolean>;
@@ -62,13 +58,6 @@ interface SimulatedNotification {
   store: string;
 }
 
-function flattenSeedRenewals() {
-  const items: Array<Record<string, unknown>> = [];
-  RENEWAL_CATEGORIES.forEach(cat => {
-    cat.items.forEach(item => items.push({ ...item, category: cat.id }));
-  });
-  return items;
-}
 
 function useOnline() {
   const [o, setO] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
@@ -114,37 +103,20 @@ function CatalystCashShell() {
   }, []);
 
   const {
-    requireAuth,
-    setRequireAuth,
     appPasscode,
-    setAppPasscode,
-    useFaceId,
-    setUseFaceId,
     isLocked,
-    setIsLocked,
     privacyMode,
     setPrivacyMode,
-    lockTimeout,
-    setLockTimeout,
     appleLinkedId,
-    setAppleLinkedId,
     isSecurityReady,
   } = useSecurity();
   const {
-    apiKey,
-    setApiKey,
     aiProvider,
-    setAiProvider,
     aiModel,
-    setAiModel,
     persona,
-    setPersona,
     personalRules,
     setPersonalRules,
     autoBackupInterval,
-    setAutoBackupInterval,
-    notifPermission,
-    aiConsent,
     setAiConsent,
     showAiConsent,
     setShowAiConsent,
@@ -161,7 +133,6 @@ function CatalystCashShell() {
     renewals,
     setRenewals,
     cardCatalog,
-    badges,
     cardAnnualFees,
     isPortfolioReady,
   } = usePortfolio();
@@ -173,10 +144,6 @@ function CatalystCashShell() {
     moveChecks,
     setMoveChecks,
     loading,
-    error,
-    setError,
-    useStreaming,
-    setUseStreaming,
     streamText,
     elapsed,
     viewing,
@@ -188,7 +155,6 @@ function CatalystCashShell() {
     handleCancelAudit,
     abortActiveAudit,
     clearAll,
-    deleteHistoryItem,
     isAuditReady,
     handleManualImport,
     isTest,
@@ -200,22 +166,16 @@ function CatalystCashShell() {
   } = useAudit();
   const {
     tab,
-    setTab,
     navTo,
     syncTab,
-    swipeToTab,
-    swipeAnimClass,
     resultsBackTarget,
     setResultsBackTarget,
     setupReturnTab,
     setSetupReturnTab,
     onboardingComplete,
-    setOnboardingComplete,
     showGuide,
     setShowGuide,
-    inputMounted,
     lastCenterTab,
-    inputBackTarget,
     abortActiveChatStream,
     SWIPE_TAB_ORDER,
   } = useNavigation();
@@ -292,7 +252,9 @@ function CatalystCashShell() {
                 }
                 await saveConnectionLinks(refreshed);
               }
-            } catch (e) { /* ignore */ }
+            } catch {
+              void 0;
+            }
 
             window.toast?.success?.("Bank linked successfully!");
           } catch (err) {
@@ -307,7 +269,7 @@ function CatalystCashShell() {
           }
         }
       );
-    } catch (err) {
+    } catch {
       window.toast?.error?.("Plaid unavailable.");
     }
   };
@@ -473,7 +435,9 @@ function CatalystCashShell() {
             setTimeout(() => window.location.reload(), 1500);
           }
         }
-      } catch (e) { }
+      } catch {
+        void 0;
+      }
     }
     doPull();
   }, [ready, online]);
@@ -514,7 +478,6 @@ function CatalystCashShell() {
         // Heuristic: looks like an audit response if it has markdown headers + dollar amounts
         const hasHeaders = /##\s*(ALERT|DASHBOARD|MOVES|RADAR|NEXT ACTION)/i.test(text);
         const hasDollars = /\$[\d,]+\.\d{2}/.test(text);
-        const hasStatus = /\b(GREEN|YELLOW|RED)\b/.test(text);
         if (hasHeaders && hasDollars) {
           lastClipRef.current = text;
           toast.clipboard("Audit detected in clipboard", {
@@ -528,7 +491,9 @@ function CatalystCashShell() {
             },
           });
         }
-      } catch { } // clipboard permission denied — silent fail
+      } catch {
+        return;
+      } // clipboard permission denied — silent fail
     };
     const onVis = () => {
       if (!document.hidden) setTimeout(checkClipboard, 500);
@@ -652,16 +617,6 @@ function CatalystCashShell() {
     }
 
     // Clean demo-seeded badges (remove only the ones we added that weren't already there)
-    const currentBadges = (await db.get("unlocked-badges")) || {};
-    const demoBadgeIds = [
-      "first_audit",
-      "profile_complete",
-      "score_80",
-      "savings_5k",
-      "savings_10k",
-      "net_worth_positive",
-      "investor",
-    ];
     // Only remove badges that were seeded during THIS demo session (timestamp matches)
     // For simplicity, keep all badges — users may have earned some legitimately
     // Just let evaluateBadges re-check on next real audit
@@ -715,36 +670,6 @@ function CatalystCashShell() {
     []
   );
 
-  const importBackupFile = async file => {
-    const reader = new FileReader();
-    return new Promise((resolve, reject) => {
-      reader.onload = async e => {
-        try {
-          const rawResult = e.target?.result;
-          if (typeof rawResult !== "string") {
-            reject(new Error("Failed to read backup file"));
-            return;
-          }
-          const backup = JSON.parse(rawResult) as { app?: string; data?: Record<string, unknown>; exportedAt?: string };
-          if (!backup.data || (backup.app !== "Catalyst Cash" && backup.app !== "FinAudit Pro")) {
-            reject(new Error("Invalid Catalyst Cash backup file"));
-            return;
-          }
-          let count = 0;
-          for (const [key, val] of Object.entries(backup.data)) {
-            if (isSecuritySensitiveKey(key)) continue; // Never import security credentials
-            await db.set(key, val);
-            count++;
-          }
-          resolve({ count, exportedAt: backup.exportedAt });
-        } catch (err) {
-          reject(err);
-        }
-      };
-      reader.onerror = () => reject(new Error("Failed to read file"));
-      reader.readAsText(file);
-    });
-  };
 
   const inputFormDb = useMemo(
     () => ({
@@ -759,19 +684,6 @@ function CatalystCashShell() {
     []
   );
 
-  const handleRestoreFromHome = async file => {
-    if (!file) return;
-    try {
-      const restoreResult = (await importBackupFile(file)) as { count: number; exportedAt?: string };
-      const { count, exportedAt } = restoreResult;
-      const dateStr = exportedAt ? new Date(exportedAt).toLocaleDateString() : "unknown date";
-      toast.success(`Restored ${count} items from backup dated ${dateStr}.`);
-      // Short delay to ensure toasts clear and state settles before reload
-      setTimeout(() => window.location.reload(), 1200);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Import failed");
-    }
-  };
 
   const display = viewing || current;
   const displayMoveChecks = viewing ? viewing.moveChecks || {} : moveChecks;
@@ -871,16 +783,6 @@ function CatalystCashShell() {
     };
   }, []);
 
-  const investmentsTabVisible = useMemo(() => {
-    const holdings = financialConfig?.holdings || {};
-    return (
-      (financialConfig?.track401k && (holdings.k401?.length ?? 0) > 0) ||
-      (financialConfig?.trackRothContributions && (holdings.roth?.length ?? 0) > 0) ||
-      (financialConfig?.trackBrokerage && (holdings.brokerage?.length ?? 0) > 0) ||
-      (financialConfig?.trackHSA && (holdings.hsa?.length ?? 0) > 0) ||
-      (financialConfig?.trackCrypto && (holdings.crypto?.length ?? 0) > 0)
-    );
-  }, [financialConfig]);
 
   // Native iOS swipe-back is handled via WKWebView allowsBackForwardNavigationGestures
   // (set in capacitor.config.ts). The popstate listener (above) handles the navigation.

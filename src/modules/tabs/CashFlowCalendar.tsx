@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
-import { Card, Label } from "../ui.js";
-import { T } from "../constants.js";
-import { addDays, daysBetween, getNextPayday, getNextDateForDayOfMonth } from "../engine.js";
-import { Lock } from "../icons";
-import type { Card as PortfolioCard, CatalystCashConfig, Renewal } from "../../types/index.js";
+  import { useMemo,useState } from "react";
+  import type { CatalystCashConfig,Card as PortfolioCard,Renewal } from "../../types/index.js";
+  import { T } from "../constants.js";
+  import { addDays,daysBetween,getNextDateForDayOfMonth,getNextPayday } from "../engine.js";
+  import { Lock } from "../icons";
+  import { Card,Label } from "../ui.js";
 
 interface CashFlowEvent {
   type: "income" | "bill" | "expense" | "savings";
@@ -26,7 +26,7 @@ interface CashFlowDay {
   isBelowFloor: boolean;
 }
 
-interface CashFlowTimeline {
+interface CashFlowTimelineData {
   events: CashFlowDay[];
   minBalance: number;
   minBalanceDate: string;
@@ -232,7 +232,7 @@ export default function CashFlowCalendar({ config, cards = [], renewals = [], ch
     }
 
     return { events: days, minBalance, minBalanceDate };
-  }, [config, cards, renewals, checkingBalance, snapshotDate]) as CashFlowTimeline | null;
+  }, [config, cards, renewals, checkingBalance, snapshotDate]) as CashFlowTimelineData | null;
 
   // Early returns AFTER all hooks
   if (!timeline || !config || config.trackChecking === false) return null;
@@ -337,7 +337,6 @@ function GhostHeatmap({ events }) {
   // Find min / max projected daily balance to scale opacity
   const balances = events.map(e => e.projectedBalance);
   const maxB = Math.max(...balances, 1);
-  const minB = Math.min(...balances);
 
   const getHeatColor = (balance, isNegative, isBelowFloor) => {
     if (isNegative) return T.status.red;

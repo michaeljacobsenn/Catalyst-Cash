@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { getStoredTransactions } from "./plaid.js";
-import { db } from "./utils.js";
+  import { useEffect,useState } from "react";
+  import { getStoredTransactions } from "./plaid.js";
+  import { db } from "./utils.js";
 
 // Common subscription names and keywords to match against transaction descriptions.
 const SUB_KEYWORDS = [

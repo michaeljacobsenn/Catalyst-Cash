@@ -1,5 +1,5 @@
-import { Capacitor } from "@capacitor/core";
-import { Preferences } from "@capacitor/preferences";
+  import { Capacitor } from "@capacitor/core";
+  import { Preferences } from "@capacitor/preferences";
 
 const FALLBACK_PREFIX = "secure:";
 let securePluginPromise = null;

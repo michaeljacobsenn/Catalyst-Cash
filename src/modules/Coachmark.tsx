@@ -1,6 +1,6 @@
-import { memo } from "react";
-import type { CSSProperties } from "react";
-import { T } from "./constants.js";
+  import type { CSSProperties } from "react";
+  import { memo } from "react";
+  import { T } from "./constants.js";
 
 /**
  * Coachmark tooltip component — appears as a floating callout

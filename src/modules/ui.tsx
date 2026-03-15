@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useRef } from "react";
-import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from "react";
-import { T } from "./constants.js";
-import { haptic } from "./haptics.js";
+  import type { CSSProperties,KeyboardEvent as ReactKeyboardEvent,MouseEvent as ReactMouseEvent,ReactNode } from "react";
+  import React,{ useEffect } from "react";
+  import { T } from "./constants.js";
+  import { haptic } from "./haptics.js";
 
 type FontWeight = "regular" | "bold" | number;
 type CardVariant = "default" | "elevated" | "glass" | "accent";
@@ -87,13 +87,13 @@ export function useGlobalHaptics() {
 // ═══════════════════════════════════════════════════════════════
 export const getTracking = (fontSize: number, weight: FontWeight = "regular") => {
   // Base mathematical curve for SF Pro
-  let tracking = 0;
-  if (fontSize <= 10) tracking = 0.04;
-  else if (fontSize <= 12) tracking = 0.02;
-  else if (fontSize <= 16) tracking = 0;
-  else if (fontSize <= 24) tracking = -0.015;
-  else if (fontSize <= 36) tracking = -0.025;
-  else tracking = -0.04; // Massive numbers
+  let tracking =
+    fontSize <= 10 ? 0.04
+    : fontSize <= 12 ? 0.02
+    : fontSize <= 16 ? 0
+    : fontSize <= 24 ? -0.015
+    : fontSize <= 36 ? -0.025
+    : -0.04; // Massive numbers
 
   // Adjust for visual weight (heavy weights need slightly more breathing room)
   if (weight === "bold" || (typeof weight === "number" && weight >= 700)) {
@@ -256,26 +256,24 @@ export const GlobalStyles = () => (
     .scroll-area{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior:contain}
     .scroll-area::-webkit-scrollbar{display:none}
 
-    /* ── Native iOS CSS Scroll Snap ── */
+    /* ── Gesture-driven horizontal tab track ── */
     .snap-container {
-      display: flex;
-      flex-direction: row;
-      overflow-x: auto;
-      overflow-y: hidden;
-      scroll-snap-type: x mandatory;
-      scrollbar-width: none;
-      -webkit-overflow-scrolling: touch;
+      position: relative;
+      overflow: hidden;
       overscroll-behavior-x: none;
-      scroll-behavior: smooth;
     }
     .snap-container::-webkit-scrollbar {
       display: none;
     }
+    .snap-track {
+      display: flex;
+      flex-direction: row;
+      height: 100%;
+      will-change: transform;
+    }
     .snap-page {
-      scroll-snap-align: center;
-      scroll-snap-stop: always;
-      flex: 0 0 100%;
-      width: 100%;
+      flex: 0 0 var(--snap-pane-w, 100%);
+      width: var(--snap-pane-w, 100%);
       height: 100%;
       display: flex;
       flex-direction: column;
@@ -515,7 +513,7 @@ export const Label = ({ children, style }: LabelProps) => (
 );
 
 // Unified ErrorBoundary — delegates to standalone module with error telemetry (reportError)
-export { default as ErrorBoundary } from "./ErrorBoundary.js";
+  export { default as ErrorBoundary } from "./ErrorBoundary.js";
 
 export const Badge = ({ variant = "gray", children, style, size = "md" }: BadgeProps) => {
   const m = {
@@ -682,7 +680,7 @@ export const InlineTooltip = ({ term, children }: InlineTooltipProps) => {
   );
 }
 
-export { ViewToggle } from "./uiComponents.js";
+  export { ViewToggle } from "./uiComponents.js";
 
 // ═══════════════════════════════════════════════════════════════
 // IOS-STYLE SETTINGS / EDIT PANELS

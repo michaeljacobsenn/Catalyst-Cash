@@ -1,26 +1,26 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useMemo,
-  type Dispatch,
-  type ReactNode,
-  type SetStateAction,
-} from "react";
-import { db, advanceExpiredDate } from "../utils.js";
-import { ensureCardIds, getCardLabel, getShortCardLabel } from "../cards.js";
-import { loadCardCatalog } from "../issuerCards.js";
-import { scheduleBillReminders } from "../notifications.js";
-import { fetchMarketPrices } from "../marketData.js";
-import { useSettings } from "./SettingsContext.js";
-import type {
-  BankAccount,
-  Card,
-  IssuerCardCatalog,
-  MarketPriceMap,
-  Renewal,
-} from "../../types/index.js";
+  import {
+    createContext,
+    useContext,
+    useEffect,
+    useMemo,
+    useState,
+    type Dispatch,
+    type ReactNode,
+    type SetStateAction,
+  } from "react";
+  import type {
+    BankAccount,
+    Card,
+    IssuerCardCatalog,
+    MarketPriceMap,
+    Renewal,
+  } from "../../types/index.js";
+  import { ensureCardIds,getCardLabel,getShortCardLabel } from "../cards.js";
+  import { loadCardCatalog } from "../issuerCards.js";
+  import { fetchMarketPrices } from "../marketData.js";
+  import { scheduleBillReminders } from "../notifications.js";
+  import { advanceExpiredDate,db } from "../utils.js";
+  import { useSettings } from "./SettingsContext.js";
 
 interface PortfolioProviderProps {
   children: ReactNode;
@@ -53,7 +53,7 @@ export interface PortfolioContextValue {
 
 const PortfolioContext = createContext<PortfolioContextValue | null>(null);
 
-export { PortfolioContext };
+  export { PortfolioContext };
 
 export function PortfolioProvider({ children }: PortfolioProviderProps) {
   const { financialConfig, isSettingsReady } = useSettings();
@@ -221,7 +221,7 @@ export function PortfolioProvider({ children }: PortfolioProviderProps) {
     return cards
       .filter((card: Card) => card.annualFee && card.annualFeeDue)
       .map((card: Card) => {
-        const nextDue = card.annualFeeDue!;
+        const nextDue = card.annualFeeDue || "";
         return {
           id: card.id,
           linkedCardId: card.id,

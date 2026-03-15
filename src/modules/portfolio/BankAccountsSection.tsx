@@ -1,14 +1,14 @@
-import { useEffect, useState, useMemo } from "react";
-import type { Dispatch, SetStateAction } from "react";
-import { Landmark, ChevronDown, Edit3, Check, DollarSign } from "../icons";
-import { Card, Badge } from "../ui.js";
-import { Mono } from "../components.js";
-import { T, ISSUER_COLORS } from "../constants.js";
-import { usePortfolio } from "../contexts/PortfolioContext.js";
-import { fmt } from "../utils.js";
-import { getConnections } from "../plaid.js";
-import type { BankAccount } from "../../types/index.js";
-import type { PortfolioCollapsedSections } from "./types.js";
+  import type { Dispatch,SetStateAction } from "react";
+  import { useEffect,useMemo,useState } from "react";
+  import type { BankAccount } from "../../types/index.js";
+  import { Mono } from "../components.js";
+  import { ISSUER_COLORS,T } from "../constants.js";
+  import { usePortfolio } from "../contexts/PortfolioContext.js";
+  import { Check,ChevronDown,DollarSign,Edit3,Landmark } from "../icons";
+  import { getConnections } from "../plaid.js";
+  import { Badge } from "../ui.js";
+  import { fmt } from "../utils.js";
+  import type { PortfolioCollapsedSections } from "./types.js";
 
 interface EditBankForm {
     bank: string;

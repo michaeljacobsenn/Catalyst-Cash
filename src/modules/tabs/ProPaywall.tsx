@@ -3,14 +3,14 @@
 // Shows feature comparison, pricing, and IAP placeholders.
 // Only visible when shouldShowGating() returns true.
 // ═══════════════════════════════════════════════════════════════
-import { useState, useRef, useCallback } from "react";
-import type { TouchEvent } from "react";
-import { createPortal } from "react-dom";
-import { T } from "../constants.js";
-import { Card } from "../ui.js";
-import { Mono } from "../components.js";
-import { haptic } from "../haptics.js";
-import { IAP_PRICING, IAP_PRODUCTS } from "../subscription.js";
+  import type { TouchEvent } from "react";
+  import { useCallback,useRef,useState } from "react";
+  import { createPortal } from "react-dom";
+  import { Mono } from "../components.js";
+  import { T } from "../constants.js";
+  import { haptic } from "../haptics.js";
+  import { IAP_PRICING } from "../subscription.js";
+  import { Card } from "../ui.js";
 
 const loadRevenueCat = () => import("../revenuecat.js");
 

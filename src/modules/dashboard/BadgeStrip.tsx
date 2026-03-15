@@ -1,6 +1,6 @@
-import { T } from "../constants.js";
-import { BADGE_DEFINITIONS, TIER_COLORS } from "../badges.js";
-import { Card } from "../ui.js";
+  import { BADGE_DEFINITIONS,TIER_COLORS } from "../badges.js";
+  import { T } from "../constants.js";
+  import { Card } from "../ui.js";
 
 /**
  * BadgeStrip — Compact horizontal strip of achievement badges.

@@ -1,7 +1,7 @@
-import { Capacitor } from "@capacitor/core";
-import { Purchases, LOG_LEVEL } from "@revenuecat/purchases-capacitor";
-import { activatePro, deactivatePro } from "./subscription.js";
-import { log } from "./logger.js";
+  import { Capacitor } from "@capacitor/core";
+  import { LOG_LEVEL,Purchases } from "@revenuecat/purchases-capacitor";
+  import { log } from "./logger.js";
+  import { activatePro,deactivatePro } from "./subscription.js";
 
 const ENTITLEMENT_ID = "Catalyst Cash Pro";
 const RC_ENTITLEMENT_VERIFICATION_MODE = "INFORMATIONAL";

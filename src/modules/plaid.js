@@ -20,12 +20,12 @@
 //          account masks, linkage state, and last-sync timestamps.
 // ═══════════════════════════════════════════════════════════════
 
-import { db } from "./utils.js";
-import { getIssuerCards } from "./issuerCards.js";
-import { fetchWithRetry } from "./fetchWithRetry.js";
-import { getSubscriptionState, INSTITUTION_LIMITS, isGatingEnforced } from "./subscription.js";
-import { categorizeBatch, learn } from "./merchantMap.js";
-import { batchCategorizeTransactions } from "./api.js";
+  import { batchCategorizeTransactions } from "./api.js";
+  import { fetchWithRetry } from "./fetchWithRetry.js";
+  import { getIssuerCards } from "./issuerCards.js";
+  import { categorizeBatch,learn } from "./merchantMap.js";
+  import { getSubscriptionState,INSTITUTION_LIMITS,isGatingEnforced } from "./subscription.js";
+  import { db } from "./utils.js";
 
 const PLAID_STORAGE_KEY = "plaid-connections";
 const API_BASE = "https://api.catalystcash.app";

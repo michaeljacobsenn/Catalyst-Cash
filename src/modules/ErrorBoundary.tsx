@@ -1,8 +1,8 @@
-import { Component } from "react";
-import type { ErrorInfo, ReactNode } from "react";
-import { T } from "./constants.js";
-import { AlertTriangle } from "./icons";
-import { reportError } from "./errorReporter.js";
+  import type { ErrorInfo,ReactNode } from "react";
+  import { Component } from "react";
+  import { T } from "./constants.js";
+  import { reportError } from "./errorReporter.js";
+  import { AlertTriangle } from "./icons";
 
 interface ErrorBoundaryProps {
   children?: ReactNode;

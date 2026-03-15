@@ -1,6 +1,6 @@
-import { useCallback, useRef } from "react";
-import type { TouchEvent as ReactTouchEvent } from "react";
-import { haptic } from "../haptics.js";
+  import type { TouchEvent as ReactTouchEvent } from "react";
+  import { useCallback,useRef } from "react";
+  import { haptic } from "../haptics.js";
 
 interface TouchGestureState {
   startX: number;

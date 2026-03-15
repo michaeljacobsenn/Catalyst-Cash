@@ -1,15 +1,15 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
-import type { Dispatch, SetStateAction } from "react";
-import { TrendingUp, RefreshCw, ChevronDown, Trash2 } from "../icons";
-import { Card, Badge } from "../ui.js";
-import { Mono } from "../components.js";
-import { T } from "../constants.js";
-import { fmt } from "../utils.js";
-import { fetchMarketPrices } from "../marketData.js";
-import { usePortfolio } from "../contexts/PortfolioContext.js";
-import { useSettings } from "../contexts/SettingsContext.js";
-import type { CatalystCashConfig, InvestmentBucket, InvestmentHolding, InvestmentHoldings, MarketPriceMap, PlaidInvestmentAccount } from "../../types/index.js";
-import type { PortfolioCollapsedSections } from "./types.js";
+  import type { Dispatch,SetStateAction } from "react";
+  import { useCallback,useEffect,useMemo,useState } from "react";
+  import type { CatalystCashConfig,InvestmentBucket,InvestmentHolding,InvestmentHoldings,MarketPriceMap,PlaidInvestmentAccount } from "../../types/index.js";
+  import { Mono } from "../components.js";
+  import { T } from "../constants.js";
+  import { usePortfolio } from "../contexts/PortfolioContext.js";
+  import { useSettings } from "../contexts/SettingsContext.js";
+  import { ChevronDown,RefreshCw,Trash2,TrendingUp } from "../icons";
+  import { fetchMarketPrices,getManualMarketRefreshStatus } from "../marketData.js";
+  import { Badge,Card } from "../ui.js";
+  import { fmt } from "../utils.js";
+  import type { PortfolioCollapsedSections } from "./types.js";
 
 interface InvestmentsSectionProps {
     collapsedSections: PortfolioCollapsedSections;
@@ -54,7 +54,18 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
     const [investPrices, setInvestPrices] = useState<MarketPriceMap>(marketPrices || {});
     const [collapsedInvest, setCollapsedInvest] = useState<Record<string, boolean>>({});
     const [refreshingPrices, setRefreshingPrices] = useState(false);
-    const [lastRefresh, setLastRefresh] = useState<number | null>(null);
+    const [, setLastRefresh] = useState<number | null>(null);
+    const [manualRefreshStatus, setManualRefreshStatus] = useState<{
+        allowed: boolean;
+        lastSuccessfulAt: number | null;
+        nextAllowedAt: number | null;
+        remainingMs: number;
+    }>({
+        allowed: true,
+        lastSuccessfulAt: null,
+        nextAllowedAt: null,
+        remainingMs: 0,
+    });
 
     // Merge in app-level prices when they arrive
     useEffect(() => {
@@ -62,6 +73,10 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
             setInvestPrices(prev => ({ ...prev, ...marketPrices }));
         }
     }, [marketPrices]);
+
+    useEffect(() => {
+        void getManualMarketRefreshStatus().then(setManualRefreshStatus).catch(() => {});
+    }, []);
 
     // Fetch fresh prices on mount or when symbols change
     useEffect(() => {
@@ -79,19 +94,34 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
     // Manual refresh handler
     const handleRefreshPrices = useCallback(async () => {
         if (refreshingPrices || allHoldingSymbols.length === 0) return;
+        const status = await getManualMarketRefreshStatus();
+        setManualRefreshStatus(status);
+        if (!status.allowed) return;
         setRefreshingPrices(true);
         try {
-            const p = await fetchMarketPrices(allHoldingSymbols, true) as MarketPriceMap | null | undefined;
+            const p = await fetchMarketPrices(allHoldingSymbols, true, { reason: "manual" }) as MarketPriceMap | null | undefined;
             if (p && Object.keys(p).length > 0) {
                 setInvestPrices(prev => ({ ...prev, ...p }));
                 if (setMarketPrices) setMarketPrices(prev => ({ ...prev, ...p }));
                 setLastRefresh(Date.now());
+                const nextStatus = await getManualMarketRefreshStatus();
+                setManualRefreshStatus(nextStatus);
             }
         } catch {
             /* network error, silently fail */
         }
         setRefreshingPrices(false);
     }, [refreshingPrices, allHoldingSymbols, setMarketPrices]);
+
+    const manualRefreshCooldownLabel = useMemo(() => {
+        if (manualRefreshStatus.allowed || !manualRefreshStatus.remainingMs) return "Refresh prices";
+        const totalMinutes = Math.max(1, Math.ceil(manualRefreshStatus.remainingMs / 60000));
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        if (hours > 0 && minutes > 0) return `Next manual refresh in ${hours}h ${minutes}m`;
+        if (hours > 0) return `Next manual refresh in ${hours}h`;
+        return `Next manual refresh in ${minutes}m`;
+    }, [manualRefreshStatus.allowed, manualRefreshStatus.remainingMs]);
 
     const investTotalValue = useMemo(() => {
         let total = 0;
@@ -149,21 +179,21 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                     <button
                         onClick={e => {
                             e.stopPropagation();
-                            handleRefreshPrices();
+                            void handleRefreshPrices();
                         }}
-                        disabled={refreshingPrices}
-                        title="Refresh prices"
+                        disabled={refreshingPrices || !manualRefreshStatus.allowed}
+                        title={refreshingPrices ? "Refreshing prices..." : manualRefreshCooldownLabel}
                         className="hover-btn"
                         style={{
                             background: "transparent",
                             border: "none",
-                            color: refreshingPrices ? T.text.muted : T.accent.emerald,
-                            cursor: "pointer",
+                            color: refreshingPrices || !manualRefreshStatus.allowed ? T.text.muted : T.accent.emerald,
+                            cursor: refreshingPrices || !manualRefreshStatus.allowed ? "not-allowed" : "pointer",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             padding: 4,
-                            opacity: refreshingPrices ? 0.5 : 0.8,
+                            opacity: refreshingPrices || !manualRefreshStatus.allowed ? 0.45 : 0.8,
                             transition: "opacity 0.2s",
                         }}
                     >
@@ -282,7 +312,7 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                             </p>
                                         ) : (
                                             <>
-                                                {plaidItems.map((pi, i) => (
+                                                {plaidItems.map((pi) => (
                                                     <div
                                                         key={pi.id}
                                                         style={{

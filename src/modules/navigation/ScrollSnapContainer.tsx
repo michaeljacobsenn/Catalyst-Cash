@@ -1,5 +1,7 @@
-import { useEffect, useRef, type ReactNode } from "react";
-import type { AppTab } from "../contexts/NavigationContext.js";
+  import { useDrag } from "@use-gesture/react";
+  import { animate,motion,useMotionValue } from "framer-motion";
+  import { useEffect,useLayoutEffect,useRef,useState,type ReactNode } from "react";
+  import type { AppTab } from "../contexts/NavigationContext.js";
 
 interface ScrollSnapContainerProps {
   ready: boolean;
@@ -11,6 +13,17 @@ interface ScrollSnapContainerProps {
   children?: ReactNode;
 }
 
+const SPRING = { type: "spring" as const, stiffness: 300, damping: 30 };
+const VELOCITY_WEIGHT = 140;
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const applyRubberBand = (value: number, min: number, max: number) => {
+  if (value < min) return min - (min - value) * 0.22;
+  if (value > max) return max + (value - max) * 0.22;
+  return value;
+};
+
 export default function ScrollSnapContainer({
   ready,
   onboardingComplete,
@@ -20,148 +33,162 @@ export default function ScrollSnapContainer({
   hidden,
   children,
 }: ScrollSnapContainerProps) {
-  const snapContainerRef = useRef<HTMLDivElement | null>(null);
-  const initialScrollLock = useRef(true);
+  const containerRef = useRef<HTMLElement | null>(null);
+  const trackRef = useRef<HTMLDivElement | null>(null);
   const currentTabRef = useRef(tab);
+  const animationRef = useRef<ReturnType<typeof animate> | null>(null);
+  const dragIntentRef = useRef(false);
+  const [paneWidth, setPaneWidth] = useState(0);
+  const x = useMotionValue(0);
+
+  const getTabIndex = (targetTab: AppTab) => {
+    const index = SWIPE_TAB_ORDER.indexOf(targetTab);
+    return index === -1 ? 0 : index;
+  };
+
+  const stopAnimation = () => {
+    animationRef.current?.stop();
+    animationRef.current = null;
+  };
+
+  const snapToTab = (targetTab: AppTab, immediate = false) => {
+    const width = paneWidth || containerRef.current?.clientWidth || 0;
+    const index = getTabIndex(targetTab);
+    const targetX = -(index * width);
+    stopAnimation();
+    if (!width || immediate) {
+      x.set(targetX);
+      return;
+    }
+    animationRef.current = animate(x, targetX, SPRING);
+  };
+
+  const snapToIndex = (index: number) => {
+    const clampedIndex = clamp(index, 0, Math.max(0, SWIPE_TAB_ORDER.length - 1));
+    const nextTab = SWIPE_TAB_ORDER[clampedIndex];
+    if (!nextTab) return;
+    syncTab(nextTab);
+    snapToTab(nextTab);
+  };
 
   useEffect(() => {
     currentTabRef.current = tab;
   }, [tab]);
 
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateWidth = () => {
+      const nextWidth = container.clientWidth;
+      setPaneWidth((prev) => {
+        if (prev === nextWidth) return prev;
+        return nextWidth;
+      });
+    };
+
+    updateWidth();
+    const observer = new ResizeObserver(() => updateWidth());
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
-    const pane = snapContainerRef.current?.querySelector<HTMLElement>(`.snap-page[data-tabid="${tab}"]`);
+    if (!ready) return;
+    snapToTab(tab, false);
+  }, [ready, onboardingComplete, paneWidth, tab]);
+
+  useEffect(() => {
+    if (!paneWidth) return;
+    snapToTab(tab, true);
+  }, [paneWidth]);
+
+  useEffect(() => {
+    const pane = containerRef.current?.querySelector<HTMLElement>(`.snap-page[data-tabid="${tab}"]`);
     if (pane) pane.scrollTo({ top: 0, behavior: "auto" });
   }, [tab]);
 
   useEffect(() => {
-    const container = snapContainerRef.current;
-    if (!container) return;
-    initialScrollLock.current = true;
-
-    let isProgrammaticScroll = false;
-    let programmaticDebounce: ReturnType<typeof setTimeout> | null = null;
-    let initialRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const scrollToTabPane = (targetTab: AppTab) => {
-      const pane = container.querySelector<HTMLElement>(`.snap-page[data-tabid="${targetTab}"]`);
-      if (!pane) return;
-      const targetLeft = pane.offsetLeft;
-      container.scrollTo({ left: targetLeft, top: 0, behavior: "auto" });
-    };
-
     const onScrollToTab = (event: Event) => {
       const targetTab = (event as CustomEvent<AppTab>).detail;
-      const idx = SWIPE_TAB_ORDER.indexOf(targetTab);
-      if (idx === -1) return;
-      isProgrammaticScroll = true;
-      scrollToTabPane(targetTab);
-      if (programmaticDebounce) clearTimeout(programmaticDebounce);
-      programmaticDebounce = setTimeout(() => {
-        isProgrammaticScroll = false;
-      }, 180);
+      if (!SWIPE_TAB_ORDER.includes(targetTab)) return;
+      snapToTab(targetTab);
     };
     window.addEventListener("app-scroll-to-tab", onScrollToTab);
+    return () => window.removeEventListener("app-scroll-to-tab", onScrollToTab);
+  }, [SWIPE_TAB_ORDER, paneWidth]);
 
-    let scrollDebounce: ReturnType<typeof setTimeout> | null = null;
-    const onScroll = () => {
-      if (initialScrollLock.current) return;
-      if (isProgrammaticScroll) {
-        if (programmaticDebounce) clearTimeout(programmaticDebounce);
-        programmaticDebounce = setTimeout(() => {
-          isProgrammaticScroll = false;
-        }, 150);
+  useEffect(() => () => stopAnimation(), []);
+
+  const bind = useDrag(
+    ({ first, last, movement: [mx], velocity: [vx], direction: [dx], cancel, tap }) => {
+      if (!paneWidth || hidden) {
+        cancel?.();
         return;
       }
 
-      if (scrollDebounce) clearTimeout(scrollDebounce);
-      scrollDebounce = setTimeout(() => {
-        const width = container.clientWidth;
-        if (width <= 0) return;
-        const index = Math.round(container.scrollLeft / width);
-        const snappedTab = SWIPE_TAB_ORDER[index];
-        if (snappedTab) syncTab(snappedTab);
-      }, 10);
-    };
+      const baseIndex = getTabIndex(currentTabRef.current);
+      const minX = -Math.max(0, SWIPE_TAB_ORDER.length - 1) * paneWidth;
+      const maxX = 0;
+      const baseX = -(baseIndex * paneWidth);
 
-    container.addEventListener("scroll", onScroll, { passive: true });
-
-    const enforceInitialScroll = () => {
-      const initialIdx = SWIPE_TAB_ORDER.indexOf(currentTabRef.current);
-      if (initialIdx === -1) return;
-      const width = container.clientWidth || window.innerWidth;
-      const target = initialIdx * Math.max(width, 0);
-      if (Math.abs(container.scrollLeft - target) <= 5) return;
-      isProgrammaticScroll = true;
-      scrollToTabPane(currentTabRef.current);
-      if (programmaticDebounce) clearTimeout(programmaticDebounce);
-      programmaticDebounce = setTimeout(() => {
-        isProgrammaticScroll = false;
-      }, 200);
-    };
-
-    requestAnimationFrame(() => requestAnimationFrame(enforceInitialScroll));
-    initialRecoveryTimer = setTimeout(enforceInitialScroll, 120);
-
-    const lockTimer = setTimeout(() => {
-      initialScrollLock.current = false;
-    }, 180);
-
-    return () => {
-      clearTimeout(lockTimer);
-      if (initialRecoveryTimer) clearTimeout(initialRecoveryTimer);
-      window.removeEventListener("app-scroll-to-tab", onScrollToTab);
-      container.removeEventListener("scroll", onScroll);
-      if (scrollDebounce) clearTimeout(scrollDebounce);
-      if (programmaticDebounce) clearTimeout(programmaticDebounce);
-    };
-  }, [ready, onboardingComplete, SWIPE_TAB_ORDER, syncTab]);
-
-  useEffect(() => {
-    const container = snapContainerRef.current;
-    if (!container) return;
-
-    const isEditable = (el: EventTarget | null) =>
-      el instanceof HTMLElement && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
-
-    const onFocusIn = (event: FocusEvent) => {
-      if (isEditable(event.target)) {
-        container.style.scrollSnapType = "none";
-        container.style.overflowX = "hidden";
+      if (first) {
+        dragIntentRef.current = false;
+        stopAnimation();
       }
-    };
 
-    const onFocusOut = (event: FocusEvent) => {
-      if (isEditable(event.target)) {
-        setTimeout(() => {
-          if (!isEditable(document.activeElement)) {
-            container.style.scrollSnapType = "";
-            container.style.overflowX = "";
-          }
-        }, 100);
+      if (!last) {
+        dragIntentRef.current = true;
+        x.set(applyRubberBand(baseX + mx, minX, maxX));
+        return;
       }
-    };
 
-    document.addEventListener("focusin", onFocusIn);
-    document.addEventListener("focusout", onFocusOut);
-    return () => {
-      document.removeEventListener("focusin", onFocusIn);
-      document.removeEventListener("focusout", onFocusOut);
-    };
-  }, []);
+      if (tap || !dragIntentRef.current) {
+        snapToTab(currentTabRef.current);
+        return;
+      }
 
+      const projectedX = baseX + mx + vx * dx * VELOCITY_WEIGHT;
+      const projectedIndex = Math.round(-projectedX / paneWidth);
+      snapToIndex(projectedIndex);
+    },
+    {
+      axis: "x",
+      filterTaps: true,
+      pointer: { touch: true },
+      rubberband: true,
+      threshold: 10,
+    },
+  );
   return (
     <main
       id="main-content"
       role="main"
-      ref={snapContainerRef}
+      ref={containerRef}
       className="snap-container snap-container-clearance"
       style={{
         flex: 1,
-        display: hidden ? "none" : "flex",
+        display: hidden ? "none" : "block",
+        overflow: "hidden",
         overscrollBehaviorX: "none",
+        touchAction: "pan-y",
       }}
     >
-      {children}
+      <div {...bind()} style={{ height: "100%", touchAction: "pan-y" }}>
+        <motion.div
+          ref={trackRef}
+          className="snap-track"
+          style={{
+            ["--snap-pane-w" as string]: paneWidth ? `${paneWidth}px` : "100%",
+            x,
+            height: "100%",
+            width: paneWidth ? `${paneWidth * SWIPE_TAB_ORDER.length}px` : `${SWIPE_TAB_ORDER.length * 100}%`,
+            touchAction: "pan-y",
+          }}
+        >
+          {children}
+        </motion.div>
+      </div>
     </main>
   );
 }

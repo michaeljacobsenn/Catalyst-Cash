@@ -15,18 +15,18 @@
 //   Pro @ $9.99/mo (after Apple 30%): $6.99 net → ~$5.79+ profit/user
 // ═══════════════════════════════════════════════════════════════
 
-import { db } from "./utils.js";
-import { Capacitor } from "@capacitor/core";
-import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
-import { APP_VERSION } from "./constants.js";
-import {
-  AI_PROVIDERS,
-  DEFAULT_FREE_MODEL_ID,
-  DEFAULT_PRO_MODEL_ID,
-  getDefaultModelIdForTier,
-  getModel,
-  isModelSelectable,
-} from "./providers.js";
+  import { Capacitor } from "@capacitor/core";
+  import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
+  import { APP_VERSION } from "./constants.js";
+  import {
+    AI_PROVIDERS,
+    DEFAULT_FREE_MODEL_ID,
+    DEFAULT_PRO_MODEL_ID,
+    getDefaultModelIdForTier,
+    getModel,
+    isModelSelectable,
+  } from "./providers.js";
+  import { db } from "./utils.js";
 
 // ── Gating Mode ─────────────────────────────────────────────
 // Controls whether subscription limits are enforced.

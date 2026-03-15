@@ -1,15 +1,12 @@
-import React, { useState, useMemo, useEffect, Suspense } from "react";
-import { Plus, Settings, AlertTriangle, ArrowRight, Wallet, TrendingUp, HelpCircle } from "../icons";
-import { T } from "../constants.js";
-import { Card } from "../ui.js";
-import { useBudget } from "../contexts/BudgetContext.js";
-import { usePortfolio } from "../contexts/PortfolioContext.js";
-import { useAudit } from "../contexts/AuditContext.js";
-import { fmt } from "../utils.js";
-import { haptic } from "../haptics.js";
-import { shouldShowGating } from "../subscription.js";
-import type { FormEvent } from "react";
-import ProBanner from "./ProBanner.js";
+  import type { FormEvent } from "react";
+  import React,{ Suspense,useEffect,useMemo,useState } from "react";
+  import { T } from "../constants.js";
+  import { useAudit } from "../contexts/AuditContext.js";
+  import { useBudget } from "../contexts/BudgetContext.js";
+  import { haptic } from "../haptics.js";
+  import { shouldShowGating } from "../subscription.js";
+  import { Card } from "../ui.js";
+  import ProBanner from "./ProBanner.js";
 const LazyProPaywall = React.lazy(() => import("./ProPaywall.js"));
 
 const STRIPE_CSS = `
@@ -42,7 +39,7 @@ function getBucketId(name) {
   return "personal";
 }
 
-export default function BudgetTab({ onRunAudit, embedded, proEnabled = false }) {
+export default function BudgetTab({ embedded, proEnabled = false }) {
   const { envelopes, monthlyIncome, updateMonthlyIncome, allocateToEnvelope, getReadyToAssign } = useBudget();
   const { current } = useAudit();
 

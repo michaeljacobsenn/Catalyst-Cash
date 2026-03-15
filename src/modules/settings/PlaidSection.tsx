@@ -1,19 +1,19 @@
-import { useState, useEffect } from "react";
-import type { Dispatch, SetStateAction } from "react";
-import type { CatalystCashConfig, BankAccount, Card as PortfolioCard, PlaidInvestmentAccount } from "../../types/index.js";
-import type { SetFinancialConfig } from "../contexts/SettingsContext.js";
-import { T } from "../constants.js";
-import { Card, Label } from "../ui.js";
-import { Plus, Building2, Unplug, Loader2 } from "../icons";
-import {
-  getConnections,
-  removeConnection,
-  connectBank,
-  autoMatchAccounts,
-  fetchBalancesAndLiabilities,
-  applyBalanceSync,
-  saveConnectionLinks,
-} from "../plaid.js";
+  import type { Dispatch,SetStateAction } from "react";
+  import { useEffect,useState } from "react";
+  import type { BankAccount,CatalystCashConfig,PlaidInvestmentAccount,Card as PortfolioCard } from "../../types/index.js";
+  import { T } from "../constants.js";
+  import type { SetFinancialConfig } from "../contexts/SettingsContext.js";
+  import { Building2,Loader2,Plus,Unplug } from "../icons";
+  import {
+    applyBalanceSync,
+    autoMatchAccounts,
+    connectBank,
+    fetchBalancesAndLiabilities,
+    getConnections,
+    removeConnection,
+    saveConnectionLinks,
+  } from "../plaid.js";
+  import { Card,Label } from "../ui.js";
 
 interface PlaidConnectionAccount {
   id?: string;

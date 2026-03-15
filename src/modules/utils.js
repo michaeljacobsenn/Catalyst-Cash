@@ -2,16 +2,16 @@
 // STORAGE — Capacitor Preferences on iOS (iCloud KV-backed),
 //           localStorage fallback on web / Vite dev server
 // ═══════════════════════════════════════════════════════════════
-import { Preferences } from "@capacitor/preferences";
-import { Share } from "@capacitor/share";
-import { Filesystem, Directory } from "@capacitor/filesystem";
-import { Capacitor } from "@capacitor/core";
-import { APP_VERSION } from "./constants.js";
-import { buildDashboardSafetyModel } from "./dashboard/safetyModel.js";
+  import { Capacitor } from "@capacitor/core";
+  import { Directory,Filesystem } from "@capacitor/filesystem";
+  import { Preferences } from "@capacitor/preferences";
+  import { Share } from "@capacitor/share";
+  import { APP_VERSION } from "./constants.js";
+  import { buildDashboardSafetyModel } from "./dashboard/safetyModel.js";
 
-import { registerPlugin } from "@capacitor/core";
+  import { registerPlugin } from "@capacitor/core";
 
-import { BiometricAuth } from "@aparajita/capacitor-biometric-auth";
+  import { BiometricAuth } from "@aparajita/capacitor-biometric-auth";
 
 export const FaceId = {
   isAvailable: async () => {
@@ -131,7 +131,7 @@ export const db = {
   },
 };
 
-import { formatCurrency } from "./currency.js";
+  import { formatCurrency } from "./currency.js";
 
 export const fmt = n => formatCurrency(n);
 

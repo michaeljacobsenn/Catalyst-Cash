@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { getSystemPrompt, sanitizePersonalRules } from "./prompts.js";
-import { getChatSystemPrompt } from "./chatPrompts.js";
+import { getSystemPrompt, sanitizePersonalRules } from "../../worker/src/promptBuilders.js";
+import { getChatSystemPrompt } from "../../worker/src/chatPromptBuilders.js";
 import { evaluateChatDecisionRules } from "./decisionRules.js";
 
 // Polyfill window for Node.js environment (formatCurrency checks window.__privacyMode)

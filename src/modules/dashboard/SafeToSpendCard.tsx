@@ -1,11 +1,11 @@
-import React, { useMemo } from "react";
-import { T } from "../constants.js";
-import { Card } from "../ui.js";
-import { usePortfolio } from "../contexts/PortfolioContext.js";
-import { useSettings } from "../contexts/SettingsContext.js";
-import { buildDashboardSafetyModel } from "./safetyModel.js";
+  import { useMemo } from "react";
+  import { T } from "../constants.js";
+  import { usePortfolio } from "../contexts/PortfolioContext.js";
+  import { useSettings } from "../contexts/SettingsContext.js";
+  import { Card } from "../ui.js";
+  import { buildDashboardSafetyModel } from "./safetyModel.js";
 
-export function SafeToSpendCard({ theme, spendableCash, ccDebt }) {
+export function SafeToSpendCard({ spendableCash, ccDebt }) {
   const { renewals, cards } = usePortfolio();
   const { financialConfig } = useSettings();
 

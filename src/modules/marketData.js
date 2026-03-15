@@ -4,12 +4,83 @@
 // Used for auto-tracking Roth IRA, 401k, Brokerage, and Crypto holdings.
 // ═══════════════════════════════════════════════════════════════
 
-import { db } from "./utils.js";
-import { getMarketRefreshTTL } from "./subscription.js";
+  import { getMarketRefreshTTL } from "./subscription.js";
+  import { db } from "./utils.js";
 
 const CACHE_KEY = "market-data-cache";
 const CACHE_TS_KEY = "market-data-ts";
+const LAUNCH_REFRESH_SUCCESS_KEY = "market-data-launch-refresh-success-ts";
+const MANUAL_REFRESH_SUCCESS_KEY = "market-data-manual-refresh-success-ts";
 const DEFAULT_CACHE_TTL = 15 * 60 * 1000; // 15 min fallback (sync contexts)
+const MANUAL_REFRESH_WINDOW_MS = 60 * 60 * 1000;
+
+function parseStoredTimestamp(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+async function getStoredRefreshTs(key) {
+  try {
+    return parseStoredTimestamp(await db.get(key));
+  } catch {
+    return null;
+  }
+}
+
+async function setStoredRefreshTs(key, ts) {
+  try {
+    await db.set(key, ts);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function getCachedPrices(symbols) {
+  try {
+    const cached = await db.get(CACHE_KEY);
+    if (cached && typeof cached === "object") {
+      const filtered = {};
+      for (const sym of symbols) {
+        if (cached[sym]) filtered[sym] = cached[sym];
+      }
+      return filtered;
+    }
+  } catch {
+    /* ignore */
+  }
+  return {};
+}
+
+export async function getManualMarketRefreshStatus() {
+  const lastSuccessfulAt = await getStoredRefreshTs(MANUAL_REFRESH_SUCCESS_KEY);
+  if (!lastSuccessfulAt) {
+    return {
+      allowed: true,
+      lastSuccessfulAt: null,
+      nextAllowedAt: null,
+      remainingMs: 0,
+    };
+  }
+
+  const remainingMs = Math.max(0, MANUAL_REFRESH_WINDOW_MS - (Date.now() - lastSuccessfulAt));
+  return {
+    allowed: remainingMs === 0,
+    lastSuccessfulAt,
+    nextAllowedAt: remainingMs === 0 ? null : lastSuccessfulAt + MANUAL_REFRESH_WINDOW_MS,
+    remainingMs,
+  };
+}
+
+async function shouldThrottleRefresh(reason) {
+  const key = reason === "manual" ? MANUAL_REFRESH_SUCCESS_KEY : LAUNCH_REFRESH_SUCCESS_KEY;
+  const lastSuccessfulAt = await getStoredRefreshTs(key);
+  if (!lastSuccessfulAt) return false;
+  return Date.now() - lastSuccessfulAt < MANUAL_REFRESH_WINDOW_MS;
+}
 
 /**
  * Get the effective cache TTL based on subscription tier.
@@ -580,19 +651,34 @@ function getWorkerUrl() {
  * Returns { [SYMBOL]: { price, change, changePct, name } }
  */
 const _inflightRequests = new Map();
-export async function fetchMarketPrices(symbols, forceRefresh = false) {
+export async function fetchMarketPrices(symbols, forceRefresh = false, options = {}) {
   if (!symbols || symbols.length === 0) return {};
+
+  const refreshReason = options.reason === "manual" || forceRefresh ? "manual" : "launch";
+  if (await shouldThrottleRefresh(refreshReason)) {
+    console.warn(`[MarketData] ${refreshReason} refresh throttled; serving cache only`);
+    return getCachedPrices(symbols);
+  }
 
   // Deduplicate concurrent requests for the same symbols
   if (!forceRefresh) {
     const dedupeKey = [...symbols].sort().join(",");
     if (_inflightRequests.has(dedupeKey)) return _inflightRequests.get(dedupeKey);
-    const promise = _fetchMarketPricesImpl(symbols, forceRefresh);
+    const promise = _fetchMarketPricesImpl(symbols, forceRefresh).then(async ({ data, source }) => {
+      if (source === "network" || source === "partial-cache-network") {
+        await setStoredRefreshTs(LAUNCH_REFRESH_SUCCESS_KEY, Date.now());
+      }
+      return data;
+    });
     _inflightRequests.set(dedupeKey, promise);
     promise.finally(() => _inflightRequests.delete(dedupeKey));
     return promise;
   }
-  return _fetchMarketPricesImpl(symbols, forceRefresh);
+  const result = await _fetchMarketPricesImpl(symbols, forceRefresh);
+  if (result.source === "network") {
+    await setStoredRefreshTs(MANUAL_REFRESH_SUCCESS_KEY, Date.now());
+  }
+  return result.data;
 }
 
 async function _fetchMarketPricesImpl(symbols, forceRefresh) {
@@ -613,7 +699,7 @@ async function _fetchMarketPricesImpl(symbols, forceRefresh) {
           // If all symbols are cached, return immediately
           if (missing.length === 0) {
             console.warn("[MarketData] serving from cache:", Object.keys(filtered).join(", "));
-            return filtered;
+            return { data: filtered, source: "cache" };
           }
           // If most are cached, fetch only the missing ones and merge
           if (Object.keys(filtered).length > 0 && missing.length < symbols.length) {
@@ -634,7 +720,7 @@ async function _fetchMarketPricesImpl(symbols, forceRefresh) {
                 })
                 .catch(() => {});
             }
-            return filtered;
+            return { data: filtered, source: "partial-cache-network" };
           }
         }
       }
@@ -646,19 +732,8 @@ async function _fetchMarketPricesImpl(symbols, forceRefresh) {
   const url = getWorkerUrl();
   if (!url) {
     console.warn("[MarketData] no worker URL configured — falling back to stale cache");
-    try {
-      const cached = await db.get(CACHE_KEY);
-      if (cached && typeof cached === "object") {
-        const filtered = {};
-        for (const sym of symbols) {
-          if (cached[sym]) filtered[sym] = cached[sym];
-        }
-        if (Object.keys(filtered).length > 0) return filtered;
-      }
-    } catch (_) {
-      /* ignore */
-    }
-    return {};
+    const filtered = await getCachedPrices(symbols);
+    return { data: filtered, source: Object.keys(filtered).length > 0 ? "fallback-cache" : "empty" };
   }
 
   console.warn(`[MarketData] fetching: ${url}?symbols=${symbols.join(",")}`);
@@ -751,23 +826,12 @@ async function _fetchMarketPricesImpl(symbols, forceRefresh) {
       await db.set(CACHE_TS_KEY, Date.now());
     }
 
-    return data;
+    return { data, source: "network" };
   } catch (err) {
     console.warn("[MarketData] fetch failed:", err.message);
     // Fall back to stale cache
-    try {
-      const cached = await db.get(CACHE_KEY);
-      if (cached) {
-        const filtered = {};
-        for (const sym of symbols) {
-          if (cached[sym]) filtered[sym] = cached[sym];
-        }
-        return filtered;
-      }
-    } catch (_) {
-      /* ignore */
-    }
-    return {};
+    const filtered = await getCachedPrices(symbols);
+    return { data: filtered, source: Object.keys(filtered).length > 0 ? "fallback-cache" : "empty" };
   }
 }
 

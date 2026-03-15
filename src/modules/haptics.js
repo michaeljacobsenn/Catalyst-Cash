@@ -2,7 +2,7 @@
 // HAPTIC FEEDBACK — wraps @capacitor/haptics for iOS
 // Falls back to no-op on web/unsupported
 // ═══════════════════════════════════════════════════════════════
-import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics";
+  import { Haptics,ImpactStyle,NotificationType } from "@capacitor/haptics";
 
 const safe = fn => async () => {
   try {

@@ -7,7 +7,7 @@
 // These facts are injected into every future prompt.
 // ═══════════════════════════════════════════════════════════════
 
-import { db } from "./utils.js";
+  import { db } from "./utils.js";
 
 const MEMORY_DB_KEY = "catalyst-ai-memory-bank";
 

@@ -1,7 +1,6 @@
-import { Capacitor } from "@capacitor/core";
-import { registerPlugin } from "@capacitor/core";
-import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
-import { encrypt, decrypt, isEncrypted } from "./crypto.js";
+  import { Capacitor,registerPlugin } from "@capacitor/core";
+  import { Directory,Encoding,Filesystem } from "@capacitor/filesystem";
+  import { decrypt,encrypt,isEncrypted } from "./crypto.js";
 
 // ═══════════════════════════════════════════════════════════════
 // NATIVE iCLOUD SYNC PLUGIN

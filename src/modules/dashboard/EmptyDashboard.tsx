@@ -1,5 +1,12 @@
-import { useRef } from "react";
-import type { ChangeEvent, ComponentType } from "react";
+  import type { ChangeEvent,ComponentType } from "react";
+  import { useRef } from "react";
+  import { T } from "../constants.js";
+  import { useNavigation } from "../contexts/NavigationContext.js";
+  import { usePortfolio } from "../contexts/PortfolioContext.js";
+  import { useSettings } from "../contexts/SettingsContext.js";
+  import { haptic } from "../haptics.js";
+  import { Activity,Building2,CalendarClock,Settings,Zap } from "../icons";
+  import { Card,Label } from "../ui.js";
 
 interface EmptyDashboardProps {
   investmentSnapshot?: unknown;
@@ -15,19 +22,12 @@ interface ChecklistStep {
   action: () => void;
   Icon: ComponentType<{ size?: number; color?: string }>;
 }
-import { Zap, Activity, ChevronRight, Settings, Building2, CalendarClock } from "../icons";
-import { T } from "../constants.js";
-import { Card, Label } from "../ui.js";
-import { haptic } from "../haptics.js";
-import { useSettings } from "../contexts/SettingsContext.js";
-import { usePortfolio } from "../contexts/PortfolioContext.js";
-import { useNavigation } from "../contexts/NavigationContext.js";
 
 /**
  * EmptyDashboard — Rendered when no audit exists. 
  * A guided onboarding experience to get users connecting banks and running their first audit.
  */
-export default function EmptyDashboard({ investmentSnapshot, onRestore, onDemoAudit }: EmptyDashboardProps) {
+export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboardProps) {
   const { financialConfig } = useSettings();
   const { cards, renewals } = usePortfolio();
   const { navTo, setSetupReturnTab } = useNavigation();
@@ -129,7 +129,7 @@ export default function EmptyDashboard({ investmentSnapshot, onRestore, onDemoAu
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {steps.map((step, i) => (
+            {steps.map((step) => (
               <div
                 key={step.id}
                 onClick={() => {

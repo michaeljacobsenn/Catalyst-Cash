@@ -1,4 +1,4 @@
-import type { BackupData, CatalystCashConfig, Card, Renewal, BankAccount } from "../types/index.js";
+  import type { BackupData,BankAccount,Card,CatalystCashConfig,Renewal } from "../types/index.js";
 
 export const FULL_PROFILE_QA_LABEL = "Full-Profile QA Seed";
 

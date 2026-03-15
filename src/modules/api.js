@@ -1,11 +1,10 @@
-import { getSystemPrompt } from "./prompts.js";
-import { getBackendProvider } from "./providers.js";
-import { log } from "./logger.js";
-import { fetchWithRetry } from "./fetchWithRetry.js";
-import { APP_VERSION } from "./constants.js";
-import { isPro } from "./subscription.js";
-import { getRevenueCatAppUserId } from "./revenuecat.js";
-import { db } from "./utils.js";
+  import { APP_VERSION } from "./constants.js";
+  import { fetchWithRetry } from "./fetchWithRetry.js";
+  import { log } from "./logger.js";
+  import { getBackendProvider } from "./providers.js";
+  import { getRevenueCatAppUserId } from "./revenuecat.js";
+  import { isPro } from "./subscription.js";
+  import { db } from "./utils.js";
 
 // ═══════════════════════════════════════════════════════════════
 // AI API MODULE — Catalyst Cash
@@ -97,15 +96,16 @@ function resolveProvider(model, fallbackProvider) {
   return normalizedFallback || "gemini";
 }
 
-async function* streamBackend(snapshot, model, sysText, history, deviceId, backendProvider, signal, responseFormat) {
+async function* streamBackend(snapshot, model, context, history, deviceId, backendProvider, signal, responseFormat, requestType = "audit") {
   const resolvedProvider = resolveProvider(model, backendProvider);
 
   const res = await fetch(`${BACKEND_URL}/audit`, {
     method: "POST",
     headers: await buildBackendHeaders(deviceId),
     body: JSON.stringify({
+      type: requestType,
+      context,
       snapshot,
-      systemPrompt: sysText,
       history: history || [],
       model,
       stream: true,
@@ -163,15 +163,16 @@ async function* streamBackend(snapshot, model, sysText, history, deviceId, backe
   }
 }
 
-async function callBackend(snapshot, model, sysText, history, deviceId, backendProvider, responseFormat) {
+async function callBackend(snapshot, model, context, history, deviceId, backendProvider, responseFormat, requestType = "audit") {
   const resolvedProvider = resolveProvider(model, backendProvider);
 
   const res = await fetchWithRetry(`${BACKEND_URL}/audit`, {
     method: "POST",
     headers: await buildBackendHeaders(deviceId),
     body: JSON.stringify({
+      type: requestType,
+      context,
       snapshot,
-      systemPrompt: sysText,
       history: history || [],
       model,
       stream: false,
@@ -228,7 +229,7 @@ export async function* streamAudit(
   snapshot,
   providerId = "backend",
   model,
-  sysText,
+  context,
   history = [],
   deviceId,
   signal,
@@ -236,7 +237,17 @@ export async function* streamAudit(
 ) {
   const responseFormat = isChat ? "text" : "json";
   log.info("audit", "Audit started", { provider: "backend", model, streaming: true, isChat });
-  yield* streamBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), signal, responseFormat);
+  yield* streamBackend(
+    snapshot,
+    model,
+    context,
+    history,
+    deviceId,
+    getBackendProvider(model),
+    signal,
+    responseFormat,
+    isChat ? "chat" : "audit"
+  );
 }
 
 /** Call the backend proxy for a non-streaming audit or chat response. */
@@ -245,14 +256,23 @@ export async function callAudit(
   snapshot,
   providerId = "backend",
   model,
-  sysText,
+  context,
   history = [],
   deviceId,
   isChat = false
 ) {
   const responseFormat = isChat ? "text" : "json";
   log.info("audit", "Audit started", { provider: "backend", model, streaming: false, isChat });
-  return callBackend(snapshot, model, sysText, history, deviceId, getBackendProvider(model), responseFormat);
+  return callBackend(
+    snapshot,
+    model,
+    context,
+    history,
+    deviceId,
+    getBackendProvider(model),
+    responseFormat,
+    isChat ? "chat" : "audit"
+  );
 }
 
 /**
@@ -262,20 +282,19 @@ export async function callAudit(
 export async function classifyMerchant(merchantName) {
   try {
     const { getOrCreateDeviceId } = await import("./subscription.js");
-    const { getLocationCategorizationPrompt } = await import("./prompts.js");
     
     const deviceId = await getOrCreateDeviceId();
-    const sysText = getLocationCategorizationPrompt();
     
     // We intentionally force Gemini Flash to keep costs near-zero for rapid classification.
     const rawJSON = await callBackend(
       merchantName, // "snapshot" becomes the user query
       "gemini-2.5-flash",
-      sysText,
+      { variant: "location-categorization" },
       [], // no history needed
       deviceId,
       "gemini",
-      "json"
+      "json",
+      "chat"
     );
     
     // Attempt to parse out the category, falling back to catch-all
@@ -314,20 +333,19 @@ export async function batchCategorizeTransactions(merchantNames) {
   if (!merchantNames || merchantNames.length === 0) return {};
   try {
     const { getOrCreateDeviceId } = await import("./subscription.js");
-    const { getBatchCategorizationPrompt } = await import("./prompts.js");
     
     const deviceId = await getOrCreateDeviceId();
-    const sysText = getBatchCategorizationPrompt();
     
     // We intentionally force Gemini Flash to keep costs near-zero for rapid classification.
     const rawJSON = await callBackend(
       JSON.stringify(merchantNames), // User query is the array of strings
       "gemini-2.5-flash",
-      sysText,
+      { variant: "batch-categorization" },
       [], // no history needed
       deviceId,
       "gemini",
-      "json"
+      "json",
+      "chat"
     );
     
     let parsed = null;

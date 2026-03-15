@@ -70,6 +70,10 @@ refactor_card_portfolio.py
 
 .vite/
 test-results/
+
+# Private prompt modules
+src/modules/*Prompts*.js
+src/modules/prompts*.js
 .vscode/
 
 # ── Local Media / Recordings ──

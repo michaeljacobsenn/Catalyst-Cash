@@ -1,11 +1,11 @@
 // ═══════════════════════════════════════════════════════════════
 // WEEKLY MICRO-CHALLENGES — Gamified spending challenges
 // ═══════════════════════════════════════════════════════════════
-import { useState, useEffect } from "react";
-import { T } from "../constants.js";
-import { db } from "../utils.js";
-import { Card, Label } from "../ui.js";
-import { unlockBadge } from "../badges.js";
+  import { useEffect,useState } from "react";
+  import { unlockBadge } from "../badges.js";
+  import { T } from "../constants.js";
+  import { Card } from "../ui.js";
+  import { db } from "../utils.js";
 
 type ChallengeDifficulty = "easy" | "medium" | "hard";
 

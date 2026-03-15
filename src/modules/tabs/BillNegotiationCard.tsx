@@ -2,12 +2,12 @@
 // BILL NEGOTIATION SUGGESTIONS — Identifies high-impact savings
 // opportunities derived directly from the AI Audit's negotiationTargets
 // ═══════════════════════════════════════════════════════════════
-import { T } from "../constants.js";
-import { Card } from "../ui.js";
-import { Mono } from "../components.js";
-import { fmt } from "../utils.js";
-import { Sparkles, Phone } from "../icons";
-import type { Card as PortfolioCard, CatalystCashConfig } from "../../types/index.js";
+  import type { CatalystCashConfig,Card as PortfolioCard } from "../../types/index.js";
+  import { Mono } from "../components.js";
+  import { T } from "../constants.js";
+  import { Phone,Sparkles } from "../icons";
+  import { Card } from "../ui.js";
+  import { fmt } from "../utils.js";
 
 interface NegotiationTarget {
   target: string;
@@ -22,8 +22,6 @@ interface BillNegotiationCardProps {
 }
 
 export default function BillNegotiationCard({
-  cards = [],
-  financialConfig = {},
   negotiationTargets = [],
 }: BillNegotiationCardProps) {
   if (!negotiationTargets || negotiationTargets.length === 0) return null;

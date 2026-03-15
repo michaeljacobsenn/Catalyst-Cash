@@ -1,8 +1,8 @@
-import { Suspense, lazy } from "react";
-import { T } from "../constants.js";
-import type { ToastApi } from "../Toast.js";
-import { ErrorBoundary } from "../ui.js";
-import type { AppTab, NavViewState } from "../contexts/NavigationContext.js";
+  import { Suspense,lazy } from "react";
+  import { T } from "../constants.js";
+  import type { AppTab,NavViewState } from "../contexts/NavigationContext.js";
+  import type { ToastApi } from "../Toast.js";
+  import { ErrorBoundary } from "../ui.js";
 
 const DashboardTab = lazy(() => import("../tabs/DashboardTab.js"));
 const AIChatTab = lazy(() => import("../tabs/AIChatTab.js"));

@@ -1,15 +1,15 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MouseEvent as ReactMouseEvent,
-  type TouchEvent as ReactTouchEvent,
-} from "react";
-import { Clock, CreditCard, Home, MessageCircle, Plus, Settings, Wallet, Zap } from "../icons";
-import { T } from "../constants.js";
-import { haptic } from "../haptics.js";
-import type { AppTab, NavViewState } from "../contexts/NavigationContext.js";
+  import {
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type MouseEvent as ReactMouseEvent,
+    type TouchEvent as ReactTouchEvent,
+  } from "react";
+  import { T } from "../constants.js";
+  import type { AppTab,NavViewState } from "../contexts/NavigationContext.js";
+  import { haptic } from "../haptics.js";
+  import { Clock,CreditCard,Home,MessageCircle,Plus,Settings,Wallet,Zap } from "../icons";
 
 interface BottomNavBarProps {
   tab: AppTab;

@@ -6,8 +6,8 @@
 // deterministically. All data encrypted at rest.
 // ═══════════════════════════════════════════════════════════════
 
-import { db } from "./utils.js";
-import { encryptAtRest, decryptAtRestDetailed, isEncrypted } from "./crypto.js";
+  import { decryptAtRestDetailed,encryptAtRest,isEncrypted } from "./crypto.js";
+  import { db } from "./utils.js";
 
 const MEMORY_DB_KEY = "ai-persistent-memory";
 const MAX_FACTS = 30;

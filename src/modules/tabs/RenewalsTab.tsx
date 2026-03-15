@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useMemo, memo, useCallback, Suspense, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
-import { ChevronDown, ChevronUp, AlertTriangle, X, Plus, Check, CheckCircle2, Calendar, CreditCard, AlignLeft } from "../icons";
-import { T, RENEWAL_CATEGORIES, formatInterval } from "../constants.js";
-import { fmt } from "../utils.js";
-import { resolveCardLabel, getShortCardLabel } from "../cards.js";
-import { Card as UICard, Label as UILabel, Badge as UIBadge, FormGroup as UIFormGroup, FormRow as UIFormRow } from "../ui.js";
-import { Mono as UIMono, EmptyState as UIEmptyState } from "../components.js";
-import SearchableSelectBase from "../SearchableSelect.js";
-import { haptic } from "../haptics.js";
-import { shouldShowGating } from "../subscription.js";
-import ProBanner from "./ProBanner.js";
+  import React,{ memo,Suspense,useCallback,useEffect,useMemo,useState,type ChangeEvent,type CSSProperties,type ReactNode } from "react";
+  import { getShortCardLabel } from "../cards.js";
+  import { EmptyState as UIEmptyState,Mono as UIMono } from "../components.js";
+  import { formatInterval,T } from "../constants.js";
+  import { haptic } from "../haptics.js";
+  import { AlertTriangle,AlignLeft,Calendar,Check,CheckCircle2,ChevronDown,CreditCard,Plus,X } from "../icons";
+  import SearchableSelectBase from "../SearchableSelect.js";
+  import { shouldShowGating } from "../subscription.js";
+  import { Badge as UIBadge,Card as UICard,FormGroup as UIFormGroup,FormRow as UIFormRow } from "../ui.js";
+  import { fmt } from "../utils.js";
+  import ProBanner from "./ProBanner.js";
 const LazyProPaywall = React.lazy(() => import("./ProPaywall.js"));
 
 // Interval options for dropdowns
@@ -17,13 +17,13 @@ const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
 const YEAR_OPTIONS = [1, 2, 3];
 const DAY_OPTIONS = Array.from({ length: 90 }, (_, i) => i + 1);
 
-import { usePortfolio } from "../contexts/PortfolioContext.js";
-import { useAudit } from "../contexts/AuditContext.js";
-import { useSubscriptions } from "../useSubscriptions.js";
-import { Zap, ExternalLink, Bot } from "../icons";
-import { getNegotiableMerchant } from "../negotiation.js";
-import { useNavigation } from "../contexts/NavigationContext.js";
-import type { CatalystCashConfig, Card, Renewal } from "../../types/index.js";
+  import type { Card as PortfolioCard,CatalystCashConfig,Renewal } from "../../types/index.js";
+  import { useAudit } from "../contexts/AuditContext.js";
+  import { useNavigation } from "../contexts/NavigationContext.js";
+  import { usePortfolio } from "../contexts/PortfolioContext.js";
+  import { Bot,ExternalLink,Zap } from "../icons";
+  import { getNegotiableMerchant } from "../negotiation.js";
+  import { useSubscriptions } from "../useSubscriptions.js";
 
 interface RenewalsTabProps {
   proEnabled?: boolean;
@@ -133,10 +133,6 @@ interface CardProps {
   className?: string;
 }
 
-interface LabelProps {
-  children?: ReactNode;
-  style?: CSSProperties;
-}
 
 interface BadgeProps {
   children?: ReactNode;
@@ -171,7 +167,6 @@ interface EmptyStateProps {
 }
 
 const Card = UICard as unknown as (props: CardProps) => ReactNode;
-const Label = UILabel as unknown as (props: LabelProps) => ReactNode;
 const Badge = UIBadge as unknown as (props: BadgeProps) => ReactNode;
 const FormGroup = UIFormGroup as unknown as (props: FormGroupProps) => ReactNode;
 const FormRow = UIFormRow as unknown as (props: FormRowProps) => ReactNode;
@@ -217,14 +212,7 @@ function buildNewRenewal(form: AddRenewalState, chargedToLabel: string): Renewal
   return next;
 }
 
-function markRenewalCancelled(renewal: Renewal, cancelledAt: string): Renewal {
-  return { ...renewal, isCancelled: true, cancelledAt };
-}
 
-function restoreCancelledRenewal(renewal: Renewal): Renewal {
-  const { cancelledAt, ...rest } = renewal;
-  return { ...rest, isCancelled: false };
-}
 
 function toGroupedRenewalItem(renewal: Renewal, originalIndex: number, now: string): GroupedRenewalItem {
   return {
@@ -619,7 +607,6 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
     });
 
     // Sort items within each category: frequency (most frequent first) → next due (soonest first) → amount (highest first)
-    const unitWeight = { weeks: 1, months: 2, years: 3 };
     const toMonths = (interval, unit) => {
       const i = interval || 1;
       if (unit === "days") return i / 30.44;
@@ -739,42 +726,6 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
     [setRenewals]
   );
 
-  const toggleCancel = useCallback(
-    (renewalIndex: number | null | undefined, itemName: string | undefined) => {
-      if (renewalIndex == null || renewalIndex < 0) return;
-      const current = (renewals || [])[renewalIndex];
-      if (!current) return;
-      if (!current.isCancelled) {
-        // Cancelling — confirm with projected savings
-        const amt = current.amount || 0;
-        const unit = (current.intervalUnit || "monthly").toLowerCase();
-        const interval = current.interval || 1;
-        let annualSavings = 0;
-        if (unit === "weekly" || unit === "week") annualSavings = (amt / interval) * 52;
-        else if (unit === "monthly" || unit === "month") annualSavings = (amt / interval) * 12;
-        else if (unit === "yearly" || unit === "year" || unit === "annual") annualSavings = amt / interval;
-        else if (unit === "daily" || unit === "day") annualSavings = (amt / interval) * 365;
-        else annualSavings = amt * 12; // default monthly
-        const savingsLine = annualSavings > 0
-          ? `\n\nYou'll save ~$${annualSavings.toFixed(0)}/year.`
-          : "";
-        if (
-          !window.confirm(
-            `Cancel "${itemName || current.name}"?\n\nThis will move it to Inactive & History. You can restore it later.${savingsLine}`
-          )
-        )
-          return;
-        setRenewals((prev) => {
-          const cancelledAt = new Date().toISOString().split("T")[0] ?? "";
-          return (prev || []).map((r, idx) => (idx === renewalIndex ? markRenewalCancelled(r, cancelledAt) : r));
-        });
-      } else {
-        // Restoring
-        setRenewals((prev) => (prev || []).map((r, idx) => (idx === renewalIndex ? restoreCancelledRenewal(r) : r)));
-      }
-    },
-    [renewals, setRenewals]
-  );
 
   const addItem = (): void => {
     if (!addForm.name.trim() || !addForm.amount) return;
@@ -857,7 +808,7 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
   );
 
   const CardSelector = ({ value, onChange }: CardSelectorProps) => {
-    const grouped: Record<string, Card[]> = {};
+    const grouped: Record<string, PortfolioCard[]> = {};
     (cards || []).forEach((c) => {
       (grouped[c.institution] = grouped[c.institution] || []).push(c);
     });
@@ -1294,7 +1245,7 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
             message="Add your recurring bills and subscriptions to see a clear monthly forecast across all accounts."
           />
         ) : (
-          grouped.map((cat, catIdx) => (
+          grouped.map((cat) => (
             <div
               key={cat.id}
               style={{ marginBottom: 24, padding: 0, overflow: "hidden", background: "transparent" }}

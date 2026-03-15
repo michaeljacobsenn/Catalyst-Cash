@@ -12,7 +12,7 @@
 //   log.warn("subscription", "Quota nearing limit", { remaining: 1 });
 // ═══════════════════════════════════════════════════════════════
 
-import { Preferences } from "@capacitor/preferences";
+  import { Preferences } from "@capacitor/preferences";
 
 const LOG_KEY = "catalyst-debug-log";
 const MAX_ENTRIES = 200;

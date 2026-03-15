@@ -1,25 +1,25 @@
-import React, {
-  memo,
-  lazy,
-  Suspense,
-  useState,
-  type ChangeEvent,
-  type CSSProperties,
-  type MouseEvent,
-  type ReactNode,
-} from "react";
-import { Calendar, Download, CheckCircle, Trash2, Edit3, Plus, Filter, type LucideIcon } from "../icons";
-import { T } from "../constants.js";
-import { fmt, fmtDate, exportAudit, exportAllAudits, exportSelectedAudits, exportAuditCSV } from "../utils.js";
-import { Card as UICard, Badge as UIBadge } from "../ui.js";
-import { Mono as UIMono, EmptyState as UIEmptyState } from "../components.js";
-import { haptic } from "../haptics.js";
-import { shouldShowGating } from "../subscription.js";
-import ProBannerBase from "./ProBanner.js";
+  import {
+    lazy,
+    memo,
+    Suspense,
+    useState,
+    type ChangeEvent,
+    type CSSProperties,
+    type MouseEvent,
+    type ReactNode,
+  } from "react";
+  import { EmptyState as UIEmptyState,Mono as UIMono } from "../components.js";
+  import { T } from "../constants.js";
+  import { haptic } from "../haptics.js";
+  import { Calendar,CheckCircle,Download,Edit3,Filter,Plus,Trash2,type LucideIcon } from "../icons";
+  import { shouldShowGating } from "../subscription.js";
+  import { Badge as UIBadge,Card as UICard } from "../ui.js";
+  import { exportAllAudits,exportAudit,exportAuditCSV,exportSelectedAudits,fmt,fmtDate } from "../utils.js";
+  import ProBannerBase from "./ProBanner.js";
 
-import { useAudit } from "../contexts/AuditContext.js";
-import { useNavigation } from "../contexts/NavigationContext.js";
-import type { AuditFormDebt, AuditFormInvestment, AuditRecord } from "../../types/index.js";
+  import type { AuditFormDebt,AuditFormInvestment,AuditRecord } from "../../types/index.js";
+  import { useAudit } from "../contexts/AuditContext.js";
+  import { useNavigation } from "../contexts/NavigationContext.js";
 
 const LazyProPaywall = lazy(() => import("./ProPaywall.js"));
 
