@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef, lazy, Suspense } from "rea
 import {
   Search, Sparkles, CreditCard, Coffee, ShoppingCart,
   Fuel, Plane, Train, Package, Store, Pill, AlertCircle, Info, Settings2, ChevronDown, Check, X, RefreshCw, Tv, DollarSign, Smartphone, RotateCw, Clock, Lock, Zap
-} from "lucide-react";
+} from "../icons";
 import { usePortfolio } from "../contexts/PortfolioContext.js";
 import { useSettings } from "../contexts/SettingsContext.js";
 import { getCardMultiplier, VALUATIONS } from "../rewardsCatalog.js";

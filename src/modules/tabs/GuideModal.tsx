@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { MutableRefObject, TouchEventHandler } from "react";
-import { X } from "lucide-react";
+import { X } from "../icons";
 import { T, APP_VERSION } from "../constants.js";
 
 import { useNavigation } from "../contexts/NavigationContext.js";

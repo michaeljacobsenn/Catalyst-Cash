@@ -8,7 +8,7 @@ import React, {
   type MouseEvent,
   type ReactNode,
 } from "react";
-import { Calendar, Download, CheckCircle, Trash2, Edit3, Plus, Filter, type LucideIcon } from "lucide-react";
+import { Calendar, Download, CheckCircle, Trash2, Edit3, Plus, Filter, type LucideIcon } from "../icons";
 import { T } from "../constants.js";
 import { fmt, fmtDate, exportAudit, exportAllAudits, exportSelectedAudits, exportAuditCSV } from "../utils.js";
 import { Card as UICard, Badge as UIBadge } from "../ui.js";

@@ -7,7 +7,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   ReactNode,
 } from "react";
-import { CheckCircle, ChevronDown, ChevronUp, Loader2, Check } from "lucide-react";
+import { CheckCircle, ChevronDown, ChevronUp, Loader2, Check } from "./icons";
 import { T } from "./constants.js";
 import { fmt } from "./utils.js";
 import { Badge, Card } from "./ui.js";

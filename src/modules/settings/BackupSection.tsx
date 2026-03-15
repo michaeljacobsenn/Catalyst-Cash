@@ -1,4 +1,4 @@
-import { Cloud, Download, Upload, CheckCircle, AlertTriangle, Loader2, Save } from "lucide-react";
+import { Cloud, Download, Upload, CheckCircle, AlertTriangle, Loader2, Save } from "../icons";
 import { T } from "../constants.js";
 import { Card, Label } from "../ui.js";
 import { db } from "../utils.js";

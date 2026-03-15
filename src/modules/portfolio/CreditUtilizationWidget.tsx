@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { HelpCircle } from "lucide-react";
+import { HelpCircle } from "../icons";
 import { Card, Badge, InlineTooltip } from "../ui.js";
 import { Mono } from "../components.js";
 import { T } from "../constants.js";

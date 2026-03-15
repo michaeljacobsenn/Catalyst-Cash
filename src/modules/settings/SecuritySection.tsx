@@ -1,4 +1,4 @@
-import { ExternalLink, Shield, Loader2 } from "lucide-react";
+import { ExternalLink, Shield, Loader2 } from "../icons";
 import { T } from "../constants.js";
 import { Card, Label } from "../ui.js";
 import { db } from "../utils.js";

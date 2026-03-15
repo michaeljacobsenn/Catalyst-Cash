@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, Suspense } from "react";
-import { Plus, Settings, AlertTriangle, ArrowRight, Wallet, TrendingUp, HelpCircle } from "lucide-react";
+import { Plus, Settings, AlertTriangle, ArrowRight, Wallet, TrendingUp, HelpCircle } from "../icons";
 import { T } from "../constants.js";
 import { Card } from "../ui.js";
 import { useBudget } from "../contexts/BudgetContext.js";

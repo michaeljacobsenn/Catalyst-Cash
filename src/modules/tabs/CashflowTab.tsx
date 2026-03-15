@@ -77,6 +77,9 @@ export default function CashflowTab({ onRunAudit, toast, proEnabled = false }: C
           display: "flex",
           justifyContent: "center",
           flexShrink: 0,
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
         }}
       >
         <TypedViewToggle

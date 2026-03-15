@@ -63,11 +63,17 @@ interface InlineTooltipProps {
 // ═══════════════════════════════════════════════════════════════
 export function useGlobalHaptics() {
   useEffect(() => {
+    let lastTouchHapticAt = 0;
     const handler = (e: TouchEvent) => {
       const target = e.target;
       if (!(target instanceof Element)) return;
       const btn = target.closest<HTMLElement>("button, [role='button']");
-      if (btn && !("disabled" in btn && btn.disabled)) haptic.light();
+      if (!btn || ("disabled" in btn && btn.disabled)) return;
+      if (btn.getAttribute("role") === "tab" || btn.closest("[role='tablist']")) return;
+      const now = Date.now();
+      if (now - lastTouchHapticAt < 180) return;
+      lastTouchHapticAt = now;
+      haptic.light();
     };
     document.addEventListener("touchstart", handler, { passive: true });
     return () => document.removeEventListener("touchstart", handler);

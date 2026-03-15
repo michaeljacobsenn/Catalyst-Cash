@@ -6,7 +6,7 @@ import { T } from "../constants.js";
 import { Card, Label } from "../ui.js";
 import { Mono } from "../components.js";
 import { cmpString, fromCents, monthlyInterestCents, toBps, toCents } from "../moneyMath.js";
-import { Sparkles } from "lucide-react";
+import { Sparkles } from "../icons";
 import { haptic } from "../haptics.js";
 import ScenarioSandbox from "../dashboard/ScenarioSandbox.js";
 import type { Card as PortfolioCard, CatalystCashConfig, NonCardDebt } from "../../types/index.js";

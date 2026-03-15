@@ -3,7 +3,7 @@ import { T } from "../constants.js";
 import { Card, Label, Badge } from "../ui.js";
 import { Mono } from "../components.js";
 import { haptic } from "../haptics.js";
-import { X } from "lucide-react";
+import { X } from "../icons";
 
 interface FireTimelinePoint {
     year: number;

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Navigation, MapPin, RefreshCw, AlertCircle, Sparkles, X } from "lucide-react";
+import { Navigation, MapPin, RefreshCw, AlertCircle, Sparkles, X } from "../icons";
 import { Badge } from "../ui.js";
 import { T } from "../constants.js";
 import { usePortfolio } from "../contexts/PortfolioContext.js";

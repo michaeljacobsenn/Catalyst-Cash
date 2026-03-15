@@ -23,7 +23,7 @@ import {
   Building2,
   CalendarClock,
   ChevronRight,
-} from "lucide-react";
+} from "../icons";
 import { T } from "../constants.js";
 
 import { fmt, fmtDate, exportAudit, shareAudit, stripPaycheckParens, db } from "../utils.js";

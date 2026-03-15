@@ -46,7 +46,7 @@ import {
   Dumbbell,
   Sparkles,
   Lock,
-} from "lucide-react";
+} from "../icons";
 import { T } from "../constants.js";
 import { Card } from "../ui.js";
 import { EmptyState } from "../components.js";

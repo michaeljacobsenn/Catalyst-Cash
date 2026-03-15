@@ -8,7 +8,7 @@ export const APP_VERSION = "2.0.0";
 // Icon: deep violet (#3D1B6B) → emerald green (#1A6B40)
 // ═══════════════════════════════════════════════════════════════
 
-const DARK_TOKENS = {
+export const DARK_TOKENS = {
   bg: {
     base: "#05080F", // Deep, rich void for maximum contrast against neon accents
     card: "#0A1018", // Slightly elevated card background
@@ -64,7 +64,7 @@ const DARK_TOKENS = {
   },
 };
 
-const LIGHT_TOKENS = {
+export const LIGHT_TOKENS = {
   bg: {
     base: "#F6F6F9", // Cool tinted paper-white
     card: "#FFFFFF",
@@ -121,7 +121,7 @@ const LIGHT_TOKENS = {
 };
 
 // Shared tokens (don't change between themes)
-const SHARED_TOKENS = {
+export const SHARED_TOKENS = {
   radius: { sm: 8, md: 12, lg: 16, xl: 24 },
   font: {
     mono: "ui-monospace, 'SF Mono', 'JetBrains Mono', monospace",
@@ -129,38 +129,13 @@ const SHARED_TOKENS = {
   },
 };
 
-// Deep clone so we don't accidentally mutate the master templates
-export const T = JSON.parse(JSON.stringify({ ...DARK_TOKENS, ...SHARED_TOKENS }));
-
-/**
- * Apply a theme by mutating T in-place.
- * Every component importing T will see updated values on next render.
- * @param {"dark"|"light"} mode
- */
-export function applyTheme(mode) {
+export function cloneThemeTokens(mode = "dark") {
   const tokens = mode === "light" ? LIGHT_TOKENS : DARK_TOKENS;
-  const safeTokens = JSON.parse(JSON.stringify(tokens));
-
-  Object.assign(T.bg, safeTokens.bg);
-  Object.assign(T.border, safeTokens.border);
-  Object.assign(T.text, safeTokens.text);
-  Object.assign(T.accent, safeTokens.accent);
-  Object.assign(T.status, safeTokens.status);
-  Object.assign(T.shadow, safeTokens.shadow);
-  T._mode = mode; // track current mode
-
-  // Keep native/webview surfaces in sync even if a memoized view skips a render.
-  if (typeof document !== "undefined") {
-    document.documentElement.dataset.theme = mode;
-    document.documentElement.style.setProperty("--cc-bg-base", tokens.bg.base);
-    document.documentElement.style.colorScheme = mode;
-    if (document.body) document.body.style.background = tokens.bg.base;
-    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
-    if (metaThemeColor) {
-      metaThemeColor.setAttribute("content", tokens.bg.base);
-    }
-  }
+  return JSON.parse(JSON.stringify({ ...tokens, ...SHARED_TOKENS }));
 }
+
+// Mutable compatibility shim for legacy imports. ThemeProvider keeps it in sync.
+export const T = cloneThemeTokens("dark");
 
 export const INSTITUTIONS = [
   "American Express",

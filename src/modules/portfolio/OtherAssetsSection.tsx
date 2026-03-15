@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { AlertTriangle, Target, Wallet, ChevronDown, ChevronUp, Edit3, Trash2, Check, Plus, Link2, TrendingUp, TrendingDown } from "lucide-react";
+import { AlertTriangle, Target, Wallet, ChevronDown, ChevronUp, Edit3, Trash2, Check, Plus, Link2, TrendingUp, TrendingDown } from "../icons";
 import { Card, Badge } from "../ui.js";
 import { Mono } from "../components.js";
 import { T } from "../constants.js";

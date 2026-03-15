@@ -27,7 +27,7 @@ function normalizeNumericInput(raw, pattern) {
 export function toCents(value) {
   if (typeof value === "number") {
     if (!Number.isFinite(value)) return 0;
-    return Math.round(value * 100);
+    return Math.round((value + Number.EPSILON) * 100);
   }
   const { negative, intPart, fracPart } = normalizeNumericInput(value, MONEY_PATTERN);
   const cents = Number(intPart) * 100 + Number(fracPart);

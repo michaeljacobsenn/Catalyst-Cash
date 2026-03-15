@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
-import { ShieldCheck, AlertCircle, Fingerprint } from "lucide-react";
+import { ShieldCheck, AlertCircle, Fingerprint } from "./icons";
 import { T } from "./constants.js";
 import { haptic } from "./haptics.js";
 import { Capacitor } from "@capacitor/core";

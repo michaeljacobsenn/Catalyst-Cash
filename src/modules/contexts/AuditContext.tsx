@@ -19,6 +19,7 @@ import { haptic } from "../haptics.js";
 import { useToast } from "../Toast.js";
 import { getProvider } from "../providers.js";
 import { getSystemPrompt } from "../prompts.js";
+import { isLikelyAbortError, toUserFacingRequestError } from "../networkErrors.js";
 import { getHistoryLimit, getOrCreateDeviceId, recordAuditUsage } from "../subscription.js";
 import { loadMemory, extractAuditMilestones, addMilestones, getMemoryBlock } from "../memory.js";
 import { useSettings } from "./SettingsContext.js";
@@ -742,13 +743,10 @@ export function AuditProvider({ children }: AuditProviderProps) {
           }
         }
       } catch (submitError: unknown) {
-        const message = submitError instanceof Error ? submitError.message : "Unknown error";
-        const isBackgroundAbort =
-          auditAbortReasonRef.current === "background-pause" ||
-          message.includes("aborted") ||
-          message.includes("Failed to fetch") ||
-          message.includes("network") ||
-          message.includes("Load failed");
+        const failure = toUserFacingRequestError(submitError, { context: "audit" });
+        const message = failure.rawMessage;
+        const isBackgroundAbort = auditAbortReasonRef.current === "background-pause";
+        const isAbort = isBackgroundAbort || auditAbortReasonRef.current === "user-cancelled" || isLikelyAbortError(submitError);
         const partialRaw = String(auditRawRef.current || "").trim();
         if (partialRaw) {
           await persistAuditDraft({
@@ -756,7 +754,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
             raw: partialRaw,
             updatedAt: new Date().toISOString(),
             snapshotDate: formData.date,
-            reason: auditAbortReasonRef.current || (isBackgroundAbort ? "interrupted" : message),
+            reason: auditAbortReasonRef.current || (isBackgroundAbort ? "interrupted" : failure.userMessage),
           });
         }
         if (isBackgroundAbort) {
@@ -764,9 +762,12 @@ export function AuditProvider({ children }: AuditProviderProps) {
             "The audit was interrupted because the app went to the background. Please return to the Input tab and try again."
           );
           toast.error("Audit interrupted — app was backgrounded. Tap to retry.");
+        } else if (isAbort) {
+          setError("Audit was interrupted before completion. Your inputs are still here.");
+          toast.error("Audit interrupted. Retry when you're ready.");
         } else {
-          setError(message);
-          toast.error(message || "Audit failed");
+          setError(failure.userMessage);
+          toast.error(failure.userMessage || "Audit failed");
         }
         navTo("input");
         haptic.error();

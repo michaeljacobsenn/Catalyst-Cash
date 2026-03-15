@@ -3,6 +3,8 @@
 // Used for: encrypted backup exports and iCloud cloud sync
 // ═══════════════════════════════════════════════════════════════
 
+import { getSecureItem, setSecureItem } from "./secureStore.js";
+
 const PBKDF2_ITERATIONS = 310_000; // OWASP recommended minimum for PBKDF2-SHA256
 
 /**
@@ -82,26 +84,71 @@ export function isEncrypted(obj) {
 // ═══════════════════════════════════════════════════════════════
 // DEVICE-BOUND AT-REST ENCRYPTION — for chat history
 // No user passphrase needed. Uses a per-install random secret
-// stored in device preferences as the key material.
+// stored in db + secure storage as the key material.
 // ═══════════════════════════════════════════════════════════════
 
 const DEVICE_SALT_KEY = "device-encryption-salt";
+const DEVICE_KEY_KEY = "device-encryption-key";
+
+function bytesToHex(bytes) {
+  return Array.from(bytes)
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function hexToBytes(hex) {
+  if (typeof hex !== "string" || hex.length === 0 || hex.length % 2 !== 0) return null;
+  const pairs = hex.match(/.{2}/g);
+  if (!pairs) return null;
+  const bytes = pairs.map(h => parseInt(h, 16));
+  if (bytes.some(Number.isNaN)) return null;
+  return new Uint8Array(bytes);
+}
 
 async function getOrCreateDeviceSalt(db) {
   let saltHex = await db.get(DEVICE_SALT_KEY);
-  if (!saltHex || typeof saltHex !== "string" || saltHex.length < 32) {
+  let salt = hexToBytes(saltHex);
+  if (!salt || salt.length < 16) {
     const salt = crypto.getRandomValues(new Uint8Array(16));
-    saltHex = Array.from(salt)
-      .map(b => b.toString(16).padStart(2, "0"))
-      .join("");
+    saltHex = bytesToHex(salt);
     await db.set(DEVICE_SALT_KEY, saltHex);
+    return salt;
   }
-  return new Uint8Array(saltHex.match(/.{2}/g).map(h => parseInt(h, 16)));
+  return salt;
 }
 
-async function deriveDeviceKey(db) {
-  const salt = await getOrCreateDeviceSalt(db);
-  const keyMaterial = await crypto.subtle.importKey("raw", salt, "PBKDF2", false, ["deriveKey"]);
+async function getOrCreateDeviceKeyMaterial(db) {
+  const secureStored = await getSecureItem(DEVICE_KEY_KEY).catch(() => null);
+  const secureKeyHex = typeof secureStored === "string" ? secureStored : null;
+  const secureKey = hexToBytes(secureKeyHex);
+  if (secureKey?.length === 32) {
+    await db.set(DEVICE_KEY_KEY, secureKeyHex);
+    return secureKey;
+  }
+
+  const dbStored = await db.get(DEVICE_KEY_KEY);
+  const dbKeyHex = typeof dbStored === "string" ? dbStored : null;
+  const dbKey = hexToBytes(dbKeyHex);
+  if (dbKey?.length === 32) {
+    await setSecureItem(DEVICE_KEY_KEY, dbKeyHex).catch(() => false);
+    return dbKey;
+  }
+
+  const keyBytes = crypto.getRandomValues(new Uint8Array(32));
+  const keyHex = bytesToHex(keyBytes);
+  await Promise.all([
+    db.set(DEVICE_KEY_KEY, keyHex),
+    setSecureItem(DEVICE_KEY_KEY, keyHex).catch(() => false),
+  ]);
+  return keyBytes;
+}
+
+async function importPbkdf2KeyMaterial(keyMaterialBytes) {
+  return crypto.subtle.importKey("raw", keyMaterialBytes, "PBKDF2", false, ["deriveKey"]);
+}
+
+async function deriveDeviceKeyFromMaterial(keyMaterialBytes, salt) {
+  const keyMaterial = await importPbkdf2KeyMaterial(keyMaterialBytes);
   return crypto.subtle.deriveKey(
     { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
     keyMaterial,
@@ -109,6 +156,17 @@ async function deriveDeviceKey(db) {
     false,
     ["encrypt", "decrypt"]
   );
+}
+
+async function deriveDeviceKey(db) {
+  const salt = await getOrCreateDeviceSalt(db);
+  const keyMaterialBytes = await getOrCreateDeviceKeyMaterial(db);
+  return deriveDeviceKeyFromMaterial(keyMaterialBytes, salt);
+}
+
+async function deriveLegacyDeviceKey(db) {
+  const salt = await getOrCreateDeviceSalt(db);
+  return deriveDeviceKeyFromMaterial(salt, salt);
 }
 
 /**
@@ -129,6 +187,33 @@ export async function encryptAtRest(data, db) {
   };
 }
 
+export async function decryptAtRestDetailed(payload, db) {
+  if (!payload?.iv || !payload?.ct) return { data: null, usedLegacyKey: false };
+
+  const iv = fromBase64(payload.iv);
+  const ct = fromBase64(payload.ct);
+
+  try {
+    const key = await deriveDeviceKey(db);
+    const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+    return {
+      data: JSON.parse(new TextDecoder().decode(plaintext)),
+      usedLegacyKey: false,
+    };
+  } catch {
+    try {
+      const legacyKey = await deriveLegacyDeviceKey(db);
+      const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, legacyKey, ct);
+      return {
+        data: JSON.parse(new TextDecoder().decode(plaintext)),
+        usedLegacyKey: true,
+      };
+    } catch {
+      return { data: null, usedLegacyKey: false };
+    }
+  }
+}
+
 /**
  * Decrypt a device-bound encrypted payload.
  * @param {{ iv: string, ct: string, v: 2 }} payload
@@ -136,15 +221,6 @@ export async function encryptAtRest(data, db) {
  * @returns {Promise<any>} Decrypted data
  */
 export async function decryptAtRest(payload, db) {
-  if (!payload?.iv || !payload?.ct) return null;
-  try {
-    const key = await deriveDeviceKey(db);
-    const iv = fromBase64(payload.iv);
-    const ct = fromBase64(payload.ct);
-    const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
-    return JSON.parse(new TextDecoder().decode(plaintext));
-  } catch {
-    // If decryption fails (e.g. salt was reset), return null gracefully
-    return null;
-  }
+  const result = await decryptAtRestDetailed(payload, db);
+  return result.data;
 }

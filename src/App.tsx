@@ -1,44 +1,19 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from "react";
-import type { FocusEvent as ReactFocusEvent, TouchEvent as ReactTouchEvent } from "react";
+import type { FocusEvent as ReactFocusEvent } from "react";
 import { App as CapApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { SplashScreen } from "@capacitor/splash-screen";
 import {
-  History,
-  Plus,
-  RefreshCw,
-  X,
   Eye,
   EyeOff,
-  AlertTriangle,
-  Loader2,
-  CreditCard,
   Settings,
   Info,
-  Home,
-  Zap,
-  Trash2,
-  ClipboardPaste,
-  ReceiptText,
-  Clock,
-  MessageCircle,
-  TrendingUp,
-  Wallet,
-  LayoutDashboard,
   MapPin,
-} from "lucide-react";
+} from "./modules/icons";
 import { T, DEFAULT_CARD_PORTFOLIO, RENEWAL_CATEGORIES, APP_VERSION } from "./modules/constants.js";
-import { DEFAULT_PROVIDER_ID, DEFAULT_MODEL_ID, getProvider, getModel } from "./modules/providers.js";
-import {
-  db,
-  parseAudit,
-  advanceExpiredDate,
-  cyrb53,
-} from "./modules/utils.js";
-import { ensureCardIds, getCardLabel } from "./modules/cards.js";
-import { GlobalStyles, Card, ErrorBoundary, useGlobalHaptics, Badge, getTracking } from "./modules/ui.js";
-import { StreamingView } from "./modules/components.js";
-import { streamAudit, callAudit } from "./modules/api.js";
+import { getModel } from "./modules/providers.js";
+import { db } from "./modules/utils.js";
+import { GlobalStyles, Card, useGlobalHaptics, Badge, getTracking } from "./modules/ui.js";
 import { extractCategoryByKeywords } from "./modules/merchantDatabase.js";
 import { getOptimalCard } from "./modules/rewardsCatalog.js";
 import { haptic } from "./modules/haptics.js";
@@ -48,21 +23,16 @@ installGlobalHandlers();
 import { useToast } from "./modules/Toast.js";
 import { getDemoAuditPayload } from "./modules/demoAudit.js";
 const DashboardTab = lazy(() => import("./modules/tabs/DashboardTab.js"));
-const InputForm = lazy(() => import("./modules/tabs/InputForm.js"));
-const ResultsView = lazy(() => import("./modules/tabs/ResultsView.js"));
-// Code-split: lazy-load tabs that aren't visible on initial render
-const HistoryTab = lazy(() => import("./modules/tabs/HistoryTab.js"));
-const AIChatTab = lazy(() => import("./modules/tabs/AIChatTab.js"));
-const SettingsTab = lazy(() => import("./modules/tabs/SettingsTab.js"));
-const CashflowTab = lazy(() => import("./modules/tabs/CashflowTab.js"));
-const PortfolioTab = lazy(() => import("./modules/tabs/PortfolioTab.js"));
-const AuditTab = lazy(() => import("./modules/tabs/AuditTab.js"));
-const TransactionFeed = lazy(() => import("./modules/tabs/TransactionFeed.js"));
-const GuideModal = lazy(() => import("./modules/tabs/GuideModal.js"));
 const LockScreen = lazy(() => import("./modules/LockScreen.js"));
 const SetupWizard = lazy(() => import("./modules/tabs/SetupWizard.js"));
+import ScrollSnapContainer from "./modules/navigation/ScrollSnapContainer.js";
+import BottomNavBar from "./modules/navigation/BottomNavBar.js";
+import TabRenderer from "./modules/navigation/TabRenderer.js";
+import OverlayManager from "./modules/overlays/OverlayManager.js";
+import { OverlayProvider } from "./modules/contexts/OverlayContext.js";
 import { useSecurity } from "./modules/contexts/SecurityContext.js";
 import { useSettings } from "./modules/contexts/SettingsContext.js";
+import { ThemeProvider } from "./modules/contexts/ThemeContext.js";
 import { usePortfolio } from "./modules/contexts/PortfolioContext.js";
 import { useNavigation } from "./modules/contexts/NavigationContext.js";
 import type { AppTab } from "./modules/contexts/NavigationContext.js";
@@ -84,12 +54,6 @@ interface AppFinancialConfigExtras {
   valuations?: Record<string, unknown>;
   isDemoConfig?: boolean;
   _preDemoSnapshot?: Record<string, unknown>;
-}
-
-interface TouchGestureState {
-  startX: number;
-  startY: number;
-  startTime: number;
 }
 
 interface SimulatedNotification {
@@ -134,7 +98,7 @@ const TabFallback = () => (
   </div>
 );
 
-export default function CatalystCash() {
+function CatalystCashShell() {
   const toast = useToast();
   const appToast = toast as AppToastApi | undefined;
   useEffect(() => {
@@ -256,17 +220,17 @@ export default function CatalystCash() {
     SWIPE_TAB_ORDER,
   } = useNavigation();
 
-  const scrollRef = useRef<HTMLElement | null>(null);
-  const bottomNavRef = useRef<HTMLElement | null>(null);
   const topBarRef = useRef<HTMLElement | null>(null);
   const [headerHidden, setHeaderHidden] = useState(false);
   const lastScrollY = useRef(0);
+  const headerToggleCooldown = useRef(0);
   const [transactionFeedTab, setTransactionFeedTab] = useState<AppTab | null>(null);
-  const swipeStart = useRef<TouchGestureState | null>(null);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const touchStartTime = useRef(0);
   const [chatInitialPrompt, setChatInitialPrompt] = useState<string | null>(null);
   const lastPromptedAuditDraftRef = useRef<string | null>(null);
+  const abortActiveAuditRef = useRef(abortActiveAudit);
+  const abortActiveChatStreamRef = useRef(abortActiveChatStream);
+  const checkRecoverableAuditDraftRef = useRef(checkRecoverableAuditDraft);
+  const surfaceRecoverableAuditPromptRef = useRef<(draft?: typeof recoverableAuditDraft) => void>(() => {});
 
   function mergeUniqueById<T extends { id?: string | null }>(existing: T[] = [], incoming: T[] = []): T[] {
     const ids = new Set(existing.map((item) => item.id).filter(Boolean));
@@ -348,189 +312,6 @@ export default function CatalystCash() {
     }
   };
 
-  // ── iOS-native interactive swipe-back for overlay panes ──
-  const useSwipeBack = (onDismiss: () => void) => {
-    const paneRef = useRef<HTMLDivElement | null>(null);
-    const touchRef = useRef<TouchGestureState | null>(null);
-    const isDragging = useRef(false);
-
-    const onTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
-      const touch = e.touches[0];
-      // Only start from the left 40px edge zone
-      if (!touch || touch.clientX > 40) return;
-      touchRef.current = { startX: touch.clientX, startY: touch.clientY, startTime: Date.now() };
-      isDragging.current = false;
-    }, []);
-
-    const onTouchMove = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
-      const touchState = touchRef.current;
-      if (!touchState) return;
-      const touch = e.touches[0];
-      if (!touch) return;
-      const dx = touch.clientX - touchState.startX;
-      const dy = Math.abs(touch.clientY - touchState.startY);
-
-      // Only engage if horizontal movement > vertical (prevents hijacking scroll)
-      if (!isDragging.current) {
-        if (dx < 10) return; // Not enough movement yet
-        if (dy > dx * 0.8) { touchRef.current = null; return; } // Too vertical — abort
-        isDragging.current = true;
-        if (paneRef.current) paneRef.current.classList.add("swipe-back-pane");
-      }
-
-      if (isDragging.current && paneRef.current && dx > 0) {
-        const progress = Math.min(dx / window.innerWidth, 1);
-        paneRef.current.style.transform = `translateX(${dx}px)`;
-        paneRef.current.style.opacity = String(1 - progress * 0.3);
-      }
-    }, []);
-
-    const onTouchEnd = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
-      const touchState = touchRef.current;
-      if (!touchState || !isDragging.current) {
-        touchRef.current = null;
-        isDragging.current = false;
-        return;
-      }
-
-      const touch = e.changedTouches[0];
-      if (!touch) return;
-      const dx = touch.clientX - touchState.startX;
-      const elapsed = Date.now() - touchState.startTime;
-      const velocity = dx / Math.max(elapsed, 1);
-      const pane = paneRef.current;
-
-      touchRef.current = null;
-      isDragging.current = false;
-
-      // Commit if swiped > 35% of screen width OR velocity is high enough
-      if (dx > window.innerWidth * 0.35 || velocity > 0.5) {
-        if (pane) {
-          pane.classList.remove("swipe-back-pane");
-          pane.classList.add("slide-pane-dismiss");
-          pane.style.transform = "";
-          pane.style.opacity = "";
-        }
-        haptic.light();
-        setTimeout(() => onDismiss(), 280);
-      } else {
-        // Snap back
-        if (pane) {
-          pane.classList.remove("swipe-back-pane");
-          pane.style.transition = "transform .3s cubic-bezier(.16,1,.3,1), opacity .3s ease";
-          pane.style.transform = "translateX(0)";
-          pane.style.opacity = "1";
-          setTimeout(() => {
-            if (pane) { pane.style.transition = ""; }
-          }, 300);
-        }
-      }
-    }, [onDismiss]);
-
-    return { paneRef, onTouchStart, onTouchMove, onTouchEnd };
-  };
-
-  // ── iOS-native interactive swipe-down for modal panes ──
-  const useSwipeDown = (onDismiss: () => void) => {
-    const paneRef = useRef<HTMLDivElement | null>(null);
-    const touchRef = useRef<TouchGestureState | null>(null);
-    const isDragging = useRef(false);
-
-    const onTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
-      // Don't start swipe-down if the user is scrolling the content
-      // We check if the scroll area is already scrolled down
-      const scrollBody = document.querySelector<HTMLElement>(".modal-pane .page-body");
-      if (scrollBody && scrollBody.scrollTop > 5) return;
-
-      const touch = e.touches[0];
-      if (!touch) return;
-      touchRef.current = { startX: touch.clientX, startY: touch.clientY, startTime: Date.now() };
-      isDragging.current = false;
-    }, []);
-
-    const onTouchMove = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
-      const touchState = touchRef.current;
-      if (!touchState) return;
-      const touch = e.touches[0];
-      if (!touch) return;
-      const dx = Math.abs(touch.clientX - touchState.startX);
-      const dy = touch.clientY - touchState.startY; // positive = downward
-
-      // Only engage if vertical movement > horizontal, and moving DOWN
-      if (!isDragging.current) {
-        if (dy < 10) return; // Not enough downward movement
-        if (dx > dy * 0.8) { touchRef.current = null; return; } // Too horizontal
-        isDragging.current = true;
-        if (paneRef.current) paneRef.current.classList.add("swipe-down-pane");
-      }
-
-      if (isDragging.current && paneRef.current && dy > 0) {
-        const progress = Math.min(dy / window.innerHeight, 1);
-        paneRef.current.style.transform = `translateY(${dy}px)`;
-        paneRef.current.style.opacity = String(1 - progress * 0.3);
-      }
-    }, []);
-
-    const onTouchEnd = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
-      const touchState = touchRef.current;
-      if (!touchState || !isDragging.current) {
-        touchRef.current = null;
-        isDragging.current = false;
-        return;
-      }
-
-      const touch = e.changedTouches[0];
-      if (!touch) return;
-      const dy = touch.clientY - touchState.startY;
-      const elapsed = Date.now() - touchState.startTime;
-      const velocity = dy / Math.max(elapsed, 1);
-      const pane = paneRef.current;
-
-      touchRef.current = null;
-      isDragging.current = false;
-
-      // Commit if swiped > 20% of screen height OR velocity is high enough
-      if (dy > window.innerHeight * 0.20 || velocity > 0.4) {
-        if (pane) {
-          pane.classList.remove("swipe-down-pane");
-          pane.classList.add("modal-pane-dismiss");
-          pane.style.transform = "";
-          pane.style.opacity = "";
-        }
-        haptic.light();
-        setTimeout(() => onDismiss(), 350);
-      } else {
-        // Snap back
-        if (pane) {
-          pane.classList.remove("swipe-down-pane");
-          pane.style.transition = "transform .3s cubic-bezier(.16,1,.3,1), opacity .3s ease";
-          pane.style.transform = "translateY(0)";
-          pane.style.opacity = "1";
-          setTimeout(() => {
-            if (pane) { pane.style.transition = ""; }
-          }, 300);
-        }
-      }
-    }, [onDismiss]);
-
-    return { paneRef, onTouchStart, onTouchMove, onTouchEnd };
-  };
-
-  // Create swipe-back instances for overlay panes
-  const overlaySwipeResults = useSwipeBack(useCallback(() => {
-    const target = resultsBackTarget === "history" ? "history" : "audit";
-    setResultsBackTarget(null);
-    navTo(target);
-  }, [resultsBackTarget, navTo]));
-
-  const overlaySwipeHistory = useSwipeBack(useCallback(() => {
-    navTo(lastCenterTab.current);
-  }, [navTo, lastCenterTab]));
-
-  const overlaySwipeGuide = useSwipeDown(useCallback(() => {
-    setShowGuide(false);
-  }, [setShowGuide]));
-
   // ── Shared swipe gesture handler (used by main scroll, input pane, chat pane) ──
   const ready = isSecurityReady && isSettingsReady && isPortfolioReady && isAuditReady;
 
@@ -549,8 +330,6 @@ export default function CatalystCash() {
         .catch(() => setProEnabled(false));
     });
   }, []);
-
-  const [showQuickMenu, setShowQuickMenu] = useState(false);
 
   // ── GEO-FENCING SIMULATOR ──
   const [simulatedNotification, setSimulatedNotification] = useState<SimulatedNotification | null>(null);
@@ -577,138 +356,6 @@ export default function CatalystCash() {
     window.addEventListener("simulate-geo-fence", handleSimulate);
     return () => window.removeEventListener("simulate-geo-fence", handleSimulate);
   }, [cards, financialConfig]);
-
-
-
-  // --- NATIVE SCROLL SNAP OBSERVER ---
-  const snapContainerRef = useRef<HTMLDivElement | null>(null);
-  const initialScrollLock = useRef(true);
-  const currentTabRef = useRef(tab);
-
-  useEffect(() => {
-    currentTabRef.current = tab;
-  }, [tab]);
-
-  useEffect(() => {
-    const container = snapContainerRef.current;
-    if (!container) return;
-    initialScrollLock.current = true;
-
-    let isProgrammaticScroll = false;
-    let programmaticDebounce: ReturnType<typeof setTimeout> | null = null;
-
-    // Listen for manual navTo programmatic scrolls
-    const onScrollToTab = (e: Event) => {
-      const targetTab = (e as CustomEvent<AppTab>).detail;
-      const idx = SWIPE_TAB_ORDER.indexOf(targetTab);
-      if (idx !== -1) {
-        isProgrammaticScroll = true;
-        const width = container.clientWidth;
-        container.scrollTo({ left: idx * width, behavior: 'instant' });
-
-        // Backup safeguard in case `scroll` events don't fire immediately
-        if (programmaticDebounce) clearTimeout(programmaticDebounce);
-        programmaticDebounce = setTimeout(() => { isProgrammaticScroll = false; }, 800);
-      }
-    };
-    window.addEventListener("app-scroll-to-tab", onScrollToTab);
-
-    // Watch for physical swipe scrolling using raw math
-    let scrollDebounce: ReturnType<typeof setTimeout> | null = null;
-    const onScroll = () => {
-      if (initialScrollLock.current) return;
-
-      // If programmatically scrolling, extend the lock until scrolling stops
-      if (isProgrammaticScroll) {
-        if (programmaticDebounce) clearTimeout(programmaticDebounce);
-        programmaticDebounce = setTimeout(() => {
-          isProgrammaticScroll = false;
-        }, 150);
-        return;
-      }
-
-      if (scrollDebounce) clearTimeout(scrollDebounce);
-      scrollDebounce = setTimeout(() => {
-        const width = container.clientWidth;
-        if (width <= 0) return; // Prevent division by zero and incorrect 0-index on boot
-
-        // Calculate which pane is most visible
-        const index = Math.round(container.scrollLeft / width);
-        const snappedTab = SWIPE_TAB_ORDER[index];
-        if (snappedTab) syncTab(snappedTab);
-      }, 10); // Ultra-low debounce to instantly update tab active state
-    };
-
-    container.addEventListener("scroll", onScroll, { passive: true });
-
-    // On mount, snap to the initial tab - wait for layout
-    const enforceInitialScroll = () => {
-      const initialIdx = SWIPE_TAB_ORDER.indexOf(currentTabRef.current);
-      if (initialIdx !== -1) {
-        const width = container.clientWidth || window.innerWidth;
-        const target = initialIdx * Math.max(width, 0);
-        if (Math.abs(container.scrollLeft - target) > 5) {
-          isProgrammaticScroll = true;
-          container.scrollTo({ left: target, behavior: 'instant' });
-          if (programmaticDebounce) clearTimeout(programmaticDebounce);
-          programmaticDebounce = setTimeout(() => { isProgrammaticScroll = false; }, 200);
-        }
-      }
-    };
-
-    // Enforcement loop: Chrome's native scroll restoration runs async after paint.
-    // We forcefully override it for the first 600ms to guarantee React's tab state is honored.
-    const enforceInterval = setInterval(enforceInitialScroll, 50);
-
-    const lockTimer = setTimeout(() => {
-      clearInterval(enforceInterval);
-      initialScrollLock.current = false;
-    }, 600);
-
-    return () => {
-      clearInterval(enforceInterval);
-      clearTimeout(lockTimer);
-      window.removeEventListener("app-scroll-to-tab", onScrollToTab);
-      container.removeEventListener("scroll", onScroll);
-      if (scrollDebounce) clearTimeout(scrollDebounce);
-      if (programmaticDebounce) clearTimeout(programmaticDebounce);
-    };
-  }, [ready, onboardingComplete]);
-
-  // ── Lock swipe-nav when keyboard is open (input/textarea focused) ──
-  useEffect(() => {
-    const container = snapContainerRef.current;
-    if (!container) return;
-
-    const isEditable = (el: EventTarget | null) =>
-      el instanceof HTMLElement && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
-
-    const onFocusIn = (e: FocusEvent) => {
-      if (isEditable(e.target)) {
-        container.style.scrollSnapType = "none";
-        container.style.overflowX = "hidden";
-      }
-    };
-    const onFocusOut = (e: FocusEvent) => {
-      if (isEditable(e.target)) {
-        // Small delay to avoid snap-back during field-to-field focus changes
-        setTimeout(() => {
-          if (!isEditable(document.activeElement)) {
-            container.style.scrollSnapType = "";
-            container.style.overflowX = "";
-          }
-        }, 100);
-      }
-    };
-
-    document.addEventListener("focusin", onFocusIn);
-    document.addEventListener("focusout", onFocusOut);
-    return () => {
-      document.removeEventListener("focusin", onFocusIn);
-      document.removeEventListener("focusout", onFocusOut);
-    };
-  }, []);
-
 
   // ═══════════════════════════════════════════════════════════════
 
@@ -837,23 +484,9 @@ export default function CatalystCash() {
   }, [privacyMode]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
     setHeaderHidden(false);
     lastScrollY.current = 0;
   }, [tab]);
-
-  useEffect(() => {
-    if (!bottomNavRef.current) return;
-    const update = () => {
-      if (!bottomNavRef.current) return;
-      const h = bottomNavRef.current.getBoundingClientRect().height || 0;
-      document.documentElement.style.setProperty("--bottom-nav-h", `${Math.ceil(h)}px`);
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(bottomNavRef.current);
-    return () => ro.disconnect();
-  }, []);
 
   useEffect(() => {
     if (!topBarRef.current) return;
@@ -1143,6 +776,35 @@ export default function CatalystCash() {
   const display = viewing || current;
   const displayMoveChecks = viewing ? viewing.moveChecks || {} : moveChecks;
 
+  const handleSnapPageScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    const el = event.currentTarget;
+    const scrollTop = el.scrollTop;
+    const delta = scrollTop - (lastScrollY.current || 0);
+    lastScrollY.current = scrollTop;
+
+    if (scrollTop <= 0 || scrollTop + el.clientHeight >= el.scrollHeight - 1) return;
+
+    const now = Date.now();
+    if (now - headerToggleCooldown.current < 300) return;
+
+    if (scrollTop < 60) {
+      if (headerHidden) {
+        headerToggleCooldown.current = now;
+        setHeaderHidden(false);
+      }
+    } else if (delta > 25) {
+      if (!headerHidden) {
+        headerToggleCooldown.current = now;
+        setHeaderHidden(true);
+      }
+    } else if (delta < -25) {
+      if (headerHidden) {
+        headerToggleCooldown.current = now;
+        setHeaderHidden(false);
+      }
+    }
+  }, [headerHidden]);
+
   const surfaceRecoverableAuditPrompt = useCallback((draft = recoverableAuditDraft) => {
     if (!draft?.sessionTs || !draft?.raw?.trim()) return;
     lastPromptedAuditDraftRef.current = draft.sessionTs;
@@ -1166,6 +828,22 @@ export default function CatalystCash() {
   }, [recoverableAuditDraft, surfaceRecoverableAuditPrompt]);
 
   useEffect(() => {
+    abortActiveAuditRef.current = abortActiveAudit;
+  }, [abortActiveAudit]);
+
+  useEffect(() => {
+    abortActiveChatStreamRef.current = abortActiveChatStream;
+  }, [abortActiveChatStream]);
+
+  useEffect(() => {
+    checkRecoverableAuditDraftRef.current = checkRecoverableAuditDraft;
+  }, [checkRecoverableAuditDraft]);
+
+  useEffect(() => {
+    surfaceRecoverableAuditPromptRef.current = surfaceRecoverableAuditPrompt;
+  }, [surfaceRecoverableAuditPrompt]);
+
+  useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
     let pauseHandle: { remove: () => Promise<void> } | null = null;
@@ -1173,14 +851,14 @@ export default function CatalystCash() {
 
     const register = async () => {
       pauseHandle = await CapApp.addListener("pause", async () => {
-        abortActiveAudit("background-pause");
-        abortActiveChatStream();
+        abortActiveAuditRef.current("background-pause");
+        abortActiveChatStreamRef.current();
       });
 
       resumeHandle = await CapApp.addListener("resume", async () => {
-        const draft = await checkRecoverableAuditDraft();
+        const draft = await checkRecoverableAuditDraftRef.current();
         if (draft?.sessionTs) {
-          surfaceRecoverableAuditPrompt(draft);
+          surfaceRecoverableAuditPromptRef.current(draft);
         }
       });
     };
@@ -1191,7 +869,7 @@ export default function CatalystCash() {
       pauseHandle?.remove().catch(() => {});
       resumeHandle?.remove().catch(() => {});
     };
-  }, [abortActiveAudit, abortActiveChatStream, checkRecoverableAuditDraft, surfaceRecoverableAuditPrompt]);
+  }, []);
 
   const investmentsTabVisible = useMemo(() => {
     const holdings = financialConfig?.holdings || {};
@@ -1203,14 +881,6 @@ export default function CatalystCash() {
       (financialConfig?.trackCrypto && (holdings.crypto?.length ?? 0) > 0)
     );
   }, [financialConfig]);
-
-  const navItems: Array<{ id: AppTab; label: string; icon: typeof Home; isCenter?: boolean }> = [
-    { id: "dashboard", label: "Home", icon: Home },
-    { id: "cashflow", label: "Cashflow", icon: Wallet },
-    { id: "audit", label: "Audit", icon: Zap, isCenter: true },
-    { id: "portfolio", label: "Portfolio", icon: CreditCard },
-    { id: "chat", label: "Ask AI", icon: MessageCircle },
-  ];
 
   // Native iOS swipe-back is handled via WKWebView allowsBackForwardNavigationGestures
   // (set in capacitor.config.ts). The popstate listener (above) handles the navigation.
@@ -1626,20 +1296,6 @@ export default function CatalystCash() {
         </div>
       )}
 
-      {showGuide && (
-        <Suspense fallback={null}>
-          <GuideModal onClose={() => setShowGuide(false)} swipeHook={overlaySwipeGuide} proEnabled={proEnabled} />
-        </Suspense>
-      )}
-      {transactionFeedTab === tab && (
-        <Suspense fallback={<TabFallback />}>
-          <TransactionFeed
-            onClose={() => setTransactionFeedTab(null)}
-            proEnabled={proEnabled}
-            onConnectPlaid={handleConnectAccount}
-          />
-        </Suspense>
-      )}
       {/* Skip-to-content link for a11y */}
       <a
         href="#main-content"
@@ -1679,8 +1335,7 @@ export default function CatalystCash() {
           WebkitBackdropFilter: "blur(24px) saturate(1.8)",
           borderBottom: `1px solid ${T.border.subtle}`,
           transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
-          marginBottom: headerHidden ? "-56px" : "0",
-          transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
           willChange: "transform",
         }}
       >
@@ -1807,531 +1462,87 @@ export default function CatalystCash() {
         </div>
       )}
 
-      <main
-        id="main-content"
-        role="main"
-        ref={snapContainerRef}
-        className="snap-container snap-container-clearance"
-        style={{
-          flex: 1,
-          display: tab === "settings" || tab === "results" || tab === "history" || tab === "guide" || tab === "input" ? "none" : "flex",
-          overscrollBehaviorX: "none",
-        }}
+      <ScrollSnapContainer
+        ready={ready}
+        onboardingComplete={onboardingComplete}
+        tab={tab}
+        syncTab={syncTab}
+        SWIPE_TAB_ORDER={SWIPE_TAB_ORDER}
+        hidden={tab === "settings" || tab === "results" || tab === "history" || tab === "guide" || tab === "input"}
       >
-        {SWIPE_TAB_ORDER.map(t => (
-          <div
-            key={t}
-            className="snap-page"
-            data-tabid={t}
-            style={{
-              overflowY: t === "chat" ? "hidden" : "auto",
-              paddingBottom: t === "chat" ? 0 : "calc(env(safe-area-inset-bottom, 20px) + 90px)",
-              background: t === "chat" ? T.bg.base : undefined,
-            }}
-            onScroll={(e) => {
-              const el = e.currentTarget;
-              const scrollTop = el.scrollTop;
-              const delta = scrollTop - (lastScrollY.current || 0);
-              lastScrollY.current = scrollTop;
-
-              // Ignore iOS rubber-banding overscroll out of bounds
-              if (scrollTop <= 0 || scrollTop + el.clientHeight >= el.scrollHeight - 1) return;
-
-              if (scrollTop < 40) {
-                setHeaderHidden(false);
-              } else if (delta > 8) {
-                setHeaderHidden(true);
-              } else if (delta < -8) {
-                setHeaderHidden(false);
-              }
-            }}
-          >
-            {t === "dashboard" && (
-              <ErrorBoundary name="Dashboard">
-                <Suspense fallback={<TabFallback />}>
-                  <DashboardTab
-                    proEnabled={proEnabled}
-                    onRefreshDashboard={handleRefreshDashboard}
-                    onDemoAudit={handleDemoAudit}
-                    onViewTransactions={() => setTransactionFeedTab(t)}
-                    onDiscussWithCFO={prompt => {
-                      setChatInitialPrompt(prompt);
-                      navTo("chat");
-                    }}
-                  />
-                </Suspense>
-              </ErrorBoundary>
-            )}
-            {t === "chat" && (
-              <ErrorBoundary name="AI Chat">
-                <Suspense fallback={<TabFallback />}>
-                  <AIChatTab
-                    proEnabled={proEnabled}
-                    initialPrompt={chatInitialPrompt}
-                    clearInitialPrompt={() => setChatInitialPrompt(null)}
-                    onBack={() => {
-                      navTo("dashboard");
-                    }}
-                    embedded
-                  />
-                </Suspense>
-              </ErrorBoundary>
-            )}
-
-            {t === "cashflow" && (
-              <ErrorBoundary name="Cashflow">
-                <Suspense fallback={<TabFallback />}>
-                  <CashflowTab
-                    onRunAudit={handleDemoAudit}
-                    toast={toast}
-                    proEnabled={proEnabled}
-                  />
-                </Suspense>
-              </ErrorBoundary>
-            )}
-
-            {t === "portfolio" && (
-              <ErrorBoundary name="Portfolio">
-                <Suspense fallback={<TabFallback />}>
-                  <PortfolioTab
-                    onViewTransactions={() => setTransactionFeedTab(t)}
-                    proEnabled={proEnabled}
-                  />
-                </Suspense>
-              </ErrorBoundary>
-            )}
-
-            {t === "audit" && (
-              <ErrorBoundary name="Audit">
-                <Suspense fallback={<TabFallback />}>
-                  <AuditTab proEnabled={proEnabled} toast={toast} onDemoAudit={handleDemoAudit} />
-                </Suspense>
-              </ErrorBoundary>
-            )}
-          </div>
-        ))}
-      </main>
-
-      {/* ERROR OVERLAY REMOVED (Handled uniquely by Toasts) */}
-
-      {/* FULL SCREEN DEDICATED OVERLAYS (Results, History, Input) */}
-      {tab === "input" && (
-        <div className="slide-pane safe-scroll-body" style={{ flex: 1, overflowY: "auto", position: "relative", zIndex: 20 }}>
-          <ErrorBoundary name="InputForm">
-            <Suspense fallback={<TabFallback />}>
-              <InputForm
-                onSubmit={handleSubmit}
-                isLoading={loading}
-                lastAudit={current}
-                renewals={renewals}
-                cardAnnualFees={cardAnnualFees}
-                cards={cards}
-                bankAccounts={bankAccounts}
-                onManualImport={handleManualImport}
-                toast={toast}
-                financialConfig={financialConfig}
-                setFinancialConfig={setFinancialConfig}
-                aiProvider={aiProvider}
-                personalRules={personalRules}
-                setPersonalRules={setPersonalRules}
-                persona={persona}
-                instructionHash={instructionHash}
-                setInstructionHash={value => setInstructionHash(value == null ? null : String(value))}
-                db={inputFormDb}
-                proEnabled={proEnabled}
-                onBack={() => navTo("dashboard")}
-              />
-            </Suspense>
-          </ErrorBoundary>
-        </div>
-      )}
-
-      {tab === "results" && (
-        <div ref={overlaySwipeResults.paneRef} onTouchStart={overlaySwipeResults.onTouchStart} onTouchMove={overlaySwipeResults.onTouchMove} onTouchEnd={overlaySwipeResults.onTouchEnd} className="slide-pane safe-scroll-body" style={{ flex: 1, overflowY: "auto", position: "relative", zIndex: 20 }}>
-          {loading ? (
-            <StreamingView
-              streamText={streamText}
-              elapsed={elapsed}
-              isTest={isTest}
-              modelName={getModel(aiProvider, aiModel)?.name ?? aiModel}
-              onCancel={handleCancelAudit}
-            />
-          ) : activeAuditDraftView ? (
-            <StreamingView
-              streamText={`${activeAuditDraftView.raw}\n\n[Recovered interrupted draft — rerun the audit to finish.]`}
-              elapsed={0}
-              isTest={false}
-              modelName={getModel(aiProvider, aiModel)?.name ?? aiModel}
-              onCancel={() => {
-                dismissRecoverableAuditDraft().catch(() => {});
-                const target = resultsBackTarget === "history" ? "history" : "audit";
-                setResultsBackTarget(null);
-                navTo(target);
-              }}
-            />
-          ) : !display ? (
-            (() => {
-              setTimeout(() => navTo("dashboard"), 0);
-              return null;
-            })()
-          ) : (
-            <>
-              <ErrorBoundary name="Results">
-                <Suspense fallback={<TabFallback />}>
-                  <ResultsView
-                    audit={display}
-                    moveChecks={displayMoveChecks}
-                    onToggleMove={toggleMove}
-                    streak={trendContext?.length || 0}
-                    onBack={() => {
-                      const target = resultsBackTarget === "history" ? "history" : "audit";
-                      setResultsBackTarget(null);
-                      navTo(target);
-                    }}
-                  />
-                </Suspense>
-              </ErrorBoundary>
-            </>
-          )}
-        </div>
-      )}
-
-      {tab === "history" && (
-        <div ref={overlaySwipeHistory.paneRef} onTouchStart={overlaySwipeHistory.onTouchStart} onTouchMove={overlaySwipeHistory.onTouchMove} onTouchEnd={overlaySwipeHistory.onTouchEnd} className="slide-pane safe-scroll-body" style={{ flex: 1, overflowY: "auto", position: "relative", zIndex: 20 }}>
-          <ErrorBoundary name="History">
-            <Suspense fallback={<TabFallback />}>
-              <HistoryTab toast={toast} proEnabled={proEnabled} />
-            </Suspense>
-          </ErrorBoundary>
-        </div>
-      )}
-
-
-      {tab === "settings" && (
-        <ErrorBoundary name="Settings">
-          <Suspense fallback={<TabFallback />}>
-            <SettingsTab
-              onClear={clearAll}
-              onFactoryReset={factoryReset}
-              onClearDemoData={handleRefreshDashboard}
-              proEnabled={proEnabled}
-              onShowGuide={() => setShowGuide(true)}
-              onBack={() => {
-                if (setupReturnTab) {
-                  navTo(setupReturnTab);
-                  setSetupReturnTab(null);
-                } else {
-                  navTo(lastCenterTab.current);
-                }
-              }}
-              onRestoreComplete={() => window.location.reload()}
-            />
-          </Suspense>
-        </ErrorBoundary>
-      )}
-
-      {/* ═══════ BOTTOM NAV ═══════ */}
-      <nav
-        aria-label="Main navigation"
-        ref={bottomNavRef}
-        style={{
-          background: T.bg.navGlass,
-          backdropFilter: "blur(32px) saturate(200%)",
-          WebkitBackdropFilter: "blur(32px) saturate(200%)",
-          border: `1px solid ${T.border.default}`,
-          borderRadius: 36, // Maximum pill roundness
-          position: "absolute",
-          bottom: "calc(env(safe-area-inset-bottom, 16px) + 16px)", // Detached from bottom safely
-          left: 16, // Detached from edge
-          right: 16, // Detached from edge
-          zIndex: 200,
-          boxShadow: `0 16px 32px -12px rgba(0,0,0,0.6), 0 0 0 1px ${T.border.subtle}`, // Elevated shadow
-          // Lock nav while audit runs, hide completely when guide is open
-          display: showGuide ? "none" : undefined,
-          pointerEvents: loading ? "none" : "auto",
-          opacity: loading ? 0.45 : 1,
-          transition: "opacity .3s ease",
-          overflow: "hidden", // Contained animations
-        }}
-      >
-        {/* QUICK ACTIONS MENU */}
-        {showQuickMenu && (
-          <>
-            <div
-              style={{ position: "fixed", inset: 0, zIndex: 99, background: "transparent" }}
-              onClick={() => setShowQuickMenu(false)}
-              onTouchStart={() => setShowQuickMenu(false)}
-            />
-            <div
-              style={{
-                position: "absolute",
-                bottom: "calc(env(safe-area-inset-bottom, 16px) + 76px)",
-                left: "50%",
-                transform: "translateX(-50%)",
-                background: T.bg.glass,
-                backdropFilter: "blur(24px)",
-                WebkitBackdropFilter: "blur(24px)",
-                border: `1px solid ${T.border.focus}`,
-                borderRadius: T.radius.lg,
-                padding: 8,
-                display: "flex",
-                flexDirection: "column",
-                gap: 4,
-                zIndex: 100,
-                boxShadow: T.shadow.elevated,
-                width: 220,
-                animation: "slideUpMenu .2s ease",
-              }}
-            >
-              <button
-                onClick={() => {
-                  setShowQuickMenu(false);
-                  navTo("input");
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: 12,
-                  background: "transparent",
-                  border: "none",
-                  color: T.text.primary,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  borderRadius: T.radius.sm,
-                }}
-              >
-                <Plus size={18} color={T.accent.emerald} /> Start New Audit
-              </button>
-              <button
-                onClick={() => {
-                  setShowQuickMenu(false);
-                  navTo("history");
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: 12,
-                  background: "transparent",
-                  border: "none",
-                  color: T.text.primary,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  borderRadius: T.radius.sm,
-                }}
-              >
-                <Clock size={18} color={T.accent.primary} /> Audit History
-              </button>
-
-              <div style={{ height: 1, background: T.border.default, margin: "4px 0" }} />
-              <button
-                onClick={() => {
-                  setShowQuickMenu(false);
-                  navTo("settings");
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: 12,
-                  background: "transparent",
-                  border: "none",
-                  color: T.text.primary,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  borderRadius: T.radius.sm,
-                }}
-              >
-                <Settings size={18} color={T.text.dim} /> App Configuration
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* Audit-running indicator strip */}
-        {loading && (
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 2,
-              background: `linear-gradient(90deg, transparent, ${T.accent.primary}, ${T.accent.emerald}, transparent)`,
-              animation: "shimmer 1.8s ease-in-out infinite",
-              backgroundSize: "200% 100%",
-            }}
-          />
-        )}
-
-        <div
-          style={{
-            position: "absolute",
-            top: -1,
-            left: "10%",
-            right: "10%",
-            height: 1,
-            background: loading
-              ? "none"
-              : `linear-gradient(90deg,transparent,${T.accent.primary}25,${T.accent.emerald}20,transparent)`,
-          }}
+        <TabRenderer
+          SWIPE_TAB_ORDER={SWIPE_TAB_ORDER}
+          proEnabled={proEnabled}
+          toast={toast}
+          navTo={navTo}
+          handleRefreshDashboard={handleRefreshDashboard}
+          handleDemoAudit={handleDemoAudit}
+          setTransactionFeedTab={setTransactionFeedTab}
+          chatInitialPrompt={chatInitialPrompt}
+          setChatInitialPrompt={setChatInitialPrompt}
+          onPageScroll={handleSnapPageScroll}
         />
+      </ScrollSnapContainer>
 
-        <div
-          role="tablist"
-          aria-label="Main navigation tabs"
-          style={{
-            position: "relative",
-            display: "flex",
-            justifyContent: "space-evenly",
-            alignItems: "center",
-            padding: "8px 4px",
-          }}
-        >
-          {navItems.map(n => {
-            const Icon = n.icon;
-            const isCenter = n.isCenter;
-            const active = tab === n.id;
+      <OverlayProvider
+        tab={tab}
+        showGuide={showGuide}
+        setShowGuide={setShowGuide}
+        transactionFeedTab={transactionFeedTab}
+        setTransactionFeedTab={setTransactionFeedTab}
+        proEnabled={proEnabled}
+        loading={loading}
+        streamText={streamText}
+        elapsed={elapsed}
+        isTest={isTest}
+        aiProvider={aiProvider}
+        aiModel={aiModel}
+        activeAuditDraftView={activeAuditDraftView}
+        resultsBackTarget={resultsBackTarget}
+        setResultsBackTarget={setResultsBackTarget}
+        display={display}
+        displayMoveChecks={displayMoveChecks}
+        trendContextLength={trendContext?.length || 0}
+        setupReturnTab={setupReturnTab}
+        setSetupReturnTab={setSetupReturnTab}
+        lastCenterTab={lastCenterTab}
+        cards={cards}
+        bankAccounts={bankAccounts}
+        renewals={renewals}
+        cardAnnualFees={cardAnnualFees}
+        current={current}
+        financialConfig={financialConfig}
+        personalRules={personalRules}
+        setPersonalRules={setPersonalRules}
+        persona={persona}
+        instructionHash={instructionHash}
+        setInstructionHash={setInstructionHash}
+      >
+        <OverlayManager
+          handleConnectAccount={handleConnectAccount}
+          handleCancelAudit={handleCancelAudit}
+          dismissRecoverableAuditDraft={dismissRecoverableAuditDraft}
+          navTo={navTo}
+          toggleMove={toggleMove}
+          toast={toast}
+          clearAll={clearAll}
+          factoryReset={factoryReset}
+          handleRefreshDashboard={handleRefreshDashboard}
+          handleSubmit={handleSubmit}
+          handleManualImport={handleManualImport}
+          setFinancialConfig={setFinancialConfig}
+          inputFormDb={inputFormDb}
+        />
+      </OverlayProvider>
 
-            const handlePressStart = e => {
-              if (e.type === "mousedown" && e.button !== 0) return;
-              longPressTimer.current = setTimeout(() => {
-                haptic.warning();
-                setShowQuickMenu(true);
-                longPressTimer.current = null;
-              }, 350);
-            };
-
-            const handlePressEnd = e => {
-              if (e.type === "mouseup" && e.button !== 0) return;
-              if (longPressTimer.current) {
-                clearTimeout(longPressTimer.current);
-                longPressTimer.current = null;
-                if (tab !== n.id) navTo(n.id);
-              }
-            };
-
-            return (
-              <button
-                key={n.id}
-                role="tab"
-                aria-selected={active}
-                aria-current={active ? "page" : undefined}
-                onMouseDown={isCenter ? handlePressStart : undefined}
-                onMouseUp={isCenter ? handlePressEnd : undefined}
-                onMouseLeave={
-                  isCenter
-                    ? () => {
-                      if (longPressTimer.current) clearTimeout(longPressTimer.current);
-                    }
-                    : undefined
-                }
-                onTouchStart={isCenter ? handlePressStart : undefined}
-                onTouchEnd={isCenter ? handlePressEnd : undefined}
-                aria-label={n.label}
-                onClick={
-                  !isCenter
-                    ? () => {
-                      if (tab === n.id) {
-                        if (transactionFeedTab === n.id) {
-                          setTransactionFeedTab(null);
-                        }
-                      } else {
-                        navTo(n.id);
-                      }
-                    }
-                    : undefined
-                }
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: active ? 4 : 0, // Tighten gap gracefully
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: active ? T.text.primary : T.text.dim, // High contrast active, dim inactive
-                  padding: "4px 0",
-                  height: 56, // Perfect touch target size
-                  transition: "color .2s ease, gap .3s cubic-bezier(0.16, 1, 0.3, 1)",
-                  position: "relative",
-                  userSelect: "none",
-                  WebkitUserSelect: "none",
-                  WebkitTouchCallout: "none",
-                }}
-              >
-                {isCenter ? (
-                  <div
-                    style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 24, // Perfect circle logic
-                      background: active ? T.accent.gradient : T.bg.elevated,
-                      border: `1px solid ${active ? "transparent" : T.border.default}`,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      boxShadow: active ? `0 4px 20px ${T.accent.primary}60, 0 0 24px ${T.accent.emerald}40` : T.shadow.card,
-                      transition: "all .3s cubic-bezier(0.16, 1, 0.3, 1)",
-                      animation: active ? "glowPulse 3s ease-in-out infinite" : "none",
-                      transform: active ? "scale(1.05)" : "scale(1)",
-                    }}
-                  >
-                    <Icon size={22} strokeWidth={active ? 2.5 : 1.5} color={active ? "#fff" : T.text.muted} />
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      transition: "transform .3s cubic-bezier(0.16, 1, 0.3, 1), opacity .2s",
-                      transform: active ? "translateY(-2px)" : "translateY(2px)",
-                      opacity: active ? 1 : 0.7, // Mute un-selected icons
-                    }}
-                  >
-                    <Icon size={20} strokeWidth={active ? 2.5 : 2.0} />
-                  </div>
-                )}
-
-                {/* Text only reveals on active for clean UI (skip for center button — glow is enough) */}
-                <div style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  height: (active && !isCenter) ? 18 : 0,
-                  overflow: "hidden",
-                  transition: "height .3s cubic-bezier(0.16, 1, 0.3, 1), opacity .2s",
-                  opacity: (active && !isCenter) ? 1 : 0
-                }}>
-                  <span
-                    style={{
-                      display: "block",
-                      fontSize: 10,
-                      fontWeight: 800,
-                      fontFamily: T.font.sans,
-                      letterSpacing: "0.03em",
-                      marginBottom: 2
-                    }}
-                  >
-                    {n.label}
-                  </span>
-                  {active && !isCenter && (
-                    <div style={{
-                      width: 4, height: 4, borderRadius: 2, background: T.accent.emerald,
-                      boxShadow: `0 0 8px ${T.accent.emerald}`,
-                      marginTop: 2
-                    }} />
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+      <BottomNavBar
+        tab={tab}
+        navTo={navTo}
+        loading={loading}
+        showGuide={showGuide}
+        transactionFeedTab={transactionFeedTab}
+        setTransactionFeedTab={setTransactionFeedTab}
+      />
 
       {/* Factory Reset Mask */}
       {isResetting && (
@@ -2424,5 +1635,13 @@ export default function CatalystCash() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CatalystCash() {
+  return (
+    <ThemeProvider>
+      <CatalystCashShell />
+    </ThemeProvider>
   );
 }

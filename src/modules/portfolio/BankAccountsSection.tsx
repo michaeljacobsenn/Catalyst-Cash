@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { Landmark, ChevronDown, Edit3, Check, DollarSign } from "lucide-react";
+import { Landmark, ChevronDown, Edit3, Check, DollarSign } from "../icons";
 import { Card, Badge } from "../ui.js";
 import { Mono } from "../components.js";
 import { T, ISSUER_COLORS } from "../constants.js";

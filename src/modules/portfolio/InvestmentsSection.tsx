@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { TrendingUp, RefreshCw, ChevronDown, Trash2 } from "lucide-react";
+import { TrendingUp, RefreshCw, ChevronDown, Trash2 } from "../icons";
 import { Card, Badge } from "../ui.js";
 import { Mono } from "../components.js";
 import { T } from "../constants.js";

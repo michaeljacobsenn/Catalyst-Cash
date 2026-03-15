@@ -9,8 +9,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "sync": "npm run build && echo '\\n⏳ Syncing iOS project and installing Pods (this may take 1-2 mins)...' && npx cap copy ios && cd ios/App && LANG=en_US.UTF-8 pod install && cd ../.. && node scripts/inject-local-plugins.cjs",
-    "ios": "npm run sync && npx cap open ios",
+    "sync": "npm run build && echo '\\n⏳ Syncing iOS web assets...' && node scripts/sync-ios-web.cjs && node scripts/inject-local-plugins.cjs",
+    "pods:install": "cd ios/App && LANG=en_US.UTF-8 pod install",
+    "sync:native": "npm run sync && echo '\\n⏳ Installing CocoaPods dependencies...' && npm run pods:install",
+    "ios": "npm run sync && node ./node_modules/@capacitor/cli/bin/capacitor open ios",
+    "ios:native": "npm run sync:native && node ./node_modules/@capacitor/cli/bin/capacitor open ios",
     "sync:site": "node scripts/sync-site.cjs",
     "deploy:site": "npx wrangler pages deploy site --project-name=portfolioproapp",
     "deploy": "npm run build && npx cap copy"

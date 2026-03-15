@@ -571,7 +571,7 @@ test.describe("Catalyst Cash end-to-end", () => {
 
     await page.getByRole("tab", { name: "Portfolio" }).click();
     await expect(page.getByRole("tab", { name: "Portfolio", selected: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Portfolio" }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Total Net Worth" })).toBeVisible();
 
     await page.waitForTimeout(1000);
 

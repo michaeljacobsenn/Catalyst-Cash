@@ -10,7 +10,6 @@ import React, {
   type SetStateAction,
 } from "react";
 import { db } from "../utils.js";
-import { applyTheme } from "../constants.js";
 import { DEFAULT_PROVIDER_ID, DEFAULT_MODEL_ID, getProvider } from "../providers.js";
 import { schedulePaydayReminder, cancelPaydayReminder, getNotificationPermission } from "../notifications.js";
 import { migrateToSecureItem } from "../secureStore.js";
@@ -305,11 +304,6 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
 
         const resolvedTheme: ThemeMode = savedTheme || "dark";
         setThemeModeRaw(resolvedTheme);
-        const effectiveMode: Exclude<ThemeMode, "system"> =
-          resolvedTheme === "system"
-            ? (window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark")
-            : resolvedTheme;
-        applyTheme(effectiveMode);
 
         if (finConf) {
           const merged: CatalystCashConfig = { ...DEFAULT_FINANCIAL_CONFIG, ...finConf };
@@ -377,11 +371,6 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
 
   const setThemeMode = useCallback((mode: ThemeMode): void => {
     setThemeModeRaw(mode);
-    const effective: Exclude<ThemeMode, "system"> =
-      mode === "system"
-        ? (window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark")
-        : mode;
-    applyTheme(effective);
     forceRender((count: number) => count + 1);
     db.set("theme-mode", mode);
   }, []);
@@ -391,7 +380,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     const mediaQuery = window.matchMedia?.("(prefers-color-scheme: light)");
     if (!mediaQuery) return;
     const handler = (event: MediaQueryListEvent): void => {
-      applyTheme(event.matches ? "light" : "dark");
+      void event;
       forceRender((count: number) => count + 1);
     };
     mediaQuery.addEventListener("change", handler);

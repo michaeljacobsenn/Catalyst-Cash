@@ -6,7 +6,7 @@ import { T } from "../constants.js";
 import { Card } from "../ui.js";
 import { Mono } from "../components.js";
 import { fmt } from "../utils.js";
-import { Sparkles, Phone } from "lucide-react";
+import { Sparkles, Phone } from "../icons";
 import type { Card as PortfolioCard, CatalystCashConfig } from "../../types/index.js";
 
 interface NegotiationTarget {

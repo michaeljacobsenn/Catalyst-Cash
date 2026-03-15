@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { DollarSign, ChevronDown } from "lucide-react";
+import { DollarSign, ChevronDown } from "../icons";
 import { Card, Badge } from "../ui.js";
 import { Mono } from "../components.js";
 import { T } from "../constants.js";

@@ -29,7 +29,7 @@ import {
   Trash2,
   ReceiptText,
   Loader2,
-} from "lucide-react";
+} from "../icons";
 import { T, ISSUER_COLORS } from "../constants.js";
 import { getIssuerCards, getPinnedForIssuer } from "../issuerCards.js";
 import { getBankNames, getBankProducts } from "../bankCatalog.js";

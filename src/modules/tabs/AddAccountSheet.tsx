@@ -16,7 +16,7 @@ import {
   Wallet,
   Link2,
   CheckCircle2,
-} from "lucide-react";
+} from "../icons";
 import { T } from "../constants.js";
 import { getIssuerCards, getPinnedForIssuer } from "../issuerCards.js";
 import { getBankNames, getBankProducts } from "../bankCatalog.js";

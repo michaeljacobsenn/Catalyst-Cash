@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, memo, useCallback, Suspense, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
-import { ChevronDown, ChevronUp, AlertTriangle, X, Plus, Check, CheckCircle2, Calendar, CreditCard, AlignLeft } from "lucide-react";
+import { ChevronDown, ChevronUp, AlertTriangle, X, Plus, Check, CheckCircle2, Calendar, CreditCard, AlignLeft } from "../icons";
 import { T, RENEWAL_CATEGORIES, formatInterval } from "../constants.js";
 import { fmt } from "../utils.js";
 import { resolveCardLabel, getShortCardLabel } from "../cards.js";
@@ -20,7 +20,7 @@ const DAY_OPTIONS = Array.from({ length: 90 }, (_, i) => i + 1);
 import { usePortfolio } from "../contexts/PortfolioContext.js";
 import { useAudit } from "../contexts/AuditContext.js";
 import { useSubscriptions } from "../useSubscriptions.js";
-import { Zap, ExternalLink, Bot } from "lucide-react";
+import { Zap, ExternalLink, Bot } from "../icons";
 import { getNegotiableMerchant } from "../negotiation.js";
 import { useNavigation } from "../contexts/NavigationContext.js";
 import type { CatalystCashConfig, Card, Renewal } from "../../types/index.js";
@@ -96,6 +96,15 @@ interface IntervalDropdownProps {
   interval: number;
   unit: string;
   onChange: (value: { interval: number; unit: string }) => void;
+}
+function ScrollLock() {
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, []);
+  return null;
 }
 
 interface CardSelectorProps {
@@ -474,6 +483,9 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
   const { current } = useAudit();
   const portfolioContext = usePortfolio();
   const { navTo } = useNavigation();
+
+  const [negotiateSheet, setNegotiateSheet] = useState<NegotiationSheetState | null>(null);
+
   const isDemo = !!current?.isTest;
 
   // Demo mode: use local state so cancel/restore/delete actually work
@@ -502,7 +514,7 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
   const [showAdd, setShowAdd] = useState<boolean>(false);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
   const [showInactive, setShowInactive] = useState<boolean>(false);
-  const [negotiateSheet, setNegotiateSheet] = useState<NegotiationSheetState | null>(null);
+
   const [addForm, setAddForm] = useState<AddRenewalState>({
     name: "",
     amount: "",
@@ -1840,6 +1852,7 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
       {/* ── NEGOTIATE SHEET ── */}
       {negotiateSheet && (
         <>
+          <ScrollLock />
           {/* Backdrop */}
           <div
             onClick={() => { setNegotiateSheet(null); haptic.light(); }}

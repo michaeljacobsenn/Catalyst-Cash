@@ -11,12 +11,13 @@ import React, {
   type ReactNode,
   type UIEvent,
 } from "react";
-import { Trash2, Sparkles, ArrowDown, AlertTriangle, ArrowUpRight } from "lucide-react";
+import { Trash2, Sparkles, ArrowDown, AlertTriangle, ArrowUpRight } from "../icons";
 import { T } from "../constants.js";
 import { Skeleton as UISkeleton } from "../ui.js";
 import { streamAudit } from "../api.js";
 import { getChatSystemPrompt } from "../chatPrompts.js";
 import { evaluateChatDecisionRules } from "../decisionRules.js";
+import { isLikelyNetworkError, toUserFacingRequestError } from "../networkErrors.js";
 import {
   analyzeChatInputRisk,
   buildDeterministicChatFallback,
@@ -26,9 +27,10 @@ import {
 import { generateStrategy, mergeSnapshotDebts } from "../engine.js";
 import { getBackendProvider } from "../providers.js";
 import { haptic } from "../haptics.js";
+import { useToast } from "../Toast.js";
 import { db } from "../utils.js";
 import { log } from "../logger.js";
-import { encryptAtRest, decryptAtRest, isEncrypted } from "../crypto.js";
+import { encryptAtRest, decryptAtRestDetailed, isEncrypted } from "../crypto.js";
 import { checkChatQuota, recordChatUsage, shouldShowGating, isGatingEnforced } from "../subscription.js";
 import { useNavigation } from "../contexts/NavigationContext.js";
 import ProBanner from "./ProBanner.js";
@@ -409,6 +411,7 @@ export default memo(function AIChatTab({
   const { cards, renewals } = usePortfolio();
   const { privacyMode } = useSecurity() as SecurityApi;
   const { navState, clearNavState, registerChatStreamAbort } = useNavigation() as NavigationApi;
+  const toast = useToast() as { error?: (message: string) => void } | undefined;
 
   const [messages, setMessages] = useState<ChatHistoryMessage[]>([]);
   const [input, setInput] = useState<string>("");
@@ -485,7 +488,12 @@ export default memo(function AIChatTab({
       // Decrypt if stored encrypted
       if (isEncrypted(saved)) {
         try {
-          saved = (await decryptAtRest(saved as AtRestEncryptedPayload, db)) as ChatHistoryMessage[] | null;
+          const decrypted = await decryptAtRestDetailed(saved as AtRestEncryptedPayload, db);
+          saved = decrypted.data as ChatHistoryMessage[] | null;
+          if (decrypted.usedLegacyKey && Array.isArray(saved)) {
+            const migrated = await encryptAtRest(saved, db).catch(() => saved);
+            await db.set(CHAT_STORAGE_KEY, migrated);
+          }
         } catch {
           saved = null; // Decryption failed — start fresh
         }
@@ -822,16 +830,17 @@ export default memo(function AIChatTab({
             void persistMessages(finalMsgs);
           }
         } else {
-          const message = err instanceof Error ? err.message : "Unknown chat error";
-          log.error("chat", "Chat error", { error: message });
+          const failure = toUserFacingRequestError(err, { context: "chat" });
+          log.error("chat", "Chat error", { error: failure.rawMessage });
           const fallbackText = buildDeterministicChatFallbackTyped({
             current,
             computedStrategy: chatStrategy,
             decisionRecommendations,
-            error: message,
+            error: failure.userMessage,
           });
           const finalMsgs = [...newMsgs, createChatMessage("assistant", fallbackText)];
-          setError(`${message} Showing native fallback guidance.`);
+          setError(`${failure.userMessage} Showing native fallback guidance.`);
+          toast?.error?.(failure.userMessage);
           setMessages(finalMsgs);
           void persistMessages(finalMsgs);
         }
@@ -859,6 +868,7 @@ export default memo(function AIChatTab({
       buildAPIMessages,
       persistMessages,
       chatQuota,
+      toast,
     ]
   );
 
@@ -1374,6 +1384,32 @@ RULES: Be practical, confident, and accurate. Give usable words to say, but do n
           flexShrink: 0,
         }}
       >
+        {error && !isStreaming && (
+          <div
+            style={{
+              marginBottom: 10,
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 8,
+              padding: "10px 12px",
+              borderRadius: T.radius.lg,
+              background: isLikelyNetworkError(error) ? `${T.status.amber}12` : T.status.redDim,
+              border: `1px solid ${isLikelyNetworkError(error) ? `${T.status.amber}35` : `${T.status.red}25`}`,
+            }}
+          >
+            <AlertTriangle
+              size={14}
+              color={isLikelyNetworkError(error) ? T.status.amber : T.status.red}
+              style={{ flexShrink: 0, marginTop: 1 }}
+            />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: T.text.primary, marginBottom: 3 }}>
+                {isLikelyNetworkError(error) ? "Ask AI unavailable" : "Ask AI error"}
+              </div>
+              <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5 }}>{error}</div>
+            </div>
+          </div>
+        )}
         <form
           onSubmit={handleSubmit}
           style={{

@@ -7,7 +7,7 @@ import { T } from "../constants.js";
 import { fmt } from "../utils.js";
 import { Card } from "../ui.js";
 import { Mono } from "../components.js";
-import { Target } from "lucide-react";
+import { Target } from "../icons";
 import type { Card as PortfolioCard } from "../../types/index.js";
 
 interface DebtFreedomStats {

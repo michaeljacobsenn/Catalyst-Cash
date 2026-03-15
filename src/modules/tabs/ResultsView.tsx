@@ -13,7 +13,7 @@ import {
   CheckCircle,
   Share2,
   type LucideIcon,
-} from "lucide-react";
+} from "../icons";
 import { T } from "../constants.js";
 import { fmtDate, stripPaycheckParens, exportAudit } from "../utils.js";
 import { Card as UICard, Badge as UIBadge, InlineTooltip as UIInlineTooltip } from "../ui.js";

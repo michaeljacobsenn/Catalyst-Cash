@@ -1,4 +1,4 @@
-import { Target } from "lucide-react";
+import { Target } from "../icons";
 import { T } from "../constants.js";
 import { fmt } from "../utils.js";
 import { Card } from "../ui.js";

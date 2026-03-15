@@ -4,7 +4,7 @@ import type { CatalystCashConfig, BankAccount, Card as PortfolioCard, PlaidInves
 import type { SetFinancialConfig } from "../contexts/SettingsContext.js";
 import { T } from "../constants.js";
 import { Card, Label } from "../ui.js";
-import { Plus, Building2, Unplug, Loader2 } from "lucide-react";
+import { Plus, Building2, Unplug, Loader2 } from "../icons";
 import {
   getConnections,
   removeConnection,

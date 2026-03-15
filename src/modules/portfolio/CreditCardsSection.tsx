@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { CreditCard, ChevronDown, CheckCircle2, Check, Edit3 } from "lucide-react";
+import { CreditCard, ChevronDown, CheckCircle2, Check, Edit3 } from "../icons";
 import { Card, Badge } from "../ui.js";
 import SearchableSelect from "../SearchableSelect.js";
 import { Mono } from "../components.js";

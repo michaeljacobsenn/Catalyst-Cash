@@ -15,7 +15,7 @@ interface ChecklistStep {
   action: () => void;
   Icon: ComponentType<{ size?: number; color?: string }>;
 }
-import { Zap, Activity, ChevronRight, Settings, Building2, CalendarClock } from "lucide-react";
+import { Zap, Activity, ChevronRight, Settings, Building2, CalendarClock } from "../icons";
 import { T } from "../constants.js";
 import { Card, Label } from "../ui.js";
 import { haptic } from "../haptics.js";

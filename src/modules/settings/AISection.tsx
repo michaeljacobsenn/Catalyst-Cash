@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { ExternalLink } from "../icons";
 import { T } from "../constants.js";
 import { Card, Label } from "../ui.js";
 import { Mono } from "../components.js";

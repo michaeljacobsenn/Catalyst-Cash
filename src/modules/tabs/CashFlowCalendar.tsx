@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Card, Label } from "../ui.js";
 import { T } from "../constants.js";
 import { addDays, daysBetween, getNextPayday, getNextDateForDayOfMonth } from "../engine.js";
-import { Lock } from "lucide-react";
+import { Lock } from "../icons";
 import type { Card as PortfolioCard, CatalystCashConfig, Renewal } from "../../types/index.js";
 
 interface CashFlowEvent {

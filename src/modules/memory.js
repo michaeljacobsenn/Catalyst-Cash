@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { db } from "./utils.js";
-import { encryptAtRest, decryptAtRest, isEncrypted } from "./crypto.js";
+import { encryptAtRest, decryptAtRestDetailed, isEncrypted } from "./crypto.js";
 
 const MEMORY_DB_KEY = "ai-persistent-memory";
 const MAX_FACTS = 30;
@@ -46,7 +46,12 @@ export async function loadMemory() {
     let raw = await db.get(MEMORY_DB_KEY);
     if (!raw) return { facts: [], milestones: [] };
     if (isEncrypted(raw)) {
-      raw = await decryptAtRest(raw, db).catch(() => null);
+      const decrypted = await decryptAtRestDetailed(raw, db).catch(() => ({ data: null, usedLegacyKey: false }));
+      raw = decrypted.data;
+      if (decrypted.usedLegacyKey && raw) {
+        const migrated = await encryptAtRest(raw, db).catch(() => raw);
+        await db.set(MEMORY_DB_KEY, migrated);
+      }
       if (!raw) return { facts: [], milestones: [] };
     }
     return {

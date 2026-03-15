@@ -48,5 +48,21 @@
     "moduleDetection": "force",
     "skipLibCheck": true,
   },
-  "exclude": ["dist", "ios/App/App/public/assets", "ios/App/App/public/assets*"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules",
+    "ios",
+    "android",
+    "site",
+    "public",
+    "test-results",
+    "src/**/*.test.js",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "ios/App/App/public/assets",
+    "ios/App/App/public/assets*"
+  ]
 }

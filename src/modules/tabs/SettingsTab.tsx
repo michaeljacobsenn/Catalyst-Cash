@@ -35,7 +35,7 @@ import {
   RefreshCw,
   Terminal,
   MapPin
-} from "lucide-react";
+} from "../icons";
 import { T, APP_VERSION } from "../constants.js";
 import { AI_PROVIDERS, getProvider } from "../providers.js";
 import { log, getLogsAsText, clearLogs } from "../logger.js";
@@ -57,6 +57,14 @@ import ProBanner from "./ProBanner.js";
 import AISection from "../settings/AISection.js";
 import BackupSection from "../settings/BackupSection.js";
 import SecuritySection from "../settings/SecuritySection.js";
+import {
+  applyFullProfileQaSeed,
+  FULL_PROFILE_QA_BANKS,
+  FULL_PROFILE_QA_CARDS,
+  FULL_PROFILE_QA_CONFIG,
+  FULL_PROFILE_QA_LABEL,
+  FULL_PROFILE_QA_RENEWALS,
+} from "../qaSeed.js";
 
 const ENABLE_PLAID = true; // Toggle to false to hide, true to show Plaid integration
 const LazyProPaywall = lazy(() => import("./ProPaywall.js"));
@@ -145,7 +153,17 @@ export default function SettingsTab({
     appleLinkedId,
     setAppleLinkedId,
   } = useSecurity();
-  const { cards, setCards, bankAccounts, setBankAccounts, cardCatalog, renewals, liabilitySum, refreshLiabilities } = usePortfolio();
+  const {
+    cards,
+    setCards,
+    bankAccounts,
+    setBankAccounts,
+    cardCatalog,
+    renewals,
+    setRenewals,
+    liabilitySum,
+    refreshLiabilities,
+  } = usePortfolio();
   const { navTo } = useNavigation();
 
   // Auth Plugins state management
@@ -317,6 +335,35 @@ export default function SettingsTab({
       setIsForceSyncing(false);
     }
   };
+
+  const handleLoadFullProfileQaSeed = useCallback(async () => {
+    try {
+      await applyFullProfileQaSeed(db);
+      setFinancialConfig((prev) => ({ ...prev, ...FULL_PROFILE_QA_CONFIG }));
+      setCards(FULL_PROFILE_QA_CARDS.map((card) => ({ ...card })));
+      setBankAccounts(FULL_PROFILE_QA_BANKS.map((account) => ({ ...account })));
+      setRenewals(FULL_PROFILE_QA_RENEWALS.map((renewal) => ({ ...renewal })));
+      setAiProvider("backend");
+      setAiModel("gemini-2.5-flash");
+      setPersonalRules("Prioritize cash safety first, then highest-interest debt payoff.");
+      await refreshLiabilities?.();
+      window.toast?.success?.(`${FULL_PROFILE_QA_LABEL} loaded. Review the audit inputs and run a full test.`);
+      navTo("input");
+    } catch (error) {
+      console.error("Failed to load full-profile QA seed:", error);
+      window.toast?.error?.("Failed to load the QA test profile.");
+    }
+  }, [
+    navTo,
+    refreshLiabilities,
+    setAiModel,
+    setAiProvider,
+    setBankAccounts,
+    setCards,
+    setFinancialConfig,
+    setPersonalRules,
+    setRenewals,
+  ]);
 
   const handleSwipeTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
     const touch = e.touches[0];
@@ -1814,6 +1861,33 @@ export default function SettingsTab({
               <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.6, marginBottom: 16 }}>
                 Trigger simulated native bridging events for testing features on web.
               </p>
+
+              <button
+                onClick={() => {
+                  haptic.medium();
+                  void handleLoadFullProfileQaSeed();
+                }}
+                className="hover-btn"
+                style={{
+                  width: "100%",
+                  padding: "14px",
+                  borderRadius: T.radius.md,
+                  border: `1px solid ${T.accent.primary}35`,
+                  background: `${T.accent.primary}12`,
+                  color: T.text.primary,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  marginBottom: 12
+                }}
+              >
+                <RefreshCw size={16} color={T.accent.primary} />
+                Load Full-Profile QA Seed
+              </button>
               
               <button
                 onClick={() => {

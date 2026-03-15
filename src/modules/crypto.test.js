@@ -1,5 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { encryptAtRest, decryptAtRest, isEncrypted } from "./crypto.js";
+
+const secureStore = vi.hoisted(() => ({
+  getSecureItem: vi.fn(async () => null),
+  setSecureItem: vi.fn(async () => true),
+}));
+
+vi.mock("./secureStore.js", () => ({
+  getSecureItem: secureStore.getSecureItem,
+  setSecureItem: secureStore.setSecureItem,
+}));
+
+import { encryptAtRest, decryptAtRest, decryptAtRestDetailed, isEncrypted } from "./crypto.js";
 
 // Mock db for testing
 function createMockDb() {
@@ -19,11 +30,45 @@ function createMockDb() {
   };
 }
 
+const PBKDF2_ITERATIONS = 310_000;
+
+function hexToBytes(hex) {
+  return new Uint8Array(hex.match(/.{2}/g).map(h => parseInt(h, 16)));
+}
+
+function toBase64(buf) {
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+async function encryptLegacyAtRest(data, db) {
+  const saltHex = db._store["device-encryption-salt"];
+  const salt = hexToBytes(saltHex);
+  const keyMaterial = await crypto.subtle.importKey("raw", salt, "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const plaintext = new TextEncoder().encode(JSON.stringify(data));
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plaintext);
+  return { iv: toBase64(iv), ct: toBase64(ciphertext), v: 2 };
+}
+
 describe("Device-bound at-rest encryption", () => {
   let mockDb;
 
   beforeEach(() => {
     mockDb = createMockDb();
+    secureStore.getSecureItem.mockReset();
+    secureStore.setSecureItem.mockReset();
+    secureStore.getSecureItem.mockResolvedValue(null);
+    secureStore.setSecureItem.mockResolvedValue(true);
   });
 
   it("encrypts and decrypts data round-trip", async () => {
@@ -82,5 +127,38 @@ describe("Device-bound at-rest encryption", () => {
     const encrypted = await encryptAtRest(data, mockDb);
     const decrypted = await decryptAtRest(encrypted, mockDb);
     expect(decrypted).toEqual(data);
+  });
+
+  it("stores separate device key material from the salt and mirrors it to secure storage", async () => {
+    const data = { test: true };
+    await encryptAtRest(data, mockDb);
+
+    expect(mockDb._store["device-encryption-salt"]).toMatch(/^[0-9a-f]{32}$/);
+    expect(mockDb._store["device-encryption-key"]).toMatch(/^[0-9a-f]{64}$/);
+    expect(mockDb._store["device-encryption-key"]).not.toBe(mockDb._store["device-encryption-salt"]);
+    expect(secureStore.setSecureItem).toHaveBeenCalledWith("device-encryption-key", mockDb._store["device-encryption-key"]);
+  });
+
+  it("decrypts legacy salt-only payloads via backward-compatible fallback", async () => {
+    await encryptAtRest({ warmup: true }, mockDb);
+    await mockDb.del("device-encryption-key");
+    secureStore.getSecureItem.mockResolvedValue(null);
+
+    const legacyPayload = await encryptLegacyAtRest({ legacy: "ok" }, mockDb);
+    const decrypted = await decryptAtRest(legacyPayload, mockDb);
+    expect(decrypted).toEqual({ legacy: "ok" });
+  });
+
+  it("reports when legacy key fallback was used so callers can re-encrypt", async () => {
+    await encryptAtRest({ warmup: true }, mockDb);
+    await mockDb.del("device-encryption-key");
+    secureStore.getSecureItem.mockResolvedValue(null);
+
+    const legacyPayload = await encryptLegacyAtRest({ legacy: "rewrite-me" }, mockDb);
+    const result = await decryptAtRestDetailed(legacyPayload, mockDb);
+    expect(result).toEqual({
+      data: { legacy: "rewrite-me" },
+      usedLegacyKey: true,
+    });
   });
 });

@@ -3,7 +3,7 @@ import { T } from "../constants.js";
 import { Card, Label, Badge } from "../ui.js";
 import { Mono } from "../components.js";
 import { haptic } from "../haptics.js";
-import { Sparkles } from "lucide-react";
+import { Sparkles } from "../icons";
 import ScenarioSandbox from "../dashboard/ScenarioSandbox.js";
 
 interface FireTimelinePoint {

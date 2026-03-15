@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, createContext, useContext } from "react";
 import type { FC, ReactNode } from "react";
-import { CheckCircle, AlertTriangle, X, Info, Clipboard } from "lucide-react";
+import { CheckCircle, AlertTriangle, X, Info, Clipboard } from "./icons";
 import { T } from "./constants.js";
 
 // ═══════════════════════════════════════════════════════════════
@@ -26,7 +26,7 @@ interface ToastItem {
   action: ToastAction | null;
 }
 
-interface ToastApi {
+export interface ToastApi {
   info: (message: string, options?: Omit<ToastOptions, "type">) => number;
   success: (message: string, options?: Omit<ToastOptions, "type">) => number;
   warning: (message: string, options?: Omit<ToastOptions, "type">) => number;

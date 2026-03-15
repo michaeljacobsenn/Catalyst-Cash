@@ -23,7 +23,7 @@ import {
   RefreshCw,
   TrendingUp,
   X,
-} from "lucide-react";
+} from "../icons";
 import { T } from "../constants.js";
 import { validateSnapshot } from "../validation.js";
 import { Card as UICard, Label as UILabel, Badge } from "../ui.js";
@@ -37,6 +37,7 @@ import { fetchMarketPrices, calcPortfolioValue } from "../marketData.js";
 import { getPlaidAutoFill, getStoredTransactions } from "../plaid.js";
 import { haptic } from "../haptics.js";
 import { buildSnapshotMessage } from "../buildSnapshotMessage.js";
+import { isLikelyNetworkError } from "../networkErrors.js";
 import { checkAuditQuota, isGatingEnforced } from "../subscription.js";
 import { useAudit } from "../contexts/AuditContext.js";
 import { DEFAULT_FINANCIAL_CONFIG } from "../contexts/SettingsContext.js";
@@ -551,6 +552,48 @@ export default function InputForm({
       }}
     >
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
+      {error && (
+        <div
+          style={{
+            marginBottom: 12,
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 10,
+            padding: "12px 14px",
+            borderRadius: T.radius.lg,
+            background: isLikelyNetworkError(error) ? `${T.status.amber}12` : T.status.redDim,
+            border: `1px solid ${isLikelyNetworkError(error) ? `${T.status.amber}35` : `${T.status.red}30`}`,
+            boxShadow: T.shadow.card,
+          }}
+        >
+          <AlertTriangle
+            size={16}
+            color={isLikelyNetworkError(error) ? T.status.amber : T.status.red}
+            style={{ flexShrink: 0, marginTop: 1 }}
+          />
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 800,
+                color: T.text.primary,
+                marginBottom: 4,
+                letterSpacing: "0.01em",
+              }}
+            >
+              {isLikelyNetworkError(error) ? "Audit service unavailable" : "Audit blocked"}
+            </div>
+            <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5 }}>
+              {error}
+            </div>
+            {isLikelyNetworkError(error) && (
+              <div style={{ marginTop: 6, fontSize: 11, color: T.text.dim, lineHeight: 1.5 }}>
+                Retry uses the same financial inputs. Nothing you entered was cleared.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {/* ── SNAPSHOT ITEMS ── */}
       <div style={{ marginBottom: 20 }}>
         <Card

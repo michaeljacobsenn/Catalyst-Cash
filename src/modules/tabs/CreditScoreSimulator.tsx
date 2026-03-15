@@ -8,7 +8,7 @@ import { T } from "../constants.js";
 import { Card } from "../ui.js";
 import { Mono } from "../components.js";
 import { fmt } from "../utils.js";
-import { Activity, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Activity, TrendingUp, TrendingDown, Minus } from "../icons";
 import type { Card as PortfolioCard, CatalystCashConfig } from "../../types/index.js";
 
 interface CreditScoreSimulatorProps {

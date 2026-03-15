@@ -1,7 +1,7 @@
 import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
 import { T } from "./constants.js";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "./icons";
 import { reportError } from "./errorReporter.js";
 
 interface ErrorBoundaryProps {

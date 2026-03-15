@@ -12,7 +12,7 @@ import {
   Filter,
   ExternalLink,
   TrendingUp,
-} from "lucide-react";
+} from "../icons";
 import { T } from "../constants.js";
 import { fmt, fmtDate, exportAudit, exportAllAudits, exportSelectedAudits, exportAuditCSV } from "../utils.js";
 import { Card, Badge } from "../ui.js";
