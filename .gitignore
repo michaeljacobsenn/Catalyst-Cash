@@ -10,8 +10,10 @@ ios/App/App/capacitor.config.json
 
 # ── Sensitive / Secrets ──
 .env
+.env.*
 .env.local
 ios/App/App/GoogleService-Info.plist
+**/GoogleService-Info.plist
 .claude/
 .gemini/
 *.key
@@ -68,3 +70,12 @@ refactor_card_portfolio.py
 
 .vite/
 test-results/
+.vscode/
+
+# ── Local Media / Recordings ──
+*.mp4
+*.MP4
+*.mov
+*.MOV
+*.heic
+*.HEIC
