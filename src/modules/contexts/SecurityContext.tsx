@@ -1,6 +1,6 @@
   import type { Dispatch,ReactNode,SetStateAction } from "react";
   import { createContext,useContext,useEffect,useRef,useState } from "react";
-  import { deleteSecureItem,migrateToSecureItem,setSecureItem } from "../secureStore.js";
+  import { deleteSecureItem,getSecretStorageStatus,migrateToSecureItem,setSecureItem } from "../secureStore.js";
   import { db } from "../utils.js";
 
 interface SecurityProviderProps {
@@ -23,7 +23,17 @@ interface SecurityContextValue {
   appleLinkedId: string | null;
   setAppleLinkedId: Dispatch<SetStateAction<string | null>>;
   isSecurityReady: boolean;
+  secretStorageStatus: {
+    platform: "native" | "web";
+    available: boolean;
+    mode: "native-secure" | "native-unavailable" | "web-fallback";
+    canPersistSecrets: boolean;
+    isHardwareBacked: boolean;
+    message: string;
+  };
 }
+
+type SecretStorageStatus = SecurityContextValue["secretStorageStatus"];
 
 const SecurityContext = createContext<SecurityContextValue | null>(null);
 
@@ -36,12 +46,22 @@ export function SecurityProvider({ children }: SecurityProviderProps) {
   const [lockTimeout, setLockTimeout] = useState(0);
   const [appleLinkedId, setAppleLinkedId] = useState<string | null>(null);
   const [isSecurityReady, setIsSecurityReady] = useState(false);
+  const [secretStorageStatus, setSecretStorageStatus] = useState<SecretStorageStatus>({
+    platform: "web",
+    available: false,
+    mode: "web-fallback",
+    canPersistSecrets: true,
+    isHardwareBacked: false,
+    message: "",
+  });
 
   const lastBackgrounded = useRef<number | null>(null);
 
   useEffect(() => {
     const initSecurity = async () => {
       try {
+        const storageStatus = (await getSecretStorageStatus()) as SecretStorageStatus;
+        setSecretStorageStatus(storageStatus);
         const [ra, uf, lt, legacyPin, legacyAppleLinkedId, pm] = await Promise.all([
           db.get("require-auth"),
           db.get("use-face-id"),
@@ -55,7 +75,15 @@ export function SecurityProvider({ children }: SecurityProviderProps) {
           migrateToSecureItem("apple-linked-id", legacyAppleLinkedId, () => db.del("apple-linked-id")),
         ]);
 
-        if (ra) {
+        if (storageStatus.mode === "native-unavailable") {
+          await Promise.all([
+            db.set("require-auth", false),
+            db.set("use-face-id", false),
+          ]);
+          setRequireAuth(false);
+          setUseFaceId(false);
+          setIsLocked(false);
+        } else if (ra) {
           setRequireAuth(true);
           setIsLocked(true);
         } else {
@@ -141,6 +169,7 @@ export function SecurityProvider({ children }: SecurityProviderProps) {
     appleLinkedId,
     setAppleLinkedId,
     isSecurityReady,
+    secretStorageStatus,
   };
 
   return <SecurityContext.Provider value={value}>{children}</SecurityContext.Provider>;

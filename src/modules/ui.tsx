@@ -259,6 +259,9 @@ export const GlobalStyles = () => (
     /* ── Gesture-driven horizontal tab track ── */
     .snap-container {
       position: relative;
+      display:flex;
+      flex-direction:column;
+      min-height:0;
       overflow: hidden;
       overscroll-behavior-x: none;
     }
@@ -269,12 +272,14 @@ export const GlobalStyles = () => (
       display: flex;
       flex-direction: row;
       height: 100%;
+      min-height: 0;
       will-change: transform;
     }
     .snap-page {
       flex: 0 0 var(--snap-pane-w, 100%);
       width: var(--snap-pane-w, 100%);
       height: 100%;
+      min-height: 0;
       display: flex;
       flex-direction: column;
       overflow-y: auto;
@@ -283,10 +288,10 @@ export const GlobalStyles = () => (
       position: relative;
     }
 
-    /* Safe-area + bottom-nav aware padding for scroll bodies */
-    :root{--bottom-nav-h:72px;--top-bar-h:48px}
+    /* Safe-area aware padding for scroll bodies */
+    :root{--top-bar-h:48px;--page-bottom-padding:clamp(16px,2vh,24px)}
     .safe-scroll-body{
-      padding-bottom:calc(var(--bottom-nav-h,72px) + env(safe-area-inset-bottom, 16px) + 24px);
+      padding-bottom:max(var(--page-bottom-padding), env(safe-area-inset-bottom, 0px));
     }
     .safe-pane{
       padding-top:calc(var(--top-bar-h,0px) + env(safe-area-inset-top,0px));
@@ -297,6 +302,7 @@ export const GlobalStyles = () => (
     .page-body{
       padding-inline:clamp(16px,4vw,24px);
       padding-top:clamp(12px,2vh,18px);
+      padding-bottom:var(--page-bottom-clearance, var(--page-bottom-padding));
     }
 
     /* Button resets & Accessibility 44pt min target */
@@ -315,7 +321,7 @@ export const GlobalStyles = () => (
 
     /* Safe area helpers */
     @supports(padding:max(0px)){
-      .safe-bottom{padding-bottom:max(8px,env(safe-area-inset-bottom))}
+      .safe-bottom{padding-bottom:max(var(--page-bottom-padding),env(safe-area-inset-bottom))}
     }
     @media screen and (max-width:480px){input,textarea,select{font-size:16px!important}}
     @media (prefers-reduced-motion: reduce){
@@ -412,18 +418,10 @@ export const GlobalStyles = () => (
       }
     }
 
-    /* Shrinks snap-container height so snap-pages live above the floating nav pill */
-    .snap-container-clearance{
-      padding-bottom:calc(var(--bottom-nav-h,72px) + env(safe-area-inset-bottom,16px) + 20px);
-    }
-
     /* ── Keyboard-aware scrolling: let the environment variable shift content ── */
     @supports (padding-bottom: env(keyboard-inset-height, 0px)){
       .safe-scroll-body{
-        padding-bottom:calc(var(--bottom-nav-h,72px) + env(keyboard-inset-height,0px) + 24px);
-      }
-      .snap-container-clearance{
-        padding-bottom:calc(var(--bottom-nav-h,72px) + env(keyboard-inset-height,0px) + 20px);
+        padding-bottom:max(var(--page-bottom-padding), env(keyboard-inset-height,0px));
       }
     }
   `}</style>

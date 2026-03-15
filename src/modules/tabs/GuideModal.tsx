@@ -1,4 +1,6 @@
-  import type { MutableRefObject,TouchEventHandler } from "react";
+  import type { MutableRefObject } from "react";
+  import type { MotionValue } from "framer-motion";
+  import { motion } from "framer-motion";
   import { useEffect,useState } from "react";
   import { APP_VERSION,T } from "../constants.js";
   import { X } from "../icons";
@@ -7,9 +9,12 @@
 
 interface SwipeHook {
   paneRef?: MutableRefObject<HTMLDivElement | null>;
-  onTouchStart?: TouchEventHandler<HTMLDivElement>;
-  onTouchMove?: TouchEventHandler<HTMLDivElement>;
-  onTouchEnd?: TouchEventHandler<HTMLDivElement>;
+  bind?: (() => Record<string, unknown>) | undefined;
+  motionStyle?: {
+    x?: MotionValue<number>;
+    y?: MotionValue<number>;
+    opacity?: MotionValue<number>;
+  };
 }
 
 interface GuideModalProps {
@@ -30,7 +35,8 @@ export default function GuideModal({ onClose: onExplicitClose, swipeHook = {}, p
     }, 350); // Matches .modal-pane-dismiss duration
   };
 
-  const { paneRef, onTouchStart, onTouchMove, onTouchEnd } = swipeHook;
+  const { paneRef, bind, motionStyle } = swipeHook;
+  const gestureBindings = bind ? bind() : {};
 
   // Listen for swipe-down message from iframe content
   useEffect(() => {
@@ -46,7 +52,7 @@ export default function GuideModal({ onClose: onExplicitClose, swipeHook = {}, p
   const guideUrl = proEnabled ? "/CatalystCash-Guide-Pro.html" : "/CatalystCash-Guide-Free.html";
 
   return (
-    <div
+    <motion.div
       ref={paneRef}
       className={`modal-pane ${isClosing ? "modal-pane-dismiss" : ""}`}
       style={{
@@ -61,13 +67,13 @@ export default function GuideModal({ onClose: onExplicitClose, swipeHook = {}, p
         overflow: "hidden",
         width: "100%",
         boxSizing: "border-box",
+        touchAction: "pan-y",
+        ...motionStyle,
       }}
     >
       {/* Premium Header — swipe-down grab zone */}
       <div
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
+        {...gestureBindings}
         style={{
           padding: `calc(env(safe-area-inset-top, 20px) + 8px) 20px 16px 20px`,
           background: `linear-gradient(180deg, ${T.bg.base}, ${T.bg.elevated})`,
@@ -78,7 +84,7 @@ export default function GuideModal({ onClose: onExplicitClose, swipeHook = {}, p
           flexDirection: "column",
           gap: 10,
           cursor: "grab",
-          touchAction: "none",
+          touchAction: "pan-x",
         }}
       >
         {/* iOS drag handle pill */}
@@ -151,6 +157,6 @@ export default function GuideModal({ onClose: onExplicitClose, swipeHook = {}, p
 
       {/* Safe area spacer for native */}
       <div style={{ height: "env(safe-area-inset-bottom, 0px)", background: "#06080F" }} />
-    </div>
+    </motion.div>
   );
 }

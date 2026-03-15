@@ -20,15 +20,34 @@
 //          account masks, linkage state, and last-sync timestamps.
 // ═══════════════════════════════════════════════════════════════
 
+  import { APP_VERSION } from "./constants.js";
   import { batchCategorizeTransactions } from "./api.js";
   import { fetchWithRetry } from "./fetchWithRetry.js";
   import { getIssuerCards } from "./issuerCards.js";
   import { categorizeBatch,learn } from "./merchantMap.js";
-  import { getSubscriptionState,INSTITUTION_LIMITS,isGatingEnforced } from "./subscription.js";
+  import { getRevenueCatAppUserId } from "./revenuecat.js";
+  import { getOrCreateDeviceId,getSubscriptionState,INSTITUTION_LIMITS,isGatingEnforced,isPro } from "./subscription.js";
   import { db } from "./utils.js";
 
 const PLAID_STORAGE_KEY = "plaid-connections";
 const API_BASE = "https://api.catalystcash.app";
+
+async function buildPlaidBackendHeaders(extra = {}) {
+  const deviceId = await getOrCreateDeviceId().catch(() => "unknown");
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Device-ID": deviceId || "unknown",
+    "X-App-Version": APP_VERSION,
+    "X-Subscription-Tier": (await isPro().catch(() => false)) ? "pro" : "free",
+    ...extra,
+  };
+
+  const revenueCatAppUserId = await getRevenueCatAppUserId().catch(() => null);
+  if (revenueCatAppUserId) {
+    headers["X-RC-App-User-ID"] = revenueCatAppUserId;
+  }
+  return headers;
+}
 
 // ─── Connection State Management ──────────────────────────────
 
@@ -82,7 +101,7 @@ export async function removeConnection(connectionId) {
     try {
       await fetchWithRetry(`${API_BASE}/plaid/disconnect`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await buildPlaidBackendHeaders(),
         body: JSON.stringify({ itemId: conn.id }),
       });
     } catch {
@@ -119,7 +138,7 @@ export async function purgeBrokenConnections() {
 export async function createLinkToken() {
   const res = await fetchWithRetry(`${API_BASE}/plaid/link-token`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await buildPlaidBackendHeaders(),
     body: JSON.stringify({}),
   });
   if (!res.ok) {
@@ -144,15 +163,16 @@ export async function createLinkToken() {
  * This loads the Plaid Link SDK dynamically (only when needed).
  * Returns the public_token and metadata from the Link session.
  */
-export async function openPlaidLink() {
+export async function openPlaidLink(options = {}) {
   console.warn("[Plaid] openPlaidLink() called");
+  const { skipLimit = false } = options;
 
   // Enforce Institution Limits before opening Link
   const conns = await getConnections();
   const subState = await getSubscriptionState();
   const limit = INSTITUTION_LIMITS[subState.tier] || INSTITUTION_LIMITS.free;
 
-  if (isGatingEnforced() && conns.length >= limit) {
+  if (!skipLimit && isGatingEnforced() && conns.length >= limit) {
     throw new Error(`Institution limit reached. Your ${subState.tier === "pro" ? "Pro" : "Free"} plan allows up to ${limit} bank connections.`);
   }
 
@@ -214,7 +234,7 @@ export async function openPlaidLink() {
 export async function exchangeToken(publicToken) {
   const res = await fetchWithRetry(`${API_BASE}/plaid/exchange`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await buildPlaidBackendHeaders(),
     body: JSON.stringify({ publicToken }),
   });
   if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`);
@@ -226,15 +246,49 @@ export async function exchangeToken(publicToken) {
  * Full Link flow: open Link → exchange token → store connection.
  * Returns the new connection object.
  */
-export async function connectBank(onSuccess, onError) {
+async function persistConnection(connection, itemId) {
+  const normalized = {
+    id: itemId,
+    institutionName: connection.institutionName,
+    institutionId: connection.institutionId,
+    institutionLogo: connection.institutionLogo || null,
+    accounts: connection.accounts || [],
+    lastSync: null,
+    _needsReconnect: false,
+  };
+
+  const conns = await getConnections();
+  let idx = conns.findIndex(c => c.id === itemId);
+  if (idx < 0 && normalized.institutionId) {
+    idx = conns.findIndex(c => c.institutionId === normalized.institutionId);
+  }
+  if (idx >= 0) {
+    const oldAccounts = conns[idx].accounts || [];
+    for (const newAcct of normalized.accounts) {
+      const oldMatch = oldAccounts.find(oa => oa.mask === newAcct.mask && oa.type === newAcct.type);
+      if (oldMatch) {
+        newAcct.linkedCardId = oldMatch.linkedCardId || null;
+        newAcct.linkedBankAccountId = oldMatch.linkedBankAccountId || null;
+        newAcct.linkedInvestmentId = oldMatch.linkedInvestmentId || null;
+      }
+    }
+    conns[idx] = normalized;
+  } else {
+    conns.push(normalized);
+  }
+  await saveConnections(conns);
+  return normalized;
+}
+
+async function runLinkFlow({ onSuccess, onError, skipLimit = false } = {}) {
   try {
-    const { publicToken, metadata } = await openPlaidLink();
+    const { publicToken, metadata } = await openPlaidLink({ skipLimit });
     const { itemId } = await exchangeToken(publicToken);
 
-    const connection = {
-      id: itemId,
+    const connection = await persistConnection({
       institutionName: metadata.institution?.name || "Unknown Bank",
       institutionId: metadata.institution?.institution_id || null,
+      institutionLogo: metadata.institution?.logo || null,
       accounts: (metadata.accounts || []).map(a => ({
         plaidAccountId: a.id,
         name: a.name,
@@ -246,39 +300,37 @@ export async function connectBank(onSuccess, onError) {
         linkedBankAccountId: null,
         balance: null,
       })),
-      lastSync: null,
-    };
+    }, itemId);
 
-    const conns = await getConnections();
-    // Replace existing connection for same item or same institution (prevents duplicates on reconnect)
-    let idx = conns.findIndex(c => c.id === itemId);
-    if (idx < 0 && connection.institutionId) {
-      idx = conns.findIndex(c => c.institutionId === connection.institutionId);
-    }
-    if (idx >= 0) {
-      // Migrate linked IDs from old connection's accounts so existing card/bank links carry forward
-      const oldAccounts = conns[idx].accounts || [];
-      for (const newAcct of connection.accounts) {
-        // Try to find matching old account by mask + type
-        const oldMatch = oldAccounts.find(oa => oa.mask === newAcct.mask && oa.type === newAcct.type);
-        if (oldMatch) {
-          newAcct.linkedCardId = oldMatch.linkedCardId || null;
-          newAcct.linkedBankAccountId = oldMatch.linkedBankAccountId || null;
-          newAcct.linkedInvestmentId = oldMatch.linkedInvestmentId || null;
-        }
-      }
-      conns[idx] = connection;
-    } else {
-      conns.push(connection);
-    }
-    await saveConnections(conns);
-
-    if (onSuccess) onSuccess(connection);
+    if (onSuccess) await onSuccess(connection);
     return connection;
   } catch (err) {
     if (onError) onError(err);
     else throw err;
   }
+}
+
+export async function connectBank(onSuccess, onError) {
+  return runLinkFlow({ onSuccess, onError });
+}
+
+export async function reconnectBank(connection, onSuccess, onError) {
+  return runLinkFlow({
+    skipLimit: true,
+    onSuccess: async nextConnection => {
+      const conns = await getConnections();
+      const merged = conns.map(conn =>
+        conn.id === nextConnection.id ||
+        conn.id === connection?.id ||
+        (conn.institutionId && nextConnection.institutionId && conn.institutionId === nextConnection.institutionId)
+          ? { ...nextConnection, _needsReconnect: false }
+          : conn
+      );
+      await saveConnections(merged);
+      if (onSuccess) await onSuccess(nextConnection);
+    },
+    onError,
+  });
 }
 
 // ─── Balance Fetching ─────────────────────────────────────────
@@ -290,8 +342,8 @@ export async function connectBank(onSuccess, onError) {
 export async function forceBackendSync() {
   const res = await fetch(`${API_BASE}/api/sync/force`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId: "catalyst-user" }), // Hardcoded dev user
+    headers: await buildPlaidBackendHeaders(),
+    body: JSON.stringify({}),
   });
   if (!res.ok) {
     if (res.status === 429) {
@@ -315,8 +367,8 @@ export async function fetchBalances(connectionId) {
 
   const res = await fetchWithRetry(`${API_BASE}/api/sync/status`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId: "catalyst-user" }), // Hardcoded dev user for now; would use real UUID
+    headers: await buildPlaidBackendHeaders(),
+    body: JSON.stringify({}),
   });
   if (!res.ok) {
     const errBody = await res.text().catch(() => "");
@@ -387,8 +439,8 @@ export async function fetchLiabilities(connectionId) {
 
   const res = await fetchWithRetry(`${API_BASE}/api/sync/status`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId: "catalyst-user" }),
+    headers: await buildPlaidBackendHeaders(),
+    body: JSON.stringify({}),
   });
   if (!res.ok) throw new Error(`Liabilities fetch failed: ${res.status}`);
   const data = await res.json();
@@ -509,8 +561,8 @@ export async function fetchTransactions(connectionId, days = 30) {
 
   const res = await fetchWithRetry(`${API_BASE}/api/sync/status`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId: "catalyst-user" }),
+    headers: await buildPlaidBackendHeaders(),
+    body: JSON.stringify({}),
   });
 
   if (!res.ok) {

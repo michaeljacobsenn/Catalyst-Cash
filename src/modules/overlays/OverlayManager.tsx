@@ -1,4 +1,5 @@
   import { Suspense,lazy,useCallback } from "react";
+  import { motion } from "framer-motion";
   import type { AuditFormData } from "../../types/index.js";
   import { StreamingView } from "../components.js";
   import type { AppTab,NavViewState } from "../contexts/NavigationContext.js";
@@ -166,13 +167,18 @@ export default function OverlayManager({
       )}
 
       {tab === "results" && (
-        <div
+        <motion.div
           ref={overlaySwipeResults.paneRef}
-          onTouchStart={overlaySwipeResults.onTouchStart}
-          onTouchMove={overlaySwipeResults.onTouchMove}
-          onTouchEnd={overlaySwipeResults.onTouchEnd}
+          {...overlaySwipeResults.bind()}
           className="slide-pane safe-scroll-body"
-          style={{ flex: 1, overflowY: "auto", position: "relative", zIndex: 20 }}
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            position: "relative",
+            zIndex: 20,
+            touchAction: "pan-y",
+            ...overlaySwipeResults.motionStyle,
+          }}
         >
           {loading ? (
             <StreamingView
@@ -219,24 +225,29 @@ export default function OverlayManager({
               </Suspense>
             </ErrorBoundary>
           )}
-        </div>
+        </motion.div>
       )}
 
       {tab === "history" && (
-        <div
+        <motion.div
           ref={overlaySwipeHistory.paneRef}
-          onTouchStart={overlaySwipeHistory.onTouchStart}
-          onTouchMove={overlaySwipeHistory.onTouchMove}
-          onTouchEnd={overlaySwipeHistory.onTouchEnd}
+          {...overlaySwipeHistory.bind()}
           className="slide-pane safe-scroll-body"
-          style={{ flex: 1, overflowY: "auto", position: "relative", zIndex: 20 }}
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            position: "relative",
+            zIndex: 20,
+            touchAction: "pan-y",
+            ...overlaySwipeHistory.motionStyle,
+          }}
         >
           <ErrorBoundary name="History">
             <Suspense fallback={<TabFallback />}>
               <HistoryTab toast={toast} proEnabled={proEnabled} />
             </Suspense>
           </ErrorBoundary>
-        </div>
+        </motion.div>
       )}
 
       {tab === "settings" && (

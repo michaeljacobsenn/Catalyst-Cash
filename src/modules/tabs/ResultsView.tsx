@@ -148,7 +148,7 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
   };
 
   return (
-    <div className="page-body" style={{ paddingBottom: 0 }}>
+    <div className="page-body">
       <div
         style={{ padding: "14px 0 12px", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}
       >

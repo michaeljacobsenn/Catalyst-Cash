@@ -854,7 +854,7 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
 
   return (
     <>
-    <div className="page-body stagger-container" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+    <div className="page-body stagger-container" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
         {/* existing header & monthly total */}

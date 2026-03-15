@@ -3,13 +3,14 @@
   import type { BankAccount,CatalystCashConfig,PlaidInvestmentAccount,Card as PortfolioCard } from "../../types/index.js";
   import { T } from "../constants.js";
   import type { SetFinancialConfig } from "../contexts/SettingsContext.js";
-  import { Building2,Loader2,Plus,Unplug } from "../icons";
+  import { Building2,Loader2,Plus,RefreshCw,Unplug } from "../icons";
   import {
     applyBalanceSync,
     autoMatchAccounts,
     connectBank,
     fetchBalancesAndLiabilities,
     getConnections,
+    reconnectBank,
     removeConnection,
     saveConnectionLinks,
   } from "../plaid.js";
@@ -60,6 +61,7 @@ export default function PlaidSection({
 }: PlaidSectionProps) {
   const [plaidConnections, setPlaidConnections] = useState<PlaidConnection[]>([]);
   const [isPlaidConnecting, setIsPlaidConnecting] = useState(false);
+  const [reconnectingId, setReconnectingId] = useState<string | null>(null);
   const [confirmingDisconnect, setConfirmingDisconnect] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<{ tone: "error" | "info"; message: string } | null>(null);
 
@@ -95,70 +97,7 @@ export default function PlaidSection({
     try {
       await connectBank(
         async connection => {
-          try {
-            const plaidInvestments = financialConfig?.plaidInvestments || [];
-            const { newCards, newBankAccounts, newPlaidInvestments } = autoMatchAccounts(
-              connection,
-              cards,
-              bankAccounts,
-              cardCatalog as null | undefined,
-              plaidInvestments
-            ) as { newCards: PortfolioCard[]; newBankAccounts: BankAccount[]; newPlaidInvestments: PlaidInvestmentAccount[] };
-            await saveConnectionLinks(connection);
-
-            const allCards = mergeUniqueById(cards, newCards);
-            const allBanks = mergeUniqueById(bankAccounts, newBankAccounts);
-            const allInvests = mergeUniqueById(plaidInvestments, newPlaidInvestments);
-            setCards(allCards);
-            setBankAccounts(allBanks);
-            if (newPlaidInvestments.length > 0) {
-              setFinancialConfig({ type: "SET_FIELD", field: "plaidInvestments", value: allInvests });
-            }
-
-            // Fetch live balances (best-effort)
-            try {
-              const refreshed = await fetchBalancesAndLiabilities(connection.id);
-              if (refreshed) {
-                const syncData = applyBalanceSync(refreshed, allCards, allBanks, allInvests) as BalanceSyncResult;
-                setCards(syncData.updatedCards);
-                setBankAccounts(syncData.updatedBankAccounts);
-                if (syncData.updatedPlaidInvestments) {
-                  setFinancialConfig({
-                    type: "SET_FIELD",
-                    field: "plaidInvestments",
-                    value: syncData.updatedPlaidInvestments,
-                  });
-                }
-                await saveConnectionLinks(refreshed);
-              }
-            } catch (balErr) {
-              const message = balErr instanceof Error ? balErr.message : String(balErr);
-              console.error("[Plaid] Balance fetch after connect failed:", message);
-              window.toast?.info?.("Connected! Tap Sync to fetch balances.");
-            }
-
-            setPlaidConnections(await getConnections());
-            setConnectionStatus(null);
-            window.toast?.success?.("Bank linked successfully!");
-
-            // Prompt user to review imported accounts
-            const importedCount = newCards.length + newBankAccounts.length + newPlaidInvestments.length;
-            if (importedCount > 0) {
-              setTimeout(() => {
-                window.alert(
-                  `${importedCount} account${importedCount !== 1 ? "s" : ""} imported!\n\n` +
-                  'Plaid may assign generic names like "Credit Card" instead of the actual product name.\n\n' +
-                  "Please go to the Accounts tab and tap the ✏️ edit button on each imported account to verify and update:\n" +
-                  "• Card name (e.g. Sapphire Preferred)\n" +
-                  "• APR\n" +
-                  "• Annual fee & due date\n" +
-                  "• Statement close & payment due days"
-                );
-              }, 500);
-            }
-          } catch (err) {
-            console.error("[Plaid] Post-connect processing error:", err);
-          }
+          await finalizeConnection(connection, "Bank linked successfully!");
         },
         (err: unknown) => {
           console.error(err);
@@ -175,6 +114,98 @@ export default function PlaidSection({
       window.toast?.error?.(message);
     } finally {
       setIsPlaidConnecting(false);
+    }
+  };
+
+  const finalizeConnection = async (connection: PlaidConnection, successToast: string) => {
+    try {
+      const plaidInvestments = financialConfig?.plaidInvestments || [];
+      const { newCards, newBankAccounts, newPlaidInvestments } = autoMatchAccounts(
+        connection,
+        cards,
+        bankAccounts,
+        cardCatalog as null | undefined,
+        plaidInvestments
+      ) as { newCards: PortfolioCard[]; newBankAccounts: BankAccount[]; newPlaidInvestments: PlaidInvestmentAccount[] };
+      await saveConnectionLinks(connection);
+
+      const allCards = mergeUniqueById(cards, newCards);
+      const allBanks = mergeUniqueById(bankAccounts, newBankAccounts);
+      const allInvests = mergeUniqueById(plaidInvestments, newPlaidInvestments);
+      setCards(allCards);
+      setBankAccounts(allBanks);
+      if (newPlaidInvestments.length > 0) {
+        setFinancialConfig({ type: "SET_FIELD", field: "plaidInvestments", value: allInvests });
+      }
+
+      try {
+        const refreshed = await fetchBalancesAndLiabilities(connection.id);
+        if (refreshed) {
+          const syncData = applyBalanceSync(refreshed, allCards, allBanks, allInvests) as BalanceSyncResult;
+          setCards(syncData.updatedCards);
+          setBankAccounts(syncData.updatedBankAccounts);
+          if (syncData.updatedPlaidInvestments) {
+            setFinancialConfig({
+              type: "SET_FIELD",
+              field: "plaidInvestments",
+              value: syncData.updatedPlaidInvestments,
+            });
+          }
+          await saveConnectionLinks(refreshed);
+        }
+      } catch (balErr) {
+        const message = balErr instanceof Error ? balErr.message : String(balErr);
+        console.error("[Plaid] Balance fetch after connect failed:", message);
+        window.toast?.info?.("Connected. If balances do not refresh yet, tap Sync after the backend finishes updating.");
+      }
+
+      setPlaidConnections(await getConnections());
+      setConnectionStatus(null);
+      window.toast?.success?.(successToast);
+
+      const importedCount = newCards.length + newBankAccounts.length + newPlaidInvestments.length;
+      if (importedCount > 0) {
+        setTimeout(() => {
+          window.alert(
+            `${importedCount} account${importedCount !== 1 ? "s" : ""} imported!\n\n` +
+            'Plaid may assign generic names like "Credit Card" instead of the actual product name.\n\n' +
+            "Please go to the Accounts tab and tap the ✏️ edit button on each imported account to verify and update:\n" +
+            "• Card name (e.g. Sapphire Preferred)\n" +
+            "• APR\n" +
+            "• Annual fee & due date\n" +
+            "• Statement close & payment due days"
+          );
+        }, 500);
+      }
+    } catch (err) {
+      console.error("[Plaid] Post-connect processing error:", err);
+    }
+  };
+
+  const handleReconnect = async (conn: PlaidConnection) => {
+    if (reconnectingId) return;
+    setConnectionStatus(null);
+    setReconnectingId(conn.id);
+    try {
+      await reconnectBank(
+        conn,
+        async connection => {
+          await finalizeConnection(connection, `${connection.institutionName || "Bank"} reconnected successfully!`);
+        },
+        (err: unknown) => {
+          const message = err instanceof Error ? err.message : "Failed to reconnect bank";
+          if (message === "cancelled") return;
+          setConnectionStatus({ tone: "error", message });
+          window.toast?.error?.(message);
+        }
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to reconnect bank";
+      setConnectionStatus({ tone: "error", message });
+      window.toast?.error?.(message);
+    } finally {
+      setReconnectingId(null);
+      setPlaidConnections(await getConnections());
     }
   };
 
@@ -268,6 +299,31 @@ export default function PlaidSection({
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
+                  {conn._needsReconnect && confirmingDisconnect !== conn.id && (
+                    <button
+                      onClick={() => handleReconnect(conn)}
+                      disabled={reconnectingId === conn.id}
+                      aria-label={`Reconnect ${conn.institutionName || "bank"}`}
+                      style={{
+                        padding: "0 12px",
+                        height: 36,
+                        borderRadius: T.radius.sm,
+                        border: `1px solid ${T.accent.primary}35`,
+                        background: `${T.accent.primary}14`,
+                        color: T.accent.primary,
+                        cursor: reconnectingId === conn.id ? "not-allowed" : "pointer",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        opacity: reconnectingId === conn.id ? 0.7 : 1,
+                      }}
+                    >
+                      {reconnectingId === conn.id ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
+                      {reconnectingId === conn.id ? "Reconnecting..." : "Reconnect"}
+                    </button>
+                  )}
                   {confirmingDisconnect === conn.id ? (
                     <>
                       <button
@@ -331,7 +387,7 @@ export default function PlaidSection({
 
       <button
         onClick={handleConnect}
-        disabled={isPlaidConnecting}
+        disabled={isPlaidConnecting || !!reconnectingId}
         style={{
           width: "100%",
           padding: 14,
@@ -341,12 +397,12 @@ export default function PlaidSection({
           color: "white",
           fontSize: 14,
           fontWeight: 700,
-          cursor: isPlaidConnecting ? "not-allowed" : "pointer",
+          cursor: isPlaidConnecting || reconnectingId ? "not-allowed" : "pointer",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           gap: 8,
-          opacity: isPlaidConnecting ? 0.7 : 1,
+          opacity: isPlaidConnecting || reconnectingId ? 0.7 : 1,
           transition: "opacity .2s",
         }}
       >

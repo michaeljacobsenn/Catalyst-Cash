@@ -53,6 +53,7 @@ export default function SecuritySection({
   handleRequireAuthToggle,
   useFaceId,
   handleUseFaceIdToggle,
+  secretStorageStatus,
   lockTimeout,
   setLockTimeout,
   confirmDataDeletion,
@@ -60,11 +61,39 @@ export default function SecuritySection({
   deletionInProgress,
   setDeletionInProgress,
 }) {
+  const nativeUnavailable = secretStorageStatus?.mode === "native-unavailable";
+  const webFallback = secretStorageStatus?.mode === "web-fallback";
+
   return (
     <Card
       style={{ borderLeft: `3px solid ${T.status.red}40`, display: activeMenu === "security" ? "block" : "none" }}
     >
       <Label>Security Suite</Label>
+      {(nativeUnavailable || webFallback) && (
+        <div
+          style={{
+            padding: "12px 14px",
+            borderRadius: T.radius.md,
+            marginBottom: 14,
+            background: nativeUnavailable ? `${T.status.red}10` : `${T.status.amber}10`,
+            border: `1px solid ${nativeUnavailable ? `${T.status.red}35` : `${T.status.amber}35`}`,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 800,
+              marginBottom: 4,
+              color: nativeUnavailable ? T.status.red : T.status.amber,
+            }}
+          >
+            {nativeUnavailable ? "Secure Storage Unavailable" : "Web Security Fallback"}
+          </div>
+          <p style={{ margin: 0, fontSize: 10, color: T.text.secondary, lineHeight: 1.5 }}>
+            {secretStorageStatus?.message}
+          </p>
+        </div>
+      )}
       <div
         style={{
           display: "flex",
@@ -91,6 +120,7 @@ export default function SecuritySection({
             placeholder="••••"
             aria-label="App passcode"
             autoComplete="new-password"
+            disabled={nativeUnavailable}
             style={{
               width: 60,
               padding: 8,
@@ -102,6 +132,8 @@ export default function SecuritySection({
               textAlign: "center",
               letterSpacing: 4,
               fontFamily: T.font.mono,
+              opacity: nativeUnavailable ? 0.45 : 1,
+              cursor: nativeUnavailable ? "not-allowed" : "text",
             }}
           />
         </form>
@@ -123,7 +155,9 @@ export default function SecuritySection({
             Lock app natively on launch or background
           </p>
         </div>
-        <Toggle value={requireAuth} onChange={handleRequireAuthToggle} ariaLabel="Require Passcode" />
+        <div style={{ pointerEvents: nativeUnavailable ? "none" : "auto", opacity: nativeUnavailable ? 0.45 : 1 }}>
+          <Toggle value={requireAuth} onChange={handleRequireAuthToggle} ariaLabel="Require Passcode" />
+        </div>
       </div>
 
       {requireAuth && (
@@ -145,7 +179,9 @@ export default function SecuritySection({
                 Use biometrics for faster unlocking
               </p>
             </div>
-            <Toggle value={useFaceId} onChange={handleUseFaceIdToggle} ariaLabel="Enable Face ID / Touch ID" />
+            <div style={{ pointerEvents: nativeUnavailable ? "none" : "auto", opacity: nativeUnavailable ? 0.45 : 1 }}>
+              <Toggle value={useFaceId} onChange={handleUseFaceIdToggle} ariaLabel="Enable Face ID / Touch ID" />
+            </div>
           </div>
           <div
             style={{

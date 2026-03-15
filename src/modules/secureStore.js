@@ -1,8 +1,9 @@
-  import { Capacitor } from "@capacitor/core";
-  import { Preferences } from "@capacitor/preferences";
+import { Capacitor } from "@capacitor/core";
+import { Preferences } from "@capacitor/preferences";
 
 const FALLBACK_PREFIX = "secure:";
 let securePluginPromise = null;
+let nativeAvailabilityWarningShown = false;
 
 function serialize(value) {
   return JSON.stringify(value);
@@ -19,23 +20,31 @@ function deserialize(value) {
 
 async function getPlugin() {
   if (securePluginPromise) return securePluginPromise;
+  if (!Capacitor.isNativePlatform()) {
+    securePluginPromise = Promise.resolve(null);
+    return securePluginPromise;
+  }
   securePluginPromise = Promise.race([
     import("capacitor-secure-storage-plugin")
       .then(mod => mod.SecureStoragePlugin || mod.default?.SecureStoragePlugin || mod.default || null)
       .catch((e) => null),
     new Promise(resolve => setTimeout(() => resolve(null), 3000)), // 3s timeout — never hang
   ]).then(plugin => {
-    // Security warning: if on native but plugin unavailable, data falls back to Preferences.
-    // Preferences on iOS is backed by NSUserDefaults (not Keychain) — not encrypted at rest.
-    if (!plugin && Capacitor.isNativePlatform()) {
-      console.warn(
-        "[SecureStore] Native keychain plugin unavailable — sensitive data will use Preferences fallback. " +
-        "Ensure capacitor-secure-storage-plugin is correctly installed and synced."
+    if (!plugin && Capacitor.isNativePlatform() && !nativeAvailabilityWarningShown) {
+      nativeAvailabilityWarningShown = true;
+      console.error(
+        "[SecureStore] Native secure storage is unavailable. Sensitive secrets will not be persisted until " +
+        "capacitor-secure-storage-plugin is installed and synced."
       );
     }
     return plugin;
   });
   return securePluginPromise;
+}
+
+async function getNativePluginOnly() {
+  const plugin = await getPlugin();
+  return plugin || null;
 }
 
 async function getFallback(key) {
@@ -80,6 +89,10 @@ async function removeFallback(key) {
 }
 
 export async function getSecureItem(key) {
+  if (!Capacitor.isNativePlatform()) {
+    return getFallback(key);
+  }
+
   const plugin = await getPlugin();
   if (plugin) {
     try {
@@ -87,10 +100,25 @@ export async function getSecureItem(key) {
       return deserialize(result?.value);
     } catch {}
   }
-  return getFallback(key);
+  return null;
+}
+
+export async function getNativeSecureItem(key) {
+  const plugin = await getNativePluginOnly();
+  if (!plugin) return null;
+  try {
+    const result = await plugin.get({ key });
+    return deserialize(result?.value);
+  } catch {
+    return null;
+  }
 }
 
 export async function setSecureItem(key, value) {
+  if (!Capacitor.isNativePlatform()) {
+    return setFallback(key, value);
+  }
+
   const plugin = await getPlugin();
   const serialized = serialize(value);
   if (plugin) {
@@ -99,30 +127,103 @@ export async function setSecureItem(key, value) {
       return true;
     } catch {}
   }
-  return setFallback(key, value);
+  await removeFallback(key);
+  return false;
+}
+
+export async function setNativeSecureItem(key, value) {
+  const plugin = await getNativePluginOnly();
+  if (!plugin) return false;
+  try {
+    await plugin.set({ key, value: serialize(value) });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function deleteSecureItem(key) {
+  if (!Capacitor.isNativePlatform()) {
+    await removeFallback(key);
+    return true;
+  }
+
   const plugin = await getPlugin();
   if (plugin) {
     try {
       await plugin.remove({ key });
-    } catch {}
+    } catch {
+      await removeFallback(key);
+      return false;
+    }
   }
   await removeFallback(key);
+  return Boolean(plugin);
+}
+
+export async function deleteNativeSecureItem(key) {
+  const plugin = await getNativePluginOnly();
+  if (!plugin) return false;
+  try {
+    await plugin.remove({ key });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function migrateToSecureItem(key, legacyValue, removeLegacy) {
   const existing = await getSecureItem(key);
   if (existing != null && existing !== "") return existing;
   if (legacyValue == null || legacyValue === "") return existing;
-  await setSecureItem(key, legacyValue);
+
+  const saved = await setSecureItem(key, legacyValue);
   if (typeof removeLegacy === "function") {
     await removeLegacy();
   }
-  return legacyValue;
+  return saved ? legacyValue : null;
 }
 
 export function secureStoreUsesNativeKeychain() {
   return Capacitor.isNativePlatform();
+}
+
+export async function hasNativeSecureStore() {
+  return Boolean(await getNativePluginOnly());
+}
+
+export async function getSecretStorageStatus() {
+  if (!Capacitor.isNativePlatform()) {
+    return {
+      platform: "web",
+      available: false,
+      mode: "web-fallback",
+      canPersistSecrets: true,
+      isHardwareBacked: false,
+      message:
+        "Secure device keychain is unavailable on web. Sensitive settings fall back to browser storage on this device.",
+    };
+  }
+
+  const available = Boolean(await getNativePluginOnly());
+  if (available) {
+    return {
+      platform: "native",
+      available: true,
+      mode: "native-secure",
+      canPersistSecrets: true,
+      isHardwareBacked: true,
+      message: "",
+    };
+  }
+
+  return {
+    platform: "native",
+    available: false,
+    mode: "native-unavailable",
+    canPersistSecrets: false,
+    isHardwareBacked: false,
+    message:
+      "Secure iOS storage is unavailable. App passcodes, linked identity, API keys, and device secrets will not be persisted until native secure storage is restored.",
+  };
 }

@@ -956,8 +956,9 @@ export default memo(function AIChatTab({
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              justifyContent: "center",
-              padding: "10px",
+              justifyContent: "flex-start",
+              minHeight: "100%",
+              padding: "84px 10px 20px",
               textAlign: "center",
               animation: "fadeIn .5s ease",
             }}

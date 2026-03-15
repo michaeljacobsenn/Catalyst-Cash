@@ -16,7 +16,7 @@
     "ios": "npm run sync && node ./node_modules/@capacitor/cli/bin/capacitor open ios",
     "ios:native": "npm run sync:native && node ./node_modules/@capacitor/cli/bin/capacitor open ios",
     "sync:site": "node scripts/sync-site.cjs",
-    "deploy:site": "npx wrangler pages deploy site --project-name=portfolioproapp",
+    "deploy:site": "npx wrangler pages deploy site --project-name=catalystcash",
     "deploy": "npm run build && npx cap copy"
   },
   "dependencies": {

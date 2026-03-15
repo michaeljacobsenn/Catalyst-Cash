@@ -6,9 +6,14 @@
 const ENTITLEMENT_ID = "Catalyst Cash Pro";
 const RC_ENTITLEMENT_VERIFICATION_MODE = "INFORMATIONAL";
 const RC_VERIFICATION_FAILED = "FAILED";
-// RevenueCat public API key — safe to embed (designed for client-side use).
-// Prefer VITE_REVENUECAT_KEY env var for easy rotation without code changes.
-const API_KEY_APPLE = import.meta.env.VITE_REVENUECAT_KEY || "appl_UFEFNlCGlZqaIPTiQzwObGdTdwG";
+
+function getRevenueCatApiKey() {
+  const apiKey = import.meta.env.VITE_REVENUECAT_KEY;
+  if (!apiKey) {
+    throw new Error("Missing RevenueCat configuration: VITE_REVENUECAT_KEY is not set.");
+  }
+  return apiKey;
+}
 
 // We keep a local cache of whether we are running on native iOS
 const isNative = Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
@@ -88,9 +93,10 @@ export async function initRevenueCat() {
   if (!isNative) return;
 
   try {
+    const apiKey = getRevenueCatApiKey();
     await Purchases.setLogLevel({ level: LOG_LEVEL.WARN });
     await Purchases.configure({
-      apiKey: API_KEY_APPLE,
+      apiKey,
       entitlementVerificationMode: RC_ENTITLEMENT_VERIFICATION_MODE,
     });
     await getRevenueCatAppUserId();
@@ -102,8 +108,10 @@ export async function initRevenueCat() {
 
     // Sync state on boot
     await syncProStatus();
-  } catch {
-    log.error("revenuecat", "Failed to initialize RevenueCat");
+  } catch (error) {
+    log.error("revenuecat", "Failed to initialize RevenueCat", {
+      error: error instanceof Error ? error.message : "unknown",
+    });
   }
 }
 

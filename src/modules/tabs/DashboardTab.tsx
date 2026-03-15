@@ -357,7 +357,7 @@ export default memo(function DashboardTab({
 
 
   return (
-    <div className="page-body stagger-container" aria-live="polite" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+    <div className="page-body stagger-container" aria-live="polite" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
       {runConfetti && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, pointerEvents: "none" }}>

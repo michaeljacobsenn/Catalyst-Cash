@@ -20,23 +20,11 @@ export function mergeUniqueById(existing = [], incoming = []) {
 }
 
 /**
- * Legacy key migration: if old "api-key" exists, treat as openai key.
- */
-export async function migrateApiKey() {
-  const legacy = await db.get("api-key");
-  if (legacy) {
-    const existing = await db.get("api-key-openai");
-    if (!existing) await db.set("api-key-openai", legacy);
-  }
-}
-
-/**
  * Export a full encrypted backup of all non-sensitive db keys.
  * @param {string} passphrase - Passphrase used to encrypt the backup
  * @returns {number} Number of keys backed up
  */
 export async function exportBackup(passphrase) {
-  await migrateApiKey();
   const backup = { app: "Catalyst Cash", version: APP_VERSION, exportedAt: new Date().toISOString(), data: {} };
 
   const keys = await db.keys();

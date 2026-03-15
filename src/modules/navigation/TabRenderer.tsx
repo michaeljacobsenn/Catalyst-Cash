@@ -56,7 +56,6 @@ export default function TabRenderer({
           data-tabid={t}
           style={{
             overflowY: t === "chat" ? "hidden" : "auto",
-            paddingBottom: t === "chat" ? 0 : "calc(env(safe-area-inset-bottom, 20px) + 90px)",
             background: t === "chat" ? T.bg.base : undefined,
           }}
           onScroll={(event) => onPageScroll(event, t)}

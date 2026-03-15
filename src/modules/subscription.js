@@ -16,7 +16,6 @@
 // ═══════════════════════════════════════════════════════════════
 
   import { Capacitor } from "@capacitor/core";
-  import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
   import { APP_VERSION } from "./constants.js";
   import {
     AI_PROVIDERS,
@@ -26,6 +25,7 @@
     getModel,
     isModelSelectable,
   } from "./providers.js";
+  import { getNativeSecureItem,setNativeSecureItem } from "./secureStore.js";
   import { db } from "./utils.js";
 
 // ── Gating Mode ─────────────────────────────────────────────
@@ -418,8 +418,7 @@ const isNativePlatform = Capacitor.isNativePlatform();
 async function keychainGet(key) {
   if (!isNativePlatform) return null;
   try {
-    const result = await SecureStoragePlugin.get({ key });
-    return result?.value ? JSON.parse(result.value) : null;
+    return await getNativeSecureItem(key);
   } catch {
     return null; // Key doesn't exist yet
   }
@@ -428,7 +427,10 @@ async function keychainGet(key) {
 async function keychainSet(key, value) {
   if (!isNativePlatform) return;
   try {
-    await SecureStoragePlugin.set({ key, value: JSON.stringify(value) });
+    const saved = await setNativeSecureItem(key, value);
+    if (!saved) {
+      console.warn("[Keychain] Native secure storage unavailable:", key);
+    }
   } catch (e) {
     console.warn("[Keychain] Failed to write:", key, e?.message);
   }

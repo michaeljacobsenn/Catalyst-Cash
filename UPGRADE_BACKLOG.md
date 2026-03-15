@@ -1,4 +1,4 @@
-# PortfolioPro Upgrade Backlog
+# Catalyst Cash Upgrade Backlog
 
 This file tracks the work required to move the app toward a true top-tier consumer finance product.
 

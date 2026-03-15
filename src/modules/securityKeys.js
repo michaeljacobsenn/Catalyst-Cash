@@ -17,6 +17,9 @@ const EXACT_SECURITY_KEYS = new Set([
   "last-backup-ts",    // Transient cache
   "household-id",      // Sync credentials
   "household-passcode",// Sync credentials
+  "household-id-protected",
+  "household-passcode-protected",
+  "household-sync-version",
 ]);
 
 const SAFE_IMPORT_KEY_RE = /^[a-z0-9-]+$/;

@@ -25,6 +25,11 @@
 
   import { Capacitor } from "@capacitor/core";
   import { haptic } from "../haptics.js";
+  import {
+    clearHouseholdCredentials,
+    migrateHouseholdCredentials,
+    setHouseholdCredentials,
+  } from "../householdSecrets.js";
 
   import {
     applyFullProfileQaSeed,
@@ -122,6 +127,7 @@ export default function SettingsTab({
     setLockTimeout,
     appleLinkedId,
     setAppleLinkedId,
+    secretStorageStatus,
   } = useSecurity();
   const {
     cards,
@@ -147,8 +153,14 @@ export default function SettingsTab({
   useEffect(() => {
     // Initialization now handled at root level in App.jsx
     db.get("last-backup-ts").then(ts => setLastBackupTS(ts)).catch(() => { });
-    db.get("household-id").then(val => { setHouseholdId(val || ""); setHsInputId(val || ""); }).catch(() => {});
-    db.get("household-passcode").then(val => { setHouseholdPasscode(val || ""); setHsInputPasscode(val || ""); }).catch(() => {});
+    migrateHouseholdCredentials()
+      .then(({ householdId: nextId, passcode }) => {
+        setHouseholdId(nextId || "");
+        setHsInputId(nextId || "");
+        setHouseholdPasscode(passcode || "");
+        setHsInputPasscode(passcode || "");
+      })
+      .catch(() => {});
     getRawTier().then(tier => setRawTierId(tier.id === "pro" ? "pro" : "free")).catch(() => setRawTierId("free"));
   }, []);
 
@@ -388,6 +400,10 @@ export default function SettingsTab({
   };
 
   const handlePasscodeChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (secretStorageStatus.mode === "native-unavailable") {
+      window.toast?.error?.("Secure storage is unavailable on this device. App Passcode is disabled until it is restored.");
+      return;
+    }
     const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 4);
     setAppPasscode(val);
     if (val.length < 4 && requireAuth) {
@@ -401,6 +417,10 @@ export default function SettingsTab({
   };
 
   const handleRequireAuthToggle = (enable: boolean) => {
+    if (secretStorageStatus.mode === "native-unavailable") {
+      window.toast?.error?.("App Lock requires native secure storage, which is currently unavailable.");
+      return;
+    }
     if (enable && appPasscode?.length !== 4) {
       window.toast?.error?.("Set a 4-digit App Passcode first");
       return;
@@ -420,6 +440,10 @@ export default function SettingsTab({
   };
 
   const handleUseFaceIdToggle = async (enable: boolean) => {
+    if (secretStorageStatus.mode === "native-unavailable") {
+      window.toast?.error?.("Biometric unlock requires native secure storage, which is currently unavailable.");
+      return;
+    }
     if (!enable) {
       setUseFaceId(false);
       db.set("use-face-id", false);
@@ -622,13 +646,15 @@ export default function SettingsTab({
     setApiKey(normalized);
     // Save to provider-specific slot immediately
     if (currentProvider.keyStorageKey) {
-      if (normalized) void setSecureItem(currentProvider.keyStorageKey, normalized);
+      if (normalized) {
+        void setSecureItem(currentProvider.keyStorageKey, normalized).then(saved => {
+          if (!saved) {
+            setApiKey("");
+            window.toast?.error?.("Secure storage is unavailable. API keys cannot be saved on this device right now.");
+          }
+        });
+      }
       else void deleteSecureItem(currentProvider.keyStorageKey);
-    }
-    // Also mirror to legacy "api-key" for OpenAI backward compatibility
-    if (currentProvider.id === "openai") {
-      if (normalized) db.set("api-key", normalized);
-      else db.del("api-key");
     }
   };
 
@@ -636,17 +662,14 @@ export default function SettingsTab({
     <div
       className="slide-pane"
       style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
+        position: "relative",
         background: T.bg.base,
         zIndex: 20,
         display: "flex",
         flexDirection: "column",
+        flex: 1,
+        minHeight: 0,
         width: "100%",
-        height: "100%",
         boxSizing: "border-box",
       }}
     >
@@ -687,8 +710,11 @@ export default function SettingsTab({
                 e.preventDefault(); 
                 const nid = hsInputId.trim();
                 const np = hsInputPasscode.trim();
-                await db.set("household-id", nid);
-                await db.set("household-passcode", np);
+                if (nid && np) {
+                  await setHouseholdCredentials(nid, np);
+                } else {
+                  await clearHouseholdCredentials();
+                }
                 setHouseholdId(nid);
                 setHouseholdPasscode(np);
                 setShowHouseholdModal(false);
@@ -1930,6 +1956,7 @@ export default function SettingsTab({
                  handleRequireAuthToggle={handleRequireAuthToggle}
                  useFaceId={useFaceId}
                  handleUseFaceIdToggle={handleUseFaceIdToggle}
+                 secretStorageStatus={secretStorageStatus}
                  lockTimeout={lockTimeout}
                  setLockTimeout={setLockTimeout}
                  confirmDataDeletion={confirmDataDeletion}

@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import worker, {
+  buildHouseholdIntegrityTag,
   getIsoWeekKey,
   getQuotaWindow,
   isRevenueCatEntitlementActive,
   mergePlaidTransactions,
+  resolvePlaidActor,
   resolveEffectiveTier,
+  sha256Hex,
 } from "./index.js";
 
 class FakeD1 {
@@ -12,6 +15,7 @@ class FakeD1 {
     this.plaidItems = [...(seed.plaidItems || [])];
     this.syncData = [...(seed.syncData || [])];
     this.auditLog = [...(seed.auditLog || [])];
+    this.householdSync = [...(seed.householdSync || [])];
   }
 
   prepare(sql) {
@@ -35,6 +39,26 @@ class FakeD1 {
     if (sql.includes("SELECT transactions_cursor FROM plaid_items WHERE item_id = ?")) {
       const item = this.plaidItems.find(entry => entry.item_id === params[0]);
       return item ? [{ transactions_cursor: item.transactions_cursor ?? null }] : [];
+    }
+
+    if (sql.includes("SELECT access_token FROM plaid_items WHERE item_id = ? AND user_id = ?")) {
+      const item = this.plaidItems.find(entry => entry.item_id === params[0] && entry.user_id === params[1]);
+      return item ? [{ access_token: item.access_token }] : [];
+    }
+
+    if (sql.includes("SELECT user_id, access_token FROM plaid_items WHERE item_id = ? AND user_id = ?")) {
+      const item = this.plaidItems.find(entry => entry.item_id === params[0] && entry.user_id === params[1]);
+      return item ? [{ user_id: item.user_id, access_token: item.access_token }] : [];
+    }
+
+    if (sql.includes("SELECT item_id FROM plaid_items WHERE access_token = ? AND user_id = ?")) {
+      const item = this.plaidItems.find(entry => entry.access_token === params[0] && entry.user_id === params[1]);
+      return item ? [{ item_id: item.item_id }] : [];
+    }
+
+    if (sql.includes("SELECT access_token FROM plaid_items WHERE access_token = ? AND user_id = ?")) {
+      const item = this.plaidItems.find(entry => entry.access_token === params[0] && entry.user_id === params[1]);
+      return item ? [{ access_token: item.access_token }] : [];
     }
 
     if (sql.includes("SELECT item_id FROM plaid_items WHERE access_token = ?")) {
@@ -87,6 +111,11 @@ class FakeD1 {
       return [...this.auditLog].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, 50);
     }
 
+    if (sql.includes("FROM household_sync WHERE household_id = ?")) {
+      const row = this.householdSync.find(entry => entry.household_id === params[0]);
+      return row ? [row] : [];
+    }
+
     return [];
   }
 
@@ -98,6 +127,26 @@ class FakeD1 {
         item.transactions_cursor = cursor;
         item.updated_at = "2026-03-13 12:00:00";
       }
+      return;
+    }
+
+    if (sql.includes("UPDATE plaid_items SET user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?")) {
+      const [toUserId, fromUserId] = params;
+      this.plaidItems = this.plaidItems.map(entry =>
+        entry.user_id === fromUserId
+          ? { ...entry, user_id: toUserId, updated_at: "2026-03-13 12:00:00" }
+          : entry
+      );
+      return;
+    }
+
+    if (sql.includes("UPDATE sync_data SET user_id = ? WHERE user_id = ?")) {
+      const [toUserId, fromUserId] = params;
+      this.syncData = this.syncData.map(entry =>
+        entry.user_id === fromUserId
+          ? { ...entry, user_id: toUserId }
+          : entry
+      );
       return;
     }
 
@@ -186,6 +235,67 @@ class FakeD1 {
         row.drift_warning = driftWarning;
         row.drift_details = driftDetails;
       }
+      return;
+    }
+
+    if (sql.includes("UPDATE household_sync SET auth_token_hash = ?, last_updated_at = CURRENT_TIMESTAMP WHERE household_id = ?")) {
+      const [authTokenHash, householdId] = params;
+      const row = this.householdSync.find(entry => entry.household_id === householdId);
+      if (row) {
+        row.auth_token_hash = authTokenHash;
+        row.last_updated_at = "2026-03-13 12:00:00";
+      }
+      return;
+    }
+
+    if (sql.includes("UPDATE household_sync SET integrity_tag = ?, last_updated_at = CURRENT_TIMESTAMP WHERE household_id = ?")) {
+      const [integrityTag, householdId] = params;
+      const row = this.householdSync.find(entry => entry.household_id === householdId);
+      if (row) {
+        row.integrity_tag = integrityTag;
+        row.last_updated_at = "2026-03-13 12:00:00";
+      }
+      return;
+    }
+
+    if (sql.includes("INSERT INTO household_sync")) {
+      const [householdId, encryptedBlob, authTokenHash, integrityTag, version, lastRequestId] = params;
+      const next = {
+        household_id: householdId,
+        encrypted_blob: encryptedBlob,
+        auth_token_hash: authTokenHash,
+        integrity_tag: integrityTag,
+        version,
+        last_request_id: lastRequestId,
+        last_updated_at: "2026-03-13 12:00:00",
+      };
+      const index = this.householdSync.findIndex(entry => entry.household_id === householdId);
+      if (index >= 0) {
+        this.householdSync[index] = {
+          ...this.householdSync[index],
+          encrypted_blob: encryptedBlob,
+          auth_token_hash: this.householdSync[index].auth_token_hash || authTokenHash,
+          integrity_tag: integrityTag,
+          version,
+          last_request_id: lastRequestId,
+          last_updated_at: "2026-03-13 12:00:00",
+        };
+      } else {
+        this.householdSync.push(next);
+      }
+      return;
+    }
+
+    if (sql.includes("DELETE FROM sync_data WHERE user_id = ? AND item_id = ?")) {
+      const [userId, itemId] = params;
+      this.syncData = this.syncData.filter(entry => !(entry.user_id === userId && entry.item_id === itemId));
+      return;
+    }
+
+    if (sql.includes("DELETE FROM plaid_items WHERE item_id = ? AND user_id = ?")) {
+      const [itemId, userId] = params;
+      this.plaidItems = this.plaidItems.filter(entry => !(entry.item_id === itemId && entry.user_id === userId));
+      return;
     }
   }
 
@@ -329,6 +439,48 @@ describe("tier resolution hardening", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+});
+
+describe("Plaid actor identity", () => {
+  it("derives a device-scoped actor and migrates legacy catalyst-user rows", async () => {
+    const env = makeEnv({
+      DB: new FakeD1({
+        plaidItems: [
+          {
+            item_id: "item-legacy",
+            user_id: "catalyst-user",
+            access_token: "access-legacy",
+            transactions_cursor: null,
+          },
+        ],
+        syncData: [
+          {
+            user_id: "catalyst-user",
+            item_id: "item-legacy",
+            balances_json: '{"accounts":[]}',
+            liabilities_json: "{}",
+            transactions_json: "{}",
+            last_synced_at: "2026-03-13 12:00:00",
+          },
+        ],
+      }),
+    });
+
+    const actor = await resolvePlaidActor(
+      new Request("https://api.catalystcash.app/api/sync/status", {
+        method: "POST",
+        headers: { "X-Device-ID": "device-123" },
+      }),
+      env
+    );
+
+    expect(actor).toMatchObject({
+      userId: "device:device-123",
+      source: "device",
+    });
+    expect(env.DB.plaidItems[0].user_id).toBe("device:device-123");
+    expect(env.DB.syncData[0].user_id).toBe("device:device-123");
   });
 });
 
@@ -583,6 +735,110 @@ describe("AI provider routing and gating", () => {
 });
 
 describe("Plaid transaction sync migration", () => {
+  it("returns only the current actor's sync status even when the body names another user", async () => {
+    const env = makeEnv({
+      DB: new FakeD1({
+        syncData: [
+          {
+            user_id: "device:device-a",
+            item_id: "item-a",
+            balances_json: '{"accounts":[{"account_id":"acct-a"}]}',
+            liabilities_json: "{}",
+            transactions_json: "{}",
+            last_synced_at: "2026-03-13 12:00:00",
+          },
+          {
+            user_id: "device:device-b",
+            item_id: "item-b",
+            balances_json: '{"accounts":[{"account_id":"acct-b"}]}',
+            liabilities_json: "{}",
+            transactions_json: "{}",
+            last_synced_at: "2026-03-13 12:00:00",
+          },
+        ],
+      }),
+    });
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/sync/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Device-ID": "device-a" },
+        body: JSON.stringify({ userId: "device:device-b" }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      hasData: true,
+      balances: { accounts: [{ account_id: "acct-a" }] },
+    });
+  });
+
+  it("refuses to disconnect another actor's Plaid item", async () => {
+    const env = makeEnv({
+      DB: new FakeD1({
+        plaidItems: [
+          {
+            item_id: "item-owned-by-b",
+            user_id: "device:device-b",
+            access_token: "access-b",
+            transactions_cursor: null,
+          },
+        ],
+      }),
+    });
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/plaid/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Device-ID": "device-a" },
+        body: JSON.stringify({ itemId: "item-owned-by-b" }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(404);
+    expect(env.DB.plaidItems).toHaveLength(1);
+    expect(env.DB.plaidItems[0].item_id).toBe("item-owned-by-b");
+  });
+
+  it("stores exchanged Plaid items under the derived actor instead of a caller-supplied userId", async () => {
+    const env = makeEnv({ DB: new FakeD1() });
+    const fetchMock = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/item/public_token/exchange")) {
+        return new Response(
+          JSON.stringify({
+            item_id: "item-owned-by-device-a",
+            access_token: "access-a",
+          }),
+          { status: 200 }
+        );
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/plaid/exchange", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Device-ID": "device-a" },
+        body: JSON.stringify({ publicToken: "public-token", userId: "attacker-chosen-id" }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(200);
+    expect(env.DB.plaidItems[0]).toMatchObject({
+      item_id: "item-owned-by-device-a",
+      user_id: "device:device-a",
+    });
+  });
+
   it("blocks deep sync for free users only when live gating is enabled", async () => {
     const env = makeEnv({
       GATING_MODE: "live",
@@ -590,7 +846,7 @@ describe("Plaid transaction sync migration", () => {
         plaidItems: [
           {
             item_id: "item-1",
-            user_id: "free-user",
+            user_id: "device:free-device",
             access_token: "access-1",
             transactions_cursor: null,
           },
@@ -601,7 +857,7 @@ describe("Plaid transaction sync migration", () => {
     const response = await worker.fetch(
       new Request("https://api.catalystcash.app/api/sync/deep", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Device-ID": "free-device" },
         body: JSON.stringify({ userId: "free-user" }),
       }),
       env,
@@ -641,7 +897,7 @@ describe("Plaid transaction sync migration", () => {
         plaidItems: [
           {
             item_id: "item-1",
-            user_id: "user-1",
+            user_id: "device:device-1",
             access_token: "access-1",
             transactions_cursor: null,
           },
@@ -678,7 +934,7 @@ describe("Plaid transaction sync migration", () => {
     const response = await worker.fetch(
       new Request("https://api.catalystcash.app/api/sync/deep", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Device-ID": "device-1" },
         body: JSON.stringify({ userId: "user-1" }),
       }),
       env,
@@ -692,7 +948,7 @@ describe("Plaid transaction sync migration", () => {
     );
 
     const item = env.DB.plaidItems.find(entry => entry.item_id === "item-1");
-    const syncRow = env.DB.syncData.find(entry => entry.user_id === "user-1" && entry.item_id === "item-1");
+    const syncRow = env.DB.syncData.find(entry => entry.user_id === "device:device-1" && entry.item_id === "item-1");
     expect(item.transactions_cursor).toBe("cursor-initial-1");
     expect(JSON.parse(syncRow.transactions_json)).toMatchObject({
       total_transactions: 2,
@@ -710,14 +966,14 @@ describe("Plaid transaction sync migration", () => {
         plaidItems: [
           {
             item_id: "item-1",
-            user_id: "catalyst-user",
+            user_id: "device:device-1",
             access_token: "access-1",
             transactions_cursor: "cursor-prev-1",
           },
         ],
         syncData: [
           {
-            user_id: "catalyst-user",
+            user_id: "device:device-1",
             item_id: "item-1",
             balances_json: "{}",
             liabilities_json: "{}",
@@ -774,12 +1030,251 @@ describe("Plaid transaction sync migration", () => {
 
     expect(response.status).toBe(200);
     const item = env.DB.plaidItems.find(entry => entry.item_id === "item-1");
-    const syncRow = env.DB.syncData.find(entry => entry.user_id === "catalyst-user" && entry.item_id === "item-1");
+    const syncRow = env.DB.syncData.find(entry => entry.user_id === "device:device-1" && entry.item_id === "item-1");
     const transactions = JSON.parse(syncRow.transactions_json);
 
     expect(item.transactions_cursor).toBe("cursor-next-2");
     expect(transactions.transactions.map(transaction => transaction.transaction_id)).toEqual(["txn-3", "txn-1"]);
     expect(transactions.transactions[1]).toMatchObject({ amount: 11, name: "Updated" });
     expect(syncRow.balances_json).toContain("acct-1");
+  });
+});
+
+describe("Household sync hardening", () => {
+  async function buildHouseholdRequest(overrides = {}) {
+    const householdId = overrides.householdId || "family-1";
+    const authToken = overrides.authToken || await sha256Hex(`household-auth-v1:${householdId}:shared-passcode`);
+    const version = overrides.version ?? 1;
+    const requestId = overrides.requestId || "req-1";
+    const encryptedBlob = overrides.encryptedBlob || {
+      v: 1,
+      salt: "salt",
+      iv: "iv",
+      ct: "ciphertext",
+    };
+    const integrityTag = overrides.integrityTag || await buildHouseholdIntegrityTag({
+      householdId,
+      authToken,
+      encryptedBlob,
+      version,
+      requestId,
+    });
+
+    return {
+      householdId,
+      authToken,
+      version,
+      requestId,
+      encryptedBlob,
+      integrityTag,
+    };
+  }
+
+  it("supports authenticated push then fetch for a shared household", async () => {
+    const env = makeEnv({ DB: new FakeD1() });
+    const requestBody = await buildHouseholdRequest();
+
+    const pushResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/household/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "push",
+          ...requestBody,
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(pushResponse.status).toBe(200);
+    expect(env.DB.householdSync[0]).toMatchObject({
+      household_id: "family-1",
+      auth_token_hash: await sha256Hex(requestBody.authToken),
+      version: 1,
+      last_request_id: "req-1",
+    });
+
+    const fetchResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/household/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "fetch",
+          householdId: requestBody.householdId,
+          authToken: requestBody.authToken,
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(fetchResponse.status).toBe(200);
+    await expect(fetchResponse.json()).resolves.toMatchObject({
+      hasData: true,
+      version: 1,
+      requestId: "req-1",
+      integrityTag: requestBody.integrityTag,
+      encryptedBlob: requestBody.encryptedBlob,
+    });
+  });
+
+  it("does not return ciphertext for an unauthorized fetch attempt", async () => {
+    const requestBody = await buildHouseholdRequest();
+    const env = makeEnv({
+      DB: new FakeD1({
+        householdSync: [
+          {
+            household_id: requestBody.householdId,
+            encrypted_blob: requestBody.encryptedBlob,
+            auth_token_hash: await sha256Hex(requestBody.authToken),
+            integrity_tag: requestBody.integrityTag,
+            version: 1,
+            last_request_id: requestBody.requestId,
+            last_updated_at: "2026-03-13 12:00:00",
+          },
+        ],
+      }),
+    });
+
+    const fetchResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/household/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "fetch",
+          householdId: requestBody.householdId,
+          authToken: "wrong-auth-token",
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(fetchResponse.status).toBe(404);
+    await expect(fetchResponse.json()).resolves.toMatchObject({ hasData: false });
+  });
+
+  it("blocks unauthorized overwrite attempts from a different household credential", async () => {
+    const requestBody = await buildHouseholdRequest();
+    const env = makeEnv({
+      DB: new FakeD1({
+        householdSync: [
+          {
+            household_id: requestBody.householdId,
+            encrypted_blob: requestBody.encryptedBlob,
+            auth_token_hash: await sha256Hex(requestBody.authToken),
+            integrity_tag: requestBody.integrityTag,
+            version: 2,
+            last_request_id: "req-2",
+            last_updated_at: "2026-03-13 12:00:00",
+          },
+        ],
+      }),
+    });
+
+    const attackerAuthToken = await sha256Hex("household-auth-v1:family-1:attacker-passcode");
+    const forgedEnvelope = await buildHouseholdRequest({
+      authToken: attackerAuthToken,
+      version: 3,
+      requestId: "req-3",
+      encryptedBlob: {
+        v: 1,
+        salt: "attacker-salt",
+        iv: "attacker-iv",
+        ct: "attacker-ciphertext",
+      },
+    });
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/household/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "push",
+          ...forgedEnvelope,
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(403);
+    expect(env.DB.householdSync[0]).toMatchObject({
+      version: 2,
+      last_request_id: "req-2",
+      encrypted_blob: requestBody.encryptedBlob,
+    });
+  });
+
+  it("rejects replayed and stale household sync writes", async () => {
+    const requestBody = await buildHouseholdRequest();
+    const env = makeEnv({
+      DB: new FakeD1({
+        householdSync: [
+          {
+            household_id: requestBody.householdId,
+            encrypted_blob: requestBody.encryptedBlob,
+            auth_token_hash: await sha256Hex(requestBody.authToken),
+            integrity_tag: requestBody.integrityTag,
+            version: 2,
+            last_request_id: "req-2",
+            last_updated_at: "2026-03-13 12:00:00",
+          },
+        ],
+      }),
+    });
+
+    const replayBody = await buildHouseholdRequest({
+      version: 3,
+      requestId: "req-2",
+      authToken: requestBody.authToken,
+      encryptedBlob: {
+        v: 1,
+        salt: "salt-3",
+        iv: "iv-3",
+        ct: "ciphertext-3",
+      },
+    });
+    const replayResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/household/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "push",
+          ...replayBody,
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+    expect(replayResponse.status).toBe(409);
+    await expect(replayResponse.json()).resolves.toMatchObject({ error: "replay_detected" });
+
+    const staleBody = await buildHouseholdRequest({
+      version: 2,
+      requestId: "req-4",
+      authToken: requestBody.authToken,
+      encryptedBlob: {
+        v: 1,
+        salt: "salt-4",
+        iv: "iv-4",
+        ct: "ciphertext-4",
+      },
+    });
+    const staleResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/household/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "push",
+          ...staleBody,
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+    expect(staleResponse.status).toBe(409);
+    await expect(staleResponse.json()).resolves.toMatchObject({ error: "stale_version", currentVersion: 2 });
   });
 });

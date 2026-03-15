@@ -165,22 +165,24 @@ export default function ScrollSnapContainer({
       id="main-content"
       role="main"
       ref={containerRef}
-      className="snap-container snap-container-clearance"
+      className="snap-container"
       style={{
         flex: 1,
-        display: hidden ? "none" : "block",
+        minHeight: 0,
+        display: hidden ? "none" : "flex",
         overflow: "hidden",
         overscrollBehaviorX: "none",
         touchAction: "pan-y",
       }}
     >
-      <div {...bind()} style={{ height: "100%", touchAction: "pan-y" }}>
+      <div {...bind()} style={{ flex: 1, minHeight: 0, height: "100%", touchAction: "pan-y", overflow: "hidden" }}>
         <motion.div
           ref={trackRef}
           className="snap-track"
           style={{
             ["--snap-pane-w" as string]: paneWidth ? `${paneWidth}px` : "100%",
             x,
+            minHeight: 0,
             height: "100%",
             width: paneWidth ? `${paneWidth * SWIPE_TAB_ORDER.length}px` : `${SWIPE_TAB_ORDER.length * 100}%`,
             touchAction: "pan-y",

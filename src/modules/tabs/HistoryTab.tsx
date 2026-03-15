@@ -189,7 +189,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false }: HistoryTa
   };
 
   return (
-    <div className="page-body" style={{ paddingBottom: 0, display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+    <div className="page-body" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
         {shouldShowGating() && !proEnabled && (
           <ProBanner

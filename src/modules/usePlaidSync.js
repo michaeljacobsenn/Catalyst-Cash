@@ -74,6 +74,13 @@ export function usePlaidSync({
       if (window.toast) window.toast.info("No bank connections — connect via Settings → Plaid");
       return;
     }
+    const reconnectRequired = conns.filter(conn => conn?._needsReconnect);
+    if (reconnectRequired.length === conns.length) {
+      if (window.toast) {
+        window.toast.info("Your linked banks need to be reconnected in Settings → Bank Connections before balances can sync.");
+      }
+      return;
+    }
 
     // 2. Respect launch gating mode before blocking by tier
     const tier = await getCurrentTier();
@@ -152,7 +159,16 @@ export function usePlaidSync({
         }
       } else {
         const firstErr = results.find(r => r._error)?._error || "No connections available";
-        if (window.toast) window.toast.error(`Sync failed: ${firstErr}`);
+        const reconnectCount = reconnectRequired.length;
+        if (reconnectCount > 0 && window.toast) {
+          window.toast.error(
+            reconnectCount === conns.length
+              ? "Sync unavailable until your Plaid connections are reconnected in Settings."
+              : `Sync failed for active connections. ${reconnectCount} linked bank${reconnectCount > 1 ? "s" : ""} also need reconnection in Settings.`
+          );
+        } else if (window.toast) {
+          window.toast.error(`Sync failed: ${firstErr}`);
+        }
       }
     } catch (e) {
       console.error("[PlaidSync] Failed:", e);

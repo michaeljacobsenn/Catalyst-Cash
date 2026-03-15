@@ -1,5 +1,4 @@
-  import {
-    useEffect,
+import {
     useMemo,
     useRef,
     useState,
@@ -28,22 +27,8 @@ export default function BottomNavBar({
   transactionFeedTab,
   setTransactionFeedTab,
 }: BottomNavBarProps) {
-  const bottomNavRef = useRef<HTMLElement | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showQuickMenu, setShowQuickMenu] = useState(false);
-
-  useEffect(() => {
-    if (!bottomNavRef.current) return;
-    const update = () => {
-      if (!bottomNavRef.current) return;
-      const height = bottomNavRef.current.getBoundingClientRect().height || 0;
-      document.documentElement.style.setProperty("--bottom-nav-h", `${Math.ceil(height)}px`);
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(bottomNavRef.current);
-    return () => ro.disconnect();
-  }, []);
 
   const navItems: Array<{ id: AppTab; label: string; icon: typeof Home; isCenter?: boolean }> = useMemo(
     () => [
@@ -59,24 +44,15 @@ export default function BottomNavBar({
   return (
     <nav
       aria-label="Main navigation"
-      ref={bottomNavRef}
       style={{
-        background: T.bg.navGlass,
-        backdropFilter: "blur(32px) saturate(200%)",
-        WebkitBackdropFilter: "blur(32px) saturate(200%)",
-        border: `1px solid ${T.border.default}`,
-        borderRadius: 36,
-        position: "absolute",
-        bottom: "calc(env(safe-area-inset-bottom, 16px) + 16px)",
-        left: 16,
-        right: 16,
+        position: "relative",
+        flexShrink: 0,
+        padding: "8px 16px calc(env(safe-area-inset-bottom, 16px) + 8px)",
         zIndex: 200,
-        boxShadow: `0 16px 32px -12px rgba(0,0,0,0.6), 0 0 0 1px ${T.border.subtle}`,
         display: showGuide ? "none" : undefined,
         pointerEvents: loading ? "none" : "auto",
         opacity: loading ? 0.45 : 1,
         transition: "opacity .3s ease",
-        overflow: "hidden",
       }}
     >
       {showQuickMenu && (
@@ -89,7 +65,7 @@ export default function BottomNavBar({
           <div
             style={{
               position: "absolute",
-              bottom: "calc(env(safe-area-inset-bottom, 16px) + 76px)",
+              bottom: "calc(env(safe-area-inset-bottom, 16px) + 84px)",
               left: "50%",
               transform: "translateX(-50%)",
               background: T.bg.glass,
@@ -144,9 +120,9 @@ export default function BottomNavBar({
         <div
           style={{
             position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
+            top: 8,
+            left: 16,
+            right: 16,
             height: 2,
             background: `linear-gradient(90deg, transparent, ${T.accent.primary}, ${T.accent.emerald}, transparent)`,
             animation: "shimmer 1.8s ease-in-out infinite",
@@ -158,7 +134,7 @@ export default function BottomNavBar({
       <div
         style={{
           position: "absolute",
-          top: -1,
+          top: 7,
           left: "10%",
           right: "10%",
           height: 1,
@@ -177,6 +153,13 @@ export default function BottomNavBar({
           justifyContent: "space-evenly",
           alignItems: "center",
           padding: "8px 4px",
+          background: T.bg.navGlass,
+          backdropFilter: "blur(32px) saturate(200%)",
+          WebkitBackdropFilter: "blur(32px) saturate(200%)",
+          border: `1px solid ${T.border.default}`,
+          borderRadius: 36,
+          boxShadow: `0 16px 32px -12px rgba(0,0,0,0.6), 0 0 0 1px ${T.border.subtle}`,
+          overflow: "hidden",
         }}
       >
         {navItems.map((n) => {

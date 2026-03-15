@@ -13,7 +13,7 @@
   import { setActiveCurrencyCode } from "../currency.js";
   import { cancelPaydayReminder,getNotificationPermission,schedulePaydayReminder } from "../notifications.js";
   import { DEFAULT_MODEL_ID,DEFAULT_PROVIDER_ID,getProvider } from "../providers.js";
-  import { migrateToSecureItem } from "../secureStore.js";
+  import { getSecretStorageStatus,migrateToSecureItem } from "../secureStore.js";
   import { getPreferredModelForTier,getRawTier,normalizeModelForTier } from "../subscription.js";
   import { db } from "../utils.js";
 
@@ -232,6 +232,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
   useEffect(() => {
     const initSettings = async (): Promise<void> => {
       try {
+        const secretStorageStatus = await getSecretStorageStatus();
         const notifPromise: Promise<boolean> = getNotificationPermission()
           .then((status) => status === "granted")
           .catch(() => false);
@@ -292,9 +293,11 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
 
         if (provKey) {
           setApiKey(provKey);
-        } else if (legacyKey) {
+        } else if (legacyKey && secretStorageStatus.mode === "web-fallback") {
           setApiKey(legacyKey);
           await migrateToSecureItem("api-key-openai", legacyKey, () => db.del("api-key"));
+        } else if (legacyKey && secretStorageStatus.mode === "native-unavailable") {
+          await db.del("api-key");
         }
 
         if (personalRulesValue) setPersonalRules(personalRulesValue);

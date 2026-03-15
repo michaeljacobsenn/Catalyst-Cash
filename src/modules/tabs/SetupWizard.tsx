@@ -16,7 +16,7 @@
   import { useSettings,type ThemeMode } from "../contexts/SettingsContext.js";
   import { setActiveCurrencyCode } from "../currency.js";
   import { AI_PROVIDERS } from "../providers.js";
-  import { setSecureItem } from "../secureStore.js";
+  import { getSecretStorageStatus,setSecureItem } from "../secureStore.js";
   import { getPreferredModelForTier,getRawTier,normalizeModelForTier } from "../subscription.js";
   import { useToast } from "../Toast.js";
   import { db } from "../utils.js";
@@ -28,12 +28,21 @@ interface ToastApi {
 }
 
 interface SecurityContextValue {
+  setRequireAuth?: ((value: boolean) => void) | undefined;
+  setAppPasscode?: ((value: string) => void) | undefined;
+  setUseFaceId?: ((value: boolean) => void) | undefined;
+  setIsLocked?: ((value: boolean) => void) | undefined;
+  setLockTimeout?: ((value: number) => void) | undefined;
   setAppleLinkedId?: ((value: string | null) => void) | undefined;
   appleLinkedId?: string | null;
+  secretStorageStatus?: {
+    mode: "native-secure" | "native-unavailable" | "web-fallback";
+  };
 }
 
 interface NavigationContextValue {
   setOnboardingComplete: (value: boolean) => void;
+  navTo?: ((tab: "dashboard") => void) | undefined;
 }
 
 interface ProviderModel {
@@ -157,8 +166,9 @@ function StepHeader({ step }: { step: number }) {
 }
 
 export default function SetupWizard() {
-  const { setAppleLinkedId, appleLinkedId } = useSecurity() as SecurityContextValue;
-  const { setOnboardingComplete } = useNavigation() as NavigationContextValue;
+  const { setAppleLinkedId, appleLinkedId, setRequireAuth, setAppPasscode, setUseFaceId, setIsLocked, setLockTimeout } =
+    useSecurity() as SecurityContextValue;
+  const { setOnboardingComplete, navTo } = useNavigation() as NavigationContextValue;
   const { themeMode, setThemeMode, setFinancialConfig } = useSettings();
   const [userIsPro, setUserIsPro] = useState<boolean>(false);
   const toast = useToast() as ToastApi;
@@ -175,7 +185,6 @@ export default function SetupWizard() {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [renewals, setRenewals] = useState<Renewal[]>([]);
-  const [isExiting, setIsExiting] = useState<boolean>(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const [income, setIncome] = useState<SetupWizardIncomeState>({
@@ -360,8 +369,8 @@ export default function SetupWizard() {
       await db.set("ai-model", ai.aiModel);
       await db.set("onboarding-complete", true);
       setOnboardingComplete(true);
-      setIsExiting(true);
-      setTimeout(() => window.location.reload(), 300);
+      setIsLocked?.(false);
+      navTo?.("dashboard");
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "unknown error";
       toast.error?.("Save failed: " + message);
@@ -427,20 +436,36 @@ export default function SetupWizard() {
       await db.set("ai-model", ai.aiModel);
       if (ai.apiKey.trim()) {
         const provider = typedProviders.find((item) => item.id === ai.aiProvider);
-        if (provider?.keyStorageKey) await setSecureItem(provider.keyStorageKey, ai.apiKey.trim());
+        if (provider?.keyStorageKey) {
+          const saved = await setSecureItem(provider.keyStorageKey, ai.apiKey.trim());
+          if (!saved) {
+            toast.error?.("Secure storage is unavailable. API key was not saved.");
+          }
+        }
       }
 
       if (security.pinEnabled && security.pin.length >= 4) {
-        await setSecureItem("app-passcode", security.pin);
-        await db.set("require-auth", true);
-        if (security.useFaceId) await db.set("use-face-id", true);
+        const storageStatus = await getSecretStorageStatus();
+        const savedPasscode = await setSecureItem("app-passcode", security.pin);
+        if (savedPasscode) {
+          await db.set("require-auth", true);
+          if (security.useFaceId) await db.set("use-face-id", true);
+          setAppPasscode?.(security.pin);
+          setRequireAuth?.(true);
+          setUseFaceId?.(Boolean(security.useFaceId));
+        } else if (storageStatus.mode === "native-unavailable") {
+          await Promise.all([db.set("require-auth", false), db.set("use-face-id", false)]);
+          toast.error?.("Secure storage is unavailable. App Lock was not enabled on this device.");
+        }
       }
       await db.set("lock-timeout", security.lockTimeout);
+      setLockTimeout?.(security.lockTimeout);
       if (security.autoBackupInterval) {
         await db.set("auto-backup-interval", security.autoBackupInterval);
       }
       await db.set("onboarding-complete", true);
       setOnboardingComplete(true);
+      setIsLocked?.(false);
       next();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "unknown error";
@@ -457,8 +482,10 @@ export default function SetupWizard() {
     setSaving(true);
     try {
       await db.set("lock-timeout", security.lockTimeout);
+      setLockTimeout?.(security.lockTimeout);
       await db.set("onboarding-complete", true);
       setOnboardingComplete(true);
+      setIsLocked?.(false);
       next();
     } catch {
       // ignore
@@ -469,8 +496,8 @@ export default function SetupWizard() {
   const handleFinish = (): void => {
     void db.set("onboarding-complete", true);
     setOnboardingComplete(true);
-    setIsExiting(true);
-    setTimeout(() => window.location.reload(), 300);
+    setIsLocked?.(false);
+    navTo?.("dashboard");
   };
 
   const pageId = PAGES[step]?.id;
@@ -497,7 +524,7 @@ export default function SetupWizard() {
         fontFamily: T.font.sans,
         overflow: "hidden",
         transition: "opacity 0.3s ease-in-out",
-        opacity: isExiting ? 0 : 1,
+        opacity: 1,
       }}
     >
       <div

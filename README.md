@@ -122,8 +122,8 @@ engine.js (generateStrategy)
 
 ```bash
 cd ~/Desktop
-git clone <repo-url> "PortfolioPro Public"
-cd "PortfolioPro Public"
+git clone <repo-url> "CatalystCash Public"
+cd "CatalystCash Public"
 npm install
 ```
 
@@ -191,7 +191,7 @@ The shipped app runs in backend mode and does not require any user API key.
 ## Project Structure
 
 ```
-PortfolioPro Public/
+CatalystCash Public/
 ├── index.html                    # Entry point — Vite SPA shell
 ├── vite.config.js                # Build config: code splitting, Capacitor patches
 ├── capacitor.config.json         # Capacitor: appId, iOS settings, plugins

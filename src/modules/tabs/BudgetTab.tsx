@@ -82,7 +82,7 @@ export default function BudgetTab({ embedded, proEnabled = false }) {
   };
 
   return (
-    <div className="page-body stagger-container" style={{ paddingBottom: 100, display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+    <div className="page-body stagger-container" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
       <style>{STRIPE_CSS}</style>
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>

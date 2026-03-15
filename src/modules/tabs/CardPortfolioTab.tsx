@@ -412,7 +412,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
 
   return (
     <PortfolioContext.Provider value={demoOverrideContext}>
-      <div className="page-body stagger-container" style={{ paddingBottom: 60, display: "flex", flexDirection: "column", alignItems: "center", width: "100%", gap: 0 }}>
+      <div className="page-body stagger-container" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", gap: 0 }}>
         <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
         <style>{`
             @keyframes spin { 100% { transform: rotate(360deg); } }

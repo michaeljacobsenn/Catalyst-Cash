@@ -234,6 +234,123 @@ function getRevenueCatAppUserId(request) {
   return value ? value.trim() : "";
 }
 
+function getRequestDeviceId(request) {
+  const value = request.headers.get("X-Device-ID");
+  return value ? value.trim() : "";
+}
+
+function buildPlaidOwnerId(prefix, value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+  return `${prefix}:${normalized}`;
+}
+
+async function reassignPlaidOwner(db, fromUserId, toUserId) {
+  if (!db || !fromUserId || !toUserId || fromUserId === toUserId) return false;
+
+  const { results: sourceRows } = await db.prepare(
+    "SELECT access_token, item_id FROM plaid_items WHERE user_id = ?"
+  ).bind(fromUserId).all();
+
+  if (!sourceRows || sourceRows.length === 0) return false;
+
+  const { results: existingTargetRows } = await db.prepare(
+    "SELECT access_token, item_id FROM plaid_items WHERE user_id = ?"
+  ).bind(toUserId).all();
+
+  if (existingTargetRows && existingTargetRows.length > 0) return false;
+
+  await db.prepare("UPDATE plaid_items SET user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?")
+    .bind(toUserId, fromUserId)
+    .run();
+  await db.prepare("UPDATE sync_data SET user_id = ? WHERE user_id = ?")
+    .bind(toUserId, fromUserId)
+    .run();
+  return true;
+}
+
+export async function resolvePlaidActor(request, env) {
+  const revenueCatAppUserId = getRevenueCatAppUserId(request);
+  const deviceId = getRequestDeviceId(request);
+  const primaryUserId = revenueCatAppUserId
+    ? buildPlaidOwnerId("rc", revenueCatAppUserId)
+    : buildPlaidOwnerId("device", deviceId);
+
+  if (!primaryUserId) {
+    return null;
+  }
+
+  if (env.DB) {
+    const deviceScopedUserId = buildPlaidOwnerId("device", deviceId);
+    if (revenueCatAppUserId && deviceScopedUserId && deviceScopedUserId !== primaryUserId) {
+      await reassignPlaidOwner(env.DB, deviceScopedUserId, primaryUserId);
+    }
+    await reassignPlaidOwner(env.DB, "catalyst-user", primaryUserId);
+  }
+
+  return {
+    userId: primaryUserId,
+    deviceUserId: buildPlaidOwnerId("device", deviceId) || null,
+    revenueCatUserId: revenueCatAppUserId ? buildPlaidOwnerId("rc", revenueCatAppUserId) : null,
+    source: revenueCatAppUserId ? "revenuecat" : "device",
+  };
+}
+
+export async function sha256Hex(value) {
+  const encoded = new TextEncoder().encode(String(value || ""));
+  const digest = await crypto.subtle.digest("SHA-256", encoded);
+  return Array.from(new Uint8Array(digest))
+    .map(byte => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function householdEnvelopeMessage({ householdId, encryptedBlob, version, requestId }) {
+  return JSON.stringify({
+    householdId,
+    version,
+    requestId,
+    encryptedBlob,
+  });
+}
+
+function hexToBytes(hex) {
+  if (typeof hex !== "string" || hex.length === 0 || hex.length % 2 !== 0) return new Uint8Array();
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = Number.parseInt(hex.slice(i, i + 2), 16);
+  }
+  return bytes;
+}
+
+export async function buildHouseholdIntegrityTag({ householdId, authToken, encryptedBlob, version, requestId }) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    hexToBytes(String(authToken || "")),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(householdEnvelopeMessage({ householdId, encryptedBlob, version, requestId }))
+  );
+  return Array.from(new Uint8Array(signature))
+    .map(byte => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function verifyHouseholdIntegrity({ householdId, authToken, encryptedBlob, version, requestId, integrityTag }) {
+  const expectedTag = await buildHouseholdIntegrityTag({
+    householdId,
+    authToken,
+    encryptedBlob,
+    version,
+    requestId,
+  });
+  return expectedTag === integrityTag;
+}
+
 function getConfiguredEntitlementId(env) {
   return env.REVENUECAT_ENTITLEMENT_ID || "Catalyst Cash Pro";
 }
@@ -375,6 +492,18 @@ export async function resolveEffectiveTier(request, env) {
       source: "verification_failed",
       verificationError: error?.message || "verification_failed",
     };
+  }
+}
+
+async function resolveStoredUserTier(userId, env) {
+  if (!isWorkerGatingEnforced(env)) return "pro";
+  if (!userId || !userId.startsWith("rc:")) return "free";
+
+  try {
+    const payload = await fetchRevenueCatSubscriber(userId.slice(3), env);
+    return isRevenueCatEntitlementActive(payload?.subscriber, getConfiguredEntitlementId(env)) ? "pro" : "free";
+  } catch {
+    return "free";
   }
 }
 
@@ -1104,6 +1233,14 @@ export default {
         });
       }
 
+      const plaidActor = url.pathname === "/plaid/webhook" ? null : await resolvePlaidActor(request, env);
+      if (url.pathname !== "/plaid/webhook" && !plaidActor) {
+        return new Response(JSON.stringify({ error: "Missing stable actor identity" }), {
+          status: 401,
+          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+        });
+      }
+
       const plaidDomain = `https://${PLAID_ENV}.plaid.com`;
       let plaidEndpoint = "";
       let plaidBody = {};
@@ -1120,11 +1257,16 @@ export default {
             client_name: "Catalyst Cash",
             country_codes: ["US"],
             language: "en",
-            user: { client_user_id: reqBody.userId || "catalyst-user" },
+            user: { client_user_id: plaidActor.userId },
             products: ["transactions"],
             optional_products: ["liabilities", "investments"],
             webhook: webhookUrl,
           };
+          const plaidData = await fetchPlaidJson(plaidDomain, plaidEndpoint, env, plaidBody);
+          return new Response(JSON.stringify({ link_token: plaidData.link_token }), {
+            status: 200,
+            headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+          });
         } else if (url.pathname === "/plaid/exchange") {
           plaidEndpoint = "/item/public_token/exchange";
           plaidBody = {
@@ -1143,11 +1285,10 @@ export default {
           const plaidData = await plaidRes.json();
 
           // Store Access Token + Item ID mapping in D1
-          const userId = reqBody.userId || "catalyst-user";
           if (env.DB) {
             await env.DB.prepare(
               "INSERT OR REPLACE INTO plaid_items (item_id, user_id, access_token, transactions_cursor) VALUES (?, ?, ?, ?)"
-            ).bind(plaidData.item_id, userId, plaidData.access_token, null).run();
+            ).bind(plaidData.item_id, plaidActor.userId, plaidData.access_token, null).run();
           }
 
           return new Response(
@@ -1160,35 +1301,106 @@ export default {
             }
           );
         } else if (url.pathname === "/plaid/balances") {
+          let accessToken = reqBody.accessToken || "";
+          if (accessToken && env.DB) {
+            const ownedToken = await getDbFirstResult(
+              env.DB,
+              "SELECT access_token FROM plaid_items WHERE access_token = ? AND user_id = ?",
+              [accessToken, plaidActor.userId]
+            );
+            accessToken = ownedToken?.access_token || "";
+          }
+          if (!accessToken && reqBody.itemId && env.DB) {
+            const itemRow = await getDbFirstResult(
+              env.DB,
+              "SELECT access_token FROM plaid_items WHERE item_id = ? AND user_id = ?",
+              [reqBody.itemId, plaidActor.userId]
+            );
+            accessToken = itemRow?.access_token || "";
+          }
+          if (!accessToken) {
+            return new Response(JSON.stringify({ error: "Plaid item not found for actor" }), {
+              status: 404,
+              headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+            });
+          }
           plaidEndpoint = "/accounts/get";
           plaidBody = {
             client_id: env.PLAID_CLIENT_ID,
             secret: env.PLAID_SECRET,
-            access_token: reqBody.accessToken,
+            access_token: accessToken,
           };
+          const plaidData = await fetchPlaidJson(plaidDomain, plaidEndpoint, env, plaidBody);
+          return new Response(JSON.stringify(plaidData), {
+            status: 200,
+            headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+          });
         } else if (url.pathname === "/plaid/liabilities") {
+          let accessToken = reqBody.accessToken || "";
+          if (accessToken && env.DB) {
+            const ownedToken = await getDbFirstResult(
+              env.DB,
+              "SELECT access_token FROM plaid_items WHERE access_token = ? AND user_id = ?",
+              [accessToken, plaidActor.userId]
+            );
+            accessToken = ownedToken?.access_token || "";
+          }
+          if (!accessToken && reqBody.itemId && env.DB) {
+            const itemRow = await getDbFirstResult(
+              env.DB,
+              "SELECT access_token FROM plaid_items WHERE item_id = ? AND user_id = ?",
+              [reqBody.itemId, plaidActor.userId]
+            );
+            accessToken = itemRow?.access_token || "";
+          }
+          if (!accessToken) {
+            return new Response(JSON.stringify({ error: "Plaid item not found for actor" }), {
+              status: 404,
+              headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+            });
+          }
           plaidEndpoint = "/liabilities/get";
           plaidBody = {
             client_id: env.PLAID_CLIENT_ID,
             secret: env.PLAID_SECRET,
-            access_token: reqBody.accessToken,
+            access_token: accessToken,
           };
+          const plaidData = await fetchPlaidJson(plaidDomain, plaidEndpoint, env, plaidBody);
+          return new Response(JSON.stringify(plaidData), {
+            status: 200,
+            headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+          });
         } else if (url.pathname === "/plaid/disconnect") {
           let accessToken = reqBody.accessToken || "";
           const itemId = reqBody.itemId || "";
 
+          if (accessToken && env.DB) {
+            const ownedToken = await getDbFirstResult(
+              env.DB,
+              "SELECT access_token FROM plaid_items WHERE access_token = ? AND user_id = ?",
+              [accessToken, plaidActor.userId]
+            );
+            accessToken = ownedToken?.access_token || "";
+          }
+
           if (!accessToken && itemId && env.DB) {
-            const itemRow = await getDbFirstResult(env.DB, "SELECT user_id, access_token FROM plaid_items WHERE item_id = ?", [itemId]);
+            const itemRow = await getDbFirstResult(
+              env.DB,
+              "SELECT user_id, access_token FROM plaid_items WHERE item_id = ? AND user_id = ?",
+              [itemId, plaidActor.userId]
+            );
             accessToken = itemRow?.access_token || "";
             if (itemRow?.user_id) {
               await env.DB.prepare("DELETE FROM sync_data WHERE user_id = ? AND item_id = ?").bind(itemRow.user_id, itemId).run();
             }
-            await env.DB.prepare("DELETE FROM plaid_items WHERE item_id = ?").bind(itemId).run();
+            if (itemRow?.user_id) {
+              await env.DB.prepare("DELETE FROM plaid_items WHERE item_id = ? AND user_id = ?").bind(itemId, plaidActor.userId).run();
+            }
           }
 
           if (!accessToken) {
-            return new Response(JSON.stringify({ error: "Missing Plaid item reference" }), {
-              status: 400,
+            return new Response(JSON.stringify({ error: "Plaid item not found for actor" }), {
+              status: 404,
               headers: buildHeaders(cors, { "Content-Type": "application/json" }),
             });
           }
@@ -1199,25 +1411,46 @@ export default {
             secret: env.PLAID_SECRET,
             access_token: accessToken,
           };
+          await fetchPlaidJson(plaidDomain, plaidEndpoint, env, plaidBody);
+          return new Response(JSON.stringify({ success: true }), {
+            status: 200,
+            headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+          });
         } else if (url.pathname === "/plaid/transactions") {
-          const userId = reqBody.userId || "catalyst-user";
           const itemId =
             reqBody.itemId ||
-            (await getDbFirstResult(env.DB, "SELECT item_id FROM plaid_items WHERE access_token = ?", [reqBody.accessToken]))?.item_id;
+            (
+              await getDbFirstResult(
+                env.DB,
+                "SELECT item_id FROM plaid_items WHERE access_token = ? AND user_id = ?",
+                [reqBody.accessToken, plaidActor.userId]
+              )
+            )?.item_id;
 
           if (!itemId) {
-            const { syncPayload } = await fetchAllPlaidTransactionsSync(plaidDomain, env, reqBody.accessToken, null);
-            return new Response(JSON.stringify(mergePlaidTransactions({ transactions: [] }, syncPayload)), {
-              status: 200,
+            return new Response(JSON.stringify({ error: "Plaid item not found for actor" }), {
+              status: 404,
+              headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+            });
+          }
+
+          const itemRow = await getDbFirstResult(
+            env.DB,
+            "SELECT access_token FROM plaid_items WHERE item_id = ? AND user_id = ?",
+            [itemId, plaidActor.userId]
+          );
+          if (!itemRow?.access_token) {
+            return new Response(JSON.stringify({ error: "Plaid item not found for actor" }), {
+              status: 404,
               headers: buildHeaders(cors, { "Content-Type": "application/json" }),
             });
           }
 
           const { mergedTransactions } = await syncTransactionsForItem({
             db: env.DB,
-            userId,
+            userId: plaidActor.userId,
             itemId,
-            accessToken: reqBody.accessToken,
+            accessToken: itemRow.access_token,
             plaidDomain,
             env,
           });
@@ -1244,7 +1477,7 @@ export default {
               const { user_id, access_token } = itemResults[0];
 
               // --- Tier Rate Limiting ---
-              let tierId = "free";
+              let tierId = await resolveStoredUserTier(user_id, env);
               let lastSyncTime = 0;
 
               // We need to fetch the last sync time to calculate cooldown.
@@ -1253,11 +1486,6 @@ export default {
                 // SQlite CURRENT_TIMESTAMP is UTC
                 lastSyncTime = new Date(syncResults[0].last_synced_at + "Z").getTime();
               }
-
-              // Heuristic tier fallback until Plaid item ownership is joined to verified entitlements.
-              // In soft launch, gating remains intentionally unenforced and all users may sync.
-              if (user_id === "catalyst-user" || user_id.includes("pro")) tierId = "pro";
-              if (!isWorkerGatingEnforced(env)) tierId = "pro";
 
               if (isWorkerGatingEnforced(env) && tierId === "free") {
                 // Free users: manual sync only — ignore webhook
@@ -1309,18 +1537,15 @@ export default {
         } else if (url.pathname === "/api/sync/force") {
           // Manually trigger a sync for a user, respecting the tier cooldown.
           if (request.method !== "POST") return new Response("{}", { status: 405 });
-          const { userId } = reqBody;
           if (!env.DB) return new Response(JSON.stringify({ error: "DB not configured" }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
-
-          let tierId = "free";
-          if (userId === "catalyst-user" || (userId && userId.includes("pro"))) tierId = "pro";
-          if (!isWorkerGatingEnforced(env)) tierId = "pro";
+          const tierResolution = await resolveEffectiveTier(request, env);
+          const tierId = !isWorkerGatingEnforced(env) ? "pro" : tierResolution.tier;
 
           if (isWorkerGatingEnforced(env) && tierId === "free") {
             return new Response(JSON.stringify({ error: "upgrade_required", message: "Live Syncing is a Pro feature." }), { status: 403, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
 
-          const { results: syncResults } = await env.DB.prepare("SELECT last_synced_at FROM sync_data WHERE user_id = ?").bind(userId || "catalyst-user").all();
+          const { results: syncResults } = await env.DB.prepare("SELECT last_synced_at FROM sync_data WHERE user_id = ?").bind(plaidActor.userId).all();
           let lastSyncTime = 0;
           if (syncResults && syncResults.length > 0 && syncResults[0].last_synced_at) {
             lastSyncTime = new Date(syncResults[0].last_synced_at + "Z").getTime();
@@ -1336,7 +1561,7 @@ export default {
             return new Response(JSON.stringify({ error: "cooldown", message: "Cooldown active", cooldownMs, tier: tierId }), { status: 429, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
 
-          const { results: itemResults } = await env.DB.prepare("SELECT access_token, item_id FROM plaid_items WHERE user_id = ?").bind(userId || "catalyst-user").all();
+          const { results: itemResults } = await env.DB.prepare("SELECT access_token, item_id FROM plaid_items WHERE user_id = ?").bind(plaidActor.userId).all();
           if (!itemResults || itemResults.length === 0) {
             return new Response(JSON.stringify({ error: "No plaid items found" }), { status: 404, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
@@ -1350,7 +1575,7 @@ export default {
                 access_token,
               });
 
-              await writeSyncRow(env.DB, userId || "catalyst-user", syncItemId || "default", {
+              await writeSyncRow(env.DB, plaidActor.userId, syncItemId || "default", {
                 balancesJson: JSON.stringify(balances),
               });
               anySuccess = true;
@@ -1366,17 +1591,15 @@ export default {
           // On-demand deep sync: fetch transactions + liabilities.
           // In soft launch, this remains available to all users. In live gating, free users are blocked.
           if (request.method !== "POST") return new Response("{}", { status: 405 });
-          const { userId: deepUserId } = reqBody;
           if (!env.DB) return new Response(JSON.stringify({ error: "DB not configured" }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
-
-          let deepTierId = "free";
-          if (deepUserId === "catalyst-user" || (deepUserId && deepUserId.includes("pro"))) deepTierId = "pro";
+          const tierResolution = await resolveEffectiveTier(request, env);
+          const deepTierId = !isWorkerGatingEnforced(env) ? "pro" : tierResolution.tier;
 
           if (isWorkerGatingEnforced(env) && deepTierId === "free") {
             return new Response(JSON.stringify({ error: "upgrade_required", message: "Deep sync is a Pro feature when live gating is enabled." }), { status: 403, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
 
-          const { results: deepSyncResults } = await env.DB.prepare("SELECT last_synced_at FROM sync_data WHERE user_id = ? AND item_id = 'deep_sync_meta'").bind(deepUserId || "catalyst-user").all();
+          const { results: deepSyncResults } = await env.DB.prepare("SELECT last_synced_at FROM sync_data WHERE user_id = ? AND item_id = 'deep_sync_meta'").bind(plaidActor.userId).all();
           let lastDeepSync = 0;
           if (deepSyncResults && deepSyncResults.length > 0 && deepSyncResults[0].last_synced_at) {
             lastDeepSync = new Date(deepSyncResults[0].last_synced_at + "Z").getTime();
@@ -1386,7 +1609,7 @@ export default {
             return new Response(JSON.stringify({ error: "cooldown", message: "Deep sync on cooldown (7 days)" }), { status: 429, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
 
-          const { results: deepItems } = await env.DB.prepare("SELECT access_token, item_id FROM plaid_items WHERE user_id = ?").bind(deepUserId || "catalyst-user").all();
+          const { results: deepItems } = await env.DB.prepare("SELECT access_token, item_id FROM plaid_items WHERE user_id = ?").bind(plaidActor.userId).all();
           if (!deepItems || deepItems.length === 0) {
             return new Response(JSON.stringify({ error: "No plaid items" }), { status: 404, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
@@ -1398,14 +1621,14 @@ export default {
               });
               const { mergedTransactions } = await syncTransactionsForItem({
                 db: env.DB,
-                userId: deepUserId || "catalyst-user",
+                userId: plaidActor.userId,
                 itemId: dItem.item_id || "default",
                 accessToken: dItem.access_token,
                 plaidDomain,
                 env,
               });
 
-              await writeSyncRow(env.DB, deepUserId || "catalyst-user", dItem.item_id || "default", {
+              await writeSyncRow(env.DB, plaidActor.userId, dItem.item_id || "default", {
                 liabilitiesJson: JSON.stringify(liabilities),
                 transactionsJson: JSON.stringify(mergedTransactions),
               });
@@ -1415,17 +1638,15 @@ export default {
           await env.DB.prepare(
             `INSERT INTO sync_data (user_id, item_id, balances_json) VALUES (?, 'deep_sync_meta', '{}')
              ON CONFLICT(user_id, item_id) DO UPDATE SET last_synced_at=CURRENT_TIMESTAMP`
-          ).bind(deepUserId || "catalyst-user").run();
+          ).bind(plaidActor.userId).run();
 
           return new Response(JSON.stringify({ success: true }), { status: 200, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
         } else if (url.pathname === "/api/sync/status") {
           // Frontend requests latest data from D1, entirely bypassing Plaid
           if (request.method !== "POST") return new Response("{}", { status: 405 });
-          const { userId } = await request.json();
-
           if (!env.DB) return new Response(JSON.stringify({ error: "DB not configured" }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
 
-          const { results } = await env.DB.prepare("SELECT * FROM sync_data WHERE user_id = ?").bind(userId || "catalyst-user").all();
+          const { results } = await env.DB.prepare("SELECT * FROM sync_data WHERE user_id = ?").bind(plaidActor.userId).all();
           if (!results || results.length === 0) {
             return new Response(JSON.stringify({ hasData: false }), { status: 200, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
@@ -1462,40 +1683,161 @@ export default {
       try {
         if (url.pathname === "/api/household/sync" && request.method === "POST") {
           const body = await request.json();
-          const { householdId, encryptedBlob } = body;
-          
-          if (!householdId || !encryptedBlob) {
-            return new Response(JSON.stringify({ error: "Missing householdId or encryptedBlob" }), { status: 400, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+          const action = body?.action;
+          const householdId = String(body?.householdId || "").trim();
+          const authToken = String(body?.authToken || "").trim();
+
+          if (!householdId || !authToken || !action) {
+            return new Response(JSON.stringify({
+              error: "invalid_request",
+              message: "Missing household sync credentials.",
+            }), { status: 400, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
-          
-          await env.DB.prepare(
-            `INSERT INTO household_sync (household_id, encrypted_blob, last_updated_at) 
-             VALUES (?, ?, CURRENT_TIMESTAMP)
-             ON CONFLICT(household_id) DO UPDATE SET 
-             encrypted_blob=excluded.encrypted_blob, 
-             last_updated_at=CURRENT_TIMESTAMP`
-          ).bind(householdId, encryptedBlob).run();
-          
-          return new Response(JSON.stringify({ success: true }), {
-            status: 200,
-            headers: buildHeaders(cors, { "Content-Type": "application/json" })
-          });
-        } else if (url.pathname === "/api/household/sync" && request.method === "GET") {
-          const householdId = url.searchParams.get("householdId");
-          if (!householdId) {
-            return new Response(JSON.stringify({ error: "Missing householdId" }), { status: 400, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+
+          const authTokenHash = await sha256Hex(authToken);
+          const { results } = await env.DB.prepare(
+            `SELECT household_id, encrypted_blob, auth_token_hash, integrity_tag, version, last_request_id, last_updated_at
+             FROM household_sync WHERE household_id = ?`
+          ).bind(householdId).all();
+          const existing = results?.[0] || null;
+
+          if (action === "fetch") {
+            if (!existing) {
+              return new Response(JSON.stringify({ hasData: false }), {
+                status: 200,
+                headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+              });
+            }
+
+            if (existing.auth_token_hash && existing.auth_token_hash !== authTokenHash) {
+              return new Response(JSON.stringify({ hasData: false }), {
+                status: 404,
+                headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+              });
+            }
+
+            if (!existing.auth_token_hash) {
+              await env.DB.prepare(
+                "UPDATE household_sync SET auth_token_hash = ?, last_updated_at = CURRENT_TIMESTAMP WHERE household_id = ?"
+              ).bind(authTokenHash, householdId).run();
+            }
+
+            const resolvedVersion = Number(existing.version || 0);
+            const resolvedRequestId = existing.last_request_id || "";
+            const resolvedIntegrityTag = existing.integrity_tag || await buildHouseholdIntegrityTag({
+              householdId,
+              authToken,
+              encryptedBlob: existing.encrypted_blob,
+              version: resolvedVersion,
+              requestId: resolvedRequestId,
+            });
+
+            if (!existing.integrity_tag) {
+              await env.DB.prepare(
+                "UPDATE household_sync SET integrity_tag = ?, last_updated_at = CURRENT_TIMESTAMP WHERE household_id = ?"
+              ).bind(resolvedIntegrityTag, householdId).run();
+            }
+
+            return new Response(JSON.stringify({
+              hasData: true,
+              encryptedBlob: existing.encrypted_blob,
+              integrityTag: resolvedIntegrityTag,
+              version: resolvedVersion,
+              requestId: resolvedRequestId,
+              lastUpdatedAt: existing.last_updated_at,
+            }), {
+              status: 200,
+              headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+            });
           }
-          
-          const { results } = await env.DB.prepare("SELECT encrypted_blob, last_updated_at FROM household_sync WHERE household_id = ?").bind(householdId).all();
-          if (!results || results.length === 0) {
-            return new Response(JSON.stringify({ hasData: false }), { status: 200, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+
+          if (action === "push") {
+            const encryptedBlob = body?.encryptedBlob;
+            const integrityTag = String(body?.integrityTag || "").trim();
+            const requestId = String(body?.requestId || "").trim();
+            const version = Number(body?.version || 0);
+
+            if (!encryptedBlob || !integrityTag || !requestId || !Number.isInteger(version) || version < 1) {
+              return new Response(JSON.stringify({
+                error: "invalid_request",
+                message: "Missing ciphertext, integrity tag, request id, or version.",
+              }), { status: 400, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+            }
+
+            const integrityOk = await verifyHouseholdIntegrity({
+              householdId,
+              authToken,
+              encryptedBlob,
+              version,
+              requestId,
+              integrityTag,
+            });
+            if (!integrityOk) {
+              return new Response(JSON.stringify({
+                error: "integrity_check_failed",
+                message: "Ciphertext integrity verification failed.",
+              }), { status: 422, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+            }
+
+            if (existing?.auth_token_hash && existing.auth_token_hash !== authTokenHash) {
+              return new Response(JSON.stringify({
+                error: "unauthorized_household_access",
+                message: "This household credential does not match the existing shared household.",
+              }), { status: 403, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+            }
+
+            const existingVersion = Number(existing?.version || 0);
+            if (existing?.last_request_id && existing.last_request_id === requestId) {
+              return new Response(JSON.stringify({
+                error: "replay_detected",
+                message: "This household sync request was already applied.",
+                currentVersion: existingVersion,
+              }), { status: 409, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+            }
+
+            if (version <= existingVersion) {
+              return new Response(JSON.stringify({
+                error: "stale_version",
+                message: "A newer household sync already exists. Pull the latest household data before pushing again.",
+                currentVersion: existingVersion,
+              }), { status: 409, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+            }
+
+            await env.DB.prepare(
+              `INSERT INTO household_sync (
+                 household_id,
+                 encrypted_blob,
+                 auth_token_hash,
+                 integrity_tag,
+                 version,
+                 last_request_id,
+                 last_updated_at
+               ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+               ON CONFLICT(household_id) DO UPDATE SET
+                 encrypted_blob = excluded.encrypted_blob,
+                 auth_token_hash = COALESCE(household_sync.auth_token_hash, excluded.auth_token_hash),
+                 integrity_tag = excluded.integrity_tag,
+                 version = excluded.version,
+                 last_request_id = excluded.last_request_id,
+                 last_updated_at = CURRENT_TIMESTAMP`
+            ).bind(householdId, encryptedBlob, authTokenHash, integrityTag, version, requestId).run();
+
+            return new Response(JSON.stringify({
+              success: true,
+              version,
+            }), {
+              status: 200,
+              headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+            });
           }
-          
+
           return new Response(JSON.stringify({
-            hasData: true,
-            encryptedBlob: results[0].encrypted_blob,
-            lastUpdatedAt: results[0].last_updated_at
-          }), { status: 200, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+            error: "invalid_action",
+            message: "Unsupported household sync action.",
+          }), {
+            status: 400,
+            headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+          });
         }
       } catch (err) {
         return new Response(JSON.stringify({ error: "Household sync error", details: err.message }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });

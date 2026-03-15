@@ -191,6 +191,7 @@ function CatalystCashShell() {
   const abortActiveChatStreamRef = useRef(abortActiveChatStream);
   const checkRecoverableAuditDraftRef = useRef(checkRecoverableAuditDraft);
   const surfaceRecoverableAuditPromptRef = useRef<(draft?: typeof recoverableAuditDraft) => void>(() => {});
+  const showShellHeader = tab !== "settings" && tab !== "history" && tab !== "results" && tab !== "input";
 
   function mergeUniqueById<T extends { id?: string | null }>(existing: T[] = [], incoming: T[] = []): T[] {
     const ids = new Set(existing.map((item) => item.id).filter(Boolean));
@@ -397,15 +398,13 @@ function CatalystCashShell() {
 
     householdSyncTimer.current = setTimeout(async () => {
       try {
-        const householdId = await db.get("household-id");
-        const passcode = await db.get("household-passcode");
+        const { getHouseholdCredentials, migrateHouseholdCredentials } = await import("./modules/householdSecrets.js");
+        await migrateHouseholdCredentials();
+        const { householdId, passcode } = await getHouseholdCredentials();
         if (!householdId || !passcode) return;
 
         const { pushHouseholdSync } = await import("./modules/householdSync.js");
-        const success = await pushHouseholdSync(householdId, passcode);
-        if (success) {
-          // success — silent
-        }
+        await pushHouseholdSync(householdId, passcode);
       } catch (e) {
         console.error("Household auto-sync error:", e);
       }
@@ -421,14 +420,15 @@ function CatalystCashShell() {
     const doPull = async () => {
       if (!ready || !online) return;
       try {
-        const householdId = await db.get("household-id");
-        const passcode = await db.get("household-passcode");
+        const { getHouseholdCredentials, migrateHouseholdCredentials } = await import("./modules/householdSecrets.js");
+        await migrateHouseholdCredentials();
+        const { householdId, passcode } = await getHouseholdCredentials();
         if (!householdId || !passcode) return;
 
         const { pullHouseholdSync, mergeHouseholdState } = await import("./modules/householdSync.js");
-        const payload = await pullHouseholdSync(householdId, passcode);
-        if (payload) {
-          const merged = await mergeHouseholdState(payload);
+        const result = await pullHouseholdSync(householdId, passcode);
+        if (result.ok && result.hasData && result.payload) {
+          const merged = await mergeHouseholdState(result.payload, result.version);
           if (merged) {
             // New data merged — refresh below
             toast.success("Household data synced. Refreshing...");
@@ -453,6 +453,10 @@ function CatalystCashShell() {
   }, [tab]);
 
   useEffect(() => {
+    if (!showShellHeader) {
+      document.documentElement.style.setProperty("--top-bar-h", "0px");
+      return;
+    }
     if (!topBarRef.current) return;
     const update = () => {
       if (!topBarRef.current) return;
@@ -463,7 +467,7 @@ function CatalystCashShell() {
     const ro = new ResizeObserver(update);
     ro.observe(topBarRef.current);
     return () => ro.disconnect();
-  }, []);
+  }, [showShellHeader]);
 
   // ═══════════════════════════════════════════════════════════════
   // CLIPBOARD AUTO-DETECT — check clipboard on app resume
@@ -1088,8 +1092,8 @@ function CatalystCashShell() {
     return (
       <div
         style={{
-          position: "absolute",
-          inset: 0,
+          width: "100%",
+          height: "100dvh",
           maxWidth: 800,
           margin: "0 auto",
           background: T.bg.base,
@@ -1107,8 +1111,8 @@ function CatalystCashShell() {
   return (
     <div
       style={{
-        position: "absolute",
-        inset: 0,
+        width: "100%",
+        height: "100dvh",
         maxWidth: 800,
         margin: "0 auto",
         background: T.bg.base,
@@ -1220,130 +1224,126 @@ function CatalystCashShell() {
         Skip to content
       </a>
       {/* ═══════ HEADER BAR ═══════ */}
-      <header
-        role="banner"
-        ref={topBarRef}
-        style={{
-          position: "sticky",
-          top: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: `calc(env(safe-area-inset-top, 0px) + 4px) 16px 8px 16px`,
-          background: T.bg.navGlass,
-          flexShrink: 0,
-          zIndex: 10,
-          backdropFilter: "blur(24px) saturate(1.8)",
-          WebkitBackdropFilter: "blur(24px) saturate(1.8)",
-          borderBottom: `1px solid ${T.border.subtle}`,
-          transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
-          transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-          willChange: "transform",
-        }}
-      >
-        <div style={{
-          position: "absolute", bottom: -1, left: 0, right: 0, height: 1,
-          background: `linear-gradient(90deg, transparent, ${T.accent.emerald}40, ${T.accent.primary}60, transparent)`
-        }} />
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={() => setShowGuide(!showGuide)}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              border: `1px solid ${showGuide ? T.border.focus : T.border.default}`,
-              background: showGuide ? T.bg.surface : T.bg.glass,
-              backdropFilter: "blur(12px)",
-              WebkitBackdropFilter: "blur(12px)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              color: showGuide ? T.accent.primary : T.text.dim,
-              transition: "color .2s, border-color .2s",
-              visibility: tab === "history" || tab === "settings" || tab === "chat" ? "hidden" : "visible",
-            }}
-          >
-            <Info size={18} strokeWidth={1.8} />
-          </button>
-          <button
-            onClick={() => setPrivacyMode(p => !p)}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              border: `1px solid ${privacyMode ? T.border.focus : T.border.default}`,
-              background: privacyMode ? T.bg.surface : T.bg.glass,
-              backdropFilter: "blur(12px)",
-              WebkitBackdropFilter: "blur(12px)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              color: privacyMode ? T.accent.primary : T.text.dim,
-              transition: "color .2s, border-color .2s",
-              visibility:
-                tab === "history" || tab === "settings" || tab === "input" || tab === "chat" ? "hidden" : "visible",
-            }}
-            aria-label={privacyMode ? "Disable Privacy Mode" : "Enable Privacy Mode"}
-          >
-            {privacyMode ? <EyeOff size={18} strokeWidth={1.8} /> : <Eye size={18} strokeWidth={1.8} />}
-          </button>
-        </div>
-
-        {/* Center Dynamic Title */}
-        <div
+      {showShellHeader && (
+        <header
+          role="banner"
+          ref={topBarRef}
           style={{
-            position: "absolute",
-            left: "50%",
-            transform: "translateX(-50%)",
-            textAlign: "center",
-            pointerEvents: "none",
+            position: "relative",
+            top: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: `calc(env(safe-area-inset-top, 0px) + 4px) 16px 8px 16px`,
+            background: T.bg.navGlass,
+            flexShrink: 0,
+            zIndex: 10,
+            backdropFilter: "blur(24px) saturate(1.8)",
+            WebkitBackdropFilter: "blur(24px) saturate(1.8)",
+            borderBottom: `1px solid ${T.border.subtle}`,
+            transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
+            transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+            willChange: "transform",
           }}
         >
+          <div style={{
+            position: "absolute", bottom: -1, left: 0, right: 0, height: 1,
+            background: `linear-gradient(90deg, transparent, ${T.accent.emerald}40, ${T.accent.primary}60, transparent)`
+          }} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => setShowGuide(!showGuide)}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                border: `1px solid ${showGuide ? T.border.focus : T.border.default}`,
+                background: showGuide ? T.bg.surface : T.bg.glass,
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                color: showGuide ? T.accent.primary : T.text.dim,
+                transition: "color .2s, border-color .2s",
+                visibility: tab === "chat" ? "hidden" : "visible",
+              }}
+            >
+              <Info size={18} strokeWidth={1.8} />
+            </button>
+            <button
+              onClick={() => setPrivacyMode(p => !p)}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                border: `1px solid ${privacyMode ? T.border.focus : T.border.default}`,
+                background: privacyMode ? T.bg.surface : T.bg.glass,
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                color: privacyMode ? T.accent.primary : T.text.dim,
+                transition: "color .2s, border-color .2s",
+                visibility: tab === "chat" ? "hidden" : "visible",
+              }}
+              aria-label={privacyMode ? "Disable Privacy Mode" : "Enable Privacy Mode"}
+            >
+              {privacyMode ? <EyeOff size={18} strokeWidth={1.8} /> : <Eye size={18} strokeWidth={1.8} />}
+            </button>
+          </div>
+
           <div
             style={{
-              fontSize: 16,
-              fontWeight: 800,
-              color: T.text.primary,
-              letterSpacing: getTracking(16, "bold"),
+              position: "absolute",
+              left: "50%",
+              transform: "translateX(-50%)",
+              textAlign: "center",
+              pointerEvents: "none",
             }}
           >
-            {tab === "dashboard" ? "Command Center" :
-              tab === "input" ? "New Audit" :
+            <div
+              style={{
+                fontSize: 16,
+                fontWeight: 800,
+                color: T.text.primary,
+                letterSpacing: getTracking(16, "bold"),
+              }}
+            >
+              {tab === "dashboard" ? "Command Center" :
                 tab === "audit" ? "Audit" :
                   tab === "chat" ? "Catalyst AI" :
                     tab === "cashflow" ? "Cashflow" :
-                      tab === "portfolio" ? "Portfolio" :
-                        tab === "results" ? "Results" :
-                          tab === "history" ? "History" : ""}
+                      tab === "portfolio" ? "Portfolio" : ""}
+            </div>
           </div>
-        </div>
 
-        <button
-          onClick={() => (tab === "settings" ? navTo(lastCenterTab.current) : navTo("settings"))}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 12,
-            border: `1px solid ${tab === "settings" ? T.border.focus : T.border.default}`,
-            background: tab === "settings" ? T.bg.surface : T.bg.glass,
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            color: tab === "settings" ? T.accent.primary : T.text.dim,
-            transition: "color .2s, border-color .2s",
-            visibility: tab === "settings" ? "hidden" : "visible",
-          }}
-          aria-label="Open Settings"
-        >
-          <Settings size={18} strokeWidth={1.8} />
-        </button>
-      </header>
+          <button
+            onClick={() => navTo("settings")}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              border: `1px solid ${T.border.default}`,
+              background: T.bg.glass,
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: T.text.dim,
+              transition: "color .2s, border-color .2s",
+            }}
+            aria-label="Open Settings"
+          >
+            <Settings size={18} strokeWidth={1.8} />
+          </button>
+        </header>
+      )}
 
       {/* ═══════ OFFLINE BANNER ═══════ */}
       {!online && (
