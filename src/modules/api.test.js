@@ -24,7 +24,7 @@ vi.mock("./fetchWithRetry.js", () => ({
   fetchWithRetry: vi.fn(),
 }));
 
-import { streamAudit } from "./api.js";
+import { fetchGatingConfig, streamAudit } from "./api.js";
 
 function makeStreamingResponse(reader) {
   return {
@@ -124,5 +124,26 @@ describe("streamAudit stream cleanup", () => {
     })()).rejects.toThrow(/aborted/i);
 
     expect(cancel).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("backend URL selection", () => {
+  it("uses the loopback-safe worker URL for /config on localhost and 127.0.0.1", async () => {
+    vi.stubGlobal("window", {
+      location: { hostname: "127.0.0.1" },
+    });
+    const fetchSpy = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ gatingMode: "soft", minVersion: "2.0.0" }),
+    }));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const config = await fetchGatingConfig();
+
+    expect(config).toEqual({ gatingMode: "soft", minVersion: "2.0.0" });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "https://catalyst-cash-api.portfoliopro-app.workers.dev/config",
+      expect.objectContaining({ method: "GET" })
+    );
   });
 });

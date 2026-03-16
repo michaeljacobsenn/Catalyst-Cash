@@ -6,11 +6,8 @@ import { computeNextReminderDate } from "./notifications.js";
 // ═══════════════════════════════════════════════════════════════
 
 describe("computeNextReminderDate", () => {
-  let realDate;
-
   beforeEach(() => {
     // Fix "now" to Monday, Jan 8, 2024 at 10:00 AM
-    realDate = Date;
     const mockNow = new Date(2024, 0, 8, 10, 0, 0, 0);
     vi.useFakeTimers({ now: mockNow });
   });

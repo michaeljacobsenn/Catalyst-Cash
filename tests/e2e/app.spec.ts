@@ -1,530 +1,38 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
-
-const AUDIT_FIXTURE = {
-  ensembleThoughtProcess: "ROUTING: [Planning Agent]. CHAIN OF THOUGHT: deterministic e2e fixture.",
-  headerCard: {
-    status: "GREEN",
-    details: ["Cash floor protected", "No acute solvency issue detected"],
-  },
-  liquidNetWorth: "$8,250.00",
-  healthScore: {
-    score: 86,
-    grade: "B",
-    trend: "up",
-    summary: "Strong cash coverage with one clear debt-priority move.",
-    narrative: "Cash protection is intact. Your clearest next step is to route surplus cash to high-interest debt.",
-  },
-  alertsCard: ["Protect your floor before discretionary spending."],
-  dashboardCard: [
-    { category: "Checking", amount: "$4,600.00", status: "Protected" },
-    { category: "Vault", amount: "$2,100.00", status: "On track" },
-    { category: "Pending", amount: "$225.00", status: "Upcoming" },
-    { category: "Debts", amount: "$1,450.00", status: "Pay down" },
-    { category: "Available", amount: "$1,325.00", status: "SURPLUS" },
-  ],
-  weeklyMoves: ["Route $300 to Chase Freedom this week.", "Hold checking above $900 until next payday."],
-  radar: [],
-  longRangeRadar: [],
-  milestones: ["Emergency reserve is over halfway funded."],
-  investments: {
-    balance: "$12,400.00",
-    asOf: "2026-03-13",
-    gateStatus: "Open",
-    cryptoValue: null,
-    netWorth: "$19,200.00",
-  },
-  nextAction: "Route $300 to Chase Freedom this week and keep checking above $900.",
-  spendingAnalysis: null,
-  negotiationTargets: [],
-};
-
-const CHAT_RESPONSE =
-  "You are safe this week. Keep checking above your floor and route any extra cash to your highest-interest debt first.";
-
-const SECOND_AUDIT_FIXTURE = {
-  ...AUDIT_FIXTURE,
-  headerCard: {
-    status: "YELLOW",
-    details: ["Cash buffer is tighter this cycle", "A near-term bill spike needs attention"],
-  },
-  healthScore: {
-    score: 72,
-    grade: "C-",
-    trend: "down",
-    summary: "Cash flow is tighter and needs a cleaner spending plan.",
-    narrative: "You need to slow discretionary spend and route extra cash to immediate obligations.",
-  },
-  weeklyMoves: ["Pause nonessential spending until your checking buffer recovers."],
-  nextAction: "Pause nonessential spending until your checking buffer recovers.",
-};
-
-const SETUP_WIZARD_BACKUP = {
-  app: "Catalyst Cash",
-  exportedAt: "2026-03-13T12:00:00.000Z",
-  data: {
-    "financial-config": {
-      payFrequency: "bi-weekly",
-      payday: "Friday",
-      incomeType: "salary",
-      paycheckStandard: 3200,
-      paycheckFirstOfMonth: 2800,
-      weeklySpendAllowance: 425,
-      emergencyFloor: 1500,
-      greenStatusTarget: 4200,
-      emergencyReserveTarget: 18000,
-      defaultAPR: 22.99,
-      currencyCode: "USD",
-      stateCode: "CA",
-      birthYear: 1991,
-      housingType: "rent",
-      monthlyRent: 2100,
-      isContractor: true,
-      taxBracketPercent: 28,
-      trackHSA: true,
-      trackCrypto: false,
-    },
-    "bank-accounts": [
-      {
-        id: "setup-backup-checking",
-        bank: "Backup Bank",
-        accountType: "checking",
-        name: "Primary Checking",
-        balance: 6400,
-      },
-    ],
-    "card-portfolio": [
-      {
-        id: "setup-backup-card",
-        issuer: "Chase",
-        network: "Visa",
-        name: "Freedom Unlimited",
-        limit: 12000,
-        balance: 900,
-        apr: 24.99,
-      },
-    ],
-    renewals: [
-      {
-        id: "setup-backup-renewal",
-        name: "Netflix",
-        amount: 15.49,
-        frequency: "monthly",
-        dueDate: "2026-03-28",
-      },
-    ],
-    "ai-provider": "backend",
-    "ai-model": "gemini-2.5-flash",
-  },
-};
-
-function buildStoredAudit(parsed = AUDIT_FIXTURE, overrides: Record<string, unknown> = {}) {
-  return {
-    ts: 1760000000000,
-    date: "2026-03-13",
-    provider: "backend",
-    model: "gpt-4o-mini",
-    parsed,
-    moveChecks: {},
-    form: {
-      date: "2026-03-13",
-      checkingBalance: 4600,
-      notes: "Seeded e2e audit",
-    },
-    ...overrides,
-  };
-}
-
-function chunkString(value: string, size = 80): string[] {
-  const chunks: string[] = [];
-  for (let index = 0; index < value.length; index += size) {
-    chunks.push(value.slice(index, index + size));
-  }
-  return chunks;
-}
-
-async function mockAuditApi(page: Page) {
-  await page.route("https://api.catalystcash.app/audit", async (route: Route) => {
-    const postData = route.request().postDataJSON() as {
-      stream?: boolean;
-      responseFormat?: "json" | "text";
-    };
-
-    if (postData?.stream && postData?.responseFormat === "text") {
-      const body = chunkString(CHAT_RESPONSE, 45)
-        .map(chunk => `data: ${JSON.stringify({ choices: [{ delta: { content: chunk } }] })}\n\n`)
-        .join("") + "data: [DONE]\n\n";
-      await route.fulfill({
-        status: 200,
-        contentType: "text/event-stream",
-        body,
-        headers: {
-          "access-control-allow-origin": "*",
-          "cache-control": "no-cache",
-        },
-      });
-      return;
-    }
-
-    if (postData?.stream) {
-      const body = chunkString(JSON.stringify(AUDIT_FIXTURE), 90)
-        .map(chunk => `data: ${JSON.stringify({ choices: [{ delta: { content: chunk } }] })}\n\n`)
-        .join("") + "data: [DONE]\n\n";
-      await route.fulfill({
-        status: 200,
-        contentType: "text/event-stream",
-        body,
-        headers: {
-          "access-control-allow-origin": "*",
-          "cache-control": "no-cache",
-        },
-      });
-      return;
-    }
-
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        result: postData?.responseFormat === "text" ? CHAT_RESPONSE : JSON.stringify(AUDIT_FIXTURE),
-      }),
-      headers: {
-        "access-control-allow-origin": "*",
-        "content-type": "application/json",
-        "X-RateLimit-Remaining": "999",
-        "X-RateLimit-Limit": "999",
-      },
-    });
-  });
-}
-
-async function mockAuditApiSequence(page: Page, fixtures: Array<Record<string, unknown>>) {
-  let index = 0;
-  await page.route("https://api.catalystcash.app/audit", async (route: Route) => {
-    const postData = route.request().postDataJSON() as {
-      stream?: boolean;
-      responseFormat?: "json" | "text";
-    };
-    const fixture = fixtures[Math.min(index, fixtures.length - 1)];
-
-    if (postData?.stream && postData?.responseFormat === "text") {
-      const body = chunkString(CHAT_RESPONSE, 45)
-        .map(chunk => `data: ${JSON.stringify({ choices: [{ delta: { content: chunk } }] })}\n\n`)
-        .join("") + "data: [DONE]\n\n";
-      await route.fulfill({
-        status: 200,
-        contentType: "text/event-stream",
-        body,
-        headers: {
-          "access-control-allow-origin": "*",
-          "cache-control": "no-cache",
-        },
-      });
-      return;
-    }
-
-    if (postData?.stream) {
-      const body = chunkString(JSON.stringify(fixture), 90)
-        .map(chunk => `data: ${JSON.stringify({ choices: [{ delta: { content: chunk } }] })}\n\n`)
-        .join("") + "data: [DONE]\n\n";
-      await route.fulfill({
-        status: 200,
-        contentType: "text/event-stream",
-        body,
-        headers: {
-          "access-control-allow-origin": "*",
-          "cache-control": "no-cache",
-        },
-      });
-      index += 1;
-      return;
-    }
-
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        result: postData?.responseFormat === "text" ? CHAT_RESPONSE : JSON.stringify(fixture),
-      }),
-      headers: {
-        "access-control-allow-origin": "*",
-        "content-type": "application/json",
-        "X-RateLimit-Remaining": "999",
-        "X-RateLimit-Limit": "999",
-      },
-    });
-    index += 1;
-  });
-}
-
-async function mockAuditApiFailure(page: Page, error = "Audit backend unavailable") {
-  await page.route("https://api.catalystcash.app/audit", async (route: Route) => {
-    await route.fulfill({
-      status: 500,
-      contentType: "application/json",
-      body: JSON.stringify({ error }),
-      headers: {
-        "access-control-allow-origin": "*",
-        "content-type": "application/json",
-      },
-    });
-  });
-}
-
-async function mockPlaidFlow(page: Page, mode: "success" | "exit" | "exchange-failure" = "success") {
-  await page.addInitScript((scenario: "success" | "exit" | "exchange-failure") => {
-    type PlaidInitWindow = Window & {
-      Plaid?: {
-        create: (config: {
-          onSuccess: (publicToken: string, metadata: unknown) => void;
-          onExit?: (error: unknown, metadata: unknown) => void;
-        }) => { open: () => void };
-      };
-    };
-
-    const plaidMetadata = {
-      institution: {
-        name: "Mock Bank",
-        institution_id: "ins_mock_bank",
-      },
-      accounts: [
-        {
-          id: "acct-checking-1",
-          name: "Plaid Checking",
-          official_name: "Plaid Checking",
-          type: "depository",
-          subtype: "checking",
-          mask: "1234",
-        },
-      ],
-    };
-
-    (window as PlaidInitWindow).Plaid = {
-      create: ({
-        onSuccess,
-        onExit,
-      }: {
-        onSuccess: (publicToken: string, metadata: unknown) => void;
-        onExit?: (error: unknown, metadata: unknown) => void;
-      }) => ({
-        open: () => {
-          window.setTimeout(() => {
-            if (scenario === "exit") {
-              onExit?.(null, plaidMetadata);
-              return;
-            }
-            onSuccess("public-sandbox-token", plaidMetadata);
-          }, 50);
-        },
-      }),
-    };
-  }, mode);
-
-  await page.route("https://api.catalystcash.app/plaid/link-token", async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ link_token: "link-sandbox-token" }),
-      headers: {
-        "access-control-allow-origin": "*",
-        "content-type": "application/json",
-      },
-    });
-  });
-
-  await page.route("https://api.catalystcash.app/plaid/exchange", async route => {
-    if (mode === "exchange-failure") {
-      await route.fulfill({
-        status: 400,
-        contentType: "application/json",
-        body: JSON.stringify({ error: "Token exchange failed: 400" }),
-        headers: {
-          "access-control-allow-origin": "*",
-          "content-type": "application/json",
-        },
-      });
-      return;
-    }
-
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        access_token: "access-sandbox-token",
-        item_id: "item-mock-bank-1",
-      }),
-      headers: {
-        "access-control-allow-origin": "*",
-        "content-type": "application/json",
-      },
-    });
-  });
-
-  await page.route("https://api.catalystcash.app/api/sync/status", async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        hasData: true,
-        last_synced_at: "2026-03-13T12:00:00.000Z",
-        balances: {
-          accounts: [
-            {
-              account_id: "acct-checking-1",
-              balances: {
-                available: 1200,
-                current: 1260,
-                limit: null,
-                iso_currency_code: "USD",
-              },
-            },
-          ],
-        },
-        liabilities: {
-          liabilities: {
-            credit: [],
-          },
-        },
-        transactions: {
-          transactions: [],
-        },
-      }),
-      headers: {
-        "access-control-allow-origin": "*",
-        "content-type": "application/json",
-      },
-    });
-  });
-}
-
-async function seedStorage(page: Page, seed: Record<string, unknown>) {
-  await page.addInitScript((payload: Record<string, unknown>) => {
-    if (window.sessionStorage.getItem("__e2e_seeded__") === "1") {
-      return;
-    }
-
-    window.localStorage.clear();
-    window.sessionStorage.clear();
-    Object.entries(payload).forEach(([key, value]) => {
-      window.localStorage.setItem(key, JSON.stringify(value));
-    });
-    window.sessionStorage.setItem("__e2e_seeded__", "1");
-  }, seed);
-}
-
-async function writeAppStorage(page: Page, key: string, value: unknown) {
-  await page.evaluate(
-    async ({ storageKey, storageValue }) => {
-      const preferences = (window as Window & {
-        Capacitor?: {
-          Plugins?: {
-            Preferences?: {
-              set: (input: { key: string; value: string }) => Promise<void>;
-            };
-          };
-        };
-      }).Capacitor?.Plugins?.Preferences;
-
-      const serialized = JSON.stringify(storageValue);
-      if (preferences?.set) {
-        await preferences.set({ key: storageKey, value: serialized });
-        return;
-      }
-
-      window.localStorage.setItem(storageKey, serialized);
-    },
-    { storageKey: key, storageValue: value }
-  );
-}
-
-async function readAppStorage(page: Page, key: string) {
-  return page.evaluate(async (storageKey) => {
-    const preferences = (window as Window & {
-      Capacitor?: {
-        Plugins?: {
-          Preferences?: {
-            get: (input: { key: string }) => Promise<{ value?: string | null }>;
-          };
-        };
-      };
-    }).Capacitor?.Plugins?.Preferences;
-
-    if (preferences?.get) {
-      const result = await preferences.get({ key: storageKey });
-      return result?.value ? JSON.parse(result.value) : null;
-    }
-
-    const raw = window.localStorage.getItem(storageKey);
-    return raw ? JSON.parse(raw) : null;
-  }, key);
-}
-
-async function openAuditComposer(page: Page) {
-  await page.getByRole("button", { name: "Begin Audit", exact: true }).click();
-  await expect(page.getByRole("spinbutton", { name: "Checking balance" })).toBeVisible();
-}
-
-async function openSettingsMenu(page: Page, menuName: RegExp | string) {
-  await page.getByRole("button", { name: "Open Settings" }).click();
-  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-  await page.getByRole("button", { name: menuName }).click();
-}
-
-function getSettingsRowInput(page: Page, label: string) {
-  return page
-    .getByText(label, { exact: true })
-    .locator("xpath=ancestor::div[1]")
-    .locator("input:visible")
-    .first();
-}
-
-function getWizardFieldInput(page: Page, label: RegExp | string) {
-  return page
-    .getByText(label)
-    .locator("xpath=ancestor::div[2]")
-    .locator("input:visible")
-    .first();
-}
-
-async function completeOnboarding(page: Page) {
-  await page.goto("/");
-
-  await expect(page.getByRole("button", { name: "Let's Get Started →" })).toBeVisible();
-  await page.getByRole("checkbox", { name: "Accept legal disclaimer" }).click();
-  await page.getByRole("button", { name: "Let's Get Started →" }).click();
-  await expect(page.getByText("Import Data")).toBeVisible();
-  await page.getByRole("button", { name: "Skip for Now →" }).click();
-  await expect(page.getByText("Your Profile")).toBeVisible();
-  await page.getByRole("button", { name: "Continue →" }).click();
-  await expect(page.getByText("Your Cash Flow")).toBeVisible();
-  await page.getByRole("button", { name: "Next →" }).click();
-  await expect(page.getByText("Your Goals")).toBeVisible();
-  await page.getByRole("button", { name: "Next →" }).click();
-  await expect(page.getByText("Your Setup")).toBeVisible();
-  await page.getByRole("button", { name: "Save & Finish →" }).click();
-
-  await expect.poll(
-    async () => {
-      if (await page.getByText("You're All Set").isVisible().catch(() => false)) return "done";
-      if (await page.getByRole("button", { name: "Open Settings" }).isVisible().catch(() => false)) return "shell";
-      return "pending";
-    },
-    { timeout: 10000 }
-  ).not.toBe("pending");
-
-  if (await page.getByText("You're All Set").isVisible().catch(() => false)) {
-    await page.getByRole("button", { name: "🚀 Go to Dashboard" }).click();
-  }
-
-  await expect(page.getByRole("button", { name: "Open Settings" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Home" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
-}
+import { expect, test } from "@playwright/test";
+import {
+  AUDIT_FIXTURE,
+  CORE_JOURNEY_SEED,
+  SECOND_AUDIT_FIXTURE,
+  SETUP_WIZARD_BACKUP,
+  buildStoredAudit,
+  completeOnboarding,
+  getSettingsRowInput,
+  getWizardFieldInput,
+  installMockNativeSecureStorage,
+  mockAuditApi,
+  mockAuditApiFailure,
+  mockAuditApiSequence,
+  mockBaseApi,
+  mockHouseholdSyncApi,
+  mockPlaidFlow,
+  openAuditComposer,
+  openSettingsMenu,
+  readAppStorage,
+  seedHouseholdRemoteRecord,
+  seedStorage,
+  writeAppStorage,
+} from "./helpers/appHarness";
 
 test.describe("Catalyst Cash end-to-end", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockBaseApi(page);
+  });
+
   test("completes onboarding and lands on the dashboard", async ({ page }) => {
     await seedStorage(page, {});
     await completeOnboarding(page);
-    await expect(page.getByText("Welcome Checklist")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Begin audit", exact: true })).toBeVisible();
   });
 
   test("restores the main shell after onboarding on reload", async ({ page }) => {
@@ -535,7 +43,7 @@ test.describe("Catalyst Cash end-to-end", () => {
 
     await expect(page.getByRole("button", { name: "Open Settings" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Let's Get Started →" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Start Setup →" })).toHaveCount(0);
   });
 
   test("continues setup with imported backup values prefilled", async ({ page }) => {
@@ -543,7 +51,7 @@ test.describe("Catalyst Cash end-to-end", () => {
     await page.goto("/");
 
     await page.getByRole("checkbox", { name: "Accept legal disclaimer" }).click();
-    await page.getByRole("button", { name: "Let's Get Started →" }).click();
+    await page.getByRole("button", { name: "Start Setup →" }).click();
 
     await page.locator('input[type="file"]').first().setInputFiles({
       name: "setup-backup.json",
@@ -551,15 +59,15 @@ test.describe("Catalyst Cash end-to-end", () => {
       buffer: Buffer.from(JSON.stringify(SETUP_WIZARD_BACKUP)),
     });
 
-    await expect(page.getByText("Backup imported successfully!")).toBeVisible();
+    await expect(page.getByText("Import complete")).toBeVisible();
     await page.getByRole("button", { name: "Continue Setup" }).click();
 
-    await expect(page.getByText("Your Profile")).toBeVisible();
+    await expect(page.getByText("Your Profile", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Birth year")).toHaveValue("1991");
     await expect(getWizardFieldInput(page, /Monthly Rent/)).toHaveValue("2100");
 
     await page.getByRole("button", { name: "Continue →" }).click();
-    await expect(page.getByText("Your Cash Flow")).toBeVisible();
+    await expect(page.getByText("Cash Flow", { exact: true })).toBeVisible();
     await expect(getWizardFieldInput(page, /Standard Paycheck/)).toHaveValue("3200");
     await expect(getWizardFieldInput(page, /First-of-Month Paycheck/)).toHaveValue("2800");
     await expect(getWizardFieldInput(page, /Weekly Spend Allowance/)).toHaveValue("425");
@@ -666,8 +174,9 @@ test.describe("Catalyst Cash end-to-end", () => {
       await page.getByRole("button", { name: "Run Catalyst Audit" }).click();
     }
 
-    await expect(page.getByText("Audit backend unavailable")).toBeVisible();
-    await expect(page.getByText("New Audit", { exact: true })).toBeVisible();
+    await expect(page.getByText("Audit blocked").first()).toBeVisible();
+    await expect(page.getByText("The audit hit an unexpected problem.").first()).toBeVisible();
+    await expect(page.getByRole("spinbutton", { name: "Checking balance" })).toBeVisible();
     await expect(page.getByLabel("Notes for this week")).toBeVisible();
   });
 
@@ -732,7 +241,14 @@ test.describe("Catalyst Cash end-to-end", () => {
 
     await page.getByRole("button", { name: "← Back" }).click();
     await expect(page.getByText("LATEST AUDIT")).toBeVisible();
-    await expect(page.getByRole("button", { name: /LATEST AUDIT.*72/i })).toBeVisible();
+    const latestAuditButton = page.getByRole("button", { name: /LATEST AUDIT/i }).first();
+    await expect(latestAuditButton).toBeVisible();
+    await latestAuditButton.click();
+    const reopenedNextActionHeading = page.getByRole("heading", { name: "Immediate Next Action" });
+    await expect(reopenedNextActionHeading).toBeVisible();
+    await expect(reopenedNextActionHeading.locator("xpath=following::p[1]")).toHaveText(
+      "Pause nonessential spending until your checking buffer recovers."
+    );
   });
 
   test("rejects invalid pasted audit JSON with a visible error", async ({ page, context }) => {
@@ -859,9 +375,9 @@ test.describe("Catalyst Cash end-to-end", () => {
     });
     await page.reload();
 
-    await expect(page.getByRole("button", { name: "Let's Get Started →" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start Setup →" })).toBeVisible();
     await page.getByRole("checkbox", { name: "Accept legal disclaimer" }).click();
-    await page.getByRole("button", { name: "Let's Get Started →" }).click();
+    await page.getByRole("button", { name: "Start Setup →" }).click();
     await expect(page.getByText("Import Data")).toBeVisible();
 
     await page.locator('input[type="file"]').first().setInputFiles(downloadPath as string);
@@ -869,47 +385,26 @@ test.describe("Catalyst Cash end-to-end", () => {
     await page.getByPlaceholder("Enter backup passphrase").fill("BackupPass123!");
     await page.getByRole("button", { name: "Unlock & Import" }).click();
 
-    await expect(page.getByText("Backup imported successfully!")).toBeVisible();
-    await page.getByRole("button", { name: "Go to Dashboard →" }).click();
+    await expect(page.getByText("Import complete")).toBeVisible();
+    await page.getByRole("button", { name: "Continue Setup" }).click();
 
-    await expect
-      .poll(async () => {
-        if (await page.getByRole("heading", { name: "Financial Profile" }).isVisible().catch(() => false)) {
-          return "profile";
-        }
-        if (await page.getByRole("button", { name: "Open Settings" }).isVisible().catch(() => false)) {
-          return "shell";
-        }
-        return "pending";
-      })
-      .not.toBe("pending");
+    await expect(page.getByRole("heading", { name: "Demographics & Region" })).toBeVisible();
+    await expect(getWizardFieldInput(page, /Monthly Rent/)).toHaveValue("1850");
 
-    if (await page.getByRole("button", { name: "Open Settings" }).isVisible().catch(() => false)) {
-      await openSettingsMenu(page, /Financial Profile/i);
-    }
-
-    await expect(page.getByRole("heading", { name: "Financial Profile" })).toBeVisible();
-    await expect(getSettingsRowInput(page, "Standard Paycheck")).toHaveValue("3200");
-    await expect(getSettingsRowInput(page, "Monthly Rent")).toHaveValue("1850");
+    await page.getByRole("button", { name: "Continue →" }).click();
+    await expect(page.getByText("Cash Flow", { exact: true })).toBeVisible();
+    await expect(getWizardFieldInput(page, /Standard Paycheck/)).toHaveValue("3200");
   });
 
-  test("locks the app before shell render and unlocks with the saved passcode", async ({ page }) => {
+  test("shows native-only security gating on web without trapping the user in a broken lock flow", async ({ page }) => {
     await seedStorage(page, {});
     await completeOnboarding(page);
-
     await openSettingsMenu(page, /App Security/i);
-    await expect(page.getByText("Security Suite")).toBeVisible();
-    await page.getByLabel("App passcode").fill("2468");
-    await page.getByRole("button", { name: "Require Passcode" }).click();
+    await expect(page.getByText("Native-Only Security on Web")).toBeVisible();
+    await expect(page.getByLabel("App passcode")).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Require Passcode" })).toBeVisible();
 
     await page.reload();
-
-    await expect(page.getByRole("dialog", { name: "App lock screen" })).toBeVisible();
-    await expect(page.getByText("APP IS LOCKED")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Open Settings" })).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "Dashboard" })).toHaveCount(0);
-
-    await page.keyboard.type("2468");
 
     await expect(page.getByRole("dialog", { name: "App lock screen" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Open Settings" })).toBeVisible();
@@ -1039,5 +534,101 @@ test.describe("Catalyst Cash end-to-end", () => {
     await expect(page.getByRole("tab", { name: "Portfolio", selected: true })).toBeVisible();
     await expect(page.getByText("Plaid Checking").last()).toBeVisible();
     await expect(page.getByText("Reconnect required").last()).toBeVisible();
+  });
+
+  test("pushes household sync changes after a linked profile is edited", async ({ page }) => {
+    await installMockNativeSecureStorage(page);
+    const householdApi = mockHouseholdSyncApi(page);
+    await seedStorage(page, {});
+    await completeOnboarding(page);
+
+    await openSettingsMenu(page, /Backup & Sync/i);
+    await expect(page.getByText("Backup & Sync").first()).toBeVisible();
+    await page.getByRole("button", { name: "Setup" }).click();
+    const householdModal = page.getByText("Household Sync (E2EE)").locator("xpath=ancestor::div[2]");
+    await householdModal.waitFor();
+    await householdModal.locator('input[type="text"]').fill("FamilyOne");
+    await householdModal.locator('input[type="password"]').fill("Secret123!");
+    await page.getByRole("button", { name: "Save & Sync" }).click();
+
+    await expect.poll(() => householdApi.fetches.length, { timeout: 5000 }).toBeGreaterThan(0);
+    await expect(page.getByText("Linked as: FamilyOne")).toBeVisible();
+
+    await page.getByRole("button", { name: "Back to Settings" }).evaluate((button) => {
+      (button as HTMLButtonElement).click();
+    });
+    await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+    await page.getByRole("button", { name: /Financial Profile/i }).click();
+    const paycheckInput = getSettingsRowInput(page, "Standard Paycheck");
+    await paycheckInput.fill("5100");
+    await page.getByRole("button", { name: "Back to Settings" }).evaluate((button) => {
+      (button as HTMLButtonElement).click();
+    });
+    await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+    await page.getByRole("button", { name: /Backup & Sync/i }).click();
+    await expect.poll(() => householdApi.pushes.length, { timeout: 10000 }).toBeGreaterThan(0);
+    expect(householdApi.remoteRecord).toBeTruthy();
+  });
+
+  test("pulls household sync data into a fresh linked session", async ({ page }) => {
+    await installMockNativeSecureStorage(page, {
+      "household-id": "FamilyOne",
+      "household-passcode": "Secret123!",
+    });
+    const householdApi = mockHouseholdSyncApi(page);
+    await seedHouseholdRemoteRecord(householdApi, {
+      householdId: "FamilyOne",
+      passcode: "Secret123!",
+      payload: {
+        data: {
+          "financial-config": {
+            payFrequency: "bi-weekly",
+            payday: "Friday",
+            paycheckStandard: 5100,
+            paycheckFirstOfMonth: 2800,
+            weeklySpendAllowance: 425,
+            emergencyFloor: 1200,
+            currencyCode: "USD",
+          },
+        },
+        timestamp: Date.now(),
+      },
+      version: 3,
+    });
+    await seedStorage(page, {
+      ...CORE_JOURNEY_SEED,
+      "financial-config": {
+        ...CORE_JOURNEY_SEED["financial-config"],
+        paycheckStandard: 0,
+      },
+    });
+
+    await page.goto("/");
+    await expect(page.getByRole("button", { name: "Open Settings" })).toBeVisible();
+    await expect.poll(() => readAppStorage(page, "financial-config"), { timeout: 10000 }).toMatchObject({
+      paycheckStandard: 5100,
+    });
+    expect(householdApi.fetches.length).toBeGreaterThan(0);
+  });
+
+  test("respects reduced-motion preferences while keeping tab switching stable", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await seedStorage(page, {});
+    await completeOnboarding(page);
+
+    await page.getByRole("tab", { name: "Portfolio" }).click();
+    await expect(page.getByRole("tab", { name: "Portfolio", selected: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Vault" })).toBeVisible();
+
+    const transitionStyle = await page.locator('.snap-page[data-tabid="portfolio"] > div').evaluate((element) => {
+      return window.getComputedStyle(element).transition;
+    });
+    expect(transitionStyle.startsWith("none")).toBe(true);
+
+    await page.getByRole("tab", { name: "Home" }).click();
+    await expect(page.getByRole("tab", { name: "Home", selected: true })).toBeVisible();
+    await page.getByRole("tab", { name: "Portfolio" }).click();
+    await expect(page.getByRole("tab", { name: "Portfolio", selected: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Vault" })).toBeVisible();
   });
 });

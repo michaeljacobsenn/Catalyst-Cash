@@ -11,7 +11,30 @@
 // Routes all AI requests through the Cloudflare Worker proxy.
 // ═══════════════════════════════════════════════════════════════
 
-const BACKEND_URL = "https://api.catalystcash.app";
+const PROD_BACKEND_URL = "https://api.catalystcash.app";
+const DEV_BACKEND_URL = "https://catalyst-cash-api.portfoliopro-app.workers.dev";
+const CONFIGURED_BACKEND_URL = String(import.meta.env.VITE_PROXY_URL || "").trim();
+
+function isLoopbackHost(hostname) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+}
+
+export function getBackendUrl() {
+  const hostname = typeof window !== "undefined" ? String(window.location?.hostname || "") : "";
+  const isLoopback = isLoopbackHost(hostname);
+  if (CONFIGURED_BACKEND_URL) {
+    try {
+      const configuredHostname = new URL(CONFIGURED_BACKEND_URL).hostname;
+      if (isLoopback && configuredHostname === "api.catalystcash.app") {
+        return DEV_BACKEND_URL;
+      }
+    } catch {
+      // Ignore malformed overrides and fall back below.
+    }
+    return CONFIGURED_BACKEND_URL;
+  }
+  return isLoopback ? DEV_BACKEND_URL : PROD_BACKEND_URL;
+}
 
 // ── Rate-limit sync callback ──────────────────────────────────
 // The worker returns X-RateLimit-Remaining and X-RateLimit-Limit
@@ -99,7 +122,7 @@ function resolveProvider(model, fallbackProvider) {
 async function* streamBackend(snapshot, model, context, history, deviceId, backendProvider, signal, responseFormat, requestType = "audit") {
   const resolvedProvider = resolveProvider(model, backendProvider);
 
-  const res = await fetch(`${BACKEND_URL}/audit`, {
+  const res = await fetch(`${getBackendUrl()}/audit`, {
     method: "POST",
     headers: await buildBackendHeaders(deviceId),
     body: JSON.stringify({
@@ -166,7 +189,7 @@ async function* streamBackend(snapshot, model, context, history, deviceId, backe
 async function callBackend(snapshot, model, context, history, deviceId, backendProvider, responseFormat, requestType = "audit") {
   const resolvedProvider = resolveProvider(model, backendProvider);
 
-  const res = await fetchWithRetry(`${BACKEND_URL}/audit`, {
+  const res = await fetchWithRetry(`${getBackendUrl()}/audit`, {
     method: "POST",
     headers: await buildBackendHeaders(deviceId),
     body: JSON.stringify({
@@ -203,7 +226,7 @@ async function callBackend(snapshot, model, context, history, deviceId, backendP
 export async function reportAuditLogOutcome(auditLogId, parseSucceeded, hitDegradedFallback, metadata = {}) {
   if (!auditLogId) return;
 
-  await fetchWithRetry(`${BACKEND_URL}/api/audit-log/outcome`, {
+  await fetchWithRetry(`${getBackendUrl()}/api/audit-log/outcome`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -227,7 +250,7 @@ export async function reportAuditLogOutcome(auditLogId, parseSucceeded, hitDegra
 export async function* streamAudit(
   apiKey,
   snapshot,
-  providerId = "backend",
+  _providerId = "backend",
   model,
   context,
   history = [],
@@ -254,7 +277,7 @@ export async function* streamAudit(
 export async function callAudit(
   apiKey,
   snapshot,
-  providerId = "backend",
+  _providerId = "backend",
   model,
   context,
   history = [],
@@ -388,7 +411,7 @@ export async function fetchGatingConfig() {
     return _cachedConfig;
   }
   try {
-    const res = await fetch(`${BACKEND_URL}/config`, {
+    const res = await fetch(`${getBackendUrl()}/config`, {
       method: "GET",
       headers: {
         "X-App-Version": APP_VERSION,

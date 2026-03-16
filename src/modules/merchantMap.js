@@ -77,9 +77,7 @@ const BASELINE = {
   sheetz: "Gas & Auto",
   pilot: "Gas & Auto",
   "quik trip": "Gas & Auto",
-  autozone: "Gas & Auto",
   "o'reilly": "Gas & Auto",
-  "advance auto": "Gas & Auto",
   "car wash": "Gas & Auto",
   "jiffy lube": "Gas & Auto",
   valvoline: "Gas & Auto",
@@ -100,7 +98,6 @@ const BASELINE = {
   adobe: "Subscriptions",
   "microsoft 365": "Subscriptions",
   icloud: "Subscriptions",
-  "google one": "Subscriptions",
   dropbox: "Subscriptions",
   audible: "Subscriptions",
 
@@ -113,7 +110,6 @@ const BASELINE = {
   lowe: "Shopping",
   ikea: "Shopping",
   wayfair: "Shopping",
-  "bed bath": "Shopping",
   marshalls: "Shopping",
   tjmaxx: "Shopping",
   ross: "Shopping",
@@ -131,11 +127,6 @@ const BASELINE = {
   walgreens: "Health",
   "rite aid": "Health",
   gnc: "Health",
-  "planet fitness": "Health",
-  "anytime fitness": "Health",
-  "la fitness": "Health",
-  orangetheory: "Health",
-  equinox: "Health",
   pharmacy: "Health",
   "urgent care": "Health",
   hospital: "Health",
@@ -206,7 +197,6 @@ const BASELINE = {
   // Entertainment
   amc: "Entertainment",
   regal: "Entertainment",
-  cinemark: "Entertainment",
   ticketmaster: "Entertainment",
   stubhub: "Entertainment",
   steam: "Entertainment",
@@ -268,8 +258,6 @@ const BASELINE = {
   "life time": "Gym",
   soulcycle: "Gym",
   peloton: "Gym",
-  classpass: "Gym",
-
   // More Shopping
   "dollar general": "Shopping",
   "dollar tree": "Shopping",
@@ -293,7 +281,6 @@ const BASELINE = {
   "fedex office": "Shopping",
 
   // More Health
-  noom: "Health",
   calm: "Health",
   headspace: "Health",
   "massage envy": "Health",

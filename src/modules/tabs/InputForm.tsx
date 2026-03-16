@@ -10,16 +10,11 @@
   import { CustomSelect as UICustomSelect,DI as UIDI,Mono as UIMono } from "../components.js";
   import { T } from "../constants.js";
   import {
-    AlertCircle,
     AlertTriangle,
     CheckCircle,
-    ChevronDown,
-    ChevronUp,
-    Loader2,
     Minus,
     Plus,
     Trash2,
-    TrendingUp,
     Zap,
   } from "../icons";
   import { calcPortfolioValue,fetchMarketPrices } from "../marketData.js";
@@ -41,11 +36,17 @@
   import type { PersonaMode,SetFinancialConfig } from "../contexts/SettingsContext.js";
   import { DEFAULT_FINANCIAL_CONFIG } from "../contexts/SettingsContext.js";
   import { haptic } from "../haptics.js";
-  import { isLikelyNetworkError } from "../networkErrors.js";
   import { getPlaidAutoFill,getStoredTransactions } from "../plaid.js";
   import { checkAuditQuota,isGatingEnforced } from "../subscription.js";
-
-type MoneyInput = number | string;
+  import {
+    AuditQuotaNotice,
+    InputFormErrorBanner,
+    PlaidTransactionsCard,
+    SubmitBar,
+    ValidationFeedback,
+  } from "./inputForm/FeedbackSections.js";
+  import { ConfigSection } from "./inputForm/ConfigSection";
+  import { sanitizeDollar, toMoneyInput, toNumber, type MoneyInput } from "./inputForm/utils.js";
 
 interface InputDebt extends AuditFormDebt {
   cardId: string;
@@ -224,12 +225,6 @@ const Label = UILabel as unknown as (props: LabelProps) => ReactNode;
 const Mono = UIMono as unknown as (props: MonoProps) => ReactNode;
 const DI = UIDI as unknown as (props: DollarInputProps) => ReactNode;
 const CustomSelect = UICustomSelect as unknown as (props: CustomSelectProps) => ReactNode;
-
-// Sanitize dollar input: strip non-numeric chars except decimal point
-const sanitizeDollar = (value: string): string => value.replace(/[^0-9.]/g, "").replace(/\.(?=.*\.)/g, "");
-const toNumber = (value: MoneyInput | "" | null | undefined): number => parseFloat(String(value ?? "0")) || 0;
-const toMoneyInput = (value: unknown): MoneyInput | "" =>
-  typeof value === "number" || typeof value === "string" ? value : "";
 
 export default function InputForm({
   onSubmit,
@@ -497,48 +492,7 @@ export default function InputForm({
       }}
     >
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
-      {error && (
-        <div
-          style={{
-            marginBottom: 12,
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 10,
-            padding: "12px 14px",
-            borderRadius: T.radius.lg,
-            background: isLikelyNetworkError(error) ? `${T.status.amber}12` : T.status.redDim,
-            border: `1px solid ${isLikelyNetworkError(error) ? `${T.status.amber}35` : `${T.status.red}30`}`,
-            boxShadow: T.shadow.card,
-          }}
-        >
-          <AlertTriangle
-            size={16}
-            color={isLikelyNetworkError(error) ? T.status.amber : T.status.red}
-            style={{ flexShrink: 0, marginTop: 1 }}
-          />
-          <div style={{ minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 800,
-                color: T.text.primary,
-                marginBottom: 4,
-                letterSpacing: "0.01em",
-              }}
-            >
-              {isLikelyNetworkError(error) ? "Audit service unavailable" : "Audit blocked"}
-            </div>
-            <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5 }}>
-              {error}
-            </div>
-            {isLikelyNetworkError(error) && (
-              <div style={{ marginTop: 6, fontSize: 11, color: T.text.dim, lineHeight: 1.5 }}>
-                Retry uses the same financial inputs. Nothing you entered was cleared.
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <InputFormErrorBanner error={error} />
       {/* ── SNAPSHOT ITEMS ── */}
       <div style={{ marginBottom: 20 }}>
         <Card
@@ -1783,421 +1737,25 @@ export default function InputForm({
         )
       }
 
-      {/* ── FINANCIAL PROFILE & RULES ── */}
-      <div style={{ marginTop: 8, marginBottom: 16, borderTop: `1px solid ${T.border.subtle}`, paddingTop: 10 }}>
-        <button
-          onClick={() => {
-            haptic.medium();
-            setShowConfig(!showConfig);
-          }}
-          style={{
-            width: "100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "16px 20px",
-            borderRadius: T.radius.lg,
-            border: `1px solid ${showConfig ? T.accent.primary + "50" : T.border.subtle}`,
-            background: showConfig ? `${T.accent.primary}0D` : T.bg.glass,
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
-            color: showConfig ? T.text.primary : T.text.secondary,
-            cursor: "pointer",
-            transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
-            boxShadow: showConfig ? `0 4px 16px ${T.accent.primary}1A, inset 0 1px 0 ${T.accent.primary}15` : "none",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-            <div
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: 10,
-                background: showConfig ? `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)` : T.bg.card,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: showConfig ? `0 2px 12px ${T.accent.primary}50` : "none",
-                transition: "all .3s",
-              }}
-            >
-              <Zap size={14} color={showConfig ? "#fff" : T.text.muted} strokeWidth={2.5} />
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: "-0.01em", color: T.text.primary }}>
-                Financial Profile & AI Rules
-              </div>
-              <div
-                style={{
-                  marginTop: 2,
-                  fontSize: 11,
-                  fontWeight: 500,
-                  color: showConfig ? T.text.secondary : T.text.dim,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {configSummary}
-              </div>
-            </div>
-          </div>
-          <div
-            style={{
-              transform: `rotate(${showConfig ? 180 : 0}deg)`,
-              transition: "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
-              display: "flex",
-            }}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M6 9l6 6 6-6" />
-            </svg>
-          </div>
-        </button>
-
-        {showConfig && (
-          <div style={{ animation: "fadeInUp 0.4s ease-out both", marginTop: 12 }}>
-            <Card style={{ marginBottom: 12 }}>
-              <Label>Income & Cash Flow</Label>
-              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                {(["salary", "hourly", "variable"] as const).map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => {
-                      haptic.light();
-                      setTypedFinancialConfig({ ...typedFinancialConfig, incomeType: type });
-                    }}
-                    style={{
-                      flex: 1,
-                      padding: "10px 0",
-                      borderRadius: T.radius.sm,
-                      border: `1px solid ${typedFinancialConfig?.incomeType === type ? T.accent.primary : T.border.default}`,
-                      background: typedFinancialConfig?.incomeType === type ? `${T.accent.primary}15` : T.bg.elevated,
-                      color: typedFinancialConfig?.incomeType === type ? T.accent.primary : T.text.secondary,
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      textTransform: "capitalize",
-                      transition: "all .2s",
-                    }}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
-
-              {typedFinancialConfig?.incomeType === "salary" && (
-                <div style={{ position: "relative" }}>
-                  <span
-                    style={{
-                      position: "absolute",
-                      left: 14,
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      color: T.text.dim,
-                      fontSize: 14,
-                      fontWeight: 600,
-                    }}
-                  >
-                    $
-                  </span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    pattern="[0-9]*"
-                    aria-label="Monthly take-home salary"
-                    value={typedFinancialConfig?.monthlySalary || ""}
-                    onChange={(e) => setTypedFinancialConfig({ ...typedFinancialConfig, monthlySalary: parseFloat(e.target.value) || 0 })}
-                    placeholder="Monthly Take-Home Salary"
-                    className="app-input"
-                    style={{
-                      width: "100%",
-                      padding: "12px 14px 12px 28px",
-                      borderRadius: T.radius.md,
-                      border: `1.5px solid ${T.border.default}`,
-                      background: T.bg.elevated,
-                      color: T.text.primary,
-                      fontSize: 14,
-                      boxSizing: "border-box",
-                      outline: "none",
-                    }}
-                  />
-                </div>
-              )}
-
-              {typedFinancialConfig?.incomeType === "hourly" && (
-                <div style={{ display: "flex", gap: 10 }}>
-                  <div style={{ flex: 1, position: "relative" }}>
-                    <span
-                      style={{
-                        position: "absolute",
-                        left: 14,
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        color: T.text.dim,
-                        fontSize: 14,
-                        fontWeight: 600,
-                      }}
-                    >
-                      $
-                    </span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      pattern="[0-9]*"
-                      aria-label="Hourly rate"
-                      value={typedFinancialConfig?.hourlyRate || ""}
-                      onChange={(e) => setTypedFinancialConfig({ ...typedFinancialConfig, hourlyRate: parseFloat(e.target.value) || 0 })}
-                      placeholder="Hourly Rate"
-                      className="app-input"
-                      style={{
-                        width: "100%",
-                        padding: "12px 14px 12px 28px",
-                        borderRadius: T.radius.md,
-                        border: `1.5px solid ${T.border.default}`,
-                        background: T.bg.elevated,
-                        color: T.text.primary,
-                        fontSize: 14,
-                        boxSizing: "border-box",
-                        outline: "none",
-                      }}
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      pattern="[0-9]*"
-                      aria-label="Hours per week"
-                      value={typedFinancialConfig?.assumedHours || ""}
-                      onChange={(e) => setTypedFinancialConfig({ ...typedFinancialConfig, assumedHours: parseFloat(e.target.value) || 0 })}
-                      placeholder="Hrs/Week"
-                      className="app-input"
-                      style={{
-                        width: "100%",
-                        padding: "12px 14px",
-                        borderRadius: T.radius.md,
-                        border: `1.5px solid ${T.border.default}`,
-                        background: T.bg.elevated,
-                        color: T.text.primary,
-                        fontSize: 14,
-                        boxSizing: "border-box",
-                        outline: "none",
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {typedFinancialConfig?.incomeType === "variable" && (
-                <div style={{ position: "relative" }}>
-                  <span
-                    style={{
-                      position: "absolute",
-                      left: 14,
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      color: T.text.dim,
-                      fontSize: 14,
-                      fontWeight: 600,
-                    }}
-                  >
-                    $
-                  </span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    pattern="[0-9]*"
-                    aria-label="Typical paycheck amount"
-                    value={typedFinancialConfig?.typicalPaycheck || ""}
-                    onChange={(e) => setTypedFinancialConfig({ ...typedFinancialConfig, typicalPaycheck: parseFloat(e.target.value) || 0 })}
-                    placeholder="Typical Paycheck"
-                    className="app-input"
-                    style={{
-                      width: "100%",
-                      padding: "12px 14px 12px 28px",
-                      borderRadius: T.radius.md,
-                      border: `1.5px solid ${T.border.default}`,
-                      background: T.bg.elevated,
-                      color: T.text.primary,
-                      fontSize: 14,
-                      boxSizing: "border-box",
-                      outline: "none",
-                    }}
-                  />
-                </div>
-              )}
-            </Card>
-
-            <Card style={{ marginBottom: 12 }}>
-              <Label>Custom AI Rules & Persona</Label>
-              <p style={{ fontSize: 11, color: T.text.muted, marginBottom: 10, lineHeight: 1.4 }}>
-                Define strict rules or change how the AI speaks to you.
-              </p>
-              <textarea
-                aria-label="Custom AI rules and persona"
-                value={personalRules || ""}
-                onChange={e => setPersonalRules && setPersonalRules(e.target.value)}
-                placeholder="e.g. Always remind me to save 20%. Be aggressive about my debt."
-                style={{
-                  width: "100%",
-                  height: 80,
-                  padding: "12px",
-                  borderRadius: T.radius.md,
-                  border: `1.5px solid ${T.border.default}`,
-                  background: T.bg.elevated,
-                  color: T.text.primary,
-                  fontSize: 13,
-                  fontFamily: T.font.sans,
-                  resize: "none",
-                  boxSizing: "border-box",
-                  outline: "none",
-                }}
-                className="app-input"
-              />
-            </Card>
-          </div>
-        )}
-      </div>
+      <ConfigSection
+        showConfig={showConfig}
+        setShowConfig={setShowConfig}
+        configSummary={configSummary}
+        typedFinancialConfig={typedFinancialConfig}
+        setTypedFinancialConfig={setTypedFinancialConfig}
+        personalRules={personalRules}
+        setPersonalRules={setPersonalRules}
+      />
 
       {/* ── Plaid Transactions Card ── */}
-      {
-        plaidTransactions.length > 0 && (
-          <Card style={{ marginBottom: 12, overflow: "hidden" }}>
-            <button
-              onClick={() => setShowTxns(!showTxns)}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: 0,
-                border: "none",
-                background: "none",
-                cursor: "pointer",
-                color: T.text.primary,
-                gap: 8,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <TrendingUp size={15} color={T.accent.primary} />
-                <span style={{ fontSize: 13, fontWeight: 700 }}>Recent Spending</span>
-                <Badge
-                  style={{ background: T.accent.primary + "20", color: T.accent.primary, fontSize: 10, fontWeight: 800 }}
-                >
-                  {plaidTransactions.length} txns
-                </Badge>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: T.status.red, fontFamily: T.font.mono }}>
-                  -$
-                  {plaidTransactions
-                    .reduce((s, t) => s + t.amount, 0)
-                    .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-                {showTxns ? <ChevronUp size={14} color={T.text.muted} /> : <ChevronDown size={14} color={T.text.muted} />}
-              </div>
-            </button>
-            {txnFetchedAt && (
-              <p style={{ fontSize: 10, color: T.text.dim, marginTop: 4, marginBottom: showTxns ? 8 : 0 }}>
-                Synced {new Date(txnFetchedAt).toLocaleDateString()} · Last 7 days · Auto-included in audit
-              </p>
-            )}
-            {showTxns && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 280, overflowY: "auto" }}>
-                {plaidTransactions.map((t, i) => (
-                  <div
-                    key={t.id || i}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "6px 0",
-                      borderTop: i > 0 ? `1px solid ${T.border.subtle}` : "none",
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: T.text.primary,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {t.description}
-                      </div>
-                      <div style={{ fontSize: 10, color: T.text.dim, marginTop: 1 }}>
-                        {t.date} · {t.category || "Uncategorized"}
-                        {t.accountName ? ` · ${t.accountName}` : ""}
-                      </div>
-                    </div>
-                    <Mono style={{ fontSize: 12, fontWeight: 700, color: T.status.red, flexShrink: 0, marginLeft: 8 }}>
-                      -${t.amount.toFixed(2)}
-                    </Mono>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        )
-      }
+      <PlaidTransactionsCard
+        plaidTransactions={plaidTransactions}
+        txnFetchedAt={txnFetchedAt}
+        showTxns={showTxns}
+        setShowTxns={setShowTxns}
+      />
 
-      {/* Validation Feedback — errors + warnings */}
-      {
-        (validationErrors.length > 0 || validationWarnings.length > 0) && (
-          <div style={{ marginBottom: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-            {validationErrors.map((e, i) => (
-              <div
-                key={`err-${i}`}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "10px 12px",
-                  borderRadius: T.radius.md,
-                  background: T.status.redDim,
-                  border: `1px solid ${T.status.red}30`,
-                  animation: "fadeIn .3s ease-out",
-                }}
-              >
-                <AlertCircle size={14} color={T.status.red} style={{ flexShrink: 0 }} />
-                <span style={{ fontSize: 11, color: T.status.red, fontWeight: 600, lineHeight: 1.4 }}>{e.message}</span>
-              </div>
-            ))}
-            {validationWarnings.map((w, i) => (
-              <div
-                key={`warn-${i}`}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "10px 12px",
-                  borderRadius: T.radius.md,
-                  background: T.status.amberDim,
-                  border: `1px solid ${T.status.amber}30`,
-                  animation: "fadeIn .3s ease-out",
-                }}
-              >
-                <AlertCircle size={14} color={T.status.amber} style={{ flexShrink: 0 }} />
-                <span style={{ fontSize: 11, color: T.status.amber, fontWeight: 600, lineHeight: 1.4 }}>{w.message}</span>
-              </div>
-            ))}
-          </div>
-        )
-      }
+      <ValidationFeedback validationErrors={validationErrors} validationWarnings={validationWarnings} />
 
       {/* Easy Win 1: Pre-fill indicator */}
       {
@@ -2224,126 +1782,14 @@ export default function InputForm({
         )
       }
 
-      {/* ── Quota Indicator ── */}
-      {auditQuota && auditQuota.limit !== Infinity && (
-        <div style={{ textAlign: "center", marginBottom: 16 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: auditQuota.remaining > 0 ? T.text.secondary : T.status.red }}>
-            {auditQuota.remaining > 0
-              ? `This will use 1 of ${auditQuota.remaining} weekly audit${auditQuota.remaining === 1 ? "" : "s"} remaining`
-              : "Weekly audit limit reached — upgrade for 20/month"}
-          </span>
-        </div>
-      )}
-      {auditQuota && auditQuota.limit === Infinity && auditQuota.monthlyCap !== undefined && auditQuota.monthlyUsed !== undefined && auditQuota.monthlyCap !== Infinity && (
-        <div style={{ textAlign: "center", marginBottom: 16 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: (auditQuota.monthlyCap - auditQuota.monthlyUsed) > 0 ? T.text.secondary : T.status.red }}>
-            {(auditQuota.monthlyCap - auditQuota.monthlyUsed) > 0
-              ? `This will use 1 of ${Math.max(0, auditQuota.monthlyCap - auditQuota.monthlyUsed)} monthly Pro audits remaining`
-              : "Monthly Pro audit limit reached — resets next billing cycle"}
-          </span>
-        </div>
-      )}
-      {auditQuota && auditQuota.softBlocked && (
-        <div style={{ textAlign: "center", marginBottom: 16 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: T.status.amber }}>
-            You've exceeded the free quota — upgrade to Catalyst Cash Pro for higher limits
-          </span>
-        </div>
-      )}
-
-      <div style={{
-        position: "sticky",
-        bottom: 0,
-        zIndex: 40,
-        padding: "24px 0px 4px 0px", // Reduced bottom padding to prevent the button from floating too high above the new nav pill
-        background: `linear-gradient(to top, ${T.bg.base} 65%, transparent)`,
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
-        display: "flex",
-        gap: 12,
-        alignItems: "center",
-      }}>
-        {/* Ambient glow behind Run Audit button */}
-        {canSubmit && (
-          <div
-            style={{
-              position: "absolute",
-              left: "20%",
-              bottom: 10,
-              width: "60%",
-              height: 40,
-              background: isTestMode ? T.status.amber : T.accent.primary,
-              filter: "blur(32px)",
-              opacity: 0.3,
-              borderRadius: "50%",
-              pointerEvents: "none",
-              animation: "pulse 3s ease-in-out infinite",
-            }}
-          />
-        )}
-        <button
-          onClick={() => canSubmit && onSubmit(buildMsg(), { ...form, budgetActuals }, isTestMode)}
-          disabled={!canSubmit}
-          style={{
-            flex: 1,
-            padding: "16px",
-            borderRadius: 100, // Full pill shape
-            border: `1px solid ${canSubmit ? 'rgba(255,255,255,0.15)' : 'transparent'}`, // Inner highlight
-            background: canSubmit
-              ? isTestMode
-                ? `linear-gradient(135deg,${T.status.amber},#d97706)`
-                : `linear-gradient(135deg,${T.accent.primary},#6C60FF)`
-              : T.bg.elevated,
-            color: canSubmit ? "#fff" : T.text.dim,
-            fontSize: 16,
-            fontWeight: 800,
-            cursor: canSubmit ? "pointer" : "not-allowed",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            minHeight: 56,
-            boxShadow: canSubmit ? `0 8px 24px ${isTestMode ? T.status.amber : T.accent.primary}40, inset 0 1px 1px rgba(255,255,255,0.2)` : "none",
-            transition: "all 0.35s cubic-bezier(0.16, 1, 0.3, 1)",
-            transform: canSubmit ? "scale(1)" : "scale(0.98)",
-          }}
-        >
-          {isLoading ? (
-            <>
-              <Loader2 size={18} style={{ animation: "spin .8s linear infinite" }} />
-              Running...
-            </>
-          ) : (
-            <>
-              <Zap size={18} strokeWidth={2.5} />
-              {isTestMode ? "Test Audit" : "Run Catalyst Audit"}
-            </>
-          )}
-        </button>
-
-        {/* Seamless Test Mode Toggle Icon */}
-        <button
-          onClick={() => canSubmit && setIsTestMode(!isTestMode)}
-          disabled={!canSubmit}
-          title="Toggle test mode — audit not saved"
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: 100, // Match pill shape
-            border: `1px solid ${isTestMode ? T.status.amber : 'rgba(255,255,255,0.1)'}`,
-            background: isTestMode ? `${T.status.amber}15` : 'rgba(255,255,255,0.03)',
-            color: canSubmit ? (isTestMode ? T.status.amber : T.text.secondary) : T.text.dim,
-            cursor: canSubmit ? "pointer" : "not-allowed",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-            transition: "all 0.25s ease-out",
-          }}
-        >
-          <Zap size={20} strokeWidth={isTestMode ? 3 : 2} fill={isTestMode ? T.status.amber : "none"} />
-        </button>
-      </div>
+      <AuditQuotaNotice auditQuota={auditQuota} />
+      <SubmitBar
+        canSubmit={canSubmit}
+        isLoading={isLoading}
+        isTestMode={isTestMode}
+        setIsTestMode={setIsTestMode}
+        onSubmit={() => canSubmit && onSubmit(buildMsg(), { ...form, budgetActuals }, isTestMode)}
+      />
       </div>
     </div >
   );

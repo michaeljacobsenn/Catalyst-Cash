@@ -2,6 +2,7 @@
   import { haptic } from "../haptics.js";
   import { ExternalLink,Loader2,Shield } from "../icons";
   import { getConnections,removeConnection } from "../plaid.js";
+  import { runSecurityDataDeletion } from "../recoveryFlows.js";
   import { deleteSecureItem } from "../secureStore.js";
   import { Card,Label } from "../ui.js";
   import { db } from "../utils.js";
@@ -60,16 +61,18 @@ export default function SecuritySection({
   setConfirmDataDeletion,
   deletionInProgress,
   setDeletionInProgress,
+  onConfirmDataDeletion,
 }) {
   const nativeUnavailable = secretStorageStatus?.mode === "native-unavailable";
-  const webFallback = secretStorageStatus?.mode === "web-fallback";
+  const webLimited = secretStorageStatus?.mode === "web-limited";
+  const secureControlsDisabled = nativeUnavailable || webLimited;
 
   return (
     <Card
       style={{ borderLeft: `3px solid ${T.status.red}40`, display: activeMenu === "security" ? "block" : "none" }}
     >
       <Label>Security Suite</Label>
-      {(nativeUnavailable || webFallback) && (
+      {(nativeUnavailable || webLimited) && (
         <div
           style={{
             padding: "12px 14px",
@@ -87,7 +90,7 @@ export default function SecuritySection({
               color: nativeUnavailable ? T.status.red : T.status.amber,
             }}
           >
-            {nativeUnavailable ? "Secure Storage Unavailable" : "Web Security Fallback"}
+            {nativeUnavailable ? "Secure Storage Unavailable" : "Native-Only Security on Web"}
           </div>
           <p style={{ margin: 0, fontSize: 10, color: T.text.secondary, lineHeight: 1.5 }}>
             {secretStorageStatus?.message}
@@ -120,7 +123,7 @@ export default function SecuritySection({
             placeholder="••••"
             aria-label="App passcode"
             autoComplete="new-password"
-            disabled={nativeUnavailable}
+            disabled={secureControlsDisabled}
             style={{
               width: 60,
               padding: 8,
@@ -132,8 +135,8 @@ export default function SecuritySection({
               textAlign: "center",
               letterSpacing: 4,
               fontFamily: T.font.mono,
-              opacity: nativeUnavailable ? 0.45 : 1,
-              cursor: nativeUnavailable ? "not-allowed" : "text",
+              opacity: secureControlsDisabled ? 0.45 : 1,
+              cursor: secureControlsDisabled ? "not-allowed" : "text",
             }}
           />
         </form>
@@ -155,7 +158,7 @@ export default function SecuritySection({
             Lock app natively on launch or background
           </p>
         </div>
-        <div style={{ pointerEvents: nativeUnavailable ? "none" : "auto", opacity: nativeUnavailable ? 0.45 : 1 }}>
+        <div style={{ pointerEvents: secureControlsDisabled ? "none" : "auto", opacity: secureControlsDisabled ? 0.45 : 1 }}>
           <Toggle value={requireAuth} onChange={handleRequireAuthToggle} ariaLabel="Require Passcode" />
         </div>
       </div>
@@ -179,7 +182,7 @@ export default function SecuritySection({
                 Use biometrics for faster unlocking
               </p>
             </div>
-            <div style={{ pointerEvents: nativeUnavailable ? "none" : "auto", opacity: nativeUnavailable ? 0.45 : 1 }}>
+            <div style={{ pointerEvents: secureControlsDisabled ? "none" : "auto", opacity: secureControlsDisabled ? 0.45 : 1 }}>
               <Toggle value={useFaceId} onChange={handleUseFaceIdToggle} ariaLabel="Enable Face ID / Touch ID" />
             </div>
           </div>
@@ -388,37 +391,15 @@ export default function SecuritySection({
                       setDeletionInProgress(true);
                       haptic.heavy();
                       try {
-                        // 1. Disconnect all Plaid connections
-                        const conns = await getConnections().catch(() => []);
-                        for (const conn of conns) {
-                          await removeConnection(conn.id).catch(() => { });
-                        }
-                        // 2. Clear all device storage
-                        await db.clear();
-                        // 3. Clear web storage
-                        try {
-                          localStorage.clear();
-                        } catch {
-                          void 0;
-                        }
-                        try {
-                          sessionStorage.clear();
-                        } catch {
-                          void 0;
-                        }
-                        // 4. Clear secure keychain items
-                        try {
-                          await deleteSecureItem("app-passcode");
-                        } catch {
-                          void 0;
-                        }
-                        try {
-                          await deleteSecureItem("plaid-connections");
-                        } catch {
-                          void 0;
-                        }
-                        // 5. Reload
-                        window.location.reload();
+                        await runSecurityDataDeletion(onConfirmDataDeletion, async () => {
+                          const conns = await getConnections().catch(() => []);
+                          for (const conn of conns) {
+                            await removeConnection(conn.id).catch(() => {});
+                          }
+                          await db.clear();
+                          await deleteSecureItem("app-passcode").catch(() => false);
+                          await deleteSecureItem("plaid-connections").catch(() => false);
+                        });
                       } catch {
                         setDeletionInProgress(false);
                         setConfirmDataDeletion(false);

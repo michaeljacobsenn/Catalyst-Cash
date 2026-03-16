@@ -4,7 +4,9 @@
  * Used by DashboardTab and CardPortfolioTab to avoid code duplication.
  */
   import { useCallback,useEffect,useState } from "react";
+  import { normalizeAppError } from "./appErrors.js";
   import { haptic } from "./haptics.js";
+  import { log } from "./logger.js";
   import {
     applyBalanceSync,
     fetchAllBalancesAndLiabilities,
@@ -120,7 +122,8 @@ export function usePlaidSync({
     try {
       await forceBackendSync();
     } catch (e) {
-      console.warn("[PlaidSync] Manual force sync encountered an issue:", e);
+      const failure = normalizeAppError(e, { context: "sync" });
+      log.warn("sync", "Manual force sync preflight issue", { error: failure.rawMessage, kind: failure.kind });
     }
 
     // 4. Fetch and apply balances from D1 Worker cache
@@ -171,8 +174,9 @@ export function usePlaidSync({
         }
       }
     } catch (e) {
-      console.error("[PlaidSync] Failed:", e);
-      if (window.toast) window.toast.error("Failed to sync balances");
+      const failure = normalizeAppError(e, { context: "sync" });
+      log.error("sync", "Balance sync failed", { error: failure.rawMessage, kind: failure.kind });
+      if (window.toast) window.toast.error(failure.userMessage);
     } finally {
       _setSyncing(false);
     }

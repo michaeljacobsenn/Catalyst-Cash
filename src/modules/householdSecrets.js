@@ -1,4 +1,3 @@
-import { decryptAtRestDetailed, encryptAtRest, isEncrypted } from "./crypto.js";
 import {
   deleteNativeSecureItem,
   getNativeSecureItem,
@@ -12,25 +11,6 @@ const HOUSEHOLD_PASSCODE_KEY = "household-passcode";
 const HOUSEHOLD_ID_PROTECTED_KEY = "household-id-protected";
 const HOUSEHOLD_PASSCODE_PROTECTED_KEY = "household-passcode-protected";
 
-async function readProtectedDbValue(key) {
-  const stored = await db.get(key);
-  if (!stored) return "";
-  if (isEncrypted(stored)) {
-    const result = await decryptAtRestDetailed(stored, db).catch(() => ({ data: null }));
-    return typeof result?.data === "string" ? result.data : "";
-  }
-  return typeof stored === "string" ? stored : "";
-}
-
-async function writeProtectedDbValue(key, value) {
-  if (!value) {
-    await db.del(key);
-    return;
-  }
-  const encrypted = await encryptAtRest(value, db);
-  await db.set(key, encrypted);
-}
-
 async function clearLegacyPlaintextSecrets() {
   await Promise.all([
     db.del(HOUSEHOLD_ID_KEY),
@@ -38,49 +18,53 @@ async function clearLegacyPlaintextSecrets() {
   ]);
 }
 
+async function clearProtectedFallbackSecrets() {
+  await Promise.all([
+    db.del(HOUSEHOLD_ID_PROTECTED_KEY),
+    db.del(HOUSEHOLD_PASSCODE_PROTECTED_KEY),
+  ]);
+}
+
+export async function canPersistHouseholdCredentials() {
+  return Boolean(await hasNativeSecureStore());
+}
+
 export async function getHouseholdCredentials() {
-  const nativeSecure = await hasNativeSecureStore();
-  if (nativeSecure) {
-    const [householdId, passcode] = await Promise.all([
-      getNativeSecureItem(HOUSEHOLD_ID_KEY),
-      getNativeSecureItem(HOUSEHOLD_PASSCODE_KEY),
-    ]);
-    return {
-      householdId: typeof householdId === "string" ? householdId : "",
-      passcode: typeof passcode === "string" ? passcode : "",
-    };
+  if (!(await canPersistHouseholdCredentials())) {
+    await Promise.all([clearProtectedFallbackSecrets(), clearLegacyPlaintextSecrets()]);
+    return { householdId: "", passcode: "" };
   }
 
   const [householdId, passcode] = await Promise.all([
-    readProtectedDbValue(HOUSEHOLD_ID_PROTECTED_KEY),
-    readProtectedDbValue(HOUSEHOLD_PASSCODE_PROTECTED_KEY),
+    getNativeSecureItem(HOUSEHOLD_ID_KEY),
+    getNativeSecureItem(HOUSEHOLD_PASSCODE_KEY),
   ]);
-  return { householdId, passcode };
+  return {
+    householdId: typeof householdId === "string" ? householdId : "",
+    passcode: typeof passcode === "string" ? passcode : "",
+  };
 }
 
 export async function setHouseholdCredentials(householdId, passcode) {
   const nextId = (householdId || "").trim();
   const nextPasscode = (passcode || "").trim();
-  const nativeSecure = await hasNativeSecureStore();
+  const nativeSecure = await canPersistHouseholdCredentials();
 
   if (!nextId || !nextPasscode) {
     await clearHouseholdCredentials();
     return { householdId: "", passcode: "" };
   }
 
-  if (nativeSecure) {
-    await Promise.all([
-      setNativeSecureItem(HOUSEHOLD_ID_KEY, nextId),
-      setNativeSecureItem(HOUSEHOLD_PASSCODE_KEY, nextPasscode),
-      db.del(HOUSEHOLD_ID_PROTECTED_KEY),
-      db.del(HOUSEHOLD_PASSCODE_PROTECTED_KEY),
-    ]);
-  } else {
-    await Promise.all([
-      writeProtectedDbValue(HOUSEHOLD_ID_PROTECTED_KEY, nextId),
-      writeProtectedDbValue(HOUSEHOLD_PASSCODE_PROTECTED_KEY, nextPasscode),
-    ]);
+  if (!nativeSecure) {
+    await Promise.all([clearProtectedFallbackSecrets(), clearLegacyPlaintextSecrets()]);
+    return { householdId: "", passcode: "" };
   }
+
+  await Promise.all([
+    setNativeSecureItem(HOUSEHOLD_ID_KEY, nextId),
+    setNativeSecureItem(HOUSEHOLD_PASSCODE_KEY, nextPasscode),
+    clearProtectedFallbackSecrets(),
+  ]);
 
   await clearLegacyPlaintextSecrets();
   return { householdId: nextId, passcode: nextPasscode };
@@ -90,16 +74,20 @@ export async function clearHouseholdCredentials() {
   await Promise.all([
     deleteNativeSecureItem(HOUSEHOLD_ID_KEY).catch(() => false),
     deleteNativeSecureItem(HOUSEHOLD_PASSCODE_KEY).catch(() => false),
-    db.del(HOUSEHOLD_ID_PROTECTED_KEY),
-    db.del(HOUSEHOLD_PASSCODE_PROTECTED_KEY),
+    clearProtectedFallbackSecrets(),
   ]);
   await clearLegacyPlaintextSecrets();
 }
 
 export async function migrateHouseholdCredentials() {
+  if (!(await canPersistHouseholdCredentials())) {
+    await Promise.all([clearProtectedFallbackSecrets(), clearLegacyPlaintextSecrets()]);
+    return { householdId: "", passcode: "" };
+  }
+
   const existing = await getHouseholdCredentials();
   if (existing.householdId && existing.passcode) {
-    await clearLegacyPlaintextSecrets();
+    await Promise.all([clearLegacyPlaintextSecrets(), clearProtectedFallbackSecrets()]);
     return existing;
   }
 
@@ -112,6 +100,6 @@ export async function migrateHouseholdCredentials() {
     return setHouseholdCredentials(legacyId, legacyPasscode);
   }
 
-  await clearLegacyPlaintextSecrets();
+  await Promise.all([clearLegacyPlaintextSecrets(), clearProtectedFallbackSecrets()]);
   return existing;
 }

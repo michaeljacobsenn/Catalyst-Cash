@@ -20,33 +20,40 @@
 //          account masks, linkage state, and last-sync timestamps.
 // ═══════════════════════════════════════════════════════════════
 
-  import { APP_VERSION } from "./constants.js";
+  import { getBackendUrl } from "./api.js";
   import { batchCategorizeTransactions } from "./api.js";
   import { fetchWithRetry } from "./fetchWithRetry.js";
+  import { buildIdentityHeaders,clearIdentitySession } from "./identitySession.js";
   import { getIssuerCards } from "./issuerCards.js";
   import { categorizeBatch,learn } from "./merchantMap.js";
-  import { getRevenueCatAppUserId } from "./revenuecat.js";
-  import { getOrCreateDeviceId,getSubscriptionState,INSTITUTION_LIMITS,isGatingEnforced,isPro } from "./subscription.js";
+  import { getSubscriptionState,INSTITUTION_LIMITS,isGatingEnforced } from "./subscription.js";
   import { db } from "./utils.js";
 
 const PLAID_STORAGE_KEY = "plaid-connections";
-const API_BASE = "https://api.catalystcash.app";
+const API_BASE = getBackendUrl();
 
 async function buildPlaidBackendHeaders(extra = {}) {
-  const deviceId = await getOrCreateDeviceId().catch(() => "unknown");
-  const headers = {
+  return buildIdentityHeaders({
     "Content-Type": "application/json",
-    "X-Device-ID": deviceId || "unknown",
-    "X-App-Version": APP_VERSION,
-    "X-Subscription-Tier": (await isPro().catch(() => false)) ? "pro" : "free",
     ...extra,
-  };
+  });
+}
 
-  const revenueCatAppUserId = await getRevenueCatAppUserId().catch(() => null);
-  if (revenueCatAppUserId) {
-    headers["X-RC-App-User-ID"] = revenueCatAppUserId;
+async function fetchPlaidBackend(url, init = {}) {
+  let response = await fetchWithRetry(url, {
+    ...init,
+    headers: await buildPlaidBackendHeaders(init.headers || {}),
+  });
+
+  if (response.status === 401) {
+    await clearIdentitySession().catch(() => false);
+    response = await fetchWithRetry(url, {
+      ...init,
+      headers: await buildPlaidBackendHeaders(init.headers || {}),
+    });
   }
-  return headers;
+
+  return response;
 }
 
 // ─── Connection State Management ──────────────────────────────
@@ -99,9 +106,8 @@ export async function removeConnection(connectionId) {
   // Revoke the item on the server side using the worker-stored access token.
   if (conn?.id) {
     try {
-      await fetchWithRetry(`${API_BASE}/plaid/disconnect`, {
+      await fetchPlaidBackend(`${API_BASE}/plaid/disconnect`, {
         method: "POST",
-        headers: await buildPlaidBackendHeaders(),
         body: JSON.stringify({ itemId: conn.id }),
       });
     } catch {
@@ -136,9 +142,8 @@ export async function purgeBrokenConnections() {
  * The backend calls Plaid's /link/token/create endpoint.
  */
 export async function createLinkToken() {
-  const res = await fetchWithRetry(`${API_BASE}/plaid/link-token`, {
+  const res = await fetchPlaidBackend(`${API_BASE}/plaid/link-token`, {
     method: "POST",
-    headers: await buildPlaidBackendHeaders(),
     body: JSON.stringify({}),
   });
   if (!res.ok) {
@@ -214,7 +219,7 @@ export async function openPlaidLink(options = {}) {
       onSuccess: (publicToken, metadata) => {
         resolve({ publicToken, metadata });
       },
-      onExit: (err, metadata) => {
+      onExit: (err, _metadata) => {
         if (err) reject(new Error(err.display_message || err.error_message || "Plaid Link exited"));
         else reject(new Error("cancelled"));
       },
@@ -232,9 +237,8 @@ export async function openPlaidLink(options = {}) {
  * The backend calls Plaid's /item/public_token/exchange.
  */
 export async function exchangeToken(publicToken) {
-  const res = await fetchWithRetry(`${API_BASE}/plaid/exchange`, {
+  const res = await fetchPlaidBackend(`${API_BASE}/plaid/exchange`, {
     method: "POST",
-    headers: await buildPlaidBackendHeaders(),
     body: JSON.stringify({ publicToken }),
   });
   if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`);
@@ -340,9 +344,8 @@ export async function reconnectBank(connection, onSuccess, onError) {
  * Used by Manual Sync. Respects backend tier cooldowns.
  */
 export async function forceBackendSync() {
-  const res = await fetch(`${API_BASE}/api/sync/force`, {
+  const res = await fetchPlaidBackend(`${API_BASE}/api/sync/force`, {
     method: "POST",
-    headers: await buildPlaidBackendHeaders(),
     body: JSON.stringify({}),
   });
   if (!res.ok) {
@@ -365,9 +368,8 @@ export async function fetchBalances(connectionId) {
   const conn = conns.find(c => c.id === connectionId);
   if (!conn) throw new Error(`Connection ${connectionId} not found`);
 
-  const res = await fetchWithRetry(`${API_BASE}/api/sync/status`, {
+  const res = await fetchPlaidBackend(`${API_BASE}/api/sync/status`, {
     method: "POST",
-    headers: await buildPlaidBackendHeaders(),
     body: JSON.stringify({}),
   });
   if (!res.ok) {
@@ -437,9 +439,8 @@ export async function fetchLiabilities(connectionId) {
   const conn = conns.find(c => c.id === connectionId);
   if (!conn) throw new Error("Connection not found");
 
-  const res = await fetchWithRetry(`${API_BASE}/api/sync/status`, {
+  const res = await fetchPlaidBackend(`${API_BASE}/api/sync/status`, {
     method: "POST",
-    headers: await buildPlaidBackendHeaders(),
     body: JSON.stringify({}),
   });
   if (!res.ok) throw new Error(`Liabilities fetch failed: ${res.status}`);
@@ -544,24 +545,19 @@ const TRANSACTIONS_STORAGE_KEY = "plaid-transactions";
 /**
  * Format a Date as YYYY-MM-DD for Plaid API.
  */
-function toDateStr(d) {
-  return d.toISOString().split("T")[0];
-}
-
 /**
  * Fetch transactions for a single connection from Plaid.
  * @param {string} connectionId
- * @param {number} [days=30] - How many days back to fetch
+ * @param {number} [_days=30] - Reserved for future per-call transaction windows
  * @returns {Array} Normalized transaction array
  */
-export async function fetchTransactions(connectionId, days = 30) {
+export async function fetchTransactions(connectionId, _days = 30) {
   const conns = await getConnections();
   const conn = conns.find(c => c.id === connectionId);
   if (!conn) throw new Error(`Connection ${connectionId} not found`);
 
-  const res = await fetchWithRetry(`${API_BASE}/api/sync/status`, {
+  const res = await fetchPlaidBackend(`${API_BASE}/api/sync/status`, {
     method: "POST",
-    headers: await buildPlaidBackendHeaders(),
     body: JSON.stringify({}),
   });
 

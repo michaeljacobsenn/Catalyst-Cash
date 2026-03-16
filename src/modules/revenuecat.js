@@ -79,7 +79,7 @@ export async function syncProStatus() {
     const customerInfo = await Purchases.getCustomerInfo();
     await getRevenueCatAppUserId();
     return applyCustomerInfo(customerInfo);
-  } catch (e) {
+  } catch {
     log.error("revenuecat", "Error syncing Pro status");
     return false;
   }
@@ -130,7 +130,7 @@ export async function presentPaywall() {
     if (!RevenueCatUI) {
       throw new Error("RevenueCat UI module unavailable");
     }
-    const { isPresenting } = await RevenueCatUI.presentPaywallIfNeeded({
+    await RevenueCatUI.presentPaywallIfNeeded({
       requiredEntitlementIdentifier: ENTITLEMENT_ID,
     });
 
@@ -138,7 +138,7 @@ export async function presentPaywall() {
     await new Promise(r => setTimeout(r, 500));
 
     return await syncProStatus();
-  } catch (e) {
+  } catch {
     log.error("revenuecat", "Error presenting paywall");
     if (window.toast) window.toast.error("Purchases are not configured yet. Check RevenueCat offerings.");
     return false;
@@ -184,7 +184,7 @@ export async function presentCustomerCenter() {
     try {
       const { Browser } = await import("@capacitor/browser");
       await Browser.open({ url: "https://apps.apple.com/account/subscriptions" });
-    } catch (e) {
+    } catch {
       if (window.toast)
         window.toast.error("Could not load subscriptions. Go to iOS Settings > Apple ID > Subscriptions.");
     }

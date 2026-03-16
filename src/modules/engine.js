@@ -184,6 +184,11 @@ function buildAuditSignals(
   const liquidityBufferCents = checkingBalanceCents - totalCheckingFloorCents - timeCriticalAmountCents;
   const toxicDebtCount = debtEntries.filter(debt => (debt.aprBps || 0) > 3600).length;
   const highAprCount = debtEntries.filter(debt => (debt.aprBps || 0) >= 2500).length;
+  const criticalPromoExpiryCount = debtEntries.filter(debt => {
+    if (!debt.hasPromoApr || !debt.promoAprExp) return false;
+    const daysToExp = daysBetween(snapshotDate, debt.promoAprExp);
+    return daysToExp > 0 && daysToExp <= 30;
+  }).length;
   const promoExpiryCount = debtEntries.filter(debt => {
     if (!debt.hasPromoApr || !debt.promoAprExp) return false;
     const daysToExp = daysBetween(snapshotDate, debt.promoAprExp);
@@ -243,7 +248,8 @@ function buildAuditSignals(
   if (requiredTransferCents > 0) riskFlags.push("transfer-needed");
   if (liquidityBufferCents < 0) riskFlags.push("floor-breach-risk");
   if (toxicDebtCount > 0) riskFlags.push("toxic-apr");
-  if (promoExpiryCount > 0) riskFlags.push("promo-expiry");
+  if (criticalPromoExpiryCount > 0) riskFlags.push("critical-promo-expiry");
+  else if (promoExpiryCount > 0) riskFlags.push("promo-expiry");
   if (utilizationPct != null && utilizationPct >= 85) riskFlags.push("high-utilization");
   else if (utilizationPct != null && utilizationPct >= 30) riskFlags.push("elevated-utilization");
   if (emergencyCoverageWeeks != null && emergencyCoverageWeeks < 4) riskFlags.push("thin-emergency-fund");

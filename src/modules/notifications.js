@@ -1,3 +1,4 @@
+  import { Capacitor } from "@capacitor/core";
   import { LocalNotifications } from "@capacitor/local-notifications";
 
 const PAYDAY_REMINDER_ID = 1001;
@@ -14,11 +15,20 @@ const DAY_MAP = {
   Saturday: 6,
 };
 
+function supportsLocalNotifications() {
+  return (
+    Capacitor.isNativePlatform() &&
+    Capacitor.getPlatform() !== "web" &&
+    (typeof Capacitor.isPluginAvailable !== "function" || Capacitor.isPluginAvailable("LocalNotifications"))
+  );
+}
+
 /**
  * Request iOS notification permission.
  * Returns true if granted, false otherwise.
  */
 export async function requestNotificationPermission() {
+  if (!supportsLocalNotifications()) return false;
   try {
     const { display } = await LocalNotifications.requestPermissions();
     return display === "granted";
@@ -31,6 +41,7 @@ export async function requestNotificationPermission() {
  * Check current permission status without prompting.
  */
 export async function getNotificationPermission() {
+  if (!supportsLocalNotifications()) return "denied";
   try {
     const { display } = await LocalNotifications.checkPermissions();
     return display; // "granted" | "denied" | "prompt"
@@ -93,6 +104,7 @@ export function computeNextReminderDate(payday, paycheckTime) {
  * Call this on app start and whenever payday/paycheckTime/toggle changes.
  */
 export async function schedulePaydayReminder(payday, paycheckTime) {
+  if (!supportsLocalNotifications()) return false;
   try {
     // Guard: verify notification permission before scheduling
     const { display } = await LocalNotifications.checkPermissions();
@@ -134,11 +146,13 @@ export async function schedulePaydayReminder(payday, paycheckTime) {
  * Cancel the payday reminder entirely.
  */
 export async function cancelPaydayReminder() {
+  if (!supportsLocalNotifications()) return false;
   try {
     await LocalNotifications.cancel({ notifications: [{ id: PAYDAY_REMINDER_ID }] });
   } catch {
     // silently ignore
   }
+  return true;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -151,6 +165,7 @@ const POST_AUDIT_CELEBRATION_ID = 1004;
  * Reinforces the habit with positive feedback.
  */
 export async function schedulePostAuditCelebration(score, streak) {
+  if (!supportsLocalNotifications()) return false;
   try {
     await LocalNotifications.cancel({ notifications: [{ id: POST_AUDIT_CELEBRATION_ID }] });
 
@@ -197,6 +212,7 @@ export async function schedulePostAuditCelebration(score, streak) {
 const MID_WEEK_CHECK_IN_ID = 1005;
 
 export async function scheduleMidWeekCheckIn(weeklyAllowance) {
+  if (!supportsLocalNotifications()) return false;
   try {
     await LocalNotifications.cancel({ notifications: [{ id: MID_WEEK_CHECK_IN_ID }] });
 
@@ -240,6 +256,7 @@ export async function scheduleMidWeekCheckIn(weeklyAllowance) {
 const MONTH_END_SUMMARY_ID = 1006;
 
 export async function scheduleMonthEndSummary() {
+  if (!supportsLocalNotifications()) return false;
   try {
     await LocalNotifications.cancel({ notifications: [{ id: MONTH_END_SUMMARY_ID }] });
 
@@ -277,6 +294,7 @@ export async function scheduleMonthEndSummary() {
 // WEEKLY AUDIT NUDGE — fires every Sunday at 10am (repeating)
 // ═══════════════════════════════════════════════════════════════
 export async function scheduleWeeklyAuditNudge() {
+  if (!supportsLocalNotifications()) return false;
   try {
     await LocalNotifications.cancel({ notifications: [{ id: WEEKLY_AUDIT_NUDGE_ID }] });
 
@@ -315,11 +333,13 @@ export async function scheduleWeeklyAuditNudge() {
  * Cancel the weekly audit nudge.
  */
 export async function cancelWeeklyAuditNudge() {
+  if (!supportsLocalNotifications()) return false;
   try {
     await LocalNotifications.cancel({ notifications: [{ id: WEEKLY_AUDIT_NUDGE_ID }] });
   } catch {
     /* ignore */
   }
+  return true;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -333,6 +353,7 @@ const STREAK_AT_RISK_ID = 1003;
  * Call this on app start and after each audit (to cancel if audit done).
  */
 export async function scheduleStreakAtRiskNudge(hasAuditThisWeek) {
+  if (!supportsLocalNotifications()) return false;
   try {
     // Always cancel first
     await LocalNotifications.cancel({ notifications: [{ id: STREAK_AT_RISK_ID }] });
@@ -378,11 +399,13 @@ export async function scheduleStreakAtRiskNudge(hasAuditThisWeek) {
  * Cancel the streak at risk nudge (call after user runs an audit).
  */
 export async function cancelStreakAtRiskNudge() {
+  if (!supportsLocalNotifications()) return false;
   try {
     await LocalNotifications.cancel({ notifications: [{ id: STREAK_AT_RISK_ID }] });
   } catch {
     /* ignore */
   }
+  return true;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -390,6 +413,7 @@ export async function cancelStreakAtRiskNudge() {
 // Fires at 9am the day before due date
 // ═══════════════════════════════════════════════════════════════
 export async function scheduleBillReminders(renewals = []) {
+  if (!supportsLocalNotifications()) return 0;
   try {
     // Cancel all existing bill reminders (IDs 2000-2099)
     const cancelIds = [];

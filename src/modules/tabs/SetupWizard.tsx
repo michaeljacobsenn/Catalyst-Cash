@@ -36,7 +36,7 @@ interface SecurityContextValue {
   setAppleLinkedId?: ((value: string | null) => void) | undefined;
   appleLinkedId?: string | null;
   secretStorageStatus?: {
-    mode: "native-secure" | "native-unavailable" | "web-fallback";
+    mode: "native-secure" | "native-unavailable" | "web-limited";
   };
 }
 
@@ -60,6 +60,8 @@ interface WizardPageMeta {
   emoji: string;
   title: string;
   subtitle: string;
+  effort?: string;
+  optional?: boolean;
 }
 
 export interface SetupWizardIncomeState {
@@ -117,12 +119,12 @@ export type SetupWizardCombinedData = SetupWizardIncomeState & SetupWizardSpendi
 export type SetupWizardUpdate<T extends object> = <K extends keyof T>(key: K, value: T[K]) => void;
 
 const PAGES: WizardPageMeta[] = [
-  { id: "welcome", emoji: "👋", title: "Welcome", subtitle: "AI-powered financial intelligence." },
-  { id: "import", emoji: "📥", title: "Import Data", subtitle: "Already have a backup? Skip manual entry." },
-  { id: "profile", emoji: "🧑‍💻", title: "Your Profile", subtitle: "Region, demographics, and housing status." },
-  { id: "pass1", emoji: "⚡️", title: "Your Cash Flow", subtitle: "Income, pay schedule, and spending baselines." },
-  { id: "pass2", emoji: "🎯", title: "Your Goals", subtitle: "Safety minimums, emergency reserves, and tax optimization." },
-  { id: "pass3", emoji: "⚙️", title: "Your Setup", subtitle: "Connect accounts, choose your AI assistant, and set security." },
+  { id: "welcome", emoji: "👋", title: "Welcome", subtitle: "A quick setup for cleaner audits and calmer money decisions.", effort: "30 sec" },
+  { id: "import", emoji: "📥", title: "Import Data", subtitle: "Restore a backup first if you already have one.", effort: "Optional", optional: true },
+  { id: "profile", emoji: "🧑‍💻", title: "Your Profile", subtitle: "Region and household context that shape your plan.", effort: "1 min" },
+  { id: "pass1", emoji: "⚡️", title: "Cash Flow", subtitle: "Pay rhythm and weekly spending guardrails.", effort: "Required" },
+  { id: "pass2", emoji: "🎯", title: "Safety Targets", subtitle: "Reserve targets and tax context for safer recommendations.", effort: "Optional", optional: true },
+  { id: "pass3", emoji: "⚙️", title: "Connections & Security", subtitle: "Link accounts, choose your setup, and lock the app down.", effort: "Optional", optional: true },
   { id: "done", emoji: "🎉", title: "All Set!", subtitle: "" },
 ];
 const TOTAL = PAGES.length;
@@ -150,16 +152,47 @@ function StepHeader({ step }: { step: number }) {
   const page = PAGES[step];
   if (!page || step === TOTAL - 1) return null;
   return (
-    <div style={{ marginBottom: 22 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+    <div style={{ marginBottom: 24 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 8,
+        }}
+      >
         <span style={{ fontSize: 26 }}>{page.emoji}</span>
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, lineHeight: 1.2 }}>{page.title}</div>
-          {page.subtitle && <div style={{ fontSize: 13, color: T.text.dim, marginTop: 2 }}>{page.subtitle}</div>}
+          {page.subtitle && <div style={{ fontSize: 13, color: T.text.dim, marginTop: 4, lineHeight: 1.45 }}>{page.subtitle}</div>}
         </div>
+        {page.effort && (
+          <div
+            style={{
+              flexShrink: 0,
+              alignSelf: "center",
+              padding: "6px 10px",
+              borderRadius: 999,
+              background: page.optional ? T.accent.primaryDim : `${T.accent.emerald}12`,
+              border: `1px solid ${page.optional ? T.accent.primarySoft : `${T.accent.emerald}26`}`,
+              color: page.optional ? T.accent.primary : T.accent.emerald,
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              fontFamily: T.font.mono,
+            }}
+          >
+            {page.effort}
+          </div>
+        )}
       </div>
-      <div style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono }}>
-        Step {step + 1} of {TOTAL}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono }}>
+          Step {step + 1} of {TOTAL}
+        </div>
+        {page.optional && <div style={{ fontSize: 11, color: T.text.dim }}>You can skip this now and fine-tune it later.</div>}
       </div>
     </div>
   );
@@ -456,6 +489,9 @@ export default function SetupWizard() {
         } else if (storageStatus.mode === "native-unavailable") {
           await Promise.all([db.set("require-auth", false), db.set("use-face-id", false)]);
           toast.error?.("Secure storage is unavailable. App Lock was not enabled on this device.");
+        } else if (storageStatus.mode === "web-limited") {
+          await Promise.all([db.set("require-auth", false), db.set("use-face-id", false)]);
+          toast.error?.("App Lock is available in the native iPhone app only. Setup continued without a PIN.");
         }
       }
       await db.set("lock-timeout", security.lockTimeout);
@@ -529,7 +565,7 @@ export default function SetupWizard() {
     >
       <div
         ref={scrollRef}
-        style={{ flex: 1, overflowY: "auto", padding: "calc(env(safe-area-inset-top, 40px) + 20px) 20px 40px" }}
+        style={{ flex: 1, overflowY: "auto", padding: "calc(env(safe-area-inset-top, 40px) + 20px) 20px 56px" }}
       >
         <style>{`
           @keyframes slideFadeIn {
@@ -538,9 +574,33 @@ export default function SetupWizard() {
           }
           .wiz-input { transition: border-color 0.2s ease, box-shadow 0.2s ease; }
           .wiz-input:focus { border-color: ${T.accent.primary} !important; box-shadow: 0 0 0 3px ${T.accent.primary}30 !important; }
+          .wiz-btn:focus-visible,
+          .wiz-switch:focus-visible,
+          .wiz-tap:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px ${T.accent.primary}30 !important;
+          }
         `}</style>
         <div style={{ maxWidth: 420, margin: "0 auto" }}>
-          <div style={{ height: 3, background: T.accent.gradient, flexShrink: 0, marginBottom: 8, borderRadius: 2 }} />
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "7px 12px",
+              borderRadius: 999,
+              background: T.bg.elevated,
+              border: `1px solid ${T.border.subtle}`,
+              color: T.text.secondary,
+              fontSize: 11,
+              fontWeight: 700,
+              marginBottom: 12,
+            }}
+          >
+            <span style={{ color: T.accent.emerald }}>●</span>
+            About 2 minutes
+          </div>
+          <div style={{ height: 3, background: T.accent.gradient, flexShrink: 0, marginBottom: 10, borderRadius: 2 }} />
           <ProgressBar step={step} />
           <StepHeader step={step} />
           <div key={pageId} style={{ animation: "slideFadeIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards" }}>

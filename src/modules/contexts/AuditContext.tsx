@@ -22,6 +22,7 @@ import { BADGE_DEFINITIONS, evaluateBadges } from "../badges.js";
 import { computeStreak, getISOWeekNum } from "../dateHelpers.js";
 import { generateStrategy, mergeSnapshotDebts } from "../engine.js";
 import { haptic } from "../haptics.js";
+import { log } from "../logger.js";
 import { addMilestones, extractAuditMilestones, getMemoryBlock, loadMemory } from "../memory.js";
 import { isLikelyAbortError, toUserFacingRequestError } from "../networkErrors.js";
 import { getProvider } from "../providers.js";
@@ -32,6 +33,13 @@ import { buildDegradedParsedAudit, cyrb53, db, detectAuditDrift, parseAudit, val
 import { useNavigation } from "./NavigationContext.js";
 import { usePortfolio } from "./PortfolioContext.js";
 import { useSettings } from "./SettingsContext.js";
+import {
+  buildContributionAutoUpdates,
+  hasCompletedAuditForSession,
+  migrateHistory,
+  scrubPromptContext,
+  type AuditDraftRecord,
+} from "./auditHelpers.js";
 
 interface AuditProviderProps {
   children: ReactNode;
@@ -65,14 +73,6 @@ interface NavigationViewingEvent extends Event {
 
 interface NavigationHistoryState {
   viewingTs?: string | null;
-}
-
-interface AuditDraftRecord {
-  sessionTs: string;
-  raw: string;
-  updatedAt: string;
-  snapshotDate?: string | null;
-  reason?: string | null;
 }
 
 interface AuditContextValue {
@@ -113,39 +113,11 @@ interface AuditContextValue {
   checkRecoverableAuditDraft: () => Promise<AuditDraftRecord | null>;
   openRecoverableAuditDraft: () => void;
   dismissRecoverableAuditDraft: () => Promise<void>;
+  rehydrateAudit: () => Promise<void>;
   quota?: unknown;
 }
 
 const AuditContext = createContext<AuditContextValue | null>(null);
-
-function migrateHistory(historyItems: AuditRecord[] | null): AuditRecord[] | null {
-  if (!historyItems?.length) return historyItems;
-  let migrated = false;
-  const result = historyItems.map((audit) => {
-    if (!audit.moveChecks) {
-      migrated = true;
-      return { ...audit, moveChecks: {} };
-    }
-    return audit;
-  });
-  if (migrated) db.set("audit-history", result);
-  return result;
-}
-
-function scrubPromptContext<T>(value: T, scrub: (input: string) => string): T {
-  if (typeof value === "string") {
-    return scrub(value) as T;
-  }
-  if (Array.isArray(value)) {
-    return value.map((item) => scrubPromptContext(item, scrub)) as T;
-  }
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, scrubPromptContext(entry, scrub)])
-    ) as T;
-  }
-  return value;
-}
 
 export function AuditProvider({ children }: AuditProviderProps) {
   const {
@@ -193,49 +165,69 @@ export function AuditProvider({ children }: AuditProviderProps) {
       .catch(() => setHistoryLimit(Infinity));
   }, []);
 
+  const rehydrateAudit = useCallback(async (): Promise<void> => {
+    try {
+      setCurrent(null);
+      setHistory([]);
+      setMoveChecks({});
+      setError(null);
+      setUseStreaming(true);
+      setStreamText("");
+      setElapsed(0);
+      setViewing(null);
+      setTrendContext([]);
+      setInstructionHash(null);
+      setRecoverableAuditDraft(null);
+      setActiveAuditDraftView(null);
+
+      const [hist, moves, cur, streamingMode, instHash, savedTrend] = (await Promise.all([
+        db.get("audit-history"),
+        db.get("move-states"),
+        db.get("current-audit"),
+        db.get("use-streaming"),
+        db.get("instruction-hash"),
+        db.get("trend-context"),
+      ])) as [
+        AuditRecord[] | null,
+        MoveCheckState | null,
+        AuditRecord | null,
+        boolean | null,
+        string | null,
+        TrendContextEntry[] | null,
+      ];
+      const migratedHistory =
+        migrateHistory(hist, async (nextHistory) => {
+          await db.set("audit-history", nextHistory);
+        }) || [];
+
+      if (hist) setHistory(migratedHistory);
+      if (moves) setMoveChecks(moves);
+      if (cur) setCurrent(cur);
+      if (streamingMode !== null) setUseStreaming(streamingMode);
+      if (instHash) setInstructionHash(instHash);
+      if (savedTrend) setTrendContext(savedTrend);
+      const storedDraft = (await db.get("audit-draft")) as AuditDraftRecord | null;
+      const completedForSession = hasCompletedAuditForSession(storedDraft, cur, migratedHistory);
+      if (storedDraft?.sessionTs && storedDraft.raw?.trim() && !completedForSession) {
+        setRecoverableAuditDraft(storedDraft);
+      } else if (storedDraft) {
+        await db.del("audit-draft");
+      }
+    } catch (initError: unknown) {
+      log.error("audit", "Audit context init error", { error: initError });
+    }
+  }, []);
+
   useEffect(() => {
     const initAudit = async (): Promise<void> => {
       try {
-        const [hist, moves, cur, streamingMode, instHash, savedTrend] = (await Promise.all([
-          db.get("audit-history"),
-          db.get("move-states"),
-          db.get("current-audit"),
-          db.get("use-streaming"),
-          db.get("instruction-hash"),
-          db.get("trend-context"),
-        ])) as [
-          AuditRecord[] | null,
-          MoveCheckState | null,
-          AuditRecord | null,
-          boolean | null,
-          string | null,
-          TrendContextEntry[] | null,
-        ];
-        const migratedHistory = migrateHistory(hist) || [];
-
-        if (hist) setHistory(migratedHistory);
-        if (moves) setMoveChecks(moves);
-        if (cur) setCurrent(cur);
-        if (streamingMode !== null) setUseStreaming(streamingMode);
-        if (instHash) setInstructionHash(instHash);
-        if (savedTrend) setTrendContext(savedTrend);
-        const storedDraft = (await db.get("audit-draft")) as AuditDraftRecord | null;
-        const hasCompletedAuditForSession = storedDraft?.sessionTs
-          ? cur?.ts === storedDraft.sessionTs || migratedHistory.some((audit) => audit.ts === storedDraft.sessionTs)
-          : false;
-        if (storedDraft?.sessionTs && storedDraft.raw?.trim() && !hasCompletedAuditForSession) {
-          setRecoverableAuditDraft(storedDraft);
-        } else if (storedDraft) {
-          await db.del("audit-draft");
-        }
-      } catch (initError: unknown) {
-        console.error("Audit init error:", initError);
+        await rehydrateAudit();
       } finally {
         setIsAuditReady(true);
       }
     };
     void initAudit();
-  }, []);
+  }, [rehydrateAudit]);
 
   useEffect(() => {
     if (isAuditReady && onboardingComplete) db.set("use-streaming", useStreaming);
@@ -293,10 +285,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
       return null;
     }
 
-    const hasCompletedAuditForSession =
-      current?.ts === storedDraft.sessionTs || history.some((audit) => audit.ts === storedDraft.sessionTs);
-
-    if (hasCompletedAuditForSession) {
+    if (hasCompletedAuditForSession(storedDraft, current, history)) {
       await db.del("audit-draft");
       setRecoverableAuditDraft(null);
       return null;
@@ -316,52 +305,6 @@ export function AuditProvider({ children }: AuditProviderProps) {
   const dismissRecoverableAuditDraft = useCallback(async (): Promise<void> => {
     await clearAuditDraft();
   }, [clearAuditDraft]);
-
-  const applyContributionAutoUpdate = (parsed: ParsedAudit | null, rawText: string): void => {
-    if (!parsed) return;
-    let rothDelta = 0;
-    let k401Delta = 0;
-
-    const extractAmount = (text: string): number => {
-      const match = text.match(/\$([\d,]+(?:\.\d{2})?)/);
-      const amount = match?.[1];
-      return amount ? parseFloat(amount.replace(/,/g, "")) : 0;
-    };
-
-    const scanMoves = (moves: Array<string | { text?: string; description?: string }>): void => {
-      moves.forEach((move) => {
-        const text = (typeof move === "string" ? move : move.text || move.description || "").toString();
-        if (/roth/i.test(text)) rothDelta = Math.max(rothDelta, extractAmount(text));
-        if (/401k|401 k/i.test(text)) k401Delta = Math.max(k401Delta, extractAmount(text));
-      });
-    };
-
-    const structuredMoves = parsed.structured?.moves;
-    if (Array.isArray(structuredMoves) && structuredMoves.length) {
-      scanMoves(structuredMoves as Array<string | { text?: string; description?: string }>);
-    } else if (parsed.moveItems?.length) {
-      scanMoves(parsed.moveItems);
-    } else if (parsed.sections?.moves) {
-      scanMoves(parsed.sections.moves.split("\n"));
-    } else if (rawText) {
-      scanMoves(rawText.split("\n"));
-    }
-
-    if (!financialConfig?.trackRothContributions && !financialConfig?.track401k) return;
-
-    setFinancialConfig((prev) => {
-      const next = { ...prev };
-      if (prev.trackRothContributions && prev.autoTrackRothYTD !== false && rothDelta > 0) {
-        next.rothContributedYTD = Math.max(0, (prev.rothContributedYTD || 0) + rothDelta);
-        if (prev.rothAnnualLimit) next.rothContributedYTD = Math.min(next.rothContributedYTD, prev.rothAnnualLimit);
-      }
-      if (prev.track401k && prev.autoTrack401kYTD !== false && k401Delta > 0) {
-        next.k401ContributedYTD = Math.max(0, (prev.k401ContributedYTD || 0) + k401Delta);
-        if (prev.k401AnnualLimit) next.k401ContributedYTD = Math.min(next.k401ContributedYTD, prev.k401AnnualLimit);
-      }
-      return next;
-    });
-  };
 
   const handleSubmit = useCallback<AuditContextValue["handleSubmit"]>(
     async (msg, formData, testMode = false, manualResultText = null) => {
@@ -528,7 +471,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
         let hitDegradedFallback = false;
 
         if (!parsed && !manualResultText && computedStrategy && scrubber && deviceId) {
-          console.warn("[audit] Primary parse failed. Retrying with minimal critical-field prompt.");
+          log.warn("audit", "Primary parse failed; retrying with critical-field prompt");
           await reportAuditLogOutcome(primaryAuditLogId, false, false);
           const retryRaw = await callAudit(
             trimmedApiKey,
@@ -614,7 +557,10 @@ export function AuditProvider({ children }: AuditProviderProps) {
           await db.set("audit-history", nextHistory);
         } else {
           if (parsed.mode !== "DEGRADED") {
-            applyContributionAutoUpdate(parsed, raw);
+            const contributionUpdates = buildContributionAutoUpdates(parsed, raw, financialConfig);
+            if (contributionUpdates) {
+              setFinancialConfig((prev) => ({ ...prev, ...contributionUpdates }));
+            }
           }
           setCurrent(audit);
           setMoveChecks({});
@@ -694,7 +640,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
               if (names.length) toast.success(`🏆 Badge unlocked: ${names.join(", ")}!`);
             }
           } catch (badgeError: unknown) {
-            console.error("Badge eval failed:", badgeError);
+            log.error("audit", "Badge evaluation failed", { error: badgeError });
           }
 
           try {
@@ -809,7 +755,6 @@ export function AuditProvider({ children }: AuditProviderProps) {
 
   const factoryReset = useCallback(async (): Promise<void> => {
     await clearAll();
-    window.location.reload();
   }, [clearAll]);
 
   const deleteHistoryItem = useCallback((auditToDelete: AuditRecord): void => {
@@ -841,7 +786,10 @@ export function AuditProvider({ children }: AuditProviderProps) {
       if (!parsedAudit) throw new Error("Imported text is not valid Catalyst Cash audit JSON.");
       const parsed = validateParsedAuditConsistency(parsedAudit) as ParsedAudit;
       if (parsed.mode !== "DEGRADED") {
-        applyContributionAutoUpdate(parsed, resultText);
+        const contributionUpdates = buildContributionAutoUpdates(parsed, resultText, financialConfig);
+        if (contributionUpdates) {
+          setFinancialConfig((prev) => ({ ...prev, ...contributionUpdates }));
+        }
       }
       const today = new Date().toISOString().split("T")[0] ?? new Date().toISOString().slice(0, 10);
       const audit: AuditRecord = {
@@ -873,7 +821,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
       setLoading(false);
       setStreamText("");
     }
-  }, [applyContributionAutoUpdate, clearAuditDraft, navTo, setResultsBackTarget, toast]);
+  }, [clearAuditDraft, financialConfig, navTo, setFinancialConfig, setResultsBackTarget, toast]);
 
   const value: AuditContextValue = {
     current,
@@ -913,6 +861,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
     checkRecoverableAuditDraft,
     openRecoverableAuditDraft,
     dismissRecoverableAuditDraft,
+    rehydrateAudit,
   };
 
   return <AuditContext.Provider value={value}>{children}</AuditContext.Provider>;

@@ -7,7 +7,7 @@ describe("PII Scrubber — buildScrubber", () => {
       { name: "Chase Sapphire Preferred", institution: "Chase" },
       { name: "Amex Gold", institution: "Amex" },
     ];
-    const { scrub, unscrub, hasMappings } = buildScrubber(cards);
+    const { scrub, hasMappings } = buildScrubber(cards);
 
     expect(hasMappings).toBe(true);
     const text = "Pay your Chase Sapphire Preferred balance at Chase.";

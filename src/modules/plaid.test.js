@@ -1,5 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { autoMatchAccounts, applyBalanceSync } from "./plaid.js";
+
+beforeEach(() => {
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+  vi.spyOn(console, "error").mockImplementation(() => {});
+});
 
 describe("Plaid matching", () => {
   it("creates a new credit card and links the plaid account immediately", () => {

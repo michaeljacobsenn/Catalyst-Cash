@@ -16,7 +16,7 @@
  * @param {Object} [financialConfig] - User's financial configuration
  * @returns {{ valid: boolean, errors: ValidationError[] }}
  */
-export function validateSnapshot(formData, financialConfig = {}) {
+export function validateSnapshot(formData, _financialConfig = {}) {
   const errors = [];
 
   // ── Date validation ──

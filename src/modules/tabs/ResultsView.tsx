@@ -90,13 +90,16 @@ const InlineTooltip = UIInlineTooltip as unknown as (props: InlineTooltipProps) 
 const ReportSection = ({ title, icon: Icon, content, accentColor, badge, isLast = false }: ReportSectionProps) => {
   if (!content || !content.trim()) return null;
   return (
-    <div style={{ padding: "28px 0", borderBottom: isLast ? "none" : `1px solid ${T.border.subtle}` }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
+    <section
+      aria-labelledby={`report-section-${title.replace(/\s+/g, "-").toLowerCase()}`}
+      style={{ padding: "22px 0", borderBottom: isLast ? "none" : `1px solid ${T.border.subtle}` }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         {Icon && (
           <div
             style={{
-              width: 36,
-              height: 36,
+              width: 32,
+              height: 32,
               borderRadius: 10,
               background: `${accentColor}15`,
               display: "flex",
@@ -104,14 +107,19 @@ const ReportSection = ({ title, icon: Icon, content, accentColor, badge, isLast 
               justifyContent: "center",
             }}
           >
-            <Icon size={18} color={accentColor} strokeWidth={2.5} />
+            <Icon size={16} color={accentColor} strokeWidth={2.5} />
           </div>
         )}
-        <h2 style={{ fontSize: 20, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em", margin: 0 }}>{title}</h2>
+        <h2
+          id={`report-section-${title.replace(/\s+/g, "-").toLowerCase()}`}
+          style={{ fontSize: "clamp(17px, 4.8vw, 20px)", fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em", margin: 0 }}
+        >
+          {title}
+        </h2>
         {badge}
       </div>
       <Md text={content} />
-    </div>
+    </section>
   );
 };
 
@@ -121,20 +129,36 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
   const { navTo } = useNavigation() as NavigationApi;
 
   const [showRaw, setShowRaw] = useState<boolean>(false);
+  const isSmallPhone = typeof window !== "undefined" ? window.innerWidth <= 390 : false;
   if (!audit)
     return (
       <div
+        role="status"
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          height: "60vh",
-          padding: 32,
+          minHeight: "56vh",
+          padding: 24,
           textAlign: "center",
         }}
       >
-        <p style={{ fontSize: 14, fontWeight: 600, color: T.text.dim }}>No results yet</p>
+        <Card
+          style={{
+            width: "100%",
+            maxWidth: 420,
+            padding: "22px 18px",
+            border: `1px solid ${T.border.default}`,
+            background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
+          }}
+        >
+          <div style={{ fontSize: 30, marginBottom: 10 }}>⚡</div>
+          <p style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, margin: "0 0 6px" }}>No audit results yet</p>
+          <p style={{ fontSize: 13, lineHeight: 1.55, color: T.text.secondary, margin: 0 }}>
+            Run an audit first and this screen will turn into your readable weekly game plan.
+          </p>
+        </Card>
       </div>
     );
   const parsed = audit.parsed;
@@ -148,9 +172,9 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
   };
 
   return (
-    <div className="page-body">
+    <main className="page-body" aria-label="Audit results">
       <div
-        style={{ padding: "14px 0 12px", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}
+        style={{ padding: "12px 0 10px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}
       >
         <div>
           <button
@@ -173,7 +197,7 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
           >
             ← Back
           </button>
-          <h1 style={{ fontSize: 22, fontWeight: 800 }}>Full Results</h1>
+          <h1 style={{ fontSize: "clamp(20px, 6vw, 24px)", fontWeight: 800, margin: 0 }}>Full Results</h1>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
             <Mono size={11} color={T.text.dim}>
               {fmtDate(audit.date)}
@@ -208,7 +232,7 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
         <Card
           style={{
             marginBottom: 14,
-            padding: 18,
+            padding: 16,
             border: `1px solid ${T.status.amber}35`,
             background: `linear-gradient(180deg, ${T.status.amberDim} 0%, ${T.bg.card} 100%)`,
           }}
@@ -227,7 +251,7 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
           <p style={{ margin: 0, fontSize: 13, color: T.text.secondary, lineHeight: 1.6 }}>
             {degradedInfo.reason}
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginTop: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10, marginTop: 14 }}>
             <div style={{ padding: "12px 12px 10px", borderRadius: T.radius.lg, background: T.bg.elevated, border: `1px solid ${T.border.subtle}` }}>
               <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em" }}>NATIVE SCORE</div>
               <div style={{ marginTop: 5, fontSize: 20, fontWeight: 900, color: T.text.primary }}>
@@ -365,8 +389,8 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
       <Card
         className="slide-up"
         style={{
-          padding: "8px 20px 20px",
-          marginTop: 16,
+          padding: isSmallPhone ? "6px 16px 16px" : "8px 20px 20px",
+          marginTop: 14,
           background: T.bg.card,
           border: `1px solid ${T.border.default}`,
           boxShadow: `0 12px 40px ${T.shadow.base}`,
@@ -375,8 +399,8 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
         {sections.alerts && !/^\s*(no\s*alerts|omit|none|\[\])\s*$/i.test(sections.alerts) && sections.alerts.length > 5 && (
           <div
             style={{
-              padding: "20px 24px",
-              margin: "24px -4px",
+              padding: isSmallPhone ? "16px 16px" : "20px 24px",
+              margin: isSmallPhone ? "18px -2px" : "24px -4px",
               borderRadius: T.radius.lg,
               background: T.status.amberDim,
               borderLeft: `4px solid ${T.status.amber}`,
@@ -396,15 +420,15 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
               >
                 <AlertTriangle size={16} color={T.status.amber} strokeWidth={2.5} />
               </div>
-              <span style={{ fontSize: 16, fontWeight: 800, color: T.status.amber }}>Critical Alerts</span>
+              <span style={{ fontSize: "clamp(15px, 4.5vw, 16px)", fontWeight: 800, color: T.status.amber }}>Critical Alerts</span>
             </div>
             <Md text={sections.alerts} />
           </div>
         )}
 
         {sections.nextAction && (
-          <div style={{ padding: "28px 0", borderBottom: `1px solid ${T.border.subtle}` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+          <section aria-labelledby="results-next-action" style={{ padding: "22px 0", borderBottom: `1px solid ${T.border.subtle}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
               <div
                 style={{
                   width: 32,
@@ -418,10 +442,10 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
               >
                 <Zap size={16} color={T.accent.primary} strokeWidth={2.5} />
               </div>
-              <h2 style={{ fontSize: 18, fontWeight: 800, color: T.accent.primary, margin: 0, letterSpacing: "-0.01em" }}>Immediate Next Action</h2>
+              <h2 id="results-next-action" style={{ fontSize: "clamp(16px, 4.6vw, 18px)", fontWeight: 800, color: T.accent.primary, margin: 0, letterSpacing: "-0.01em" }}>Immediate Next Action</h2>
             </div>
             <Md text={stripPaycheckParens(sections.nextAction)} />
-          </div>
+          </section>
         )}
 
         <ReportSection
@@ -432,13 +456,13 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
           badge={<Badge variant="teal">STATE OF THE UNION</Badge>}
         />
         {parsed.moveItems.length > 0 && (
-          <div style={{ padding: "28px 0", borderBottom: `1px solid ${T.border.subtle}` }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <section aria-labelledby="results-playbook" style={{ padding: "22px 0", borderBottom: `1px solid ${T.border.subtle}` }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 10, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div
                   style={{
-                    width: 36,
-                    height: 36,
+                    width: 32,
+                    height: 32,
                     borderRadius: 10,
                     background: T.accent.primaryDim,
                     display: "flex",
@@ -446,20 +470,20 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
                     justifyContent: "center",
                   }}
                 >
-                  <CheckSquare size={18} color={T.accent.primary} strokeWidth={2.5} />
+                  <CheckSquare size={16} color={T.accent.primary} strokeWidth={2.5} />
                 </div>
-                <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>Tactical Playbook</h2>
+                <h2 id="results-playbook" style={{ fontSize: "clamp(17px, 4.8vw, 20px)", fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>Tactical Playbook</h2>
               </div>
               <Mono size={12} color={T.text.dim}>
                 {Object.values(moveChecks).filter(Boolean).length}/{parsed.moveItems.length} Complete
               </Mono>
             </div>
-            <div style={{ background: `${T.bg.elevated}50`, borderRadius: T.radius.lg, padding: "8px 16px" }}>
+            <div style={{ background: `${T.bg.elevated}50`, borderRadius: T.radius.lg, padding: isSmallPhone ? "6px 12px" : "8px 16px" }}>
               {parsed.moveItems.map((moveItem: ParsedMoveItem, index: number) => (
                 <MoveRow key={index} item={moveItem} index={index} checked={moveChecks[index] || false} onToggle={() => onToggleMove(index)} />
               ))}
             </div>
-          </div>
+          </section>
         )}
 
         <ReportSection title="Radar — 90 Days" icon={Target} content={sections.radar} accentColor={T.status.amber} />
@@ -699,11 +723,12 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
               color: T.text.secondary,
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
+              overflowWrap: "anywhere",
               marginTop: 10,
               maxHeight: 500,
               overflow: "auto",
               fontFamily: T.font.mono,
-              padding: 12,
+              padding: isSmallPhone ? 10 : 12,
               background: T.bg.card,
               borderRadius: T.radius.md,
             }}
@@ -716,7 +741,7 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
       <div
         style={{
           marginTop: 12,
-          padding: "14px 16px",
+          padding: isSmallPhone ? "12px 14px" : "14px 16px",
           borderRadius: T.radius.md,
           background: `${T.bg.elevated}80`,
           border: `1px solid ${T.border.subtle}`,
@@ -730,6 +755,6 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
           <strong style={{ color: T.text.dim }}>Disclaimer:</strong> This analysis is generated by AI for educational and informational purposes only. It is <strong>not</strong> professional financial, tax, legal, or investment advice. Always consult a licensed financial advisor before making financial decisions. The app developer assumes no liability for actions taken based on this output.
         </p>
       </div>
-    </div>
+    </main>
   );
 });

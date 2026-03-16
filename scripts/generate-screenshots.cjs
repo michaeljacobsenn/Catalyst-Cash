@@ -6,7 +6,7 @@ async function main() {
     try {
         const pw = require('@playwright/test');
         chromium = pw.chromium;
-    } catch (e) {
+    } catch {
         console.error("Playwright test is not installed. Run 'npx playwright install chromium' first.");
         const playwright = require('playwright');
         chromium = playwright.chromium;

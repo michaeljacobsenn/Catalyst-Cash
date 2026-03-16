@@ -31,7 +31,7 @@ export function buildSnapshotMessage({
   parsedTransactions,
   budgetActuals,
   holdingValues,
-  financialConfig,
+  financialConfig: _financialConfig,
   aiProvider,
 }) {
   const toNum = v => {

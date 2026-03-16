@@ -67,6 +67,28 @@ describe("chatSafety", () => {
     expect(fallback).toContain("Cut structural bills before optional spending.");
   });
 
+  it("surfaces directional-only and professional-help guidance in deterministic fallback mode", () => {
+    const fallback = buildDeterministicChatFallback({
+      decisionRecommendations: [
+        {
+          flag: "contradictory-financial-inputs",
+          active: true,
+          severity: "high",
+          rationale: "The current model has contradictory or missing inputs.",
+          recommendation: "Correct the inputs before making aggressive moves.",
+          directionalOnly: true,
+          confidence: "low",
+          requiresProfessionalHelp: true,
+          professionalHelpReason: "Severe contradictions make self-directed optimization unreliable.",
+        },
+      ],
+    });
+
+    expect(fallback).toContain("directional only");
+    expect(fallback).toContain("Professional help recommended");
+    expect(fallback).toContain("Severe contradictions make self-directed optimization unreliable.");
+  });
+
   it("returns a refusal message for prompt-injection attempts", () => {
     const refusal = buildPromptInjectionRefusal();
     expect(refusal).toContain("can't ignore safety rules");

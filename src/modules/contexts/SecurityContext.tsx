@@ -1,5 +1,6 @@
   import type { Dispatch,ReactNode,SetStateAction } from "react";
   import { createContext,useContext,useEffect,useRef,useState } from "react";
+  import { log } from "../logger.js";
   import { deleteSecureItem,getSecretStorageStatus,migrateToSecureItem,setSecureItem } from "../secureStore.js";
   import { db } from "../utils.js";
 
@@ -23,10 +24,11 @@ interface SecurityContextValue {
   appleLinkedId: string | null;
   setAppleLinkedId: Dispatch<SetStateAction<string | null>>;
   isSecurityReady: boolean;
+  rehydrateSecurity: () => Promise<void>;
   secretStorageStatus: {
     platform: "native" | "web";
     available: boolean;
-    mode: "native-secure" | "native-unavailable" | "web-fallback";
+    mode: "native-secure" | "native-unavailable" | "web-limited";
     canPersistSecrets: boolean;
     isHardwareBacked: boolean;
     message: string;
@@ -36,6 +38,19 @@ interface SecurityContextValue {
 type SecretStorageStatus = SecurityContextValue["secretStorageStatus"];
 
 const SecurityContext = createContext<SecurityContextValue | null>(null);
+
+function getSecurityTestOverride(): {
+  storageStatus?: SecretStorageStatus;
+  appPasscode?: string;
+  requireAuth?: boolean;
+  useFaceId?: boolean;
+  lockTimeout?: number;
+} | null {
+  const override =
+    (typeof globalThis !== "undefined" && globalThis.__E2E_SECURITY_STATE__) ||
+    (typeof window !== "undefined" && window.__E2E_SECURITY_STATE__);
+  return override || null;
+}
 
 export function SecurityProvider({ children }: SecurityProviderProps) {
   const [requireAuth, setRequireAuth] = useState(false);
@@ -49,54 +64,79 @@ export function SecurityProvider({ children }: SecurityProviderProps) {
   const [secretStorageStatus, setSecretStorageStatus] = useState<SecretStorageStatus>({
     platform: "web",
     available: false,
-    mode: "web-fallback",
-    canPersistSecrets: true,
+    mode: "web-limited",
+    canPersistSecrets: false,
     isHardwareBacked: false,
     message: "",
   });
 
   const lastBackgrounded = useRef<number | null>(null);
 
+  const rehydrateSecurity = async () => {
+    try {
+      setRequireAuth(false);
+      setAppPasscode("");
+      setUseFaceId(false);
+      setIsLocked(false);
+      setPrivacyMode(false);
+      setLockTimeout(0);
+      setAppleLinkedId(null);
+
+      const testOverride = getSecurityTestOverride();
+      const storageStatus = ((testOverride?.storageStatus as SecretStorageStatus | undefined) ??
+        ((await getSecretStorageStatus()) as SecretStorageStatus));
+      setSecretStorageStatus(storageStatus);
+      const [ra, uf, lt, legacyPin, legacyAppleLinkedId, pm] = await Promise.all([
+        db.get("require-auth"),
+        db.get("use-face-id"),
+        db.get("lock-timeout"),
+        db.get("app-passcode"),
+        db.get("apple-linked-id"),
+        db.get("privacy-mode"),
+      ]);
+      const [pin, appLinked] = await Promise.all([
+        migrateToSecureItem("app-passcode", legacyPin, () => db.del("app-passcode")),
+        migrateToSecureItem("apple-linked-id", legacyAppleLinkedId, () => db.del("apple-linked-id")),
+      ]);
+
+      const resolvedRequireAuth = typeof testOverride?.requireAuth === "boolean" ? testOverride.requireAuth : Boolean(ra);
+      const resolvedUseFaceId = typeof testOverride?.useFaceId === "boolean" ? testOverride.useFaceId : Boolean(uf);
+      const resolvedLockTimeout =
+        typeof testOverride?.lockTimeout === "number"
+          ? testOverride.lockTimeout
+          : lt !== null
+            ? Number(lt)
+            : 0;
+      const resolvedPasscode = typeof testOverride?.appPasscode === "string" ? testOverride.appPasscode : pin;
+      const resolvedAppleLinkedId = appLinked;
+
+      if (storageStatus.mode !== "native-secure") {
+        await Promise.all([
+          db.set("require-auth", false),
+          db.set("use-face-id", false),
+        ]);
+        setRequireAuth(false);
+        setUseFaceId(false);
+        setIsLocked(false);
+      } else if (resolvedRequireAuth) {
+        setRequireAuth(true);
+        setIsLocked(true);
+      }
+
+      if (resolvedPasscode) setAppPasscode(resolvedPasscode);
+      if (resolvedUseFaceId) setUseFaceId(true);
+      setLockTimeout(resolvedLockTimeout);
+      if (resolvedAppleLinkedId) setAppleLinkedId(resolvedAppleLinkedId);
+      if (pm) setPrivacyMode(true);
+    } catch (e) {
+      void log.error("security", "Security context initialization failed", e);
+    }
+  };
+
   useEffect(() => {
     const initSecurity = async () => {
       try {
-        const storageStatus = (await getSecretStorageStatus()) as SecretStorageStatus;
-        setSecretStorageStatus(storageStatus);
-        const [ra, uf, lt, legacyPin, legacyAppleLinkedId, pm] = await Promise.all([
-          db.get("require-auth"),
-          db.get("use-face-id"),
-          db.get("lock-timeout"),
-          db.get("app-passcode"),
-          db.get("apple-linked-id"),
-          db.get("privacy-mode"),
-        ]);
-        const [pin, appLinked] = await Promise.all([
-          migrateToSecureItem("app-passcode", legacyPin, () => db.del("app-passcode")),
-          migrateToSecureItem("apple-linked-id", legacyAppleLinkedId, () => db.del("apple-linked-id")),
-        ]);
-
-        if (storageStatus.mode === "native-unavailable") {
-          await Promise.all([
-            db.set("require-auth", false),
-            db.set("use-face-id", false),
-          ]);
-          setRequireAuth(false);
-          setUseFaceId(false);
-          setIsLocked(false);
-        } else if (ra) {
-          setRequireAuth(true);
-          setIsLocked(true);
-        } else {
-          setIsLocked(false);
-        }
-
-        if (pin) setAppPasscode(pin);
-        if (uf) setUseFaceId(true);
-        if (lt !== null) setLockTimeout(Number(lt));
-        if (appLinked) setAppleLinkedId(appLinked);
-        if (pm) setPrivacyMode(true);
-      } catch (e) {
-        console.error("Security init error:", e);
+        await rehydrateSecurity();
       } finally {
         setIsSecurityReady(true);
       }
@@ -169,6 +209,7 @@ export function SecurityProvider({ children }: SecurityProviderProps) {
     appleLinkedId,
     setAppleLinkedId,
     isSecurityReady,
+    rehydrateSecurity,
     secretStorageStatus,
   };
 

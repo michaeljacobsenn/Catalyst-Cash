@@ -13,7 +13,7 @@ function getConstant(filePath, regex, fallback) {
     if (match && match[1]) {
       return match[1];
     }
-  } catch (err) {
+  } catch {
     console.error(`Error reading ${filePath}`);
   }
   return fallback;

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -48,6 +48,10 @@ import {
   extractDashboardMetrics,
 } from "./utils.js";
 import ResultsView from "./tabs/ResultsView.tsx";
+beforeEach(() => {
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+  vi.spyOn(console, "error").mockImplementation(() => {});
+});
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -358,6 +362,56 @@ describe("parseAudit", () => {
     );
     expect(parsed.consistency.nativeScoreAnchor).toBe(68);
     expect(parsed.consistency.scoreAnchoredToNative).toBe(true);
+  });
+
+  it("re-anchors when the model drifts by more than 8 points from native score", () => {
+    const raw = JSON.stringify({
+      headerCard: { status: "GREEN" },
+      healthScore: { score: 89, grade: "B+", trend: "up", summary: "Good." },
+      dashboardCard: [{ category: "Checking", amount: "$4,600.00", status: "Protected" }],
+      weeklyMoves: ["Move 1"],
+      alertsCard: [],
+      nextAction: "Act now.",
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: {},
+    });
+
+    const parsed = validateParsedAuditConsistency(parseAudit(raw), {
+      nativeScore: 80,
+      nativeRiskFlags: [],
+    });
+
+    expect(parsed.healthScore.score).toBe(80);
+    expect(parsed.consistency.scoreAnchoredToNative).toBe(true);
+  });
+
+  it("treats critical promo expiry as a red-status native risk", () => {
+    const raw = JSON.stringify({
+      headerCard: { status: "GREEN" },
+      healthScore: { score: 82, grade: "B-", trend: "up", summary: "Solid." },
+      dashboardCard: [{ category: "Checking", amount: "$4,600.00", status: "Protected" }],
+      weeklyMoves: ["Move 1"],
+      alertsCard: [],
+      nextAction: "Act now.",
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: {},
+    });
+
+    const parsed = validateParsedAuditConsistency(parseAudit(raw), {
+      nativeScore: 82,
+      nativeRiskFlags: ["critical-promo-expiry"],
+    });
+
+    expect(parsed.status).toBe("RED");
+    expect(parsed.auditFlags).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "status-corrected-to-native-risk", severity: "medium" }),
+      ])
+    );
   });
 
   it("returns null for missing headerCard", () => {

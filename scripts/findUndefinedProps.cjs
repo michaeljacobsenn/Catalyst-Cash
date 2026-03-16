@@ -1,6 +1,4 @@
 const fs = require("fs");
-const execSync = require("child_process").execSync;
-
 let hasErrors = false;
 
 // We're specifically looking for places in App.jsx where a prop is passed, but the variable doesn't exist

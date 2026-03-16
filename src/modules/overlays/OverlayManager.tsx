@@ -7,6 +7,7 @@
   import type { SetFinancialConfig } from "../contexts/SettingsContext.js";
   import { useSwipeBack,useSwipeDown } from "../hooks/useSwipeGesture.js";
   import { getModel } from "../providers.js";
+  import { buildSettingsRefreshActions } from "../recoveryFlows.js";
   import type { ToastApi } from "../Toast.js";
   import { ErrorBoundary } from "../ui.js";
 
@@ -38,6 +39,8 @@ interface OverlayManagerProps {
   toast: ToastApi;
   clearAll: () => Promise<void>;
   factoryReset: () => Promise<void>;
+  onRestoreComplete: () => Promise<void>;
+  onHouseholdSyncConfigured: () => Promise<void>;
   handleRefreshDashboard: () => Promise<void>;
   handleSubmit: (msg: string, formData: AuditFormData, testMode?: boolean, manualResultText?: string | null) => Promise<void>;
   handleManualImport: (resultText: string) => Promise<void>;
@@ -60,6 +63,8 @@ export default function OverlayManager({
   toast,
   clearAll,
   factoryReset,
+  onRestoreComplete,
+  onHouseholdSyncConfigured,
   handleRefreshDashboard,
   handleSubmit,
   handleManualImport,
@@ -101,6 +106,10 @@ export default function OverlayManager({
     setInstructionHash,
   } = useOverlay();
   const onShowGuide = useCallback(() => setShowGuide(true), [setShowGuide]);
+  const settingsRefreshActions = buildSettingsRefreshActions({
+    onRestoreComplete,
+    onHouseholdSyncConfigured,
+  });
   const overlaySwipeResults = useSwipeBack(
     useCallback(() => {
       const target = resultsBackTarget === "history" ? "history" : "audit";
@@ -267,7 +276,7 @@ export default function OverlayManager({
                   navTo(lastCenterTab.current);
                 }
               }}
-              onRestoreComplete={() => window.location.reload()}
+              {...settingsRefreshActions}
             />
           </Suspense>
         </ErrorBoundary>

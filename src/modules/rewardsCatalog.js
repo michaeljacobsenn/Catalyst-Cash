@@ -836,7 +836,7 @@ export function getCardMultiplier(cardName, category, customValuations = {}) {
             }
           }
         }
-      } catch (e) {
+      } catch {
         // Ignore parse error
       }
     }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 
 // ════════════════════════════════════════════════════════════════
 // cloudSync.js — smoke tests for encryption toggle and constants
@@ -7,9 +7,7 @@ import { describe, it, expect, vi } from "vitest";
 // These tests verify the module's constants and logic branches.
 
 describe("cloudSync module", () => {
-  it("defines FILE_NAME constant for web fallback", async () => {
-    // The module should export or internally define FILE_NAME so the
-    // web fallback (Capacitor Filesystem) has a valid file path.
+  it("defines FILE_NAME constant for native cloud sync payloads", async () => {
     const source = await import("fs").then(fs => fs.readFileSync(new URL("./cloudSync.js", import.meta.url), "utf-8"));
     expect(source).toContain("FILE_NAME");
     expect(source).toContain("CatalystCash_CloudSync.json");
@@ -31,5 +29,12 @@ describe("cloudSync module", () => {
     const source = await import("fs").then(fs => fs.readFileSync(new URL("./cloudSync.js", import.meta.url), "utf-8"));
     // The upload function should only encrypt when passphrase is truthy
     expect(source).toMatch(/if\s*\(\s*passphrase\s*\)/);
+  });
+
+  it("treats web as intentionally unsupported rather than filesystem fallback", async () => {
+    const source = await import("fs").then(fs => fs.readFileSync(new URL("./cloudSync.js", import.meta.url), "utf-8"));
+    expect(source).toContain("Cloud backup unavailable on this platform");
+    expect(source).toContain("Cloud restore unavailable on this platform");
+    expect(source).not.toContain("Using local-only filesystem fallback");
   });
 });

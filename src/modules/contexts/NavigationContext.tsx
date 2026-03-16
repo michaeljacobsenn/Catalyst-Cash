@@ -36,6 +36,8 @@ interface NavigationContextValue {
   setSetupReturnTab: Dispatch<SetStateAction<AppTab | null>>;
   onboardingComplete: boolean;
   setOnboardingComplete: Dispatch<SetStateAction<boolean>>;
+  rehydrateNavigation: () => Promise<void>;
+  resetNavigationState: (nextTab?: AppTab) => void;
   showGuide: boolean;
   setShowGuide: Dispatch<SetStateAction<boolean>>;
   inputMounted: boolean;
@@ -72,23 +74,35 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
   const inputBackTarget = useRef<AppTab>("audit");
   const chatStreamAbortRef = useRef<(() => void) | null>(null);
 
+  const rehydrateNavigation = useCallback(async () => {
+    const obComplete = await db.get("onboarding-complete");
+    const history = await db.get("audit-history");
+
+    const hasHistory = Array.isArray(history) && history.length > 0 && !history[0]?.isDemoHistory;
+
+    if (obComplete || hasHistory) {
+      setOnboardingComplete(true);
+      if (!obComplete) db.set("onboarding-complete", true);
+    } else {
+      setOnboardingComplete(false);
+    }
+  }, []);
+
+  const resetNavigationState = useCallback((nextTab: AppTab = "dashboard") => {
+    setTab(nextTab);
+    setResultsBackTarget(null);
+    setSetupReturnTab(null);
+    setShowGuide(false);
+    setInputMounted(false);
+    lastCenterTab.current = nextTab === "dashboard" || nextTab === "input" ? nextTab : "dashboard";
+    inputBackTarget.current = "dashboard";
+    window.history.replaceState({ tab: nextTab, viewingTs: null }, "", "");
+  }, []);
+
   // Onboarding initialization
   useEffect(() => {
-    const initOnboarding = async () => {
-      const obComplete = await db.get("onboarding-complete");
-      const history = await db.get("audit-history");
-
-      const hasHistory = Array.isArray(history) && history.length > 0 && !history[0]?.isDemoHistory;
-
-      if (obComplete || hasHistory) {
-        setOnboardingComplete(true);
-        if (!obComplete) db.set("onboarding-complete", true);
-      } else {
-        setOnboardingComplete(false);
-      }
-    };
-    initOnboarding();
-  }, []);
+    void rehydrateNavigation();
+  }, [rehydrateNavigation]);
 
   const registerChatStreamAbort = useCallback((handler: (() => void) | null) => {
     chatStreamAbortRef.current = handler;
@@ -197,6 +211,8 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
     setSetupReturnTab,
     onboardingComplete,
     setOnboardingComplete,
+    rehydrateNavigation,
+    resetNavigationState,
     showGuide,
     setShowGuide,
     inputMounted,

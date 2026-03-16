@@ -1,4 +1,6 @@
+import { normalizeAppError } from "./appErrors.js";
 import { decrypt, encrypt } from "./crypto.js";
+import { log } from "./logger.js";
 import { isSecuritySensitiveKey, sanitizePlaidForBackup } from "./securityKeys.js";
 import { db } from "./utils.js";
 
@@ -175,11 +177,12 @@ export async function pushHouseholdSync(householdId, passcode) {
       timestamp: payload.timestamp,
     };
   } catch (err) {
-    console.error("pushHouseholdSync failed:", err);
+    const failure = normalizeAppError(err, { context: "sync" });
+    log.error("household-sync", "pushHouseholdSync failed", { error: failure.rawMessage, kind: failure.kind });
     return {
       ok: false,
       error: "sync_failed",
-      message: err instanceof Error ? err.message : "Household sync failed.",
+      message: failure.userMessage || "Household sync failed.",
     };
   }
 }
@@ -229,11 +232,12 @@ export async function pullHouseholdSync(householdId, passcode) {
       lastUpdatedAt: result.data.lastUpdatedAt || null,
     };
   } catch (err) {
-    console.error("pullHouseholdSync failed:", err);
+    const failure = normalizeAppError(err, { context: "sync" });
+    log.error("household-sync", "pullHouseholdSync failed", { error: failure.rawMessage, kind: failure.kind });
     return {
       ok: false,
       error: "sync_failed",
-      message: err instanceof Error ? err.message : "Household sync failed.",
+      message: failure.userMessage || "Household sync failed.",
     };
   }
 }

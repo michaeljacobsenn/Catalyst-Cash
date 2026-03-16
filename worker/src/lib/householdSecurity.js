@@ -1,0 +1,61 @@
+export async function sha256Hex(value) {
+  const encoded = new TextEncoder().encode(String(value || ""));
+  const digest = await crypto.subtle.digest("SHA-256", encoded);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function householdEnvelopeMessage({ householdId, encryptedBlob, version, requestId }) {
+  return JSON.stringify({
+    householdId,
+    version,
+    requestId,
+    encryptedBlob,
+  });
+}
+
+function hexToBytes(hex) {
+  if (typeof hex !== "string" || hex.length === 0 || hex.length % 2 !== 0) return new Uint8Array();
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = Number.parseInt(hex.slice(i, i + 2), 16);
+  }
+  return bytes;
+}
+
+export async function buildHouseholdIntegrityTag({ householdId, authToken, encryptedBlob, version, requestId }) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    hexToBytes(String(authToken || "")),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(householdEnvelopeMessage({ householdId, encryptedBlob, version, requestId }))
+  );
+  return Array.from(new Uint8Array(signature))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+export async function verifyHouseholdIntegrity({
+  householdId,
+  authToken,
+  encryptedBlob,
+  version,
+  requestId,
+  integrityTag,
+}) {
+  const expectedTag = await buildHouseholdIntegrityTag({
+    householdId,
+    authToken,
+    encryptedBlob,
+    version,
+    requestId,
+  });
+  return expectedTag === integrityTag;
+}

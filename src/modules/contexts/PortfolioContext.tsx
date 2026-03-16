@@ -17,6 +17,7 @@
   } from "../../types/index.js";
   import { ensureCardIds,getCardLabel,getShortCardLabel } from "../cards.js";
   import { loadCardCatalog } from "../issuerCards.js";
+  import { log } from "../logger.js";
   import { fetchMarketPrices } from "../marketData.js";
   import { scheduleBillReminders } from "../notifications.js";
   import { advanceExpiredDate,db } from "../utils.js";
@@ -47,6 +48,7 @@ export interface PortfolioContextValue {
   setMarketPrices: Dispatch<SetStateAction<MarketPriceMap>>;
   cardAnnualFees: Renewal[];
   isPortfolioReady: boolean;
+  rehydratePortfolio: () => Promise<void>;
   liabilitySum?: number;
   refreshLiabilities?: () => Promise<void>;
 }
@@ -67,81 +69,95 @@ export function PortfolioProvider({ children }: PortfolioProviderProps) {
   const [marketPrices, setMarketPrices] = useState<MarketPriceMap>({});
   const [isPortfolioReady, setIsPortfolioReady] = useState<boolean>(false);
 
+  const rehydratePortfolio = async (): Promise<void> => {
+    try {
+      setCards([]);
+      setBankAccounts([]);
+      setRenewals([]);
+      setCardCatalog(null);
+      setCardCatalogUpdatedAt(null);
+      setBadges({});
+      setMarketPrices({});
+
+      const [rn, cp, ba, renewalsSeedVersion, loadedBadges] = (await Promise.all([
+        db.get("renewals"),
+        db.get("card-portfolio"),
+        db.get("bank-accounts"),
+        db.get("renewals-seed-version"),
+        db.get("unlocked-badges"),
+      ])) as [Renewal[] | null, Card[] | null, BankAccount[] | null, string | null, BadgeMap | null];
+
+      if (loadedBadges) setBadges(loadedBadges);
+
+      const seedVersion = renewalsSeedVersion || null;
+      let activeRenewals: Renewal[] | null = rn ?? null;
+
+      if (activeRenewals === null) {
+        activeRenewals = [];
+        db.set("renewals-seed-version", "public-v1");
+      } else if (activeRenewals.length === 0) {
+        db.set("renewals-seed-version", "public-v1");
+      } else if (seedVersion !== "public-v1") {
+        db.set("renewals-seed-version", "public-v1");
+      }
+
+      let renewalsChanged = false;
+      activeRenewals = activeRenewals.map((renewal: Renewal) => {
+        if (!renewal.nextDue || renewal.intervalUnit === "one-time") return renewal;
+        const newDate = advanceExpiredDate(renewal.nextDue, renewal.interval || 1, renewal.intervalUnit || "months");
+        if (newDate !== renewal.nextDue) {
+          renewalsChanged = true;
+          return { ...renewal, nextDue: newDate };
+        }
+        return renewal;
+      });
+
+      if (renewalsChanged) db.set("renewals", activeRenewals);
+      setRenewals(activeRenewals);
+      scheduleBillReminders(activeRenewals).catch(() => {});
+
+      let activeCards: Card[] = cp || [];
+      let cardsChanged = false;
+      activeCards = activeCards.map((card: Card) => {
+        if (!card.annualFeeDue) return card;
+        const newDate = advanceExpiredDate(card.annualFeeDue, 1, "years");
+        if (newDate !== card.annualFeeDue) {
+          cardsChanged = true;
+          return { ...card, annualFeeDue: newDate };
+        }
+        return card;
+      });
+
+      const { cards: normalizedCards, changed: idChanged } = ensureCardIds(activeCards) as {
+        cards: Card[];
+        changed: boolean;
+      };
+      if (idChanged) {
+        cardsChanged = true;
+        activeCards = normalizedCards;
+      }
+      if (cardsChanged) db.set("card-portfolio", activeCards);
+      setCards(activeCards);
+
+      if (ba) setBankAccounts(ba);
+
+      const catalogResult = (await loadCardCatalog()) as {
+        catalog?: IssuerCardCatalog;
+        updatedAt?: number | null;
+      };
+      if (catalogResult.catalog) setCardCatalog(catalogResult.catalog);
+      if (catalogResult.updatedAt) setCardCatalogUpdatedAt(catalogResult.updatedAt);
+    } catch (error: unknown) {
+      void log.error("portfolio", "Portfolio context initialization failed", error);
+      setRenewals([]);
+      setCards([]);
+    }
+  };
+
   useEffect(() => {
     const initPortfolio = async (): Promise<void> => {
       try {
-        const [rn, cp, ba, renewalsSeedVersion, loadedBadges] = (await Promise.all([
-          db.get("renewals"),
-          db.get("card-portfolio"),
-          db.get("bank-accounts"),
-          db.get("renewals-seed-version"),
-          db.get("unlocked-badges"),
-        ])) as [Renewal[] | null, Card[] | null, BankAccount[] | null, string | null, BadgeMap | null];
-
-        if (loadedBadges) setBadges(loadedBadges);
-
-        const seedVersion = renewalsSeedVersion || null;
-        let activeRenewals: Renewal[] | null = rn ?? null;
-
-        if (activeRenewals === null) {
-          activeRenewals = [];
-          db.set("renewals-seed-version", "public-v1");
-        } else if (activeRenewals.length === 0) {
-          db.set("renewals-seed-version", "public-v1");
-        } else if (seedVersion !== "public-v1") {
-          db.set("renewals-seed-version", "public-v1");
-        }
-
-        let renewalsChanged = false;
-        activeRenewals = activeRenewals.map((renewal: Renewal) => {
-          if (!renewal.nextDue || renewal.intervalUnit === "one-time") return renewal;
-          const newDate = advanceExpiredDate(renewal.nextDue, renewal.interval || 1, renewal.intervalUnit || "months");
-          if (newDate !== renewal.nextDue) {
-            renewalsChanged = true;
-            return { ...renewal, nextDue: newDate };
-          }
-          return renewal;
-        });
-
-        if (renewalsChanged) db.set("renewals", activeRenewals);
-        setRenewals(activeRenewals);
-        scheduleBillReminders(activeRenewals).catch(() => {});
-
-        let activeCards: Card[] = cp || [];
-        let cardsChanged = false;
-        activeCards = activeCards.map((card: Card) => {
-          if (!card.annualFeeDue) return card;
-          const newDate = advanceExpiredDate(card.annualFeeDue, 1, "years");
-          if (newDate !== card.annualFeeDue) {
-            cardsChanged = true;
-            return { ...card, annualFeeDue: newDate };
-          }
-          return card;
-        });
-
-        const { cards: normalizedCards, changed: idChanged } = ensureCardIds(activeCards) as {
-          cards: Card[];
-          changed: boolean;
-        };
-        if (idChanged) {
-          cardsChanged = true;
-          activeCards = normalizedCards;
-        }
-        if (cardsChanged) db.set("card-portfolio", activeCards);
-        setCards(activeCards);
-
-        if (ba) setBankAccounts(ba);
-
-        const catalogResult = (await loadCardCatalog()) as {
-          catalog?: IssuerCardCatalog;
-          updatedAt?: number | null;
-        };
-        if (catalogResult.catalog) setCardCatalog(catalogResult.catalog);
-        if (catalogResult.updatedAt) setCardCatalogUpdatedAt(catalogResult.updatedAt);
-      } catch (error: unknown) {
-        console.error("Portfolio init error:", error);
-        setRenewals([]);
-        setCards([]);
+        await rehydratePortfolio();
       } finally {
         setIsPortfolioReady(true);
       }
@@ -258,6 +274,7 @@ export function PortfolioProvider({ children }: PortfolioProviderProps) {
     setMarketPrices,
     cardAnnualFees,
     isPortfolioReady,
+    rehydratePortfolio,
   };
 
   return <PortfolioContext.Provider value={value}>{children}</PortfolioContext.Provider>;

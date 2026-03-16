@@ -12,6 +12,7 @@ ios/App/App/capacitor.config.json
 .env
 .env.*
 .env.local
+.eslintcache
 ios/App/App/GoogleService-Info.plist
 **/GoogleService-Info.plist
 .claude/

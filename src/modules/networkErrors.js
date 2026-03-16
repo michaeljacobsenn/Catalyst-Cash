@@ -1,3 +1,5 @@
+import { normalizeAppError } from "./appErrors.js";
+
 function getErrorMessage(error) {
   if (error instanceof Error) return error.message || "Unknown error";
   return typeof error === "string" ? error : "Unknown error";
@@ -26,7 +28,8 @@ export function toUserFacingRequestError(error, options = {}) {
     context = "request",
     isLocalDev = typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname),
   } = options;
-  const rawMessage = getErrorMessage(error);
+  const normalized = normalizeAppError(error, { context });
+  const rawMessage = normalized.rawMessage || getErrorMessage(error);
 
   if (isLikelyNetworkError(error)) {
     const subject = context === "chat" ? "Ask AI" : "the audit service";
@@ -47,7 +50,7 @@ export function toUserFacingRequestError(error, options = {}) {
 
   return {
     rawMessage,
-    userMessage: rawMessage || "Unknown error",
-    kind: "unknown",
+    userMessage: normalized.userMessage || rawMessage || "Unknown error",
+    kind: normalized.kind || "unknown",
   };
 }

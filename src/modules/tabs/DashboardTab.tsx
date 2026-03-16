@@ -2,7 +2,6 @@
   import Confetti from "react-confetti";
   import { T } from "../constants.js";
   import {
-    Activity,
     AlertTriangle,
     ArrowUpRight,
     Building2,
@@ -28,6 +27,7 @@
   import { db,fmt,stripPaycheckParens } from "../utils.js";
   import "./DashboardTab.css";
   import ProBanner from "./ProBanner.js";
+  import EmptyDashboard from "../dashboard/EmptyDashboard.js";
 
   import type { CatalystCashConfig,HealthScore } from "../../types/index.js";
   import { useAudit } from "../contexts/AuditContext.js";
@@ -119,6 +119,7 @@ export default memo(function DashboardTab({
   onRefreshDashboard,
   onViewTransactions,
   onDiscussWithCFO,
+  onRestore,
 }: DashboardTabProps) {
   const { current } = useAudit();
   const { financialConfig, setFinancialConfig, autoBackupInterval } = useSettings();
@@ -155,7 +156,6 @@ export default memo(function DashboardTab({
     // return () => document.removeEventListener("visibilitychange", trySync);
   }, [cards, bankAccounts, handleSyncBalances]);
 
-  const onRunAudit = () => navTo("input");
   const onGoSettings = () => {
     setSetupReturnTab("dashboard");
     navTo("settings");
@@ -249,7 +249,11 @@ export default memo(function DashboardTab({
       if (Array.isArray(plaidConns) && plaidConns.length > 0) {
         backup.data["plaid-connections-sanitized"] = sanitizePlaidForBackup(plaidConns);
       }
-      await uploadToICloud(backup, appPasscode || null);
+      const success = await uploadToICloud(backup, appPasscode || null);
+      if (!success) {
+        window.toast?.error?.("Automatic iCloud backup is available in the native iPhone app only.");
+        return;
+      }
       await db.set("last-backup-ts", Date.now());
       setShowBackupNudge(false);
       window.toast?.success?.("✅ Backed up to iCloud");
@@ -323,6 +327,9 @@ export default memo(function DashboardTab({
   const score = typeof hs?.score === "number" ? hs.score : 0;
   const grade = hs?.grade || "?";
   const summary = hs?.summary || "";
+  const isSmallPhone = typeof window !== "undefined" ? window.innerWidth <= 390 : false;
+  const hasAuditInsights = Boolean(summary || hs?.narrative || p?.sections?.nextAction);
+  const showEmptyDashboard = !p && !hasAuditInsights;
   const scoreColor = score >= 80 ? T.status.green : score >= 60 ? T.status.amber : T.status.red;
   const safetyColor =
     safetySnapshot.level === "urgent"
@@ -354,6 +361,163 @@ export default memo(function DashboardTab({
     const phi = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
     return Math.round(z > 0 ? (1 - phi) * 100 : phi * 100);
   })();
+
+  if (showEmptyDashboard) {
+    return (
+      <div className="page-body stagger-container" aria-live="polite" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+        <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
+          {runConfetti && (
+            <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, pointerEvents: "none" }}>
+              <Confetti
+                width={windowSize.width}
+                height={windowSize.height}
+                recycle={false}
+                numberOfPieces={400}
+                gravity={0.15}
+              />
+            </div>
+          )}
+
+          <div style={{ paddingTop: 16, paddingBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div>
+              <h1 style={{ fontSize: 22, fontWeight: 900, letterSpacing: getTracking(22, "bold"), margin: 0 }}>Dashboard</h1>
+              <p style={{ fontSize: 11, color: T.text.dim, margin: "2px 0 0", fontWeight: 500, letterSpacing: "0.01em" }}>{greeting}</p>
+            </div>
+            {streak > 1 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: `${T.accent.emerald}12`, border: `1px solid ${T.status.green}25`, flexShrink: 0 }}>
+                <span style={{ fontSize: 12 }}>🔥</span>
+                <span style={{ fontSize: 10, fontWeight: 800, color: T.status.green, fontFamily: T.font.mono }}>W{streak}</span>
+              </div>
+            )}
+          </div>
+
+          {showBackupNudge && (
+            <Card
+              style={{
+                borderLeft: `3px solid ${T.status.amber}`,
+                background: `${T.status.amberDim}`,
+                padding: "10px 14px",
+                marginBottom: 10,
+                animation: "fadeInUp .4s ease-out",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <Shield size={14} color={T.status.amber} />
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 800,
+                    color: T.status.amber,
+                    fontFamily: T.font.mono,
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  BACKUP REMINDER
+                </span>
+                <button
+                  onClick={dismissBackupNudge}
+                  style={{
+                    marginLeft: "auto",
+                    background: "none",
+                    border: "none",
+                    color: T.text.dim,
+                    cursor: "pointer",
+                    fontSize: 16,
+                    padding: 4,
+                    lineHeight: 1,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.4, margin: "0 0 8px" }}>
+                Your data hasn't been backed up recently. Protect your financial data.
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={handleBackupNow}
+                  disabled={backingUp}
+                  className="hover-btn"
+               style={{
+                  flex: "1 1 160px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 5,
+                    padding: "8px 12px",
+                    borderRadius: T.radius.md,
+                    border: "none",
+                    background: `linear-gradient(135deg, ${T.status.amber}, #D97706)`,
+                    color: "#fff",
+                    fontSize: 11,
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    opacity: backingUp ? 0.6 : 1,
+                  }}
+                >
+                  <CloudUpload size={13} />
+                  {backingUp ? "Backing up..." : "Back Up Now"}
+                </button>
+                <button
+                  onClick={() => {
+                    dismissBackupNudge();
+                    navTo("settings");
+                  }}
+                  className="hover-btn"
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 5,
+                    padding: "8px 12px",
+                    borderRadius: T.radius.md,
+                    border: `1px solid ${T.status.amber}40`,
+                    background: `${T.status.amber}10`,
+                    color: T.status.amber,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Enable Auto-Backup
+                </button>
+              </div>
+            </Card>
+          )}
+
+          {typeof onDemoAudit === "function" && (
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+              <button
+                onClick={() => {
+                  haptic.light();
+                  onDemoAudit();
+                }}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 999,
+                  border: `1px solid ${T.border.default}`,
+                  background: "transparent",
+                  color: T.text.secondary,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Zap size={12} strokeWidth={2.2} />
+                {current?.isTest ? "Reload Demo Data" : "Load Demo Data"}
+              </button>
+            </div>
+          )}
+
+          <EmptyDashboard {...(onRestore ? { onRestore } : {})} onDemoAudit={onDemoAudit || (() => undefined)} />
+        </div>
+      </div>
+    );
+  }
 
 
   return (
@@ -560,7 +724,7 @@ export default memo(function DashboardTab({
                  overflow: "hidden",
                }}
              >
-               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                    <div
                      style={{
@@ -581,7 +745,7 @@ export default memo(function DashboardTab({
                      <div style={{ fontSize: 11, fontWeight: 800, color: safetyColor, fontFamily: T.font.mono, letterSpacing: "0.05em" }}>
                        THIS WEEK
                      </div>
-                     <div style={{ fontSize: 18, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.02em" }}>
+                     <div style={{ fontSize: "clamp(17px, 4.8vw, 18px)", fontWeight: 900, color: T.text.primary, letterSpacing: "-0.02em" }}>
                        Am I safe right now?
                      </div>
                    </div>
@@ -604,9 +768,9 @@ export default memo(function DashboardTab({
                  </div>
                </div>
 
-               <div style={{ display: "flex", gap: 18, alignItems: "center" }}>
+               <div style={{ display: "flex", gap: isSmallPhone ? 14 : 18, alignItems: "center", flexWrap: isSmallPhone ? "wrap" : "nowrap" }}>
                  <div style={{ flex: 1, minWidth: 0 }}>
-                   <div style={{ fontSize: 24, fontWeight: 900, color: safetyColor, letterSpacing: "-0.03em", marginBottom: 4 }}>
+                   <div style={{ fontSize: "clamp(22px, 7vw, 24px)", fontWeight: 900, color: safetyColor, letterSpacing: "-0.03em", marginBottom: 4, overflowWrap: "anywhere" }}>
                      {safetySnapshot.headline}
                    </div>
                    <p style={{ fontSize: 13, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 14px" }}>
@@ -633,7 +797,7 @@ export default memo(function DashboardTab({
                      </div>
                    </div>
 
-                   <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(136px, 1fr))", gap: 8 }}>
                      <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}` }}>
                        <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 4 }}>
                          RUNWAY
@@ -689,7 +853,7 @@ export default memo(function DashboardTab({
                  </div>
 
                  {hs?.score != null && (
-                   <div style={{ display: "flex", justifyContent: "center", flexShrink: 0 }}>
+                   <div style={{ display: "flex", justifyContent: "center", flexShrink: 0, width: isSmallPhone ? "100%" : "auto" }}>
                      <HealthGauge score={score} grade={grade} scoreColor={scoreColor} percentile={percentile} />
                    </div>
                  )}
@@ -713,7 +877,7 @@ export default memo(function DashboardTab({
              }}
            >
              {/* Top row: label + health pill */}
-             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
                <span style={{ fontSize: 12, fontWeight: 600, color: T.text.dim, letterSpacing: "0.02em" }}>
                  Balance Sheet
                </span>
@@ -767,15 +931,16 @@ export default memo(function DashboardTab({
              marginBottom: 6
            }}>
              <div>
-               <h1 style={{ fontSize: 13, fontWeight: 700, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
+               <h2 style={{ fontSize: 13, fontWeight: 700, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
                  Net Worth
-               </h1>
+               </h2>
                <div style={{ 
-                 fontSize: 36, 
+                 fontSize: "clamp(30px, 9vw, 36px)", 
                  fontWeight: 900, 
                  color: privacyMode ? T.text.dim : T.text.primary, 
                  letterSpacing: "-0.02em",
                  textShadow: privacyMode ? "none" : `0 0 15px ${T.text.primary}80, 0 2px 10px ${T.text.primary}20`,
+                 overflowWrap: "anywhere",
                }}>
                  {privacyMode ? "••••••" : fmt(portfolioMetrics?.netWorth || 0)}
                </div>
@@ -805,7 +970,7 @@ export default memo(function DashboardTab({
              return (
                <div style={{
                  display: "grid",
-                 gridTemplateColumns: `repeat(${Math.min(metrics.length, 4)}, 1fr)`,
+                 gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))",
                  gap: 8,
                  marginBottom: 12,
                }}>
@@ -833,7 +998,7 @@ export default memo(function DashboardTab({
            })()}
 
            {/* ═══ ACTION ROW — Sync + Ledger ═══ */}
-           <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+           <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
              {/* Sync Balances (only if Plaid linked) */}
              {!current?.isTest && (cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId)) && (
                <button
@@ -875,7 +1040,7 @@ export default memo(function DashboardTab({
                }}
                className="hover-btn"
                style={{
-                 flex: 1,
+                 flex: "1 1 160px",
                  display: "flex",
                  alignItems: "center",
                  justifyContent: "center",
@@ -911,8 +1076,8 @@ export default memo(function DashboardTab({
              <DashboardSection marginTop={16}>
                <div
                  className="fade-in slide-up"
-                 style={{
-                   padding: "20px 24px",
+                style={{
+                   padding: isSmallPhone ? "18px 18px" : "20px 24px",
                    borderRadius: 24,
                    background: `linear-gradient(160deg, ${T.bg.card}, transparent)`,
                    border: `1px solid ${T.accent.emerald}20`,
@@ -924,9 +1089,9 @@ export default memo(function DashboardTab({
                  {/* Glassy ambient glow */}
                  <div style={{ position: "absolute", top: -40, right: -40, width: 120, height: 120, background: T.accent.emerald, opacity: 0.08, filter: "blur(40px)", pointerEvents: "none" }} />
                  
-                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20 }}>
+                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
                    <div>
-                     <h3 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em", margin: "0 0 4px" }}>
+                     <h3 style={{ fontSize: "clamp(17px, 4.8vw, 18px)", fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em", margin: "0 0 4px" }}>
                        Welcome Checklist
                      </h3>
                      <p style={{ fontSize: 13, color: T.text.secondary, margin: 0 }}>
@@ -1027,69 +1192,13 @@ export default memo(function DashboardTab({
               </button>
             </div>
           )}
-          {/* ═══ EMPTY STATE — no audit yet ═══ */}
-          {!p && !summary && !hs?.narrative && (
-             <Card
-               animate
-               delay={200}
-               onClick={() => {
-                 haptic.medium();
-                 onRunAudit();
-               }}
-               className="hover-card"
-               style={{
-                 padding: 24,
-                 marginBottom: 16,
-                 textAlign: "center",
-                 cursor: "pointer",
-                 border: `1.5px solid ${T.accent.emerald}40`,
-                 background: `linear-gradient(145deg, ${T.bg.card}, ${T.accent.emerald}10)`,
-                 boxShadow: `0 8px 24px ${T.accent.emerald}25`,
-                 position: "relative",
-                 overflow: "hidden"
-               }}
-             >
-               <div style={{ position: "absolute", top: -50, right: -50, width: 100, height: 100, background: T.accent.emerald, opacity: 0.1, filter: "blur(40px)", pointerEvents: "none" }} />
-       
-               <div style={{
-                 width: 54, height: 54, borderRadius: 27,
-                 background: `linear-gradient(135deg, ${T.accent.emerald}, #10B981)`,
-                 display: "flex", alignItems: "center", justifyContent: "center",
-                 margin: "0 auto 16px",
-                 boxShadow: `0 4px 16px ${T.accent.emerald}60`
-               }}>
-                 <Zap size={24} color="#fff" strokeWidth={2.5} />
-               </div>
-       
-               <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, marginBottom: 8 }}>
-                 Run Your First Audit
-               </h2>
-               <p style={{ fontSize: 13, color: T.text.secondary, marginBottom: 20, lineHeight: 1.4 }}>
-                 It takes 2 minutes. Input your week's numbers to instantly generate your Wealth Trajectory, Budget Pace, and AI CFO advice.
-               </p>
-       
-               <button style={{
-                 width: "100%",
-                 padding: "14px",
-                 borderRadius: T.radius.lg,
-                 border: "none",
-                 background: T.accent.emerald,
-                 color: "#fff",
-                 fontSize: 14,
-                 fontWeight: 800,
-                 cursor: "pointer",
-                 display: "flex", alignItems: "center", justifyContent: "center", gap: 8
-               }}>
-                 Begin Audit <Activity size={16} />
-               </button>
-             </Card>
-          )}
           {/* AI Insights Action Hub */}
           {(summary || hs?.narrative) && (
-            <div
+            <section
+              aria-labelledby="dashboard-cfo-insights"
               className="fade-in"
               style={{
-                padding: "24px 20px",
+                padding: isSmallPhone ? "20px 16px" : "24px 20px",
                 marginBottom: 24,
                 background: "transparent",
                 border: `1px solid ${T.border.subtle}`,
@@ -1099,7 +1208,7 @@ export default memo(function DashboardTab({
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                 <Zap size={16} color={scoreColor} strokeWidth={2.5} />
-                <span style={{ fontSize: 14, fontWeight: 800, color: T.text.primary }}>CFO Insights</span>
+                <h2 id="dashboard-cfo-insights" style={{ fontSize: "clamp(14px, 4vw, 15px)", fontWeight: 800, color: T.text.primary, margin: 0 }}>CFO Insights</h2>
               </div>
               
               {summary && (
@@ -1118,7 +1227,7 @@ export default memo(function DashboardTab({
                       const isPositive = i === 0;
                       const iconColor = isPositive ? T.status.green : T.status.blue;
                       return (
-                        <div key={i} style={{ display: "flex", gap: 10, alignItems: "start", background: T.bg.surface, padding: "10px 12px", borderRadius: T.radius.md, borderLeft: `2px solid ${iconColor}30` }}>
+                        <div key={i} style={{ display: "flex", gap: 10, alignItems: "start", background: T.bg.surface, padding: isSmallPhone ? "10px" : "10px 12px", borderRadius: T.radius.md, borderLeft: `2px solid ${iconColor}30`, minWidth: 0 }}>
                           <div style={{ marginTop: 2, flexShrink: 0 }}>
                             {isPositive ? (
                               <CheckCircle size={13} color={T.status.green} />
@@ -1126,7 +1235,7 @@ export default memo(function DashboardTab({
                               <ArrowUpRight size={13} color={T.status.blue} />
                             )}
                           </div>
-                          <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5, margin: 0 }}>
+                          <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5, margin: 0, overflowWrap: "anywhere" }}>
                             {sentence.trim()}
                           </p>
                         </div>
@@ -1134,12 +1243,12 @@ export default memo(function DashboardTab({
                     })}
                 </div>
               )}
-            </div>
+            </section>
           )}
 
           {/* ═══ NEXT ACTION ═══ */}
           {p?.sections?.nextAction && (
-            <div style={{ padding: "24px 20px", background: "transparent", border: `1px solid ${T.border.subtle}`, borderRadius: 24, position: "relative" }}>
+            <section aria-labelledby="dashboard-next-action" style={{ padding: isSmallPhone ? "20px 16px" : "24px 20px", background: "transparent", border: `1px solid ${T.border.subtle}`, borderRadius: 24, position: "relative" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                 <div
                   style={{
@@ -1155,9 +1264,9 @@ export default memo(function DashboardTab({
                 >
                   <Zap size={15} color="#fff" strokeWidth={2.5} />
                 </div>
-                <span style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
+                <h2 id="dashboard-next-action" style={{ fontSize: "clamp(13px, 3.8vw, 14px)", fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em", margin: 0 }}>
                   Prioritized Next Action
-                </span>
+                </h2>
               </div>
               <div
                 style={{
@@ -1205,7 +1314,7 @@ export default memo(function DashboardTab({
               >
                 {nextActionExpanded ? "Show less ↑" : "Show more ↓"}
               </button>
-            </div>
+            </section>
           )}
 
 

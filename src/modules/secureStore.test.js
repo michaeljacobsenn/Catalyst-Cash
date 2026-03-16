@@ -44,6 +44,8 @@ async function loadSecureStore({ native, plugin = null, initialPrefs = {} }) {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.resetModules();
+  delete globalThis.window;
+  delete globalThis.__E2E_SECURE_STORE__;
 });
 
 describe("secureStore", () => {
@@ -93,23 +95,54 @@ describe("secureStore", () => {
     });
   });
 
-  it("degrades cleanly to browser-backed storage on web", async () => {
+  it("fails closed for secret persistence on web while staying quiet", async () => {
     const { mod, preferences, consoleError } = await loadSecureStore({ native: false, plugin: null });
 
-    await expect(mod.setSecureItem("api-key-openai", "sk-test")).resolves.toBe(true);
-    expect(preferences.api.set).toHaveBeenCalledWith({
-      key: "secure:api-key-openai",
-      value: JSON.stringify("sk-test"),
-    });
-    await expect(mod.getSecureItem("api-key-openai")).resolves.toBe("sk-test");
+    await expect(mod.setSecureItem("api-key-openai", "sk-test")).resolves.toBe(false);
+    expect(preferences.api.set).not.toHaveBeenCalled();
+    await expect(mod.getSecureItem("api-key-openai")).resolves.toBeNull();
     await expect(mod.deleteSecureItem("api-key-openai")).resolves.toBe(true);
     expect(preferences.api.remove).toHaveBeenCalledWith({ key: "secure:api-key-openai" });
     expect(consoleError).not.toHaveBeenCalled();
 
     await expect(mod.getSecretStorageStatus()).resolves.toMatchObject({
-      mode: "web-fallback",
-      canPersistSecrets: true,
+      mode: "web-limited",
+      canPersistSecrets: false,
       isHardwareBacked: false,
     });
+  });
+
+  it("supports the test-only native secure store override without relaxing normal web behavior", async () => {
+    const pluginStore = new Map();
+    const override = {
+      enabled: true,
+      plugin: {
+        get: vi.fn(async ({ key }) => ({ value: pluginStore.get(key) ?? null })),
+        set: vi.fn(async ({ key, value }) => {
+          pluginStore.set(key, value);
+          return { value: true };
+        }),
+        remove: vi.fn(async ({ key }) => {
+          pluginStore.delete(key);
+          return { value: true };
+        }),
+      },
+    };
+    globalThis.__E2E_SECURE_STORE__ = override;
+    globalThis.window = {
+      __E2E_SECURE_STORE__: override,
+    };
+
+    const { mod } = await loadSecureStore({ native: false, plugin: null });
+
+    await expect(mod.setSecureItem("app-passcode", "2468")).resolves.toBe(true);
+    await expect(mod.getSecureItem("app-passcode")).resolves.toBe("2468");
+    await expect(mod.getSecretStorageStatus()).resolves.toMatchObject({
+      mode: "native-secure",
+      canPersistSecrets: true,
+      isHardwareBacked: true,
+    });
+    await expect(mod.deleteSecureItem("app-passcode")).resolves.toBe(true);
+    await expect(mod.getSecureItem("app-passcode")).resolves.toBeNull();
   });
 });

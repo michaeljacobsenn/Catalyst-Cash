@@ -16,6 +16,8 @@ class FakeD1 {
     this.syncData = [...(seed.syncData || [])];
     this.auditLog = [...(seed.auditLog || [])];
     this.householdSync = [...(seed.householdSync || [])];
+    this.identityActors = [...(seed.identityActors || [])];
+    this.identityActorAliases = [...(seed.identityActorAliases || [])];
   }
 
   prepare(sql) {
@@ -75,6 +77,30 @@ class FakeD1 {
       return this.plaidItems
         .filter(entry => entry.user_id === params[0])
         .map(entry => ({ access_token: entry.access_token, item_id: entry.item_id }));
+    }
+
+    if (sql.includes("FROM identity_actor_aliases aliases")) {
+      const alias = this.identityActorAliases.find(
+        entry => entry.alias_type === params[0] && entry.alias_hash === params[1]
+      );
+      if (!alias) return [];
+      const actor = this.identityActors.find(entry => entry.actor_id === alias.actor_id);
+      return actor ? [{ actor_id: actor.actor_id, revenuecat_app_user_id: actor.revenuecat_app_user_id ?? null }] : [];
+    }
+
+    if (sql.includes("SELECT actor_id, revenuecat_app_user_id FROM identity_actors WHERE revenuecat_app_user_id = ?")) {
+      const actor = this.identityActors.find(entry => entry.revenuecat_app_user_id === params[0]);
+      return actor ? [{ actor_id: actor.actor_id, revenuecat_app_user_id: actor.revenuecat_app_user_id ?? null }] : [];
+    }
+
+    if (sql.includes("SELECT actor_id, revenuecat_app_user_id FROM identity_actors WHERE actor_id = ?")) {
+      const actor = this.identityActors.find(entry => entry.actor_id === params[0]);
+      return actor ? [{ actor_id: actor.actor_id, revenuecat_app_user_id: actor.revenuecat_app_user_id ?? null }] : [];
+    }
+
+    if (sql.includes("SELECT revenuecat_app_user_id FROM identity_actors WHERE actor_id = ?")) {
+      const actor = this.identityActors.find(entry => entry.actor_id === params[0]);
+      return actor ? [{ revenuecat_app_user_id: actor.revenuecat_app_user_id ?? null }] : [];
     }
 
     if (sql.includes("SELECT last_synced_at FROM sync_data WHERE user_id = ? AND item_id = 'deep_sync_meta'")) {
@@ -140,11 +166,61 @@ class FakeD1 {
       return;
     }
 
+    if (sql.includes("UPDATE plaid_items SET user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE item_id = ? AND user_id = ?")) {
+      const [toUserId, itemId, fromUserId] = params;
+      this.plaidItems = this.plaidItems.map(entry =>
+        entry.item_id === itemId && entry.user_id === fromUserId
+          ? { ...entry, user_id: toUserId, updated_at: "2026-03-13 12:00:00" }
+          : entry
+      );
+      return;
+    }
+
     if (sql.includes("UPDATE sync_data SET user_id = ? WHERE user_id = ?")) {
       const [toUserId, fromUserId] = params;
       this.syncData = this.syncData.map(entry =>
         entry.user_id === fromUserId
           ? { ...entry, user_id: toUserId }
+          : entry
+      );
+      return;
+    }
+
+    if (sql.includes("UPDATE sync_data SET user_id = ? WHERE user_id = ? AND item_id = ?")) {
+      const [toUserId, fromUserId, itemId] = params;
+      this.syncData = this.syncData.map(entry =>
+        entry.user_id === fromUserId && entry.item_id === itemId
+          ? { ...entry, user_id: toUserId }
+          : entry
+      );
+      return;
+    }
+
+    if (sql.includes("INSERT INTO identity_actors")) {
+      const [actorId, revenueCatAppUserId] = params;
+      this.identityActors.push({
+        actor_id: actorId,
+        revenuecat_app_user_id: revenueCatAppUserId ?? null,
+      });
+      return;
+    }
+
+    if (sql.includes("INSERT INTO identity_actor_aliases")) {
+      const [aliasType, aliasHash, actorId] = params;
+      const index = this.identityActorAliases.findIndex(
+        entry => entry.alias_type === aliasType && entry.alias_hash === aliasHash
+      );
+      const next = { alias_type: aliasType, alias_hash: aliasHash, actor_id: actorId };
+      if (index >= 0) this.identityActorAliases[index] = next;
+      else this.identityActorAliases.push(next);
+      return;
+    }
+
+    if (sql.includes("UPDATE identity_actors")) {
+      const [revenueCatAppUserId, actorId] = params;
+      this.identityActors = this.identityActors.map(entry =>
+        entry.actor_id === actorId
+          ? { ...entry, revenuecat_app_user_id: revenueCatAppUserId }
           : entry
       );
       return;
@@ -320,6 +396,7 @@ class FakeD1 {
 function makeEnv(overrides = {}) {
   return {
     ALLOWED_ORIGIN: "https://catalystcash.app",
+    IDENTITY_SESSION_SECRET: "identity-session-secret",
     PLAID_CLIENT_ID: "plaid-client-id",
     PLAID_SECRET: "plaid-secret",
     DB: new FakeD1(),
@@ -339,6 +416,23 @@ function makeCtx() {
   };
 }
 
+async function issueSessionFor(env, headers = {}) {
+  const response = await worker.fetch(
+    new Request("https://api.catalystcash.app/auth/session", {
+      method: "POST",
+      headers,
+    }),
+    env,
+    makeCtx()
+  );
+  const payload = await response.json();
+  return {
+    response,
+    payload,
+    authorization: payload?.token ? { Authorization: `Bearer ${payload.token}` } : {},
+  };
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -354,6 +448,63 @@ describe("worker quota windows", () => {
     const now = new Date("2026-03-05T23:30:00-05:00");
     expect(getQuotaWindow("pro", false, now).periodKey).toBe("2026-03");
     expect(getQuotaWindow("pro", true, now).periodKey).toBe("2026-03-06");
+  });
+});
+
+describe("worker CORS config origins", () => {
+  it("allows localhost and 127.0.0.1 loopback origins for /config without weakening other origins", async () => {
+    const env = makeEnv();
+    const ctx = makeCtx();
+
+    const localhostResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/config", {
+        method: "GET",
+        headers: { Origin: "http://localhost:5173" },
+      }),
+      env,
+      ctx
+    );
+    expect(localhostResponse.headers.get("Access-Control-Allow-Origin")).toBe("http://localhost:5173");
+
+    const loopbackResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/config", {
+        method: "GET",
+        headers: { Origin: "http://127.0.0.1:4173" },
+      }),
+      env,
+      ctx
+    );
+    expect(loopbackResponse.headers.get("Access-Control-Allow-Origin")).toBe("http://127.0.0.1:4173");
+
+    const foreignResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/config", {
+        method: "GET",
+        headers: { Origin: "https://evil.example" },
+      }),
+      env,
+      ctx
+    );
+    expect(foreignResponse.headers.get("Access-Control-Allow-Origin")).toBe("https://catalystcash.app");
+  });
+
+  it("publishes explicit web platform limits in /config", async () => {
+    const env = makeEnv();
+    const ctx = makeCtx();
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/config", {
+        method: "GET",
+        headers: { Origin: "https://catalystcash.app" },
+      }),
+      env,
+      ctx
+    );
+    const payload = await response.json();
+    expect(payload.platformPolicy?.web).toMatchObject({
+      secureSecretPersistence: false,
+      appLock: false,
+      cloudBackup: false,
+      householdSync: false,
+    });
   });
 });
 
@@ -443,7 +594,7 @@ describe("tier resolution hardening", () => {
 });
 
 describe("Plaid actor identity", () => {
-  it("derives a device-scoped actor and migrates legacy catalyst-user rows", async () => {
+  it("issues a signed actor session and migrates legacy catalyst-user rows", async () => {
     const env = makeEnv({
       DB: new FakeD1({
         plaidItems: [
@@ -467,20 +618,81 @@ describe("Plaid actor identity", () => {
       }),
     });
 
+    const { response, payload, authorization } = await issueSessionFor(env, {
+      "X-Device-ID": "device-123",
+    });
+    expect(response.status).toBe(200);
+    expect(payload.actorId).toMatch(/^actor_/);
+
     const actor = await resolvePlaidActor(
       new Request("https://api.catalystcash.app/api/sync/status", {
         method: "POST",
-        headers: { "X-Device-ID": "device-123" },
+        headers: authorization,
       }),
+      env.DB,
       env
     );
 
     expect(actor).toMatchObject({
-      userId: "device:device-123",
+      userId: payload.actorId,
       source: "device",
     });
-    expect(env.DB.plaidItems[0].user_id).toBe("device:device-123");
-    expect(env.DB.syncData[0].user_id).toBe("device:device-123");
+    expect(env.DB.plaidItems[0].user_id).toBe(payload.actorId);
+    expect(env.DB.syncData[0].user_id).toBe(payload.actorId);
+  });
+
+  it("rejects forged identity session tokens", async () => {
+    const env = makeEnv();
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/sync/status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer ccid.forged.payload",
+        },
+        body: JSON.stringify({}),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Invalid or missing identity session",
+    });
+  });
+
+  it("migrates legacy RevenueCat-linked rows into the signed actor", async () => {
+    const env = makeEnv({
+      REVENUECAT_SECRET_KEY: "revenuecat-secret",
+      DB: new FakeD1({
+        plaidItems: [
+          {
+            item_id: "item-legacy-rc",
+            user_id: "rc:rc_user_123",
+            access_token: "access-legacy-rc",
+            transactions_cursor: null,
+          },
+        ],
+      }),
+    });
+
+    vi.stubGlobal("fetch", vi.fn(async (input) => {
+      const url = String(input);
+      if (url === "https://api.revenuecat.com/v1/subscribers/rc_user_123") {
+        return new Response(JSON.stringify({ subscriber: { entitlements: {} } }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    }));
+
+    const { response, payload } = await issueSessionFor(env, {
+      "X-Device-ID": "device-rc",
+      "X-RC-App-User-ID": "rc_user_123",
+    });
+
+    expect(response.status).toBe(200);
+    expect(env.DB.plaidItems[0].user_id).toBe(payload.actorId);
+    expect(env.DB.identityActors[0].revenuecat_app_user_id).toBe("rc_user_123");
   });
 });
 
@@ -759,11 +971,33 @@ describe("Plaid transaction sync migration", () => {
       }),
     });
 
+    const sessionA = await issueSessionFor(env, { "X-Device-ID": "device-a" });
+    const actorA = sessionA.payload.actorId;
+    const actorB = (await issueSessionFor(env, { "X-Device-ID": "device-b" })).payload.actorId;
+    env.DB.syncData = [
+      {
+        user_id: actorA,
+        item_id: "item-a",
+        balances_json: '{"accounts":[{"account_id":"acct-a"}]}',
+        liabilities_json: "{}",
+        transactions_json: "{}",
+        last_synced_at: "2026-03-13 12:00:00",
+      },
+      {
+        user_id: actorB,
+        item_id: "item-b",
+        balances_json: '{"accounts":[{"account_id":"acct-b"}]}',
+        liabilities_json: "{}",
+        transactions_json: "{}",
+        last_synced_at: "2026-03-13 12:00:00",
+      },
+    ];
+
     const response = await worker.fetch(
       new Request("https://api.catalystcash.app/api/sync/status", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Device-ID": "device-a" },
-        body: JSON.stringify({ userId: "device:device-b" }),
+        headers: { "Content-Type": "application/json", ...sessionA.authorization },
+        body: JSON.stringify({ userId: actorB }),
       }),
       env,
       makeCtx()
@@ -790,10 +1024,21 @@ describe("Plaid transaction sync migration", () => {
       }),
     });
 
+    const sessionA = await issueSessionFor(env, { "X-Device-ID": "device-a" });
+    const sessionB = await issueSessionFor(env, { "X-Device-ID": "device-b" });
+    env.DB.plaidItems = [
+      {
+        item_id: "item-owned-by-b",
+        user_id: sessionB.payload.actorId,
+        access_token: "access-b",
+        transactions_cursor: null,
+      },
+    ];
+
     const response = await worker.fetch(
       new Request("https://api.catalystcash.app/plaid/disconnect", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Device-ID": "device-a" },
+        headers: { "Content-Type": "application/json", ...sessionA.authorization },
         body: JSON.stringify({ itemId: "item-owned-by-b" }),
       }),
       env,
@@ -807,6 +1052,7 @@ describe("Plaid transaction sync migration", () => {
 
   it("stores exchanged Plaid items under the derived actor instead of a caller-supplied userId", async () => {
     const env = makeEnv({ DB: new FakeD1() });
+    const session = await issueSessionFor(env, { "X-Device-ID": "device-a" });
     const fetchMock = vi.fn(async (input) => {
       const url = String(input);
       if (url.endsWith("/item/public_token/exchange")) {
@@ -825,7 +1071,7 @@ describe("Plaid transaction sync migration", () => {
     const response = await worker.fetch(
       new Request("https://api.catalystcash.app/plaid/exchange", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Device-ID": "device-a" },
+        headers: { "Content-Type": "application/json", ...session.authorization },
         body: JSON.stringify({ publicToken: "public-token", userId: "attacker-chosen-id" }),
       }),
       env,
@@ -835,8 +1081,34 @@ describe("Plaid transaction sync migration", () => {
     expect(response.status).toBe(200);
     expect(env.DB.plaidItems[0]).toMatchObject({
       item_id: "item-owned-by-device-a",
-      user_id: "device:device-a",
+      user_id: session.payload.actorId,
     });
+  });
+
+  it("refuses a valid session from another actor", async () => {
+    const env = makeEnv({ DB: new FakeD1() });
+    const sessionA = await issueSessionFor(env, { "X-Device-ID": "device-a" });
+    const sessionB = await issueSessionFor(env, { "X-Device-ID": "device-b" });
+    env.DB.plaidItems = [
+      {
+        item_id: "item-owned-by-a",
+        user_id: sessionA.payload.actorId,
+        access_token: "access-a",
+        transactions_cursor: null,
+      },
+    ];
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/plaid/balances", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...sessionB.authorization },
+        body: JSON.stringify({ itemId: "item-owned-by-a" }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(404);
   });
 
   it("blocks deep sync for free users only when live gating is enabled", async () => {
@@ -853,11 +1125,20 @@ describe("Plaid transaction sync migration", () => {
         ],
       }),
     });
+    const session = await issueSessionFor(env, { "X-Device-ID": "free-device" });
+    env.DB.plaidItems = [
+      {
+        item_id: "item-1",
+        user_id: session.payload.actorId,
+        access_token: "access-1",
+        transactions_cursor: null,
+      },
+    ];
 
     const response = await worker.fetch(
       new Request("https://api.catalystcash.app/api/sync/deep", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Device-ID": "free-device" },
+        headers: { "Content-Type": "application/json", ...session.authorization },
         body: JSON.stringify({ userId: "free-user" }),
       }),
       env,
@@ -904,6 +1185,15 @@ describe("Plaid transaction sync migration", () => {
         ],
       }),
     });
+    const session = await issueSessionFor(env, { "X-Device-ID": "device-1" });
+    env.DB.plaidItems = [
+      {
+        item_id: "item-1",
+        user_id: session.payload.actorId,
+        access_token: "access-1",
+        transactions_cursor: null,
+      },
+    ];
 
     const fetchMock = vi.fn(async (input, init) => {
       const url = String(input);
@@ -934,7 +1224,7 @@ describe("Plaid transaction sync migration", () => {
     const response = await worker.fetch(
       new Request("https://api.catalystcash.app/api/sync/deep", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Device-ID": "device-1" },
+        headers: { "Content-Type": "application/json", ...session.authorization },
         body: JSON.stringify({ userId: "user-1" }),
       }),
       env,
@@ -948,7 +1238,7 @@ describe("Plaid transaction sync migration", () => {
     );
 
     const item = env.DB.plaidItems.find(entry => entry.item_id === "item-1");
-    const syncRow = env.DB.syncData.find(entry => entry.user_id === "device:device-1" && entry.item_id === "item-1");
+    const syncRow = env.DB.syncData.find(entry => entry.user_id === session.payload.actorId && entry.item_id === "item-1");
     expect(item.transactions_cursor).toBe("cursor-initial-1");
     expect(JSON.parse(syncRow.transactions_json)).toMatchObject({
       total_transactions: 2,

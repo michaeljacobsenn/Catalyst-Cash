@@ -4,6 +4,7 @@
   import { T } from "../constants.js";
   import type { SetFinancialConfig } from "../contexts/SettingsContext.js";
   import { Building2,Loader2,Plus,RefreshCw,Unplug } from "../icons";
+  import { log } from "../logger.js";
   import {
     applyBalanceSync,
     autoMatchAccounts,
@@ -100,7 +101,7 @@ export default function PlaidSection({
           await finalizeConnection(connection, "Bank linked successfully!");
         },
         (err: unknown) => {
-          console.error(err);
+          void log.error("plaid", "Bank link flow failed", err);
           const msg = err instanceof Error ? err.message : "Failed to link bank";
           if (msg === "cancelled") return;
           setConnectionStatus({ tone: "error", message: msg });
@@ -108,7 +109,7 @@ export default function PlaidSection({
         }
       );
     } catch (err) {
-      console.error(err);
+      void log.error("plaid", "Plaid initialization failed", err);
       const message = err instanceof Error ? err.message : "Failed to initialize Plaid";
       setConnectionStatus({ tone: "error", message });
       window.toast?.error?.(message);
@@ -155,7 +156,7 @@ export default function PlaidSection({
         }
       } catch (balErr) {
         const message = balErr instanceof Error ? balErr.message : String(balErr);
-        console.error("[Plaid] Balance fetch after connect failed:", message);
+        void log.warn("plaid", "Balance fetch after connect failed", { message });
         window.toast?.info?.("Connected. If balances do not refresh yet, tap Sync after the backend finishes updating.");
       }
 
@@ -178,7 +179,7 @@ export default function PlaidSection({
         }, 500);
       }
     } catch (err) {
-      console.error("[Plaid] Post-connect processing error:", err);
+      void log.error("plaid", "Post-connect processing failed", err);
     }
   };
 

@@ -1,3 +1,5 @@
+import { log, redactForLog } from "./logger.js";
+
 /**
  * errorReporter.js — Global error telemetry with IndexedDB persistence.
  *
@@ -24,7 +26,7 @@ function openDB() {
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => {
-      console.warn("[errorReporter] IndexedDB open failed:", req.error);
+      void log.warn("errorReporter", "IndexedDB open failed", { error: req.error });
       dbPromise = null;
       reject(req.error);
     };
@@ -68,9 +70,13 @@ export async function reportError(error, context = {}) {
           body: JSON.stringify(entry),
           // fire-and-forget, keepalive true so payload sends even if page unloads
           keepalive: true,
-       }).catch(e => console.warn("Failed to send telemetry:", e));
+       }).catch(error => {
+         void log.warn("telemetry", "Failed to send telemetry", { error });
+       });
     }
-  } catch(e) { /* ignore */ }
+  } catch {
+    // Ignore telemetry failures; they must never break the app.
+  }
 
   try {
     const db = await openDB();
@@ -103,8 +109,10 @@ export async function reportError(error, context = {}) {
       tx.onerror = () => reject(tx.error);
     });
   } catch (err) {
-    // Fallback: log to console if DB fails
-    console.error("[errorReporter] Failed to store error:", err, entry);
+    void log.error("errorReporter", "Failed to store error", {
+      error: err,
+      entry: redactForLog(entry),
+    });
   }
 }
 
@@ -123,7 +131,7 @@ export async function getErrorLog() {
       req.onerror = () => reject(req.error);
     });
   } catch (err) {
-    console.warn("[errorReporter] getErrorLog failed:", err);
+    void log.warn("errorReporter", "getErrorLog failed", { error: err });
     return [];
   }
 }
@@ -142,7 +150,7 @@ export async function clearErrorLog() {
       tx.onerror = () => reject(tx.error);
     });
   } catch (err) {
-    console.warn("[errorReporter] clearErrorLog failed:", err);
+    void log.warn("errorReporter", "clearErrorLog failed", { error: err });
   }
 }
 

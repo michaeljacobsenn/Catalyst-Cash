@@ -286,10 +286,19 @@ export const PaceBar = ({ name, saved, target, deadline, onPace, weeklyPace, cat
 export const Md = ({ text }: MdProps) => {
   if (!text) return null;
   return (
-    <div style={{ fontSize: 13, lineHeight: 1.75, color: T.text.secondary }}>
+    <div
+      style={{
+        fontSize: 13,
+        lineHeight: 1.75,
+        color: T.text.secondary,
+        overflowWrap: "anywhere",
+        wordBreak: "break-word",
+      }}
+    >
       {text.split("\n").map((line, i) => {
-        if (!line.trim()) return <div key={i} style={{ height: 6 }} />;
-        if (/^---+$/.test(line.trim())) return <Divider key={i} />;
+        const trimmed = line.trim();
+        if (!trimmed) return <div key={i} style={{ height: 6 }} />;
+        if (/^---+$/.test(trimmed)) return <Divider key={i} />;
         // Headline (17pt, semibold) - iOS HIG
         if (line.startsWith("### "))
           return (
@@ -297,11 +306,12 @@ export const Md = ({ text }: MdProps) => {
               key={i}
               style={{
                 color: T.text.primary,
-                fontSize: 17,
+                fontSize: "clamp(15px, 4vw, 17px)",
                 fontWeight: 600,
                 letterSpacing: "-0.02em",
                 margin: "14px 0 6px",
                 fontFamily: T.font.mono,
+                lineHeight: 1.3,
               }}
             >
               {line.slice(4).replace(/\*\*/g, "").trim()}
@@ -314,22 +324,77 @@ export const Md = ({ text }: MdProps) => {
               key={i}
               style={{
                 color: T.text.primary,
-                fontSize: 22,
+                fontSize: "clamp(18px, 5vw, 22px)",
                 fontWeight: 700,
                 letterSpacing: "-0.01em",
                 margin: "18px 0 8px",
+                lineHeight: 1.2,
               }}
             >
               {line.slice(3).replace(/\*\*/g, "").trim()}
             </h3>
           );
         // Catch compressed headers (e.g. "**DASHBOARD CARD**" without leading ##) - Treat as Headline
-        if (/^\*\*[A-Z\s]+CARD\*\*$/.test(line.trim()))
+        if (/^\*\*[A-Z\s]+CARD\*\*$/.test(trimmed))
           return (
-            <h3 key={i} style={{ color: T.text.primary, fontSize: 17, fontWeight: 600, margin: "14px 0 6px" }}>
-              {line.replace(/\*\*/g, "").trim()}
+            <h3 key={i} style={{ color: T.text.primary, fontSize: "clamp(15px, 4vw, 17px)", fontWeight: 600, margin: "14px 0 6px", lineHeight: 1.3 }}>
+              {trimmed.replace(/\*\*/g, "").trim()}
             </h3>
           );
+
+        if (/^[-*]\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed)) {
+          const numbered = trimmed.match(/^(\d+\.)\s+(.*)$/);
+          const bulletText = (numbered?.[2] ?? trimmed.replace(/^[-*]\s+/, "")).trim();
+          const marker = numbered ? numbered[1] : "•";
+          const parts = bulletText.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+          return (
+            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 8 }}>
+              <span
+                aria-hidden="true"
+                style={{
+                  flexShrink: 0,
+                  width: 18,
+                  marginTop: 2,
+                  color: T.accent.primary,
+                  fontSize: 12,
+                  fontWeight: 800,
+                  fontFamily: numbered ? T.font.mono : T.font.sans,
+                }}
+              >
+                {marker}
+              </span>
+              <p style={{ margin: 0, fontSize: "clamp(14px, 3.7vw, 15px)", lineHeight: 1.6, overflowWrap: "anywhere" }}>
+                {parts.map((p, j) => {
+                  if (p.startsWith("**") && p.endsWith("**"))
+                    return (
+                      <strong key={j} style={{ color: T.text.primary, fontWeight: 700 }}>
+                        {p.slice(2, -2)}
+                      </strong>
+                    );
+                  if (p.startsWith("`") && p.endsWith("`"))
+                    return (
+                      <code
+                        key={j}
+                        style={{
+                          fontFamily: T.font.mono,
+                          fontSize: 13,
+                          color: T.accent.primary,
+                          background: T.accent.primaryDim,
+                          padding: "2px 6px",
+                          borderRadius: 4,
+                          whiteSpace: "break-spaces",
+                          overflowWrap: "anywhere",
+                        }}
+                      >
+                        {p.slice(1, -1)}
+                      </code>
+                    );
+                  return <span key={j}>{p}</span>;
+                })}
+              </p>
+            </div>
+          );
+        }
 
         if (line.startsWith("|")) {
           const cells = line
@@ -350,7 +415,7 @@ export const Md = ({ text }: MdProps) => {
               }}
             >
               {cells.map((c, j) => (
-                <span key={j} style={{ flex: 1, padding: "2px 4px", color: T.text.secondary }}>
+                <span key={j} style={{ flex: 1, padding: "2px 4px", color: T.text.secondary, overflowWrap: "anywhere" }}>
                   {c.replace(/\*\*/g, "")}
                 </span>
               ))}
@@ -359,7 +424,7 @@ export const Md = ({ text }: MdProps) => {
         }
         const parts = line.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
         return (
-          <p key={i} style={{ marginBottom: 4, fontSize: 15, lineHeight: 1.6 }}>
+          <p key={i} style={{ marginBottom: 6, fontSize: "clamp(14px, 3.7vw, 15px)", lineHeight: 1.62, overflowWrap: "anywhere" }}>
             {parts.map((p, j) => {
               // Subheadline size
               if (p.startsWith("**") && p.endsWith("**"))
@@ -379,6 +444,8 @@ export const Md = ({ text }: MdProps) => {
                       background: T.accent.primaryDim,
                       padding: "2px 6px",
                       borderRadius: 4,
+                      whiteSpace: "break-spaces",
+                      overflowWrap: "anywhere",
                     }}
                   >
                     {p.slice(1, -1)}

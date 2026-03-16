@@ -18,7 +18,8 @@
 10. [Backend / Cloudflare Worker](#backend--cloudflare-worker)
 11. [Build & Deployment](#build--deployment)
 12. [Testing](#testing)
-13. [Environment Variables](#environment-variables)
+13. [Verification Workflow](#verification-workflow)
+14. [Environment Variables](#environment-variables)
 
 ---
 
@@ -529,6 +530,27 @@ Test files:
 
 ---
 
+## Verification Workflow
+
+Run the production-quality local lane before shipping:
+
+```bash
+npm run verify
+```
+
+Individual stages:
+
+```bash
+npm run lint
+npm run typecheck
+npm run test:unit
+npm run test:e2e:smoke
+```
+
+Detailed expectations live in [docs/VERIFICATION.md](/Users/michaeljacobsen/Desktop/PortfolioPro%20Public/docs/VERIFICATION.md).
+
+---
+
 ## Environment Variables
 
 | Variable | Required | Description |
@@ -563,7 +585,7 @@ npx cap open ios
 // Paste in the browser console (dev only):
 const { Preferences } = await import('@capacitor/preferences');
 await Preferences.clear();
-window.location.reload();
+// Then refresh the browser tab manually.
 ```
 
 **Adding a new AI provider:**

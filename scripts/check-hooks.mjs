@@ -33,8 +33,6 @@ function findMissingHookImports(dir) {
             const imported = new RegExp(`import\\s+.*\\b${hook}\\b.*\\s+from`).test(content);
             const declaredFunc = new RegExp(`function\\s+${hook}\\b`).test(content);
             const declaredVar = new RegExp(`(?:const|let|var)\\s+${hook}\\b|${hook}\\s*:`).test(content);
-            const objectMethod = new RegExp(`\\w+\\.${hook}\\(`).test(content); // e.g. someObj.useHook()
-
             // Let's ensure if it is used like `useHook()`, it is defined somewhere above.
             // Easiest is to check if the string "hook" exists anywhere else other than its usages.
             // But imported, declaredFunc and declaredVar checks are usually sufficient.

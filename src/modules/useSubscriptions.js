@@ -89,7 +89,7 @@ export function useSubscriptions(existingRenewals = [], isPro = false) {
                     }
 
                     if (isMatch) {
-                        let cleanName = t.description.split(/[\d\*\#\-]/)[0].trim();
+                        let cleanName = t.description.split(/[\d*#-]/)[0].trim();
                         if (cleanName.length < 3) cleanName = t.description;
 
                         if (trackedNames.has(cleanName.toLowerCase())) continue;
@@ -155,7 +155,9 @@ export function useSubscriptions(existingRenewals = [], isPro = false) {
             if (!existing.includes(suggestionId)) {
                 await db.set("dismissed-suggestions", [...existing, suggestionId]);
             }
-        } catch (e) { }
+        } catch {
+            // Dismissal persistence is best-effort only.
+        }
     };
 
     return { detected, loading, dismissSuggestion };

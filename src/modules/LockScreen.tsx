@@ -4,6 +4,7 @@
   import { useSecurity } from "./contexts/SecurityContext.js";
   import { haptic } from "./haptics.js";
   import { AlertCircle,Fingerprint,ShieldCheck } from "./icons";
+  import { log } from "./logger.js";
   import { FaceId } from "./utils.js";
 
 export async function isBiometricAvailable() {
@@ -100,7 +101,7 @@ export default function LockScreen() {
       setTimeout(onUnlock, 300);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      console.error("Auth Error:", message);
+      void log.warn("security", "Biometric authentication failed", { message });
       // Fall back to custom PIN Pad on cancellation or failure
       setShowPinPad(true);
       setStatus("locked");

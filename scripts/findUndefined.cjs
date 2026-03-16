@@ -1,5 +1,4 @@
 const fs = require("fs");
-const path = require("path");
 const { execSync } = require("child_process");
 
 console.log("Starting lightweight check for undefined variables in React components...");
@@ -7,9 +6,6 @@ console.log("Starting lightweight check for undefined variables in React compone
 // Use grep to find all defined variables and compare against usages
 // Note: Building a full AST parser from scratch is overkill and error-prone.
 // Let's do a smart regex pass specifically looking for dropped props from the recent Context extractions.
-
-const srcPath = path.join(__dirname, "src");
-const filesContent = execSync(`find src -type f -name "*.jsx" -o -name "*.js" | xargs cat`).toString();
 
 // List of all extracted props from the recent Context refactor (based on App.jsx state that was removed)
 const potentialLostVars = [

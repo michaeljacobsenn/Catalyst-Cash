@@ -1,0 +1,40 @@
+export interface StateOption {
+  code: string;
+  label: string;
+}
+
+export interface ToastApi {
+  success?: (message: string, options?: { duration?: number }) => void;
+  error?: (message: string, options?: { duration?: number }) => void;
+  info?: (message: string, options?: { duration?: number }) => void;
+  warn?: (message: string, options?: { duration?: number }) => void;
+}
+
+export interface BackupPayload {
+  app?: string;
+  type?: string;
+  base64?: string;
+  data?: Record<string, unknown>;
+}
+
+export interface AppleSignInResult {
+  response: {
+    user?: string | null;
+  };
+}
+
+export interface ConnectionWithId {
+  id: string;
+  institutionName?: string;
+  [key: string]: unknown;
+}
+
+export interface SpreadsheetModule {
+  read: (data: ArrayBuffer, options: { type: "array" }) => {
+    SheetNames: string[];
+    Sheets: Record<string, unknown>;
+  };
+  utils: {
+    sheet_to_json: (sheet: unknown, options: { header: 1; defval: string }) => Array<Array<string | number>>;
+  };
+}

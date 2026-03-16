@@ -329,6 +329,48 @@ describe("Engine Strategy Logic - generateStrategy", () => {
     expect(strategy.debtPayoff.withExtraPayment.interestSaved).toBeGreaterThanOrEqual(0);
     expect(strategy.debtPayoff.perDebt.length).toBe(1);
   });
+
+  it("flags critical promo expiry inside 30 days as a severe native risk", () => {
+    const strategy = generateStrategy(baseConfig, {
+      snapshotDate: "2024-01-01",
+      checkingBalance: 5000,
+      cards: [
+        {
+          name: "Promo Card",
+          balance: 2800,
+          minPayment: 75,
+          apr: 24,
+          hasPromoApr: true,
+          promoAprExp: "2024-01-20",
+          limit: 5000,
+        },
+      ],
+    });
+
+    expect(strategy.auditSignals.riskFlags).toContain("critical-promo-expiry");
+    expect(strategy.auditSignals.riskFlags).not.toContain("promo-expiry");
+  });
+
+  it("keeps broader promo-expiry risk when the promo is beyond 30 days but inside 90", () => {
+    const strategy = generateStrategy(baseConfig, {
+      snapshotDate: "2024-01-01",
+      checkingBalance: 5000,
+      cards: [
+        {
+          name: "Promo Card",
+          balance: 2800,
+          minPayment: 75,
+          apr: 24,
+          hasPromoApr: true,
+          promoAprExp: "2024-02-20",
+          limit: 5000,
+        },
+      ],
+    });
+
+    expect(strategy.auditSignals.riskFlags).toContain("promo-expiry");
+    expect(strategy.auditSignals.riskFlags).not.toContain("critical-promo-expiry");
+  });
 });
 
 describe("projectDebtPayoff — Compound Interest Amortization", () => {

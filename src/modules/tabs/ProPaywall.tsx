@@ -10,6 +10,7 @@
   import { T } from "../constants.js";
   import { haptic } from "../haptics.js";
   import { IAP_PRICING } from "../subscription.js";
+  import { log } from "../logger.js";
   import { Card } from "../ui.js";
 
 const loadRevenueCat = () => import("../revenuecat.js");
@@ -113,7 +114,7 @@ export default function ProPaywall({ onClose }: ProPaywallProps) {
         appWindow.toast?.info?.("In-App Purchases are only available in the iOS app.");
       }
     } catch (e) {
-      console.error("[IAP] Purchase failed:", e);
+      void log.error("subscription", "Pro purchase failed", e);
     } finally {
       setPurchasing(false);
     }

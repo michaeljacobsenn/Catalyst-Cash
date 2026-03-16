@@ -11,6 +11,7 @@
   } from "react";
   import type { CatalystCashConfig } from "../../types/index.js";
   import { setActiveCurrencyCode } from "../currency.js";
+  import { log } from "../logger.js";
   import { cancelPaydayReminder,getNotificationPermission,schedulePaydayReminder } from "../notifications.js";
   import { DEFAULT_MODEL_ID,DEFAULT_PROVIDER_ID,getProvider } from "../providers.js";
   import { getSecretStorageStatus,migrateToSecureItem } from "../secureStore.js";
@@ -97,6 +98,7 @@ export interface SettingsContextValue {
   financialConfig: CatalystCashConfig;
   setFinancialConfig: SetFinancialConfig;
   isSettingsReady: boolean;
+  rehydrateSettings: () => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -229,117 +231,133 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
 
   const [isSettingsReady, setIsSettingsReady] = useState<boolean>(false);
 
+  const rehydrateSettings = useCallback(async (): Promise<void> => {
+    try {
+      setApiKey("");
+      setAiProvider(DEFAULT_PROVIDER_ID);
+      setAiModel(DEFAULT_MODEL_ID);
+      setPersona(null);
+      setPersonalRules("");
+      setAutoBackupInterval("weekly");
+      setNotifPermission("prompt");
+      setAiConsent(false);
+      setShowAiConsent(false);
+      setThemeModeRaw("dark");
+      dispatchFinConfig({ type: "REPLACE", payload: DEFAULT_FINANCIAL_CONFIG });
+      setActiveCurrencyCode(DEFAULT_FINANCIAL_CONFIG.currencyCode || "USD");
+
+      const secretStorageStatus = await getSecretStorageStatus();
+      const notifPromise: Promise<boolean> = getNotificationPermission()
+        .then((status) => status === "granted")
+        .catch(() => false);
+
+      const [
+        legacyKey,
+        provId,
+        modId,
+        finConf,
+        personalRulesValue,
+        consent,
+        savedPersona,
+        backupInterval,
+        savedTheme,
+        notifGranted,
+      ] = (await Promise.all([
+        db.get("api-key"),
+        db.get("ai-provider"),
+        db.get("ai-model"),
+        db.get("financial-config"),
+        db.get("personal-rules"),
+        db.get("ai-consent-accepted"),
+        db.get("ai-persona"),
+        db.get("auto-backup-interval"),
+        db.get("theme-mode"),
+        notifPromise,
+      ])) as [
+        string | null,
+        string | null,
+        string | null,
+        Partial<CatalystCashConfig> | null,
+        string | null,
+        boolean | null,
+        PersonaMode,
+        BackupInterval | null,
+        ThemeMode | null,
+        boolean,
+      ];
+
+      setNotifPermission(notifGranted ? "granted" : "denied");
+
+      const rawTier = await getRawTier();
+      const validProvider = getProvider(provId || DEFAULT_PROVIDER_ID) as ProviderConfig;
+      const validModelId = normalizeModelForTier(
+        rawTier.id,
+        modId || getPreferredModelForTier(rawTier.id) || DEFAULT_MODEL_ID,
+        validProvider.id
+      );
+      setAiProvider(validProvider.id);
+      setAiModel(validModelId);
+      if (modId !== validModelId) {
+        await db.set("ai-model", validModelId);
+      }
+
+      const provKey = validProvider.keyStorageKey
+        ? ((await migrateToSecureItem(validProvider.keyStorageKey, legacyKey, () => db.del("api-key"))) as string | null)
+        : null;
+
+      if (provKey) {
+        setApiKey(provKey);
+      } else if (legacyKey && !secretStorageStatus.canPersistSecrets) {
+        await db.del("api-key");
+      }
+
+      if (personalRulesValue) setPersonalRules(personalRulesValue);
+      if (consent) setAiConsent(true);
+      if (savedPersona) setPersona(savedPersona);
+      if (backupInterval) setAutoBackupInterval(backupInterval);
+
+      const resolvedTheme: ThemeMode = savedTheme || "dark";
+      setThemeModeRaw(resolvedTheme);
+
+      if (finConf) {
+        const merged: CatalystCashConfig = { ...DEFAULT_FINANCIAL_CONFIG, ...finConf };
+        const currentYear = new Date().getFullYear();
+        const lastResetYear = (await db.get("ytd-reset-year")) as number | null;
+
+        if (lastResetYear && lastResetYear < currentYear) {
+          merged.rothContributedYTD = 0;
+          merged.k401ContributedYTD = 0;
+          db.set("ytd-reset-year", currentYear);
+          db.set("financial-config", merged);
+        } else if (!lastResetYear) {
+          db.set("ytd-reset-year", currentYear);
+        }
+
+        if (merged.paydayReminderEnabled === undefined || merged.paydayReminderEnabled === null) {
+          merged.paydayReminderEnabled = notifGranted;
+        } else if (!notifGranted) {
+          merged.paydayReminderEnabled = false;
+        }
+
+        dispatchFinConfig({ type: "REPLACE", payload: merged });
+        setActiveCurrencyCode(merged.currencyCode || "USD");
+      }
+    } catch (error: unknown) {
+      void log.error("settings", "Settings context initialization failed", error);
+    }
+  }, []);
+
   useEffect(() => {
     const initSettings = async (): Promise<void> => {
       try {
-        const secretStorageStatus = await getSecretStorageStatus();
-        const notifPromise: Promise<boolean> = getNotificationPermission()
-          .then((status) => status === "granted")
-          .catch(() => false);
-
-        const [
-          legacyKey,
-          provId,
-          modId,
-          finConf,
-          personalRulesValue,
-          consent,
-          savedPersona,
-          backupInterval,
-          savedTheme,
-          notifGranted,
-        ] = (await Promise.all([
-          db.get("api-key"),
-          db.get("ai-provider"),
-          db.get("ai-model"),
-          db.get("financial-config"),
-          db.get("personal-rules"),
-          db.get("ai-consent-accepted"),
-          db.get("ai-persona"),
-          db.get("auto-backup-interval"),
-          db.get("theme-mode"),
-          notifPromise,
-        ])) as [
-          string | null,
-          string | null,
-          string | null,
-          Partial<CatalystCashConfig> | null,
-          string | null,
-          boolean | null,
-          PersonaMode,
-          BackupInterval | null,
-          ThemeMode | null,
-          boolean,
-        ];
-
-        setNotifPermission(notifGranted ? "granted" : "denied");
-
-        const rawTier = await getRawTier();
-        const validProvider = getProvider(provId || DEFAULT_PROVIDER_ID) as ProviderConfig;
-        const validModelId = normalizeModelForTier(
-          rawTier.id,
-          modId || getPreferredModelForTier(rawTier.id) || DEFAULT_MODEL_ID,
-          validProvider.id
-        );
-        setAiProvider(validProvider.id);
-        setAiModel(validModelId);
-        if (modId !== validModelId) {
-          await db.set("ai-model", validModelId);
-        }
-
-        const provKey = validProvider.keyStorageKey
-          ? ((await migrateToSecureItem(validProvider.keyStorageKey, legacyKey, () => db.del("api-key"))) as string | null)
-          : null;
-
-        if (provKey) {
-          setApiKey(provKey);
-        } else if (legacyKey && secretStorageStatus.mode === "web-fallback") {
-          setApiKey(legacyKey);
-          await migrateToSecureItem("api-key-openai", legacyKey, () => db.del("api-key"));
-        } else if (legacyKey && secretStorageStatus.mode === "native-unavailable") {
-          await db.del("api-key");
-        }
-
-        if (personalRulesValue) setPersonalRules(personalRulesValue);
-        if (consent) setAiConsent(true);
-        if (savedPersona) setPersona(savedPersona);
-        if (backupInterval) setAutoBackupInterval(backupInterval);
-
-        const resolvedTheme: ThemeMode = savedTheme || "dark";
-        setThemeModeRaw(resolvedTheme);
-
-        if (finConf) {
-          const merged: CatalystCashConfig = { ...DEFAULT_FINANCIAL_CONFIG, ...finConf };
-          const currentYear = new Date().getFullYear();
-          const lastResetYear = (await db.get("ytd-reset-year")) as number | null;
-
-          if (lastResetYear && lastResetYear < currentYear) {
-            merged.rothContributedYTD = 0;
-            merged.k401ContributedYTD = 0;
-            db.set("ytd-reset-year", currentYear);
-            db.set("financial-config", merged);
-          } else if (!lastResetYear) {
-            db.set("ytd-reset-year", currentYear);
-          }
-
-          if (merged.paydayReminderEnabled === undefined || merged.paydayReminderEnabled === null) {
-            merged.paydayReminderEnabled = notifGranted;
-          } else if (!notifGranted) {
-            merged.paydayReminderEnabled = false;
-          }
-
-          dispatchFinConfig({ type: "REPLACE", payload: merged });
-          setActiveCurrencyCode(merged.currencyCode || "USD");
-        }
-      } catch (error: unknown) {
-        console.error("Settings init error:", error);
+        await rehydrateSettings();
       } finally {
         setIsSettingsReady(true);
       }
     };
 
     void initSettings();
-  }, []);
+  }, [rehydrateSettings]);
 
   useEffect(() => {
     if (isSettingsReady) db.set("ai-provider", aiProvider);
@@ -424,6 +442,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     financialConfig,
     setFinancialConfig,
     isSettingsReady,
+    rehydrateSettings,
   };
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;

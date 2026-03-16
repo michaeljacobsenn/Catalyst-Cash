@@ -12,6 +12,21 @@ interface Window {
   toast?: AppToastApi;
   __privacyMode?: boolean;
   __biometricActive?: boolean;
+  __E2E_HOUSEHOLD_SYNC_DELAY__?: number;
+  __E2E_SECURITY_STATE__?: {
+    storageStatus?: {
+      platform: "native" | "web";
+      available: boolean;
+      mode: "native-secure" | "native-unavailable" | "web-limited";
+      canPersistSecrets: boolean;
+      isHardwareBacked: boolean;
+      message: string;
+    };
+    appPasscode?: string;
+    requireAuth?: boolean;
+    useFaceId?: boolean;
+    lockTimeout?: number;
+  };
   haptic?: {
     light?: () => void;
     medium?: () => void;
@@ -22,3 +37,21 @@ interface Window {
     selection?: () => void;
   };
 }
+
+declare var __E2E_HOUSEHOLD_SYNC_DELAY__: number | undefined;
+declare var __E2E_SECURITY_STATE__:
+  | {
+      storageStatus?: {
+        platform: "native" | "web";
+        available: boolean;
+        mode: "native-secure" | "native-unavailable" | "web-limited";
+        canPersistSecrets: boolean;
+        isHardwareBacked: boolean;
+        message: string;
+      };
+      appPasscode?: string;
+      requireAuth?: boolean;
+      useFaceId?: boolean;
+      lockTimeout?: number;
+    }
+  | undefined;

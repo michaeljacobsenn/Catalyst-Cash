@@ -2,12 +2,20 @@
 // HAPTIC FEEDBACK — wraps @capacitor/haptics for iOS
 // Falls back to no-op on web/unsupported
 // ═══════════════════════════════════════════════════════════════
+  import { Capacitor } from "@capacitor/core";
   import { Haptics,ImpactStyle,NotificationType } from "@capacitor/haptics";
 
+const supportsHaptics =
+  Capacitor.isNativePlatform() &&
+  (typeof Capacitor.isPluginAvailable !== "function" || Capacitor.isPluginAvailable("Haptics"));
+
 const safe = fn => async () => {
+  if (!supportsHaptics) return;
   try {
     await fn();
-  } catch {}
+  } catch {
+    // Unsupported haptics should degrade silently.
+  }
 };
 
 export const haptic = {

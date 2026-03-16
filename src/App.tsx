@@ -1,9 +1,27 @@
-  import { App as CapApp } from "@capacitor/app";
-  import { Capacitor } from "@capacitor/core";
-  import type { FocusEvent as ReactFocusEvent } from "react";
   import { Suspense,lazy,useCallback,useEffect,useMemo,useRef,useState } from "react";
-  import { uploadToICloud } from "./modules/cloudSync.js";
-  import { APP_VERSION,T } from "./modules/constants.js";
+  import AppShellHeader, { SkipToContentLink } from "./modules/appShell/AppShellHeader.js";
+  import {
+    AiConsentModal,
+    AppFrame,
+    FactoryResetMask,
+    LoadingScreen,
+    OfflineBanner,
+    SimulatedNotificationBanner,
+    TabFallback,
+  } from "./modules/appShell/AppShellOverlays.js";
+  import {
+    useAutoICloudBackup,
+    useBootServices,
+    useClipboardAuditImport,
+    useHeaderChrome,
+    useHouseholdSync,
+    useLoadReadyHaptic,
+    usePrivacyModeMirror,
+    useRecoverableAuditLifecycle,
+    useSimulatedGeofenceNotification,
+  } from "./modules/appShell/useAppShellRuntime.js";
+  import { refreshAppState as refreshAppStateModel,resetAppState } from "./modules/appRefreshModel.js";
+  import { T } from "./modules/constants.js";
   import { useAudit } from "./modules/contexts/AuditContext.js";
   import type { AppTab } from "./modules/contexts/NavigationContext.js";
   import { useNavigation } from "./modules/contexts/NavigationContext.js";
@@ -14,28 +32,17 @@
   import { ThemeProvider } from "./modules/contexts/ThemeContext.js";
   import { getDemoAuditPayload } from "./modules/demoAudit.js";
   import { installGlobalHandlers } from "./modules/errorReporter.js";
+  import { normalizeAppError } from "./modules/appErrors.js";
   import { haptic } from "./modules/haptics.js";
-  import {
-    Eye,
-    EyeOff,
-    Info,
-    MapPin,
-    Settings,
-  } from "./modules/icons";
-  import { extractCategoryByKeywords } from "./modules/merchantDatabase.js";
+  import { log } from "./modules/logger.js";
   import BottomNavBar from "./modules/navigation/BottomNavBar.js";
   import ScrollSnapContainer from "./modules/navigation/ScrollSnapContainer.js";
   import TabRenderer from "./modules/navigation/TabRenderer.js";
-  import { syncOTAData } from "./modules/ota.js";
   import OverlayManager from "./modules/overlays/OverlayManager.js";
-  import { initRevenueCat } from "./modules/revenuecat.js";
-  import { getOptimalCard } from "./modules/rewardsCatalog.js";
   import { deleteSecureItem } from "./modules/secureStore.js";
-  import { isSecuritySensitiveKey,sanitizePlaidForBackup } from "./modules/securityKeys.js";
-  import { getGatingMode,isPro,syncRemoteGatingMode } from "./modules/subscription.js";
   import "./modules/tabs/DashboardTab.css"; // Global animations, skeleton loaders, utility classes
   import { useToast } from "./modules/Toast.js";
-  import { GlobalStyles,getTracking,useGlobalHaptics } from "./modules/ui.js";
+  import { GlobalStyles,useGlobalHaptics } from "./modules/ui.js";
   import { db } from "./modules/utils.js";
   import type { AuditRecord,BankAccount,Card as CardType,ParsedAudit,PlaidInvestmentAccount,Renewal } from "./types/index.js";
 // Payday reminder scheduling is handled in SettingsContext
@@ -44,20 +51,12 @@ const LockScreen = lazy(() => import("./modules/LockScreen.js"));
 const SetupWizard = lazy(() => import("./modules/tabs/SetupWizard.js"));
 
 type AppToastApi = Window["toast"];
-const uploadToICloudTyped = uploadToICloud as (payload: unknown, passphrase?: string | null) => Promise<boolean>;
 
 interface AppFinancialConfigExtras {
   valuations?: Record<string, unknown>;
   isDemoConfig?: boolean;
   _preDemoSnapshot?: Record<string, unknown>;
 }
-
-interface SimulatedNotification {
-  title: string;
-  body: string;
-  store: string;
-}
-
 
 function useOnline() {
   const [o, setO] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
@@ -74,19 +73,6 @@ function useOnline() {
   return o;
 }
 
-// Suspense fallback for lazy-loaded tabs — iOS-style skeleton loader
-const TabFallback = () => (
-  <div className="skeleton-loader" style={{ padding: "20px 16px" }}>
-    <div className="skeleton-block" style={{ height: 48, borderRadius: 14 }} />
-    <div className="skeleton-block" style={{ height: 120, borderRadius: 16 }} />
-    <div style={{ display: "flex", gap: 10 }}>
-      <div className="skeleton-block" style={{ height: 80, flex: 1, borderRadius: 14 }} />
-      <div className="skeleton-block" style={{ height: 80, flex: 1, borderRadius: 14 }} />
-    </div>
-    <div className="skeleton-block" style={{ height: 64, borderRadius: 14 }} />
-  </div>
-);
-
 function CatalystCashShell() {
   const toast = useToast();
   const appToast = toast as AppToastApi | undefined;
@@ -96,12 +82,6 @@ function CatalystCashShell() {
   const online = useOnline();
   useGlobalHaptics(); // Auto-haptic on every button tap
 
-  // Sync remote gating config on boot (anti-downgrade protection) and start OTA Data routines
-  useEffect(() => {
-    syncRemoteGatingMode();
-    syncOTAData();
-  }, []);
-
   const {
     appPasscode,
     isLocked,
@@ -109,6 +89,7 @@ function CatalystCashShell() {
     setPrivacyMode,
     appleLinkedId,
     isSecurityReady,
+    rehydrateSecurity,
   } = useSecurity();
   const {
     aiProvider,
@@ -123,6 +104,7 @@ function CatalystCashShell() {
     financialConfig,
     setFinancialConfig,
     isSettingsReady,
+    rehydrateSettings,
   } = useSettings();
   const extendedFinancialConfig = financialConfig as typeof financialConfig & AppFinancialConfigExtras;
   const {
@@ -135,6 +117,7 @@ function CatalystCashShell() {
     cardCatalog,
     cardAnnualFees,
     isPortfolioReady,
+    rehydratePortfolio,
   } = usePortfolio();
   const {
     current,
@@ -163,6 +146,7 @@ function CatalystCashShell() {
     checkRecoverableAuditDraft,
     openRecoverableAuditDraft,
     dismissRecoverableAuditDraft,
+    rehydrateAudit,
   } = useAudit();
   const {
     tab,
@@ -177,6 +161,8 @@ function CatalystCashShell() {
     setShowGuide,
     lastCenterTab,
     abortActiveChatStream,
+    rehydrateNavigation,
+    resetNavigationState,
     SWIPE_TAB_ORDER,
   } = useNavigation();
 
@@ -186,12 +172,39 @@ function CatalystCashShell() {
   const headerToggleCooldown = useRef(0);
   const [transactionFeedTab, setTransactionFeedTab] = useState<AppTab | null>(null);
   const [chatInitialPrompt, setChatInitialPrompt] = useState<string | null>(null);
-  const lastPromptedAuditDraftRef = useRef<string | null>(null);
-  const abortActiveAuditRef = useRef(abortActiveAudit);
-  const abortActiveChatStreamRef = useRef(abortActiveChatStream);
-  const checkRecoverableAuditDraftRef = useRef(checkRecoverableAuditDraft);
-  const surfaceRecoverableAuditPromptRef = useRef<(draft?: typeof recoverableAuditDraft) => void>(() => {});
   const showShellHeader = tab !== "settings" && tab !== "history" && tab !== "results" && tab !== "input";
+
+  const clearShellRefreshState = useCallback(() => {
+    setTransactionFeedTab(null);
+    setChatInitialPrompt(null);
+    setHeaderHidden(false);
+    lastScrollY.current = 0;
+    headerToggleCooldown.current = 0;
+  }, []);
+
+  const refreshAppState = useCallback(
+    async (nextTab: AppTab = "dashboard") => {
+      await refreshAppStateModel({
+        rehydrateSettings,
+        rehydrateSecurity,
+        rehydratePortfolio,
+        rehydrateAudit,
+        rehydrateNavigation,
+        resetNavigationState,
+        clearUiState: clearShellRefreshState,
+        nextTab,
+      });
+    },
+    [
+      clearShellRefreshState,
+      rehydrateAudit,
+      rehydrateNavigation,
+      rehydratePortfolio,
+      rehydrateSecurity,
+      rehydrateSettings,
+      resetNavigationState,
+    ]
+  );
 
   function mergeUniqueById<T extends { id?: string | null }>(existing: T[] = [], incoming: T[] = []): T[] {
     const ids = new Set(existing.map((item) => item.id).filter(Boolean));
@@ -259,12 +272,15 @@ function CatalystCashShell() {
 
             window.toast?.success?.("Bank linked successfully!");
           } catch (err) {
-            console.error("Link err", err);
+            const failure = normalizeAppError(err, { context: "sync" });
+            log.error("plaid", "Post-link processing failed", { error: failure.rawMessage, kind: failure.kind });
+            window.toast?.info?.("Bank linked. If balances have not updated yet, try Sync again in a moment.");
           }
         },
         err => {
           if (window.toast) {
-            const msg = err?.message || "Failed to link bank";
+            const failure = normalizeAppError(err, { context: "sync" });
+            const msg = failure.userMessage || "Failed to link bank";
             if (msg === "cancelled") return;
             window.toast.error?.(msg);
           }
@@ -278,233 +294,45 @@ function CatalystCashShell() {
   // ── Shared swipe gesture handler (used by main scroll, input pane, chat pane) ──
   const ready = isSecurityReady && isSettingsReady && isPortfolioReady && isAuditReady;
 
-  // Pro subscription state — resolved async on mount
   const [proEnabled, setProEnabled] = useState(true);
-  useEffect(() => {
-    initRevenueCat().then(() => {
-      const mode = getGatingMode();
-      // "off" = no gating at all, "soft" = show Pro UI but don't block features
-      if (mode === "off" || mode === "soft") {
-        setProEnabled(true);
-        return;
-      }
-      isPro()
-        .then(setProEnabled)
-        .catch(() => setProEnabled(false));
-    });
-  }, []);
+  useBootServices(setProEnabled);
 
-  // ── GEO-FENCING SIMULATOR ──
-  const [simulatedNotification, setSimulatedNotification] = useState<SimulatedNotification | null>(null);
-
-  useEffect(() => {
-    const handleSimulate = (e: Event) => {
-      const detail = (e as CustomEvent<{ store?: string }>).detail;
-      const store = detail?.store || "Store";
-      const categoryStr = extractCategoryByKeywords(store) || "other";
-      const optimal = getOptimalCard(cards || [], categoryStr, extendedFinancialConfig.valuations || {});
-
-      let recText = `Open Catalyst to see your best card.`;
-      if (optimal && optimal.yield) {
-        recText = `Use your ${optimal.cardName} here for ${parseFloat((optimal.yield * 100).toFixed(1))}% back!`;
-      }
-
-      setSimulatedNotification({
-        title: store + " Nearby",
-        body: recText,
-        store,
-      });
-      setTimeout(() => setSimulatedNotification(null), 6000);
-    };
-    window.addEventListener("simulate-geo-fence", handleSimulate);
-    return () => window.removeEventListener("simulate-geo-fence", handleSimulate);
-  }, [cards, financialConfig]);
-
-  // ═══════════════════════════════════════════════════════════════
-
-  // Payday reminder scheduling is handled in SettingsContext — no duplicate here
-
-  // ═══════════════════════════════════════════════════════════════
-  // iCLOUD AUTO-BACKUP — Syncs all user data to iCloud ubiquity
-  // container via native ICloudSyncPlugin. Survives app deletion
-  // and restores on new devices with the same Apple ID.
-  // ═══════════════════════════════════════════════════════════════
-  const iCloudSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!ready || !appleLinkedId) return;
-    if (autoBackupInterval === "off") return;
-
-    if (iCloudSyncTimer.current) clearTimeout(iCloudSyncTimer.current);
-
-    iCloudSyncTimer.current = setTimeout(async () => {
-      try {
-        // Enforce backup schedule
-        const lastBackupStr = await db.get("last-backup-ts");
-        const lastBackup = lastBackupStr ? Number(lastBackupStr) : 0;
-        const now = Date.now();
-        const hrs24 = 24 * 60 * 60 * 1000;
-        let requiredDeltaMs = 0;
-
-        if (autoBackupInterval === "daily") requiredDeltaMs = hrs24;
-        else if (autoBackupInterval === "weekly") requiredDeltaMs = hrs24 * 7;
-        else if (autoBackupInterval === "monthly") requiredDeltaMs = hrs24 * 30;
-
-        if (now - lastBackup < requiredDeltaMs) {
-          return; // Throttled — schedule not yet met
-        }
-
-        const backup = { app: "Catalyst Cash", version: APP_VERSION, exportedAt: new Date().toISOString(), data: {} };
-        const keys = await db.keys();
-        for (const key of keys) {
-          if (isSecuritySensitiveKey(key)) continue; // Never sync security credentials
-          const val = await db.get(key);
-          if (val !== null) backup.data[key] = val;
-        }
-        if (!("personal-rules" in backup.data)) {
-          backup.data["personal-rules"] = personalRules ?? "";
-        }
-
-        // Include sanitized Plaid metadata (no access tokens) for reconnect deduplication
-        const plaidConns = await db.get("plaid-connections");
-        if (Array.isArray(plaidConns) && plaidConns.length > 0) {
-          backup.data["plaid-connections-sanitized"] = sanitizePlaidForBackup(plaidConns);
-        }
-
-        const success = await uploadToICloudTyped(backup, appPasscode || null);
-        if (success) {
-          await db.set("last-backup-ts", now);
-          // Settings UI polls this key on mount or relies on local state update which is handled there.
-          // We just need it perfectly accurately persisted to the DB on success.
-          // success — silent
-        }
-      } catch (e) {
-        console.error("iCloud auto-sync error:", e);
-      }
-    }, 15000); // 15 second debounce — avoid writing on every keystroke
-
-    return () => {
-      if (iCloudSyncTimer.current) clearTimeout(iCloudSyncTimer.current);
-    };
-  }, [ready, history, renewals, cards, financialConfig, personalRules, appleLinkedId, autoBackupInterval]);
-
-  // ═══════════════════════════════════════════════════════════════
-  // HOUSEHOLD CLOUD SYNC — Syncs to Cloudflare D1
-  // ═══════════════════════════════════════════════════════════════
-  const householdSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!ready || autoBackupInterval === "off") return;
-
-    if (householdSyncTimer.current) clearTimeout(householdSyncTimer.current);
-
-    householdSyncTimer.current = setTimeout(async () => {
-      try {
-        const { getHouseholdCredentials, migrateHouseholdCredentials } = await import("./modules/householdSecrets.js");
-        await migrateHouseholdCredentials();
-        const { householdId, passcode } = await getHouseholdCredentials();
-        if (!householdId || !passcode) return;
-
-        const { pushHouseholdSync } = await import("./modules/householdSync.js");
-        await pushHouseholdSync(householdId, passcode);
-      } catch (e) {
-        console.error("Household auto-sync error:", e);
-      }
-    }, 16000); // 16s debounce (offset slightly from iCloud)
-
-    return () => {
-      if (householdSyncTimer.current) clearTimeout(householdSyncTimer.current);
-    };
-  }, [ready, history, renewals, cards, financialConfig, personalRules, autoBackupInterval]);
-
-  useEffect(() => {
-    // Attempt pull on load
-    const doPull = async () => {
-      if (!ready || !online) return;
-      try {
-        const { getHouseholdCredentials, migrateHouseholdCredentials } = await import("./modules/householdSecrets.js");
-        await migrateHouseholdCredentials();
-        const { householdId, passcode } = await getHouseholdCredentials();
-        if (!householdId || !passcode) return;
-
-        const { pullHouseholdSync, mergeHouseholdState } = await import("./modules/householdSync.js");
-        const result = await pullHouseholdSync(householdId, passcode);
-        if (result.ok && result.hasData && result.payload) {
-          const merged = await mergeHouseholdState(result.payload, result.version);
-          if (merged) {
-            // New data merged — refresh below
-            toast.success("Household data synced. Refreshing...");
-            setTimeout(() => window.location.reload(), 1500);
-          }
-        }
-      } catch {
-        void 0;
-      }
-    }
-    doPull();
-  }, [ready, online]);
-
-  // Sync privacy mode to global for components that read it outside React
-  useEffect(() => {
-    (window as Window & { __privacyMode?: boolean }).__privacyMode = privacyMode;
-  }, [privacyMode]);
-
-  useEffect(() => {
-    setHeaderHidden(false);
-    lastScrollY.current = 0;
-  }, [tab]);
-
-  useEffect(() => {
-    if (!showShellHeader) {
-      document.documentElement.style.setProperty("--top-bar-h", "0px");
-      return;
-    }
-    if (!topBarRef.current) return;
-    const update = () => {
-      if (!topBarRef.current) return;
-      const h = topBarRef.current.getBoundingClientRect().height || 0;
-      document.documentElement.style.setProperty("--top-bar-h", `${Math.ceil(h)}px`);
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(topBarRef.current);
-    return () => ro.disconnect();
-  }, [showShellHeader]);
-
-  // ═══════════════════════════════════════════════════════════════
-  // CLIPBOARD AUTO-DETECT — check clipboard on app resume
-  // ═══════════════════════════════════════════════════════════════
-  const lastClipRef = useRef("");
-  useEffect(() => {
-    const checkClipboard = async () => {
-      if (document.hidden) return;
-      try {
-        const text = await navigator.clipboard.readText();
-        if (!text || text === lastClipRef.current || text.length < 50) return;
-        // Heuristic: looks like an audit response if it has markdown headers + dollar amounts
-        const hasHeaders = /##\s*(ALERT|DASHBOARD|MOVES|RADAR|NEXT ACTION)/i.test(text);
-        const hasDollars = /\$[\d,]+\.\d{2}/.test(text);
-        if (hasHeaders && hasDollars) {
-          lastClipRef.current = text;
-          toast.clipboard("Audit detected in clipboard", {
-            duration: 8000,
-            action: {
-              label: "Import",
-              fn: () => {
-                handleManualImport(text);
-                haptic.success();
-              },
-            },
-          });
-        }
-      } catch {
-        return;
-      } // clipboard permission denied — silent fail
-    };
-    const onVis = () => {
-      if (!document.hidden) setTimeout(checkClipboard, 500);
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, [history]);
+  const { simulatedNotification, dismissSimulatedNotification } = useSimulatedGeofenceNotification(
+    cards,
+    extendedFinancialConfig.valuations
+  );
+  useAutoICloudBackup({
+    ready,
+    appleLinkedId,
+    autoBackupInterval,
+    history,
+    renewals,
+    cards,
+    financialConfig: financialConfig as unknown as Record<string, unknown>,
+    personalRules,
+    appPasscode,
+  });
+  const { handleRestoreComplete, handleHouseholdSyncConfigured } = useHouseholdSync({
+    ready,
+    online,
+    autoBackupInterval,
+    history,
+    renewals,
+    cards,
+    financialConfig: financialConfig as unknown as Record<string, unknown>,
+    personalRules,
+    refreshAppState,
+    toast,
+  });
+  usePrivacyModeMirror(privacyMode);
+  useHeaderChrome({
+    tab,
+    showShellHeader,
+    topBarRef,
+    setHeaderHidden,
+    lastScrollY,
+  });
+  useClipboardAuditImport({ history, handleManualImport, toast });
 
   const toggleMove = async i => {
     haptic.light();
@@ -646,24 +474,36 @@ function CatalystCashShell() {
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const factoryReset = async () => {
     haptic.warning();
-    toast.success("App securely erased. Restarting...");
+    toast.success("App securely erased. Resetting...");
     setIsResetting(true); // Unmounts SettingsTab immediately
 
     // Wait for any trailing debounces to flush from React to the DB before wiping
     resetTimerRef.current = setTimeout(async () => {
-      await db.clear();
-      await db.set("renewals", []);
-      await db.set("renewals-seed-version", "v2");
-      await db.set("card-portfolio", []);
-      await db.set("bank-accounts", []);
-      await db.set("personal-rules", "");
-      await deleteSecureItem("app-passcode");
-      await deleteSecureItem("apple-linked-id");
-      await deleteSecureItem("api-key");
-      await deleteSecureItem("api-key-openai");
-      await db.del("onboarding-complete"); // Guarantee Setup Wizard on reload
-
-      window.location.reload();
+      try {
+        const { clearHouseholdCredentials } = await import("./modules/householdSecrets.js");
+        await resetAppState({
+          clearDb: async () => {
+            await db.clear();
+            await db.del("onboarding-complete");
+          },
+          deleteSecrets: [
+            () => deleteSecureItem("app-passcode"),
+            () => deleteSecureItem("apple-linked-id"),
+            () => deleteSecureItem("api-key"),
+            () => deleteSecureItem("api-key-openai"),
+            () => clearHouseholdCredentials(),
+          ],
+          refresh: async () => {
+            await refreshAppState("dashboard");
+            setIsResetting(false);
+          },
+        });
+      } catch (resetError) {
+        const failure = normalizeAppError(resetError, { context: "security" });
+        log.error("security", "Factory reset failed", { error: failure.rawMessage, kind: failure.kind });
+        setIsResetting(false);
+        toast.error("Catalyst couldn't complete the reset. Please try again.");
+      }
     }, 800);
   };
   // Cleanup factory reset timer on unmount
@@ -721,362 +561,19 @@ function CatalystCashShell() {
     }
   }, [headerHidden]);
 
-  const surfaceRecoverableAuditPrompt = useCallback((draft = recoverableAuditDraft) => {
-    if (!draft?.sessionTs || !draft?.raw?.trim()) return;
-    lastPromptedAuditDraftRef.current = draft.sessionTs;
-    toast.warning("Previous audit was interrupted. Recover the partial draft or rerun the audit.", {
-      duration: 9000,
-      action: {
-        label: "Recover",
-        fn: () => {
-          openRecoverableAuditDraft();
-          setResultsBackTarget("audit");
-          navTo("results");
-        },
-      },
-    });
-  }, [navTo, openRecoverableAuditDraft, recoverableAuditDraft, setResultsBackTarget, toast]);
+  useRecoverableAuditLifecycle({
+    recoverableAuditDraft,
+    navTo,
+    openRecoverableAuditDraft,
+    setResultsBackTarget,
+    toast,
+    abortActiveAudit,
+    abortActiveChatStream,
+    checkRecoverableAuditDraft,
+  });
+  useLoadReadyHaptic(ready);
 
-  useEffect(() => {
-    if (!recoverableAuditDraft?.sessionTs) return;
-    if (lastPromptedAuditDraftRef.current === recoverableAuditDraft.sessionTs) return;
-    surfaceRecoverableAuditPrompt(recoverableAuditDraft);
-  }, [recoverableAuditDraft, surfaceRecoverableAuditPrompt]);
-
-  useEffect(() => {
-    abortActiveAuditRef.current = abortActiveAudit;
-  }, [abortActiveAudit]);
-
-  useEffect(() => {
-    abortActiveChatStreamRef.current = abortActiveChatStream;
-  }, [abortActiveChatStream]);
-
-  useEffect(() => {
-    checkRecoverableAuditDraftRef.current = checkRecoverableAuditDraft;
-  }, [checkRecoverableAuditDraft]);
-
-  useEffect(() => {
-    surfaceRecoverableAuditPromptRef.current = surfaceRecoverableAuditPrompt;
-  }, [surfaceRecoverableAuditPrompt]);
-
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
-
-    let pauseHandle: { remove: () => Promise<void> } | null = null;
-    let resumeHandle: { remove: () => Promise<void> } | null = null;
-
-    const register = async () => {
-      pauseHandle = await CapApp.addListener("pause", async () => {
-        abortActiveAuditRef.current("background-pause");
-        abortActiveChatStreamRef.current();
-      });
-
-      resumeHandle = await CapApp.addListener("resume", async () => {
-        const draft = await checkRecoverableAuditDraftRef.current();
-        if (draft?.sessionTs) {
-          surfaceRecoverableAuditPromptRef.current(draft);
-        }
-      });
-    };
-
-    register().catch(() => {});
-
-    return () => {
-      pauseHandle?.remove().catch(() => {});
-      resumeHandle?.remove().catch(() => {});
-    };
-  }, []);
-
-
-  // Native iOS swipe-back is handled via WKWebView allowsBackForwardNavigationGestures
-  // (set in capacitor.config.ts). The popstate listener (above) handles the navigation.
-
-  // Native splash auto-hides instantly (launchShowDuration: 0) — no manual dismiss needed
-
-  // ── Haptic on load-complete (premium feel) ──
-  const loadReadyRef = useRef(false);
-  useEffect(() => {
-    if (ready && !loadReadyRef.current) {
-      loadReadyRef.current = true;
-      haptic.light();
-    }
-  }, [ready]);
-
-  if (!ready)
-    return (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100dvh",
-          background: T.bg.base,
-          position: "relative",
-          overflow: "hidden",
-        }}
-      >
-        <GlobalStyles />
-        <style>{`
-@keyframes loadFloat1 { 0%, 100% { transform: translate(0, 0) scale(1); } 33% { transform: translate(30px, -20px) scale(1.1); } 66% { transform: translate(-20px, 10px) scale(0.95); } }
-@keyframes loadFloat2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-35px, -25px) scale(1.15); } }
-@keyframes loadFloat3 { 0%, 100% { transform: translate(0, 0) scale(0.9); } 40% { transform: translate(25px, 15px) scale(1.05); } 80% { transform: translate(-15px, -10px) scale(1); } }
-@keyframes ringSweep { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-@keyframes iconBloom { 0% { transform: scale(0.7); opacity: 0; filter: blur(8px); } 100% { transform: scale(1); opacity: 1; filter: blur(0); } }
-@keyframes iconPulse { 0%, 100% { box-shadow: 0 12px 48px rgba(0,0,0,0.4), 0 0 30px ${T.accent.primary}15; } 50% { box-shadow: 0 16px 56px rgba(0,0,0,0.5), 0 0 60px ${T.accent.primary}30, 0 0 100px ${T.accent.emerald}10; } }
-@keyframes glowPulse { 0%, 100% { opacity: 0.15; transform: scale(1); } 50% { opacity: 0.35; transform: scale(1.08); } }
-@keyframes particleDrift1 { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 0.6; } 90% { opacity: 0.6; } 100% { transform: translate(40px, -80px); opacity: 0; } }
-@keyframes particleDrift2 { 0% { transform: translate(0, 0); opacity: 0; } 15% { opacity: 0.5; } 85% { opacity: 0.5; } 100% { transform: translate(-50px, -70px); opacity: 0; } }
-@keyframes particleDrift3 { 0% { transform: translate(0, 0); opacity: 0; } 20% { opacity: 0.4; } 80% { opacity: 0.4; } 100% { transform: translate(30px, -90px); opacity: 0; } }
-@keyframes particleDrift4 { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 0.5; } 90% { opacity: 0.3; } 100% { transform: translate(-35px, -60px); opacity: 0; } }
-@keyframes loadBarFill { 0% { width: 0%; } 20% { width: 25%; } 50% { width: 55%; } 80% { width: 80%; } 100% { width: 95%; } }
-@keyframes textReveal { 0% { opacity: 0; transform: translateY(16px); filter: blur(6px); } 100% { opacity: 1; transform: translateY(0); filter: blur(0); } }
-@keyframes subtitlePulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
-    `}</style>
-
-        {/* Ambient gradient blobs — slow floating motion */}
-        <div
-          style={{
-            position: "absolute",
-            top: "12%",
-            left: "5%",
-            width: 240,
-            height: 240,
-            background: `radial-gradient(circle, ${T.accent.primary}20, transparent 70%)`,
-            filter: "blur(60px)",
-            borderRadius: "50%",
-            pointerEvents: "none",
-            animation: "loadFloat1 8s ease-in-out infinite",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            bottom: "15%",
-            right: "5%",
-            width: 200,
-            height: 200,
-            background: `radial-gradient(circle, ${T.accent.emerald}18, transparent 70%)`,
-            filter: "blur(50px)",
-            borderRadius: "50%",
-            pointerEvents: "none",
-            animation: "loadFloat2 10s ease-in-out infinite",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "55%",
-            width: 180,
-            height: 180,
-            background: `radial-gradient(circle, #6C60FF12, transparent 70%)`,
-            filter: "blur(55px)",
-            borderRadius: "50%",
-            pointerEvents: "none",
-            animation: "loadFloat3 12s ease-in-out infinite",
-          }}
-        />
-
-        {/* Icon + Glow Ring */}
-        <div
-          style={{
-            position: "relative",
-            width: 120,
-            height: 120,
-            marginBottom: 36,
-            animation: "iconBloom .8s cubic-bezier(0.16,1,0.3,1) both",
-          }}
-        >
-          {/* Pulsing glow behind icon */}
-          <div
-            style={{
-              position: "absolute",
-              inset: -20,
-              borderRadius: "50%",
-              background: `radial-gradient(circle, ${T.accent.primary}30, ${T.accent.emerald}10, transparent 70%)`,
-              animation: "glowPulse 3s ease-in-out .6s infinite",
-              pointerEvents: "none",
-            }}
-          />
-
-          {/* Sweeping ring — conic gradient arc */}
-          <div
-            style={{
-              position: "absolute",
-              inset: -8,
-              borderRadius: "50%",
-              animation: "ringSweep 2.5s linear .4s infinite",
-              opacity: 0,
-              animationFillMode: "forwards",
-            }}
-          >
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                borderRadius: "50%",
-                background: `conic-gradient(from 0deg, transparent 0%, ${T.accent.primary}60 15%, ${T.accent.emerald}50 30%, transparent 45%)`,
-                mask: "radial-gradient(farthest-side, transparent calc(100% - 2.5px), #fff calc(100% - 2px))",
-                WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 2.5px), #fff calc(100% - 2px))",
-              }}
-            />
-          </div>
-
-          {/* Static subtle ring track */}
-          <div
-            style={{
-              position: "absolute",
-              inset: -8,
-              borderRadius: "50%",
-              border: `1px solid ${T.border.subtle}`,
-              pointerEvents: "none",
-              animation: "textReveal .5s ease-out .3s both",
-            }}
-          />
-
-          {/* Floating particles */}
-          <div
-            style={{
-              position: "absolute",
-              left: "15%",
-              bottom: "10%",
-              width: 4,
-              height: 4,
-              borderRadius: "50%",
-              background: T.accent.primary,
-              animation: "particleDrift1 3s ease-out .8s infinite",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              right: "10%",
-              bottom: "20%",
-              width: 3,
-              height: 3,
-              borderRadius: "50%",
-              background: T.accent.emerald,
-              animation: "particleDrift2 3.5s ease-out 1.2s infinite",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              left: "45%",
-              bottom: "5%",
-              width: 3,
-              height: 3,
-              borderRadius: "50%",
-              background: "#6C60FF",
-              animation: "particleDrift3 4s ease-out 1.5s infinite",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              right: "30%",
-              bottom: "15%",
-              width: 2,
-              height: 2,
-              borderRadius: "50%",
-              background: T.accent.primary,
-              animation: "particleDrift4 3.2s ease-out 2s infinite",
-            }}
-          />
-
-          {/* App icon — blooms in, then pulses */}
-          <img
-            src="/icon-512.png"
-            alt=""
-            style={{
-              position: "relative",
-              width: "100%",
-              height: "100%",
-              borderRadius: 28,
-              zIndex: 2,
-              background: T.bg.base,
-              animation: "iconPulse 3s ease-in-out .8s infinite",
-            }}
-          />
-        </div>
-
-        {/* App name — staggered reveal with gradient */}
-        <h1
-          style={{
-            fontSize: 30,
-            fontWeight: 900,
-            letterSpacing: getTracking(30, "bold"),
-            marginBottom: 6,
-            animation: "textReveal .6s ease-out .4s both",
-          }}
-        >
-          <span
-            style={{
-              background: `linear-gradient(135deg, ${T.text.primary}, ${T.accent.primary}90)`,
-              WebkitBackgroundClip: "text",
-              backgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
-            Catalyst Cash
-          </span>
-        </h1>
-
-        {/* Tagline — warm, human */}
-        <p
-          style={{
-            fontSize: 10,
-            color: T.text.dim,
-            fontFamily: T.font.mono,
-            letterSpacing: "2px",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            marginBottom: 36,
-            animation: "textReveal .6s ease-out .6s both",
-          }}
-        >
-          <span style={{ animation: "subtitlePulse 2.5s ease-in-out infinite" }}>Preparing your dashboard</span>
-        </p>
-
-        {/* Progress bar — smooth fill */}
-        <div
-          style={{
-            width: 160,
-            height: 3,
-            borderRadius: 3,
-            background: T.border.default,
-            overflow: "hidden",
-            animation: "textReveal .6s ease-out .8s both",
-            position: "relative",
-          }}
-        >
-          <div
-            style={{
-              height: "100%",
-              borderRadius: 3,
-              background: T.accent.gradient,
-              animation: "loadBarFill 3s ease-out forwards",
-              boxShadow: `0 0 8px ${T.accent.primary}40`,
-            }}
-          />
-        </div>
-
-        {/* Version */}
-        <p
-          style={{
-            fontSize: 9,
-            color: T.text.muted,
-            fontFamily: T.font.mono,
-            marginTop: 20,
-            animation: "textReveal .6s ease-out 1s both",
-            opacity: 0.4,
-          }}
-        >
-          v{APP_VERSION}
-        </p>
-      </div>
-    );
+  if (!ready) return <LoadingScreen />;
 
   if (!onboardingComplete)
     return (
@@ -1109,260 +606,31 @@ function CatalystCashShell() {
     );
 
   return (
-    <div
-      style={{
-        width: "100%",
-        height: "100dvh",
-        maxWidth: 800,
-        margin: "0 auto",
-        background: T.bg.base,
-        display: "flex",
-        flexDirection: "column",
-        fontFamily: T.font.sans,
-        overflow: "hidden",
-      }}
-    >
-      <GlobalStyles />
-      {/* Privacy mode sync — moved to useEffect in CatalystCash body */}
-      {showAiConsent && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 100,
-            background: "rgba(0,0,0,0.75)",
-            backdropFilter: "blur(24px) saturate(1.8)",
-            WebkitBackdropFilter: "blur(24px) saturate(1.8)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 20,
-          }}
-        >
-          <div
-            style={{
-              width: "100%",
-              maxWidth: 360,
-              background: T.bg.card,
-              borderRadius: T.radius.xl,
-              border: `1px solid ${T.border.subtle}`,
-              padding: 24,
-              boxShadow: `0 24px 48px rgba(0,0,0,0.6), 0 0 0 1px ${T.border.subtle}`,
-            }}
-          >
-            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 10, color: T.text.primary }}>
-              AI Data Consent
-            </div>
-            <p style={{ fontSize: 13, color: T.text.secondary, lineHeight: 1.6, marginBottom: 20 }}>
-              When you run an audit, the financial data you enter is sent to your selected AI provider using your API
-              key. We do not sell AI access or store your data on our servers. By continuing, you agree to this data
-              transfer.
-            </p>
-            <div style={{ display: "flex", gap: 12 }}>
-              <button
-                onClick={() => setShowAiConsent(false)}
-                style={{
-                  flex: 1,
-                  padding: 14,
-                  borderRadius: T.radius.lg,
-                  border: `1px solid ${T.border.default}`,
-                  background: "transparent",
-                  color: T.text.secondary,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  fontSize: 14,
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  setAiConsent(true);
-                  setShowAiConsent(false);
-                  await db.set("ai-consent-accepted", true);
-                  toast.success("Consent saved");
-                }}
-                style={{
-                  flex: 1,
-                  padding: 14,
-                  borderRadius: T.radius.lg,
-                  border: "none",
-                  background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`,
-                  color: "white",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                  fontSize: 14,
-                  boxShadow: `0 4px 12px ${T.accent.primary}40`,
-                }}
-              >
-                I Agree
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Skip-to-content link for a11y */}
-      <a
-        href="#main-content"
-        style={{
-          position: "absolute",
-          top: -60,
-          left: 16,
-          zIndex: 100,
-          background: T.accent.primary,
-          color: "#fff",
-          padding: "8px 16px",
-          borderRadius: T.radius.md,
-          fontWeight: 700,
-          fontSize: 13,
-          transition: "top .2s ease",
+    <AppFrame>
+      <AiConsentModal
+        open={showAiConsent}
+        onCancel={() => setShowAiConsent(false)}
+        onConfirm={async () => {
+          setAiConsent(true);
+          setShowAiConsent(false);
+          await db.set("ai-consent-accepted", true);
+          toast.success("Consent saved");
         }}
-        onFocus={(e: ReactFocusEvent<HTMLAnchorElement>) => (e.currentTarget.style.top = "8px")}
-        onBlur={(e: ReactFocusEvent<HTMLAnchorElement>) => (e.currentTarget.style.top = "-60px")}
-      >
-        Skip to content
-      </a>
-      {/* ═══════ HEADER BAR ═══════ */}
+      />
+      <SkipToContentLink />
       {showShellHeader && (
-        <header
-          role="banner"
-          ref={topBarRef}
-          style={{
-            position: "relative",
-            top: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: `calc(env(safe-area-inset-top, 0px) + 4px) 16px 8px 16px`,
-            background: T.bg.navGlass,
-            flexShrink: 0,
-            zIndex: 10,
-            backdropFilter: "blur(24px) saturate(1.8)",
-            WebkitBackdropFilter: "blur(24px) saturate(1.8)",
-            borderBottom: `1px solid ${T.border.subtle}`,
-            transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
-            transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-            willChange: "transform",
-          }}
-        >
-          <div style={{
-            position: "absolute", bottom: -1, left: 0, right: 0, height: 1,
-            background: `linear-gradient(90deg, transparent, ${T.accent.emerald}40, ${T.accent.primary}60, transparent)`
-          }} />
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={() => setShowGuide(!showGuide)}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 12,
-                border: `1px solid ${showGuide ? T.border.focus : T.border.default}`,
-                background: showGuide ? T.bg.surface : T.bg.glass,
-                backdropFilter: "blur(12px)",
-                WebkitBackdropFilter: "blur(12px)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                color: showGuide ? T.accent.primary : T.text.dim,
-                transition: "color .2s, border-color .2s",
-                visibility: tab === "chat" ? "hidden" : "visible",
-              }}
-            >
-              <Info size={18} strokeWidth={1.8} />
-            </button>
-            <button
-              onClick={() => setPrivacyMode(p => !p)}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 12,
-                border: `1px solid ${privacyMode ? T.border.focus : T.border.default}`,
-                background: privacyMode ? T.bg.surface : T.bg.glass,
-                backdropFilter: "blur(12px)",
-                WebkitBackdropFilter: "blur(12px)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                color: privacyMode ? T.accent.primary : T.text.dim,
-                transition: "color .2s, border-color .2s",
-                visibility: tab === "chat" ? "hidden" : "visible",
-              }}
-              aria-label={privacyMode ? "Disable Privacy Mode" : "Enable Privacy Mode"}
-            >
-              {privacyMode ? <EyeOff size={18} strokeWidth={1.8} /> : <Eye size={18} strokeWidth={1.8} />}
-            </button>
-          </div>
-
-          <div
-            style={{
-              position: "absolute",
-              left: "50%",
-              transform: "translateX(-50%)",
-              textAlign: "center",
-              pointerEvents: "none",
-            }}
-          >
-            <div
-              style={{
-                fontSize: 16,
-                fontWeight: 800,
-                color: T.text.primary,
-                letterSpacing: getTracking(16, "bold"),
-              }}
-            >
-              {tab === "dashboard" ? "Command Center" :
-                tab === "audit" ? "Audit" :
-                  tab === "chat" ? "Catalyst AI" :
-                    tab === "cashflow" ? "Cashflow" :
-                      tab === "portfolio" ? "Portfolio" : ""}
-            </div>
-          </div>
-
-          <button
-            onClick={() => navTo("settings")}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              border: `1px solid ${T.border.default}`,
-              background: T.bg.glass,
-              backdropFilter: "blur(12px)",
-              WebkitBackdropFilter: "blur(12px)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              color: T.text.dim,
-              transition: "color .2s, border-color .2s",
-            }}
-            aria-label="Open Settings"
-          >
-            <Settings size={18} strokeWidth={1.8} />
-          </button>
-        </header>
+        <AppShellHeader
+          tab={tab}
+          topBarRef={topBarRef}
+          headerHidden={headerHidden}
+          showGuide={showGuide}
+          setShowGuide={setShowGuide}
+          privacyMode={privacyMode}
+          setPrivacyMode={setPrivacyMode}
+          navTo={navTo}
+        />
       )}
-
-      {/* ═══════ OFFLINE BANNER ═══════ */}
-      {!online && (
-        <div
-          style={{
-            background: T.status.amberDim,
-            borderBottom: `1px solid ${T.status.amber}30`,
-            padding: "6px 16px",
-            textAlign: "center",
-            fontSize: 11,
-            color: T.status.amber,
-            fontWeight: 600,
-            fontFamily: T.font.mono,
-            flexShrink: 0,
-          }}
-        >
-          ⚡ NO INTERNET — Audits unavailable
-        </div>
-      )}
+      {!online && <OfflineBanner />}
 
       <ScrollSnapContainer
         ready={ready}
@@ -1374,6 +642,7 @@ function CatalystCashShell() {
       >
         <TabRenderer
           SWIPE_TAB_ORDER={SWIPE_TAB_ORDER}
+          activeTab={tab}
           proEnabled={proEnabled}
           toast={toast}
           navTo={navTo}
@@ -1429,6 +698,8 @@ function CatalystCashShell() {
           toast={toast}
           clearAll={clearAll}
           factoryReset={factoryReset}
+          onRestoreComplete={handleRestoreComplete}
+          onHouseholdSyncConfigured={handleHouseholdSyncConfigured}
           handleRefreshDashboard={handleRefreshDashboard}
           handleSubmit={handleSubmit}
           handleManualImport={handleManualImport}
@@ -1446,97 +717,12 @@ function CatalystCashShell() {
         setTransactionFeedTab={setTransactionFeedTab}
       />
 
-      {/* Factory Reset Mask */}
-      {isResetting && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 9999,
-            background: T.bg.base,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            animation: "fadeIn 0.3s ease-out forwards",
-          }}
-        >
-          <div
-            className="spin"
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              border: `3px solid ${T.border.default}`,
-              borderTopColor: T.accent.primary,
-            }}
-          />
-          <p
-            style={{
-              marginTop: 24,
-              fontSize: 13,
-              color: T.text.secondary,
-              fontWeight: 600,
-              fontFamily: T.font.mono,
-              letterSpacing: "0.05em",
-            }}
-          >
-            SECURELY ERASING...
-          </p>
-        </div>
-      )}
-
-      {/* SIMULATED PUSH NOTIFICATION */}
-      {simulatedNotification && (
-        <div
-          style={{
-            position: "fixed",
-            top: 16,
-            left: 16,
-            right: 16,
-            zIndex: 9999,
-            background: `linear-gradient(135deg, ${T.bg.card}, ${T.bg.surface})`,
-            borderRadius: T.radius.xl,
-            padding: 16,
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 12,
-            boxShadow: `0 12px 32px rgba(0,0,0,0.8), 0 0 0 1px ${T.border.default}`,
-            backdropFilter: "blur(24px)",
-            WebkitBackdropFilter: "blur(24px)",
-            animation: "slideDownNotif 0.4s cubic-bezier(0.16,1,0.3,1)",
-            cursor: "pointer",
-          }}
-          onClick={() => setSimulatedNotification(null)}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 12,
-              background: T.accent.primaryDim,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <MapPin size={22} color={T.accent.primary} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
-                {simulatedNotification.title}
-              </span>
-              <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono }}>NOW</span>
-            </div>
-            <p style={{ margin: 0, fontSize: 12, color: T.text.secondary, lineHeight: 1.4 }}>
-              {simulatedNotification.body}
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
+      <FactoryResetMask active={isResetting} />
+      <SimulatedNotificationBanner
+        notification={simulatedNotification}
+        onDismiss={dismissSimulatedNotification}
+      />
+    </AppFrame>
   );
 }
 

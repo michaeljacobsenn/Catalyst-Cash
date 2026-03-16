@@ -1,5 +1,5 @@
   import { useDrag } from "@use-gesture/react";
-  import { animate,motion,useMotionValue } from "framer-motion";
+  import { animate,motion,useMotionValue,useReducedMotion } from "framer-motion";
   import { useEffect,useLayoutEffect,useRef,useState,type ReactNode } from "react";
   import type { AppTab } from "../contexts/NavigationContext.js";
 
@@ -36,10 +36,12 @@ export default function ScrollSnapContainer({
   const containerRef = useRef<HTMLElement | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const currentTabRef = useRef(tab);
+  const transitionModeRef = useRef<"immediate" | "gesture">("immediate");
   const animationRef = useRef<ReturnType<typeof animate> | null>(null);
   const dragIntentRef = useRef(false);
   const [paneWidth, setPaneWidth] = useState(0);
   const x = useMotionValue(0);
+  const prefersReducedMotion = useReducedMotion();
 
   const getTabIndex = (targetTab: AppTab) => {
     const index = SWIPE_TAB_ORDER.indexOf(targetTab);
@@ -51,12 +53,12 @@ export default function ScrollSnapContainer({
     animationRef.current = null;
   };
 
-  const snapToTab = (targetTab: AppTab, immediate = false) => {
+  const snapToTab = (targetTab: AppTab, mode: "immediate" | "gesture" = "immediate") => {
     const width = paneWidth || containerRef.current?.clientWidth || 0;
     const index = getTabIndex(targetTab);
     const targetX = -(index * width);
     stopAnimation();
-    if (!width || immediate) {
+    if (!width || mode === "immediate" || prefersReducedMotion) {
       x.set(targetX);
       return;
     }
@@ -67,8 +69,12 @@ export default function ScrollSnapContainer({
     const clampedIndex = clamp(index, 0, Math.max(0, SWIPE_TAB_ORDER.length - 1));
     const nextTab = SWIPE_TAB_ORDER[clampedIndex];
     if (!nextTab) return;
+    if (nextTab === currentTabRef.current) {
+      snapToTab(nextTab, "gesture");
+      return;
+    }
+    transitionModeRef.current = "gesture";
     syncTab(nextTab);
-    snapToTab(nextTab);
   };
 
   useEffect(() => {
@@ -95,28 +101,26 @@ export default function ScrollSnapContainer({
 
   useEffect(() => {
     if (!ready) return;
-    snapToTab(tab, false);
-  }, [ready, onboardingComplete, paneWidth, tab]);
+    const mode = transitionModeRef.current;
+    transitionModeRef.current = "immediate";
+    snapToTab(tab, mode);
+  }, [ready, onboardingComplete, paneWidth, prefersReducedMotion, tab]);
 
   useEffect(() => {
     if (!paneWidth) return;
-    snapToTab(tab, true);
+    snapToTab(tab, "immediate");
   }, [paneWidth]);
-
-  useEffect(() => {
-    const pane = containerRef.current?.querySelector<HTMLElement>(`.snap-page[data-tabid="${tab}"]`);
-    if (pane) pane.scrollTo({ top: 0, behavior: "auto" });
-  }, [tab]);
 
   useEffect(() => {
     const onScrollToTab = (event: Event) => {
       const targetTab = (event as CustomEvent<AppTab>).detail;
       if (!SWIPE_TAB_ORDER.includes(targetTab)) return;
-      snapToTab(targetTab);
+      transitionModeRef.current = "immediate";
+      syncTab(targetTab);
     };
     window.addEventListener("app-scroll-to-tab", onScrollToTab);
     return () => window.removeEventListener("app-scroll-to-tab", onScrollToTab);
-  }, [SWIPE_TAB_ORDER, paneWidth]);
+  }, [SWIPE_TAB_ORDER, syncTab]);
 
   useEffect(() => () => stopAnimation(), []);
 

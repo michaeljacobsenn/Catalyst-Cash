@@ -7,6 +7,7 @@
 // These facts are injected into every future prompt.
 // ═══════════════════════════════════════════════════════════════
 
+  import { log } from "./logger.js";
   import { db } from "./utils.js";
 
 const MEMORY_DB_KEY = "catalyst-ai-memory-bank";
@@ -20,7 +21,7 @@ export async function getMemoryFacts() {
     const facts = await db.get(MEMORY_DB_KEY);
     return Array.isArray(facts) ? facts : [];
   } catch (e) {
-    console.error("[MemoryBank] Failed to load facts", e);
+    void log.error("memory-bank", "Failed to load memory facts", { error: e });
     return [];
   }
 }
@@ -42,10 +43,10 @@ export async function saveMemoryFact(key, value) {
     }
     
     await db.set(MEMORY_DB_KEY, facts);
-    console.log(`[MemoryBank] Saved fact: [${key}] ${value}`);
+    void log.info("memory-bank", "Saved memory fact", { key, totalFacts: facts.length });
     return true;
   } catch (e) {
-    console.error("[MemoryBank] Failed to save fact", e);
+    void log.error("memory-bank", "Failed to save memory fact", { error: e, key });
     return false;
   }
 }
@@ -62,12 +63,12 @@ export async function deleteMemoryFact(key) {
     
     if (facts.length !== len) {
       await db.set(MEMORY_DB_KEY, facts);
-      console.log(`[MemoryBank] Deleted fact: ${key}`);
+      void log.info("memory-bank", "Deleted memory fact", { key, totalFacts: facts.length });
       return true;
     }
     return false;
   } catch (e) {
-    console.error("[MemoryBank] Failed to delete fact", e);
+    void log.error("memory-bank", "Failed to delete memory fact", { error: e, key });
     return false;
   }
 }
@@ -78,10 +79,10 @@ export async function deleteMemoryFact(key) {
 export async function clearAllMemory() {
   try {
     await db.del(MEMORY_DB_KEY);
-    console.log("[MemoryBank] Cleared all memory.");
+    void log.info("memory-bank", "Cleared all memory facts");
     return true;
   } catch (e) {
-    console.error("[MemoryBank] Failed to clear memory", e);
+    void log.error("memory-bank", "Failed to clear memory facts", { error: e });
     return false;
   }
 }

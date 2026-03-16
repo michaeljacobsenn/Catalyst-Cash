@@ -1,11 +1,10 @@
   import { Capacitor,registerPlugin } from "@capacitor/core";
-  import { Directory,Encoding,Filesystem } from "@capacitor/filesystem";
   import { decrypt,encrypt,isEncrypted } from "./crypto.js";
+  import { log } from "./logger.js";
 
 // ═══════════════════════════════════════════════════════════════
 // NATIVE iCLOUD SYNC PLUGIN
 // Uses the iCloud ubiquity container for true cross-device backup.
-// Falls back to Capacitor Filesystem on non-native platforms.
 // ═══════════════════════════════════════════════════════════════
 
 const ICloudSync = Capacitor.isNativePlatform() ? registerPlugin("ICloudSync") : null;
@@ -19,8 +18,13 @@ const FILE_NAME = "CatalystCash_CloudSync.json";
 // real iCloud ubiquity container. Survives app deletion,
 // restores on new devices with the same Apple ID.
 //
-// On Web: Falls back to Capacitor Filesystem (local only).
+// On Web: intentionally unsupported. Browser storage is not
+// presented as iCloud-equivalent backup.
 // ═══════════════════════════════════════════════════════════════
+
+export function isCloudSyncSupported() {
+  return Boolean(ICloudSync);
+}
 
 /**
  * Check if iCloud is available on this device.
@@ -41,6 +45,11 @@ export async function isICloudAvailable() {
  */
 export async function uploadToICloud(payload, passphrase = null) {
   try {
+    if (!ICloudSync) {
+      void log.info("icloud", "Cloud backup unavailable on this platform", { platform: Capacitor.getPlatform() });
+      return false;
+    }
+
     let data = JSON.stringify(payload);
     if (passphrase) {
       const envelope = await encrypt(data, passphrase);
@@ -48,29 +57,20 @@ export async function uploadToICloud(payload, passphrase = null) {
     }
 
     // Native iOS — use ubiquity container
-    if (ICloudSync) {
-      const result = await ICloudSync.save({ data });
-      if (result?.success) {
-        console.log("[iCloud] Backup saved to ubiquity container:", result.path);
-        return true;
-      }
-      console.warn("[iCloud] Save returned without success:", result);
-      return false;
+    const result = await ICloudSync.save({ data });
+    if (result?.success) {
+      void log.info("icloud", "Backup saved to ubiquity container", { native: true, fileName: FILE_NAME });
+      return true;
     }
-
-    // Web fallback — local Capacitor Filesystem
-    if (Capacitor.getPlatform() !== "ios") {
-      console.warn("iCloud sync is only available on iOS. Using local fallback.");
-    }
-    await Filesystem.writeFile({
-      path: FILE_NAME,
-      data,
-      directory: Directory.Documents,
-      encoding: Encoding.UTF8,
+    void log.warn("icloud", "Backup save returned without success", {
+      native: true,
+      reason: result?.reason || "unknown",
     });
-    return true;
+    return false;
   } catch (e) {
-    console.error("iCloud Sync Write Error:", e);
+    void log.error("icloud", "Failed to write backup", {
+      error: e instanceof Error ? e.message : String(e),
+    });
     return false;
   }
 }
@@ -80,46 +80,32 @@ export async function uploadToICloud(payload, passphrase = null) {
  */
 export async function downloadFromICloud(passphrase = null) {
   try {
+    if (!ICloudSync) {
+      void log.info("icloud", "Cloud restore unavailable on this platform", { platform: Capacitor.getPlatform() });
+      return null;
+    }
+
     let rawData;
 
     // Native iOS — use ubiquity container
-    if (ICloudSync) {
-      const result = await ICloudSync.restore();
+    const result = await ICloudSync.restore();
 
-      if (result?.reason === "downloading") {
-        // File exists in iCloud but is still downloading to device
-        // Wait 2 seconds and retry once
-        console.log("[iCloud] Backup is downloading from iCloud, retrying in 2s...");
-        await new Promise(r => setTimeout(r, 2000));
-        const retry = await ICloudSync.restore();
-        if (!retry?.data) {
-          console.log("[iCloud] Backup still downloading. Will restore on next app launch.");
-          return null;
-        }
-        rawData = retry.data;
-      } else if (!result?.data) {
-        console.log("[iCloud] No backup found:", result?.reason);
+    if (result?.reason === "downloading") {
+      // File exists in iCloud but is still downloading to device
+      // Wait 2 seconds and retry once
+      void log.info("icloud", "Backup is downloading from iCloud", { retrying: true });
+      await new Promise(r => setTimeout(r, 2000));
+      const retry = await ICloudSync.restore();
+      if (!retry?.data) {
+        void log.info("icloud", "Backup still downloading after retry", { pending: true });
         return null;
-      } else {
-        rawData = result.data;
       }
+      rawData = retry.data;
+    } else if (!result?.data) {
+      void log.info("icloud", "No backup found", { reason: result?.reason || "missing" });
+      return null;
     } else {
-      // Web fallback
-      try {
-        const result = await Filesystem.readFile({
-          path: FILE_NAME,
-          directory: Directory.Documents,
-          encoding: Encoding.UTF8,
-        });
-        rawData = result.data;
-      } catch (e) {
-        const msg = e?.message || String(e);
-        if (msg.includes("not exist") || msg.includes("ENOENT") || msg.includes("NOT_FOUND")) {
-          return null;
-        }
-        console.error("iCloud Sync Read Error:", e);
-        return null;
-      }
+      rawData = result.data;
     }
 
     // Parse the data
@@ -127,7 +113,9 @@ export async function downloadFromICloud(passphrase = null) {
     try {
       data = JSON.parse(rawData);
     } catch (e) {
-      console.error("iCloud Sync Parse Error: Backup contains invalid JSON.", e);
+      void log.error("icloud", "Backup contains invalid JSON", {
+        error: e instanceof Error ? e.message : String(e),
+      });
       return null;
     }
 
@@ -139,7 +127,9 @@ export async function downloadFromICloud(passphrase = null) {
     }
     return data;
   } catch (e) {
-    console.error("iCloud Sync Error:", e?.message || e);
+    void log.error("icloud", "Backup restore failed", {
+      error: e instanceof Error ? e.message : String(e),
+    });
     return null;
   }
 }

@@ -105,7 +105,9 @@ export const db = {
     } catch {
       try {
         localStorage.removeItem(k);
-      } catch {}
+      } catch {
+        // Local cleanup is best-effort only.
+      }
     }
   },
   async keys() {
@@ -126,7 +128,9 @@ export const db = {
     } catch {
       try {
         localStorage.clear();
-      } catch {}
+      } catch {
+        // Local cleanup is best-effort only.
+      }
     }
   },
 };
@@ -492,7 +496,7 @@ export function parseJSON(raw) {
         .map(
           a =>
             `⚠️ ${String(a)
-              .replace(/^[\u26A0\uFE0F\u2757\u203C\s⚠️!]+/u, "")
+              .replace(/^(?:!|\s|\u26A0|\uFE0F|\u2757|\u203C)+/u, "")
               .trim()}`
         )
         .join("\n"),
@@ -605,7 +609,13 @@ export function detectAuditDrift(previousParsed, nextParsed) {
 function inferAuditStatusFromSignals(score, riskFlags = []) {
   const numericScore = Number(score);
   const normalizedRiskFlags = Array.isArray(riskFlags) ? riskFlags.filter(Boolean) : [];
-  const severeFlags = new Set(["floor-breach-risk", "transfer-needed", "toxic-apr", "high-utilization"]);
+  const severeFlags = new Set([
+    "floor-breach-risk",
+    "transfer-needed",
+    "toxic-apr",
+    "high-utilization",
+    "critical-promo-expiry",
+  ]);
 
   if (
     (Number.isFinite(numericScore) && numericScore < 70) ||
@@ -677,7 +687,7 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
     consistency.nativeScoreAnchor = expectedNativeScore;
     consistency.nativeScoreDelta = scoreDelta;
 
-    if (Math.abs(scoreDelta) > 12) {
+    if (Math.abs(scoreDelta) > 8) {
       const originalScore = parsed.healthScore.score;
       const correctedGrade = getGradeLetter(expectedNativeScore);
       parsed.healthScore = {
@@ -1164,7 +1174,9 @@ export async function shareAudit(audit) {
   if (navigator.share)
     try {
       await navigator.share({ title: `Catalyst Cash — ${audit.date}`, text: t });
-    } catch {}
+    } catch {
+      // User cancellation is expected; clipboard fallback handles share unavailability.
+    }
   else await navigator.clipboard?.writeText(t);
 }
 

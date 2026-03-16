@@ -1,4 +1,5 @@
   import { Suspense,lazy } from "react";
+  import { useReducedMotion } from "framer-motion";
   import { T } from "../constants.js";
   import type { AppTab,NavViewState } from "../contexts/NavigationContext.js";
   import type { ToastApi } from "../Toast.js";
@@ -24,6 +25,7 @@ const TabFallback = () => (
 
 interface TabRendererProps {
   SWIPE_TAB_ORDER: readonly AppTab[];
+  activeTab: AppTab;
   proEnabled: boolean;
   toast: ToastApi;
   navTo: (newTab: AppTab, viewState?: NavViewState | null) => void;
@@ -37,6 +39,7 @@ interface TabRendererProps {
 
 export default function TabRenderer({
   SWIPE_TAB_ORDER,
+  activeTab,
   proEnabled,
   toast,
   navTo,
@@ -47,6 +50,8 @@ export default function TabRenderer({
   setChatInitialPrompt,
   onPageScroll,
 }: TabRendererProps) {
+  const prefersReducedMotion = useReducedMotion();
+
   return (
     <>
       {SWIPE_TAB_ORDER.map((t) => (
@@ -60,62 +65,72 @@ export default function TabRenderer({
           }}
           onScroll={(event) => onPageScroll(event, t)}
         >
-          {t === "dashboard" && (
-            <ErrorBoundary name="Dashboard">
-              <Suspense fallback={<TabFallback />}>
-                <DashboardTab
-                  proEnabled={proEnabled}
-                  onRefreshDashboard={handleRefreshDashboard}
-                  onDemoAudit={handleDemoAudit}
-                  onViewTransactions={() => setTransactionFeedTab(t)}
-                  onDiscussWithCFO={(prompt: string) => {
-                    setChatInitialPrompt(prompt);
-                    navTo("chat");
-                  }}
-                />
-              </Suspense>
-            </ErrorBoundary>
-          )}
+          <div
+            style={{
+              minHeight: "100%",
+              opacity: activeTab === t ? 1 : 0.985,
+              transform: activeTab === t ? "translateY(0)" : "translateY(1px)",
+              transition: prefersReducedMotion ? "none" : "opacity 120ms ease-out, transform 120ms ease-out",
+              willChange: prefersReducedMotion ? undefined : "opacity, transform",
+            }}
+          >
+            {t === "dashboard" && (
+              <ErrorBoundary name="Dashboard">
+                <Suspense fallback={<TabFallback />}>
+                  <DashboardTab
+                    proEnabled={proEnabled}
+                    onRefreshDashboard={handleRefreshDashboard}
+                    onDemoAudit={handleDemoAudit}
+                    onViewTransactions={() => setTransactionFeedTab(t)}
+                    onDiscussWithCFO={(prompt: string) => {
+                      setChatInitialPrompt(prompt);
+                      navTo("chat");
+                    }}
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            )}
 
-          {t === "chat" && (
-            <ErrorBoundary name="AI Chat">
-              <Suspense fallback={<TabFallback />}>
-                <AIChatTab
-                  proEnabled={proEnabled}
-                  initialPrompt={chatInitialPrompt}
-                  clearInitialPrompt={() => setChatInitialPrompt(null)}
-                  onBack={() => {
-                    navTo("dashboard");
-                  }}
-                  embedded
-                />
-              </Suspense>
-            </ErrorBoundary>
-          )}
+            {t === "chat" && (
+              <ErrorBoundary name="AI Chat">
+                <Suspense fallback={<TabFallback />}>
+                  <AIChatTab
+                    proEnabled={proEnabled}
+                    initialPrompt={chatInitialPrompt}
+                    clearInitialPrompt={() => setChatInitialPrompt(null)}
+                    onBack={() => {
+                      navTo("dashboard");
+                    }}
+                    embedded
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            )}
 
-          {t === "cashflow" && (
-            <ErrorBoundary name="Cashflow">
-              <Suspense fallback={<TabFallback />}>
-                <CashflowTab onRunAudit={handleDemoAudit} toast={toast} proEnabled={proEnabled} />
-              </Suspense>
-            </ErrorBoundary>
-          )}
+            {t === "cashflow" && (
+              <ErrorBoundary name="Cashflow">
+                <Suspense fallback={<TabFallback />}>
+                  <CashflowTab onRunAudit={handleDemoAudit} toast={toast} proEnabled={proEnabled} />
+                </Suspense>
+              </ErrorBoundary>
+            )}
 
-          {t === "portfolio" && (
-            <ErrorBoundary name="Portfolio">
-              <Suspense fallback={<TabFallback />}>
-                <PortfolioTab onViewTransactions={() => setTransactionFeedTab(t)} proEnabled={proEnabled} />
-              </Suspense>
-            </ErrorBoundary>
-          )}
+            {t === "portfolio" && (
+              <ErrorBoundary name="Portfolio">
+                <Suspense fallback={<TabFallback />}>
+                  <PortfolioTab onViewTransactions={() => setTransactionFeedTab(t)} proEnabled={proEnabled} />
+                </Suspense>
+              </ErrorBoundary>
+            )}
 
-          {t === "audit" && (
-            <ErrorBoundary name="Audit">
-              <Suspense fallback={<TabFallback />}>
-                <AuditTab proEnabled={proEnabled} toast={toast} onDemoAudit={handleDemoAudit} />
-              </Suspense>
-            </ErrorBoundary>
-          )}
+            {t === "audit" && (
+              <ErrorBoundary name="Audit">
+                <Suspense fallback={<TabFallback />}>
+                  <AuditTab proEnabled={proEnabled} toast={toast} onDemoAudit={handleDemoAudit} />
+                </Suspense>
+              </ErrorBoundary>
+            )}
+          </div>
         </div>
       ))}
     </>

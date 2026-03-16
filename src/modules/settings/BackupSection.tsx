@@ -1,3 +1,4 @@
+  import { Capacitor } from "@capacitor/core";
   import { T } from "../constants.js";
   import { clearErrorLog,getErrorLog } from "../errorReporter.js";
   import { AlertTriangle,CheckCircle,Cloud,Download,Loader2,Upload } from "../icons";
@@ -17,6 +18,7 @@ export default function BackupSection({ activeMenu, ...props }) {
     householdId,
     setShowHouseholdModal,
     appleLinkedId,
+    secretStorageStatus,
     handleAppleSignIn,
     unlinkApple,
     autoBackupInterval,
@@ -33,6 +35,10 @@ export default function BackupSection({ activeMenu, ...props }) {
     setConfirmFactoryReset,
   } = props;
 
+  const isWeb = Capacitor.getPlatform() === "web";
+  const householdSupported = Boolean(secretStorageStatus?.canPersistSecrets);
+  const cloudBackupSupported = !isWeb;
+
   return (
     <>
       {/* ── Backup & Sync ────────────────────────────────────── */}
@@ -47,17 +53,19 @@ export default function BackupSection({ activeMenu, ...props }) {
             {
               n: "1",
               title: "Auto-Sync",
-              desc: "Data automatically syncs to any iPhone signed into your Apple ID with Catalyst Cash installed via iCloud Preferences.",
+              desc: cloudBackupSupported
+                ? "Data automatically syncs to any iPhone signed into your Apple ID with Catalyst Cash installed via iCloud Preferences."
+                : "Automatic cloud sync is available in the native iPhone app only.",
             },
             {
               n: "2",
               title: "Export Backup",
-              desc: "Tap EXPORT to save a .json backup to your device (Files, iCloud Drive, or AirDrop to a new phone).",
+              desc: "Export creates an encrypted .enc backup you can save to Files, iCloud Drive, or AirDrop to a new phone.",
             },
             {
               n: "3",
               title: "New Device",
-              desc: "On your new iPhone, open Settings \u2192 tap RESTORE \u2192 select your backup file. App reloads with all your data.",
+              desc: "On your new iPhone, open Settings \u2192 tap RESTORE \u2192 choose your Catalyst Cash backup. Data rehydrates in-app, and bank connections may still need reconnecting.",
             },
           ].map(({ n, title, desc }) => (
             <div key={n} style={{ display: "flex", gap: 10, marginBottom: 10 }}>
@@ -113,17 +121,28 @@ export default function BackupSection({ activeMenu, ...props }) {
                 <p style={{ fontSize: 11, color: T.text.secondary, marginTop: 4, lineHeight: 1.4 }}>
                   {householdId
                     ? `Linked as: ${householdId}`
-                    : "End-to-End Encrypted Cloud Sync"}
+                    : householdSupported
+                      ? "End-to-End Encrypted Cloud Sync"
+                      : "Native iPhone feature for shared encrypted sync"}
                 </p>
               </div>
             </div>
             <button
-              onClick={() => setShowHouseholdModal(true)}
-              style={{ padding: "8px 14px", background: householdId ? "none" : T.accent.primary, border: householdId ? `1px solid ${T.accent.primary}50` : "none", color: householdId ? T.accent.primary : "#fff", borderRadius: T.radius.sm, fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}
+              onClick={() => {
+                if (!householdSupported) return;
+                setShowHouseholdModal(true);
+              }}
+              disabled={!householdSupported}
+              style={{ padding: "8px 14px", background: householdId ? "none" : T.accent.primary, border: householdId ? `1px solid ${T.accent.primary}50` : "none", color: householdId ? T.accent.primary : "#fff", borderRadius: T.radius.sm, fontSize: 12, fontWeight: 700, cursor: householdSupported ? "pointer" : "not-allowed", transition: "all 0.2s", opacity: householdSupported ? 1 : 0.5 }}
             >
               {householdId ? "Manage" : "Setup"}
             </button>
           </div>
+          {!householdSupported && (
+            <p style={{ margin: "10px 0 0 0", fontSize: 11, color: T.text.secondary, lineHeight: 1.5 }}>
+              Shared household sync stores sync credentials in secure device storage, so it is intentionally limited to the native iPhone app.
+            </p>
+          )}
         </div>
 
         {/* Status banner */}
@@ -207,7 +226,7 @@ export default function BackupSection({ activeMenu, ...props }) {
           <div style={{ flex: 1, minWidth: "100%", position: "relative", marginTop: 4 }}>
             <input
               type="file"
-              accept="*/*"
+              accept=".enc,.json,application/json,application/octet-stream,text/plain"
               onChange={handleImport}
               disabled={restoreStatus === "restoring"}
               aria-label="Restore backup file"
@@ -233,10 +252,16 @@ export default function BackupSection({ activeMenu, ...props }) {
               }}
             >
               {restoreStatus === "restoring" ? <Loader2 size={14} className="spin" /> : <Upload size={14} />}
-              RESTORE (.json / .enc)
+              RESTORE (.enc / .json)
             </div>
           </div>
         </div>
+
+        <p style={{ marginTop: 10, fontSize: 11, color: T.text.muted, lineHeight: 1.55 }}>
+          Restores apply your saved settings, planning data, and sanitized account metadata. Plaid balances and
+          transaction access stay protected server-side, so restored bank connections may still show
+          <span style={{ color: T.text.secondary }}> Reconnect required</span>.
+        </p>
 
         {/* ── Debug Log Export ────────────────────────────── */}
         <div style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid ${T.border.subtle}` }}>
@@ -324,13 +349,30 @@ export default function BackupSection({ activeMenu, ...props }) {
         <div style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid ${T.border.subtle}` }}>
           <Label>Auto-Backup</Label>
           <p style={{ fontSize: 11, color: T.text.muted, marginBottom: 16, lineHeight: 1.6 }}>
-            Enable Apple Sign-In to activate automatic iCloud backup. Your data is continuously saved to your
-            private iCloud Drive, automatically restoring on any iPhone sharing your Apple ID.
+            {cloudBackupSupported
+              ? "Enable Apple Sign-In to activate automatic iCloud backup. Your data is continuously saved to your private iCloud Drive, automatically restoring on any iPhone sharing your Apple ID."
+              : "Apple Sign-In and iCloud backup are available in the native iPhone app only. On web, use encrypted export files instead of automatic cloud backup."}
           </p>
 
           {/* Apple / iCloud */}
           <div style={{ marginBottom: 10 }}>
-            {appleLinkedId ? (
+            {!cloudBackupSupported ? (
+              <div
+                style={{
+                  padding: "14px 16px",
+                  borderRadius: 12,
+                  background: `${T.status.amber}10`,
+                  border: `1px solid ${T.status.amber}25`,
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.status.amber, marginBottom: 6 }}>
+                  Native iPhone feature
+                </div>
+                <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.55 }}>
+                  Use encrypted `.enc` exports on web. Automatic iCloud backup and Apple Sign-In are intentionally disabled outside the native app.
+                </div>
+              </div>
+            ) : appleLinkedId ? (
               <div
                 style={{
                   display: "flex",

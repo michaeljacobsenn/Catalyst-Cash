@@ -129,7 +129,16 @@ export function buildDeterministicChatFallback({
 
   const priorities = [];
   activeRecommendations.forEach(rule => {
-    priorities.push(`${rule.rationale}${rule.recommendation ? ` ${rule.recommendation}` : ""}`.trim());
+    const parts = [`${rule.rationale}${rule.recommendation ? ` ${rule.recommendation}` : ""}`.trim()];
+    if (rule?.directionalOnly) parts.push("Treat this guidance as directional only until the inputs are corrected.");
+    if (rule?.requiresProfessionalHelp) {
+      parts.push(
+        rule?.professionalHelpReason
+          ? `Professional help recommended: ${rule.professionalHelpReason}`
+          : "Professional help recommended before making large financial changes."
+      );
+    }
+    priorities.push(parts.filter(Boolean).join(" "));
   });
   if (priorities.length === 0 && parsed?.weeklyMoves?.length) {
     priorities.push(...parsed.weeklyMoves.slice(0, 2));

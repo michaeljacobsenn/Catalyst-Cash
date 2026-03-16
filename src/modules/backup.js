@@ -7,6 +7,24 @@
   import { isSafeImportKey,isSecuritySensitiveKey,sanitizePlaidForBackup } from "./securityKeys.js";
   import { db,nativeExport } from "./utils.js";
 
+const SUPPORTED_BACKUP_EXTENSIONS = [".enc", ".json"];
+const SUPPORTED_BACKUP_MIME_TYPES = new Set([
+  "application/json",
+  "application/octet-stream",
+  "text/plain",
+  "",
+]);
+
+export function isSupportedBackupFile(file) {
+  if (!file) return false;
+  const name = String(file.name || "").toLowerCase();
+  const type = String(file.type || "").toLowerCase();
+  return (
+    SUPPORTED_BACKUP_EXTENSIONS.some(extension => name.endsWith(extension)) ||
+    SUPPORTED_BACKUP_MIME_TYPES.has(type)
+  );
+}
+
 /**
  * Merge two arrays of objects with unique `id` fields, keeping existing entries.
  */
@@ -22,10 +40,11 @@ export function mergeUniqueById(existing = [], incoming = []) {
 /**
  * Export a full encrypted backup of all non-sensitive db keys.
  * @param {string} passphrase - Passphrase used to encrypt the backup
- * @returns {number} Number of keys backed up
+ * @returns {{count: number, exportedAt: string, filename: string, plaidConnectionCount: number}} Backup metadata
  */
 export async function exportBackup(passphrase) {
-  const backup = { app: "Catalyst Cash", version: APP_VERSION, exportedAt: new Date().toISOString(), data: {} };
+  const exportedAt = new Date().toISOString();
+  const backup = { app: "Catalyst Cash", version: APP_VERSION, exportedAt, data: {} };
 
   const keys = await db.keys();
   for (const key of keys) {
@@ -41,25 +60,33 @@ export async function exportBackup(passphrase) {
   // Include sanitized Plaid connections (metadata only, no access tokens)
   // so reconnecting after restore can deduplicate instead of creating new entries
   const plaidConns = await db.get("plaid-connections");
+  let plaidConnectionCount = 0;
   if (Array.isArray(plaidConns) && plaidConns.length > 0) {
-    backup.data["plaid-connections-sanitized"] = sanitizePlaidForBackup(plaidConns);
+    const sanitizedConnections = sanitizePlaidForBackup(plaidConns);
+    backup.data["plaid-connections-sanitized"] = sanitizedConnections;
+    plaidConnectionCount = sanitizedConnections.length;
   }
 
   if (!passphrase) throw new Error("Backup cancelled — passphrase required");
   const envelope = await encrypt(JSON.stringify(backup), passphrase);
-  const dateStr = new Date().toISOString().split("T")[0];
-  await nativeExport(`CatalystCash_Backup_${dateStr}.enc`, JSON.stringify(envelope), "application/octet-stream");
-  return Object.keys(backup.data).length;
+  const dateStr = exportedAt.split("T")[0];
+  const filename = `CatalystCash_Backup_${dateStr}.enc`;
+  await nativeExport(filename, JSON.stringify(envelope), "application/octet-stream");
+  return { count: Object.keys(backup.data).length, exportedAt, filename, plaidConnectionCount };
 }
 
 /**
  * Import a backup file (encrypted .enc or spreadsheet .xlsx).
  * @param {File} file - The file to import
  * @param {Function} getPassphrase - Async function that returns the passphrase
- * @returns {Promise<{count: number, exportedAt: string}>}
+ * @returns {Promise<{count: number, exportedAt: string, plaidReconnectCount: number}>}
  */
 export async function importBackup(file, getPassphrase) {
   return new Promise((resolve, reject) => {
+    if (!isSupportedBackupFile(file)) {
+      reject(new Error("Unsupported backup file — choose a Catalyst Cash .enc or .json backup."));
+      return;
+    }
     const reader = new FileReader();
     reader.onload = async e => {
       try {
@@ -179,7 +206,7 @@ export async function importBackup(file, getPassphrase) {
 
           const existing = (await db.get("financial-config")) || {};
           await db.set("financial-config", { ...existing, ...config, _fromSetupWizard: true });
-          resolve({ count: Object.keys(config).length, exportedAt: new Date().toISOString() });
+          resolve({ count: Object.keys(config).length, exportedAt: new Date().toISOString(), plaidReconnectCount: 0 });
           return;
         }
 
@@ -197,6 +224,7 @@ export async function importBackup(file, getPassphrase) {
         // Restore sanitized Plaid connections (metadata only, no access tokens)
         // so `autoMatchAccounts` can deduplicate when the user reconnects
         const sanitizedPlaid = backup.data["plaid-connections-sanitized"];
+        let plaidReconnectCount = 0;
         if (Array.isArray(sanitizedPlaid) && sanitizedPlaid.length > 0) {
           // Merge with any existing connections (don't overwrite live tokens)
           const existing = (await db.get("plaid-connections")) || [];
@@ -205,13 +233,14 @@ export async function importBackup(file, getPassphrase) {
           for (const conn of sanitizedPlaid) {
             if (!existingIds.has(conn.id)) {
               merged.push({ ...conn, _needsReconnect: true });
+              plaidReconnectCount++;
             }
           }
           await db.set("plaid-connections", merged);
           count++;
         }
 
-        resolve({ count, exportedAt: backup.exportedAt });
+        resolve({ count, exportedAt: backup.exportedAt, plaidReconnectCount });
       } catch (err) {
         reject(err);
       }

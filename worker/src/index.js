@@ -5,20 +5,54 @@
 // ═══════════════════════════════════════════════════════════════
 
 import {
+  estimatePromptTokens,
   getBatchCategorizationPrompt,
   getLocationCategorizationPrompt,
   getSystemPrompt,
 } from "./promptBuilders.js";
 import { getChatSystemPrompt } from "./chatPromptBuilders.js";
+import {
+  buildHouseholdIntegrityTag,
+  sha256Hex,
+  verifyHouseholdIntegrity,
+} from "./lib/householdSecurity.js";
+import { getRevenueCatAppUserId } from "./lib/requestIdentity.js";
+import {
+  bootstrapIdentityActor,
+  getActorRevenueCatUserId,
+  issueIdentitySessionToken,
+  resolveAuthenticatedActor,
+} from "./lib/identitySession.js";
+import {
+  getQuotaWindow,
+  isRevenueCatEntitlementActive,
+} from "./lib/quota.js";
+import {
+  fetchPlaidJson,
+  getDbFirstResult,
+  syncTransactionsForItem,
+  writeSyncRow,
+} from "./lib/plaidSync.js";
+import { getSafeClientError, redactForWorkerLogs, workerLog } from "./lib/observability.js";
+import { handleHouseholdRoute } from "./routes/householdRoutes.js";
+import { handleMarketRoute } from "./routes/marketRoutes.js";
+import { handleSystemRoute } from "./routes/systemRoutes.js";
+import { handleTelemetryRoute } from "./routes/telemetryRoutes.js";
+
+export { buildHouseholdIntegrityTag, sha256Hex } from "./lib/householdSecurity.js";
+export {
+  bootstrapIdentityActor,
+  issueIdentitySessionToken,
+  resolveAuthenticatedActor as resolvePlaidActor,
+} from "./lib/identitySession.js";
+export { verifyIdentitySessionToken } from "./lib/identitySession.js";
+export { getIsoWeekKey, getQuotaWindow, isRevenueCatEntitlementActive } from "./lib/quota.js";
+export { mergePlaidTransactions } from "./lib/plaidSync.js";
 
 const ANTHROPIC_VERSION = "2023-06-01";
-const MAX_BODY_SIZE = 512_000; // 512KB max request body (system prompt alone is ~110KB)
+const MAX_BODY_SIZE = 512_000; // 512KB max request body (rich audit prompt is now ~60KB before snapshot/history)
 const VALID_PROVIDERS = ["gemini", "openai", "claude", "anthropic"];
 const PLAID_ENV = "production"; // "sandbox", "development", or "production"
-const FREE_AUDITS_PER_WEEK = 2;
-const PRO_AUDITS_PER_MONTH = 20;
-const FREE_CHATS_PER_DAY = 10;
-const PRO_CHATS_PER_DAY = 25;
 const PROVIDER_TIMEOUT_MS = 240_000; // 4 min for all models (client has a cancel button)
 const PLAID_TIMEOUT_MS = 15_000;
 const MARKET_TIMEOUT_MS = 10_000;
@@ -31,6 +65,7 @@ const SECURITY_HEADERS = {
   "X-Frame-Options": "DENY",
   "Content-Security-Policy": "frame-ancestors 'none'",
 };
+const LOOPBACK_ORIGIN_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i;
 const MODEL_ALLOWLIST = {
   free: new Set(["gemini-2.5-flash"]),
   pro: new Set([
@@ -199,6 +234,17 @@ function buildSystemPrompt(type, context = {}, resolvedProvider = "gemini") {
   );
 }
 
+function logPromptProfile(env, type, provider, prompt) {
+  const chars = String(prompt || "").length;
+  const estimatedTokens = estimatePromptTokens(prompt);
+  workerLog(
+    env,
+    "debug",
+    "prompt-profile",
+    `type=${type || "audit"} provider=${provider || "gemini"} chars=${chars} est_tokens=${estimatedTokens}`
+  );
+}
+
 function getWorkerGatingMode(env) {
   return env.GATING_MODE || "off";
 }
@@ -211,11 +257,11 @@ function isWorkerGatingEnforced(env) {
 function corsHeaders(origin, env) {
   const allowed = (env.ALLOWED_ORIGIN || "https://catalystcash.app").split(",").map(s => s.trim());
   const isAllowed =
-    allowed.includes(origin) || origin?.startsWith("http://localhost") || origin === "capacitor://localhost";
+    allowed.includes(origin) || LOOPBACK_ORIGIN_RE.test(String(origin || "")) || origin === "capacitor://localhost";
   return {
     "Access-Control-Allow-Origin": isAllowed ? origin : allowed[0],
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Device-ID, X-App-Version, X-Subscription-Tier, X-RC-App-User-ID",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Device-ID, X-App-Version, X-Subscription-Tier, X-RC-App-User-ID",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
   };
@@ -223,132 +269,6 @@ function corsHeaders(origin, env) {
 
 function buildHeaders(cors, extra = {}) {
   return { ...cors, ...SECURITY_HEADERS, ...extra };
-}
-
-function getRequestedTier(request) {
-  return request.headers.get("X-Subscription-Tier") === "pro" ? "pro" : "free";
-}
-
-function getRevenueCatAppUserId(request) {
-  const value = request.headers.get("X-RC-App-User-ID");
-  return value ? value.trim() : "";
-}
-
-function getRequestDeviceId(request) {
-  const value = request.headers.get("X-Device-ID");
-  return value ? value.trim() : "";
-}
-
-function buildPlaidOwnerId(prefix, value) {
-  const normalized = String(value || "").trim();
-  if (!normalized) return "";
-  return `${prefix}:${normalized}`;
-}
-
-async function reassignPlaidOwner(db, fromUserId, toUserId) {
-  if (!db || !fromUserId || !toUserId || fromUserId === toUserId) return false;
-
-  const { results: sourceRows } = await db.prepare(
-    "SELECT access_token, item_id FROM plaid_items WHERE user_id = ?"
-  ).bind(fromUserId).all();
-
-  if (!sourceRows || sourceRows.length === 0) return false;
-
-  const { results: existingTargetRows } = await db.prepare(
-    "SELECT access_token, item_id FROM plaid_items WHERE user_id = ?"
-  ).bind(toUserId).all();
-
-  if (existingTargetRows && existingTargetRows.length > 0) return false;
-
-  await db.prepare("UPDATE plaid_items SET user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?")
-    .bind(toUserId, fromUserId)
-    .run();
-  await db.prepare("UPDATE sync_data SET user_id = ? WHERE user_id = ?")
-    .bind(toUserId, fromUserId)
-    .run();
-  return true;
-}
-
-export async function resolvePlaidActor(request, env) {
-  const revenueCatAppUserId = getRevenueCatAppUserId(request);
-  const deviceId = getRequestDeviceId(request);
-  const primaryUserId = revenueCatAppUserId
-    ? buildPlaidOwnerId("rc", revenueCatAppUserId)
-    : buildPlaidOwnerId("device", deviceId);
-
-  if (!primaryUserId) {
-    return null;
-  }
-
-  if (env.DB) {
-    const deviceScopedUserId = buildPlaidOwnerId("device", deviceId);
-    if (revenueCatAppUserId && deviceScopedUserId && deviceScopedUserId !== primaryUserId) {
-      await reassignPlaidOwner(env.DB, deviceScopedUserId, primaryUserId);
-    }
-    await reassignPlaidOwner(env.DB, "catalyst-user", primaryUserId);
-  }
-
-  return {
-    userId: primaryUserId,
-    deviceUserId: buildPlaidOwnerId("device", deviceId) || null,
-    revenueCatUserId: revenueCatAppUserId ? buildPlaidOwnerId("rc", revenueCatAppUserId) : null,
-    source: revenueCatAppUserId ? "revenuecat" : "device",
-  };
-}
-
-export async function sha256Hex(value) {
-  const encoded = new TextEncoder().encode(String(value || ""));
-  const digest = await crypto.subtle.digest("SHA-256", encoded);
-  return Array.from(new Uint8Array(digest))
-    .map(byte => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function householdEnvelopeMessage({ householdId, encryptedBlob, version, requestId }) {
-  return JSON.stringify({
-    householdId,
-    version,
-    requestId,
-    encryptedBlob,
-  });
-}
-
-function hexToBytes(hex) {
-  if (typeof hex !== "string" || hex.length === 0 || hex.length % 2 !== 0) return new Uint8Array();
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = Number.parseInt(hex.slice(i, i + 2), 16);
-  }
-  return bytes;
-}
-
-export async function buildHouseholdIntegrityTag({ householdId, authToken, encryptedBlob, version, requestId }) {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    hexToBytes(String(authToken || "")),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    new TextEncoder().encode(householdEnvelopeMessage({ householdId, encryptedBlob, version, requestId }))
-  );
-  return Array.from(new Uint8Array(signature))
-    .map(byte => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-async function verifyHouseholdIntegrity({ householdId, authToken, encryptedBlob, version, requestId, integrityTag }) {
-  const expectedTag = await buildHouseholdIntegrityTag({
-    householdId,
-    authToken,
-    encryptedBlob,
-    version,
-    requestId,
-  });
-  return expectedTag === integrityTag;
 }
 
 function getConfiguredEntitlementId(env) {
@@ -365,55 +285,6 @@ async function fetchWithTimeout(input, init = {}, timeoutMs = PROVIDER_TIMEOUT_M
   }
 }
 
-export function getIsoWeekKey(now) {
-  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const dayNum = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil(((date - yearStart) / 86400000 + 1) / 7);
-  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
-}
-
-function getNextUtcBoundary(period, now = new Date()) {
-  const next = new Date(now);
-  if (period === "day") {
-    next.setUTCHours(24, 0, 0, 0);
-    return next;
-  }
-  if (period === "month") {
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
-  }
-  const dayNum = now.getUTCDay() || 7;
-  const daysUntilNextMonday = 8 - dayNum;
-  return new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysUntilNextMonday, 0, 0, 0, 0)
-  );
-}
-
-export function getQuotaWindow(tier, isChat, now = new Date()) {
-  if (isChat) {
-    return {
-      limit: tier === "pro" ? PRO_CHATS_PER_DAY : FREE_CHATS_PER_DAY,
-      periodKey: now.toISOString().slice(0, 10),
-      resetAt: getNextUtcBoundary("day", now),
-    };
-  }
-
-  if (tier === "pro") {
-    return {
-      limit: PRO_AUDITS_PER_MONTH,
-      periodKey: now.toISOString().slice(0, 7),
-      resetAt: getNextUtcBoundary("month", now),
-    };
-  }
-
-  return {
-    limit: FREE_AUDITS_PER_WEEK,
-    periodKey: getIsoWeekKey(now),
-    resetAt: getNextUtcBoundary("week", now),
-  };
-}
-
 function getDefaultModelForTier(provider, tier) {
   if (provider === "openai") return tier === "pro" ? "o3" : DEFAULTS.gemini;
   if (provider === "gemini") return tier === "pro" ? "gemini-2.5-pro" : "gemini-2.5-flash";
@@ -425,22 +296,16 @@ function isModelAllowedForTier(model, tier) {
   return MODEL_ALLOWLIST[tier]?.has(model);
 }
 
-export function isRevenueCatEntitlementActive(subscriber, entitlementId, now = new Date()) {
-  const entitlement = subscriber?.entitlements?.[entitlementId];
-  if (!entitlement) return false;
-  if (!entitlement.expires_date) return true;
-  const expiresAt = Date.parse(entitlement.expires_date);
-  return Number.isFinite(expiresAt) && expiresAt >= now.getTime();
-}
-
 async function fetchRevenueCatSubscriber(appUserId, env) {
   if (!env.REVENUECAT_SECRET_KEY || !appUserId) return null;
 
   const cacheKey = `https://revenuecat.internal/${encodeURIComponent(appUserId)}`;
-  const cache = caches.default;
-  const cached = await cache.match(cacheKey);
-  if (cached) {
-    return cached.json();
+  const cache = typeof caches !== "undefined" ? caches.default : null;
+  if (cache) {
+    const cached = await cache.match(cacheKey);
+    if (cached) {
+      return cached.json();
+    }
   }
 
   const response = await fetchWithTimeout(
@@ -462,17 +327,30 @@ async function fetchRevenueCatSubscriber(appUserId, env) {
   }
 
   const payload = await response.json();
-  await cache.put(
-    cacheKey,
-    new Response(JSON.stringify(payload), {
-      headers: { "Cache-Control": `max-age=${REVENUECAT_CACHE_TTL_SECONDS}` },
-    })
-  );
+  if (cache) {
+    await cache.put(
+      cacheKey,
+      new Response(JSON.stringify(payload), {
+        headers: { "Cache-Control": `max-age=${REVENUECAT_CACHE_TTL_SECONDS}` },
+      })
+    );
+  }
   return payload;
 }
 
-export async function resolveEffectiveTier(request, env) {
+async function resolveVerifiedRevenueCatAppUserId(request, env) {
   const revenueCatAppUserId = getRevenueCatAppUserId(request);
+  if (!revenueCatAppUserId || !env.REVENUECAT_SECRET_KEY) return null;
+  try {
+    const payload = await fetchRevenueCatSubscriber(revenueCatAppUserId, env);
+    return payload?.subscriber ? revenueCatAppUserId : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function resolveEffectiveTier(request, env, actor = null) {
+  const revenueCatAppUserId = actor?.revenueCatAppUserId || getRevenueCatAppUserId(request);
   if (!env.REVENUECAT_SECRET_KEY || !revenueCatAppUserId) {
     return { tier: "free", verified: false, source: "unverified" };
   }
@@ -497,10 +375,14 @@ export async function resolveEffectiveTier(request, env) {
 
 async function resolveStoredUserTier(userId, env) {
   if (!isWorkerGatingEnforced(env)) return "pro";
-  if (!userId || !userId.startsWith("rc:")) return "free";
+  if (!userId) return "free";
+
+  const revenueCatAppUserId =
+    userId.startsWith("rc:") ? userId.slice(3) : await getActorRevenueCatUserId(env.DB, userId);
+  if (!revenueCatAppUserId) return "free";
 
   try {
-    const payload = await fetchRevenueCatSubscriber(userId.slice(3), env);
+    const payload = await fetchRevenueCatSubscriber(revenueCatAppUserId, env);
     return isRevenueCatEntitlementActive(payload?.subscriber, getConfiguredEntitlementId(env)) ? "pro" : "free";
   } catch {
     return "free";
@@ -884,7 +766,7 @@ async function callOpenAI(apiKey, { snapshot, systemPrompt, history, model, stre
 }
 
 // ─── Claude Provider ─────────────────────────────────────────
-async function callClaude(apiKey, { snapshot, systemPrompt, history, model, stream, responseFormat }) {
+async function callClaude(apiKey, { snapshot, systemPrompt, history, model, stream, responseFormat: _responseFormat }) {
   const body = {
     model: model || DEFAULTS.claude,
     max_tokens: 12000,
@@ -939,175 +821,6 @@ function getProviderHandler(provider) {
   }
 }
 
-function parseStoredJson(value, fallback = {}) {
-  if (!value) return fallback;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-}
-
-function normalizeStoredTransactionsPayload(payload) {
-  if (!payload || typeof payload !== "object") {
-    return { transactions: [], total_transactions: 0 };
-  }
-
-  const transactions = Array.isArray(payload.transactions) ? payload.transactions.filter(Boolean) : [];
-  return {
-    ...payload,
-    transactions,
-    total_transactions: transactions.length,
-  };
-}
-
-function comparePlaidTransactions(a, b) {
-  const dateA = typeof a?.date === "string" ? a.date : "";
-  const dateB = typeof b?.date === "string" ? b.date : "";
-  if (dateA !== dateB) return dateB.localeCompare(dateA);
-  const pendingA = a?.pending ? 1 : 0;
-  const pendingB = b?.pending ? 1 : 0;
-  if (pendingA !== pendingB) return pendingA - pendingB;
-  const idA = a?.transaction_id || "";
-  const idB = b?.transaction_id || "";
-  return idA.localeCompare(idB);
-}
-
-export function mergePlaidTransactions(existingPayload, syncPayload) {
-  const existing = normalizeStoredTransactionsPayload(existingPayload);
-  const byId = new Map(
-    existing.transactions
-      .filter(transaction => transaction?.transaction_id)
-      .map(transaction => [transaction.transaction_id, transaction])
-  );
-
-  for (const transaction of syncPayload?.added || []) {
-    if (!transaction?.transaction_id) continue;
-    byId.set(transaction.transaction_id, transaction);
-  }
-
-  for (const transaction of syncPayload?.modified || []) {
-    if (!transaction?.transaction_id) continue;
-    byId.set(transaction.transaction_id, transaction);
-  }
-
-  for (const transaction of syncPayload?.removed || []) {
-    if (!transaction?.transaction_id) continue;
-    byId.delete(transaction.transaction_id);
-  }
-
-  const transactions = [...byId.values()].sort(comparePlaidTransactions);
-  return {
-    transactions,
-    total_transactions: transactions.length,
-  };
-}
-
-async function fetchPlaidJson(plaidDomain, endpoint, env, body) {
-  const plaidRes = await fetchWithTimeout(
-    `${plaidDomain}${endpoint}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        client_id: env.PLAID_CLIENT_ID,
-        secret: env.PLAID_SECRET,
-        ...body,
-      }),
-    },
-    PLAID_TIMEOUT_MS
-  );
-
-  if (!plaidRes.ok) {
-    const errorText = await plaidRes.text().catch(() => "");
-    throw new Error(`Plaid ${endpoint} failed (${plaidRes.status})${errorText ? `: ${errorText}` : ""}`);
-  }
-
-  return plaidRes.json();
-}
-
-async function getDbFirstResult(db, sql, params = []) {
-  const { results } = await db.prepare(sql).bind(...params).all();
-  return results?.[0] || null;
-}
-
-async function getStoredSyncRow(db, userId, itemId) {
-  if (!db) return null;
-  return getDbFirstResult(db, "SELECT * FROM sync_data WHERE user_id = ? AND item_id = ?", [userId, itemId]);
-}
-
-async function writeSyncRow(db, userId, itemId, updates = {}) {
-  if (!db) return;
-
-  const existing = (await getStoredSyncRow(db, userId, itemId)) || {};
-  const balancesJson = updates.balancesJson ?? existing.balances_json ?? "{}";
-  const liabilitiesJson = updates.liabilitiesJson ?? existing.liabilities_json ?? "{}";
-  const transactionsJson = updates.transactionsJson ?? existing.transactions_json ?? "{}";
-
-  await db.prepare(
-    `INSERT INTO sync_data (user_id, item_id, balances_json, liabilities_json, transactions_json)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(user_id, item_id) DO UPDATE SET
-       balances_json = excluded.balances_json,
-       liabilities_json = excluded.liabilities_json,
-       transactions_json = excluded.transactions_json,
-       last_synced_at = CURRENT_TIMESTAMP`
-  ).bind(userId, itemId, balancesJson, liabilitiesJson, transactionsJson).run();
-}
-
-export async function fetchAllPlaidTransactionsSync(plaidDomain, env, accessToken, initialCursor = null) {
-  let cursor = initialCursor || null;
-  let nextCursor = initialCursor || null;
-  let hasMore = true;
-  const aggregate = {
-    added: [],
-    modified: [],
-    removed: [],
-  };
-
-  while (hasMore) {
-    const response = await fetchPlaidJson(plaidDomain, "/transactions/sync", env, {
-      access_token: accessToken,
-      ...(cursor ? { cursor } : {}),
-    });
-
-    aggregate.added.push(...(response.added || []));
-    aggregate.modified.push(...(response.modified || []));
-    aggregate.removed.push(...(response.removed || []));
-    nextCursor = response.next_cursor || nextCursor;
-    hasMore = Boolean(response.has_more);
-    cursor = nextCursor;
-  }
-
-  return {
-    syncPayload: aggregate,
-    nextCursor: nextCursor || initialCursor || null,
-  };
-}
-
-async function syncTransactionsForItem({ db, userId, itemId, accessToken, plaidDomain, env }) {
-  const itemRow = db ? await getDbFirstResult(db, "SELECT transactions_cursor FROM plaid_items WHERE item_id = ?", [itemId]) : null;
-  const currentCursor = itemRow?.transactions_cursor || null;
-  const existingSyncRow = db ? await getStoredSyncRow(db, userId, itemId) : null;
-  const existingTransactions = normalizeStoredTransactionsPayload(parseStoredJson(existingSyncRow?.transactions_json, {}));
-  const { syncPayload, nextCursor } = await fetchAllPlaidTransactionsSync(plaidDomain, env, accessToken, currentCursor);
-  const mergedTransactions = mergePlaidTransactions(existingTransactions, syncPayload);
-
-  if (db) {
-    await writeSyncRow(db, userId, itemId, {
-      transactionsJson: JSON.stringify(mergedTransactions),
-    });
-    await db.prepare(
-      "UPDATE plaid_items SET transactions_cursor = ?, updated_at = CURRENT_TIMESTAMP WHERE item_id = ?"
-    ).bind(nextCursor, itemId).run();
-  }
-
-  return {
-    mergedTransactions,
-    nextCursor,
-  };
-}
-
 // ─── Main Handler ────────────────────────────────────────────
 export default {
   async fetch(request, env, ctx) {
@@ -1119,103 +832,22 @@ export default {
       return new Response(null, { status: 204, headers: buildHeaders(cors) });
     }
 
-    // Health check (GET or POST)
     const url = new URL(request.url);
-    if (url.pathname === "/health") {
-      return new Response(
-        JSON.stringify({
-          status: "ok",
-          version: "1.1",
-          providers: ["gemini", "openai", "claude"],
-          defaultProvider: "gemini",
-          defaultModel: DEFAULTS.gemini,
-          plaid: Boolean(env.PLAID_CLIENT_ID && env.PLAID_SECRET),
-        }),
-        {
-          status: 200,
-          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
-        }
-      );
-    }
-
-    if (url.pathname === "/config" && request.method === "GET") {
-      return new Response(
-        JSON.stringify({
-          gatingMode: getWorkerGatingMode(env),
-          minVersion: env.MIN_VERSION || "2.0.0",
-          entitlementVerification: Boolean(env.REVENUECAT_SECRET_KEY),
-          rotatingCategories: {
-            "Chase Freedom Flex": ["gas", "transit"], // Example active quarter
-            "Discover it Cash Back": ["groceries", "drugstores", "online_shopping"] // Example active quarter
-          }
-        }),
-        {
-          status: 200,
-          headers: buildHeaders(cors, { "Content-Type": "application/json", "Cache-Control": "max-age=300" }),
-        }
-      );
-    }
-
-    if (url.pathname === "/api/admin/audit-log" && request.method === "GET") {
-      const authHeader = request.headers.get("Authorization") || "";
-      const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-      if (!env.ADMIN_TOKEN || bearerToken !== env.ADMIN_TOKEN) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
-        });
-      }
-
-      if (!env.DB) {
-        return new Response(JSON.stringify({ error: "DB not configured" }), {
-          status: 500,
-          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
-        });
-      }
-
-      const { results } = await env.DB.prepare(
-        `SELECT id, created_at, provider, model, user_id, prompt_tokens, completion_tokens,
-                parse_succeeded, hit_degraded_fallback, response_preview, confidence, drift_warning, drift_details
-           FROM audit_log
-          ORDER BY created_at DESC
-          LIMIT 50`
-      ).bind().all();
-
-      return new Response(JSON.stringify({ rows: results || [] }), {
-        status: 200,
-        headers: buildHeaders(cors, { "Content-Type": "application/json" }),
-      });
-    }
-
-    if (url.pathname === "/api/audit-log/outcome" && request.method === "POST") {
-      if (!env.DB) {
-        return new Response(JSON.stringify({ error: "DB not configured" }), {
-          status: 500,
-          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
-        });
-      }
-
-      const { auditLogId, parseSucceeded, hitDegradedFallback, confidence, driftWarning, driftDetails } = await request.json().catch(() => ({}));
-      if (!auditLogId) {
-        return new Response(JSON.stringify({ error: "Missing auditLogId" }), {
-          status: 400,
-          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
-        });
-      }
-
-      await updateAuditLogRow(env.DB, auditLogId, {
-        parseSucceeded: Boolean(parseSucceeded),
-        hitDegradedFallback: Boolean(hitDegradedFallback),
-        confidence: typeof confidence === "string" ? confidence : "medium",
-        driftWarning: Boolean(driftWarning),
-        driftDetails: Array.isArray(driftDetails) ? driftDetails : [],
-      });
-
-      return new Response(JSON.stringify({ success: true }), {
-        status: 200,
-        headers: buildHeaders(cors, { "Content-Type": "application/json" }),
-      });
-    }
+    const systemResponse = await handleSystemRoute({
+      request,
+      url,
+      env,
+      cors,
+      buildHeaders,
+      DEFAULTS,
+      getWorkerGatingMode,
+      resolveVerifiedRevenueCatAppUserId,
+      bootstrapIdentityActor,
+      issueIdentitySessionToken,
+      updateAuditLogRow,
+      workerLog,
+    });
+    if (systemResponse) return systemResponse;
 
     // ─── Plaid Endpoints ─────────────────────────────────────
     if (url.pathname.startsWith("/plaid/") || url.pathname.startsWith("/api/sync/")) {
@@ -1233,9 +865,9 @@ export default {
         });
       }
 
-      const plaidActor = url.pathname === "/plaid/webhook" ? null : await resolvePlaidActor(request, env);
+      const plaidActor = url.pathname === "/plaid/webhook" ? null : await resolveAuthenticatedActor(request, env.DB, env);
       if (url.pathname !== "/plaid/webhook" && !plaidActor) {
-        return new Response(JSON.stringify({ error: "Missing stable actor identity" }), {
+        return new Response(JSON.stringify({ error: "Invalid or missing identity session" }), {
           status: 401,
           headers: buildHeaders(cors, { "Content-Type": "application/json" }),
         });
@@ -1461,7 +1093,6 @@ export default {
           });
         } else if (url.pathname === "/plaid/webhook") {
           // ── Plaid Webhook Receiver ────────────────────────
-          const webhookType = reqBody.webhook_type || "UNKNOWN";
           const webhookCode = reqBody.webhook_code || "UNKNOWN";
           const itemId = reqBody.item_id || "";
 
@@ -1478,15 +1109,6 @@ export default {
 
               // --- Tier Rate Limiting ---
               let tierId = await resolveStoredUserTier(user_id, env);
-              let lastSyncTime = 0;
-
-              // We need to fetch the last sync time to calculate cooldown.
-              const { results: syncResults } = await env.DB.prepare("SELECT last_synced_at FROM sync_data WHERE user_id = ?").bind(user_id).all();
-              if (syncResults && syncResults.length > 0 && syncResults[0].last_synced_at) {
-                // SQlite CURRENT_TIMESTAMP is UTC
-                lastSyncTime = new Date(syncResults[0].last_synced_at + "Z").getTime();
-              }
-
               if (isWorkerGatingEnforced(env) && tierId === "free") {
                 // Free users: manual sync only — ignore webhook
                 return; // Completely ignore webhooks for free users
@@ -1527,7 +1149,11 @@ export default {
             };
 
             // Use ctx.waitUntil to keep the worker alive for the async sync
-            ctx.waitUntil(performSync().catch(console.error));
+            ctx.waitUntil(
+              performSync().catch((error) => {
+                workerLog(env, "error", "plaid-webhook", "Background sync failed", { error, itemId });
+              })
+            );
           }
 
           return new Response(
@@ -1538,7 +1164,7 @@ export default {
           // Manually trigger a sync for a user, respecting the tier cooldown.
           if (request.method !== "POST") return new Response("{}", { status: 405 });
           if (!env.DB) return new Response(JSON.stringify({ error: "DB not configured" }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
-          const tierResolution = await resolveEffectiveTier(request, env);
+          const tierResolution = await resolveEffectiveTier(request, env, plaidActor);
           const tierId = !isWorkerGatingEnforced(env) ? "pro" : tierResolution.tier;
 
           if (isWorkerGatingEnforced(env) && tierId === "free") {
@@ -1579,7 +1205,12 @@ export default {
                 balancesJson: JSON.stringify(balances),
               });
               anySuccess = true;
-            } catch (err) { console.error("[Manual Sync] Error syncing item", err); }
+            } catch (err) {
+              workerLog(env, "warn", "plaid-sync", "Manual sync item failed", {
+                error: err,
+                itemId: syncItemId || "default",
+              });
+            }
           }
 
           if (anySuccess) {
@@ -1592,7 +1223,7 @@ export default {
           // In soft launch, this remains available to all users. In live gating, free users are blocked.
           if (request.method !== "POST") return new Response("{}", { status: 405 });
           if (!env.DB) return new Response(JSON.stringify({ error: "DB not configured" }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
-          const tierResolution = await resolveEffectiveTier(request, env);
+          const tierResolution = await resolveEffectiveTier(request, env, plaidActor);
           const deepTierId = !isWorkerGatingEnforced(env) ? "pro" : tierResolution.tier;
 
           if (isWorkerGatingEnforced(env) && deepTierId === "free") {
@@ -1632,7 +1263,12 @@ export default {
                 liabilitiesJson: JSON.stringify(liabilities),
                 transactionsJson: JSON.stringify(mergedTransactions),
               });
-            } catch (err) { console.error("[Deep Sync] Error", err); }
+            } catch (err) {
+              workerLog(env, "warn", "plaid-sync", "Deep sync item failed", {
+                error: err,
+                itemId: dItem.item_id || "default",
+              });
+            }
           }
 
           await env.DB.prepare(
@@ -1665,304 +1301,35 @@ export default {
           });
         }
       } catch (err) {
-        return new Response(JSON.stringify({ error: "Plaid proxy error", details: err.message }), {
+        workerLog(env, "error", "plaid-proxy", "Plaid proxy error", { error: err, path: url.pathname });
+        return new Response(JSON.stringify({ error: "Plaid proxy error", message: "Catalyst couldn't complete the Plaid request right now." }), {
           status: 500,
           headers: buildHeaders(cors, { "Content-Type": "application/json" }),
         });
       }
     }
 
-    // ─── Household Sync ──────────────────────────────────────
-    if (url.pathname.startsWith("/api/household/")) {
-      if (!env.DB) {
-        return new Response(JSON.stringify({ error: "DB not configured" }), {
-          status: 500,
-          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
-        });
-      }
-      try {
-        if (url.pathname === "/api/household/sync" && request.method === "POST") {
-          const body = await request.json();
-          const action = body?.action;
-          const householdId = String(body?.householdId || "").trim();
-          const authToken = String(body?.authToken || "").trim();
+    const householdResponse = await handleHouseholdRoute({
+      request,
+      url,
+      env,
+      cors,
+      buildHeaders,
+      sha256Hex,
+      buildHouseholdIntegrityTag,
+      verifyHouseholdIntegrity,
+    });
+    if (householdResponse) return householdResponse;
 
-          if (!householdId || !authToken || !action) {
-            return new Response(JSON.stringify({
-              error: "invalid_request",
-              message: "Missing household sync credentials.",
-            }), { status: 400, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
-          }
-
-          const authTokenHash = await sha256Hex(authToken);
-          const { results } = await env.DB.prepare(
-            `SELECT household_id, encrypted_blob, auth_token_hash, integrity_tag, version, last_request_id, last_updated_at
-             FROM household_sync WHERE household_id = ?`
-          ).bind(householdId).all();
-          const existing = results?.[0] || null;
-
-          if (action === "fetch") {
-            if (!existing) {
-              return new Response(JSON.stringify({ hasData: false }), {
-                status: 200,
-                headers: buildHeaders(cors, { "Content-Type": "application/json" }),
-              });
-            }
-
-            if (existing.auth_token_hash && existing.auth_token_hash !== authTokenHash) {
-              return new Response(JSON.stringify({ hasData: false }), {
-                status: 404,
-                headers: buildHeaders(cors, { "Content-Type": "application/json" }),
-              });
-            }
-
-            if (!existing.auth_token_hash) {
-              await env.DB.prepare(
-                "UPDATE household_sync SET auth_token_hash = ?, last_updated_at = CURRENT_TIMESTAMP WHERE household_id = ?"
-              ).bind(authTokenHash, householdId).run();
-            }
-
-            const resolvedVersion = Number(existing.version || 0);
-            const resolvedRequestId = existing.last_request_id || "";
-            const resolvedIntegrityTag = existing.integrity_tag || await buildHouseholdIntegrityTag({
-              householdId,
-              authToken,
-              encryptedBlob: existing.encrypted_blob,
-              version: resolvedVersion,
-              requestId: resolvedRequestId,
-            });
-
-            if (!existing.integrity_tag) {
-              await env.DB.prepare(
-                "UPDATE household_sync SET integrity_tag = ?, last_updated_at = CURRENT_TIMESTAMP WHERE household_id = ?"
-              ).bind(resolvedIntegrityTag, householdId).run();
-            }
-
-            return new Response(JSON.stringify({
-              hasData: true,
-              encryptedBlob: existing.encrypted_blob,
-              integrityTag: resolvedIntegrityTag,
-              version: resolvedVersion,
-              requestId: resolvedRequestId,
-              lastUpdatedAt: existing.last_updated_at,
-            }), {
-              status: 200,
-              headers: buildHeaders(cors, { "Content-Type": "application/json" }),
-            });
-          }
-
-          if (action === "push") {
-            const encryptedBlob = body?.encryptedBlob;
-            const integrityTag = String(body?.integrityTag || "").trim();
-            const requestId = String(body?.requestId || "").trim();
-            const version = Number(body?.version || 0);
-
-            if (!encryptedBlob || !integrityTag || !requestId || !Number.isInteger(version) || version < 1) {
-              return new Response(JSON.stringify({
-                error: "invalid_request",
-                message: "Missing ciphertext, integrity tag, request id, or version.",
-              }), { status: 400, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
-            }
-
-            const integrityOk = await verifyHouseholdIntegrity({
-              householdId,
-              authToken,
-              encryptedBlob,
-              version,
-              requestId,
-              integrityTag,
-            });
-            if (!integrityOk) {
-              return new Response(JSON.stringify({
-                error: "integrity_check_failed",
-                message: "Ciphertext integrity verification failed.",
-              }), { status: 422, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
-            }
-
-            if (existing?.auth_token_hash && existing.auth_token_hash !== authTokenHash) {
-              return new Response(JSON.stringify({
-                error: "unauthorized_household_access",
-                message: "This household credential does not match the existing shared household.",
-              }), { status: 403, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
-            }
-
-            const existingVersion = Number(existing?.version || 0);
-            if (existing?.last_request_id && existing.last_request_id === requestId) {
-              return new Response(JSON.stringify({
-                error: "replay_detected",
-                message: "This household sync request was already applied.",
-                currentVersion: existingVersion,
-              }), { status: 409, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
-            }
-
-            if (version <= existingVersion) {
-              return new Response(JSON.stringify({
-                error: "stale_version",
-                message: "A newer household sync already exists. Pull the latest household data before pushing again.",
-                currentVersion: existingVersion,
-              }), { status: 409, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
-            }
-
-            await env.DB.prepare(
-              `INSERT INTO household_sync (
-                 household_id,
-                 encrypted_blob,
-                 auth_token_hash,
-                 integrity_tag,
-                 version,
-                 last_request_id,
-                 last_updated_at
-               ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-               ON CONFLICT(household_id) DO UPDATE SET
-                 encrypted_blob = excluded.encrypted_blob,
-                 auth_token_hash = COALESCE(household_sync.auth_token_hash, excluded.auth_token_hash),
-                 integrity_tag = excluded.integrity_tag,
-                 version = excluded.version,
-                 last_request_id = excluded.last_request_id,
-                 last_updated_at = CURRENT_TIMESTAMP`
-            ).bind(householdId, encryptedBlob, authTokenHash, integrityTag, version, requestId).run();
-
-            return new Response(JSON.stringify({
-              success: true,
-              version,
-            }), {
-              status: 200,
-              headers: buildHeaders(cors, { "Content-Type": "application/json" }),
-            });
-          }
-
-          return new Response(JSON.stringify({
-            error: "invalid_action",
-            message: "Unsupported household sync action.",
-          }), {
-            status: 400,
-            headers: buildHeaders(cors, { "Content-Type": "application/json" }),
-          });
-        }
-      } catch (err) {
-        return new Response(JSON.stringify({ error: "Household sync error", details: err.message }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
-      }
-    }
-
-    // ─── Market Data Proxy (GET /market?symbols=VTI,VOO) ─────
-    if (url.pathname === "/market" && request.method === "GET") {
-      const symbols = (url.searchParams.get("symbols") || "")
-        .split(",")
-        .map(s => s.trim().toUpperCase())
-        .filter(Boolean);
-      if (symbols.length === 0 || symbols.length > 20) {
-        return new Response(JSON.stringify({ error: "Provide 1-20 comma-separated symbols" }), {
-          status: 400,
-          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
-        });
-      }
-
-      // Check CF Cache first
-      const cacheKey = `https://market-data.internal/${symbols.sort().join(",")}`;
-      const cache = caches.default;
-      const cached = await cache.match(cacheKey);
-      if (cached) {
-        const body = await cached.text();
-        return new Response(body, {
-          status: 200,
-          headers: buildHeaders(cors, { "Content-Type": "application/json", "X-Cache": "HIT" }),
-        });
-      }
-
-      try {
-        // Primary: Yahoo Finance v8 spark API
-        const yfUrl = `https://query1.finance.yahoo.com/v8/finance/spark?symbols=${symbols.join(",")}&range=1d&interval=1d`;
-        const yfRes = await fetchWithTimeout(
-          yfUrl,
-          {
-            headers: { "User-Agent": "Mozilla/5.0 (compatible; CatalystCash/1.0)", Accept: "application/json" },
-          },
-          MARKET_TIMEOUT_MS
-        );
-        if (!yfRes.ok) throw new Error(`Yahoo Finance returned ${yfRes.status}`);
-        const yfData = await yfRes.json();
-
-        const result = {};
-        for (const sym of symbols) {
-          // Handle both response formats:
-          // Format A (new): { VTI: { close: [340.89], chartPreviousClose: 341.83, symbol: "VTI" } }
-          // Format B (old): { spark: { result: [{ symbol: "VTI", response: [{ meta: {...} }] }] } }
-          let price = null,
-            prevClose = null,
-            name = sym;
-
-          // Try Format A first (direct symbol keys)
-          if (yfData[sym]) {
-            const d = yfData[sym];
-            const closes = d.close || [];
-            price = closes[closes.length - 1] || null;
-            prevClose = d.chartPreviousClose || d.previousClose || null;
-            name = d.symbol || sym;
-          }
-          // Try Format B (spark.result)
-          else if (yfData?.spark?.result) {
-            const spark = yfData.spark.result.find(r => r.symbol === sym);
-            if (spark?.response?.[0]?.meta) {
-              const meta = spark.response[0].meta;
-              price = meta.regularMarketPrice ?? meta.previousClose ?? null;
-              prevClose = meta.previousClose ?? null;
-              name = meta.shortName || meta.symbol || sym;
-            }
-          }
-
-          if (price != null) {
-            result[sym] = {
-              price,
-              previousClose: prevClose,
-              change: price && prevClose ? +(price - prevClose).toFixed(2) : null,
-              changePct: price && prevClose ? +(((price - prevClose) / prevClose) * 100).toFixed(2) : null,
-              name,
-              currency: "USD",
-            };
-          }
-        }
-
-        // If primary returned nothing, try fallback v6 quote API
-        if (Object.keys(result).length === 0) {
-          const fbUrl = `https://query2.finance.yahoo.com/v6/finance/quote?symbols=${symbols.join(",")}`;
-          const fbRes = await fetchWithTimeout(
-            fbUrl,
-            {
-              headers: { "User-Agent": "Mozilla/5.0 (compatible; CatalystCash/1.0)", Accept: "application/json" },
-            },
-            MARKET_TIMEOUT_MS
-          );
-          if (fbRes.ok) {
-            const fbData = await fbRes.json();
-            for (const q of fbData?.quoteResponse?.result || []) {
-              result[q.symbol] = {
-                price: q.regularMarketPrice ?? null,
-                previousClose: q.regularMarketPreviousClose ?? null,
-                change: q.regularMarketChange != null ? +q.regularMarketChange.toFixed(2) : null,
-                changePct: q.regularMarketChangePercent != null ? +q.regularMarketChangePercent.toFixed(2) : null,
-                name: q.shortName || q.longName || q.symbol,
-                currency: q.currency || "USD",
-              };
-            }
-          }
-        }
-
-        const json = JSON.stringify({ data: result, fetchedAt: Date.now() });
-        // Cache for 15 minutes
-        const cacheRes = new Response(json, { headers: { "Cache-Control": "max-age=900" } });
-        await cache.put(cacheKey, cacheRes);
-
-        return new Response(json, {
-          status: 200,
-          headers: buildHeaders(cors, { "Content-Type": "application/json", "X-Cache": "MISS" }),
-        });
-      } catch (err) {
-        return new Response(JSON.stringify({ error: err.message || "Market data unavailable" }), {
-          status: 502,
-          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
-        });
-      }
-    }
+    const marketResponse = await handleMarketRoute({
+      request,
+      url,
+      cors,
+      buildHeaders,
+      fetchWithTimeout,
+      MARKET_TIMEOUT_MS,
+    });
+    if (marketResponse) return marketResponse;
 
     // Only accept POST for /audit
     if (request.method !== "POST") {
@@ -1972,25 +1339,16 @@ export default {
       });
     }
 
-    // ─── Telemetry: Client Error Reports ────────────────────
-    if (url.pathname === "/api/v1/telemetry/errors" && request.method === "POST") {
-      try {
-        const payload = await request.json();
-        // Validate shape — accept only expected fields, drop everything else
-        const entry = {
-          timestamp: typeof payload.timestamp === "string" ? payload.timestamp.slice(0, 30) : new Date().toISOString(),
-          component: String(payload.component || "unknown").slice(0, 100),
-          action: String(payload.action || "").slice(0, 200),
-          message: String(payload.message || "").slice(0, 2000),
-          stack: String(payload.stack || "").slice(0, 4000),
-          userAgent: String(payload.userAgent || "").slice(0, 200),
-        };
-        // Log to Worker analytics (visible in Cloudflare dashboard Tail logs)
-        console.error("[telemetry]", JSON.stringify(entry));
-      } catch { /* discard malformed payloads silently */ }
-      // Always 204 — never leak info back to client, never block the app
-      return new Response(null, { status: 204, headers: buildHeaders(cors) });
-    }
+    const telemetryResponse = await handleTelemetryRoute({
+      request,
+      url,
+      env,
+      cors,
+      buildHeaders,
+      redactForWorkerLogs,
+      workerLog,
+    });
+    if (telemetryResponse) return telemetryResponse;
 
     if (url.pathname !== "/audit") {
       return new Response(JSON.stringify({ error: "Not found" }), {
@@ -2092,7 +1450,9 @@ export default {
       );
     }
     const { handler, keyName } = getProviderHandler(selectedProvider);
-    const resolvedSystemPrompt = systemPrompt || buildSystemPrompt(type || (isChat ? "chat" : "audit"), context || {}, selectedProvider);
+    const resolvedType = type || (isChat ? "chat" : "audit");
+    const resolvedSystemPrompt = systemPrompt || buildSystemPrompt(resolvedType, context || {}, selectedProvider);
+    logPromptProfile(env, resolvedType, selectedProvider, resolvedSystemPrompt);
 
     const apiKey = env[keyName];
     if (!apiKey) {
@@ -2183,7 +1543,14 @@ export default {
         }),
       });
     } catch (err) {
-      const message = err?.name === "AbortError" ? "Upstream provider timed out" : err.message || "Proxy error";
+      workerLog(env, "error", "ai-proxy", "Provider call failed", {
+        error: err,
+        provider: selectedProvider,
+        type: resolvedType,
+      });
+      const message = err?.name === "AbortError"
+        ? "Upstream provider timed out"
+        : getSafeClientError(err, "Catalyst AI is temporarily unavailable. Please try again.");
       return new Response(JSON.stringify({ error: message }), {
         status: 502,
         headers: buildHeaders(cors, { "Content-Type": "application/json", ...tierHeaders }),

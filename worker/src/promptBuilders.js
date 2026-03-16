@@ -92,7 +92,7 @@ When NOT deferring (HabitCount at/under critical threshold):
   return `${liveData}${step3Note}\n${step325}`;
 }
 
-function buildInvestmentsSection(config, cSym = "$") {
+function buildInvestmentsSection(config, _cSym = "$") {
   if (!isInvestmentTrackingEnabled(config)) return "";
 
   return `
@@ -127,7 +127,7 @@ InvestmentsAsOfDate (HARD): ${config.investmentsAsOfDate} (USER-CONFIRMED)
 `;
 }
 
-function buildRothSection(config, cSym = "$", totalCheckingFloor = 0) {
+function buildRothSection(config, _cSym = "$", totalCheckingFloor = 0) {
   if (!isRothTrackingEnabled(config)) return "";
 
   return `State:
@@ -155,7 +155,7 @@ Contribution Sizing (do not guess IRS limit):
 `;
 }
 
-function build401kSection(config, cSym = "$") {
+function build401kSection(config, _cSym = "$") {
   if (!is401kTrackingEnabled(config)) return "";
 
   return `
@@ -172,7 +172,7 @@ function build401kSection(config, cSym = "$") {
 `;
 }
 
-function buildHSASection(config, cSym = "$") {
+function buildHSASection(config, _cSym = "$") {
   if (!isHSATrackingEnabled(config)) return "";
 
   return `
@@ -203,6 +203,198 @@ export function sanitizePersonalRules(rules) {
     .slice(0, 2000);
 
   return sanitized;
+}
+
+function replacePromptSection(prompt, startMarker, endMarker, replacement) {
+  const start = prompt.indexOf(startMarker);
+  if (start === -1) return prompt;
+  const end = prompt.indexOf(endMarker, start);
+  if (end === -1) return prompt;
+  return `${prompt.slice(0, start)}${replacement}${prompt.slice(end)}`;
+}
+
+function buildExpandedCoverageLite(config, cSym = "$") {
+  const hasStudentDebt = (config?.nonCardDebts || []).some(d => String(d?.type || "").toLowerCase().includes("student"));
+  const hasHousing = Number(config?.monthlyRent || 0) > 0 || Number(config?.mortgagePayment || 0) > 0 || Number(config?.homeEquity || 0) > 0;
+  const hasDependents = Number(config?.dependents || 0) > 0;
+  const is55Plus = config?.birthYear ? new Date().getFullYear() - config.birthYear >= 55 : false;
+
+  return `
+========================
+CE) EXPANDED FINANCIAL SITUATION COVERAGE (CONCISE)
+========================
+Use only the scenarios that are relevant to the current snapshot or notes.
+
+${hasHousing ? `MORTGAGE / RENT
+- Housing is a structural obligation. Treat rent or mortgage as highest-priority fixed cost.
+- Flag housing cost ratio above 30% of gross income as a drag on every other goal.
+` : ""}${
+    hasStudentDebt
+      ? `STUDENT LOAN STRATEGIES
+- If federal student loans exist, check PSLF / IDR implications before recommending aggressive payoff.
+- Private loans follow normal debt prioritization.
+- Mention the student-loan interest deduction (${cSym}2,500 cap) only as informational.
+`
+      : ""
+  }MEDICAL DEBT
+- Medical debt is often negotiable and may belong on a provider payment plan before standard debt-avalanche treatment.
+- Recommend itemized bills and direct provider negotiation before paying collections.
+
+ALIMONY / CHILD SUPPORT
+- Treat any court-ordered support as non-deferrable and legal-risk-bearing.
+
+${hasDependents ? `DEPENDENT / CHILDCARE EXPENSES
+- Childcare and dependent-care costs are structural fixed costs.
+- Mention dependent-care FSA limits and education savings only when dependents are actually present.
+` : ""}DEBT CONSOLIDATION / BALANCE TRANSFER
+- Mention balance transfers or consolidation only when multiple high-APR debts exist, and warn about fees plus relapse risk.
+
+${config?.birthYear && new Date().getFullYear() - config.birthYear >= 30 ? `ESTATE PLANNING / LIFE INSURANCE
+- If the user is 30+ with dependents or meaningful assets, mention term life + basic estate documents as long-range protections.
+` : ""}${
+    is55Plus
+      ? `PENSION / ANNUITY / SOCIAL SECURITY
+- Treat pensions/annuities as guaranteed income when provided.
+- Mention Social Security timing, RMDs, and Medicare deadlines only when age makes them relevant.
+`
+      : ""
+  }RENTAL INCOME / REAL ESTATE
+- Count only net rental income after property costs, and warn that real estate is illiquid.
+
+EQUITY COMPENSATION (RSU/ESPP/STOCK OPTIONS)
+- Track vesting or expiry dates, concentration risk, and tax-complexity warnings when employer stock is mentioned.
+`;
+}
+
+function compactAuditPrompt(prompt, config, cSym = "$") {
+  let next = prompt;
+
+  next = replacePromptSection(
+    next,
+    `========================\nU) WEEKLY OPERATOR CHECKLIST (HARD-UX, 90-SECOND RUN)\n========================`,
+    `========================\nV) KERNEL UNIT TESTS (HARD)\n========================`,
+    `========================
+U) WEEKLY OPERATOR CHECKLIST (CONCISE)
+========================
+- Confirm SnapshotDate / SnapshotTime and the paycheck branch.
+- Protect floor, then time-critical bills, then required transfers.
+- Fund vault / sinking buckets only after the due-before-next-payday window is safe.
+- Route remaining verified surplus with zero-based discipline and reconcile all buckets before output.
+`
+  );
+
+  next = replacePromptSection(
+    next,
+    `========================\nV) KERNEL UNIT TESTS (HARD)\n========================`,
+    `========================\nW) SESSION INIT VALIDATION (HARD)\n========================`,
+    ""
+  );
+
+  next = replacePromptSection(
+    next,
+    `========================\nW) SESSION INIT VALIDATION (HARD)\n========================`,
+    `========================\nX) NET WORTH ENGINE (HARD)\n========================`,
+    `========================
+W) SESSION INIT VALIDATION (CONCISE)
+========================
+- If prior audit state is pasted, re-check bucket reconciliation, stale pace data, unresolved UNKNOWNs, and expired promos before using it.
+- Fresh balances always override pasted balances.
+- If pasted state violates an invariant (negative unallocated cash, stale dates, unresolved over-allocation), stop and surface a fix list first.
+`
+  );
+
+  next = replacePromptSection(
+    next,
+    `========================\nX) NET WORTH ENGINE (HARD)\n========================`,
+    `========================\nY) EMERGENCY RESERVE ENGINE (DEFERRED ACTIVATION)\n========================`,
+    `========================
+X) NET WORTH ENGINE (CONCISE)
+========================
+- NetWorth = total assets minus explicitly listed debts.
+- LiquidNetWorth = checking + vault + brokerage + crypto minus listed debt.
+- Treat Roth / 401k / HSA / home equity / vehicle value as non-liquid unless age-based access explicitly applies.
+- Use LiquidNetWorth for risk grading; use NetWorth for long-range wealth tracking.
+- InvestmentsAsOfDate must print whenever investment values are shown.
+`
+  );
+
+  next = replacePromptSection(
+    next,
+    `========================\nY) EMERGENCY RESERVE ENGINE (DEFERRED ACTIVATION)\n========================`,
+    `========================\nCC) CREDIT BUILDING ENGINE (ALWAYS ACTIVE — RUNS IN PARALLEL WITH ALL PHASES)\n========================`,
+    `========================
+Y) EMERGENCY RESERVE ENGINE (CONCISE)
+========================
+- During debt payoff, use the starter emergency-fund override before full reserve funding.
+- Full emergency-reserve pacing begins only after revolving debt is cleared and hard-deadline sinking funds are on pace.
+- Emergency reserve is not available for routine planned spending.
+`
+  );
+
+  next = replacePromptSection(
+    next,
+    `========================\nCC) CREDIT BUILDING ENGINE (ALWAYS ACTIVE — RUNS IN PARALLEL WITH ALL PHASES)\n========================`,
+    `========================\nCD) VARIABLE INCOME ADAPTER (ACTIVE WHEN incomeType = 'hourly' OR 'variable')\n========================`,
+    `========================
+CC) CREDIT BUILDING ENGINE (CONCISE)
+========================
+- Target 1-9% reported utilization per card and under 10% overall when possible.
+- Statement-close timing matters more than due date for utilization reporting.
+- Suggest soft-pull CLI or product change only when it improves utilization or preserves account age without new risk.
+`
+  );
+
+  next = replacePromptSection(
+    next,
+    `========================\nCD) VARIABLE INCOME ADAPTER (ACTIVE WHEN incomeType = 'hourly' OR 'variable')\n========================`,
+    `========================\nCE) EXPANDED FINANCIAL SITUATION COVERAGE (ALWAYS ACTIVE)\n========================`,
+    config?.incomeType === "hourly" || config?.incomeType === "variable"
+      ? `========================
+CD) VARIABLE INCOME ADAPTER (CONCISE)
+========================
+- Treat variable income conservatively: protect floor and minimums first, then defer optional allocations in lean weeks.
+- In stronger weeks, rebuild the income buffer before accelerating discretionary goals.
+`
+      : ""
+  );
+
+  next = replacePromptSection(
+    next,
+    `========================\nCE) EXPANDED FINANCIAL SITUATION COVERAGE (ALWAYS ACTIVE)\n========================`,
+    `========================\nZ) 90-DAY FORWARD RADAR — KEY MILESTONES (HARD)\n========================`,
+    buildExpandedCoverageLite(config, cSym)
+  );
+
+  next = replacePromptSection(
+    next,
+    `========================\nZ) 90-DAY FORWARD RADAR — KEY MILESTONES (HARD)\n========================`,
+    `========================\nAA) COMPACT EXECUTION SEQUENCE (HARD)\n========================`,
+    `========================
+Z) 90-DAY FORWARD RADAR — KEY MILESTONES (CONCISE)
+========================
+- Surface only meaningful 90-day pressure weeks: large bills, promo deadlines, tax dates, or convergence weeks that stress one paycheck.
+- If a future shortfall is visible, state the week and the weekly reserve amount needed to avoid it.
+- For long-range projections over 12 months, note inflation as informational context only.
+`
+  );
+
+  next = replacePromptSection(
+    next,
+    `========================\nAA) COMPACT EXECUTION SEQUENCE (HARD)\n========================`,
+    `========================\nAB) INPUT SCHEMA CARD (HARD)\n========================`,
+    `========================
+AA) COMPACT EXECUTION SEQUENCE (CONCISE)
+========================
+1. Validate snapshot completeness and resolve paycheck inclusion.
+2. Protect floor and due-before-next-payday obligations.
+3. Compute required transfer, verified surplus, and promo pacing.
+4. Fund vault / sinking buckets only after near-term safety is clear.
+5. Route remaining surplus through debt kill or wealth-building ladder with no idle cash.
+6. Reconcile buckets, compute net worth + radar, then map cleanly into the JSON contract.
+`
+  );
+
+  return next;
 }
 
 export const getSystemPromptCore = (config, cards = [], renewals = [], personalRules = "", computedStrategy = null) => {
@@ -243,7 +435,6 @@ export const getSystemPromptCore = (config, cards = [], renewals = [], personalR
       : null;
 
   // Income sources & Structure
-  const incomeTypeStr = config?.incomeType ? config.incomeType.toUpperCase() : "SALARY";
   const incomeDetails = [];
   if (config?.incomeType === "hourly") {
     incomeDetails.push(`  - Earning Structure: HOURLY`);
@@ -1461,87 +1652,53 @@ HSA Annual Limit: ${cSym}[amount] (if enabled)
 // STRICT STRUCTURED JSON OUTPUT WRAPPER
 // ═══════════════════════════════════════════════════════════════
 export const getJsonWrapper = (providerId, cSym = "$") => `IMPORTANT OUTPUT FORMAT OVERRIDE:
-You MUST output your ENTIRE response as a completely valid, parseable JSON object.
-DO NOT output ANY markdown, preamble, explanations, or conversational text outside of the JSON block.
-Your output MUST include the following keys and keep the overall structure valid:
+Return exactly one valid JSON object. No markdown, no prose outside JSON, no code fences.
 
+Required top-level keys:
+- ensembleThoughtProcess
+- headerCard
+- liquidNetWorth
+- healthScore
+- alertsCard
+- dashboardCard
+- weeklyMoves
+- radar
+- longRangeRadar
+- milestones
+- investments
+- nextAction
+- spendingAnalysis
+- negotiationTargets
+
+Compact shape example:
 {
-  "ensembleThoughtProcess": "ROUTING: [Spending Agent | Invest Agent | Planning Agent]. CHAIN OF THOUGHT: [Your internal reasoning, math checks, and strict solvency/floor verification before finalizing the audit.]",
-  "headerCard": {
-    "status": "Brief status phrase",
-    "details": ["Bullet 1", "Bullet 2"]
-  },
-  "liquidNetWorth": "${cSym}0.00 (liquid assets minus debt — excludes Roth/401k/HSA/home/vehicle)",
-  "healthScore": {
-    "score": 75,
-    "grade": "B+",
-    "trend": "up",
-    "summary": "One-sentence health summary (concise, dashboard headline)",
-    "narrative": "2-3 sentence financial insight that explains the biggest observation and the clearest next move."
-  },
-  "alertsCard": [
-    "Alert item 1",
-    "Alert item 2"
-  ],
-  "dashboardCard": [
-    { "category": "Checking", "amount": "${cSym}0.00", "status": "" },
-    { "category": "Vault", "amount": "${cSym}0.00", "status": "" }
-  ],
-  "weeklyMoves": [
-    "Move 1",
-    "Move 2"
-  ],
-  "radar": [
-    { "item": "Exp item", "amount": "${cSym}0.00", "date": "YYYY-MM-DD" }
-  ],
-  "longRangeRadar": [
-    { "item": "Exp item", "amount": "${cSym}0.00", "date": "YYYY-MM-DD" }
-  ],
-  "milestones": [
-    "Milestone 1"
-  ],
-  "investments": {
-    "balance": "${cSym}0.00",
-    "asOf": "YYYY-MM-DD",
-    "gateStatus": "Open/Closed",
-    "cryptoValue": "${cSym}0.00 or null if no crypto held",
-    "netWorth": "${cSym}0.00 (total: checking + vault + investments + crypto - debts)"
-  },
-  "nextAction": "One sentence summary action",
+  "ensembleThoughtProcess": "ROUTING: [Spending Agent | Invest Agent | Planning Agent]. Internal math and safety checks completed.",
+  "headerCard": { "status": "Brief status phrase", "details": ["Bullet 1", "Bullet 2"] },
+  "liquidNetWorth": "${cSym}0.00",
+  "healthScore": { "score": 75, "grade": "B+", "trend": "up", "summary": "One sentence.", "narrative": "2-3 sentence insight." },
+  "alertsCard": ["Alert item"],
+  "dashboardCard": [{ "category": "Checking", "amount": "${cSym}0.00", "status": "" }],
+  "weeklyMoves": ["Route ${cSym}150 to the highest-priority target."],
+  "radar": [{ "item": "Upcoming bill", "amount": "${cSym}0.00", "date": "YYYY-MM-DD" }],
+  "longRangeRadar": [],
+  "milestones": ["Milestone 1"],
+  "investments": { "balance": "${cSym}0.00", "asOf": "YYYY-MM-DD", "gateStatus": "Open", "cryptoValue": null, "netWorth": "${cSym}0.00" },
+  "nextAction": "One sentence summary action.",
   "spendingAnalysis": null,
-  "negotiationTargets": [
-    {
-      "target": "AT&T Internet",
-      "strategy": "Concrete negotiation approach or script",
-      "estimatedAnnualSavings": 240
-    }
-  ]
+  "negotiationTargets": []
 }
 
-HEALTH SCORE RULES:
-- "score" is 0-100 integer. 0 = financial crisis, 100 = perfect financial health.
-- "grade" is A+, A, A-, B+, B, B-, C+, C, C-, D+, D, D-, F. Map from score: 97+=A+, 93+=A, 90+=A-, 87+=B+, 83+=B, 80+=B-, 77+=C+, 73+=C, 70+=C-, 67+=D+, 63+=D, 60+=D-, <60=F.
-- "trend" is "up", "down", or "flat" based on comparison to prior audit if trend context is available.
-- "summary" is ONE sentence explaining the grade (e.g. "Strong cash position but card debt is dragging your score down.").
-- Score factors: floor safety (20%), debt-to-LIQUID-asset ratio (20%), savings momentum (20%), obligation coverage (20%), spending discipline (20%).
-- CRITICAL — Debt-to-Liquid-Asset Ratio uses LiquidNetWorth (Section X), NOT total NetWorth. Roth IRA, 401(k), HSA, home equity, and vehicles are EXCLUDED from this factor because they cannot be sold to pay credit card debt (locked behind age gates, penalties, or non-fungible). Only checking, vault, brokerage, and crypto count as liquid.
-- SPENDING DISCIPLINE SCORING: When Plaid transaction data is present, factor 5 MUST evaluate actual spending vs. WeeklySpendAllowance and budget category targets. Overspending = deducted points. Under-spending with surplus deployed = bonus points. When no transaction data is available, evaluate based on structural allocation discipline only.
-- NEGOTIATION TARGETING: Scan Budget Category Actuals and Debts for high-margin, monopolistic, or negotiable services (e.g., ISPs, Cell Phones, Car Insurance, Gyms, High-APR Loans). Synthesize 1-3 highly actionable negotiation targets when real opportunities exist.
-- spendingAnalysis may be null when no Plaid transaction data is available. When present, use this object shape:
-  {
-    "totalSpent": "${cSym}0.00",
-    "dailyAverage": "${cSym}0.00",
-    "vsAllowance": "UNDER or OVER by ${cSym}X.XX",
-    "topCategories": [
-      { "category": "Category Name", "amount": "${cSym}0.00", "pctOfTotal": "0%" }
-    ],
-    "alerts": ["Ghost sub detected: Netflix ${cSym}15.99", "Anomaly: ${cSym}250 at Amazon"],
-    "debtImpact": "At current spending, debt-free by YYYY-MM-DD. Cutting ${cSym}X/week accelerates payoff by Y weeks."
-  }
+Health score rules:
+- score = integer 0-100
+- grade map = 97 A+, 93 A, 90 A-, 87 B+, 83 B, 80 B-, 77 C+, 73 C, 70 C-, 67 D+, 63 D, 60 D-, below 60 F
+- trend = up | down | flat
+- use LiquidNetWorth, not total NetWorth, for debt-coverage risk logic
+- spendingAnalysis may be null when no Plaid transactions are available
+- negotiationTargets should appear only when a real opportunity exists
 
-If any section has no data, return an empty array [] or empty string "" or null. The app will normalize dashboard rows, minor presentation details, and nullable optional sections natively. If no Plaid transactions are available, return spendingAnalysis as null.`;
+If a section has no data, return [] or "" or null as appropriate. The app normalizes dashboard rows and nullable presentation details natively.`;
 
-function getProviderTweaks(providerId, cSym = "$") {
+function getProviderTweaks(providerId, _cSym = "$") {
   const normalizedProvider =
     providerId === "backend" ? "openai" : providerId === "anthropic" ? "claude" : providerId || "openai";
 
@@ -1591,33 +1748,22 @@ function getProviderTweaks(providerId, cSym = "$") {
 <shared_provider_rules priority="critical">
 - NATIVE STRATEGY ENGINE LOCK: If <ALGORITHMIC_STRATEGY> is present, those values are authoritative for NextPayday, TotalCheckingFloor, Time-Critical amount, RequiredTransfer, OperationalSurplus, and any Debt Kill Override.
 - NATIVE AUDIT SIGNALS LOCK: If <NATIVE_AUDIT_SIGNALS> is present, treat that native score and risk set as the default scoring anchor. Do not drift materially without explanation.
-- TREND CONTEXT INTEGRATION: Use the provided weekly trend lines to set healthScore.trend and week-over-week commentary in alertsCard.
-- PERSONA MODE INTEGRATION: Respect the selected communication persona while preserving exact math and rule ordering.
-- EXPANDED LIVE DATA: Incorporate budget categories, non-card debts, savings goals, income structure, credit profile, tax flags, insurance deductibles, and big-ticket plans when present.
 - IDLE CASH INTOLERANCE: Any cash above TotalCheckingFloor after required obligations is a routing failure unless assigned to debt kill, tax-advantaged investing, sinking funds, brokerage, or HYSA in a specific dollar amount.
 </shared_provider_rules>
 
 <${selected.protocolTag}>
   <rule priority="critical">AA SEQUENCER OBEDIENCE: Execute the audit in order. If you detect skipped or out-of-order stages, restart the reasoning sequence before output.</rule>
   <rule priority="critical">CONFLICT HIERARCHY LOCK: Enforce exactly: Floor > Fixed Mandates > Time-Critical > Vault > Safety Card > Promo Sprint.</rule>
-  <rule priority="critical">SEQUENCE-SAFE CAPITAL DEPLOYMENT: Before any growth allocation, protect the floor, satisfy mandatory/time-critical obligations, capture employer 401k match when applicable, then execute debt/arbitrage routing, then Sweep Protocol deployment.</rule>
   <rule priority="critical">ZERO-BASED CAPITAL DISCIPLINE: After satisfying all floors and obligations, explicitly route remaining surplus to the highest-priority vehicle. Do not leave material surplus above TotalCheckingFloor unexplained.</rule>
-  <rule priority="critical">TRUST LANGUAGE: Use calm, professional wording. Do not describe yourself as elite, world-class, flawless, Wall-Street-grade, or the user's fiduciary. Do not present recommendations as guaranteed outcomes.</rule>
   <rule priority="critical">ADVICE RISK FIREWALL: Never recommend harmful or speculative tactics such as leverage, options gambling, day-trading, payday loans, cash advances, skipping minimums, or penalty-heavy early withdrawals.</rule>
   <rule priority="critical">OUTPUT CONTRACT: Return exactly one valid JSON object. No markdown, no prose, no code fences, no trailing text.</rule>
-  <rule priority="critical">ENSEMBLE OF EXPERTS ROUTING: In ensembleThoughtProcess, route the case to [Spending Agent], [Invest Agent], or [Planning Agent], then verify math, sequence safety, and floor checks before finalizing the JSON.</rule>
   <rule priority="critical">SCHEMA COMPLETENESS: Return every required key in the contract: ensembleThoughtProcess, headerCard, liquidNetWorth, healthScore, alertsCard, dashboardCard, weeklyMoves, radar, longRangeRadar, milestones, investments, nextAction, spendingAnalysis, and negotiationTargets.</rule>
   <rule priority="critical">HEALTH SCORE CALIBRATION: Score floor safety, debt-to-liquid-asset ratio, savings momentum, obligation coverage, and capital efficiency from 0-20 each. Sum to 0-100 and map the grade exactly.</rule>
   <rule priority="critical">MATH INTEGRITY: Compute all amounts from provided data only. Every dollar of surplus must be accounted for in weeklyMoves. Unallocated surplus is unacceptable.</rule>
-  <rule priority="critical">MATH REVIEW DISCIPLINE: Scrutinize currency precision, date math, and inconsistent user inputs. If inputs conflict, isolate uncertainty, keep the output conservative, and explain the safest mathematical path in plain language.</rule>
   <rule priority="high">INSOLVENCY PROTOCOL ENFORCEMENT: If available cash cannot cover minimums or time-critical bills, invoke the insolvency path immediately. Structural solvency outranks comfort reserves and optional goals.</rule>
-  <rule priority="high">MODULE QUALITY GATES: headerCard must be clear, dashboardCard must use canonical category labels, weeklyMoves must use concrete dollar actions, and nextAction must be one executable sentence for this week.</rule>
-  <rule priority="high">SWEEP PROTOCOL ENFORCEMENT: When revolving debt is cleared or arbitrage favors investing, explicitly state where the wealth-building surplus is being routed and the exact dollar amount.</rule>
-  <rule priority="high">CRYPTO AND LIQUIDITY DISCIPLINE: Include crypto in net worth but never count it toward emergency reserves or floor protection. Use LiquidNetWorth, not total NetWorth, for debt coverage and crisis grading.</rule>
   <rule priority="high">TREND INTEGRATION: When trend context is available, compare week-over-week metrics and reference momentum shifts in alertsCard and nextAction.</rule>
   <rule priority="standard">DATA FIDELITY: Use only snapshot and live app values. Do not hallucinate missing balances, due dates, limits, or APRs. If data is missing, keep schema complete with conservative N/A wording.</rule>
-  <rule priority="standard">PERSONA CONSISTENCY: Apply the selected persona tone to nextAction, weeklyMoves, alertsCard, and healthScore.summary without changing the underlying mathematics.</rule>
-  <rule priority="standard">FINAL VERIFICATION PASS: Before returning JSON, verify schema completeness, canonical dashboard category labels, concrete weeklyMoves, correct score/grade mapping, and no unexplained surplus above TotalCheckingFloor.</rule>
+  <rule priority="standard">FINAL VERIFICATION PASS: Verify schema completeness, score/grade mapping, canonical dashboard labels, and concrete dollar routing before returning JSON.</rule>
   ${customDirectives}
 </${selected.protocolTag}>
 </${selected.tag}>
@@ -1625,7 +1771,7 @@ function getProviderTweaks(providerId, cSym = "$") {
 `;
 }
 
-function getTaskLayerBlock(cSym = "$") {
+function getTaskLayerBlock(_cSym = "$") {
   return `
 ========================
 <TASK_LAYERS>
@@ -1638,13 +1784,11 @@ LAYER 1 — CALCULATION
 
 LAYER 2 — RISK DETECTION
 - Identify floor breach risk, transfer-needed risk, toxic APR debt, promo expiry, elevated utilization, and weak emergency reserves.
-- If risk flags exist in native signals, surface them in alertsCard or weeklyMoves.
-- If no acute risk exists, state that clearly instead of manufacturing urgency.
+- If native risk flags exist, surface them in alertsCard or weeklyMoves.
 
 LAYER 3 — COACHING TONE
 - Only after math and risk tagging are settled, write the summary, alerts, weeklyMoves, and nextAction.
 - Keep tone consistent with the selected persona, but never let tone change the numbers or the priority hierarchy.
-- Prefer precise, high-trust language over hype. Example: "Route ${cSym}180 to Chase Freedom this week" beats vague encouragement.
 </TASK_LAYERS>
 ========================
 `;
@@ -1762,24 +1906,19 @@ export function getSystemPrompt(
       ? `
 
 <critical_reminder>
-YOU ARE ABOUT TO OUTPUT YOUR RESPONSE. Before outputting, verify:
-1. Your output is a single valid JSON object (starts with {, ends with }).
-2. All 13 required schema keys are present (including ensembleThoughtProcess).
-3. healthScore.score is 0-100 with correct grade mapping.
-4. healthScore.trend is set correctly based on trend context (if available).
-5. weeklyMoves contains concrete dollar amounts, not vague suggestions.
-6. dashboardCard uses only canonical category labels (Checking, Vault, Pending, Debts, Available) when rows are present.
-7. All dollar amounts use $X,XXX.XX format.
-8. nextAction is a single actionable sentence.
+Before outputting, verify:
+1. Single valid JSON object only.
+2. Required keys are present.
+3. healthScore score/grade/trend are valid.
+4. weeklyMoves and nextAction use concrete dollar actions.
+5. No unexplained surplus remains above TotalCheckingFloor.
 Do NOT output anything except the JSON object.
 </critical_reminder>`
       : "";
 
   // Memory block injection
   const memBlock = memoryBlock ? "\n\n" + memoryBlock : "";
-  const prompt = core + trendBlock + chatBlock + personaBlock + memBlock + taskLayerBlock + providerTweaks + wrapper + attentionAnchor;
-  const estimatedTokens = estimatePromptTokens(prompt);
-  console.debug(`[Prompts] Estimated prompt tokens: ~${estimatedTokens}`);
+  const prompt = compactAuditPrompt(core + trendBlock + chatBlock + personaBlock + memBlock + taskLayerBlock + providerTweaks + wrapper + attentionAnchor, config, cSym);
   return prompt;
 }
 

@@ -58,6 +58,69 @@ const REDACTED_KEYS = [
   "holding",    // catches holdings, holdingBalance, etc.
 ];
 
+const SECRET_PATTERNS = [
+  { pattern: /Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi, replacement: "Bearer [REDACTED]" },
+  { pattern: /\bsk-[A-Za-z0-9_-]{10,}\b/g, replacement: "[API_KEY]" },
+  { pattern: /\b(access|refresh|link|public|private|client|session)[-_ ]?token\b/gi, replacement: "[TOKEN]" },
+  { pattern: /\b\d{3}-\d{2}-\d{4}\b/g, replacement: "[SSN]" },
+  { pattern: /\b\d{9,19}\b/g, replacement: "[NUMBER]" },
+];
+
+function shouldRedactKey(key) {
+  const normalizedKey = String(key || "").toLowerCase();
+  return REDACTED_KEYS.some(redacted => normalizedKey.includes(redacted));
+}
+
+function sanitizeString(value) {
+  let sanitized = String(value ?? "");
+  for (const rule of SECRET_PATTERNS) {
+    sanitized = sanitized.replace(rule.pattern, rule.replacement);
+  }
+  if (sanitized.length > 240) {
+    sanitized = `${sanitized.slice(0, 240)}…`;
+  }
+  return sanitized;
+}
+
+function sanitizeValue(value, depth = 0) {
+  if (value == null) return value;
+  if (depth > 3) return "[Truncated]";
+  if (value instanceof Error) {
+    return {
+      name: value.name || "Error",
+      message: sanitizeString(value.message || "Unknown error"),
+    };
+  }
+  if (typeof value === "string") return sanitizeString(value);
+  if (typeof value === "number" || typeof value === "boolean") return value;
+  if (Array.isArray(value)) {
+    return value.slice(0, 8).map((item) => sanitizeValue(item, depth + 1));
+  }
+  if (typeof value === "object") {
+    const safe = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (shouldRedactKey(k)) {
+        safe[k] = "[REDACTED]";
+        continue;
+      }
+      safe[k] = sanitizeValue(v, depth + 1);
+    }
+    return safe;
+  }
+  return sanitizeString(value);
+}
+
+function getConsoleMethod(level) {
+  if (level >= LEVELS.ERROR) return console.error;
+  if (level >= LEVELS.WARN) return console.warn;
+  if (level >= LEVELS.INFO) return console.info;
+  return console.debug;
+}
+
+function shouldEmitToConsole(level) {
+  return Boolean(import.meta.env.DEV) || level >= LEVELS.WARN;
+}
+
 // ── Internal: persist buffer ──────────────────────────────────
 async function persist() {
   try {
@@ -92,17 +155,13 @@ async function append(level, tag, message, data) {
 
   // Only include data if present and non-empty
   if (data !== undefined && data !== null) {
-    const safe = {};
-    for (const [k, v] of Object.entries(data)) {
-      const kl = k.toLowerCase();
-      if (REDACTED_KEYS.some(r => kl.includes(r))) continue;
-      if (typeof v === "string" && v.length > 120) {
-        safe[k] = v.slice(0, 120) + "…";
-      } else {
-        safe[k] = v;
-      }
+    const safe = sanitizeValue(data);
+    if (
+      (typeof safe === "object" && safe !== null && Object.keys(safe).length > 0) ||
+      typeof safe !== "object"
+    ) {
+      entry.data = safe;
     }
-    if (Object.keys(safe).length > 0) entry.data = safe;
   }
 
   buffer.push(entry);
@@ -115,6 +174,15 @@ async function append(level, tag, message, data) {
   // Persist every 5 entries to reduce I/O
   if (buffer.length % 5 === 0) {
     persist();
+  }
+
+  if (shouldEmitToConsole(level)) {
+    const consoleMethod = getConsoleMethod(level);
+    if (entry.data) {
+      consoleMethod(`[${entry.tag}] ${entry.msg}`, entry.data);
+    } else {
+      consoleMethod(`[${entry.tag}] ${entry.msg}`);
+    }
   }
 }
 
@@ -160,4 +228,13 @@ export async function clearLogs() {
  */
 export async function flushLogs() {
   await persist();
+}
+
+export function redactForLog(value) {
+  return sanitizeValue(value);
+}
+
+export function getSafeErrorMessage(error) {
+  if (error instanceof Error) return sanitizeString(error.message || "Unknown error");
+  return sanitizeString(String(error || "Unknown error"));
 }

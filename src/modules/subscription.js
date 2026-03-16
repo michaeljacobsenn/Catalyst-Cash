@@ -5,14 +5,14 @@
 // Currently uses local storage. When RevenueCat or StoreKit is
 // integrated, this module becomes the bridge to the native IAP API.
 //
-// ─── AI MODEL COST MATRIX (per audit, ~3K tokens in / ~2K out) ──
-//   gemini-2.5-flash  $0.30/$2.50/M  ≈ $0.006/audit  → Free (Catalyst AI)
-//   gpt-4.1           $2.00/$8.00/M  ≈ $0.022/audit  → Pro  (Catalyst AI Precision)
+// ─── AI MODEL COST MATRIX (per audit, ~13.3K tokens in / ~2.2K out) ──
+//   gemini-2.5-flash  $0.30/$2.50/M  ≈ $0.010/audit  → Free (Catalyst AI)
+//   gpt-4.1           $2.00/$8.00/M  ≈ $0.044/audit  → Pro  (Catalyst AI Precision)
 //   o3                premium reasoning spend         → Pro  (Catalyst AI Reasoning)
 //
-//   Free: 2 audits/wk on Flash  → ~$0.05/user/month
+//   Free: 2 audits/wk on Flash  → ~$0.08/user/month
 //   Pro worst case: 20 audits/mo on premium models → bounded premium compute
-//   Pro @ $9.99/mo (after Apple 30%): $6.99 net → ~$5.79+ profit/user
+//   Pro @ $9.99/mo (after Apple 30%): $6.99 net → still strongly margin-positive
 // ═══════════════════════════════════════════════════════════════
 
   import { Capacitor } from "@capacitor/core";
@@ -143,8 +143,8 @@ export async function syncRemoteGatingMode() {
 //     protection even if client storage is tampered with.
 //
 // ── AI TOOL LIMIT PHILOSOPHY ────────────────────────────────────
-//   Audits: Heavy (~3K tokens in, ~2K out, structured JSON). Weekly cap.
-//   AskAI:  Light (~300 tokens in, ~500 out, natural language). Daily cap.
+//   Audits: Heavy (~12K-15K prompt tokens in, ~2.2K out, structured JSON). Weekly cap.
+//   AskAI:  Light-to-mid (~2.2K-3.4K prompt tokens in, ~500 out, natural language). Daily cap.
 //
 //   Free AskAI: 10/day — enough to experience the value proposition.
 //   Pro AskAI: 25/day — generous but bounded to prevent abuse.

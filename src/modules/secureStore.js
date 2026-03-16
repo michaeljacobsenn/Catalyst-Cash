@@ -1,9 +1,30 @@
 import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
+import { log } from "./logger.js";
 
 const FALLBACK_PREFIX = "secure:";
 let securePluginPromise = null;
 let nativeAvailabilityWarningShown = false;
+
+function getTestSecureStoreOverride() {
+  const override =
+    (typeof globalThis !== "undefined" && globalThis.__E2E_SECURE_STORE__) ||
+    (typeof window !== "undefined" && window.__E2E_SECURE_STORE__);
+  if (!override || override.enabled !== true) return null;
+  return override;
+}
+
+function getTestSecurityStatusOverride() {
+  const override =
+    (typeof globalThis !== "undefined" && globalThis.__E2E_SECURITY_STATE__) ||
+    (typeof window !== "undefined" && window.__E2E_SECURITY_STATE__);
+  if (!override?.storageStatus) return null;
+  return override.storageStatus;
+}
+
+function hasSecureStorageRuntime() {
+  return Capacitor.isNativePlatform() || Boolean(getTestSecureStoreOverride());
+}
 
 function serialize(value) {
   return JSON.stringify(value);
@@ -20,6 +41,11 @@ function deserialize(value) {
 
 async function getPlugin() {
   if (securePluginPromise) return securePluginPromise;
+  const testOverride = getTestSecureStoreOverride();
+  if (testOverride?.plugin) {
+    securePluginPromise = Promise.resolve(testOverride.plugin);
+    return securePluginPromise;
+  }
   if (!Capacitor.isNativePlatform()) {
     securePluginPromise = Promise.resolve(null);
     return securePluginPromise;
@@ -27,14 +53,18 @@ async function getPlugin() {
   securePluginPromise = Promise.race([
     import("capacitor-secure-storage-plugin")
       .then(mod => mod.SecureStoragePlugin || mod.default?.SecureStoragePlugin || mod.default || null)
-      .catch((e) => null),
+      .catch(() => null),
     new Promise(resolve => setTimeout(() => resolve(null), 3000)), // 3s timeout — never hang
   ]).then(plugin => {
     if (!plugin && Capacitor.isNativePlatform() && !nativeAvailabilityWarningShown) {
       nativeAvailabilityWarningShown = true;
-      console.error(
-        "[SecureStore] Native secure storage is unavailable. Sensitive secrets will not be persisted until " +
-        "capacitor-secure-storage-plugin is installed and synced."
+      void log.error(
+        "secure-store",
+        "Native secure storage unavailable",
+        {
+          platform: "native",
+          canPersistSecrets: false,
+        }
       );
     }
     return plugin;
@@ -47,36 +77,6 @@ async function getNativePluginOnly() {
   return plugin || null;
 }
 
-async function getFallback(key) {
-  const prefKey = `${FALLBACK_PREFIX}${key}`;
-  try {
-    const { value } = await Preferences.get({ key: prefKey });
-    return deserialize(value);
-  } catch {
-    try {
-      return deserialize(localStorage.getItem(prefKey));
-    } catch {
-      return null;
-    }
-  }
-}
-
-async function setFallback(key, value) {
-  const prefKey = `${FALLBACK_PREFIX}${key}`;
-  const serialized = serialize(value);
-  try {
-    await Preferences.set({ key: prefKey, value: serialized });
-    return true;
-  } catch {
-    try {
-      localStorage.setItem(prefKey, serialized);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-}
-
 async function removeFallback(key) {
   const prefKey = `${FALLBACK_PREFIX}${key}`;
   try {
@@ -84,13 +84,15 @@ async function removeFallback(key) {
   } catch {
     try {
       localStorage.removeItem(prefKey);
-    } catch {}
+    } catch {
+      // Local cleanup is best-effort only.
+    }
   }
 }
 
 export async function getSecureItem(key) {
-  if (!Capacitor.isNativePlatform()) {
-    return getFallback(key);
+  if (!hasSecureStorageRuntime()) {
+    return null;
   }
 
   const plugin = await getPlugin();
@@ -98,7 +100,9 @@ export async function getSecureItem(key) {
     try {
       const result = await plugin.get({ key });
       return deserialize(result?.value);
-    } catch {}
+    } catch {
+      // Native plugin get failures should not leak or fall through to insecure storage.
+    }
   }
   return null;
 }
@@ -115,8 +119,9 @@ export async function getNativeSecureItem(key) {
 }
 
 export async function setSecureItem(key, value) {
-  if (!Capacitor.isNativePlatform()) {
-    return setFallback(key, value);
+  if (!hasSecureStorageRuntime()) {
+    await removeFallback(key);
+    return false;
   }
 
   const plugin = await getPlugin();
@@ -125,7 +130,9 @@ export async function setSecureItem(key, value) {
     try {
       await plugin.set({ key, value: serialized });
       return true;
-    } catch {}
+    } catch {
+      // Native secret persistence fails closed on native platforms.
+    }
   }
   await removeFallback(key);
   return false;
@@ -143,7 +150,7 @@ export async function setNativeSecureItem(key, value) {
 }
 
 export async function deleteSecureItem(key) {
-  if (!Capacitor.isNativePlatform()) {
+  if (!hasSecureStorageRuntime()) {
     await removeFallback(key);
     return true;
   }
@@ -185,7 +192,7 @@ export async function migrateToSecureItem(key, legacyValue, removeLegacy) {
 }
 
 export function secureStoreUsesNativeKeychain() {
-  return Capacitor.isNativePlatform();
+  return hasSecureStorageRuntime();
 }
 
 export async function hasNativeSecureStore() {
@@ -193,15 +200,31 @@ export async function hasNativeSecureStore() {
 }
 
 export async function getSecretStorageStatus() {
+  const statusOverride = getTestSecurityStatusOverride();
+  if (statusOverride) {
+    return statusOverride;
+  }
+
+  if (getTestSecureStoreOverride()?.plugin) {
+    return {
+      platform: "native",
+      available: true,
+      mode: "native-secure",
+      canPersistSecrets: true,
+      isHardwareBacked: true,
+      message: "",
+    };
+  }
+
   if (!Capacitor.isNativePlatform()) {
     return {
       platform: "web",
       available: false,
-      mode: "web-fallback",
-      canPersistSecrets: true,
+      mode: "web-limited",
+      canPersistSecrets: false,
       isHardwareBacked: false,
       message:
-        "Secure device keychain is unavailable on web. Sensitive settings fall back to browser storage on this device.",
+        "Browser storage is not treated as secure storage. App Lock, linked identity, cloud sync credentials, and other secrets are available only in the native iPhone app.",
     };
   }
 

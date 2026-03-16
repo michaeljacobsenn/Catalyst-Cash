@@ -808,7 +808,9 @@ async function _fetchMarketPricesImpl(symbols, forceRefresh) {
                 data[sym] = cached[sym];
                 console.warn(`[MarketData] Recovered cached price for ${sym}: $${cached[sym].price}`);
               }
-            } catch (e) {}
+            } catch {
+              // Cache recovery is best-effort only.
+            }
           }
         }
         // Delay between batches to respect rate limits

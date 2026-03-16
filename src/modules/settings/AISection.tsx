@@ -1,6 +1,7 @@
   import type { Dispatch,SetStateAction } from "react";
   import { Mono } from "../components.js";
   import { T } from "../constants.js";
+  import { getAiUsageDisplayLabel } from "../aiUsageProfile.js";
   import { haptic } from "../haptics.js";
   import { Card,Label } from "../ui.js";
 
@@ -371,7 +372,7 @@ export default function AISection({
           ["Version", "v1"],
           ["Provider", currentProvider.name],
           ["Model", `${selectedModel.name} · ${selectedModelTierLabel}`],
-          ["Tokens", "12,000"],
+          ["Tokens", getAiUsageDisplayLabel()],
           ["Output", "JSON"],
           ["Stream", useStreaming ? "ON" : "OFF"],
         ].map(([label, value]) => (
