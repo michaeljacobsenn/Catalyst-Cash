@@ -15,6 +15,8 @@
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
+		7C6A5B4D3E2F1A0B9C8D7E6F /* ExportFilePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6A5B4D3E2F1A0B9C8D7E70 /* ExportFilePlugin.swift */; };
+		7C6A5B4D3E2F1A0B9C8D7E71 /* ExportFilePlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = 7C6A5B4D3E2F1A0B9C8D7E72 /* ExportFilePlugin.m */; };
 		9D0E1F2A3B4C5D6E7F8090A1 /* PdfViewerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D0E1F2A3B4C5D6E7F8090A2 /* PdfViewerPlugin.swift */; };
 		A2B3C4D5E6F7A8B9C0D1E2F3 /* ICloudSyncPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B3C4D5E6F7A8B9C0D1E2F4 /* ICloudSyncPlugin.swift */; };
 		A2B3C4D5E6F7A8B9C0D1E2F5 /* ICloudSyncPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = A2B3C4D5E6F7A8B9C0D1E2F6 /* ICloudSyncPlugin.m */; };
@@ -32,6 +34,8 @@
 		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
+		7C6A5B4D3E2F1A0B9C8D7E70 /* ExportFilePlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ExportFilePlugin.swift; sourceTree = "<group>"; };
+		7C6A5B4D3E2F1A0B9C8D7E72 /* ExportFilePlugin.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = ExportFilePlugin.m; sourceTree = "<group>"; };
 		85B04E51BA2A95C7508E29C4 /* GoogleService-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		9D0E1F2A3B4C5D6E7F8090A2 /* PdfViewerPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PdfViewerPlugin.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
@@ -86,6 +90,8 @@
 				50B271D01FEDC1A000F3C39B /* public */,
 				DDA224D0215F347BF5E6BB27 /* FaceIdPlugin.swift */,
 				9D0E1F2A3B4C5D6E7F8090A2 /* PdfViewerPlugin.swift */,
+				7C6A5B4D3E2F1A0B9C8D7E70 /* ExportFilePlugin.swift */,
+				7C6A5B4D3E2F1A0B9C8D7E72 /* ExportFilePlugin.m */,
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* App.entitlements */,
 				85B04E51BA2A95C7508E29C4 /* GoogleService-Info.plist */,
 				A2B3C4D5E6F7A8B9C0D1E2F4 /* ICloudSyncPlugin.swift */,
@@ -233,6 +239,8 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				1991E67975C25490F64FD4FA /* FaceIdPlugin.swift in Sources */,
 				9D0E1F2A3B4C5D6E7F8090A1 /* PdfViewerPlugin.swift in Sources */,
+				7C6A5B4D3E2F1A0B9C8D7E6F /* ExportFilePlugin.swift in Sources */,
+				7C6A5B4D3E2F1A0B9C8D7E71 /* ExportFilePlugin.m in Sources */,
 				A2B3C4D5E6F7A8B9C0D1E2F3 /* ICloudSyncPlugin.swift in Sources */,
 				A2B3C4D5E6F7A8B9C0D1E2F5 /* ICloudSyncPlugin.m in Sources */,
 			);

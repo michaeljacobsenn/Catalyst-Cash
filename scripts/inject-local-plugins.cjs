@@ -20,6 +20,7 @@ const NATIVE_PLUGIN_CLASSES = [
   "FaceIdPlugin",
   "PdfViewerPlugin",
   "ICloudSyncPlugin",
+  "ExportFilePlugin",
 ];
 
 try {

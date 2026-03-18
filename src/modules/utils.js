@@ -29,10 +29,11 @@ export const FaceId = {
   },
 };
 export const PdfViewer = registerPlugin("PdfViewer");
+export const ExportFile = registerPlugin("ExportFile");
 
 const _exportLocks = {};
 const EXPORT_ERROR_MESSAGES = {
-  nativeUnavailable: "Native export is unavailable in this build. Falling back to an in-app download.",
+  nativeUnavailable: "Export is unavailable in this build. Rebuild the iPhone app and try again.",
 };
 
 function isUnimplementedPluginError(error) {
@@ -70,6 +71,7 @@ async function triggerBrowserDownload(filename, content, mimeType, isBase64 = fa
   } finally {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  return { completed: true, source: "browser" };
 }
 
 function csvEscape(value) {
@@ -138,24 +140,38 @@ export async function nativeExport(filename, content, mimeType = "text/plain", i
 
   if (Capacitor.isNativePlatform()) {
     try {
-      const opts = { path: filename, data: content, directory: Directory.Cache, recursive: true };
-      if (!isBase64) opts.encoding = "utf8";
-      const res = await Filesystem.writeFile(opts);
-      // Only pass `files` — passing both `url` and `files` causes iOS to show 2 items
-      await Share.share({ files: [res.uri], dialogTitle: "Export File" });
-      return;
+      return await ExportFile.share({ filename, data: content, mimeType, isBase64 });
     } catch (e) {
       console.error("Native export failed:", e);
-      if (isUnimplementedPluginError(e)) {
-        if (window.toast) window.toast.info(EXPORT_ERROR_MESSAGES.nativeUnavailable);
-        await triggerBrowserDownload(filename, content, mimeType, isBase64);
-        return;
+      try {
+        const opts = { path: filename, data: content, directory: Directory.Cache, recursive: true };
+        if (!isBase64) opts.encoding = "utf8";
+        const res = await Filesystem.writeFile(opts);
+        await Share.share({ files: [res.uri], dialogTitle: "Export File" });
+        return { completed: true, source: "capacitor" };
+      } catch (fallbackError) {
+        console.error("Capacitor export fallback failed:", fallbackError);
+        const nativeUnavailable = isUnimplementedPluginError(e) || isUnimplementedPluginError(fallbackError);
+        if (nativeUnavailable && Capacitor.getPlatform() === "ios") {
+          const error = new Error(EXPORT_ERROR_MESSAGES.nativeUnavailable);
+          if (window.toast?.error) window.toast.error(error.message);
+          throw error;
+        }
+        if (nativeUnavailable) {
+          if (window.toast?.info) window.toast.info(EXPORT_ERROR_MESSAGES.nativeUnavailable);
+          return await triggerBrowserDownload(filename, content, mimeType, isBase64);
+        }
+        if (window.toast?.error) window.toast.error("Export failed. Please check permissions.");
+        throw fallbackError;
       }
-      if (window.toast) window.toast.error("Export failed. Please check permissions.");
-      throw e;
     }
   }
-  await triggerBrowserDownload(filename, content, mimeType, isBase64);
+  return await triggerBrowserDownload(filename, content, mimeType, isBase64);
+}
+
+function isUserCancelledShare(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  return message.includes("cancel") || message.includes("user interaction");
 }
 
 const PREFS_TIMEOUT_MS = 2000;
@@ -1191,16 +1207,16 @@ export async function exportAudit(audit) {
     pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
 
     const pdfBase64 = pdf.output("datauristring").split(",")[1];
-    await nativeExport(`CatalystCash_CPA_TearSheet_${dateStr}.pdf`, pdfBase64, "application/pdf", true);
+    return await nativeExport(`CatalystCash_CPA_TearSheet_${dateStr}.pdf`, pdfBase64, "application/pdf", true);
   } catch (err) {
-    const isCancel =
-      err.message?.toLowerCase().includes("cancel") || err.message?.toLowerCase().includes("user interaction");
+    const isCancel = isUserCancelledShare(err);
     if (!isCancel) {
       console.error("PDF generation or Share sheet failed:", err);
       // Fallback
       const h = `<!DOCTYPE html><html><body>${container.innerHTML}</body></html>`;
-      await nativeExport(`CatalystCash_Audit_${dateStr}.html`, h, "text/html");
+      return await nativeExport(`CatalystCash_Audit_${dateStr}.html`, h, "text/html");
     }
+    return { completed: false, source: "native" };
   } finally {
     document.body.removeChild(container);
   }
@@ -1215,7 +1231,7 @@ export async function exportAuditJson(audit) {
     type: "single-audit",
     audit,
   };
-  await nativeExport(
+  return await nativeExport(
     `CatalystCash_Audit_${audit.date || new Date().toISOString().split("T")[0]}.json`,
     JSON.stringify(payload, null, 2),
     "application/json"
@@ -1225,7 +1241,7 @@ export async function exportAuditJson(audit) {
 export async function exportAuditCsv(audit) {
   if (!audit) return;
   const csv = buildSingleAuditCsv(audit);
-  await nativeExport(
+  return await nativeExport(
     `CatalystCash_Audit_${audit.date || new Date().toISOString().split("T")[0]}.csv`,
     csv,
     "text/csv"
@@ -1241,7 +1257,7 @@ export async function exportAllAudits(audits) {
     count: audits.length,
     audits,
   };
-  await nativeExport(
+  return await nativeExport(
     `CatalystCash_ALL_${new Date().toISOString().split("T")[0]}.json`,
     JSON.stringify(payload, null, 2),
     "application/json"
@@ -1257,7 +1273,7 @@ export async function exportSelectedAudits(audits) {
     count: audits.length,
     audits,
   };
-  await nativeExport(
+  return await nativeExport(
     `CatalystCash_Selected_${audits.length}_${new Date().toISOString().split("T")[0]}.json`,
     JSON.stringify(payload, null, 2),
     "application/json"
@@ -1286,7 +1302,7 @@ export async function exportAuditCSV(audits) {
     ]);
   });
   const csv = buildCsvContent(rows);
-  await nativeExport(`CatalystCash_History_${new Date().toISOString().split("T")[0]}.csv`, csv, "text/csv");
+  return await nativeExport(`CatalystCash_History_${new Date().toISOString().split("T")[0]}.csv`, csv, "text/csv");
 }
 
 export async function shareAudit(audit) {

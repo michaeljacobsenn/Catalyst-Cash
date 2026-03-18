@@ -233,6 +233,7 @@ export default memo(function DashboardTab({
   const grade = hs?.grade || "?";
   const summary = hs?.summary || "";
   const isSmallPhone = typeof window !== "undefined" ? window.innerWidth <= 390 : false;
+  const isCompactWidth = typeof window !== "undefined" ? window.innerWidth <= 430 : false;
   const hasAuditInsights = Boolean(summary || hs?.narrative || p?.sections?.nextAction);
   const showEmptyDashboard = !p && !hasAuditInsights;
   const scoreColor = score >= 80 ? T.status.green : score >= 60 ? T.status.amber : T.status.red;
@@ -417,16 +418,16 @@ export default memo(function DashboardTab({
            {p && (
              <Card
                animate
-               style={{
-                 padding: "22px 20px",
+             style={{
+                 padding: isSmallPhone ? "18px 16px" : "20px 18px",
                  marginBottom: 12,
                  background: `linear-gradient(180deg, ${safetyColor}10 0%, ${T.bg.card} 55%)`,
                  border: `1px solid ${safetyColor}28`,
                  boxShadow: `0 12px 32px ${safetyColor}12`,
-                 overflow: "hidden",
+                 overflow: "visible",
                }}
              >
-               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
+               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                    <div
                      style={{
@@ -444,10 +445,10 @@ export default memo(function DashboardTab({
                      {safetyIcon}
                    </div>
                    <div>
-                     <div style={{ fontSize: 11, fontWeight: 800, color: safetyColor, fontFamily: T.font.mono, letterSpacing: "0.05em" }}>
+                     <div style={{ fontSize: 10, fontWeight: 800, color: safetyColor, fontFamily: T.font.mono, letterSpacing: "0.05em" }}>
                        THIS WEEK
                      </div>
-                     <div style={{ fontSize: "clamp(17px, 4.8vw, 18px)", fontWeight: 900, color: T.text.primary, letterSpacing: "-0.02em" }}>
+                     <div style={{ fontSize: "clamp(16px, 4.5vw, 18px)", fontWeight: 900, color: T.text.primary, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
                        Am I safe right now?
                      </div>
                    </div>
@@ -459,7 +460,7 @@ export default memo(function DashboardTab({
                      background: `${safetyColor}14`,
                      border: `1px solid ${safetyColor}22`,
                      color: safetyColor,
-                     fontSize: 11,
+                     fontSize: 10,
                      fontWeight: 800,
                      fontFamily: T.font.mono,
                      letterSpacing: "0.04em",
@@ -470,56 +471,56 @@ export default memo(function DashboardTab({
                  </div>
                </div>
 
-                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                  <div style={{ minWidth: 0 }}>
-                   <div style={{ fontSize: "clamp(20px, 6.4vw, 22px)", fontWeight: 900, color: safetyColor, letterSpacing: "-0.03em", marginBottom: 4, overflowWrap: "anywhere" }}>
+                   <div style={{ fontSize: isCompactWidth ? "clamp(18px, 5.7vw, 20px)" : "clamp(19px, 5.5vw, 22px)", fontWeight: 900, color: safetyColor, letterSpacing: "-0.03em", lineHeight: 1.08, marginBottom: 4, overflowWrap: "anywhere" }}>
                      {safetySnapshot.headline}
                    </div>
-                   <p style={{ fontSize: 13, color: T.text.secondary, lineHeight: 1.5, margin: 0 }}>
+                   <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.45, margin: 0 }}>
                      {safetySnapshot.summary}
                    </p>
                  </div>
-                   <div style={{ display: "grid", gridTemplateColumns: isSmallPhone ? "1fr 1fr" : "1.2fr 1fr 1fr 1fr", gap: 8 }}>
+                   <div style={{ display: "grid", gridTemplateColumns: isCompactWidth ? "1fr 1fr" : "1.25fr repeat(3, minmax(0, 1fr))", gap: 8 }}>
                      <div
                        style={{
-                         padding: "12px 14px",
+                         padding: isSmallPhone ? "11px 12px" : "12px 14px",
                          borderRadius: T.radius.lg,
                          background: `${T.bg.elevated}`,
                          border: `1px solid ${T.border.subtle}`,
-                         gridColumn: isSmallPhone ? "1 / -1" : "auto",
+                         gridColumn: isCompactWidth ? "1 / -1" : "auto",
                        }}
                      >
                        <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 6 }}>
                          SAFE TO SPEND
                        </div>
-                       <div style={{ fontSize: 24, fontWeight: 900, color: privacyMode ? T.text.dim : safetyColor, letterSpacing: "-0.04em", fontFamily: T.font.mono }}>
+                       <div style={{ fontSize: isSmallPhone ? 22 : 24, fontWeight: 900, color: privacyMode ? T.text.dim : safetyColor, letterSpacing: "-0.04em", fontFamily: T.font.mono, lineHeight: 1.05 }}>
                          {privacyMode ? "••••••" : fmt(Math.max(0, safetySnapshot.safeToSpend))}
                        </div>
-                       <div style={{ fontSize: 11, color: T.text.dim, marginTop: 4 }}>
+                       <div style={{ fontSize: 10, color: T.text.dim, marginTop: 4, lineHeight: 1.35 }}>
                          Protected need: {privacyMode ? "••••" : fmt(safetySnapshot.protectedNeed)}
                        </div>
                      </div>
-                     <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}` }}>
+                     <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}`, minWidth: 0 }}>
                        <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 4 }}>
                          RUNWAY
                        </div>
-                       <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary }}>
+                       <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, overflowWrap: "anywhere" }}>
                          {safetySnapshot.runwayWeeks != null ? `${safetySnapshot.runwayWeeks.toFixed(1)}w` : "Set budget"}
                        </div>
                      </div>
-                     <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}` }}>
+                     <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}`, minWidth: 0 }}>
                        <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 4 }}>
                          PENDING
                        </div>
-                       <div style={{ fontSize: 14, fontWeight: 800, color: privacyMode ? T.text.dim : T.text.primary }}>
+                       <div style={{ fontSize: 13, fontWeight: 800, color: privacyMode ? T.text.dim : T.text.primary, overflowWrap: "anywhere" }}>
                          {privacyMode ? "••••" : fmt(safetySnapshot.pendingCharges)}
                        </div>
                      </div>
-                     <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}` }}>
+                     <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}`, minWidth: 0 }}>
                        <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 4 }}>
                          30-DAY BILLS
                        </div>
-                       <div style={{ fontSize: 14, fontWeight: 800, color: privacyMode ? T.text.dim : T.text.primary }}>
+                       <div style={{ fontSize: 13, fontWeight: 800, color: privacyMode ? T.text.dim : T.text.primary, overflowWrap: "anywhere" }}>
                          {privacyMode ? "••••" : fmt(safetySnapshot.upcomingBills30d)}
                        </div>
                      </div>
@@ -530,8 +531,8 @@ export default memo(function DashboardTab({
                        display: "flex",
                        alignItems: "center",
                        justifyContent: "space-between",
-                       gap: 12,
-                       padding: "12px 14px",
+                       gap: 10,
+                       padding: "11px 12px",
                        borderRadius: T.radius.lg,
                        background: `${T.bg.surface}`,
                        border: `1px solid ${T.border.subtle}`,
@@ -542,7 +543,7 @@ export default memo(function DashboardTab({
                        <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, fontFamily: T.font.mono, letterSpacing: "0.05em", marginBottom: 4 }}>
                          PRIMARY RISK
                        </div>
-                       <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary }}>
+                       <div style={{ fontSize: 12, fontWeight: 800, color: T.text.primary, lineHeight: 1.35, overflowWrap: "anywhere" }}>
                          {primaryRiskLabel}
                        </div>
                      </div>
@@ -576,17 +577,17 @@ export default memo(function DashboardTab({
              className="hover-card a11y-hit-target"
              onClick={() => { haptic.selection(); navTo("portfolio"); }}
              style={{
-               padding: "24px 20px",
+               padding: isSmallPhone ? "18px 16px" : "22px 18px",
                marginBottom: 12,
                background: T.bg.card,
                border: `1px solid ${T.border.subtle}`,
                cursor: "pointer",
                position: "relative",
-               overflow: "hidden",
+               overflow: "visible",
              }}
            >
              {/* Top row: label + health pill */}
-             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
                <span style={{ fontSize: 12, fontWeight: 600, color: T.text.dim, letterSpacing: "0.02em" }}>
                  Balance Sheet
                </span>
@@ -631,11 +632,11 @@ export default memo(function DashboardTab({
 
              {/* Big number block mimicking Portfolio hero style */}
            <div style={{
-             display: "flex", flexDirection: "column", gap: 14,
+             display: "flex", flexDirection: "column", gap: 12,
              background: `linear-gradient(180deg, ${T.bg.card} 0%, transparent 100%)`,
              border: `1px solid ${T.border.subtle}`,
              borderRadius: T.radius.lg,
-             padding: "18px 16px 20px",
+             padding: isSmallPhone ? "16px 14px 18px" : "18px 16px 20px",
              boxShadow: `0 16px 48px rgba(16,185,129,0.06), 0 8px 24px rgba(138,99,210,0.1), inset 0 1px 0 rgba(255,255,255,0.05)`,
              marginBottom: 6
            }}>
@@ -644,12 +645,13 @@ export default memo(function DashboardTab({
                  Net Worth
                </h2>
                <div style={{ 
-                 fontSize: "clamp(30px, 9vw, 36px)", 
+                 fontSize: isCompactWidth ? "clamp(28px, 8.2vw, 34px)" : "clamp(30px, 9vw, 36px)", 
                  fontWeight: 900, 
                  color: privacyMode ? T.text.dim : T.text.primary, 
                  letterSpacing: "-0.02em",
                  textShadow: privacyMode ? "none" : `0 0 15px ${T.text.primary}80, 0 2px 10px ${T.text.primary}20`,
                  overflowWrap: "anywhere",
+                 lineHeight: 1.02,
                }}>
                  {privacyMode ? "••••••" : fmt(portfolioMetrics?.netWorth || 0)}
                </div>
