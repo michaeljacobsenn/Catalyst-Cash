@@ -38,21 +38,37 @@ function getHouseholdSyncDelayMs() {
 
 export function useBootServices(setProEnabled: (value: boolean) => void) {
   useEffect(() => {
-    syncRemoteGatingMode();
     syncOTAData();
   }, []);
 
   useEffect(() => {
-    initRevenueCat().then(() => {
+    let cancelled = false;
+
+    const boot = async () => {
+      await syncRemoteGatingMode();
+      await initRevenueCat();
+
       const mode = getGatingMode();
+      if (cancelled) return;
+
       if (mode === "off" || mode === "soft") {
         setProEnabled(true);
         return;
       }
+
       isPro()
-        .then(setProEnabled)
-        .catch(() => setProEnabled(false));
-    });
+        .then(value => {
+          if (!cancelled) setProEnabled(value);
+        })
+        .catch(() => {
+          if (!cancelled) setProEnabled(false);
+        });
+    };
+
+    void boot();
+    return () => {
+      cancelled = true;
+    };
   }, [setProEnabled]);
 }
 

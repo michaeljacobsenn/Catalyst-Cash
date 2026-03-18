@@ -6,9 +6,11 @@ export async function handleSystemRoute({
   buildHeaders,
   DEFAULTS,
   getWorkerGatingMode,
+  resolveAuthenticatedActor,
   resolveVerifiedRevenueCatAppUserId,
-  bootstrapIdentityActor,
-  issueIdentitySessionToken,
+  createIdentityChallenge,
+  completeIdentityChallenge,
+  rotateIdentityDeviceKey,
   updateAuditLogRow,
   workerLog,
 }) {
@@ -17,7 +19,7 @@ export async function handleSystemRoute({
       JSON.stringify({
         status: "ok",
         version: "1.1",
-        providers: ["gemini", "openai", "claude"],
+        providers: ["gemini", "openai"],
         defaultProvider: "gemini",
         defaultModel: DEFAULTS.gemini,
         plaid: Boolean(env.PLAID_CLIENT_ID && env.PLAID_SECRET),
@@ -43,8 +45,10 @@ export async function handleSystemRoute({
             appleSignIn: false,
             cloudBackup: false,
             householdSync: false,
+            protectedFinanceIdentity: false,
+            plaidSync: false,
             note:
-              "Web is intentionally limited for security-sensitive features. Device secrets, Apple-backed backup, and shared-household credentials require the native iPhone app.",
+              "Web is intentionally limited for security-sensitive features. Device-proof identity, Plaid sync, Apple-backed backup, and shared-household credentials require the native iPhone app.",
           },
         },
         rotatingCategories: {
@@ -59,6 +63,60 @@ export async function handleSystemRoute({
     );
   }
 
+  if (url.pathname === "/auth/challenge" && request.method === "POST") {
+    if (!env.DB) {
+      return new Response(JSON.stringify({ error: "DB not configured" }), {
+        status: 500,
+        headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+      });
+    }
+
+    try {
+      const body = await request.json().catch(() => ({}));
+      const verifiedRevenueCatAppUserId = await resolveVerifiedRevenueCatAppUserId(request, env);
+      const authenticatedActor =
+        body?.intent === "rotate"
+          ? await resolveAuthenticatedActor(request, env.DB, env)
+          : null;
+      if (body?.intent === "rotate" && !authenticatedActor) {
+        return new Response(JSON.stringify({ error: "identity_session_required" }), {
+          status: 401,
+          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+        });
+      }
+
+      const challenge = await createIdentityChallenge(env.DB, env, {
+        publicKeyJwk: body?.publicKeyJwk,
+        verifiedRevenueCatAppUserId,
+        legacyDeviceId: body?.legacyDeviceId,
+        intent: body?.intent,
+        actor: authenticatedActor,
+        nextPublicKeyJwk: body?.nextPublicKeyJwk,
+      });
+      return new Response(JSON.stringify(challenge), {
+        status: 200,
+        headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+      });
+    } catch (error) {
+      const message = String(error?.message || "");
+      const status =
+        message === "identity_rotation_requires_authenticated_actor" ||
+        message === "identity_session_required"
+          ? 401
+          : message.includes("identity_public_key") || message.includes("identity_rotation_next_key_missing")
+            ? 400
+            : 500;
+      workerLog(env, status >= 500 ? "error" : "warn", "identity-session", "Failed to create identity challenge", {
+        error,
+        status,
+      });
+      return new Response(JSON.stringify({ error: message || "identity_challenge_failed" }), {
+        status,
+        headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+      });
+    }
+  }
+
   if (url.pathname === "/auth/session" && request.method === "POST") {
     if (!env.DB) {
       return new Response(JSON.stringify({ error: "DB not configured" }), {
@@ -68,24 +126,53 @@ export async function handleSystemRoute({
     }
 
     try {
+      const body = await request.json().catch(() => ({}));
       const verifiedRevenueCatAppUserId = await resolveVerifiedRevenueCatAppUserId(request, env);
-      const actor = await bootstrapIdentityActor(env.DB, request, env, verifiedRevenueCatAppUserId);
-      if (!actor) {
-        return new Response(JSON.stringify({ error: "Missing bootstrap identity" }), {
-          status: 401,
-          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+      let session;
+      if (body?.intent === "rotate") {
+        const authenticatedActor = await resolveAuthenticatedActor(request, env.DB, env);
+        if (!authenticatedActor) {
+          return new Response(JSON.stringify({ error: "identity_session_required" }), {
+            status: 401,
+            headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+          });
+        }
+        session = await rotateIdentityDeviceKey(env.DB, env, {
+          challengeId: body?.challengeId,
+          nonce: body?.nonce,
+          currentSignature: body?.currentSignature,
+          nextPublicKeyJwk: body?.nextPublicKeyJwk,
+          nextSignature: body?.nextSignature,
+        });
+      } else {
+        session = await completeIdentityChallenge(env.DB, env, {
+          challengeId: body?.challengeId,
+          nonce: body?.nonce,
+          publicKeyJwk: body?.publicKeyJwk,
+          signature: body?.signature,
+          legacyDeviceId: body?.legacyDeviceId,
+          verifiedRevenueCatAppUserId,
         });
       }
 
-      const session = await issueIdentitySessionToken(actor, env);
       return new Response(JSON.stringify(session), {
         status: 200,
         headers: buildHeaders(cors, { "Content-Type": "application/json" }),
       });
     } catch (error) {
-      workerLog(env, "error", "identity-session", "Failed to issue identity session", { error });
-      return new Response(JSON.stringify({ error: "identity_session_failed" }), {
-        status: 500,
+      const message = String(error?.message || "");
+      const status =
+        message === "identity_proof_required"
+          ? 409
+          : message.includes("identity_challenge") || message.includes("identity_key_") || message.includes("identity_signature")
+            ? 401
+            : 500;
+      workerLog(env, status >= 500 ? "error" : "warn", "identity-session", "Failed to issue identity session", {
+        error,
+        status,
+      });
+      return new Response(JSON.stringify({ error: message || "identity_session_failed" }), {
+        status,
         headers: buildHeaders(cors, { "Content-Type": "application/json" }),
       });
     }

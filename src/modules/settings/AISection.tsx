@@ -32,7 +32,7 @@ interface AISectionProps {
   setUseStreaming: Dispatch<SetStateAction<boolean>>;
   currentProvider: ProviderConfig;
   selectedModel: ProviderModel;
-  proEnabled: boolean;
+  showUpgradeCta: boolean;
   showModelSelector: boolean;
   setShowPaywall: Dispatch<SetStateAction<boolean>>;
   apiKey?: string;
@@ -95,7 +95,7 @@ export default function AISection({
   setUseStreaming,
   currentProvider,
   selectedModel,
-  proEnabled,
+  showUpgradeCta,
   showModelSelector,
   setShowPaywall
 }: AISectionProps) {
@@ -179,7 +179,7 @@ export default function AISection({
             {currentProvider.models.map(m => {
               const active = aiModel === m.id;
               const isPro = m.tier === "pro";
-              const locked = (isPro && !proEnabled) || m.disabled || m.comingSoon;
+              const locked = (isPro && !showModelSelector) || m.disabled || m.comingSoon;
               const badgeLabel = m.comingSoon ? "SOON" : m.badge || (isPro ? "PRO" : "FREE");
               const badgeStyle = m.comingSoon
                 ? {
@@ -316,28 +316,32 @@ export default function AISection({
                 </span>
               </div>
               <div style={{ fontSize: 11, color: T.text.dim, marginTop: 4 }}>
-                Your current plan uses our default model automatically. Upgrade to unlock Fast AI and Precision AI.
+                {showUpgradeCta
+                  ? "Free includes Catalyst AI automatically. Upgrade to unlock Catalyst AI CFO and Boardroom reasoning."
+                  : "Pro includes three curated engines: Free-speed Flash, default CFO, and deep-reasoning Boardroom."}
               </div>
             </div>
-            <button
-              onClick={() => {
-                haptic.light();
-                setShowPaywall(true);
-              }}
-              style={{
-                border: `1px solid ${T.accent.primary}30`,
-                background: `${T.accent.primary}12`,
-                color: T.accent.primary,
-                borderRadius: 999,
-                padding: "8px 12px",
-                fontSize: 11,
-                fontWeight: 800,
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Upgrade
-            </button>
+            {showUpgradeCta ? (
+              <button
+                onClick={() => {
+                  haptic.light();
+                  setShowPaywall(true);
+                }}
+                style={{
+                  border: `1px solid ${T.accent.primary}30`,
+                  background: `${T.accent.primary}12`,
+                  color: T.accent.primary,
+                  borderRadius: 999,
+                  padding: "8px 12px",
+                  fontSize: 11,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Upgrade
+              </button>
+            ) : null}
           </div>
         </div>
       )}

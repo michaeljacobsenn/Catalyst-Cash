@@ -169,7 +169,6 @@ function CatalystCashShell() {
   const topBarRef = useRef<HTMLElement | null>(null);
   const [headerHidden, setHeaderHidden] = useState(false);
   const lastScrollY = useRef(0);
-  const headerToggleCooldown = useRef(0);
   const [transactionFeedTab, setTransactionFeedTab] = useState<AppTab | null>(null);
   const [chatInitialPrompt, setChatInitialPrompt] = useState<string | null>(null);
   const showShellHeader = tab !== "settings" && tab !== "history" && tab !== "results" && tab !== "input";
@@ -179,7 +178,6 @@ function CatalystCashShell() {
     setChatInitialPrompt(null);
     setHeaderHidden(false);
     lastScrollY.current = 0;
-    headerToggleCooldown.current = 0;
   }, []);
 
   const refreshAppState = useCallback(
@@ -293,6 +291,20 @@ function CatalystCashShell() {
 
   // ── Shared swipe gesture handler (used by main scroll, input pane, chat pane) ──
   const ready = isSecurityReady && isSettingsReady && isPortfolioReady && isAuditReady;
+
+  useEffect(() => {
+    if (ready) return;
+    const timer = window.setTimeout(() => {
+      log.warn("boot", "Startup still waiting on readiness gates", {
+        isSecurityReady,
+        isSettingsReady,
+        isPortfolioReady,
+        isAuditReady,
+        onboardingComplete,
+      });
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [ready, isSecurityReady, isSettingsReady, isPortfolioReady, isAuditReady, onboardingComplete]);
 
   const [proEnabled, setProEnabled] = useState(true);
   useBootServices(setProEnabled);
@@ -532,34 +544,10 @@ function CatalystCashShell() {
   const display = viewing || current;
   const displayMoveChecks = viewing ? viewing.moveChecks || {} : moveChecks;
 
-  const handleSnapPageScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
-    const el = event.currentTarget;
-    const scrollTop = el.scrollTop;
-    const delta = scrollTop - (lastScrollY.current || 0);
-    lastScrollY.current = scrollTop;
-
-    if (scrollTop <= 0 || scrollTop + el.clientHeight >= el.scrollHeight - 1) return;
-
-    const now = Date.now();
-    if (now - headerToggleCooldown.current < 300) return;
-
-    if (scrollTop < 60) {
-      if (headerHidden) {
-        headerToggleCooldown.current = now;
-        setHeaderHidden(false);
-      }
-    } else if (delta > 25) {
-      if (!headerHidden) {
-        headerToggleCooldown.current = now;
-        setHeaderHidden(true);
-      }
-    } else if (delta < -25) {
-      if (headerHidden) {
-        headerToggleCooldown.current = now;
-        setHeaderHidden(false);
-      }
-    }
-  }, [headerHidden]);
+  const handleSnapPageScroll = useCallback(() => {
+    // Keep the shared shell header stable on finance surfaces.
+    // Velocity-based hide/show created inconsistent behavior on fast swipes.
+  }, []);
 
   useRecoverableAuditLifecycle({
     recoverableAuditDraft,

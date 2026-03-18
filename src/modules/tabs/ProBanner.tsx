@@ -1,4 +1,5 @@
   import { T } from "../constants.js";
+  import { buildPromoLine,PRO_BANNER_BENEFITS } from "../planCatalog.js";
   import { haptic } from "../haptics.js";
 
 /* ─── Animations ─────────────────────────────────────────────── */
@@ -22,14 +23,6 @@ const SHIMMER_CSS = `
   100% { transform: scale(1);   opacity: 1; }
 }
 `;
-
-/* Benefit pills shown inside the card */
-const BENEFITS = [
-  { emoji: "📊", text: "20 audits/mo" },
-  { emoji: "🤖", text: "Premium AI" },
-  { emoji: "📈", text: "Full archive" },
-  { emoji: "💳", text: "Smart card matches" },
-];
 
 export default function ProBanner({ onUpgrade, label, sublabel, compact = false }) {
   const handleClick = () => {
@@ -168,14 +161,14 @@ export default function ProBanner({ onUpgrade, label, sublabel, compact = false 
                 {label || "Unlock Catalyst Cash Pro"}
               </div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 2, fontWeight: 500 }}>
-                {sublabel || "20 audits/month, premium AI, and full financial history"}
+                {sublabel || buildPromoLine(["audits", "chats", "history"])}
               </div>
             </div>
           </div>
 
           {/* Benefit pills */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {BENEFITS.map(b => (
+            {PRO_BANNER_BENEFITS.map(b => (
               <div
                 key={b.text}
                 style={{

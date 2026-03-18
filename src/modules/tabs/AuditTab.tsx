@@ -16,10 +16,12 @@
     TrendingUp,
     Zap
   } from "../icons";
+  import { buildPromoLine } from "../planCatalog.js";
   import { shouldShowGating } from "../subscription.js";
   import { Badge,Card } from "../ui.js";
-  import { exportAllAudits,exportAudit,exportAuditCSV,exportSelectedAudits,fmt,fmtDate } from "../utils.js";
+  import { exportAllAudits,exportAuditCSV,exportSelectedAudits,fmt,fmtDate } from "../utils.js";
   import "./DashboardTab.css";
+  import AuditExportSheet from "./AuditExportSheet.js";
   import ProBanner from "./ProBanner.js";
 
 const LazyProPaywall = lazy(() => import("./ProPaywall.js"));
@@ -160,6 +162,7 @@ export default memo(function AuditTab({ proEnabled = false, toast, onDemoAudit }
   const [showManualPaste, setShowManualPaste] = useState(false);
   const [manualPasteText, setManualPasteText] = useState("");
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [exportAuditRecord, setExportAuditRecord] = useState<AuditRecord | null>(null);
 
   const filteredAudits = statusFilter ? audits.filter(a => getAuditColor(a) === statusFilter) : audits;
   const allSel = sel.size === filteredAudits.length && filteredAudits.length > 0;
@@ -197,13 +200,16 @@ export default memo(function AuditTab({ proEnabled = false, toast, onDemoAudit }
             compact
             onUpgrade={() => setShowPaywall(true)}
             label="Upgrade to Pro"
-            sublabel="20 audits/month · Full archive · Smart card matches"
+            sublabel={buildPromoLine(["audits", "history", "rewards"])}
           />
         )}
         {showPaywall && (
           <Suspense fallback={null}>
             <LazyProPaywall onClose={() => setShowPaywall(false)} />
           </Suspense>
+        )}
+        {exportAuditRecord && (
+          <AuditExportSheet audit={exportAuditRecord} onClose={() => setExportAuditRecord(null)} toast={toast} />
         )}
 
         {demoActive && (
@@ -719,7 +725,7 @@ export default memo(function AuditTab({ proEnabled = false, toast, onDemoAudit }
                            <div style={{ display: "flex", gap: 8, alignItems: "center", opacity: 0.4 }}>
                               {!selMode && (
                                 <button
-                                  onClick={e => { e.stopPropagation(); exportAudit(a); }}
+                                  onClick={e => { e.stopPropagation(); setExportAuditRecord(a); }}
                                   style={{ background: "none", border: "none", color: T.text.dim, cursor: "pointer", padding: 4 }}
                                 >
                                   <Download size={14} />

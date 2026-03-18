@@ -4,6 +4,7 @@ import { encrypt } from "../../../src/modules/crypto.js";
 const BACKEND_HOST_PATTERN = "(?:api\\.catalystcash\\.app|catalyst-cash-api\\.portfoliopro-app\\.workers\\.dev)";
 const CONFIG_ROUTE = new RegExp(`https://${BACKEND_HOST_PATTERN}/config$`);
 const MARKET_ROUTE = new RegExp(`https://${BACKEND_HOST_PATTERN}/market(?:\\?.*)?$`);
+const AUTH_CHALLENGE_ROUTE = new RegExp(`https://${BACKEND_HOST_PATTERN}/auth/challenge$`);
 const AUTH_SESSION_ROUTE = new RegExp(`https://${BACKEND_HOST_PATTERN}/auth/session$`);
 const AUDIT_ROUTE = new RegExp(`https://${BACKEND_HOST_PATTERN}/audit$`);
 const PLAID_LINK_TOKEN_ROUTE = new RegExp(`https://${BACKEND_HOST_PATTERN}/plaid/link-token$`);
@@ -252,6 +253,38 @@ export async function mockBaseApi(page: Page, gatingMode = "off") {
         token: "e2e-identity-token",
         expiresAt: "2099-01-01T00:00:00.000Z",
         actorId: "actor:e2e",
+      }),
+      headers: {
+        "access-control-allow-origin": "*",
+        "content-type": "application/json",
+      },
+    });
+  });
+
+  await page.route(AUTH_CHALLENGE_ROUTE, async route => {
+    const request = route.request();
+    const body = request.postDataJSON?.() || {};
+    const currentKeyFingerprint =
+      body?.publicKeyJwk?.x || "e2e-device-key";
+    const nextKeyFingerprint = body?.nextPublicKeyJwk?.x || "";
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        challengeId: "e2e-challenge",
+        nonce: "e2e-nonce",
+        keyFingerprint: currentKeyFingerprint,
+        nextKeyFingerprint,
+        signingPayload: JSON.stringify({
+          v: 1,
+          aud: "catalystcash-identity-v2",
+          challengeId: "e2e-challenge",
+          nonce: "e2e-nonce",
+          intent: body?.intent || "bootstrap",
+          keyFingerprint: currentKeyFingerprint,
+          nextKeyFingerprint,
+        }),
+        expiresAt: "2099-01-01T00:05:00.000Z",
       }),
       headers: {
         "access-control-allow-origin": "*",

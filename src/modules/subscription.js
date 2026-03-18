@@ -5,14 +5,14 @@
 // Currently uses local storage. When RevenueCat or StoreKit is
 // integrated, this module becomes the bridge to the native IAP API.
 //
-// ─── AI MODEL COST MATRIX (per audit, ~13.3K tokens in / ~2.2K out) ──
-//   gemini-2.5-flash  $0.30/$2.50/M  ≈ $0.010/audit  → Free (Catalyst AI)
-//   gpt-4.1           $2.00/$8.00/M  ≈ $0.044/audit  → Pro  (Catalyst AI Precision)
-//   o3                premium reasoning spend         → Pro  (Catalyst AI Reasoning)
+// ─── AI MODEL COST MATRIX (per rich audit, ~4.5K tokens in / ~2.2K out) ──
+//   gemini-2.5-flash  $0.30/$2.50/M  ≈ $0.007/audit  → Free (Catalyst AI)
+//   gpt-4.1           $2.00/$8.00/M  ≈ $0.027/audit  → Pro  (Catalyst AI CFO)
+//   o3                $10.00/$40.00/M ≈ $0.133/audit → Pro  (Catalyst AI Boardroom)
 //
-//   Free: 2 audits/wk on Flash  → ~$0.08/user/month
-//   Pro worst case: 20 audits/mo on premium models → bounded premium compute
-//   Pro @ $9.99/mo (after Apple 30%): $6.99 net → still strongly margin-positive
+//   Free: 2 audits/wk on Flash + 1 Plaid institution max
+//   Pro: GPT-4.1 is the default premium engine; o3 is reserved for deep audits
+//   Plaid is the dominant marginal risk, so live gating and institution limits stay strict
 // ═══════════════════════════════════════════════════════════════
 
   import { Capacitor } from "@capacitor/core";
@@ -25,6 +25,19 @@
     getModel,
     isModelSelectable,
   } from "./providers.js";
+  import {
+    FREE_AUDIT_LIMIT,
+    FREE_CHAT_LIMIT,
+    FREE_HISTORY_LIMIT,
+    FREE_MARKET_REFRESH_MS,
+    IAP_PRICING,
+    IAP_PRODUCTS,
+    INSTITUTION_LIMITS,
+    PRO_DAILY_CHAT_CAP,
+    PRO_MARKET_REFRESH_MS,
+    PRO_MONTHLY_AUDIT_CAP,
+    TIER_MODEL_IDS,
+  } from "./planCatalog.js";
   import { getNativeSecureItem,setNativeSecureItem } from "./secureStore.js";
   import { db } from "./utils.js";
 
@@ -39,7 +52,7 @@
 // returns gatingMode:"live" and ALL app versions enforce it —
 // even old builds that have "off" hardcoded here.
 // ────────────────────────────────────────────────────────────
-const GATING_MODE_DEFAULT = "off";
+const GATING_MODE_DEFAULT = "soft";
 let _effectiveGatingMode = GATING_MODE_DEFAULT;
 
 /**
@@ -63,6 +76,10 @@ export function isGatingEnforced() {
  */
 export function shouldShowGating() {
   return _effectiveGatingMode === "soft" || _effectiveGatingMode === "live";
+}
+
+export function __setGatingModeForTests(mode) {
+  _effectiveGatingMode = mode || GATING_MODE_DEFAULT;
 }
 
 /**
@@ -156,18 +173,15 @@ export async function syncRemoteGatingMode() {
 //   For months shorter than the anchor day (e.g. anchor=31, Feb),
 //   the last day of the month is used. All dates are UTC.
 // ──────────────────────────────────────────────────────────────
-export const PRO_MONTHLY_AUDIT_CAP = 20; // Keeps premium model usage bounded
-export const PRO_DAILY_CHAT_CAP = 25; // Generous daily ceiling without abuse risk
-
 export const TIERS = {
   free: {
     id: "free",
     name: "Free",
-    auditsPerWeek: 2, // Weekly audit + 1 re-run (matches worker enforcement)
-    chatMessagesPerDay: 10, // Enough to experience value (matches worker enforcement)
-    marketRefreshMs: 60 * 60 * 1000, // 60 minutes
-    historyLimit: 12, // ~3 months of trends (quarterly)
-    models: [DEFAULT_FREE_MODEL_ID], // Standard AI
+    auditsPerWeek: FREE_AUDIT_LIMIT, // Weekly audit + 1 re-run (matches worker enforcement)
+    chatMessagesPerDay: FREE_CHAT_LIMIT, // Enough to experience value (matches worker enforcement)
+    marketRefreshMs: FREE_MARKET_REFRESH_MS, // 60 minutes
+    historyLimit: FREE_HISTORY_LIMIT, // ~3 months of trends (quarterly)
+    models: TIER_MODEL_IDS.free, // Default free model
     features: [
       "basic_audit", // Core AI audit
       "health_score", // Financial health scoring
@@ -192,17 +206,9 @@ export const TIERS = {
     name: "Pro",
     auditsPerWeek: Infinity, // No weekly cap (monthly cap applies)
     chatMessagesPerDay: Infinity, // No daily cap enforced at tier level (PRO_DAILY_CHAT_CAP applies)
-    marketRefreshMs: 5 * 60 * 1000, // 5 minutes
+    marketRefreshMs: PRO_MARKET_REFRESH_MS, // 5 minutes
     historyLimit: Infinity, // All history
-    models: [
-      DEFAULT_PRO_MODEL_ID, // Fast AI default for Pro
-      DEFAULT_FREE_MODEL_ID, // Standard AI fallback
-      "gpt-4.1", // Catalyst AI Precision
-      "o3", // Catalyst AI Reasoning
-      "claude-sonnet-4-6", // Catalyst AI Sonnet
-      "claude-opus-4-6", // Catalyst AI Opus
-      "gemini-2.5-pro", // Catalyst AI Vision
-    ],
+    models: TIER_MODEL_IDS.pro,
     features: [
       // ── Everything in Free ──
       "basic_audit",
@@ -222,7 +228,7 @@ export const TIERS = {
 
       // ── Pro Exclusives ──
       "monthly_audit_cap", // 20/mo monthly cap
-      "premium_models", // Access to GPT-4.1 / o3 / Claude / Gemini Pro
+      "premium_models", // Access to GPT-4.1 / o3
       "unlimited_history", // Full audit archive
       "share_card_clean", // Share without branding
       "export_csv", // CSV / XLSX export
@@ -249,37 +255,15 @@ export const TIERS = {
   },
 };
 
-// ── IAP Product IDs (Apple App Store) ─────────────────────────
-export const IAP_PRODUCTS = {
-  monthly: "com.catalystcash.pro.monthly.v2", // $9.99/mo
-  yearly: "com.catalystcash.pro.yearly.v2", // $69.99/yr ($5.83/mo)
-};
-
-// ── IAP Display Pricing (for UI — no StoreKit dependency) ─────
-//
-// PRICING RATIONALE (Frozen Account Pivot):
-//   $9.99/mo → "Under $10" premium at exact psychological threshold
-//   $69.99/yr → $5.83/mo effective with 4 months free positioning
-//   Apple takes 30% → $6.99 net/mo (monthly), $5.25 net/mo (yearly)
-//   Free COGS is strictly bounded as 1-time snapshot. Pro max COGS is ~$4.80/mo.
-// ──────────────────────────────────────────────────────────────
-export const IAP_PRICING = {
-  monthly: { price: "$9.99", period: "month", savings: false },
-  yearly: { price: "$69.99", period: "year", savings: "4 months free", perMonth: "$5.83", original: "$119.88", trial: "7-day free trial" },
-};
-
-// ── Institution Limits (Plaid bank connections per tier) ───────
-export const INSTITUTION_LIMITS = {
-  free: 2, // Checking + 1 credit card — enough to demo value
-  pro: 5, // Five connected institutions with live sync
-};
+export { IAP_PRICING, IAP_PRODUCTS, INSTITUTION_LIMITS, PRO_MONTHLY_AUDIT_CAP, PRO_DAILY_CHAT_CAP };
 
 export function getPreferredModelForTier(tierId = "free") {
   return getDefaultModelIdForTier(tierId);
 }
 
 export function normalizeModelForTier(tierId = "free", modelId, providerId = "backend") {
-  if (tierId !== "pro") return DEFAULT_FREE_MODEL_ID;
+  const effectiveTierId = isGatingEnforced() ? tierId : "pro";
+  if (effectiveTierId !== "pro") return DEFAULT_FREE_MODEL_ID;
   const candidateId = modelId || DEFAULT_PRO_MODEL_ID;
   const resolved = getModel(providerId, candidateId);
   if (!resolved || !isModelSelectable(resolved) || !TIERS.pro.models.includes(resolved.id)) {
@@ -567,10 +551,10 @@ export async function getSubscriptionState() {
 
 /**
  * Get the effective tier config.
- * When GATING_MODE is "off", always returns Pro tier.
+ * Returns the effective tier after applying the current gating mode.
  */
 export async function getCurrentTier() {
-  if (_effectiveGatingMode === "off") return TIERS.pro;
+  if (_effectiveGatingMode !== "live") return TIERS.pro;
   const state = await getSubscriptionState();
   return TIERS[state.tier] || TIERS.free;
 }
@@ -608,7 +592,7 @@ export async function isModelAvailable(modelId) {
 /**
  * Check if the user can run another audit this week.
  * Returns { allowed, remaining, limit, used }.
- * When GATING_MODE is "off", always returns unlimited.
+ * Returns the current audit quota after applying the current gating mode.
  */
 export async function checkAuditQuota() {
   if (getGatingMode() === "off") {
@@ -671,7 +655,7 @@ export async function recordAuditUsage() {
 /**
  * Check if the user can send another AskAI chat message today.
  * Returns { allowed, remaining, limit, used }.
- * When GATING_MODE is "off", always returns unlimited.
+ * Returns the current chat quota after applying the current gating mode.
  */
 export async function checkChatQuota() {
   if (getGatingMode() === "off") {
@@ -731,7 +715,7 @@ export async function recordChatUsage() {
 /**
  * Get the market data cache TTL based on current tier.
  * Returns milliseconds.
- * When GATING_MODE is "off", returns Pro-level refresh rate.
+ * Returns the current market-data refresh rate after applying the current gating mode.
  */
 export async function getMarketRefreshTTL() {
   const tier = await getCurrentTier();
@@ -741,7 +725,7 @@ export async function getMarketRefreshTTL() {
 /**
  * Get the history display limit based on current tier.
  * Returns number of audits to show (Infinity = all).
- * When GATING_MODE is "off", returns Infinity.
+ * Returns the visible audit-history depth after applying the current gating mode.
  */
 export async function getHistoryLimit() {
   const tier = await getCurrentTier();
@@ -790,7 +774,7 @@ export async function deactivatePro() {
  * In "live" mode, checks the actual RevenueCat subscription.
  */
 export async function isPro() {
-  if (getGatingMode() === "off") return true;
+  if (getGatingMode() !== "live") return true;
   const state = await getSubscriptionState();
   return state.tier === "pro";
 }

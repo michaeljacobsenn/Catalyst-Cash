@@ -89,6 +89,44 @@ describe("chatSafety", () => {
     expect(fallback).toContain("Severe contradictions make self-directed optimization unreliable.");
   });
 
+  it("downgrades certainty in deterministic fallback mode when multiple high-risk rules stack", () => {
+    const fallback = buildDeterministicChatFallback({
+      decisionRecommendations: [
+        {
+          flag: "cash-timing-conflict",
+          active: true,
+          severity: "high",
+          rationale: "Bills are due before the next paycheck.",
+          recommendation: "Cover near-term obligations before optional moves.",
+          confidence: "low",
+          directionalOnly: true,
+        },
+        {
+          flag: "promo-apr-cliff",
+          active: true,
+          severity: "high",
+          rationale: "A promo APR expires in 21 days.",
+          recommendation: "Treat the promo deadline as a hard priority.",
+          confidence: "high",
+        },
+        {
+          flag: "mixed-debt-portfolio-complexity",
+          active: true,
+          severity: "high",
+          rationale: "Student-loan protections and promo timing create a brittle payoff tradeoff.",
+          recommendation: "Avoid blanket refinance or consolidation advice.",
+          confidence: "low",
+          requiresProfessionalHelp: true,
+          professionalHelpReason: "A professional should review tradeoffs before protections are waived.",
+        },
+      ],
+    });
+
+    expect(fallback).toContain("Confidence is limited");
+    expect(fallback).toContain("stabilization-first");
+    expect(fallback).toContain("Professional help recommended");
+  });
+
   it("returns a refusal message for prompt-injection attempts", () => {
     const refusal = buildPromptInjectionRefusal();
     expect(refusal).toContain("can't ignore safety rules");

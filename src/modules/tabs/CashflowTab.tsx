@@ -69,7 +69,7 @@ export default function CashflowTab({ onRunAudit, toast, proEnabled = false }: C
   }, []);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, position: "relative" }}>
       <div
         style={{
           padding: "16px 16px 4px 16px",
@@ -77,9 +77,6 @@ export default function CashflowTab({ onRunAudit, toast, proEnabled = false }: C
           display: "flex",
           justifyContent: "center",
           flexShrink: 0,
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
         }}
       >
         <TypedViewToggle
@@ -92,11 +89,11 @@ export default function CashflowTab({ onRunAudit, toast, proEnabled = false }: C
         />
       </div>
 
-      <div style={{ flex: 1, position: "relative" }}>
-        <div style={{ display: activeView === "budget" ? "block" : "none", height: "100%" }}>
+      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+        <div style={{ display: activeView === "budget" ? "block" : "none", height: "100%", minHeight: 0 }}>
           <TypedBudgetTab onRunAudit={onRunAudit} toast={toast} embedded proEnabled={proEnabled} />
         </div>
-        <div style={{ display: activeView === "renewals" ? "block" : "none", height: "100%" }}>
+        <div style={{ display: activeView === "renewals" ? "block" : "none", height: "100%", minHeight: 0 }}>
           <TypedRenewalsTab proEnabled={proEnabled} embedded />
         </div>
       </div>

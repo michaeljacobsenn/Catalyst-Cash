@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import { SignInWithApple } from "@capacitor-community/apple-sign-in";
 import { Capacitor } from "@capacitor/core";
 import type {
   SetupWizardSecurityState,
@@ -20,6 +19,8 @@ import type {
   SpreadsheetModule,
   ToastApi,
 } from "./types.js";
+
+const loadAppleSignIn = () => import("@capacitor-community/apple-sign-in");
 
 interface PageImportProps {
   onNext: () => void;
@@ -473,6 +474,11 @@ export default function PageImport({
           <button
             onClick={async () => {
               try {
+                const { SignInWithApple } = await loadAppleSignIn();
+                if (!SignInWithApple?.authorize) {
+                  toast?.error?.("Apple Sign-In is not available in this build.");
+                  return;
+                }
                 const result = (await SignInWithApple.authorize({
                   clientId: "com.jacobsen.portfoliopro",
                   redirectURI: "https://api.catalystcash.app/auth/apple/callback",
@@ -523,7 +529,11 @@ export default function PageImport({
               } catch (error: unknown) {
                 const message = error instanceof Error ? error.message : "Apple Sign-In failed";
                 if (!message.toLowerCase().includes("cancel")) {
-                  toast?.error?.(message);
+                  toast?.error?.(
+                    message.toLowerCase().includes("not implemented") || message.toLowerCase().includes("unimplemented")
+                      ? "Apple Sign-In is not enabled in this build."
+                      : message
+                  );
                 }
               }
             }}

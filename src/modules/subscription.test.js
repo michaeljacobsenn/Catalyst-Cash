@@ -19,6 +19,7 @@ import {
   TIERS,
   IAP_PRODUCTS,
   IAP_PRICING,
+  __setGatingModeForTests,
   getGatingMode,
   isGatingEnforced,
   shouldShowGating,
@@ -27,6 +28,7 @@ import {
   getRawTier,
   hasFeature,
   isModelAvailable,
+  normalizeModelForTier,
   checkAuditQuota,
   recordAuditUsage,
   getMarketRefreshTTL,
@@ -40,6 +42,7 @@ import {
 // ── Helper: clear mock store between tests ────────────────────
 beforeEach(() => {
   Object.keys(mockStore).forEach(k => delete mockStore[k]);
+  __setGatingModeForTests("soft");
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -60,10 +63,7 @@ describe("Tier Definitions", () => {
     expect(TIERS.pro.models).toContain("gemini-2.5-flash");
     expect(TIERS.pro.models).toContain("gpt-4.1");
     expect(TIERS.pro.models).toContain("o3");
-    expect(TIERS.pro.models).toContain("claude-sonnet-4-6");
-    expect(TIERS.pro.models).toContain("claude-opus-4-6");
-    expect(TIERS.pro.models).toContain("claude-haiku-4-5");
-    expect(TIERS.pro.models).toContain("gemini-2.5-pro");
+    expect(TIERS.pro.models).toHaveLength(3);
   });
 });
 
@@ -78,9 +78,9 @@ describe("IAP Constants", () => {
 
   it("has display pricing", () => {
     expect(IAP_PRICING.monthly.price).toBe("$9.99");
-    expect(IAP_PRICING.yearly.price).toBe("$69.99");
-    expect(IAP_PRICING.yearly.perMonth).toBe("$5.83");
-    expect(IAP_PRICING.yearly.savings).toBe("4 months free");
+    expect(IAP_PRICING.yearly.price).toBe("$89.99");
+    expect(IAP_PRICING.yearly.perMonth).toBe("$7.50");
+    expect(IAP_PRICING.yearly.savings).toBe("3 months free");
   });
 });
 
@@ -88,47 +88,59 @@ describe("IAP Constants", () => {
 // GATING MODE
 // ═══════════════════════════════════════════════════════════════
 describe("Gating Mode", () => {
-  it('default gating mode is "off"', () => {
-    expect(getGatingMode()).toBe("off");
+  it('default gating mode is "soft"', () => {
+    expect(getGatingMode()).toBe("soft");
   });
 
-  it("isGatingEnforced returns false when off", () => {
+  it("isGatingEnforced returns false when soft", () => {
     expect(isGatingEnforced()).toBe(false);
   });
 
-  it("shouldShowGating returns false when off", () => {
-    expect(shouldShowGating()).toBe(false);
+  it("shouldShowGating returns true when soft", () => {
+    expect(shouldShowGating()).toBe(true);
+  });
+
+  it("isPro reports true in soft mode so client headers match effective Pro access", async () => {
+    expect(await isPro()).toBe(true);
   });
 });
 
 // ═══════════════════════════════════════════════════════════════
-// OFF GATING — soft launch unlocks Pro behavior without blocking
+// LIVE GATING — free users stay free until they buy Pro
 // ═══════════════════════════════════════════════════════════════
-describe('Off Gating — launch mode behaves like unlocked Pro access', () => {
-  it("getCurrentTier returns Pro tier for unpaid users", async () => {
-    const tier = await getCurrentTier();
-    expect(tier.id).toBe("pro");
+describe('Live Gating — unpaid users stay on Free limits', () => {
+  beforeEach(() => {
+    __setGatingModeForTests("live");
   });
 
-  it("checkAuditQuota returns unlimited access", async () => {
+  it("getCurrentTier returns Free tier for unpaid users", async () => {
+    const tier = await getCurrentTier();
+    expect(tier.id).toBe("free");
+  });
+
+  it("isPro reports false for unpaid users in live mode", async () => {
+    expect(await isPro()).toBe(false);
+  });
+
+  it("checkAuditQuota returns the free tier quota", async () => {
     const quota = await checkAuditQuota();
     expect(quota.allowed).toBe(true);
-    expect(quota.limit).toBe(Infinity);
+    expect(quota.limit).toBe(2);
   });
 
-  it("getMarketRefreshTTL returns Pro cadence", async () => {
+  it("getMarketRefreshTTL returns Free cadence", async () => {
     const ttl = await getMarketRefreshTTL();
-    expect(ttl).toBe(5 * 60 * 1000);
+    expect(ttl).toBe(60 * 60 * 1000);
   });
 
-  it("getHistoryLimit returns unlimited history", async () => {
+  it("getHistoryLimit returns the free history limit", async () => {
     const limit = await getHistoryLimit();
-    expect(limit).toBe(Infinity);
+    expect(limit).toBe(12);
   });
 
-  it("hasFeature returns true for Pro-only features", async () => {
-    expect(await hasFeature("premium_models")).toBe(true);
-    expect(await hasFeature("monthly_audit_cap")).toBe(true);
+  it("hasFeature returns false for Pro-only features", async () => {
+    expect(await hasFeature("premium_models")).toBe(false);
+    expect(await hasFeature("monthly_audit_cap")).toBe(false);
   });
 
   it("hasFeature returns true for free-tier features", async () => {
@@ -137,26 +149,30 @@ describe('Off Gating — launch mode behaves like unlocked Pro access', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// MODEL GATING — off mode unlocks the full launch lineup
+// MODEL GATING — live mode restricts unpaid users to the profitable lineup
 // ═══════════════════════════════════════════════════════════════
-describe('Model Gating (launch mode "off")', () => {
-  it("unpaid users can access the full model lineup during soft launch", async () => {
-    expect(await isModelAvailable("gemini-2.5-flash")).toBe(true);
-    expect(await isModelAvailable("gpt-4.1")).toBe(true);
-    expect(await isModelAvailable("o3")).toBe(true);
-    expect(await isModelAvailable("claude-sonnet-4-6")).toBe(true);
-    expect(await isModelAvailable("claude-opus-4-6")).toBe(true);
+describe('Model Gating (launch mode "live")', () => {
+  beforeEach(() => {
+    __setGatingModeForTests("live");
   });
 
-  it("pro user can access all models", async () => {
+  it("normalizeModelForTier keeps free users on Flash and defaults Pro to GPT-4.1", () => {
+    expect(normalizeModelForTier("free", "gpt-4.1", "backend")).toBe("gemini-2.5-flash");
+    expect(normalizeModelForTier("free", null, "backend")).toBe("gemini-2.5-flash");
+    expect(normalizeModelForTier("pro", null, "backend")).toBe("gpt-4.1");
+  });
+
+  it("unpaid users can access only the free model", async () => {
+    expect(await isModelAvailable("gemini-2.5-flash")).toBe(true);
+    expect(await isModelAvailable("gpt-4.1")).toBe(false);
+    expect(await isModelAvailable("o3")).toBe(false);
+  });
+
+  it("pro user can access the curated premium lineup", async () => {
     await activatePro("com.catalystcash.pro.monthly", 30);
     expect(await isModelAvailable("gemini-2.5-flash")).toBe(true);
     expect(await isModelAvailable("gpt-4.1")).toBe(true);
     expect(await isModelAvailable("o3")).toBe(true);
-    expect(await isModelAvailable("claude-sonnet-4-6")).toBe(true);
-    expect(await isModelAvailable("claude-opus-4-6")).toBe(true);
-    expect(await isModelAvailable("claude-haiku-4-5")).toBe(true);
-    expect(await isModelAvailable("gemini-2.5-pro")).toBe(true);
   });
 });
 
@@ -181,8 +197,7 @@ describe("Subscription State", () => {
   it("deactivatePro resets to free", async () => {
     await activatePro("com.catalystcash.pro.monthly", 30);
     await deactivatePro();
-    // isPro() returns true in soft gating mode regardless of tier,
-    // so verify state directly
+    // Verify state directly so we do not couple this check to the current gating mode.
     const state = await getSubscriptionState();
     expect(state.tier).toBe("free");
     expect(state.expiresAt).toBeNull();

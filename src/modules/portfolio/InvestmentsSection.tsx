@@ -6,10 +6,11 @@
   import { usePortfolio } from "../contexts/PortfolioContext.js";
   import { useSettings } from "../contexts/SettingsContext.js";
   import { ChevronDown,RefreshCw,Trash2,TrendingUp } from "../icons";
-  import { fetchMarketPrices,getManualMarketRefreshStatus } from "../marketData.js";
   import { Badge,Card } from "../ui.js";
   import { fmt } from "../utils.js";
   import type { PortfolioCollapsedSections } from "./types.js";
+
+const loadMarketData = () => import("../marketData.js");
 
 interface InvestmentsSectionProps {
     collapsedSections: PortfolioCollapsedSections;
@@ -75,25 +76,32 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
     }, [marketPrices]);
 
     useEffect(() => {
-        void getManualMarketRefreshStatus().then(setManualRefreshStatus).catch(() => {});
+        void loadMarketData()
+            .then(({ getManualMarketRefreshStatus }) => getManualMarketRefreshStatus())
+            .then(setManualRefreshStatus)
+            .catch(() => {});
     }, []);
 
     // Fetch fresh prices on mount or when symbols change
     useEffect(() => {
         if (allHoldingSymbols.length > 0) {
-            fetchMarketPrices(allHoldingSymbols).then((p: MarketPriceMap | null | undefined) => {
-                if (p && Object.keys(p).length > 0) {
-                    setInvestPrices(prev => ({ ...prev, ...p }));
-                    if (setMarketPrices) setMarketPrices(prev => ({ ...prev, ...p }));
-                    setLastRefresh(Date.now());
-                }
-            });
+            void loadMarketData()
+                .then(({ fetchMarketPrices }) => fetchMarketPrices(allHoldingSymbols))
+                .then((p: MarketPriceMap | null | undefined) => {
+                    if (p && Object.keys(p).length > 0) {
+                        setInvestPrices(prev => ({ ...prev, ...p }));
+                        if (setMarketPrices) setMarketPrices(prev => ({ ...prev, ...p }));
+                        setLastRefresh(Date.now());
+                    }
+                })
+                .catch(() => {});
         }
     }, [allHoldingSymbols.join()]);
 
     // Manual refresh handler
     const handleRefreshPrices = useCallback(async () => {
         if (refreshingPrices || allHoldingSymbols.length === 0) return;
+        const { fetchMarketPrices, getManualMarketRefreshStatus } = await loadMarketData();
         const status = await getManualMarketRefreshStatus();
         setManualRefreshStatus(status);
         if (!status.allowed) return;

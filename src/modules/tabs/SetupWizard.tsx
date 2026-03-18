@@ -17,7 +17,7 @@
   import { setActiveCurrencyCode } from "../currency.js";
   import { AI_PROVIDERS } from "../providers.js";
   import { getSecretStorageStatus,setSecureItem } from "../secureStore.js";
-  import { getPreferredModelForTier,getRawTier,normalizeModelForTier } from "../subscription.js";
+  import { getPreferredModelForTier,getRawTier,normalizeModelForTier,shouldShowGating } from "../subscription.js";
   import { useToast } from "../Toast.js";
   import { db } from "../utils.js";
   import { PageDone,PageImport,PagePass1,PagePass2,PagePass3,PageProfile,PageWelcome } from "./SetupWizardPages.js";
@@ -131,14 +131,14 @@ const TOTAL = PAGES.length;
 
 function ProgressBar({ step }: { step: number }) {
   return (
-    <div style={{ display: "flex", gap: 5, marginBottom: 6 }}>
+    <div style={{ display: "flex", gap: 5, marginBottom: 10 }} aria-hidden="true">
       {PAGES.map((_, i) => (
         <div
           key={i}
           style={{
             flex: 1,
-            height: 3,
-            borderRadius: 2,
+            height: i === step ? 5 : 4,
+            borderRadius: 999,
             background: i < step ? T.accent.primary : i === step ? T.accent.primarySoft : T.bg.surface,
             transition: "background .35s",
           }}
@@ -152,26 +152,21 @@ function StepHeader({ step }: { step: number }) {
   const page = PAGES[step];
   if (!page || step === TOTAL - 1) return null;
   return (
-    <div style={{ marginBottom: 24 }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 12,
-          marginBottom: 8,
-        }}
-      >
-        <span style={{ fontSize: 26 }}>{page.emoji}</span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, lineHeight: 1.2 }}>{page.title}</div>
-          {page.subtitle && <div style={{ fontSize: 13, color: T.text.dim, marginTop: 4, lineHeight: 1.45 }}>{page.subtitle}</div>}
+    <div style={{ marginBottom: 22 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <span style={{ fontSize: 22, lineHeight: 1 }}>{page.emoji}</span>
+          <div>
+            <div style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono }}>
+              Step {step + 1} of {TOTAL}
+            </div>
+            {page.optional && <div style={{ fontSize: 11, color: T.text.dim, marginTop: 2 }}>Optional now. Easy to refine later.</div>}
+          </div>
         </div>
         {page.effort && (
           <div
             style={{
               flexShrink: 0,
-              alignSelf: "center",
               padding: "6px 10px",
               borderRadius: 999,
               background: page.optional ? T.accent.primaryDim : `${T.accent.emerald}12`,
@@ -188,11 +183,15 @@ function StepHeader({ step }: { step: number }) {
           </div>
         )}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono }}>
-          Step {step + 1} of {TOTAL}
-        </div>
-        {page.optional && <div style={{ fontSize: 11, color: T.text.dim }}>You can skip this now and fine-tune it later.</div>}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        <div style={{ fontSize: 22, fontWeight: 900, color: T.text.primary, lineHeight: 1.1, letterSpacing: "-0.03em" }}>{page.title}</div>
+        {page.subtitle && <div style={{ fontSize: 13, color: T.text.dim, lineHeight: 1.55, maxWidth: 360 }}>{page.subtitle}</div>}
       </div>
     </div>
   );
@@ -218,6 +217,8 @@ export default function SetupWizard() {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [renewals, setRenewals] = useState<Renewal[]>([]);
+  const prefersReducedMotion =
+    typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const [income, setIncome] = useState<SetupWizardIncomeState>({
@@ -266,6 +267,7 @@ export default function SetupWizard() {
     lockTimeout: 0,
     useFaceId: false,
   });
+  const hasPremiumAiAccess = userIsPro || !shouldShowGating();
 
   const hydrateWizardFromStorage = useCallback(
     async (options: { syncContexts?: boolean } = {}): Promise<void> => {
@@ -384,7 +386,7 @@ export default function SetupWizard() {
     setAi((prev) => {
       const next = { ...prev, [key]: value };
       if (key === "aiProvider") {
-        next.aiModel = getPreferredModelForTier(userIsPro ? "pro" : "free");
+        next.aiModel = normalizeModelForTier(userIsPro ? "pro" : "free", null, String(value || "backend"));
       }
       return next;
     });
@@ -565,7 +567,7 @@ export default function SetupWizard() {
     >
       <div
         ref={scrollRef}
-        style={{ flex: 1, overflowY: "auto", padding: "calc(env(safe-area-inset-top, 40px) + 20px) 20px 56px" }}
+        style={{ flex: 1, overflowY: "auto", padding: "calc(env(safe-area-inset-top, 24px) + 12px) 20px 48px" }}
       >
         <style>{`
           @keyframes slideFadeIn {
@@ -580,30 +582,39 @@ export default function SetupWizard() {
             outline: none;
             box-shadow: 0 0 0 3px ${T.accent.primary}30 !important;
           }
+          @media (prefers-reduced-motion: reduce) {
+            .wiz-page-enter {
+              animation: none !important;
+            }
+          }
         `}</style>
         <div style={{ maxWidth: 420, margin: "0 auto" }}>
           <div
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "7px 12px",
-              borderRadius: 999,
-              background: T.bg.elevated,
+              marginBottom: 18,
+              padding: "12px 14px",
+              borderRadius: T.radius.lg,
+              background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
               border: `1px solid ${T.border.subtle}`,
-              color: T.text.secondary,
-              fontSize: 11,
-              fontWeight: 700,
-              marginBottom: 12,
             }}
           >
-            <span style={{ color: T.accent.emerald }}>●</span>
-            About 2 minutes
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, color: T.text.secondary, fontSize: 11, fontWeight: 700 }}>
+                <span style={{ color: T.accent.emerald }}>●</span>
+                About 2 minutes
+              </div>
+              <div style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono }}>
+                Clear setup. Better first audit.
+              </div>
+            </div>
+            <ProgressBar step={step} />
           </div>
-          <div style={{ height: 3, background: T.accent.gradient, flexShrink: 0, marginBottom: 10, borderRadius: 2 }} />
-          <ProgressBar step={step} />
           <StepHeader step={step} />
-          <div key={pageId} style={{ animation: "slideFadeIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards" }}>
+          <div
+            key={pageId}
+            className="wiz-page-enter"
+            style={{ animation: prefersReducedMotion ? "none" : "slideFadeIn 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) forwards" }}
+          >
             {pageId === "welcome" && <PageWelcome onNext={next} />}
             {pageId === "import" && (
               <PageImport
@@ -634,7 +645,7 @@ export default function SetupWizard() {
                 onBack={back}
                 onSkip={handleSecuritySkip}
                 saving={saving}
-                isPro={userIsPro}
+                isPro={hasPremiumAiAccess}
               />
             )}
             {pageId === "done" && <PageDone onFinish={handleFinish} />}

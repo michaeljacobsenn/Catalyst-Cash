@@ -14,6 +14,7 @@ interface EditBankForm {
     bank: string;
     accountType: string;
     name: string;
+    balance: string;
     apy: string;
     notes: string;
 }
@@ -30,7 +31,7 @@ export default function BankAccountsSection({ collapsedSections: propCollapsed, 
     const collapsedSections = propCollapsed || internalCollapsed;
     const setCollapsedSections = propSetCollapsed || internalSetCollapsed;
     const [editingBank, setEditingBank] = useState<string | null>(null);
-    const [editBankForm, setEditBankForm] = useState<EditBankForm>({ bank: "", accountType: "", name: "", apy: "", notes: "" });
+    const [editBankForm, setEditBankForm] = useState<EditBankForm>({ bank: "", accountType: "", name: "", balance: "", apy: "", notes: "" });
     const [reconnectConnectionIds, setReconnectConnectionIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
@@ -57,11 +58,14 @@ export default function BankAccountsSection({ collapsedSections: propCollapsed, 
     };
 
     const startEditBank = (acct: BankAccount) => {
+        const needsReconnect = !!(acct._plaidConnectionId && reconnectConnectionIds.has(acct._plaidConnectionId));
+        const usesManualFallback = !!acct._plaidManualFallback || needsReconnect;
         setEditingBank(acct.id);
         setEditBankForm({
             bank: acct.bank,
             accountType: acct.accountType,
             name: acct.name,
+            balance: String(usesManualFallback ? (acct.balance ?? "") : (acct._plaidBalance ?? acct.balance ?? "")),
             apy: String(acct.apy || ""),
             notes: acct.notes || "",
         });
@@ -76,6 +80,7 @@ export default function BankAccountsSection({ collapsedSections: propCollapsed, 
                         bank: editBankForm.bank || a.bank,
                         accountType: editBankForm.accountType || a.accountType,
                         name: (editBankForm.name || "").trim() || a.name,
+                        balance: editBankForm.balance === "" ? null : parseFloat(editBankForm.balance) || 0,
                         apy: editBankForm.apy === "" ? null : parseFloat(editBankForm.apy) || null,
                         notes: editBankForm.notes,
                     }
@@ -115,8 +120,9 @@ export default function BankAccountsSection({ collapsedSections: propCollapsed, 
 
     const renderAccountRow = (acct: BankAccount, i: number, total: number, sectionColor: string) => {
         const colors = ic(acct.bank);
-        const liveBalance = acct._plaidBalance != null ? acct._plaidBalance : Number(acct.balance || 0);
         const needsReconnect = !!(acct._plaidConnectionId && reconnectConnectionIds.has(acct._plaidConnectionId));
+        const usesManualFallback = !!acct._plaidManualFallback || needsReconnect;
+        const liveBalance = !usesManualFallback && acct._plaidBalance != null ? acct._plaidBalance : Number(acct.balance || 0);
         return (
             <div
                 key={acct.id}
@@ -141,6 +147,16 @@ export default function BankAccountsSection({ collapsedSections: propCollapsed, 
                             aria-label="Account name"
                             style={{ width: "100%", fontSize: 13, padding: "8px 10px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }}
                         />
+                        {usesManualFallback ? (
+                            <div style={{ position: "relative" }}>
+                                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontSize: 12, fontWeight: 600 }}>$</span>
+                                <input type="number" inputMode="decimal" step="0.01" value={editBankForm.balance} onChange={e => setEditBankForm(p => ({ ...p, balance: e.target.value }))} placeholder="Current balance" aria-label="Current account balance" style={{ width: "100%", padding: "8px 10px 8px 22px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                            </div>
+                        ) : (
+                            <div style={{ padding: "8px 10px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, fontSize: 11, lineHeight: 1.5 }}>
+                                ⚡ Live Plaid balance active. Manual balance edits unlock if this connection is lost or disconnected.
+                            </div>
+                        )}
                         <div style={{ display: "flex", gap: 8 }}>
                             <div style={{ flex: 0.4, position: "relative" }}>
                                 <input type="number" inputMode="decimal" step="0.01" value={editBankForm.apy} onChange={e => setEditBankForm(p => ({ ...p, apy: e.target.value }))} placeholder="APY" aria-label="APY percentage" style={{ width: "100%", padding: "8px 24px 8px 10px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
@@ -174,14 +190,15 @@ export default function BankAccountsSection({ collapsedSections: propCollapsed, 
                                 <Mono size={10} color={T.text.dim} style={{ display: "block" }}>
                                     {[
                                         needsReconnect && "Reconnect required",
+                                        usesManualFallback && "Manual balance",
                                         (acct.apy ?? 0) > 0 && `${acct.apy}% APY`,
-                                        acct._plaidAccountId && `⚡ Plaid`,
+                                        acct._plaidAccountId && !usesManualFallback && `⚡ Plaid`,
                                     ].filter(Boolean).join("  ·  ") || (acct.notes && !acct._plaidAccountId ? acct.notes : "")}
                                 </Mono>
                             )}
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                            <Mono size={13} weight={800} color={acct._plaidBalance != null ? sectionColor : T.text.muted}>{fmt(liveBalance)}</Mono>
+                            <Mono size={13} weight={800} color={!usesManualFallback && acct._plaidBalance != null ? sectionColor : T.text.muted}>{fmt(liveBalance)}</Mono>
                             <button onClick={() => startEditBank(acct)} style={{ width: 28, height: 28, borderRadius: T.radius.md, border: "none", background: "transparent", color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} className="hover-btn"><Edit3 size={11} /></button>
                         </div>
                     </div>

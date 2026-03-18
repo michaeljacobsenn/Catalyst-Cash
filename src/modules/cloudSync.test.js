@@ -31,6 +31,11 @@ describe("cloudSync module", () => {
     expect(source).toMatch(/if\s*\(\s*passphrase\s*\)/);
   });
 
+  it("verifies the exact data written instead of treating any readable backup as success", async () => {
+    const source = await import("fs").then(fs => fs.readFileSync(new URL("./cloudSync.js", import.meta.url), "utf-8"));
+    expect(source).toContain("verify.data === data");
+  });
+
   it("treats web as intentionally unsupported rather than filesystem fallback", async () => {
     const source = await import("fs").then(fs => fs.readFileSync(new URL("./cloudSync.js", import.meta.url), "utf-8"));
     expect(source).toContain("Cloud backup unavailable on this platform");

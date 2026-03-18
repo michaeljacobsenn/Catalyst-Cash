@@ -3,6 +3,7 @@
   import { T } from "./constants.js";
   import { reportError } from "./errorReporter.js";
   import { AlertTriangle } from "./icons";
+  import { log } from "./logger.js";
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -34,7 +35,11 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error(`[ErrorBoundary:${this.props.name || "unknown"}]`, error, errorInfo);
+    log.error("error-boundary", "React section render failed", {
+      component: this.props.name || "unknown",
+      error,
+      componentStack: errorInfo.componentStack || "",
+    });
     reportError(error, { component: this.props.name || "unknown", action: "render" });
   }
 

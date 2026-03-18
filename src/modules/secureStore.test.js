@@ -24,13 +24,13 @@ async function loadSecureStore({ native, plugin = null, initialPrefs = {} }) {
   vi.doMock("@capacitor/core", () => ({
     Capacitor: {
       isNativePlatform: () => native,
+      isPluginAvailable: (name) => name === "SecureStoragePlugin" && Boolean(plugin),
+      Plugins: plugin ? { SecureStoragePlugin: plugin } : {},
     },
+    registerPlugin: () => plugin ?? {},
   }));
   vi.doMock("@capacitor/preferences", () => ({
     Preferences: preferences.api,
-  }));
-  vi.doMock("capacitor-secure-storage-plugin", () => ({
-    SecureStoragePlugin: plugin,
   }));
 
   const mod = await import("./secureStore.js");
@@ -46,6 +46,7 @@ afterEach(() => {
   vi.resetModules();
   delete globalThis.window;
   delete globalThis.__E2E_SECURE_STORE__;
+  delete globalThis.__E2E_SECURE_STORE_TIMEOUT_MS__;
 });
 
 describe("secureStore", () => {
@@ -144,5 +145,76 @@ describe("secureStore", () => {
     });
     await expect(mod.deleteSecureItem("app-passcode")).resolves.toBe(true);
     await expect(mod.getSecureItem("app-passcode")).resolves.toBeNull();
+  });
+
+  it("fails fast when the native secure storage bridge hangs", async () => {
+    globalThis.__E2E_SECURE_STORE_TIMEOUT_MS__ = 5;
+    const plugin = {
+      get: vi.fn(() => new Promise(() => {})),
+      set: vi.fn(() => new Promise(() => {})),
+      remove: vi.fn(() => new Promise(() => {})),
+    };
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { mod, consoleError } = await loadSecureStore({ native: true, plugin });
+
+    await expect(mod.getSecretStorageStatus()).resolves.toMatchObject({
+      mode: "native-checking",
+      canPersistSecrets: true,
+      isHardwareBacked: true,
+    });
+    await expect(mod.setSecureItem("app-passcode", "1234")).resolves.toBe(false);
+    await expect(mod.getSecureItem("app-passcode")).resolves.toBeNull();
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(consoleWarn).toHaveBeenCalled();
+  });
+
+  it("recovers cleanly after an initial status timeout without poisoning later native calls", async () => {
+    globalThis.__E2E_SECURE_STORE_TIMEOUT_MS__ = 5;
+    const nativeStore = new Map();
+    let firstGetAttempt = true;
+    const plugin = {
+      get: vi.fn(({ key }) => {
+        if (firstGetAttempt) {
+          firstGetAttempt = false;
+          return new Promise(() => {});
+        }
+        return Promise.resolve({ value: nativeStore.get(key) ?? null });
+      }),
+      set: vi.fn(({ key, value }) => {
+        nativeStore.set(key, value);
+        return Promise.resolve({ value: true });
+      }),
+      remove: vi.fn(async ({ key }) => {
+        nativeStore.delete(key);
+        return { value: true };
+      }),
+    };
+
+    const { mod } = await loadSecureStore({ native: true, plugin });
+
+    await expect(mod.getSecretStorageStatus()).resolves.toMatchObject({
+      mode: "native-checking",
+      canPersistSecrets: true,
+      isHardwareBacked: true,
+    });
+    await expect(mod.setSecureItem("app-passcode", "2468")).resolves.toBe(true);
+    await expect(mod.getSecureItem("app-passcode")).resolves.toBe("2468");
+  });
+
+  it("negative-caches missing native keys to avoid repeated bridge misses", async () => {
+    const plugin = {
+      get: vi.fn(async () => {
+        throw new Error("Item with given key does not exist");
+      }),
+      set: vi.fn(async () => ({ value: true })),
+      remove: vi.fn(async () => ({ value: true })),
+    };
+
+    const { mod } = await loadSecureStore({ native: true, plugin });
+
+    await expect(mod.getSecureItem("apple-linked-id")).resolves.toBeNull();
+    await expect(mod.getSecureItem("apple-linked-id")).resolves.toBeNull();
+
+    expect(plugin.get).toHaveBeenCalledTimes(2);
   });
 });

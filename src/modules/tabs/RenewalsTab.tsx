@@ -1,7 +1,9 @@
   import React,{ memo,Suspense,useCallback,useEffect,useMemo,useState,type ChangeEvent,type CSSProperties,type ReactNode } from "react";
+  import { createPortal } from "react-dom";
   import { getShortCardLabel } from "../cards.js";
   import { EmptyState as UIEmptyState,Mono as UIMono } from "../components.js";
-  import { formatInterval,T } from "../constants.js";
+  import { T } from "../constants.js";
+  import { formatInterval } from "../constants.js";
   import { haptic } from "../haptics.js";
   import { AlertTriangle,AlignLeft,Calendar,Check,CheckCircle2,ChevronDown,CreditCard,Plus,X } from "../icons";
   import SearchableSelectBase from "../SearchableSelect.js";
@@ -11,19 +13,23 @@
   import ProBanner from "./ProBanner.js";
 const LazyProPaywall = React.lazy(() => import("./ProPaywall.js"));
 
-// Interval options for dropdowns
-const WEEK_OPTIONS = Array.from({ length: 52 }, (_, i) => i + 1);
-const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
-const YEAR_OPTIONS = [1, 2, 3];
-const DAY_OPTIONS = Array.from({ length: 90 }, (_, i) => i + 1);
-
   import type { Card as PortfolioCard,CatalystCashConfig,Renewal } from "../../types/index.js";
   import { useAudit } from "../contexts/AuditContext.js";
   import { useNavigation } from "../contexts/NavigationContext.js";
   import { usePortfolio } from "../contexts/PortfolioContext.js";
-  import { Bot,ExternalLink,Zap } from "../icons";
+  import { Bot,Zap } from "../icons";
   import { getNegotiableMerchant } from "../negotiation.js";
   import { useSubscriptions } from "../useSubscriptions.js";
+  import {
+    DAY_OPTIONS,
+    MONTH_OPTIONS,
+    WEEK_OPTIONS,
+    YEAR_OPTIONS,
+    buildNewRenewal,
+    buildRenewalDraft,
+    getCancelUrl,
+    toGroupedRenewalItem,
+  } from "./renewals/helpers";
 
 interface RenewalsTabProps {
   proEnabled?: boolean;
@@ -172,300 +178,14 @@ const FormGroup = UIFormGroup as unknown as (props: FormGroupProps) => ReactNode
 const FormRow = UIFormRow as unknown as (props: FormRowProps) => ReactNode;
 const Mono = UIMono as unknown as (props: MonoProps) => ReactNode;
 const EmptyState = UIEmptyState as unknown as (props: EmptyStateProps) => ReactNode;
+
+function formatRenewalDueDate(dateValue?: string) {
+  if (!dateValue) return "";
+  const parsed = new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return dateValue;
+  return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
 const SearchableSelect = SearchableSelectBase as unknown as (props: SearchableSelectProps) => ReactNode;
-
-function setRenewalOptional(renewal: Renewal, key: "source" | "chargedTo" | "chargedToId" | "nextDue" | "category", value: string | undefined | null): Renewal {
-  if (value == null || value === "") return renewal;
-  return { ...renewal, [key]: value };
-}
-
-function buildRenewalDraft(base: Renewal, patch: EditRenewalState, fallbackName?: string): Renewal {
-  let next: Renewal = {
-    ...base,
-    name: (patch.name || "").trim() || fallbackName || base.name,
-    amount: parseFloat(patch.amount) || 0,
-    interval: patch.interval,
-    intervalUnit: patch.intervalUnit,
-    cadence: formatInterval(patch.interval, patch.intervalUnit),
-  };
-  next = setRenewalOptional(next, "source", patch.source);
-  next = setRenewalOptional(next, "chargedTo", patch.chargedTo);
-  next = setRenewalOptional(next, "chargedToId", patch.chargedToId);
-  next = setRenewalOptional(next, "nextDue", patch.nextDue);
-  next = setRenewalOptional(next, "category", patch.category || base.category);
-  return next;
-}
-
-function buildNewRenewal(form: AddRenewalState, chargedToLabel: string): Renewal {
-  let next: Renewal = {
-    name: form.name.trim(),
-    amount: parseFloat(form.amount) || 0,
-    interval: Number(form.interval) || 1,
-    intervalUnit: form.intervalUnit,
-    cadence: formatInterval(Number(form.interval) || 1, form.intervalUnit),
-  };
-  next = setRenewalOptional(next, "source", form.source);
-  next = setRenewalOptional(next, "chargedTo", chargedToLabel);
-  next = setRenewalOptional(next, "chargedToId", form.chargedToId);
-  next = setRenewalOptional(next, "category", form.category);
-  next = setRenewalOptional(next, "nextDue", form.nextDue);
-  return next;
-}
-
-
-
-function toGroupedRenewalItem(renewal: Renewal, originalIndex: number, now: string): GroupedRenewalItem {
-  return {
-    ...renewal,
-    originalIndex,
-    isExpired: Boolean(renewal.intervalUnit === "one-time" && renewal.nextDue && renewal.nextDue < now && !renewal.isCancelled),
-  };
-}
-
-const CANCELLATION_LINKS = {
-  // ── Streaming Video ──
-  "netflix": "https://www.netflix.com/cancelplan",
-  "hulu": "https://secure.hulu.com/account",
-  "disney+": "https://www.disneyplus.com/account",
-  "disney plus": "https://www.disneyplus.com/account",
-  "max": "https://auth.max.com/subscription",
-  "hbo max": "https://auth.max.com/subscription",
-  "hbo": "https://auth.max.com/subscription",
-  "peacock": "https://www.peacocktv.com/account",
-  "paramount+": "https://www.paramountplus.com/account/",
-  "paramount plus": "https://www.paramountplus.com/account/",
-  "youtube premium": "https://www.youtube.com/paid_memberships",
-  "youtube tv": "https://tv.youtube.com/welcome/",
-  "youtube music": "https://www.youtube.com/paid_memberships",
-  "crunchyroll": "https://www.crunchyroll.com/account/subscription",
-  "funimation": "https://www.funimation.com/account/",
-  "espn+": "https://plus.espn.com/account",
-  "espn plus": "https://plus.espn.com/account",
-  "discovery+": "https://www.discoveryplus.com/account",
-  "amc+": "https://www.amcplus.com/account",
-  "starz": "https://www.starz.com/account",
-  "showtime": "https://www.sho.com/account",
-  "britbox": "https://www.britbox.com/account",
-  "mubi": "https://mubi.com/account",
-  "tubi": "https://tubitv.com/account",
-  "sling tv": "https://www.sling.com/account",
-  "sling": "https://www.sling.com/account",
-  "fubo": "https://www.fubo.tv/account",
-  "fubotv": "https://www.fubo.tv/account",
-  "philo": "https://www.philo.com/account",
-  "dazn": "https://www.dazn.com/account",
-
-  // ── Streaming Music & Audio ──
-  "spotify": "https://www.spotify.com/us/account/subscription/",
-  "apple music": "https://apps.apple.com/account/subscriptions",
-  "tidal": "https://account.tidal.com/subscription",
-  "pandora": "https://www.pandora.com/account/settings",
-  "amazon music": "https://www.amazon.com/music/settings",
-  "deezer": "https://www.deezer.com/account/subscription",
-  "audible": "https://www.audible.com/account/overview",
-
-  // ── Apple Services ──
-  "apple tv+": "https://apps.apple.com/account/subscriptions",
-  "apple tv": "https://apps.apple.com/account/subscriptions",
-  "icloud": "https://apps.apple.com/account/subscriptions",
-  "icloud+": "https://apps.apple.com/account/subscriptions",
-  "apple one": "https://apps.apple.com/account/subscriptions",
-  "apple arcade": "https://apps.apple.com/account/subscriptions",
-  "apple fitness": "https://apps.apple.com/account/subscriptions",
-  "apple news": "https://apps.apple.com/account/subscriptions",
-
-  // ── Amazon / Shopping ──
-  "amazon prime": "https://www.amazon.com/mc",
-  "prime video": "https://www.amazon.com/mc",
-  "prime": "https://www.amazon.com/mc",
-  "kindle unlimited": "https://www.amazon.com/kindle-dbs/ku/ku-central",
-  "kindle": "https://www.amazon.com/kindle-dbs/ku/ku-central",
-  "walmart+": "https://www.walmart.com/plus/account",
-  "walmart plus": "https://www.walmart.com/plus/account",
-  "instacart": "https://www.instacart.com/store/account/instacart-plus",
-  "instacart+": "https://www.instacart.com/store/account/instacart-plus",
-
-  // ── Food Delivery ──
-  "doordash": "https://www.doordash.com/consumer/membership/",
-  "dashpass": "https://www.doordash.com/consumer/membership/",
-  "grubhub": "https://www.grubhub.com/account/manage-membership",
-  "grubhub+": "https://www.grubhub.com/account/manage-membership",
-
-  // ── Meal Kits ──
-  "blue apron": "https://www.blueapron.com/account/details",
-  "home chef": "https://www.homechef.com/account",
-
-  // ── Fitness & Wellness ──
-  "planet fitness": "https://www.planetfitness.com/my-account/subscription",
-  "crunch fitness": "https://members.crunch.com/",
-  "crunch": "https://members.crunch.com/",
-  "equinox": "https://www.equinox.com/account",
-  "orangetheory": "https://www.orangetheory.com/en-us/member-portal",
-  "strava": "https://www.strava.com/account",
-  "alltrails": "https://www.alltrails.com/account",
-  "headspace": "https://www.headspace.com/subscriptions",
-  "fitbit": "https://www.fitbit.com/settings/subscription",
-  "tonal": "https://www.tonal.com/account",
-  "beachbody": "https://www.beachbodyondemand.com/account",
-  "classpass": "https://classpass.com/account/membership",
-  "ymca": "https://www.ymca.org/",
-  "24 hour fitness": "https://www.24hourfitness.com/myaccount/",
-  "lifetime fitness": "https://my.lifetime.life/account",
-
-  // ── Productivity & Cloud Storage ──
-  "adobe": "https://account.adobe.com/plans",
-  "adobe creative cloud": "https://account.adobe.com/plans",
-  "canva": "https://www.canva.com/settings/billing",
-  "microsoft 365": "https://account.microsoft.com/services",
-  "microsoft": "https://account.microsoft.com/services",
-  "office 365": "https://account.microsoft.com/services",
-  "google one": "https://one.google.com/settings",
-  "google workspace": "https://workspace.google.com/dashboard",
-  "google storage": "https://one.google.com/settings",
-  "dropbox": "https://www.dropbox.com/account/plan",
-  "notion": "https://www.notion.so/my-account",
-  "evernote": "https://www.evernote.com/Settings.action",
-  "slack": "https://slack.com/plans",
-  "zoom": "https://us02web.zoom.us/account",
-  "grammarly": "https://account.grammarly.com/subscription",
-  "1password": "https://my.1password.com/settings/billing",
-  "dashlane": "https://app.dashlane.com/settings/subscription",
-  "figma": "https://www.figma.com/settings",
-  "github copilot": "https://github.com/settings/copilot",
-  "chatgpt": "https://chat.openai.com/settings/subscription",
-  "openai": "https://platform.openai.com/settings/organization/billing",
-  "claude": "https://claude.ai/settings",
-  "midjourney": "https://www.midjourney.com/account",
-
-  // ── VPN & Security ──
-  "nordvpn": "https://my.nordaccount.com/dashboard/nordvpn/",
-  "expressvpn": "https://www.expressvpn.com/subscriptions",
-  "surfshark": "https://my.surfshark.com/subscription",
-  "protonvpn": "https://account.protonvpn.com/dashboard",
-  "proton": "https://account.proton.me/dashboard",
-  "norton": "https://my.norton.com/extspa/subscriptions",
-  "malwarebytes": "https://my.malwarebytes.com/account/subscriptions",
-
-  // ── Gaming ──
-  "xbox game pass": "https://account.microsoft.com/services",
-  "xbox": "https://account.microsoft.com/services",
-  "playstation plus": "https://store.playstation.com/en-us/subscriptions",
-  "ps plus": "https://store.playstation.com/en-us/subscriptions",
-  "playstation": "https://store.playstation.com/en-us/subscriptions",
-  "nintendo switch online": "https://ec.nintendo.com/my/membership",
-  "nintendo": "https://ec.nintendo.com/my/membership",
-  "geforce now": "https://www.nvidia.com/en-us/account/gfn/",
-
-  // ── News & Media ──
-  "wsj": "https://customercenter.wsj.com/manage-subscriptions",
-  "wall street journal": "https://customercenter.wsj.com/manage-subscriptions",
-  "nytimes": "https://myaccount.nytimes.com/seg/subscription",
-  "new york times": "https://myaccount.nytimes.com/seg/subscription",
-  "medium": "https://medium.com/me/settings/membership",
-  "linkedin": "https://www.linkedin.com/premium/cancel",
-  "linkedin premium": "https://www.linkedin.com/premium/cancel",
-
-  // ── Dating ──
-  "bumble": "https://bumble.com/en/get-started",
-  "hinge": "https://hingeapp.zendesk.com/hc/en-us/articles/360012065853",
-  "match": "https://www.match.com/account",
-
-  // ── Education ──
-  "duolingo": "https://www.duolingo.com/settings/subscription",
-  "masterclass": "https://www.masterclass.com/account/subscription",
-  "coursera": "https://www.coursera.org/account-settings",
-  "skillshare": "https://www.skillshare.com/settings/payments",
-  "blinkist": "https://www.blinkist.com/en/settings/subscription",
-
-  // ── Subscription Boxes ──
-  "barkbox": "https://www.barkbox.com/account",
-  "dollar shave club": "https://www.dollarshaveclub.com/your-account",
-  "fabfitfun": "https://www.fabfitfun.com/account",
-  "stitch fix": "https://www.stitchfix.com/settings/account",
-  "ipsy": "https://www.ipsy.com/glambag/settings",
-
-  // ── Insurance & Utilities ──
-  "state farm": "https://www.statefarm.com/customer-care",
-
-  // ── Communications ──
-  "ring": "https://account.ring.com/account/subscription",
-  "simplisafe": "https://webapp.simplisafe.com/new/#/account",
-
-  // ── Recently Added Verified Links ──
-  "apple care+": "https://apps.apple.com/account/subscriptions",
-  "apple care": "https://apps.apple.com/account/subscriptions",
-  "applecare+": "https://apps.apple.com/account/subscriptions",
-  "applecare": "https://apps.apple.com/account/subscriptions",
-  "hevy pro": "https://apps.apple.com/account/subscriptions",
-  "hevy": "https://apps.apple.com/account/subscriptions",
-  "google ai pro": "https://myaccount.google.com/payments-and-subscriptions",
-  "google ai": "https://myaccount.google.com/payments-and-subscriptions",
-  "gemini advanced": "https://myaccount.google.com/payments-and-subscriptions",
-  "gemini": "https://myaccount.google.com/payments-and-subscriptions",
-  "siriusxm": "https://care.siriusxm.com/",
-  "sirius xm": "https://care.siriusxm.com/",
-};
-
-// Build a universal fallback for any merchant not in the list
-function getCancelUrl(itemName: string | undefined): string | null {
-  const nameLower = (itemName || "").toLowerCase().trim();
-  if (!nameLower) return null;
-
-  // 1. Exact Name match
-  if (CANCELLATION_LINKS[nameLower]) return CANCELLATION_LINKS[nameLower];
-
-  // Helper for simple Levenshtein distance (fuzzy matching)
-  const getDistance = (a: string, b: string): number => {
-    if (a.length === 0) return b.length;
-    if (b.length === 0) return a.length;
-    const matrix = Array(b.length + 1).fill(null).map(() => Array(a.length + 1).fill(null));
-    const firstRow = matrix[0];
-    if (!firstRow) return Math.max(a.length, b.length);
-    for (let i = 0; i <= a.length; i += 1) firstRow[i] = i;
-    for (let j = 0; j <= b.length; j += 1) {
-      const row = matrix[j];
-      if (row) row[0] = j;
-    }
-    for (let j = 1; j <= b.length; j += 1) {
-      for (let i = 1; i <= a.length; i += 1) {
-        const ind = a[i - 1] === b[j - 1] ? 0 : 1;
-        const currentRow = matrix[j];
-        const previousRow = matrix[j - 1];
-        if (!currentRow || !previousRow) continue;
-        currentRow[i] = Math.min(
-          (currentRow[i - 1] ?? 0) + 1,
-          (previousRow[i] ?? 0) + 1,
-          (previousRow[i - 1] ?? 0) + ind
-        );
-      }
-    }
-    return matrix[b.length]?.[a.length] ?? Math.max(a.length, b.length);
-  };
-
-  const normalizedInput = nameLower.replace(/[^a-z0-9]/g, "");
-
-  for (const key of Object.keys(CANCELLATION_LINKS)) {
-    const normalizedKey = key.replace(/[^a-z0-9]/g, "");
-
-    // 2. Normalized substring match (handles "Net flix" or "Netflix Premium" or "N.e.t.f.l.i.x")
-    if (normalizedInput.includes(normalizedKey) || normalizedKey.includes(normalizedInput)) {
-      return CANCELLATION_LINKS[key];
-    }
-
-    // 3. Fuzzy match for typos (e.g. "Netlix" vs "Netflix")
-    // Only fuzzy match if both strings are >= 4 chars to prevent short acronyms from false-positives
-    if (normalizedInput.length >= 4 && normalizedKey.length >= 4) {
-      // Allow 1 typo (insertion, deletion, substitution) for every 5 characters
-      const allowedTypos = Math.floor(Math.max(normalizedInput.length, normalizedKey.length) / 5) || 1;
-      if (getDistance(normalizedInput, normalizedKey) <= allowedTypos) {
-        return CANCELLATION_LINKS[key];
-      }
-    }
-  }
-
-  // 4. No match found — return null to avoid cluttering the UI with generic search links
-  return null;
-}
 
 export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProps) {
   const { current } = useAudit();
@@ -852,9 +572,167 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
     dismissSuggestion: (suggestionId: string) => void;
   };
 
+  const negotiateSheetOverlay =
+    negotiateSheet && typeof document !== "undefined"
+      ? createPortal(
+          <>
+            <ScrollLock />
+            <div
+              onClick={() => { setNegotiateSheet(null); haptic.light(); }}
+              style={{
+                position: "fixed", inset: 0, zIndex: 200,
+                background: "rgba(0,0,0,0.55)",
+                backdropFilter: "blur(4px)",
+                WebkitBackdropFilter: "blur(4px)",
+                animation: "fadeIn .2s ease",
+                touchAction: "none",
+              }}
+            />
+            <div
+              style={{
+                position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 201,
+                background: T.bg.card,
+                borderTop: `1px solid ${T.border.default}`,
+                borderRadius: `${T.radius.xl}px ${T.radius.xl}px 0 0`,
+                padding: "0 0 env(safe-area-inset-bottom, 20px)",
+                maxHeight: "82vh",
+                display: "flex",
+                flexDirection: "column",
+                boxShadow: "0 -8px 40px rgba(0,0,0,0.45)",
+                animation: "slideUp .3s cubic-bezier(.16,1,.3,1)",
+                overscrollBehavior: "contain",
+              }}
+            >
+              <style>{`
+                @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+                @keyframes fadeIn  { from { opacity:0; } to { opacity:1; } }
+              `}</style>
+
+              <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
+                <div style={{ width: 36, height: 4, borderRadius: 2, background: T.border.default }} />
+              </div>
+
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "8px 20px 12px",
+                borderBottom: `1px solid ${T.border.subtle}`,
+              }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Bot size={16} color={T.accent.primary} />
+                    <span style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em" }}>
+                      {negotiateSheet.merchant}
+                    </span>
+                    <span style={{
+                      fontSize: 9, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
+                      color: T.accent.primary, background: T.accent.primaryDim,
+                      border: `1px solid ${T.accent.primary}30`,
+                      padding: "2px 7px", borderRadius: 99,
+                      fontFamily: T.font.mono,
+                    }}>{ negotiateSheet.type }</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: T.text.dim, marginTop: 3 }}>
+                    ${(negotiateSheet.amount || 0).toFixed(2)}/mo · Negotiation Playbook
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setNegotiateSheet(null); haptic.light(); }}
+                  style={{
+                    width: 32, height: 32, borderRadius: "50%",
+                    background: T.bg.elevated, border: `1px solid ${T.border.default}`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", color: T.text.dim,
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div style={{ overflowY: "auto", padding: "16px 20px", flex: 1 }}>
+                <div style={{
+                  background: T.bg.elevated,
+                  border: `1px solid ${T.border.default}`,
+                  borderRadius: T.radius.lg,
+                  padding: "14px 16px",
+                  marginBottom: 16,
+                }}>
+                  <div style={{
+                    fontSize: 9, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase",
+                    color: T.status.green, fontFamily: T.font.mono, marginBottom: 10,
+                    display: "flex", alignItems: "center", gap: 6,
+                  }}>
+                    <span style={{ display: "inline-block", width: 14, height: 1, background: T.status.green }} />
+                    Proven Tactic
+                  </div>
+                  <p style={{
+                    fontSize: 14, lineHeight: 1.75, color: T.text.secondary,
+                    margin: 0, whiteSpace: "pre-wrap",
+                  }}>
+                    {negotiateSheet.tactic}
+                  </p>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <button
+                    onClick={() => {
+                      if (shouldShowGating() && !proEnabled) {
+                        haptic.selection();
+                        setShowPaywall(true);
+                        return;
+                      }
+                      haptic.success();
+                      setNegotiateSheet(null);
+                      const payload: NegotiationFlowPayload = {
+                        merchant: negotiateSheet.merchant,
+                        amount: negotiateSheet.amount,
+                        tactic: negotiateSheet.tactic,
+                        financialContext: null,
+                      };
+                      navTo("chat", {
+                        negotiateBill: {
+                          merchant: payload.merchant,
+                          amount: payload.amount,
+                          tactic: payload.tactic,
+                        }
+                      });
+                    }}
+                    style={{
+                      width: "100%", padding: "14px",
+                      borderRadius: T.radius.md, border: "none",
+                      background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`,
+                      color: "#fff", fontSize: 14, fontWeight: 800,
+                      cursor: "pointer", display: "flex",
+                      alignItems: "center", justifyContent: "center", gap: 8,
+                      boxShadow: `0 4px 16px ${T.accent.primary}40`,
+                    }}
+                  >
+                    <Bot size={15} />
+                    Generate Full AI Phone Script
+                  </button>
+                  <button
+                    onClick={() => { setNegotiateSheet(null); haptic.light(); }}
+                    style={{
+                      width: "100%", padding: "12px",
+                      borderRadius: T.radius.md,
+                      border: `1px solid ${T.border.default}`,
+                      background: "transparent",
+                      color: T.text.secondary, fontSize: 13, fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Got It
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>,
+          document.body
+        )
+      : null;
+
   return (
     <>
-    <div className="page-body stagger-container" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+    <div className="page-body" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
         {/* existing header & monthly total */}
@@ -1284,13 +1162,18 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
                   // Find matching cancellation link (exact → partial → universal fallback)
                   const cancelUrl = item.isCancelled || item.isExpired ? null : getCancelUrl(item.name);
                   const negotiableMerchant = item.isCancelled || item.isExpired || item.isCardAF ? null : getNegotiableMerchant(item.name);
+                  const emailHref =
+                    cancelUrl && !cancelUrl.includes("google.com/search")
+                      ? `mailto:support@${(item.name || "company").toLowerCase().replace(/[^a-z0-9]/g, "")}.com?subject=Subscription%20Cancellation%20Request&body=Hello,%0D%0A%0D%0AI%20would%20like%20to%20cancel%20my%20${encodeURIComponent(item.name || "subscription")}%20plan%20effective%20immediately.%20Please%20confirm%20when%20this%20has%20been%20processed.%0D%0A%0D%0AThank%20you.`
+                      : null;
+                  const actionCount = [cancelUrl, emailHref, negotiableMerchant].filter(Boolean).length;
 
                   return (
                     <div
                       key={itemKey}
                       style={{
                         borderBottom: i === cat.items.length - 1 ? "none" : `1px solid ${T.border.subtle}`,
-                        padding: "16px 20px",
+                        padding: "12px 16px",
                         animation: `fadeInUp .3s ease-out ${Math.min(i * 0.04, 0.4)}s both`,
                       }}
                     >
@@ -1538,25 +1421,24 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
                           display: "flex",
                           justifyContent: "space-between",
                           alignItems: "flex-start",
-                          minHeight: 40,
-                          padding: "16px 0",
-                          marginBottom: 4
+                          minHeight: 0,
+                          padding: "8px 0",
                         }}>
                           <div
                             style={{
                               flex: 1,
                               minWidth: 0,
-                              paddingRight: 16,
+                              paddingRight: 12,
                               display: "flex",
                               flexDirection: "column",
                               justifyContent: "center",
                             }}
                           >
                             {/* Top Row: Title & Badges */}
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
                               <span
                                 style={{
-                                  fontSize: 15,
+                                  fontSize: 14,
                                   fontWeight: 700,
                                   color: item.isCancelled || item.isExpired ? T.text.muted : T.text.primary,
                                   textDecoration: item.isCancelled ? "line-through" : "none",
@@ -1571,52 +1453,65 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
                             </div>
 
                             {/* Metadata Container */}
-                            <div style={{
-                              display: "flex",
-                              flexWrap: "wrap",
-                              columnGap: 24,
-                              rowGap: 8,
-                              alignItems: "center"
-                            }}>
-                              {/* Cadence */}
-                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                <Mono size={14} color={T.text.dim}>
-                                  {item.cadence || formatInterval(item.interval, item.intervalUnit)}
-                                </Mono>
-                              </div>
-
-                              {/* Payment Method */}
-                              {item.chargedTo && (
-                                <div style={{ display: "flex", alignItems: "center", gap: 12, maxWidth: "100%" }}>
-                                  <div style={{ width: 1.5, height: 16, backgroundColor: T.text.dim, opacity: 0.6 }} />
-                                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                    <CreditCard size={14} color={T.accent.primary} style={{ flexShrink: 0 }} />
-                                    <span style={{ fontSize: 13, color: T.text.secondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                      {item.chargedTo.replace(/^(American Express|Barclays|Capital One|Chase|Citi|Discover) /, "")}
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Due Date */}
-                              {item.nextDue && (
-                                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                                  {(!item.chargedTo) && <div style={{ width: 1.5, height: 16, backgroundColor: T.text.dim, opacity: 0.6 }} />}
-                                  <div style={{ width: 1.5, height: 16, backgroundColor: T.text.dim, opacity: 0.6 }} />
-                                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                    <Calendar size={14} color={T.text.dim} style={{ flexShrink: 0 }} />
-                                    <span style={{ fontSize: 12, fontWeight: 600, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
-                                      Due {item.nextDue}
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
+                            <div style={{ display: "flex", flexWrap: "wrap", rowGap: 6, alignItems: "center" }}>
+                              {([
+                                {
+                                  key: "cadence",
+                                  node: (
+                                    <Mono size={13} color={T.text.dim}>
+                                      {item.cadence || formatInterval(item.interval, item.intervalUnit)}
+                                    </Mono>
+                                  ),
+                                },
+                                item.chargedTo
+                                  ? {
+                                      key: "card",
+                                      node: (
+                                        <div style={{ display: "flex", alignItems: "center", gap: 5, maxWidth: "100%" }}>
+                                          <CreditCard size={13} color={T.accent.primary} style={{ flexShrink: 0 }} />
+                                          <span style={{ fontSize: 12, color: T.text.secondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                            {item.chargedTo.replace(/^(American Express|Barclays|Capital One|Chase|Citi|Discover) /, "")}
+                                          </span>
+                                        </div>
+                                      ),
+                                    }
+                                  : null,
+                                item.nextDue
+                                  ? {
+                                      key: "due",
+                                      node: (
+                                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                          <Calendar size={13} color={T.text.dim} style={{ flexShrink: 0 }} />
+                                          <span style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
+                                            Due {formatRenewalDueDate(item.nextDue)}
+                                          </span>
+                                        </div>
+                                      ),
+                                    }
+                                  : null,
+                              ].filter(Boolean) as Array<{ key: string; node: ReactNode }>).map((segment, segmentIndex) => (
+                                <React.Fragment key={segment.key}>
+                                  {segmentIndex > 0 && (
+                                    <div
+                                      aria-hidden="true"
+                                      style={{
+                                        width: 1,
+                                        height: 12,
+                                        backgroundColor: T.text.dim,
+                                        opacity: 0.5,
+                                        margin: "0 10px",
+                                      }}
+                                    />
+                                  )}
+                                  {segment.node}
+                                </React.Fragment>
+                              ))}
 
                               {/* Notes / Source */}
                               {item.source && (
-                                <div style={{ display: "flex", alignItems: "flex-start", gap: 6, width: "100%", marginTop: 2 }}>
-                                  <AlignLeft size={14} color={T.text.dim} style={{ flexShrink: 0, marginTop: 2 }} />
-                                  <span style={{ fontSize: 13, color: T.text.muted, fontStyle: "italic", lineHeight: 1.4 }}>
+                                <div style={{ display: "flex", alignItems: "flex-start", gap: 6, width: "100%", marginTop: 4 }}>
+                                  <AlignLeft size={13} color={T.text.dim} style={{ flexShrink: 0, marginTop: 1 }} />
+                                  <span style={{ fontSize: 12, color: T.text.muted, fontStyle: "italic", lineHeight: 1.35 }}>
                                     {item.source}
                                   </span>
                                 </div>
@@ -1624,8 +1519,17 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
                             </div>
 
                             {/* Action Buttons Row */}
-                            {!item.isCardAF && !item.archivedAt && (cancelUrl || negotiableMerchant) && (
-                              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 }}>
+                            {!item.isCardAF && !item.archivedAt && actionCount > 0 && (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexWrap: "wrap",
+                                  gap: 8,
+                                  marginTop: 10,
+                                  width: "100%",
+                                  maxWidth: 320,
+                                }}
+                              >
                                 {/* Cancel Link */}
                                 {cancelUrl && (
                                   <a
@@ -1637,45 +1541,56 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
                                       display: "inline-flex",
                                       alignItems: "center",
                                       justifyContent: "center",
-                                      gap: 6,
-                                      padding: "6px 14px",
-                                      borderRadius: 100, // Pill shape
+                                      flex: "0 0 106px",
+                                      width: 106,
+                                      height: 34,
+                                      padding: "0 10px",
+                                      borderRadius: 12,
                                       fontSize: 11,
                                       fontWeight: 800,
+                                      whiteSpace: "nowrap",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
                                       color: T.status.red,
                                       textDecoration: "none",
                                       background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.base})`,
                                       border: `1px solid ${T.status.red}30`,
                                       boxShadow: `0 2px 4px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.05)`,
+                                      boxSizing: "border-box",
                                     }}
                                   >
-                                    {cancelUrl.includes("google.com/search") ? "How to Cancel" : "Cancel"}
-                                    <ExternalLink size={10} style={{ opacity: 0.8 }} />
+                                    Cancel
                                   </a>
                                 )}
 
                                 {/* Email Cancel */}
-                                {cancelUrl && !cancelUrl.includes("google.com/search") && (
+                                {emailHref && (
                                   <a
-                                    href={`mailto:support@${(item.name || "company").toLowerCase().replace(/[^a-z0-9]/g, "")}.com?subject=Subscription%20Cancellation%20Request&body=Hello,%0D%0A%0D%0AI%20would%20like%20to%20cancel%20my%20${encodeURIComponent(item.name || "subscription")}%20plan%20effective%20immediately.%20Please%20confirm%20when%20this%20has%20been%20processed.%0D%0A%0D%0AThank%20you.`}
+                                    href={emailHref}
                                     className="hover-btn"
                                     style={{
                                       display: "inline-flex",
                                       alignItems: "center",
                                       justifyContent: "center",
-                                      gap: 6,
-                                      padding: "6px 14px",
-                                      borderRadius: 100,
+                                      flex: "0 0 106px",
+                                      width: 106,
+                                      height: 34,
+                                      padding: "0 10px",
+                                      borderRadius: 12,
                                       fontSize: 11,
-                                      fontWeight: 700,
+                                      fontWeight: 800,
+                                      whiteSpace: "nowrap",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
                                       color: T.text.secondary,
                                       textDecoration: "none",
                                       background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.base})`,
                                       border: `1px solid ${T.border.default}`,
                                       boxShadow: `0 2px 4px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.05)`,
+                                      boxSizing: "border-box",
                                     }}
                                   >
-                                    ✉ Email
+                                    Email
                                   </a>
                                 )}
 
@@ -1704,20 +1619,25 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
                                       display: "inline-flex",
                                       alignItems: "center",
                                       justifyContent: "center",
-                                      gap: 6,
-                                      padding: "6px 14px",
-                                      borderRadius: 100,
+                                      flex: "0 0 106px",
+                                      width: 106,
+                                      height: 34,
+                                      padding: "0 10px",
+                                      borderRadius: 12,
                                       fontSize: 11,
                                       fontWeight: 800,
+                                      whiteSpace: "nowrap",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
                                       color: T.accent.primary,
-                                      background: `linear-gradient(180deg, ${T.accent.primaryDim}, transparent)`,
-                                      backgroundColor: T.bg.card,
+                                      textDecoration: "none",
+                                      background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.base})`,
                                       border: `1px solid ${T.accent.primary}40`,
-                                      boxShadow: `0 2px 6px ${T.accent.primary}20, inset 0 1px 0 rgba(255,255,255,0.05)`,
+                                      boxShadow: `0 2px 4px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.05)`,
                                       cursor: "pointer",
+                                      boxSizing: "border-box",
                                     }}
                                   >
-                                    <Bot size={11} />
                                     Negotiate
                                   </button>
                                 )}
@@ -1727,7 +1647,7 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
 
                           {/* Right Column: Amount & Actions */}
                           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 }}>
-                            <span style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, marginBottom: 12 }}>
+                            <span style={{ fontSize: 17, fontWeight: 800, color: T.text.primary, marginBottom: 10 }}>
                               ${(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
 
@@ -1737,7 +1657,7 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
                                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEdit(item, renewalIndex); }}
                                   className="hover-btn"
                                   style={{
-                                    width: 32, height: 32, borderRadius: T.radius.md,
+                                    width: 30, height: 30, borderRadius: T.radius.md,
                                     background: T.bg.base, color: T.text.secondary, border: `1px solid ${T.border.default}`,
                                     display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14,
                                     boxShadow: `0 2px 4px rgba(0,0,0,0.1)`
@@ -1749,7 +1669,7 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
                                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeItem(renewalIndex, item.name); }}
                                   className="hover-btn"
                                   style={{
-                                    width: 32, height: 32, borderRadius: T.radius.md, border: "none",
+                                    width: 30, height: 30, borderRadius: T.radius.md, border: "none",
                                     background: T.status.redDim, color: T.status.red,
                                     display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
                                     boxShadow: `0 2px 4px rgba(0,0,0,0.1)`
@@ -1800,166 +1720,7 @@ export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProp
     </div>
     </div>
 
-      {/* ── NEGOTIATE SHEET ── */}
-      {negotiateSheet && (
-        <>
-          <ScrollLock />
-          {/* Backdrop */}
-          <div
-            onClick={() => { setNegotiateSheet(null); haptic.light(); }}
-            style={{
-              position: "fixed", inset: 0, zIndex: 200,
-              background: "rgba(0,0,0,0.55)",
-              backdropFilter: "blur(4px)",
-              WebkitBackdropFilter: "blur(4px)",
-              animation: "fadeIn .2s ease",
-            }}
-          />
-          {/* Sheet */}
-          <div
-            style={{
-              position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 201,
-              background: T.bg.card,
-              borderTop: `1px solid ${T.border.default}`,
-              borderRadius: `${T.radius.xl}px ${T.radius.xl}px 0 0`,
-              padding: "0 0 env(safe-area-inset-bottom, 20px)",
-              maxHeight: "82vh",
-              display: "flex",
-              flexDirection: "column",
-              boxShadow: "0 -8px 40px rgba(0,0,0,0.45)",
-              animation: "slideUp .3s cubic-bezier(.16,1,.3,1)",
-            }}
-          >
-            <style>{`
-              @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-              @keyframes fadeIn  { from { opacity:0; } to { opacity:1; } }
-            `}</style>
-
-            {/* Handle bar */}
-            <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
-              <div style={{ width: 36, height: 4, borderRadius: 2, background: T.border.default }} />
-            </div>
-
-            {/* Header */}
-            <div style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "8px 20px 12px",
-              borderBottom: `1px solid ${T.border.subtle}`,
-            }}>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Bot size={16} color={T.accent.primary} />
-                  <span style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em" }}>
-                    {negotiateSheet.merchant}
-                  </span>
-                  <span style={{
-                    fontSize: 9, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-                    color: T.accent.primary, background: T.accent.primaryDim,
-                    border: `1px solid ${T.accent.primary}30`,
-                    padding: "2px 7px", borderRadius: 99,
-                    fontFamily: T.font.mono,
-                  }}>{ negotiateSheet.type }</span>
-                </div>
-                <div style={{ fontSize: 12, color: T.text.dim, marginTop: 3 }}>
-                  ${(negotiateSheet.amount || 0).toFixed(2)}/mo · Negotiation Playbook
-                </div>
-              </div>
-              <button
-                onClick={() => { setNegotiateSheet(null); haptic.light(); }}
-                style={{
-                  width: 32, height: 32, borderRadius: "50%",
-                  background: T.bg.elevated, border: `1px solid ${T.border.default}`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  cursor: "pointer", color: T.text.dim,
-                }}
-              >
-                <X size={14} />
-              </button>
-            </div>
-
-            {/* Scrollable tactic body */}
-            <div style={{ overflowY: "auto", padding: "16px 20px", flex: 1 }}>
-              {/* Tactic card */}
-              <div style={{
-                background: T.bg.elevated,
-                border: `1px solid ${T.border.default}`,
-                borderRadius: T.radius.lg,
-                padding: "14px 16px",
-                marginBottom: 16,
-              }}>
-                <div style={{
-                  fontSize: 9, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase",
-                  color: T.status.green, fontFamily: T.font.mono, marginBottom: 10,
-                  display: "flex", alignItems: "center", gap: 6,
-                }}>
-                  <span style={{ display: "inline-block", width: 14, height: 1, background: T.status.green }} />
-                  Proven Tactic
-                </div>
-                <p style={{
-                  fontSize: 14, lineHeight: 1.75, color: T.text.secondary,
-                  margin: 0, whiteSpace: "pre-wrap",
-                }}>
-                  {negotiateSheet.tactic}
-                </p>
-              </div>
-
-              {/* CTA buttons */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {/* Generate full AI script — opens AskAI with the negotiation context */}
-                <button
-                  onClick={() => {
-                    if (shouldShowGating() && !proEnabled) {
-                      haptic.selection();
-                      setShowPaywall(true);
-                      return;
-                    }
-                    haptic.success();
-                    setNegotiateSheet(null);
-                    const payload: NegotiationFlowPayload = {
-                      merchant: negotiateSheet.merchant,
-                      amount: negotiateSheet.amount,
-                      tactic: negotiateSheet.tactic,
-                      financialContext: null,
-                    };
-                    navTo("chat", {
-                      negotiateBill: {
-                        merchant: payload.merchant,
-                        amount: payload.amount,
-                        tactic: payload.tactic,
-                      }
-                    });
-                  }}
-                  style={{
-                    width: "100%", padding: "14px",
-                    borderRadius: T.radius.md, border: "none",
-                    background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`,
-                    color: "#fff", fontSize: 14, fontWeight: 800,
-                    cursor: "pointer", display: "flex",
-                    alignItems: "center", justifyContent: "center", gap: 8,
-                    boxShadow: `0 4px 16px ${T.accent.primary}40`,
-                  }}
-                >
-                  <Bot size={15} />
-                  Generate Full AI Phone Script
-                </button>
-                <button
-                  onClick={() => { setNegotiateSheet(null); haptic.light(); }}
-                  style={{
-                    width: "100%", padding: "12px",
-                    borderRadius: T.radius.md,
-                    border: `1px solid ${T.border.default}`,
-                    background: "transparent",
-                    color: T.text.secondary, fontSize: 13, fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  Got It
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+      {negotiateSheetOverlay}
     </>
   );
 });

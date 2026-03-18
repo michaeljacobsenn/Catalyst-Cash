@@ -1,22 +1,29 @@
-  import { Suspense,lazy,useCallback } from "react";
+  import { Suspense,lazy,useCallback,useEffect } from "react";
   import { motion } from "framer-motion";
   import type { AuditFormData } from "../../types/index.js";
   import { StreamingView } from "../components.js";
   import type { AppTab,NavViewState } from "../contexts/NavigationContext.js";
   import { useOverlay } from "../contexts/OverlayContext.js";
   import type { SetFinancialConfig } from "../contexts/SettingsContext.js";
-  import { useSwipeBack,useSwipeDown } from "../hooks/useSwipeGesture.js";
+import { useSwipeBack } from "../hooks/useSwipeGesture.js";
   import { getModel } from "../providers.js";
   import { buildSettingsRefreshActions } from "../recoveryFlows.js";
   import type { ToastApi } from "../Toast.js";
   import { ErrorBoundary } from "../ui.js";
 
-const InputForm = lazy(() => import("../tabs/InputForm.js"));
-const ResultsView = lazy(() => import("../tabs/ResultsView.js"));
-const HistoryTab = lazy(() => import("../tabs/HistoryTab.js"));
-const TransactionFeed = lazy(() => import("../tabs/TransactionFeed.js"));
-const GuideModal = lazy(() => import("../tabs/GuideModal.js"));
-const SettingsTab = lazy(() => import("../tabs/SettingsTab.js"));
+const loadInputForm = () => import("../tabs/InputForm.js");
+const loadResultsView = () => import("../tabs/ResultsView.js");
+const loadHistoryTab = () => import("../tabs/HistoryTab.js");
+const loadTransactionFeed = () => import("../tabs/TransactionFeed.js");
+const loadGuideModal = () => import("../tabs/GuideModal.js");
+const loadSettingsTab = () => import("../tabs/SettingsTab.js");
+
+const InputForm = lazy(loadInputForm);
+const ResultsView = lazy(loadResultsView);
+const HistoryTab = lazy(loadHistoryTab);
+const TransactionFeed = lazy(loadTransactionFeed);
+const GuideModal = lazy(loadGuideModal);
+const SettingsTab = lazy(loadSettingsTab);
 
 const TabFallback = () => (
   <div className="skeleton-loader" style={{ padding: "20px 16px" }}>
@@ -106,6 +113,33 @@ export default function OverlayManager({
     setInstructionHash,
   } = useOverlay();
   const onShowGuide = useCallback(() => setShowGuide(true), [setShowGuide]);
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const warmup = () => {
+      void Promise.allSettled([
+        loadInputForm(),
+        loadResultsView(),
+        loadHistoryTab(),
+        loadTransactionFeed(),
+        loadGuideModal(),
+        loadSettingsTab(),
+      ]);
+    };
+
+    const idleId =
+      typeof window.requestIdleCallback === "function"
+        ? window.requestIdleCallback(warmup, { timeout: 1600 })
+        : window.setTimeout(warmup, 260);
+
+    return () => {
+      if (typeof idleId !== "number" && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(idleId);
+        return;
+      }
+      window.clearTimeout(idleId as number);
+    };
+  }, []);
   const settingsRefreshActions = buildSettingsRefreshActions({
     onRestoreComplete,
     onHouseholdSyncConfigured,
@@ -124,17 +158,11 @@ export default function OverlayManager({
     }, [lastCenterTab, navTo])
   );
 
-  const overlaySwipeGuide = useSwipeDown(
-    useCallback(() => {
-      setShowGuide(false);
-    }, [setShowGuide])
-  );
-
   return (
     <>
       {showGuide && (
         <Suspense fallback={null}>
-          <GuideModal onClose={() => setShowGuide(false)} swipeHook={overlaySwipeGuide} proEnabled={proEnabled} />
+          <GuideModal onClose={() => setShowGuide(false)} proEnabled={proEnabled} />
         </Suspense>
       )}
 

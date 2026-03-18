@@ -13,6 +13,7 @@ interface SwipeGestureHandlers {
     y?: MotionValue<number>;
     opacity: MotionValue<number>;
   };
+  dismiss: () => void;
 }
 
 interface InteractiveSwipeOptions {
@@ -68,7 +69,7 @@ function useInteractiveSwipe({ axis,onDismiss,edgeOnly = false,edgeSize = EDGE_S
     const size = Math.max(getViewportSize(axis, pane), 1);
     return Math.max(0, Math.min(latest / size, 1));
   });
-  const opacity = useTransform(progress, [0, 1], [1, 0.92]);
+  const opacity = useTransform(progress, [0, 1], axis === "y" ? [1, 0.72] : [1, 0.9]);
 
   useMotionValueEvent(progress, "change", (latest) => {
     applyUnderlyingParallax(axis, latest);
@@ -142,6 +143,17 @@ function useInteractiveSwipe({ axis,onDismiss,edgeOnly = false,edgeSize = EDGE_S
     },
   );
 
+  const dismiss = useCallback(() => {
+    if (dismissingRef.current) return;
+    const pane = paneRef.current;
+    const size = getViewportSize(axis, pane);
+    if (!size) {
+      completeDismiss();
+      return;
+    }
+    animateTo(size, completeDismiss);
+  }, [animateTo, axis, completeDismiss]);
+
   useEffect(() => {
     dismissingRef.current = false;
     motion.set(0);
@@ -165,6 +177,7 @@ function useInteractiveSwipe({ axis,onDismiss,edgeOnly = false,edgeSize = EDGE_S
     paneRef,
     bind,
     motionStyle,
+    dismiss,
   };
 }
 

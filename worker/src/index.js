@@ -18,15 +18,23 @@ import {
 } from "./lib/householdSecurity.js";
 import { getRevenueCatAppUserId } from "./lib/requestIdentity.js";
 import {
-  bootstrapIdentityActor,
-  getActorRevenueCatUserId,
-  issueIdentitySessionToken,
+  createIdentityChallenge,
+  completeIdentityChallenge,
+  rotateIdentityDeviceKey,
   resolveAuthenticatedActor,
 } from "./lib/identitySession.js";
+import { getQuotaWindow } from "./lib/quota.js";
+import { buildHeaders, corsHeaders, fetchWithTimeout } from "./lib/http.js";
 import {
-  getQuotaWindow,
-  isRevenueCatEntitlementActive,
-} from "./lib/quota.js";
+  DEFAULTS,
+  VALID_PROVIDERS,
+  getProviderHandler,
+} from "./lib/providerClients.js";
+import {
+  resolveEffectiveTier,
+  resolveStoredUserTier,
+  resolveVerifiedRevenueCatAppUserId,
+} from "./lib/revenueCat.js";
 import {
   fetchPlaidJson,
   getDbFirstResult,
@@ -41,50 +49,28 @@ import { handleTelemetryRoute } from "./routes/telemetryRoutes.js";
 
 export { buildHouseholdIntegrityTag, sha256Hex } from "./lib/householdSecurity.js";
 export {
-  bootstrapIdentityActor,
-  issueIdentitySessionToken,
+  createIdentityChallenge,
+  completeIdentityChallenge,
+  rotateIdentityDeviceKey,
   resolveAuthenticatedActor as resolvePlaidActor,
 } from "./lib/identitySession.js";
+export { issueIdentitySessionToken } from "./lib/identitySession.js";
 export { verifyIdentitySessionToken } from "./lib/identitySession.js";
 export { getIsoWeekKey, getQuotaWindow, isRevenueCatEntitlementActive } from "./lib/quota.js";
 export { mergePlaidTransactions } from "./lib/plaidSync.js";
+export { resolveEffectiveTier } from "./lib/revenueCat.js";
 
-const ANTHROPIC_VERSION = "2023-06-01";
 const MAX_BODY_SIZE = 512_000; // 512KB max request body (rich audit prompt is now ~60KB before snapshot/history)
-const VALID_PROVIDERS = ["gemini", "openai", "claude", "anthropic"];
 const PLAID_ENV = "production"; // "sandbox", "development", or "production"
-const PROVIDER_TIMEOUT_MS = 240_000; // 4 min for all models (client has a cancel button)
 const PLAID_TIMEOUT_MS = 15_000;
 const MARKET_TIMEOUT_MS = 10_000;
-const REVENUECAT_TIMEOUT_MS = 8_000;
-const REVENUECAT_CACHE_TTL_SECONDS = 300;
-const SECURITY_HEADERS = {
-  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-  "Referrer-Policy": "no-referrer",
-  "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "DENY",
-  "Content-Security-Policy": "frame-ancestors 'none'",
-};
-const LOOPBACK_ORIGIN_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i;
 const MODEL_ALLOWLIST = {
   free: new Set(["gemini-2.5-flash"]),
   pro: new Set([
     "gemini-2.5-flash",
-    "gemini-2.5-pro",
     "gpt-4.1",
     "o3",
-    "claude-sonnet-4-6",
-    "claude-opus-4-6",
-    "claude-haiku-4-5",
   ]),
-};
-
-// Model defaults per provider
-const DEFAULTS = {
-  gemini: "gemini-2.5-flash",
-  openai: "gpt-4.1",
-  claude: "claude-haiku-4-5",
-  anthropic: "claude-haiku-4-5",
 };
 
 function buildPersonaProfile(persona) {
@@ -246,147 +232,22 @@ function logPromptProfile(env, type, provider, prompt) {
 }
 
 function getWorkerGatingMode(env) {
-  return env.GATING_MODE || "off";
+  return env.GATING_MODE || "soft";
 }
 
 function isWorkerGatingEnforced(env) {
   return getWorkerGatingMode(env) === "live";
 }
 
-// ─── CORS ────────────────────────────────────────────────────
-function corsHeaders(origin, env) {
-  const allowed = (env.ALLOWED_ORIGIN || "https://catalystcash.app").split(",").map(s => s.trim());
-  const isAllowed =
-    allowed.includes(origin) || LOOPBACK_ORIGIN_RE.test(String(origin || "")) || origin === "capacitor://localhost";
-  return {
-    "Access-Control-Allow-Origin": isAllowed ? origin : allowed[0],
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Device-ID, X-App-Version, X-Subscription-Tier, X-RC-App-User-ID",
-    "Access-Control-Max-Age": "86400",
-    Vary: "Origin",
-  };
-}
-
-function buildHeaders(cors, extra = {}) {
-  return { ...cors, ...SECURITY_HEADERS, ...extra };
-}
-
-function getConfiguredEntitlementId(env) {
-  return env.REVENUECAT_ENTITLEMENT_ID || "Catalyst Cash Pro";
-}
-
-async function fetchWithTimeout(input, init = {}, timeoutMs = PROVIDER_TIMEOUT_MS) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(input, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 function getDefaultModelForTier(provider, tier) {
-  if (provider === "openai") return tier === "pro" ? "o3" : DEFAULTS.gemini;
-  if (provider === "gemini") return tier === "pro" ? "gemini-2.5-pro" : "gemini-2.5-flash";
+  if (provider === "openai") return tier === "pro" ? "gpt-4.1" : DEFAULTS.gemini;
+  if (provider === "gemini") return "gemini-2.5-flash";
   if (provider === "anthropic" || provider === "claude") return tier === "pro" ? "claude-haiku-4-5" : DEFAULTS.gemini;
   return DEFAULTS[provider] || DEFAULTS.gemini;
 }
 
 function isModelAllowedForTier(model, tier) {
   return MODEL_ALLOWLIST[tier]?.has(model);
-}
-
-async function fetchRevenueCatSubscriber(appUserId, env) {
-  if (!env.REVENUECAT_SECRET_KEY || !appUserId) return null;
-
-  const cacheKey = `https://revenuecat.internal/${encodeURIComponent(appUserId)}`;
-  const cache = typeof caches !== "undefined" ? caches.default : null;
-  if (cache) {
-    const cached = await cache.match(cacheKey);
-    if (cached) {
-      return cached.json();
-    }
-  }
-
-  const response = await fetchWithTimeout(
-    `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(appUserId)}`,
-    {
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${env.REVENUECAT_SECRET_KEY}`,
-      },
-    },
-    REVENUECAT_TIMEOUT_MS
-  );
-
-  if (response.status === 404) {
-    return null;
-  }
-  if (!response.ok) {
-    throw new Error(`RevenueCat verification failed (${response.status})`);
-  }
-
-  const payload = await response.json();
-  if (cache) {
-    await cache.put(
-      cacheKey,
-      new Response(JSON.stringify(payload), {
-        headers: { "Cache-Control": `max-age=${REVENUECAT_CACHE_TTL_SECONDS}` },
-      })
-    );
-  }
-  return payload;
-}
-
-async function resolveVerifiedRevenueCatAppUserId(request, env) {
-  const revenueCatAppUserId = getRevenueCatAppUserId(request);
-  if (!revenueCatAppUserId || !env.REVENUECAT_SECRET_KEY) return null;
-  try {
-    const payload = await fetchRevenueCatSubscriber(revenueCatAppUserId, env);
-    return payload?.subscriber ? revenueCatAppUserId : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function resolveEffectiveTier(request, env, actor = null) {
-  const revenueCatAppUserId = actor?.revenueCatAppUserId || getRevenueCatAppUserId(request);
-  if (!env.REVENUECAT_SECRET_KEY || !revenueCatAppUserId) {
-    return { tier: "free", verified: false, source: "unverified" };
-  }
-
-  try {
-    const payload = await fetchRevenueCatSubscriber(revenueCatAppUserId, env);
-    const isPro = isRevenueCatEntitlementActive(payload?.subscriber, getConfiguredEntitlementId(env));
-    return {
-      tier: isPro ? "pro" : "free",
-      verified: true,
-      source: "revenuecat",
-    };
-  } catch (error) {
-    return {
-      tier: "free",
-      verified: false,
-      source: "verification_failed",
-      verificationError: error?.message || "verification_failed",
-    };
-  }
-}
-
-async function resolveStoredUserTier(userId, env) {
-  if (!isWorkerGatingEnforced(env)) return "pro";
-  if (!userId) return "free";
-
-  const revenueCatAppUserId =
-    userId.startsWith("rc:") ? userId.slice(3) : await getActorRevenueCatUserId(env.DB, userId);
-  if (!revenueCatAppUserId) return "free";
-
-  try {
-    const payload = await fetchRevenueCatSubscriber(revenueCatAppUserId, env);
-    return isRevenueCatEntitlementActive(payload?.subscriber, getConfiguredEntitlementId(env)) ? "pro" : "free";
-  } catch {
-    return "free";
-  }
 }
 
 // ─── Rate Limiting (per-device, using Durable Objects) ─────────────
@@ -641,186 +502,6 @@ async function captureStreamAuditLog(db, logId, provider, response) {
   });
 }
 
-// ─── Gemini Provider ─────────────────────────────────────────
-async function callGemini(apiKey, { snapshot, systemPrompt, history, model, stream, responseFormat }) {
-  const m = model || DEFAULTS.gemini;
-  const endpoint = stream
-    ? `https://generativelanguage.googleapis.com/v1beta/models/${m}:streamGenerateContent?alt=sse&key=${apiKey}`
-    : `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
-
-  const genConfig = {
-    maxOutputTokens: 12000,
-    temperature: 0.1,
-    topP: 0.95,
-  };
-  // Only force JSON output for audits — chat needs natural language
-  if (responseFormat !== "text") {
-    genConfig.responseMimeType = "application/json";
-  }
-
-  const body = {
-    contents: [
-      ...(history || []).map(h => ({
-        role: h.role === "assistant" ? "model" : "user",
-        parts: [{ text: h.content }],
-      })),
-      { parts: [{ text: snapshot }], role: "user" },
-    ],
-    systemInstruction: { parts: [{ text: systemPrompt }] },
-    generationConfig: genConfig,
-  };
-
-  const res = await fetchWithTimeout(
-    endpoint,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    },
-    PROVIDER_TIMEOUT_MS
-  );
-
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({}));
-    const msg = e.error?.message || e[0]?.error?.message || `HTTP ${res.status}`;
-    throw new Error(`Gemini Error: ${msg}`);
-  }
-
-  if (stream) {
-    return res; // Return raw SSE stream
-  }
-
-  const data = await res.json();
-  return {
-    text: data.candidates?.[0]?.content?.parts?.map(p => p.text).join("") || "",
-    usage: buildUsage(
-      data.usageMetadata?.promptTokenCount || 0,
-      data.usageMetadata?.candidatesTokenCount ??
-        Math.max(0, (data.usageMetadata?.totalTokenCount || 0) - (data.usageMetadata?.promptTokenCount || 0))
-    ),
-  };
-}
-
-// ─── OpenAI Provider ─────────────────────────────────────────
-async function callOpenAI(apiKey, { snapshot, systemPrompt, history, model, stream, responseFormat }) {
-  const m = model || DEFAULTS.openai;
-  const isReasoning = m.startsWith("o");
-
-  const body = {
-    model: m,
-    stream: stream || false,
-    messages: [{ role: "system", content: systemPrompt }, ...(history || []), { role: "user", content: snapshot }],
-  };
-
-  if (isReasoning) {
-    body.max_completion_tokens = 12000;
-    if (stream) {
-      body.stream_options = { include_usage: true };
-    }
-    // Reasoning models don't support response_format — inject explicit JSON instruction
-    if (responseFormat !== "text") {
-      const jsonSuffix =
-        "\n\nCRITICAL: You MUST respond with RAW JSON only. No markdown, no code fences, no prose, no explanation. Your entire response must be a single valid JSON object starting with { and ending with }.";
-      body.messages[0].content += jsonSuffix;
-    }
-  } else {
-    body.max_tokens = 12000;
-    body.temperature = 0.1;
-    body.top_p = 0.95;
-    if (stream) {
-      body.stream_options = { include_usage: true };
-    }
-    // Only force JSON output for audits — chat needs natural language
-    if (responseFormat !== "text") {
-      body.response_format = { type: "json_object" };
-    }
-  }
-
-  const res = await fetchWithTimeout(
-    "https://api.openai.com/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-    },
-    PROVIDER_TIMEOUT_MS
-  );
-
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({}));
-    throw new Error(`OpenAI Error: ${e.error?.message || `HTTP ${res.status}`}`);
-  }
-
-  if (stream) {
-    return res; // Return raw SSE stream
-  }
-
-  const data = await res.json();
-  return {
-    text: data.choices?.[0]?.message?.content || "",
-    usage: buildUsage(data.usage?.prompt_tokens || 0, data.usage?.completion_tokens || 0),
-  };
-}
-
-// ─── Claude Provider ─────────────────────────────────────────
-async function callClaude(apiKey, { snapshot, systemPrompt, history, model, stream, responseFormat: _responseFormat }) {
-  const body = {
-    model: model || DEFAULTS.claude,
-    max_tokens: 12000,
-    temperature: 0.1,
-    stream: stream || false,
-    system: systemPrompt,
-    messages: [...(history || []), { role: "user", content: snapshot }],
-  };
-
-  const res = await fetchWithTimeout(
-    "https://api.anthropic.com/v1/messages",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": ANTHROPIC_VERSION,
-      },
-      body: JSON.stringify(body),
-    },
-    PROVIDER_TIMEOUT_MS
-  );
-
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({}));
-    throw new Error(`Claude Error: ${e.error?.message || `HTTP ${res.status}`}`);
-  }
-
-  if (stream) {
-    return res; // Return raw SSE stream
-  }
-
-  const data = await res.json();
-  return {
-    text: data.content?.[0]?.text || "",
-    usage: buildUsage(data.usage?.input_tokens || 0, data.usage?.output_tokens || 0),
-  };
-}
-
-// ─── Provider Router ─────────────────────────────────────────
-function getProviderHandler(provider) {
-  switch (provider) {
-    case "gemini":
-      return { handler: callGemini, keyName: "GOOGLE_API_KEY" };
-    case "openai":
-      return { handler: callOpenAI, keyName: "OPENAI_API_KEY" };
-    case "claude":
-    case "anthropic":
-      return { handler: callClaude, keyName: "ANTHROPIC_API_KEY" };
-    default:
-      return { handler: callGemini, keyName: "GOOGLE_API_KEY" };
-  }
-}
-
 // ─── Main Handler ────────────────────────────────────────────
 export default {
   async fetch(request, env, ctx) {
@@ -841,9 +522,11 @@ export default {
       buildHeaders,
       DEFAULTS,
       getWorkerGatingMode,
+      resolveAuthenticatedActor,
       resolveVerifiedRevenueCatAppUserId,
-      bootstrapIdentityActor,
-      issueIdentitySessionToken,
+      createIdentityChallenge,
+      completeIdentityChallenge,
+      rotateIdentityDeviceKey,
       updateAuditLogRow,
       workerLog,
     });
@@ -1164,14 +847,11 @@ export default {
           // Manually trigger a sync for a user, respecting the tier cooldown.
           if (request.method !== "POST") return new Response("{}", { status: 405 });
           if (!env.DB) return new Response(JSON.stringify({ error: "DB not configured" }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+          const requestBody = await request.json().catch(() => ({}));
           const tierResolution = await resolveEffectiveTier(request, env, plaidActor);
           const tierId = !isWorkerGatingEnforced(env) ? "pro" : tierResolution.tier;
 
-          if (isWorkerGatingEnforced(env) && tierId === "free") {
-            return new Response(JSON.stringify({ error: "upgrade_required", message: "Live Syncing is a Pro feature." }), { status: 403, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
-          }
-
-          const { results: syncResults } = await env.DB.prepare("SELECT last_synced_at FROM sync_data WHERE user_id = ?").bind(plaidActor.userId).all();
+          const { results: syncResults } = await env.DB.prepare("SELECT item_id, last_synced_at FROM sync_data WHERE user_id = ?").bind(plaidActor.userId).all();
           let lastSyncTime = 0;
           if (syncResults && syncResults.length > 0 && syncResults[0].last_synced_at) {
             lastSyncTime = new Date(syncResults[0].last_synced_at + "Z").getTime();
@@ -1182,21 +862,47 @@ export default {
             pro: 24 * 60 * 60 * 1000,
           };
           const cooldownMs = COOLDOWNS[tierId] || COOLDOWNS.free;
-          const now = Date.now();
-          if (lastSyncTime > 0 && (now - lastSyncTime) < cooldownMs) {
-            return new Response(JSON.stringify({ error: "cooldown", message: "Cooldown active", cooldownMs, tier: tierId }), { status: 429, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
-          }
 
           const { results: itemResults } = await env.DB.prepare("SELECT access_token, item_id FROM plaid_items WHERE user_id = ?").bind(plaidActor.userId).all();
           if (!itemResults || itemResults.length === 0) {
             return new Response(JSON.stringify({ error: "No plaid items found" }), { status: 404, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
 
+          let targetItems = itemResults;
+          let limitedToItemId = null;
+          const requestedItemId = String(requestBody?.connectionId || "").trim();
+          const matchedRequestedItem = requestedItemId
+            ? itemResults.find(item => String(item.item_id || "") === requestedItemId)
+            : null;
+
+          if (matchedRequestedItem) {
+            targetItems = [matchedRequestedItem];
+            limitedToItemId = matchedRequestedItem.item_id || "default";
+          }
+
+          if (isWorkerGatingEnforced(env) && tierId === "free") {
+            const selectedItem = matchedRequestedItem || itemResults[0];
+            if (!selectedItem) {
+              return new Response(JSON.stringify({ error: "No plaid items found" }), { status: 404, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+            }
+            targetItems = [selectedItem];
+            limitedToItemId = selectedItem.item_id || "default";
+            const targetedSyncRow = (syncResults || []).find(row => row.item_id === limitedToItemId);
+            lastSyncTime = targetedSyncRow?.last_synced_at
+              ? new Date(targetedSyncRow.last_synced_at + "Z").getTime()
+              : 0;
+          }
+
+          const now = Date.now();
+          if (lastSyncTime > 0 && (now - lastSyncTime) < cooldownMs) {
+            return new Response(JSON.stringify({ error: "cooldown", message: "Cooldown active", cooldownMs, tier: tierId, limitedToItemId }), { status: 429, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+          }
+
           let anySuccess = false;
-          for (const item of itemResults) {
+          for (const item of targetItems) {
             const { access_token, item_id: syncItemId } = item;
             try {
-              // Manual sync: use free /accounts/get and rely on background product updates ($0.30/mo flat)
+              // Manual sync should complete before we return so the client can read fresh data immediately.
               const balances = await fetchPlaidJson(plaidDomain, "/accounts/get", env, {
                 access_token,
               });
@@ -1205,6 +911,27 @@ export default {
                 balancesJson: JSON.stringify(balances),
               });
               anySuccess = true;
+
+              try {
+                const { mergedTransactions } = await syncTransactionsForItem({
+                  db: env.DB,
+                  userId: plaidActor.userId,
+                  itemId: syncItemId || "default",
+                  accessToken: access_token,
+                  plaidDomain,
+                  env,
+                });
+
+                await writeSyncRow(env.DB, plaidActor.userId, syncItemId || "default", {
+                  balancesJson: JSON.stringify(balances),
+                  transactionsJson: JSON.stringify(mergedTransactions),
+                });
+              } catch (transactionErr) {
+                workerLog(env, "warn", "plaid-sync", "Manual sync transactions failed; balances were still cached", {
+                  error: transactionErr,
+                  itemId: syncItemId || "default",
+                });
+              }
             } catch (err) {
               workerLog(env, "warn", "plaid-sync", "Manual sync item failed", {
                 error: err,
@@ -1214,13 +941,17 @@ export default {
           }
 
           if (anySuccess) {
-            return new Response(JSON.stringify({ success: true }), { status: 200, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+            return new Response(JSON.stringify({
+              success: true,
+              syncedItemIds: targetItems.map(item => item.item_id || "default"),
+              limitedToItemId,
+            }), { status: 200, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           } else {
             return new Response(JSON.stringify({ error: "Failed to sync items" }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
         } else if (url.pathname === "/api/sync/deep") {
           // On-demand deep sync: fetch transactions + liabilities.
-          // In soft launch, this remains available to all users. In live gating, free users are blocked.
+          // Deep sync is intentionally paid-only under live gating because Plaid usage is the primary marginal cost.
           if (request.method !== "POST") return new Response("{}", { status: 405 });
           if (!env.DB) return new Response(JSON.stringify({ error: "DB not configured" }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           const tierResolution = await resolveEffectiveTier(request, env, plaidActor);
@@ -1287,12 +1018,56 @@ export default {
             return new Response(JSON.stringify({ hasData: false }), { status: 200, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
 
+          const aggregatePayload = (rows, key) => {
+            const aggregated = {};
+            for (const row of rows) {
+              try {
+                const parsed = JSON.parse(row?.[key] || "{}");
+                if (!parsed || typeof parsed !== "object") continue;
+
+                if (Array.isArray(parsed.accounts)) {
+                  aggregated.accounts = [...(aggregated.accounts || []), ...parsed.accounts];
+                }
+
+                if (Array.isArray(parsed.transactions)) {
+                  aggregated.transactions = [...(aggregated.transactions || []), ...parsed.transactions];
+                  aggregated.total_transactions =
+                    Number(aggregated.total_transactions || 0) + Number(parsed.total_transactions || parsed.transactions.length || 0);
+                }
+
+                const liabilities = parsed.liabilities;
+                if (liabilities && typeof liabilities === "object") {
+                  aggregated.liabilities = aggregated.liabilities || {};
+                  for (const [liabilityKey, liabilityValue] of Object.entries(liabilities)) {
+                    if (Array.isArray(liabilityValue)) {
+                      aggregated.liabilities[liabilityKey] = [
+                        ...(aggregated.liabilities[liabilityKey] || []),
+                        ...liabilityValue,
+                      ];
+                    } else {
+                      aggregated.liabilities[liabilityKey] = liabilityValue;
+                    }
+                  }
+                }
+              } catch {
+                // Ignore malformed cached payloads for individual items.
+              }
+            }
+            return aggregated;
+          };
+
+          const latestSyncedAt = [...results]
+            .map(result => result?.last_synced_at)
+            .filter(Boolean)
+            .sort()
+            .at(-1) || null;
+
           return new Response(JSON.stringify({
             hasData: true,
-            last_synced_at: results[0].last_synced_at,
-            balances: JSON.parse(results[0].balances_json || "{}"),
-            liabilities: JSON.parse(results[0].liabilities_json || "{}"),
-            transactions: JSON.parse(results[0].transactions_json || "{}")
+            last_synced_at: latestSyncedAt,
+            balances: aggregatePayload(results, "balances_json"),
+            liabilities: aggregatePayload(results, "liabilities_json"),
+            transactions: aggregatePayload(results, "transactions_json"),
           }), { status: 200, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
         } else {
           return new Response(JSON.stringify({ error: "Unknown Plaid endpoint" }), {
@@ -1315,6 +1090,7 @@ export default {
       env,
       cors,
       buildHeaders,
+      resolveAuthenticatedActor,
       sha256Hex,
       buildHouseholdIntegrityTag,
       verifyHouseholdIntegrity,
@@ -1408,6 +1184,7 @@ export default {
     }
 
     const { snapshot, systemPrompt, context, type, history, model, stream, provider, responseFormat } = body;
+    const resolvedType = type || (isChat ? "chat" : "audit");
 
     if (!snapshot || (!systemPrompt && !context)) {
       return new Response(JSON.stringify({ error: "Missing required fields: snapshot, context" }), {
@@ -1430,6 +1207,9 @@ export default {
       selectedProvider = "gemini";
       resolvedModel = "gemini-2.5-flash";
     }
+    if (resolvedType === "chat" && resolvedModel === "o3") {
+      resolvedModel = "gpt-4.1";
+    }
     if (!isModelAllowedForTier(resolvedModel, subscriptionTier)) {
       return new Response(
         JSON.stringify({
@@ -1450,7 +1230,6 @@ export default {
       );
     }
     const { handler, keyName } = getProviderHandler(selectedProvider);
-    const resolvedType = type || (isChat ? "chat" : "audit");
     const resolvedSystemPrompt = systemPrompt || buildSystemPrompt(resolvedType, context || {}, selectedProvider);
     logPromptProfile(env, resolvedType, selectedProvider, resolvedSystemPrompt);
 

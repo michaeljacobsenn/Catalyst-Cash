@@ -17,7 +17,6 @@
     Trash2,
     Zap,
   } from "../icons";
-  import { calcPortfolioValue,fetchMarketPrices } from "../marketData.js";
   import { Badge,Card as UICard,Label as UILabel } from "../ui.js";
   import { fmt } from "../utils.js";
   import { validateSnapshot } from "../validation.js";
@@ -31,13 +30,11 @@
     CatalystCashConfig,
     Renewal,
   } from "../../types/index.js";
-  import { buildSnapshotMessage } from "../buildSnapshotMessage.js";
   import { useAudit } from "../contexts/AuditContext.js";
   import type { PersonaMode,SetFinancialConfig } from "../contexts/SettingsContext.js";
-  import { DEFAULT_FINANCIAL_CONFIG } from "../contexts/SettingsContext.js";
   import { haptic } from "../haptics.js";
-  import { getPlaidAutoFill,getStoredTransactions } from "../plaid.js";
-  import { checkAuditQuota,isGatingEnforced } from "../subscription.js";
+  import { getPlaidAutoFill } from "../plaid.js";
+  import { isGatingEnforced } from "../subscription.js";
   import {
     AuditQuotaNotice,
     InputFormErrorBanner,
@@ -46,7 +43,19 @@
     ValidationFeedback,
   } from "./inputForm/FeedbackSections.js";
   import { ConfigSection } from "./inputForm/ConfigSection";
-  import { sanitizeDollar, toMoneyInput, toNumber, type MoneyInput } from "./inputForm/utils.js";
+  import {
+    buildCardSelectGroups,
+    buildInputSnapshotMessage,
+    createInitialInputFormState,
+    getTypedFinancialConfig,
+    hasReusableAuditSeed,
+    loadAuditQuota,
+    loadHoldingValues,
+    loadRecentPlaidTransactions,
+    mergeLastAuditIntoForm,
+    mergePlaidAutoFillIntoForm,
+  } from "./inputForm/state";
+  import { sanitizeDollar, toNumber, type MoneyInput } from "./inputForm/utils.js";
 
 interface InputDebt extends AuditFormDebt {
   cardId: string;
@@ -115,11 +124,6 @@ interface PlaidTransaction {
   description: string;
   category?: string;
   accountName?: string;
-}
-
-interface StoredTransactionsResult {
-  data?: PlaidTransaction[];
-  fetchedAt?: string | number | null;
 }
 
 interface PlaidAutoFillData {
@@ -241,8 +245,8 @@ export default function InputForm({
   setPersonalRules,
 }: InputFormProps) {
   const { error } = useAudit();
-  const today = new Date();
-  const typedFinancialConfig = (financialConfig ?? (DEFAULT_FINANCIAL_CONFIG as InputFormConfig)) as InputFormConfig;
+  const initialToday = useMemo(() => new Date(), []);
+  const typedFinancialConfig = getTypedFinancialConfig(financialConfig) as InputFormConfig;
   const setTypedFinancialConfig = setFinancialConfig as unknown as (
     value: InputFormConfig | ((prev: InputFormConfig) => InputFormConfig)
   ) => void;
@@ -255,38 +259,17 @@ export default function InputForm({
   const [txnFetchedAt, setTxnFetchedAt] = useState<string | number | null>(null);
   const [showTxns, setShowTxns] = useState<boolean>(false);
   useEffect(() => {
-    try {
-      const typedStored = getStoredTransactions() as StoredTransactionsResult | null;
-      if (typedStored?.data?.length) {
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - 7);
-        const cutoffStr = cutoff.toISOString().split("T")[0] ?? cutoff.toISOString().slice(0, 10);
-        const recent = typedStored.data.filter(
-          (transaction) => transaction.date >= cutoffStr && !transaction.pending && !transaction.isCredit
-        );
-        setPlaidTransactions(recent);
-        setTxnFetchedAt(typedStored.fetchedAt ?? null);
-      }
-    } catch {
-      // ignore transaction cache read failures
-    }
+    void loadRecentPlaidTransactions(setPlaidTransactions, setTxnFetchedAt);
   }, []);
 
-  const [form, setForm] = useState<InputFormState>({
-    date: today.toISOString().split("T")[0] ?? today.toISOString().slice(0, 10),
-    time: (today.toTimeString().split(" ")[0] ?? "00:00:00").slice(0, 5),
-    checking: plaidData.checking !== null ? plaidData.checking : "",
-    savings: plaidData.vault !== null ? plaidData.vault : "",
-    roth: typedFinancialConfig?.investmentRoth || "",
-    brokerage: typedFinancialConfig?.investmentBrokerage || "",
-    k401Balance: typedFinancialConfig?.k401Balance || "",
-    pendingCharges: [],
-    habitCount: 10,
-    debts: plaidData.debts?.length > 0 ? plaidData.debts : [{ cardId: "", name: "", balance: "" }],
-    notes: "",
-    autoPaycheckAdd: false,
-    paycheckAddOverride: "",
-  });
+  const [form, setForm] = useState<InputFormState>(
+    () =>
+      createInitialInputFormState({
+        today: initialToday,
+        plaidData,
+        config: typedFinancialConfig,
+      }) as InputFormState
+  );
   const [isTestMode, setIsTestMode] = useState<boolean>(false);
 
   const [budgetActuals, setBudgetActuals] = useState<Record<string, string | number>>({});
@@ -296,70 +279,20 @@ export default function InputForm({
 
   const [auditQuota, setAuditQuota] = useState<AuditQuota | null>(null);
   useEffect(() => {
-    checkAuditQuota().then((quota) => setAuditQuota(quota as AuditQuota | null));
+    void loadAuditQuota(setAuditQuota);
   }, []);
 
   // Re-sync Plaid balances when cards or bankAccounts update (e.g. after Plaid sync finishes)
   useEffect(() => {
     const freshPlaid = getPlaidAutoFill(cards || [], bankAccounts || []) as PlaidAutoFillData;
-    setForm((p) => {
-      const updates: Partial<InputFormState> = {};
-      // Only update checking/savings if user hasn't overridden
-      if (freshPlaid.checking !== null && !overridePlaid.checking) updates.checking = freshPlaid.checking;
-      if (freshPlaid.vault !== null && !overridePlaid.vault) updates.savings = freshPlaid.vault;
-      // Update debt balances for cards that have Plaid data and aren't overridden
-      if (freshPlaid.debts?.length > 0) {
-        const newDebts = (p.debts || []).map((d) => {
-          if (!d.cardId) return d;
-          if (overridePlaid.debts[d.cardId]) return d;
-          const pd = freshPlaid.debts.find((fd) => fd.cardId === d.cardId);
-          return pd ? { ...d, balance: pd.balance } : d;
-        });
-        // Add any new Plaid debts that aren't already in the form
-        const existingIds = new Set(newDebts.map((d) => d.cardId).filter(Boolean));
-        const additions = freshPlaid.debts.filter((pd) => pd.cardId && !existingIds.has(pd.cardId));
-        if (additions.length > 0 || newDebts.some((d, i) => d !== (p.debts || [])[i])) {
-          updates.debts = [...newDebts, ...additions];
-        }
-      }
-      if (Object.keys(updates).length === 0) return p;
-      return { ...p, ...updates };
-    });
-  }, [cards, bankAccounts]);
+    setForm(p => mergePlaidAutoFillIntoForm(p, freshPlaid, overridePlaid) as InputFormState);
+  }, [cards, bankAccounts, overridePlaid]);
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
   const [showConfig, setShowConfig] = useState<boolean>(false);
 
   // Auto-calculate portfolio values from cached market prices
   useEffect(() => {
-    if (!financialConfig?.enableHoldings) return;
-    const holdings = financialConfig?.holdings || {};
-    const allSymbols = [
-      ...new Set(
-        [
-          ...(holdings.roth || []),
-          ...(holdings.k401 || []),
-          ...(holdings.brokerage || []),
-          ...(holdings.crypto || []),
-          ...(holdings.hsa || []),
-        ].map(h => h.symbol)
-      ),
-    ];
-    if (allSymbols.length === 0) return;
-    fetchMarketPrices(allSymbols)
-      .then(prices => {
-        const calc = key => {
-          const { total } = calcPortfolioValue(holdings[key] || [], prices);
-          return total;
-        };
-        setHoldingValues({
-          roth: calc("roth"),
-          k401: calc("k401"),
-          brokerage: calc("brokerage"),
-          crypto: calc("crypto"),
-          hsa: calc("hsa"),
-        });
-      })
-      .catch(() => { });
+    void loadHoldingValues(financialConfig, setHoldingValues);
   }, [financialConfig?.enableHoldings, financialConfig?.holdings]);
 
   // Structured validation via validation.js
@@ -374,54 +307,20 @@ export default function InputForm({
   // Compute exact strategy using current form inputs
 
   const cardOptions = useMemo<SelectGroup[]>(() => {
-    const groupedCards = (cards || []).reduce<Record<string, PortfolioCard[]>>((groups, card) => {
-      (groups[card.institution] = groups[card.institution] || []).push(card);
-      return groups;
-    }, {});
-    return Object.entries(groupedCards).map(([inst, instCards]) => ({
-      label: inst,
-      options: instCards.map((card) => ({
-        value: card.id || card.name,
-        label: getShortCardLabel(cards || [], card).replace(`${inst} `, ""),
-      })),
-    }));
+    return buildCardSelectGroups(cards || [], getShortCardLabel) as SelectGroup[];
   }, [cards]);
 
   useEffect(() => {
-    if (lastAudit?.form && !lastAudit.isTest) {
-      const prevDebts = Array.isArray(lastAudit.form.debts) ? lastAudit.form.debts : [];
-      const debtWithBalance = prevDebts
-        .filter((d) => d?.name && parseFloat(String(d?.balance || "0")) > 0)
-        .map((d) => {
-          if (d.cardId) return d;
-          const match = (cards || []).find((c) => c.name === d.name);
-          return match ? { ...d, cardId: match.id } : d;
-        }) as InputDebt[];
-      const plaidNow = getPlaidAutoFill(cards || [], bankAccounts || []) as PlaidAutoFillData;
-      setForm((p) => {
-        const priorForm = (lastAudit.form || {}) as Record<string, unknown>;
-        return {
-          ...p,
-          ...lastAudit.form,
-          debts:
-            plaidNow.debts?.length > 0
-              ? plaidNow.debts
-              : debtWithBalance.length
-                ? debtWithBalance
-                : [{ cardId: "", name: "", balance: "" }],
-          date: today.toISOString().split("T")[0] ?? today.toISOString().slice(0, 10),
-          time: (today.toTimeString().split(" ")[0] ?? "00:00:00").slice(0, 5),
-          // Prefer live Plaid balance > last audit > empty
-          checking: plaidNow.checking !== null ? plaidNow.checking : toMoneyInput(lastAudit?.form?.checking),
-          savings: plaidNow.vault !== null ? plaidNow.vault : toMoneyInput(lastAudit?.form?.savings ?? lastAudit?.form?.ally),
-          pendingCharges: [],
-          roth: toMoneyInput(priorForm.roth ?? p.roth),
-          brokerage: toMoneyInput(priorForm.brokerage ?? p.brokerage),
-          k401Balance: toMoneyInput(priorForm.k401Balance ?? p.k401Balance),
-          autoPaycheckAdd: typeof priorForm.autoPaycheckAdd === "boolean" ? priorForm.autoPaycheckAdd : false,
-          paycheckAddOverride: typeof priorForm.paycheckAddOverride === "string" ? priorForm.paycheckAddOverride : "",
-        };
-      });
+    if (hasReusableAuditSeed(lastAudit)) {
+      setForm(p =>
+        mergeLastAuditIntoForm({
+          previousForm: p,
+          lastAudit,
+          cards,
+          bankAccounts,
+          today: new Date(),
+        }) as InputFormState
+      );
     }
   }, [lastAudit, cards, bankAccounts]);
   function s<K extends keyof InputFormState>(key: K, value: InputFormState[K]): void {
@@ -468,7 +367,7 @@ export default function InputForm({
   ].join(" • ");
 
   const buildMsg = () =>
-    buildSnapshotMessage({
+    buildInputSnapshotMessage({
       form,
       activeConfig,
       cards,

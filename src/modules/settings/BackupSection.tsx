@@ -54,7 +54,7 @@ export default function BackupSection({ activeMenu, ...props }) {
               n: "1",
               title: "Auto-Sync",
               desc: cloudBackupSupported
-                ? "Data automatically syncs to any iPhone signed into your Apple ID with Catalyst Cash installed via iCloud Preferences."
+                ? "Backups can be saved to your private iCloud Drive and restored on another iPhone using the same Apple ID."
                 : "Automatic cloud sync is available in the native iPhone app only.",
             },
             {
@@ -350,7 +350,7 @@ export default function BackupSection({ activeMenu, ...props }) {
           <Label>Auto-Backup</Label>
           <p style={{ fontSize: 11, color: T.text.muted, marginBottom: 16, lineHeight: 1.6 }}>
             {cloudBackupSupported
-              ? "Enable Apple Sign-In to activate automatic iCloud backup. Your data is continuously saved to your private iCloud Drive, automatically restoring on any iPhone sharing your Apple ID."
+              ? "Enable Apple Sign-In to save encrypted backups to your private iCloud Drive. They can then be restored on another iPhone using the same Apple ID."
               : "Apple Sign-In and iCloud backup are available in the native iPhone app only. On web, use encrypted export files instead of automatic cloud backup."}
           </p>
 
@@ -391,12 +391,12 @@ export default function BackupSection({ activeMenu, ...props }) {
                     </svg>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: T.text.primary }}>
-                        iCloud Backup Active
+                        iCloud Backup Enabled
                       </div>
                       <div style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, marginTop: 2 }}>
                         {lastBackupTS
-                          ? `Last sync: ${new Date(lastBackupTS).toLocaleString()}`
-                          : "Pending first sync..."}
+                          ? `Last backup: ${new Date(lastBackupTS).toLocaleString()}`
+                          : "Pending first backup..."}
                       </div>
                     </div>
                   </div>

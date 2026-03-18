@@ -1,11 +1,11 @@
 // ═══════════════════════════════════════════════════════════════
 // AI PROVIDER REGISTRY — Catalyst Cash
-// 7 models, branded for clear free vs pro routing
-// Backend models: Gemini 2.5 Flash | Claude Haiku 4.5 | GPT-4.1 | o3 | Claude Sonnet 4.6 | Claude Opus 4.6 | Gemini 2.5 Pro
+// 3-model lineup, curated for margin discipline and CFO-grade output
+// Backend models: Gemini 2.5 Flash | GPT-4.1 | o3
 // ═══════════════════════════════════════════════════════════════
 
 export const DEFAULT_FREE_MODEL_ID = "gemini-2.5-flash";
-export const DEFAULT_PRO_MODEL_ID = "claude-haiku-4-5";
+export const DEFAULT_PRO_MODEL_ID = "gpt-4.1";
 
 export const AI_PROVIDERS = [
   {
@@ -17,25 +17,16 @@ export const AI_PROVIDERS = [
       {
         id: "gemini-2.5-flash",
         name: "Catalyst AI",
-        note: "Fastest everyday audit engine with the best free-tier value",
+        note: "Fast, low-cost daily audit engine for the free tier and lightweight follow-up questions",
         tier: "free",
         badge: "FREE",
         provider: "gemini",
         poweredBy: "Google Gemini 2.5 Flash",
       },
       {
-        id: "claude-haiku-4-5",
-        name: "Catalyst AI Haiku",
-        note: "Fast Claude responses when you want concise financial guidance",
-        tier: "pro",
-        badge: "PRO",
-        provider: "anthropic",
-        poweredBy: "Anthropic Claude Haiku 4.5",
-      },
-      {
         id: "gpt-4.1",
-        name: "Catalyst AI Precision",
-        note: "Balanced reasoning and conversational quality for deep audits",
+        name: "Catalyst AI CFO",
+        note: "Default Pro engine for CFO-grade audits, high-context planning, and premium day-to-day guidance",
         tier: "pro",
         badge: "PRO",
         provider: "openai",
@@ -43,39 +34,12 @@ export const AI_PROVIDERS = [
       },
       {
         id: "o3",
-        name: "Catalyst AI Reasoning",
-        note: "Highest-rigor OpenAI reasoning for thorny edge cases",
+        name: "Catalyst AI Boardroom",
+        note: "Escalation-only reasoning for insolvency risk, tax complexity, promo APR cliffs, and edge-case tradeoffs",
         tier: "pro",
-        badge: "PRO",
+        badge: "DEEP",
         provider: "openai",
         poweredBy: "OpenAI o3",
-      },
-      {
-        id: "claude-sonnet-4-6",
-        name: "Catalyst AI Sonnet",
-        note: "Strong long-form planning with calm, polished explanations",
-        tier: "pro",
-        badge: "PRO",
-        provider: "anthropic",
-        poweredBy: "Anthropic Claude Sonnet 4.6",
-      },
-      {
-        id: "claude-opus-4-6",
-        name: "Catalyst AI Opus",
-        note: "Premium deep-thinking mode for the most complex financial tradeoffs",
-        tier: "pro",
-        badge: "PREMIUM",
-        provider: "anthropic",
-        poweredBy: "Anthropic Claude Opus 4.6",
-      },
-      {
-        id: "gemini-2.5-pro",
-        name: "Catalyst AI Vision",
-        note: "Broader synthesis and planning depth for multi-factor money decisions",
-        tier: "pro",
-        badge: "PRO",
-        provider: "gemini",
-        poweredBy: "Google Gemini 2.5 Pro",
       },
     ],
     defaultModel: DEFAULT_PRO_MODEL_ID,
@@ -111,7 +75,7 @@ export function getDefaultModelIdForTier(tierId) {
 
 /**
  * For backend provider, resolve which Worker provider to route to.
- * e.g. "gemini-2.5-flash" → "gemini", "claude-sonnet-4-6" → "anthropic"
+ * e.g. "gemini-2.5-flash" → "gemini", "gpt-4.1" → "openai"
  */
 export function getBackendProvider(modelId) {
   const backend = getProvider("backend");

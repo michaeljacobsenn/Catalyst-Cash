@@ -30,8 +30,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Prompt budgets
+        run: npm run prompts:check
+
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Bundle budgets
+        run: npm run perf:check
 
       - name: Unit tests
         run: npm run test:unit

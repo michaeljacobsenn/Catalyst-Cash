@@ -1,12 +1,13 @@
-  import type { ChangeEvent,ComponentType } from "react";
-  import { useRef } from "react";
-  import { T } from "../constants.js";
-  import { useNavigation } from "../contexts/NavigationContext.js";
-  import { usePortfolio } from "../contexts/PortfolioContext.js";
-  import { useSettings } from "../contexts/SettingsContext.js";
-  import { haptic } from "../haptics.js";
-  import { Activity,Building2,CalendarClock,Settings,Zap } from "../icons";
-  import { Card,Label } from "../ui.js";
+import type { ChangeEvent, ComponentType } from "react";
+import { useRef } from "react";
+import { T } from "../constants.js";
+import { useNavigation } from "../contexts/NavigationContext.js";
+import { usePortfolio } from "../contexts/PortfolioContext.js";
+import { useSettings } from "../contexts/SettingsContext.js";
+import { deriveEmptyDashboardSetupState } from "./emptyDashboardModel.js";
+import { haptic } from "../haptics.js";
+import { Activity, Building2, CalendarClock, Settings, Zap } from "../icons";
+import { Card, Label } from "../ui.js";
 
 interface EmptyDashboardProps {
   investmentSnapshot?: unknown;
@@ -29,7 +30,7 @@ interface ChecklistStep {
  */
 export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboardProps) {
   const { financialConfig } = useSettings();
-  const { cards, renewals } = usePortfolio();
+  const { cards, bankAccounts, renewals } = usePortfolio();
   const { navTo, setSetupReturnTab } = useNavigation();
   const restoreInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -47,13 +48,21 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
     navTo("cashflow");
   };
 
-  const hasCards = cards.length > 0;
-  const hasRenewals = (renewals || []).length > 0;
-  const hasProfile =
-    Boolean(financialConfig?.paycheckStandard) ||
-    Boolean(financialConfig?.averagePaycheck) ||
-    Boolean(financialConfig?.hourlyRateNet) ||
-    Boolean(financialConfig?.weeklySpendAllowance);
+  const {
+    hasProfile,
+    hasConnectedAccounts,
+    hasRenewals,
+    connectedAccountCount,
+    connectedInputCount,
+    completedSteps,
+    progressPct,
+  } = deriveEmptyDashboardSetupState({
+    cards,
+    bankAccounts,
+    renewals,
+    plaidInvestments: financialConfig?.plaidInvestments,
+    financialConfig,
+  });
 
   // Onboarding Checklist
   const steps: ChecklistStep[] = [
@@ -68,8 +77,8 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
     {
       id: "cards",
       title: "Connect Accounts",
-      desc: "Securely link your banks via Plaid.",
-      done: hasCards,
+      desc: "Securely link banks, cards, and investment accounts.",
+      done: hasConnectedAccounts,
       action: onGoCards,
       Icon: Building2,
     },
@@ -83,54 +92,20 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
     }
   ];
 
-  const completedSteps = steps.filter(s => s.done).length;
-  const progressPct = (completedSteps / steps.length) * 100;
   const isSmallPhone = typeof window !== "undefined" ? window.innerWidth <= 390 : false;
+  const nextRecommendedStep = steps.find((step) => !step.done) || null;
+  const setupComplete = completedSteps === steps.length;
+  const heroLabel = setupComplete ? "Ready to turn data into direction" : "Ready for your first audit";
+  const heroTitle = setupComplete
+    ? "Your dashboard has context. Now make it decisive."
+    : "Run one audit and unlock the dashboard.";
+  const heroBody = setupComplete
+    ? "You already connected the inputs that matter. Run an audit to generate a health score, next action, and cash guidance from your real setup."
+    : "Start with one audit. You can add bank sync, subscriptions, and extra detail afterward without losing momentum.";
+  const primaryCtaLabel = setupComplete ? "Run your first audit now" : "Begin first audit";
 
   return (
     <main aria-label="Empty dashboard" style={{ width: "100%" }}>
-      <section style={{ textAlign: "center", paddingTop: 16, paddingBottom: 12, animation: "fadeInUp .6s ease-out both" }}>
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "7px 12px",
-            borderRadius: 999,
-            background: `${T.accent.emerald}10`,
-            border: `1px solid ${T.accent.emerald}20`,
-            color: T.accent.emerald,
-            fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            marginBottom: 14,
-          }}
-        >
-          Ready for your first audit
-        </div>
-        <img
-          src="/icon-192.png"
-          alt="Catalyst Cash"
-          style={{
-            width: 68,
-            height: 68,
-            borderRadius: 18,
-            margin: "0 auto 14px",
-            display: "block",
-            filter: `drop-shadow(0 8px 16px ${T.accent.emerald}30) drop-shadow(0 2px 4px ${T.accent.primary}40)`,
-          }}
-        />
-        <h1 style={{ fontSize: "clamp(23px, 7vw, 26px)", fontWeight: 900, marginBottom: 8, fontFamily: T.font.sans, color: T.text.primary, letterSpacing: "-0.03em", lineHeight: 1.05 }}>
-          Your dashboard is ready.
-          <br />
-          Now give it context.
-        </h1>
-        <p style={{ fontSize: 13, color: T.text.secondary, width: "92%", margin: "0 auto", lineHeight: 1.55, maxWidth: 320, overflowWrap: "anywhere" }}>
-          Start with one audit. You can add bank sync, subscriptions, and extra detail afterward without losing momentum.
-        </p>
-      </section>
-
       <Card
         animate
         delay={200}
@@ -140,38 +115,105 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
         }}
         className="hover-card"
         style={{
-          padding: isSmallPhone ? 20 : 24,
+          padding: isSmallPhone ? 18 : 22,
           marginBottom: 14,
-          textAlign: "center",
           cursor: "pointer",
           border: `1.5px solid ${T.accent.emerald}40`,
           background: `linear-gradient(145deg, ${T.bg.card}, ${T.accent.emerald}10)`,
           boxShadow: `0 8px 24px ${T.accent.emerald}25`,
           position: "relative",
-          overflow: "hidden"
+          overflow: "hidden",
         }}
       >
         <div style={{ position: "absolute", top: -50, right: -50, width: 100, height: 100, background: T.accent.emerald, opacity: 0.1, filter: "blur(40px)", pointerEvents: "none" }} />
 
-        <div style={{
-          width: 54, height: 54, borderRadius: 27,
-          background: `linear-gradient(135deg, ${T.accent.emerald}, #10B981)`,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          margin: "0 auto 16px",
-          boxShadow: `0 4px 16px ${T.accent.emerald}60`
-        }}>
-          <Zap size={24} color="#fff" strokeWidth={2.5} />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 14,
+            marginBottom: 16,
+          }}
+        >
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "7px 12px",
+                borderRadius: 999,
+                background: `${T.accent.emerald}10`,
+                border: `1px solid ${T.accent.emerald}20`,
+                color: T.accent.emerald,
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                marginBottom: 12,
+              }}
+            >
+              {heroLabel}
+            </div>
+            <h1 style={{ fontSize: "clamp(22px, 6.6vw, 26px)", fontWeight: 900, marginBottom: 8, fontFamily: T.font.sans, color: T.text.primary, letterSpacing: "-0.03em", lineHeight: 1.02 }}>
+              {heroTitle}
+            </h1>
+            <p style={{ fontSize: 13, color: T.text.secondary, margin: 0, lineHeight: 1.55, maxWidth: 420 }}>
+              {heroBody}
+            </p>
+          </div>
+          <div style={{
+            width: 52, height: 52, borderRadius: 18,
+            background: `linear-gradient(135deg, ${T.accent.emerald}, #10B981)`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: `0 4px 16px ${T.accent.emerald}60`,
+            flexShrink: 0,
+            marginTop: 4,
+          }}>
+            <Zap size={22} color="#fff" strokeWidth={2.5} />
+          </div>
         </div>
 
-        <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, marginBottom: 8 }}>
-          Run your first audit
-        </h2>
-        <p style={{ fontSize: 13, color: T.text.secondary, marginBottom: 20, lineHeight: 1.4 }}>
-          It takes about 2 minutes. Enter this week’s numbers and get a clear health score, next move, and cash-flow guidance.
-        </p>
+        <div style={{ display: "grid", gridTemplateColumns: setupComplete ? "repeat(3, minmax(0, 1fr))" : "repeat(2, minmax(0, 1fr))", gap: 8, marginBottom: 16 }}>
+          <div style={{ padding: "12px 12px", borderRadius: T.radius.md, background: `${T.bg.base}70`, border: `1px solid ${T.border.subtle}` }}>
+            <div style={{ fontSize: 10, color: T.text.dim, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Time</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: T.text.primary }}>~2 min</div>
+          </div>
+          <div style={{ padding: "12px 12px", borderRadius: T.radius.md, background: `${T.bg.base}70`, border: `1px solid ${T.border.subtle}` }}>
+            <div style={{ fontSize: 10, color: T.text.dim, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Setup</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: T.text.primary }}>{completedSteps}/{steps.length}</div>
+          </div>
+          {setupComplete && (
+            <div style={{ padding: "12px 12px", borderRadius: T.radius.md, background: `${T.bg.base}70`, border: `1px solid ${T.border.subtle}` }}>
+              <div style={{ fontSize: 10, color: T.text.dim, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Inputs</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: T.text.primary }}>{connectedInputCount}</div>
+            </div>
+          )}
+        </div>
+
+        {nextRecommendedStep && !setupComplete && (
+          <div
+            style={{
+              marginBottom: 14,
+              padding: "10px 12px",
+              borderRadius: T.radius.md,
+              background: `${T.bg.base}70`,
+              border: `1px solid ${T.border.subtle}`,
+              textAlign: "left",
+            }}
+          >
+            <div style={{ fontSize: 10, color: T.text.dim, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>
+              Recommended next setup
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>{nextRecommendedStep.title}</div>
+            <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45, marginTop: 3 }}>{nextRecommendedStep.desc}</div>
+          </div>
+        )}
 
         <button style={{
           width: "100%",
+          minHeight: 48,
           padding: "14px",
           borderRadius: T.radius.lg,
           border: "none",
@@ -182,27 +224,34 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
           cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center", gap: 8
         }}>
-          Begin audit <Activity size={16} />
+          {primaryCtaLabel} <Activity size={16} />
         </button>
       </Card>
 
       <Card animate delay={250} style={{ marginBottom: 14, padding: isSmallPhone ? "14px" : "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
           <div>
-            <Label style={{ margin: 0, textTransform: "none", fontSize: 14 }}>Suggested setup</Label>
+            <Label style={{ margin: 0, textTransform: "none", fontSize: 14 }}>
+              {setupComplete ? "Connected inputs" : "Suggested setup"}
+            </Label>
             <div style={{ fontSize: 11, color: T.text.dim, marginTop: 2 }}>
-              {completedSteps} of {steps.length} completed
+              {setupComplete ? "You already added the core context that sharpens your audit." : "Finish the core context that improves your audit quality"}
             </div>
           </div>
-          <div style={{ width: 72, height: 6, background: T.border.default, borderRadius: 3, overflow: "hidden" }}>
-            <div
-              style={{
-                height: "100%",
-                width: `${progressPct}%`,
-                background: T.accent.emerald,
-                transition: "width 0.4s cubic-bezier(.16,1,.3,1)",
-              }}
-            />
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono }}>
+              {completedSteps}/{steps.length}
+            </div>
+            <div style={{ width: 72, height: 6, background: T.border.default, borderRadius: 3, overflow: "hidden" }}>
+              <div
+                style={{
+                  height: "100%",
+                  width: `${progressPct}%`,
+                  background: T.accent.emerald,
+                  transition: "width 0.4s cubic-bezier(.16,1,.3,1)",
+                }}
+              />
+            </div>
           </div>
         </div>
 
@@ -219,7 +268,7 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
                 display: "flex",
                 alignItems: "center",
                 gap: 12,
-                minHeight: 56,
+                minHeight: 60,
                 padding: "12px 14px",
                 borderRadius: T.radius.md,
                 background: step.done ? `${T.accent.emerald}0A` : T.bg.elevated,
@@ -228,6 +277,7 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
                 transition: "all 0.2s",
                 textAlign: "left",
               }}
+              aria-label={`${step.title}. ${step.done ? "Completed" : "Open setup"}. ${step.desc}`}
             >
               <div
                 style={{
@@ -256,7 +306,7 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
                 </div>
                 <div style={{ fontSize: 11, color: T.text.dim, lineHeight: 1.4 }}>{step.desc}</div>
               </div>
-              {!step.done && <div style={{ fontSize: 14, color: T.accent.primary }}>›</div>}
+                {!step.done && <div style={{ fontSize: 14, color: T.accent.primary, minWidth: 12, textAlign: "right" }}>›</div>}
             </button>
           ))}
         </div>
@@ -290,13 +340,13 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
         </div>
       </Card>
 
-      {(hasCards || hasRenewals) && (
-        <Card animate delay={400} style={{ marginBottom: 14 }}>
+      {(hasConnectedAccounts || hasRenewals) && (
+        <Card animate delay={400} style={{ marginBottom: 14, padding: "14px 16px" }}>
           <Label>Connected data</Label>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <div style={{ padding: "12px", background: T.bg.elevated, borderRadius: T.radius.md, border: `1px solid ${T.border.subtle}` }}>
               <div style={{ fontSize: 10, color: T.text.dim, fontWeight: 700 }}>ACCOUNTS</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: T.text.primary }}>{cards.length}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: T.text.primary }}>{connectedAccountCount}</div>
             </div>
             <div style={{ padding: "12px", background: T.bg.elevated, borderRadius: T.radius.md, border: `1px solid ${T.border.subtle}` }}>
               <div style={{ fontSize: 10, color: T.text.dim, fontWeight: 700 }}>RENEWALS</div>
@@ -329,10 +379,11 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
               background: "none",
               border: "none",
               color: T.text.dim,
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: 600,
               cursor: "pointer",
-              padding: "8px 16px",
+              minHeight: 44,
+              padding: "10px 16px",
               textDecoration: "underline",
             }}
           >

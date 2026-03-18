@@ -10,6 +10,41 @@ import worker, {
   sha256Hex,
 } from "./index.js";
 
+function toBase64Url(bytes) {
+  return Buffer.from(bytes)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+async function generateIdentityTestKeyPair() {
+  const keyPair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+  const [privateKeyJwk, publicKeyJwk, rawPublicKey] = await Promise.all([
+    crypto.subtle.exportKey("jwk", keyPair.privateKey),
+    crypto.subtle.exportKey("jwk", keyPair.publicKey),
+    crypto.subtle.exportKey("raw", keyPair.publicKey),
+  ]);
+  const digest = await crypto.subtle.digest("SHA-256", rawPublicKey);
+  return {
+    privateKeyJwk,
+    publicKeyJwk: { kty: publicKeyJwk.kty, crv: publicKeyJwk.crv, x: publicKeyJwk.x },
+    keyFingerprint: toBase64Url(new Uint8Array(digest)),
+  };
+}
+
+async function signIdentityPayload(privateKeyJwk, payload) {
+  const privateKey = await crypto.subtle.importKey(
+    "jwk",
+    privateKeyJwk,
+    { name: "Ed25519" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("Ed25519", privateKey, new TextEncoder().encode(payload));
+  return toBase64Url(new Uint8Array(signature));
+}
+
 class FakeD1 {
   constructor(seed = {}) {
     this.plaidItems = [...(seed.plaidItems || [])];
@@ -18,6 +53,8 @@ class FakeD1 {
     this.householdSync = [...(seed.householdSync || [])];
     this.identityActors = [...(seed.identityActors || [])];
     this.identityActorAliases = [...(seed.identityActorAliases || [])];
+    this.identityDeviceKeys = [...(seed.identityDeviceKeys || [])];
+    this.identityChallenges = [...(seed.identityChallenges || [])];
   }
 
   prepare(sql) {
@@ -85,17 +122,48 @@ class FakeD1 {
       );
       if (!alias) return [];
       const actor = this.identityActors.find(entry => entry.actor_id === alias.actor_id);
-      return actor ? [{ actor_id: actor.actor_id, revenuecat_app_user_id: actor.revenuecat_app_user_id ?? null }] : [];
+      return actor
+        ? [{
+            actor_id: actor.actor_id,
+            revenuecat_app_user_id: actor.revenuecat_app_user_id ?? null,
+            session_version: actor.session_version ?? 1,
+            active_device_key_fingerprint: actor.active_device_key_fingerprint ?? null,
+          }]
+        : [];
     }
 
-    if (sql.includes("SELECT actor_id, revenuecat_app_user_id FROM identity_actors WHERE revenuecat_app_user_id = ?")) {
+    if (sql.includes("FROM identity_device_keys")) {
+      const row = this.identityDeviceKeys.find(entry => entry.key_fingerprint === params[0]);
+      return row ? [row] : [];
+    }
+
+    if (sql.includes("FROM identity_bootstrap_challenges")) {
+      const row = this.identityChallenges.find(entry => entry.challenge_id === params[0]);
+      return row ? [row] : [];
+    }
+
+    if (sql.includes("SELECT actor_id, revenuecat_app_user_id, session_version, active_device_key_fingerprint FROM identity_actors WHERE revenuecat_app_user_id = ?")) {
       const actor = this.identityActors.find(entry => entry.revenuecat_app_user_id === params[0]);
-      return actor ? [{ actor_id: actor.actor_id, revenuecat_app_user_id: actor.revenuecat_app_user_id ?? null }] : [];
+      return actor
+        ? [{
+            actor_id: actor.actor_id,
+            revenuecat_app_user_id: actor.revenuecat_app_user_id ?? null,
+            session_version: actor.session_version ?? 1,
+            active_device_key_fingerprint: actor.active_device_key_fingerprint ?? null,
+          }]
+        : [];
     }
 
-    if (sql.includes("SELECT actor_id, revenuecat_app_user_id FROM identity_actors WHERE actor_id = ?")) {
+    if (sql.includes("SELECT actor_id, revenuecat_app_user_id, session_version, active_device_key_fingerprint FROM identity_actors WHERE actor_id = ?")) {
       const actor = this.identityActors.find(entry => entry.actor_id === params[0]);
-      return actor ? [{ actor_id: actor.actor_id, revenuecat_app_user_id: actor.revenuecat_app_user_id ?? null }] : [];
+      return actor
+        ? [{
+            actor_id: actor.actor_id,
+            revenuecat_app_user_id: actor.revenuecat_app_user_id ?? null,
+            session_version: actor.session_version ?? 1,
+            active_device_key_fingerprint: actor.active_device_key_fingerprint ?? null,
+          }]
+        : [];
     }
 
     if (sql.includes("SELECT revenuecat_app_user_id FROM identity_actors WHERE actor_id = ?")) {
@@ -197,10 +265,12 @@ class FakeD1 {
     }
 
     if (sql.includes("INSERT INTO identity_actors")) {
-      const [actorId, revenueCatAppUserId] = params;
+      const [actorId, revenueCatAppUserId, sessionVersion, activeDeviceKeyFingerprint] = params;
       this.identityActors.push({
         actor_id: actorId,
         revenuecat_app_user_id: revenueCatAppUserId ?? null,
+        session_version: sessionVersion ?? 1,
+        active_device_key_fingerprint: activeDeviceKeyFingerprint ?? null,
       });
       return;
     }
@@ -216,11 +286,112 @@ class FakeD1 {
       return;
     }
 
-    if (sql.includes("UPDATE identity_actors")) {
+    if (sql.includes("UPDATE identity_actors") && sql.includes("revenuecat_app_user_id")) {
       const [revenueCatAppUserId, actorId] = params;
       this.identityActors = this.identityActors.map(entry =>
         entry.actor_id === actorId
           ? { ...entry, revenuecat_app_user_id: revenueCatAppUserId }
+          : entry
+      );
+      return;
+    }
+
+    if (sql.includes("UPDATE identity_actors") && sql.includes("active_device_key_fingerprint = ?") && !sql.includes("session_version")) {
+      const [keyFingerprint, actorId] = params;
+      this.identityActors = this.identityActors.map(entry =>
+        entry.actor_id === actorId
+          ? { ...entry, active_device_key_fingerprint: keyFingerprint ?? null }
+          : entry
+      );
+      return;
+    }
+
+    if (sql.includes("UPDATE identity_actors") && sql.includes("session_version = COALESCE(session_version, 1) + 1")) {
+      const [keyFingerprint, actorId] = params;
+      this.identityActors = this.identityActors.map(entry =>
+        entry.actor_id === actorId
+          ? {
+              ...entry,
+              session_version: Number(entry.session_version || 1) + 1,
+              active_device_key_fingerprint: keyFingerprint ?? null,
+            }
+          : entry
+      );
+      return;
+    }
+
+    if (sql.includes("INSERT INTO identity_device_keys")) {
+      const [keyFingerprint, actorId, publicKeyJwk] = params;
+      const next = {
+        key_fingerprint: keyFingerprint,
+        actor_id: actorId,
+        public_key_jwk: publicKeyJwk,
+        status: "active",
+        revoked_at: null,
+        replaced_by_key_fingerprint: null,
+      };
+      const index = this.identityDeviceKeys.findIndex(entry => entry.key_fingerprint === keyFingerprint);
+      if (index >= 0) {
+        this.identityDeviceKeys[index] = { ...this.identityDeviceKeys[index], ...next };
+      } else {
+        this.identityDeviceKeys.push(next);
+      }
+      return;
+    }
+
+    if (sql.includes("UPDATE identity_device_keys") && sql.includes("SET status = 'revoked'")) {
+      const [nextKeyFingerprint, currentKeyFingerprint, actorId] = params;
+      this.identityDeviceKeys = this.identityDeviceKeys.map(entry =>
+        entry.key_fingerprint === currentKeyFingerprint && entry.actor_id === actorId
+          ? {
+              ...entry,
+              status: "revoked",
+              revoked_at: "2026-03-13 12:00:00",
+              replaced_by_key_fingerprint: nextKeyFingerprint ?? null,
+            }
+          : entry
+      );
+      return;
+    }
+
+    if (sql.includes("INSERT INTO identity_bootstrap_challenges")) {
+      const [
+        challengeId,
+        nonceHash,
+        publicKeyFingerprint,
+        publicKeyJwk,
+        verifiedRevenueCatAppUserId,
+        legacyDeviceAliasHash,
+        intent,
+        actorId,
+        currentKeyFingerprint,
+        nextKeyFingerprint,
+        nextPublicKeyJwk,
+        expiresAt,
+      ] = params;
+      this.identityChallenges.push({
+        challenge_id: challengeId,
+        nonce_hash: nonceHash,
+        public_key_fingerprint: publicKeyFingerprint,
+        public_key_jwk: publicKeyJwk,
+        verified_revenuecat_app_user_id: verifiedRevenueCatAppUserId ?? null,
+        legacy_device_alias_hash: legacyDeviceAliasHash ?? null,
+        intent,
+        actor_id: actorId ?? null,
+        current_key_fingerprint: currentKeyFingerprint ?? null,
+        next_key_fingerprint: nextKeyFingerprint ?? null,
+        next_public_key_jwk: nextPublicKeyJwk ?? null,
+        expires_at: expiresAt,
+        used_at: null,
+      });
+      return;
+    }
+
+    if (sql.includes("UPDATE identity_bootstrap_challenges SET used_at = ?")) {
+      const [usedAt, challengeId] = params;
+      this.identityChallenges = this.identityChallenges.map(entry =>
+        entry.challenge_id === challengeId
+          ? { ...entry, used_at: usedAt }
           : entry
       );
       return;
@@ -416,11 +587,47 @@ function makeCtx() {
   };
 }
 
-async function issueSessionFor(env, headers = {}) {
+async function issueSessionFor(env, headers = {}, options = {}) {
+  const keyPair = options.keyPair || await generateIdentityTestKeyPair();
+  const challengeHeaders = {
+    "Content-Type": "application/json",
+    ...headers,
+  };
+  const challengeResponse = await worker.fetch(
+    new Request("https://api.catalystcash.app/auth/challenge", {
+      method: "POST",
+      headers: challengeHeaders,
+      body: JSON.stringify({
+        intent: "bootstrap",
+        publicKeyJwk: keyPair.publicKeyJwk,
+        legacyDeviceId: headers["X-Device-ID"] || options.legacyDeviceId || "",
+      }),
+    }),
+    env,
+    makeCtx()
+  );
+  const challengePayload = await challengeResponse.json();
+  if (!challengeResponse.ok) {
+    return {
+      response: challengeResponse,
+      payload: challengePayload,
+      authorization: {},
+      keyPair,
+    };
+  }
+
+  const signature = await signIdentityPayload(keyPair.privateKeyJwk, challengePayload.signingPayload);
   const response = await worker.fetch(
     new Request("https://api.catalystcash.app/auth/session", {
       method: "POST",
-      headers,
+      headers: challengeHeaders,
+      body: JSON.stringify({
+        challengeId: challengePayload.challengeId,
+        nonce: challengePayload.nonce,
+        publicKeyJwk: keyPair.publicKeyJwk,
+        signature,
+        legacyDeviceId: headers["X-Device-ID"] || options.legacyDeviceId || "",
+      }),
     }),
     env,
     makeCtx()
@@ -430,6 +637,62 @@ async function issueSessionFor(env, headers = {}) {
     response,
     payload,
     authorization: payload?.token ? { Authorization: `Bearer ${payload.token}` } : {},
+    keyPair,
+  };
+}
+
+async function rotateSessionFor(env, authorization, currentKeyPair, nextKeyPair = null) {
+  const replacementKeyPair = nextKeyPair || await generateIdentityTestKeyPair();
+  const challengeResponse = await worker.fetch(
+    new Request("https://api.catalystcash.app/auth/challenge", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authorization,
+      },
+      body: JSON.stringify({
+        intent: "rotate",
+        publicKeyJwk: currentKeyPair.publicKeyJwk,
+        nextPublicKeyJwk: replacementKeyPair.publicKeyJwk,
+      }),
+    }),
+    env,
+    makeCtx()
+  );
+  const challengePayload = await challengeResponse.json();
+  if (!challengeResponse.ok) {
+    return { response: challengeResponse, payload: challengePayload, keyPair: replacementKeyPair };
+  }
+  const signingPayload = challengePayload.signingPayload;
+  const [currentSignature, nextSignature] = await Promise.all([
+    signIdentityPayload(currentKeyPair.privateKeyJwk, signingPayload),
+    signIdentityPayload(replacementKeyPair.privateKeyJwk, signingPayload),
+  ]);
+  const response = await worker.fetch(
+    new Request("https://api.catalystcash.app/auth/session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authorization,
+      },
+      body: JSON.stringify({
+        intent: "rotate",
+        challengeId: challengePayload.challengeId,
+        nonce: challengePayload.nonce,
+        currentSignature,
+        nextPublicKeyJwk: replacementKeyPair.publicKeyJwk,
+        nextSignature,
+      }),
+    }),
+    env,
+    makeCtx()
+  );
+  const payload = await response.json();
+  return {
+    response,
+    payload,
+    authorization: payload?.token ? { Authorization: `Bearer ${payload.token}` } : {},
+    keyPair: replacementKeyPair,
   };
 }
 
@@ -635,10 +898,107 @@ describe("Plaid actor identity", () => {
 
     expect(actor).toMatchObject({
       userId: payload.actorId,
-      source: "device",
+      source: "device-key",
     });
     expect(env.DB.plaidItems[0].user_id).toBe(payload.actorId);
     expect(env.DB.syncData[0].user_id).toBe(payload.actorId);
+  });
+
+  it("does not let a spoofed device id claim an actor already bound to another device key", async () => {
+    const env = makeEnv({
+      DB: new FakeD1(),
+    });
+    const first = await issueSessionFor(env, { "X-Device-ID": "shared-device" });
+    expect(first.response.status).toBe(200);
+
+    const attackerKeyPair = await generateIdentityTestKeyPair();
+    const challengeResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/auth/challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          intent: "bootstrap",
+          publicKeyJwk: attackerKeyPair.publicKeyJwk,
+          legacyDeviceId: "shared-device",
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+    const challenge = await challengeResponse.json();
+    const signature = await signIdentityPayload(attackerKeyPair.privateKeyJwk, challenge.signingPayload);
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          challengeId: challenge.challengeId,
+          nonce: challenge.nonce,
+          publicKeyJwk: attackerKeyPair.publicKeyJwk,
+          signature,
+          legacyDeviceId: "shared-device",
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "identity_proof_required",
+    });
+  });
+
+  it("rejects replayed bootstrap challenges", async () => {
+    const env = makeEnv();
+    const keyPair = await generateIdentityTestKeyPair();
+    const challengeResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/auth/challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Device-ID": "device-replay" },
+        body: JSON.stringify({
+          intent: "bootstrap",
+          publicKeyJwk: keyPair.publicKeyJwk,
+          legacyDeviceId: "device-replay",
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+    const challenge = await challengeResponse.json();
+    const signature = await signIdentityPayload(keyPair.privateKeyJwk, challenge.signingPayload);
+    const requestBody = JSON.stringify({
+      challengeId: challenge.challengeId,
+      nonce: challenge.nonce,
+      publicKeyJwk: keyPair.publicKeyJwk,
+      signature,
+      legacyDeviceId: "device-replay",
+    });
+
+    const first = await worker.fetch(
+      new Request("https://api.catalystcash.app/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: requestBody,
+      }),
+      env,
+      makeCtx()
+    );
+    expect(first.status).toBe(200);
+
+    const replay = await worker.fetch(
+      new Request("https://api.catalystcash.app/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: requestBody,
+      }),
+      env,
+      makeCtx()
+    );
+    expect(replay.status).toBe(401);
+    await expect(replay.json()).resolves.toMatchObject({
+      error: "identity_challenge_replayed",
+    });
   });
 
   it("rejects forged identity session tokens", async () => {
@@ -693,6 +1053,143 @@ describe("Plaid actor identity", () => {
     expect(response.status).toBe(200);
     expect(env.DB.plaidItems[0].user_id).toBe(payload.actorId);
     expect(env.DB.identityActors[0].revenuecat_app_user_id).toBe("rc_user_123");
+  });
+
+  it("merges a verified RevenueCat actor without a bound key into the proved device actor flow", async () => {
+    const env = makeEnv({
+      REVENUECAT_SECRET_KEY: "revenuecat-secret",
+      DB: new FakeD1({
+        identityActors: [
+          {
+            actor_id: "actor_rc_existing",
+            revenuecat_app_user_id: "rc_user_456",
+            session_version: 1,
+            active_device_key_fingerprint: null,
+          },
+          {
+            actor_id: "actor_legacy_device",
+            revenuecat_app_user_id: null,
+            session_version: 1,
+            active_device_key_fingerprint: null,
+          },
+        ],
+        identityActorAliases: [
+          { alias_type: "device", alias_hash: "legacy-device-hash", actor_id: "actor_legacy_device" },
+        ],
+        plaidItems: [
+          {
+            item_id: "legacy-item",
+            user_id: "actor_legacy_device",
+            access_token: "access-legacy",
+            transactions_cursor: null,
+          },
+        ],
+      }),
+    });
+
+    vi.stubGlobal("fetch", vi.fn(async (input) => {
+      const url = String(input);
+      if (url === "https://api.revenuecat.com/v1/subscribers/rc_user_456") {
+        return new Response(JSON.stringify({ subscriber: { entitlements: {} } }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    }));
+
+    const identityModule = await import("./lib/identitySession.js");
+    const deviceAliasHash = await identityModule.hashIdentityAlias("device", "legacy-device", env);
+    env.DB.identityActorAliases[0].alias_hash = deviceAliasHash;
+
+    const session = await issueSessionFor(env, {
+      "X-Device-ID": "legacy-device",
+      "X-RC-App-User-ID": "rc_user_456",
+    });
+
+    expect(session.response.status).toBe(200);
+    expect(session.payload.actorId).toBe("actor_rc_existing");
+    expect(env.DB.plaidItems[0].user_id).toBe("actor_rc_existing");
+    expect(env.DB.identityActors.find(entry => entry.actor_id === "actor_rc_existing")?.active_device_key_fingerprint)
+      .toBeTruthy();
+  });
+
+  it("rejects RevenueCat actor takeover when that actor is already bound to another device key", async () => {
+    const env = makeEnv({
+      REVENUECAT_SECRET_KEY: "revenuecat-secret",
+      DB: new FakeD1({
+        identityActors: [
+          {
+            actor_id: "actor_rc_bound",
+            revenuecat_app_user_id: "rc_user_bound",
+            session_version: 1,
+            active_device_key_fingerprint: "existing-key",
+          },
+        ],
+        identityDeviceKeys: [
+          {
+            key_fingerprint: "existing-key",
+            actor_id: "actor_rc_bound",
+            public_key_jwk: JSON.stringify({ kty: "OKP", crv: "Ed25519", x: "existing-key-x" }),
+            status: "active",
+            revoked_at: null,
+            replaced_by_key_fingerprint: null,
+          },
+        ],
+      }),
+    });
+
+    vi.stubGlobal("fetch", vi.fn(async (input) => {
+      const url = String(input);
+      if (url === "https://api.revenuecat.com/v1/subscribers/rc_user_bound") {
+        return new Response(JSON.stringify({ subscriber: { entitlements: {} } }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    }));
+
+    const response = await issueSessionFor(env, {
+      "X-Device-ID": "new-device",
+      "X-RC-App-User-ID": "rc_user_bound",
+    });
+
+    expect(response.response.status).toBe(409);
+    expect(response.payload).toMatchObject({ error: "identity_proof_required" });
+  });
+
+  it("rotates a bound device key and invalidates the old session", async () => {
+    const env = makeEnv();
+    const first = await issueSessionFor(env, { "X-Device-ID": "rotate-device" });
+    expect(first.response.status).toBe(200);
+
+    const rotated = await rotateSessionFor(env, first.authorization, first.keyPair);
+    expect(rotated.response.status).toBe(200);
+    expect(rotated.payload.actorId).toBe(first.payload.actorId);
+    expect(env.DB.identityActors[0].session_version).toBe(2);
+
+    const oldSessionResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/sync/status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...first.authorization,
+        },
+        body: JSON.stringify({}),
+      }),
+      env,
+      makeCtx()
+    );
+    expect(oldSessionResponse.status).toBe(401);
+
+    const newSessionResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/sync/status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...rotated.authorization,
+        },
+        body: JSON.stringify({}),
+      }),
+      env,
+      makeCtx()
+    );
+    expect(newSessionResponse.status).toBe(200);
   });
 });
 
@@ -795,7 +1292,7 @@ describe("AI provider routing and gating", () => {
     expect(payload.rows[0].drift_details).toBe(JSON.stringify(["health-score-drift:9"]));
   });
 
-  it("routes Claude-family selections through the Anthropic endpoint", async () => {
+  it("blocks retired premium models even for pro users", async () => {
     vi.stubGlobal("caches", {
       default: {
         match: vi.fn(async () => null),
@@ -803,7 +1300,7 @@ describe("AI provider routing and gating", () => {
       },
     });
 
-    const fetchMock = vi.fn(async (input, init) => {
+    const fetchMock = vi.fn(async (input) => {
       const url = String(input);
       if (url === "https://api.revenuecat.com/v1/subscribers/rc_user_123") {
         return new Response(
@@ -817,13 +1314,7 @@ describe("AI provider routing and gating", () => {
           { status: 200 }
         );
       }
-      expect(url).toBe("https://api.anthropic.com/v1/messages");
-      expect(init?.headers?.["x-api-key"]).toBe("anthropic-test-key");
-      expect(JSON.parse(init.body)).toMatchObject({
-        model: "claude-sonnet-4-6",
-        system: "system prompt",
-      });
-      return new Response(JSON.stringify({ content: [{ text: "anthropic ok" }] }), { status: 200 });
+      throw new Error(`Unexpected fetch ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -851,9 +1342,11 @@ describe("AI provider routing and gating", () => {
       makeCtx()
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ result: "anthropic ok" });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Model claude-sonnet-4-6 is not currently available.",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("stores up to 600 characters of audit preview text", async () => {
@@ -943,6 +1436,73 @@ describe("AI provider routing and gating", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ result: '{"ok":true}' });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes pro o3 chat requests to GPT-4.1 to keep everyday chat costs bounded", async () => {
+    vi.stubGlobal("caches", {
+      default: {
+        match: vi.fn(async () => null),
+        put: vi.fn(async () => undefined),
+      },
+    });
+
+    const fetchMock = vi.fn(async (input, init) => {
+      const url = String(input);
+      if (url === "https://api.revenuecat.com/v1/subscribers/rc_user_123") {
+        return new Response(
+          JSON.stringify({
+            subscriber: {
+              entitlements: {
+                "Catalyst Cash Pro": { expires_date: "2030-01-01T00:00:00Z" },
+              },
+            },
+          }),
+          { status: 200 }
+        );
+      }
+      expect(url).toBe("https://api.openai.com/v1/chat/completions");
+      expect(JSON.parse(init.body)).toMatchObject({
+        model: "gpt-4.1",
+      });
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "precision ok" } }],
+          usage: { prompt_tokens: 25, completion_tokens: 10 },
+        }),
+        { status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/audit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Subscription-Tier": "pro",
+          "X-RC-App-User-ID": "rc_user_123",
+        },
+        body: JSON.stringify({
+          snapshot: "Need help with this month",
+          systemPrompt: "system prompt",
+          history: [],
+          type: "chat",
+          model: "o3",
+          provider: "openai",
+          stream: false,
+          responseFormat: "text",
+        }),
+      }),
+      makeEnv({
+        OPENAI_API_KEY: "openai-test-key",
+        REVENUECAT_SECRET_KEY: "revenuecat-test-key",
+      }),
+      makeCtx()
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ result: "precision ok" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -1083,6 +1643,292 @@ describe("Plaid transaction sync migration", () => {
       item_id: "item-owned-by-device-a",
       user_id: session.payload.actorId,
     });
+  });
+
+  it("completes manual sync before returning so fresh balances are immediately readable", async () => {
+    const env = makeEnv({
+      DB: new FakeD1({
+        plaidItems: [
+          {
+            item_id: "item-1",
+            user_id: "device:sync-device",
+            access_token: "access-1",
+            transactions_cursor: null,
+          },
+        ],
+      }),
+    });
+
+    const session = await issueSessionFor(env, { "X-Device-ID": "sync-device" });
+    env.DB.plaidItems = [
+      {
+        item_id: "item-1",
+        user_id: session.payload.actorId,
+        access_token: "access-1",
+        transactions_cursor: null,
+      },
+    ];
+
+    const fetchMock = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.includes("/accounts/get")) {
+        return new Response(
+          JSON.stringify({
+            accounts: [
+              {
+                account_id: "acct-1",
+                balances: { current: 123.45 },
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/transactions/sync")) {
+        return new Response(
+          JSON.stringify({
+            added: [
+              {
+                transaction_id: "txn-1",
+                date: "2026-03-13",
+                pending: false,
+              },
+            ],
+            modified: [],
+            removed: [],
+            has_more: false,
+            next_cursor: "cursor-1",
+          }),
+          { status: 200 }
+        );
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/sync/force", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...session.authorization },
+        body: JSON.stringify({}),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ success: true });
+    expect(env.DB.syncData).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          user_id: session.payload.actorId,
+          item_id: "item-1",
+        }),
+      ])
+    );
+    const storedRow = env.DB.syncData.find(entry => entry.item_id === "item-1");
+    expect(JSON.parse(storedRow.balances_json)).toMatchObject({
+      accounts: [expect.objectContaining({ account_id: "acct-1" })],
+    });
+    expect(JSON.parse(storedRow.transactions_json)).toMatchObject({
+      transactions: [expect.objectContaining({ transaction_id: "txn-1" })],
+      total_transactions: 1,
+    });
+  });
+
+  it("aggregates sync status across all plaid items for the actor", async () => {
+    const env = makeEnv({ DB: new FakeD1() });
+    const session = await issueSessionFor(env, { "X-Device-ID": "aggregate-device" });
+    env.DB.syncData = [
+      {
+        user_id: session.payload.actorId,
+        item_id: "item-a",
+        balances_json: JSON.stringify({ accounts: [{ account_id: "acct-a" }] }),
+        liabilities_json: JSON.stringify({ liabilities: { credit: [{ account_id: "acct-a" }] } }),
+        transactions_json: JSON.stringify({
+          transactions: [{ transaction_id: "txn-a", date: "2026-03-14", pending: false }],
+          total_transactions: 1,
+        }),
+        last_synced_at: "2026-03-13 12:00:00",
+      },
+      {
+        user_id: session.payload.actorId,
+        item_id: "item-b",
+        balances_json: JSON.stringify({ accounts: [{ account_id: "acct-b" }] }),
+        liabilities_json: JSON.stringify({ liabilities: { credit: [{ account_id: "acct-b" }] } }),
+        transactions_json: JSON.stringify({
+          transactions: [{ transaction_id: "txn-b", date: "2026-03-15", pending: false }],
+          total_transactions: 1,
+        }),
+        last_synced_at: "2026-03-14 12:00:00",
+      },
+    ];
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/sync/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...session.authorization },
+        body: JSON.stringify({}),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      hasData: true,
+      last_synced_at: "2026-03-14 12:00:00",
+      balances: {
+        accounts: expect.arrayContaining([
+          expect.objectContaining({ account_id: "acct-a" }),
+          expect.objectContaining({ account_id: "acct-b" }),
+        ]),
+      },
+      liabilities: {
+        liabilities: {
+          credit: expect.arrayContaining([
+            expect.objectContaining({ account_id: "acct-a" }),
+            expect.objectContaining({ account_id: "acct-b" }),
+          ]),
+        },
+      },
+      transactions: {
+        transactions: expect.arrayContaining([
+          expect.objectContaining({ transaction_id: "txn-a" }),
+          expect.objectContaining({ transaction_id: "txn-b" }),
+        ]),
+        total_transactions: 2,
+      },
+    });
+  });
+
+  it("manual sync still succeeds when transactions fail but balances are available", async () => {
+    const env = makeEnv({ DB: new FakeD1() });
+
+    const session = await issueSessionFor(env, { "X-Device-ID": "balances-only-device" });
+    env.DB.plaidItems = [
+      {
+        item_id: "item-balances-only",
+        user_id: session.payload.actorId,
+        access_token: "access-balances-only",
+        transactions_cursor: null,
+      },
+    ];
+
+    const fetchMock = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.includes("/accounts/get")) {
+        return new Response(
+          JSON.stringify({
+            accounts: [
+              {
+                account_id: "acct-balances-only",
+                balances: { current: 222.22 },
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/transactions/sync")) {
+        return new Response(JSON.stringify({ error_message: "sync unavailable" }), { status: 500 });
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/sync/force", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...session.authorization },
+        body: JSON.stringify({}),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ success: true });
+
+    const storedRow = env.DB.syncData.find(entry => entry.item_id === "item-balances-only");
+    expect(storedRow).toBeTruthy();
+    expect(JSON.parse(storedRow.balances_json)).toMatchObject({
+      accounts: [expect.objectContaining({ account_id: "acct-balances-only" })],
+    });
+  });
+
+  it("allows free users to live-sync one plaid item under live gating", async () => {
+    const env = makeEnv({
+      GATING_MODE: "live",
+      DB: new FakeD1(),
+    });
+    const session = await issueSessionFor(env, { "X-Device-ID": "free-sync-device" });
+    env.DB.plaidItems = [
+      {
+        item_id: "item-1",
+        user_id: session.payload.actorId,
+        access_token: "access-1",
+        transactions_cursor: null,
+      },
+    ];
+
+    const fetchMock = vi.fn(async (input, init) => {
+      const url = String(input);
+      const parsed = JSON.parse(init.body);
+      if (url.includes("/accounts/get")) {
+        if (parsed.access_token !== "access-1") {
+          throw new Error(`Unexpected access token ${parsed.access_token}`);
+        }
+        return new Response(
+          JSON.stringify({
+            accounts: [
+              {
+                account_id: "acct-free-1",
+                balances: { current: 88.5 },
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/transactions/sync")) {
+        return new Response(
+          JSON.stringify({
+            added: [],
+            modified: [],
+            removed: [],
+            has_more: false,
+            next_cursor: "cursor-free-2",
+          }),
+          { status: 200 }
+        );
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/sync/force", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Subscription-Tier": "free", ...session.authorization },
+        body: JSON.stringify({ connectionId: "item-1" }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      syncedItemIds: ["item-1"],
+      limitedToItemId: "item-1",
+    });
+    expect(env.DB.syncData).toEqual([
+      expect.objectContaining({
+        user_id: session.payload.actorId,
+        item_id: "item-1",
+      }),
+    ]);
   });
 
   it("refuses a valid session from another actor", async () => {
@@ -1363,11 +2209,12 @@ describe("Household sync hardening", () => {
   it("supports authenticated push then fetch for a shared household", async () => {
     const env = makeEnv({ DB: new FakeD1() });
     const requestBody = await buildHouseholdRequest();
+    const session = await issueSessionFor(env, { "X-Device-ID": "household-owner" });
 
     const pushResponse = await worker.fetch(
       new Request("https://api.catalystcash.app/api/household/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...session.authorization },
         body: JSON.stringify({
           action: "push",
           ...requestBody,
@@ -1388,7 +2235,7 @@ describe("Household sync hardening", () => {
     const fetchResponse = await worker.fetch(
       new Request("https://api.catalystcash.app/api/household/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...session.authorization },
         body: JSON.stringify({
           action: "fetch",
           householdId: requestBody.householdId,
@@ -1426,11 +2273,12 @@ describe("Household sync hardening", () => {
         ],
       }),
     });
+    const session = await issueSessionFor(env, { "X-Device-ID": "household-reader" });
 
     const fetchResponse = await worker.fetch(
       new Request("https://api.catalystcash.app/api/household/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...session.authorization },
         body: JSON.stringify({
           action: "fetch",
           householdId: requestBody.householdId,
@@ -1462,6 +2310,7 @@ describe("Household sync hardening", () => {
         ],
       }),
     });
+    const session = await issueSessionFor(env, { "X-Device-ID": "household-writer" });
 
     const attackerAuthToken = await sha256Hex("household-auth-v1:family-1:attacker-passcode");
     const forgedEnvelope = await buildHouseholdRequest({
@@ -1479,7 +2328,7 @@ describe("Household sync hardening", () => {
     const response = await worker.fetch(
       new Request("https://api.catalystcash.app/api/household/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...session.authorization },
         body: JSON.stringify({
           action: "push",
           ...forgedEnvelope,
@@ -1514,6 +2363,7 @@ describe("Household sync hardening", () => {
         ],
       }),
     });
+    const session = await issueSessionFor(env, { "X-Device-ID": "household-replay" });
 
     const replayBody = await buildHouseholdRequest({
       version: 3,
@@ -1529,7 +2379,7 @@ describe("Household sync hardening", () => {
     const replayResponse = await worker.fetch(
       new Request("https://api.catalystcash.app/api/household/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...session.authorization },
         body: JSON.stringify({
           action: "push",
           ...replayBody,
@@ -1555,7 +2405,7 @@ describe("Household sync hardening", () => {
     const staleResponse = await worker.fetch(
       new Request("https://api.catalystcash.app/api/household/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...session.authorization },
         body: JSON.stringify({
           action: "push",
           ...staleBody,

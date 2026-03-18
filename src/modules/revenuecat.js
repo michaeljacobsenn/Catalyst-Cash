@@ -6,19 +6,28 @@
 const ENTITLEMENT_ID = "Catalyst Cash Pro";
 const RC_ENTITLEMENT_VERIFICATION_MODE = "INFORMATIONAL";
 const RC_VERIFICATION_FAILED = "FAILED";
+const REVENUECAT_TIMEOUT_MS = 1500;
 
 function getRevenueCatApiKey() {
-  const apiKey = import.meta.env.VITE_REVENUECAT_KEY;
-  if (!apiKey) {
-    throw new Error("Missing RevenueCat configuration: VITE_REVENUECAT_KEY is not set.");
-  }
-  return apiKey;
+  return String(import.meta.env.VITE_REVENUECAT_KEY || "").trim() || null;
 }
 
 // We keep a local cache of whether we are running on native iOS
 const isNative = Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
 let cachedRevenueCatAppUserId = null;
 let revenueCatUiPromise = null;
+
+function withRevenueCatTimeout(promiseFactory, label) {
+  let timer = null;
+  return Promise.race([
+    Promise.resolve().then(promiseFactory),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} timed out`)), REVENUECAT_TIMEOUT_MS);
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
 
 async function getRevenueCatUI() {
   if (!revenueCatUiPromise) {
@@ -54,10 +63,14 @@ async function applyCustomerInfo(customerInfo) {
 
 export async function getRevenueCatAppUserId() {
   if (!isNative) return null;
+  if (!getRevenueCatApiKey()) return null;
   if (cachedRevenueCatAppUserId) return cachedRevenueCatAppUserId;
 
   try {
-    const { appUserID } = await Purchases.getAppUserID();
+    const { appUserID } = await withRevenueCatTimeout(
+      () => Purchases.getAppUserID(),
+      "RevenueCat getAppUserID"
+    );
     if (appUserID) {
       cachedRevenueCatAppUserId = appUserID;
       return appUserID;
@@ -74,9 +87,13 @@ export async function getRevenueCatAppUserId() {
  */
 export async function syncProStatus() {
   if (!isNative) return false;
+  if (!getRevenueCatApiKey()) return false;
 
   try {
-    const customerInfo = await Purchases.getCustomerInfo();
+    const customerInfo = await withRevenueCatTimeout(
+      () => Purchases.getCustomerInfo(),
+      "RevenueCat getCustomerInfo"
+    );
     await getRevenueCatAppUserId();
     return applyCustomerInfo(customerInfo);
   } catch {
@@ -94,11 +111,22 @@ export async function initRevenueCat() {
 
   try {
     const apiKey = getRevenueCatApiKey();
-    await Purchases.setLogLevel({ level: LOG_LEVEL.WARN });
-    await Purchases.configure({
-      apiKey,
-      entitlementVerificationMode: RC_ENTITLEMENT_VERIFICATION_MODE,
-    });
+    if (!apiKey) {
+      log.info("revenuecat", "RevenueCat not configured; skipping initialization");
+      return;
+    }
+    await withRevenueCatTimeout(
+      () => Purchases.setLogLevel({ level: LOG_LEVEL.WARN }),
+      "RevenueCat setLogLevel"
+    );
+    await withRevenueCatTimeout(
+      () =>
+        Purchases.configure({
+          apiKey,
+          entitlementVerificationMode: RC_ENTITLEMENT_VERIFICATION_MODE,
+        }),
+      "RevenueCat configure"
+    );
     await getRevenueCatAppUserId();
 
     // Listen for real-time changes to the customer's purchase status
@@ -123,6 +151,10 @@ export async function presentPaywall() {
   if (!isNative) {
     console.warn("RevenueCat paywall is only available on native iOS. Falling back to simple web paywall.");
     return null; // Signals the caller to show the web UI fallback
+  }
+  if (!getRevenueCatApiKey()) {
+    if (window.toast) window.toast.error("Purchases are not configured in this build.");
+    return false;
   }
 
   try {
@@ -150,9 +182,13 @@ export async function presentPaywall() {
  */
 export async function restorePurchases() {
   if (!isNative) return null; // Web fallback — no IAP available
+  if (!getRevenueCatApiKey()) return false;
 
   try {
-    const customerInfo = await Purchases.restorePurchases();
+    const customerInfo = await withRevenueCatTimeout(
+      () => Purchases.restorePurchases(),
+      "RevenueCat restorePurchases"
+    );
     return applyCustomerInfo(customerInfo);
   } catch {
     log.error("revenuecat", "Error restoring purchases");
@@ -168,6 +204,10 @@ export async function presentCustomerCenter() {
   if (!isNative) {
     console.warn("Customer Center is only available on native iOS.");
     if (window.toast) window.toast.error("Subscription management is only available in the iOS app.");
+    return;
+  }
+  if (!getRevenueCatApiKey()) {
+    if (window.toast) window.toast.error("Purchases are not configured in this build.");
     return;
   }
 

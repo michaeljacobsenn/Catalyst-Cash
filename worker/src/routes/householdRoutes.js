@@ -4,6 +4,7 @@ export async function handleHouseholdRoute({
   env,
   cors,
   buildHeaders,
+  resolveAuthenticatedActor,
   sha256Hex,
   buildHouseholdIntegrityTag,
   verifyHouseholdIntegrity,
@@ -19,6 +20,13 @@ export async function handleHouseholdRoute({
 
   try {
     if (url.pathname === "/api/household/sync" && request.method === "POST") {
+      const actor = await resolveAuthenticatedActor(request, env.DB, env);
+      if (!actor) {
+        return new Response(JSON.stringify({ error: "Invalid or missing identity session" }), {
+          status: 401,
+          headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+        });
+      }
       const body = await request.json();
       const action = body?.action;
       const householdId = String(body?.householdId || "").trim();
@@ -182,7 +190,7 @@ export async function handleHouseholdRoute({
              last_updated_at = CURRENT_TIMESTAMP`
         ).bind(householdId, encryptedBlob, authTokenHash, integrityTag, version, requestId).run();
 
-        return new Response(JSON.stringify({ success: true, version }), {
+        return new Response(JSON.stringify({ success: true, version, actorId: actor.actorId }), {
           status: 200,
           headers: buildHeaders(cors, { "Content-Type": "application/json" }),
         });

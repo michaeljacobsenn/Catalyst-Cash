@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Post-sync script: ensures local native plugins are registered
+ * Post-sync script: ensures non-core native plugins are registered
  * in capacitor.config.json's packageClassList.
  *
  * Run after every `npx cap sync ios`:
@@ -12,14 +12,22 @@ const fs = require("fs");
 const path = require("path");
 
 const CONFIG_PATH = path.join(__dirname, "..", "ios", "App", "App", "capacitor.config.json");
-const LOCAL_PLUGINS = ["FaceIdPlugin", "PdfViewerPlugin", "ICloudSyncPlugin"]; // ObjC runtime names of local plugins
+const NATIVE_PLUGIN_CLASSES = [
+  "SignInWithApple",
+  "SecureStoragePlugin",
+  "PurchasesPlugin",
+  "RevenueCatUIPlugin",
+  "FaceIdPlugin",
+  "PdfViewerPlugin",
+  "ICloudSyncPlugin",
+];
 
 try {
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
   const classList = config.packageClassList || [];
   let changed = false;
 
-  for (const plugin of LOCAL_PLUGINS) {
+  for (const plugin of NATIVE_PLUGIN_CLASSES) {
     if (!classList.includes(plugin)) {
       classList.push(plugin);
       changed = true;

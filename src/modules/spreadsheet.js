@@ -1,6 +1,7 @@
-  import * as XLSX from "xlsx";
   import { encrypt } from "./crypto.js";
   import { db,nativeExport } from "./utils.js";
+
+const loadXlsx = () => import("xlsx");
 
 function arrayBufferToBase64(buffer) {
   let binary = "";
@@ -12,7 +13,7 @@ function arrayBufferToBase64(buffer) {
   return window.btoa(binary);
 }
 
-function appendSheet(workbook, name, rows, widths = []) {
+function appendSheet(XLSX, workbook, name, rows, widths = []) {
   const sheet = XLSX.utils.aoa_to_sheet(rows);
   if (widths.length) {
     sheet["!cols"] = widths.map(wch => ({ wch }));
@@ -29,6 +30,7 @@ function withHeader(header, items) {
 }
 
 export async function generateBackupSpreadsheet(passphrase = null) {
+  const XLSX = await loadXlsx();
   const workbook = XLSX.utils.book_new();
   workbook.Props = {
     Title: "Catalyst Cash Spreadsheet Backup",
@@ -40,6 +42,7 @@ export async function generateBackupSpreadsheet(passphrase = null) {
   const financialConfig = (await db.get("financial-config")) || {};
 
   appendSheet(
+    XLSX,
     workbook,
     "README Guide",
     [
@@ -66,6 +69,7 @@ export async function generateBackupSpreadsheet(passphrase = null) {
   );
 
   appendSheet(
+    XLSX,
     workbook,
     "Setup Data",
     withHeader(
@@ -115,6 +119,7 @@ export async function generateBackupSpreadsheet(passphrase = null) {
   );
 
   appendSheet(
+    XLSX,
     workbook,
     "Income Sources",
     withHeader(
@@ -132,6 +137,7 @@ export async function generateBackupSpreadsheet(passphrase = null) {
   );
 
   appendSheet(
+    XLSX,
     workbook,
     "Budget Categories",
     withHeader(
@@ -147,6 +153,7 @@ export async function generateBackupSpreadsheet(passphrase = null) {
   );
 
   appendSheet(
+    XLSX,
     workbook,
     "Savings Goals",
     withHeader(
@@ -162,6 +169,7 @@ export async function generateBackupSpreadsheet(passphrase = null) {
   );
 
   appendSheet(
+    XLSX,
     workbook,
     "Non-Card Debts",
     withHeader(
@@ -178,6 +186,7 @@ export async function generateBackupSpreadsheet(passphrase = null) {
   );
 
   appendSheet(
+    XLSX,
     workbook,
     "Other Assets",
     withHeader(

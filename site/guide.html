@@ -6,22 +6,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#0C121B" />
-    <title>Catalyst Cash Guide | Your Weekly Money Audit</title>
+    <title>Catalyst Cash Guide | How the app actually works</title>
     <meta name="description"
-        content="Learn how to set up Catalyst Cash, run your weekly money audit, understand free vs Pro, and use the app without losing privacy." />
+        content="A practical guide to Catalyst Cash: what to add, what each area of the app does, how the weekly workflow works, and what Free vs Pro changes." />
     <meta property="og:title" content="Catalyst Cash Guide" />
     <meta property="og:description"
-        content="The complete guide for Catalyst Cash: setup, weekly audits, plans, privacy, and the fastest way to get value from the app." />
+        content="Learn how to set up Catalyst Cash, run the weekly audit, use each product area, and understand Free vs Pro clearly." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://catalystcash.app/guide.html" />
     <meta property="og:image" content="https://catalystcash.app/icon-512.png" />
-    <link rel="icon" href="favicon.png" type="image/png" />
-    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
         href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap"
         rel="stylesheet" />
     <meta name="robots" content="index, follow" />
-    <link rel="stylesheet" href="/style.css?v=2.8" />
+    <link rel="stylesheet" href="/style.css?v=3.0" />
 </head>
 
 <body>
@@ -35,7 +37,7 @@
         <nav role="navigation" aria-label="Main navigation">
             <div class="nav-inner">
                 <a href="/" class="brand">
-                    <img src="icon-192.png" alt="Catalyst Cash Logo" width="32" height="32" loading="eager" />
+                    <img src="/icon-192.png" alt="Catalyst Cash Logo" width="32" height="32" loading="eager" />
                     Catalyst Cash
                 </a>
                 <button class="hamburger" id="hamburger-btn" aria-label="Toggle navigation menu" aria-expanded="false">
@@ -43,450 +45,248 @@
                 </button>
                 <div class="nav-links" id="nav-links">
                     <a href="/">Home</a>
-                    <a href="#setup">Setup</a>
+                    <a href="#app-map">App Map</a>
+                    <a href="#workflow">Workflow</a>
                     <a href="#plans">Plans</a>
-                    <a href="privacy.html">Privacy</a>
-                    <a href="terms.html">Terms</a>
+                    <a href="/privacy.html">Privacy</a>
+                    <a href="/terms.html">Terms</a>
                     <a href="https://testflight.apple.com/join/3rpWQq49" class="nav-cta">Join TestFlight</a>
                 </div>
             </div>
         </nav>
 
-        <main class="shell guide-content" id="main-content">
-            <!-- ═══ HERO ═══ -->
-            <div class="header-wrapper animate-fade-up" role="banner">
-                <img src="./icon-512.png?v=4" alt="Catalyst Cash App Icon" class="splash-logo" width="160" height="160" fetchpriority="high" />
-                <div class="label-pill">Your Money, Simplified</div>
-                <h1 style="margin-top: 0px;">Catalyst Cash</h1>
-                <div class="subtitle">Your personal AI finance coach — built to help you spend smarter, pay off debt
-                    faster,
-                    and grow your wealth.</div>
-
-                <div class="scroll-indicator" aria-hidden="true">
-                    <span>SCROLL</span>
-                    <div class="scroll-line"></div>
-                </div>
-            </div>
-
-            <!-- ═══ 01 — WHAT IS IT? ═══ -->
-            <div class="section-card animate-fade-up delay-1" role="region" aria-label="What is Catalyst Cash">
-                <div class="section-header">
-                    <span class="section-number">01 /</span>
-                    <h2 class="section-title">What is Catalyst Cash?</h2>
-                </div>
-                <p class="lead">Catalyst Cash is a <strong>privacy-first AI finance app</strong> that gives you the kind
-                    of
-                    advice
-                    usually reserved for people with financial advisors — except it's instant, automatic, and lives on
-                    your
-                    iPhone.</p>
-
-                <div class="grid-3">
-                    <div class="feature-box">
-                        <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2ECC71"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                            </svg> Privacy-First</h3>
-                        <p>Your core financial data is stored locally on your device. AI requests are proxied securely
-                            only
-                            when you run audits or chat.</p>
-                    </div>
-                    <div class="feature-box">
-                        <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7B5EA7"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
-                                <rect x="9" y="9" width="6" height="6"></rect>
-                                <line x1="9" y1="1" x2="9" y2="4"></line>
-                                <line x1="15" y1="1" x2="15" y2="4"></line>
-                                <line x1="9" y1="20" x2="9" y2="23"></line>
-                                <line x1="15" y1="20" x2="15" y2="23"></line>
-                                <line x1="20" y1="9" x2="23" y2="9"></line>
-                                <line x1="20" y1="14" x2="23" y2="14"></line>
-                                <line x1="1" y1="9" x2="4" y2="9"></line>
-                                <line x1="1" y1="14" x2="4" y2="14"></line>
-                            </svg> AI-Powered</h3>
-                        <p>Your AI coach reads your full financial picture — every balance, bill, and card — then gives
-                            you
-                            specific, actionable advice tailored to your exact situation.</p>
-                    </div>
-                    <div class="feature-box">
-                        <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2ECC71"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                            </svg> Fast & Secure</h3>
-                        <p>AI requests are routed through the Catalyst Cash backend proxy with PII scrubbing before
-                            reaching
-                            the selected model provider. Raw financial payloads are not retained on our servers.</p>
+        <main class="shell" id="main-content">
+            <section class="section guide-hero">
+                <div class="guide-hero-copy fade-up">
+                    <div class="eyebrow">Guide | updated March 16, 2026</div>
+                    <h1>How Catalyst Cash works in practice.</h1>
+                    <p class="hero-sub">
+                        This is the practical version: what to add, what each area of the app does, how the weekly
+                        operating loop works, and what changes when you upgrade.
+                    </p>
+                    <div class="guide-nav">
+                        <a href="#getting-started">Getting started</a>
+                        <a href="#app-map">App map</a>
+                        <a href="#workflow">Weekly workflow</a>
+                        <a href="#plans">Free vs Pro</a>
+                        <a href="#privacy">Privacy</a>
                     </div>
                 </div>
-            </div>
-
-            <!-- ═══ 02 — WHAT YOU CAN TRACK ═══ -->
-            <div class="section-card animate-fade-up delay-1" role="region" aria-label="What you can track">
-                <div class="section-header">
-                    <span class="section-number">02 /</span>
-                    <h2 class="section-title">What You Can Track</h2>
+                <div class="guide-hero-side fade-up delay-1">
+                    <div class="guide-stat-card">
+                        <span>Primary output</span>
+                        <strong>Weekly action packet</strong>
+                        <p>Status, risk, next moves, and follow-up questions on your actual numbers.</p>
+                    </div>
+                    <div class="guide-stat-card">
+                        <span>Input model</span>
+                        <strong>Manual or Plaid</strong>
+                        <p>Use manual entry, one live institution on Free, or broader coverage on Pro.</p>
+                    </div>
+                    <div class="guide-stat-card">
+                        <span>Free tier</span>
+                        <strong>2 audits / week</strong>
+                        <p>The core workflow is included. Pro expands usage, history, models, and ledger depth.</p>
+                    </div>
                 </div>
-                <p class="lead">The more Catalyst knows about your finances, the smarter its advice gets. Here's
-                    everything
-                    you can add to your portfolio:</p>
+            </section>
 
-                <ul style="margin-bottom: 24px;">
-                    <li><strong>Bank Accounts (Checking & Savings):</strong> Connect via Plaid for automatic balance
-                        updates, or enter them manually. Catalyst monitors your cash flow and spending runway.</li>
-                    <li><strong>Credit Cards:</strong> Track every card — balances, limits, APRs, annual fees, and due
-                        dates. Catalyst flags utilization spikes and finds optimization opportunities.</li>
-                    <li><strong>Debts & Loans:</strong> Add auto loans, student loans, mortgages, or personal debt. The
-                        built-in Debt Simulator shows you exactly how to pay them off fastest.</li>
-                    <li><strong>Investments:</strong> Sync brokerage, Roth IRA, and 401(k) accounts via Plaid — or add
-                        them
-                        manually — to see your complete net worth in one view.</li>
-                    <li><strong>Crypto:</strong> Add your crypto holdings with live market prices pulled automatically.
-                    </li>
-                    <li><strong>Other Assets:</strong> Track real estate, vehicles, valuables — anything with a dollar
-                        value. Classify each as Liquid or Locked.</li>
-                </ul>
-
-                <div class="cfo-rule">
-                    <h4>How It Works: The Safety Floor</h4>
-                    <p>Set a minimum "Emergency Floor" for your checking account. If your upcoming bills would push you
-                        below that floor, Catalyst warns you immediately so you can adjust before it's too late.</p>
+            <section class="section" id="getting-started">
+                <div class="section-head">
+                    <div class="micro-label">Getting Started</div>
+                    <h2>What to add before your first serious audit.</h2>
+                    <p>The app gets better as your balances, obligations, and timing become more accurate.</p>
                 </div>
 
-                <div class="cfo-rule">
-                    <h4>How It Works: Smart Debt Payoff</h4>
-                    <p>The Debt Simulator automatically orders your debts by highest interest rate first (the
-                        "avalanche"
-                        method). This is mathematically proven to save the most money on interest over time.</p>
+                <div class="fit-grid">
+                    <div class="fit-card">
+                        <h3>Cash accounts</h3>
+                        <p>Checking and savings are the core inputs for cash safety, runway, and spending decisions.</p>
+                    </div>
+                    <div class="fit-card">
+                        <h3>Debt balances</h3>
+                        <p>Credit cards, loans, APRs, limits, and due dates drive payoff order and utilization logic.</p>
+                    </div>
+                    <div class="fit-card">
+                        <h3>Recurring claims on cash</h3>
+                        <p>Renewals, bills, and known upcoming charges help the app distinguish a safe week from a risky one.</p>
+                    </div>
                 </div>
-            </div>
+            </section>
 
-            <!-- ═══ 03 — FEATURES AT A GLANCE ═══ -->
-            <div class="section-card animate-fade-up delay-1" role="region" aria-label="Features">
-                <div class="section-header">
-                    <span class="section-number">03 /</span>
-                    <h2 class="section-title">Everything You Get</h2>
+            <section class="section" id="app-map">
+                <div class="section-head">
+                    <div class="micro-label">App Map</div>
+                    <h2>What each area of the app is for.</h2>
+                    <p>The product works best when you know which surface answers which question.</p>
                 </div>
-                <p class="lead">Catalyst Cash packs more financial tools into one app than most people have bookmarked
-                    across ten websites.</p>
 
-                <div class="grid-3">
-                    <div class="feat-card">
-                        <span class="feat-emoji">📊</span>
+                <div class="app-map-grid">
+                    <article class="app-map-card">
                         <h3>Dashboard</h3>
-                        <p>Your financial health score, spending pacing, cash-on-hand, and upcoming bills — all in one
-                            glance.</p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">💳</span>
-                        <h3>Accounts</h3>
-                        <p>Full portfolio view — credit cards, bank accounts, debts, investments, crypto, and other
-                            assets
-                            in one place.</p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">🔄</span>
-                        <h3>Expense Tracker</h3>
-                        <p>Track recurring bills. Use our fuzzy-matching 1-Click Cancel feature to instantly navigate to direct merchant cancellation URLs.</p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">🤖</span>
-                        <h3>AI Check-In</h3>
-                        <p>Run a weekly audit. Catalyst AI analyzes your full picture and tells you exactly what to do
-                            this
-                            week.</p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">💬</span>
-                        <h3>Ask AI</h3>
-                        <p>Chat with your AI coach anytime. It knows your exact balances and can answer questions like
-                            "Can
-                            I afford this?" or "How do I pay off my car faster?"</p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">📈</span>
-                        <h3>Debt Simulator</h3>
-                        <p>Model payoff strategies for your loans. See how extra payments save you thousands in
-                            interest.
-                        </p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">🏆</span>
-                        <h3>Credit Score Simulator</h3>
-                        <p>Estimate how specific actions — like paying down a card or opening a new account — affect
-                            your
-                            credit score.</p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">📞</span>
-                        <h3>Bill Negotiation</h3>
-                        <p>AI generates custom scripts for calling your providers to negotiate lower rates on bills and
-                            subscriptions.</p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">🔥</span>
-                        <h3>FIRE Calculator</h3>
-                        <p>Calculate your path to financial independence and early retirement based on your actual
-                            numbers.
-                        </p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">📅</span>
-                        <h3>Cash Flow Calendar</h3>
-                        <p>Visualize when money comes in and goes out. See your daily projected balance across the
-                            month.
-                        </p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">🎯</span>
-                        <h3>Weekly Challenges</h3>
-                        <p>Fun, practical money challenges that build better habits — like a no-spend day or cooking all
-                            meals at home.</p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">🏦</span>
-                        <h3>Bank Sync & Transactions</h3>
-                        <p>Securely connect via Plaid. Free users can manually sync real-time balances once a week. Pro
-                            users enjoy automatic background syncing and full transaction history.</p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">📒</span>
-                        <h3>Local Edge AI Categories</h3>
-                        <p>Browse transactions in a searchable feed. Everything is auto-categorized locally on-device using embeddings for total privacy.</p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">💼</span>
-                        <h3>Zero-Based Budgeting</h3>
-                        <p>Every dollar gets a job. Utilize the "Unassigned Cash" allocation method for mathematically bulletproof budget planning.</p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">⏱️</span>
-                        <h3>Spending Pace</h3>
-                        <p>See how your spending tracks against your weekly allowance in real time. Stay under budget
-                            with a visual progress bar tied to your paycheck cycle.</p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">📍</span>
-                        <h3>Geo-Card Suggestions</h3>
-                        <p>Enable precise location to automatically rank your physical cards based on the cash-back multipliers of the merchant you are standing in.</p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">🗓️</span>
-                        <h3>Payday Reminders</h3>
-                        <p>Set your paycheck schedule and get automatic notifications when it's time to run your weekly
-                            check-in.</p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">🌍</span>
-                        <h3>Multi-Currency Support</h3>
-                        <p>Automatically formats 28 global currencies natively, setting the AI math and dashboard
-                            exactly for your region.</p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">🔒</span>
-                        <h3>Privacy & GDPR/CCPA</h3>
-                        <p>Lock the app behind Face ID. Request full account and data deletion instantly to satisfy
-                            GDPR/CCPA. Data is fully encrypted at rest.</p>
-                    </div>
-                    <div class="feat-card">
-                        <span class="feat-emoji">⏳</span>
-                        <h3>Debt Freedom Countdown</h3>
-                        <p>See your projected debt-free date based on your current balances and payment pace.
-                            Celebrate milestones as you knock out each card.</p>
-                    </div>
+                        <p>Use it for the current snapshot: health score, safe-to-spend, trend cards, and the fastest read on whether the week improved.</p>
+                    </article>
+                    <article class="app-map-card">
+                        <h3>Audit</h3>
+                        <p>Use it for the weekly decision pass. It packages cash pressure, debt focus, renewals, and portfolio context into a readable action list.</p>
+                    </article>
+                    <article class="app-map-card">
+                        <h3>AskAI</h3>
+                        <p>Use it for tradeoffs after the audit: affordability, debt sequencing, timing decisions, and “what if I do this instead?”</p>
+                    </article>
+                    <article class="app-map-card">
+                        <h3>Portfolio Vault</h3>
+                        <p>Use it to manage banks, cards, loans, investments, crypto, other assets, and transaction previews in one place.</p>
+                    </article>
+                    <article class="app-map-card">
+                        <h3>Cashflow + Renewals</h3>
+                        <p>Use these surfaces to manage budget envelopes, recurring charges, payment timing, and the 30-day cash-flow picture.</p>
+                    </article>
+                    <article class="app-map-card">
+                        <h3>History + Ledger</h3>
+                        <p>Use History to compare old audits. Use the Pro ledger when you need search, filtering, export, and transaction-level cleanup.</p>
+                    </article>
                 </div>
-            </div>
+            </section>
 
-            <!-- ═══ 04 — WEEKLY ROUTINE ═══ -->
-            <div class="section-card animate-fade-up delay-1" role="region" aria-label="Weekly routine">
-                <div class="section-header">
-                    <span class="section-number">04 /</span>
-                    <h2 class="section-title">Your Weekly Routine</h2>
-                </div>
-                <p class="lead">Spend 5 minutes each week to stay on top of your money. Here's the simple routine that
-                    makes
-                    Catalyst work best:</p>
-
-                <div class="step-list">
-                    <div class="step-item">
-                        <div class="step-circle">1</div>
-                        <div class="step-content">
-                            <h3>Sync Your Accounts</h3>
-                            <p>If you use Plaid, tap Sync — your balances will update based on your tier limits. Pro
-                                users also get background auto-syncing seamlessly.
-                                Otherwise, quickly update your checking balance manually.</p>
-                        </div>
-                    </div>
-                    <div class="step-item">
-                        <div class="step-circle">2</div>
-                        <div class="step-content">
-                            <h3>Run Your Check-In</h3>
-                            <p>Tap the Audit button. Catalyst AI will analyze your cash flow, upcoming bills, credit
-                                utilization, and spending pace — then give you a clear action plan.</p>
-                        </div>
-                    </div>
-                    <div class="step-item">
-                        <div class="step-circle">3</div>
-                        <div class="step-content">
-                            <h3>Review Your Results</h3>
-                            <p>Your Dashboard updates with your health score, available spending money, and any alerts.
-                                Green means you're on track. Red means take action now.</p>
-                        </div>
-                    </div>
-                    <div class="step-item">
-                        <div class="step-circle">4</div>
-                        <div class="step-content">
-                            <h3>Ask Follow-Up Questions</h3>
-                            <p>Need more detail? Open Ask AI to chat directly. Ask things like "Should I pay off my Visa
-                                or
-                                my car loan first?" and get instant, personalized advice.</p>
-                        </div>
-                    </div>
+            <section class="section" id="workflow">
+                <div class="section-head">
+                    <div class="micro-label">Weekly Workflow</div>
+                    <h2>The operating loop that makes the app useful.</h2>
+                    <p>Most value comes from repetition, not from a one-time setup sprint.</p>
                 </div>
 
-                <div class="insight-box">
-                    <div class="insight-header">Your Chats Auto-Delete</div>
-                    <p><strong>For your privacy</strong>, all AI chat conversations are automatically deleted after 24
-                        hours. Your financial data is scrubbed from chat history before any processing occurs.</p>
+                <div class="steps">
+                    <div class="step-card fade-up">
+                        <div class="step-index">01</div>
+                        <h3>Refresh the numbers</h3>
+                        <p>Sync through Plaid or update balances manually so the audit is working from current reality.</p>
+                    </div>
+                    <div class="step-card fade-up delay-1">
+                        <div class="step-index">02</div>
+                        <h3>Run the audit</h3>
+                        <p>Start with the week color, safe-to-spend logic, debt priority, and the top action list.</p>
+                    </div>
+                    <div class="step-card fade-up delay-2">
+                        <div class="step-index">03</div>
+                        <h3>Open the supporting tool</h3>
+                        <p>Use AskAI for the tradeoff, Renewals for recurring costs, Budget for pacing, or the ledger for cleanup.</p>
+                    </div>
                 </div>
-            </div>
+            </section>
 
-            <!-- ═══ 05 — FREE VS PRO ═══ -->
-            <div class="section-card animate-fade-up delay-1" role="region" aria-label="Plans and pricing">
-                <div class="section-header">
-                    <span class="section-number">05 /</span>
-                    <h2 class="section-title">Free vs Pro</h2>
+            <section class="section">
+                <div class="section-head">
+                    <div class="micro-label">Financial Logic</div>
+                    <h2>The main rules the product cares about.</h2>
                 </div>
-                <p class="lead">The free plan gives you the complete app. Pro raises the limits and upgrades the AI.
-                </p>
 
-                <div class="grid-2">
-                    <div class="tier-box tier-free">
-                        <div class="tier-header">
-                            <h3 style="margin:0; color:#F8FAFC; font-size:22px; font-weight:800;">Free Plan</h3>
-                            <span
-                                style="font-size:12px; font-weight:700; background:rgba(255,255,255,0.1); padding:4px 10px; border-radius:99px;">$0
-                                / mo</span>
+                <div class="adv-grid">
+                    <div class="adv-card">
+                        <div class="adv-icon" style="background: var(--green-deep); color: var(--green);">FLR</div>
+                        <h3>Checking floor first</h3>
+                        <p>The audit treats your emergency floor as a hard safety boundary. If the floor is dishonest, the advice will be too.</p>
+                    </div>
+                    <div class="adv-card">
+                        <div class="adv-icon" style="background: var(--amber-deep); color: var(--amber);">APR</div>
+                        <h3>Avalanche debt logic</h3>
+                        <p>The debt simulator prioritizes high APR debt to minimize interest drag, then lets you test the effect of extra payments.</p>
+                    </div>
+                    <div class="adv-card">
+                        <div class="adv-icon" style="background: var(--blue-deep); color: var(--blue);">RNW</div>
+                        <h3>Renewals are future cash claims</h3>
+                        <p>Recurring charges matter because of timing, not just total cost. Renewal pressure is part of weekly safety, not an afterthought.</p>
+                    </div>
+                    <div class="adv-card">
+                        <div class="adv-icon" style="background: var(--purple-deep); color: var(--purple);">TRN</div>
+                        <h3>History exists to validate decisions</h3>
+                        <p>Audit history should help you see whether your actions improved liquidity, reduced risk, or changed the trajectory.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section" id="plans">
+                <div class="section-head">
+                    <div class="micro-label">Plans</div>
+                    <h2>Free vs Pro, without the spin.</h2>
+                    <p>Free includes the core workflow. Pro increases room, depth, and operational tooling.</p>
+                </div>
+
+                <div class="pricing">
+                    <div class="price-card glass-card free fade-up">
+                        <h3>Free</h3>
+                        <div class="price-amount">
+                            <strong>$0</strong>
+                            <span>forever</span>
                         </div>
                         <ul>
-                            <li><strong style="color:white">2</strong> audits per week</li>
-                            <li><strong style="color:white">10</strong> AskAI chats per day</li>
-                            <li>AI powered securely by <strong style="color:white">Standard AI</strong></li>
-                            <li><strong>2</strong> manual bank snapshots, no Plaid live sync</li>
-                            <li>iCloud cross-device backup &amp; restore</li>
-                            <li>All tools: Debt Sim, Credit Sim, FIRE Calc (with State Tax)</li>
-                            <li>Spending Pace, Multi-Currency, &amp; CCPA Control</li>
-                            <li>Face ID / passcode lock</li>
+                            <li>2 audits per week</li>
+                            <li>10 AskAI chats per day</li>
+                            <li>Catalyst AI</li>
+                            <li>1 Plaid institution</li>
+                            <li>Last 12 saved audits</li>
+                            <li>Core budgeting, debt, FIRE, renewals, and dashboard tools</li>
                         </ul>
                     </div>
-                    <div class="tier-box tier-pro">
-                        <div class="tier-header">
-                            <h3 style="margin:0; color:#fff; font-size:22px; font-weight:800;">Catalyst Pro</h3>
-                            <p>Catalyst Cash Pro is completely optional. If you choose to upgrade, it is available for
-                                just <span
-                                    style="font-size:12px; font-weight:800; color:#D4C4FB; background:rgba(123, 94, 167, 0.2); border: 1px solid rgba(123, 94, 167, 0.5); padding:4px 10px; border-radius:99px;">$9.99/mo</span>
-                                through Secure In-App Purchases on your device. Every active subscriber guarantees their
-                                data is never monetized and helps keep the app entirely ad-free.</p>
+                    <div class="price-card glass-card pro fade-up delay-1">
+                        <div class="price-badge">Pro</div>
+                        <h3>Pro</h3>
+                        <div class="price-amount">
+                            <strong>$9.99</strong>
+                            <span>per month</span>
                         </div>
                         <ul>
-                            <li><strong>20</strong> audits per month</li>
-                            <li><strong>25</strong> AskAI chats per day</li>
-                            <li><strong>Fast AI</strong> is the default, with <strong>Precision AI</strong> available.</li>
-                            <li><strong>5</strong> connected institutions with live sync.</li>
-                            <li>Transaction Ledger with search &amp; export</li>
-                            <li>Advanced analytics &amp; trend charts</li>
-                            <li>Faster AI responses &amp; deeper analysis</li>
+                            <li>20 audits per month</li>
+                            <li>25 AskAI chats per day</li>
+                            <li>Catalyst AI CFO + Boardroom</li>
+                            <li>Up to 6 Plaid institutions</li>
+                            <li>Full audit archive</li>
+                            <li>Full searchable ledger with export</li>
                         </ul>
-                        <ul class="sub-list mt-3">
-                            <li>Monthly plan: <strong>$9.99/mo</strong></li>
-                            <li>Annual plan: <strong>$69.99/yr</strong> (<strong>$5.83/mo</strong>, 4 months free)</li>
-                        </ul>
+                        <p class="price-foot">$89.99/year is available with a 7-day free trial.</p>
                     </div>
                 </div>
+            </section>
 
-
-            </div>
-
-            <!-- ═══ 06 — PRIVACY & BACKUP ═══ -->
-            <div class="section-card animate-fade-up delay-1" role="region" aria-label="Privacy and backup">
-                <div class="section-header">
-                    <span class="section-number">06 /</span>
-                    <h2 class="section-title">Privacy & Backup</h2>
-                </div>
-                <p class="lead">You have complete control over your data. Catalyst gives you multiple ways to back up,
-                    export, and protect your finances.</p>
-
-                <div class="grid-3" style="margin-bottom: 30px;">
-                    <div class="feature-box">
-                        <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2ECC71"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                            </svg> iCloud Cross-Device Backup</h3>
-                        <p>Your data is automatically backed up to your private iCloud container. Switch devices or
-                            sign in on a new phone and your data restores automatically — no manual import needed.</p>
-                    </div>
-                    <div class="feature-box">
-                        <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2ECC71"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <line x1="12" y1="20" x2="12" y2="10"></line>
-                                <line x1="18" y1="20" x2="18" y2="4"></line>
-                                <line x1="6" y1="20" x2="6" y2="16"></line>
-                            </svg> Spreadsheet Export</h3>
-                        <p>Export your entire portfolio as an <code>.xlsx</code> spreadsheet. Edit in Excel or Google
-                            Sheets, then import it back into the app.</p>
-                    </div>
-                    <div class="feature-box">
-                        <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7B5EA7"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                            </svg> Encrypted Backup</h3>
-                        <p>Create a password-protected <code>.enc</code> backup file. Store it in iCloud Drive, AirDrop
-                            it
-                            to a new phone, or save it anywhere you trust. Passcodes, API keys, device IDs, and
-                            subscription state are excluded automatically.</p>
-                    </div>
+            <section class="section" id="privacy">
+                <div class="section-head">
+                    <div class="micro-label">Privacy</div>
+                    <h2>Where the data lives and what leaves the device.</h2>
+                    <p>The shortest accurate version is local-first by default, networked only when you use networked features.</p>
                 </div>
 
-                <div class="cfo-rule">
-                    <h4>Built with Your Trust in Mind</h4>
-                    <p>Catalyst Cash is not a financial advisor. All AI insights are for informational purposes only. We
-                        do
-                        not store raw financial payloads on our servers, and your core financial data remains stored
-                        locally
-                        on your device.</p>
-                </div>
-
-                <div class="feature-box danger-zone">
-                    <div class="danger-header">Reset & Delete</div>
-                    <div class="grid-2">
-                        <div>
-                            <h3 style="color: #F8FAFC; font-size: 14px; margin-bottom: 6px;">Clear History</h3>
-                            <p style="color: #64748B; font-size: 13px;">Deletes all past AI check-in results. Your
-                                accounts
-                                and settings are kept.</p>
-                        </div>
-                        <div>
-                            <h3 style="color: #F8FAFC; font-size: 14px; margin-bottom: 6px;">Factory Reset</h3>
-                            <p style="color: #64748B; font-size: 13px;">Permanently erases all data — accounts, saved
-                                credentials,
-                                history, and settings. The app resets to its first-launch state. <strong>Back up
-                                    first.</strong></p>
-                        </div>
+                <div class="fit-grid">
+                    <div class="fit-card">
+                        <h3>Stored locally first</h3>
+                        <p>Balances, debts, renewals, settings, and audit history are kept on your device as the primary record.</p>
+                    </div>
+                    <div class="fit-card">
+                        <h3>AI on demand</h3>
+                        <p>When you run an audit or AskAI chat, the request is scrubbed and sent through the Catalyst backend proxy.</p>
+                    </div>
+                    <div class="fit-card">
+                        <h3>Plaid is optional</h3>
+                        <p>If you connect through Plaid, it helps keep balances and transactions current. You can also stay fully manual.</p>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <div class="footer-meta">
-                <p
-                    style="max-width: 500px; margin: 0 auto 14px; font-size: 10px; line-height: 1.6; color: rgba(255,255,255,0.25); font-family: -apple-system, sans-serif; letter-spacing: 0;">
-                    ⚠️ Catalyst Cash provides AI-generated educational and informational content only. It is
-                    <strong>not</strong> professional financial, tax, legal, or investment advice. Always consult a
-                    licensed financial advisor before making financial decisions.
-                </p>
-                © 2026 CATALYST CASH · YOUR DATA STAYS ON YOUR DEVICE
-            </div>
-
+            <section class="section" style="padding-top: 0;">
+                <div class="final-cta">
+                    <div>
+                        <div class="micro-label">Next Step</div>
+                        <h2>Start with one honest weekly check-in.</h2>
+                        <p>
+                            Add the accounts that matter, run the audit once with current numbers, and use the result to
+                            decide whether this is the operating model you have been missing.
+                        </p>
+                    </div>
+                    <div class="button-stack">
+                        <a href="https://testflight.apple.com/join/3rpWQq49" class="button-primary">Join TestFlight</a>
+                        <a href="/compare.html" class="button-secondary">Compare Apps</a>
+                    </div>
+                </div>
+            </section>
         </main>
 
         <footer class="shell">
@@ -502,13 +302,15 @@
                 <div class="footer-links">
                     <div class="footer-col">
                         <h4>Product</h4>
-                        <a href="/#sample-audit">Sample Audit</a>
-                        <a href="/#difference">Why It Wins</a>
-                        <a href="/#pricing">Pricing</a>
+                        <a href="/">Home</a>
+                        <a href="#app-map">App Map</a>
+                        <a href="#workflow">Workflow</a>
+                        <a href="#plans">Plans</a>
                     </div>
                     <div class="footer-col">
                         <h4>Resources</h4>
                         <a href="/guide.html">Guide</a>
+                        <a href="/security.html">Security</a>
                         <a href="/privacy.html">Privacy Policy</a>
                         <a href="/terms.html">Terms of Service</a>
                     </div>
@@ -526,59 +328,8 @@
             </div>
         </footer>
     </div>
-    <script>
-        (() => {
-            var btn = document.getElementById('hamburger-btn');
-            var nav = document.getElementById('nav-links');
-            var overlay = document.getElementById('mobile-overlay');
-            if (!btn || !nav) return;
-            function toggle() {
-                var open = nav.classList.toggle('open');
-                btn.classList.toggle('active');
-                btn.setAttribute('aria-expanded', String(open));
-                if (overlay) overlay.classList.toggle('active', open);
-            }
-            function close() {
-                nav.classList.remove('open');
-                btn.classList.remove('active');
-                btn.setAttribute('aria-expanded', 'false');
-                if (overlay) overlay.classList.remove('active');
-            }
-            btn.addEventListener('click', toggle);
-            if (overlay) overlay.addEventListener('click', close);
-            nav.querySelectorAll('a').forEach((a) => {
-                a.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const target = a.getAttribute('href');
-                    close();
-                    setTimeout(() => { window.location.href = target; }, 350);
-                });
-            });
-        })();
-    </script>
 
-    <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        entry.target.style.animationPlayState = 'running';
-                        entry.target.style.opacity = '1';
-                        observer.unobserve(entry.target);
-                    }
-                });
-            }, {
-                threshold: 0.1
-            });
-
-            document.querySelectorAll('.animate-fade-up').forEach((el, index) => {
-                if (index > 0) {
-                    el.style.animationPlayState = 'paused';
-                }
-                observer.observe(el);
-            });
-        });
-    </script>
+    <script src="/main.js"></script>
 </body>
 
 </html>

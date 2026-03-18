@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { autoMatchAccounts, applyBalanceSync } from "./plaid.js";
+import {
+  autoMatchAccounts,
+  applyBalanceSync,
+  filterTransactionsForConnection,
+  materializeManualFallbackForConnections,
+} from "./plaid.js";
 
 beforeEach(() => {
   vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -102,5 +107,114 @@ describe("Plaid sync fallback", () => {
     expect(updatedCards[0]._plaidLimit).toBe(1000);
     expect(updatedCards[0].limit).toBe(1000);
     expect(connection.accounts[0].linkedCardId).toBe("card_1");
+  });
+});
+
+describe("Plaid transaction filtering", () => {
+  it("keeps only transactions for the requested connection accounts", () => {
+    const connection = {
+      id: "item_1",
+      institutionName: "American Express",
+      accounts: [
+        { plaidAccountId: "acct_amex_1" },
+        { plaidAccountId: "acct_amex_2" },
+      ],
+    };
+
+    const transactions = [
+      { transaction_id: "txn_1", account_id: "acct_amex_1", amount: 10 },
+      { transaction_id: "txn_2", account_id: "acct_amex_2", amount: 20 },
+      { transaction_id: "txn_3", account_id: "acct_chase_1", amount: 30 },
+      { transaction_id: "txn_4", account_id: null, amount: 40 },
+    ];
+
+    expect(filterTransactionsForConnection(transactions, connection)).toEqual([
+      { transaction_id: "txn_1", account_id: "acct_amex_1", amount: 10 },
+      { transaction_id: "txn_2", account_id: "acct_amex_2", amount: 20 },
+    ]);
+  });
+});
+
+describe("Plaid manual fallback", () => {
+  it("promotes lost card balances into editable manual fields while preserving link metadata", () => {
+    const { updatedCards, updatedBankAccounts, changed } = materializeManualFallbackForConnections(
+      [
+        {
+          id: "card_1",
+          institution: "Chase",
+          name: "Sapphire Preferred",
+          balance: null,
+          limit: 5000,
+          _plaidConnectionId: "item_1",
+          _plaidAccountId: "acct_card_1",
+          _plaidBalance: 321.45,
+          _plaidAvailable: 4678.55,
+          _plaidLimit: 7000,
+        },
+      ],
+      [
+        {
+          id: "bank_1",
+          bank: "Ally",
+          accountType: "checking",
+          name: "Checking",
+          balance: null,
+          _plaidConnectionId: "item_1",
+          _plaidAccountId: "acct_bank_1",
+          _plaidBalance: 1000,
+          _plaidAvailable: 975,
+        },
+      ],
+      ["item_1"],
+      { keepLinkMetadata: true }
+    );
+
+    expect(changed).toBe(true);
+    expect(updatedCards[0]).toMatchObject({
+      balance: 321.45,
+      limit: 7000,
+      _plaidBalance: null,
+      _plaidAvailable: null,
+      _plaidLimit: null,
+      _plaidManualFallback: true,
+      _plaidConnectionId: "item_1",
+      _plaidAccountId: "acct_card_1",
+    });
+    expect(updatedBankAccounts[0]).toMatchObject({
+      balance: 975,
+      _plaidBalance: null,
+      _plaidAvailable: null,
+      _plaidManualFallback: true,
+      _plaidConnectionId: "item_1",
+      _plaidAccountId: "acct_bank_1",
+    });
+  });
+
+  it("can fully detach link metadata when a connection is intentionally released", () => {
+    const { updatedCards, changed } = materializeManualFallbackForConnections(
+      [
+        {
+          id: "card_1",
+          institution: "Chase",
+          name: "Freedom",
+          balance: null,
+          _plaidConnectionId: "item_1",
+          _plaidAccountId: "acct_card_1",
+          _plaidBalance: 88.5,
+        },
+      ],
+      [],
+      ["item_1"],
+      { keepLinkMetadata: false }
+    );
+
+    expect(changed).toBe(true);
+    expect(updatedCards[0]).toMatchObject({
+      balance: 88.5,
+      _plaidBalance: null,
+      _plaidManualFallback: true,
+    });
+    expect(updatedCards[0]._plaidConnectionId).toBeUndefined();
+    expect(updatedCards[0]._plaidAccountId).toBeUndefined();
   });
 });

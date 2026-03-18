@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { Capacitor } from "@capacitor/core";
 
 vi.mock("./logger.js", () => ({
   log: {
@@ -24,7 +25,7 @@ vi.mock("./fetchWithRetry.js", () => ({
   fetchWithRetry: vi.fn(),
 }));
 
-import { fetchGatingConfig, streamAudit } from "./api.js";
+import { fetchGatingConfig, getBackendUrl, streamAudit } from "./api.js";
 
 function makeStreamingResponse(reader) {
   return {
@@ -142,8 +143,17 @@ describe("backend URL selection", () => {
 
     expect(config).toEqual({ gatingMode: "soft", minVersion: "2.0.0" });
     expect(fetchSpy).toHaveBeenCalledWith(
-      "https://catalyst-cash-api.portfoliopro-app.workers.dev/config",
+      "https://catalystcash-api.portfoliopro-app.workers.dev/config",
       expect.objectContaining({ method: "GET" })
     );
+  });
+
+  it("uses the workers hostname on native builds", () => {
+    vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
+    vi.stubGlobal("window", {
+      location: { hostname: "catalystcash.app" },
+    });
+
+    expect(getBackendUrl()).toBe("https://catalystcash-api.portfoliopro-app.workers.dev");
   });
 });

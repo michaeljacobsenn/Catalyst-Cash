@@ -14,31 +14,29 @@ import { streamAudit } from "../api.js";
 import {
   analyzeChatInputRisk,
   buildDeterministicChatFallback,
-    buildPromptInjectionRefusal,
-    normalizeChatAssistantOutput,
-  } from "../chatSafety.js";
-  import { T } from "../constants.js";
-  import { useNavigation } from "../contexts/NavigationContext.js";
-  import { decryptAtRestDetailed,encryptAtRest,isEncrypted } from "../crypto.js";
-  import { evaluateChatDecisionRules } from "../decisionRules.js";
-  import { generateStrategy,mergeSnapshotDebts } from "../engine.js";
-  import { haptic } from "../haptics.js";
-  import { AlertTriangle,ArrowDown,ArrowUpRight,Sparkles,Trash2 } from "../icons";
-  import { log } from "../logger.js";
-  import { addFacts,extractMemoryTags,getMemoryBlock,loadMemory } from "../memory.js";
-  import { isLikelyNetworkError,toUserFacingRequestError } from "../networkErrors.js";
-  import { getBackendProvider } from "../providers.js";
-  import { checkChatQuota,isGatingEnforced,recordChatUsage,shouldShowGating } from "../subscription.js";
-  import { useToast } from "../Toast.js";
-  import { Skeleton as UISkeleton } from "../ui.js";
-  import { db } from "../utils.js";
-  import ProBanner from "./ProBanner.js";
+  buildPromptInjectionRefusal,
+  normalizeChatAssistantOutput,
+} from "../chatSafety.js";
+import { useNavigation } from "../contexts/NavigationContext.js";
+import { T } from "../constants.js";
+import { evaluateChatDecisionRules } from "../decisionRules.js";
+import { generateStrategy, mergeSnapshotDebts } from "../engine.js";
+import { haptic } from "../haptics.js";
+import { AlertTriangle, ArrowDown, ArrowUpRight, Sparkles, Trash2 } from "../icons";
+import { log } from "../logger.js";
+import { extractMemoryTags } from "../memory.js";
+import { isLikelyNetworkError, toUserFacingRequestError } from "../networkErrors.js";
+import { checkChatQuota, isGatingEnforced, recordChatUsage, shouldShowGating } from "../subscription.js";
+import { useToast } from "../Toast.js";
+import { Skeleton as UISkeleton } from "../ui.js";
+import { db } from "../utils.js";
+import ProBanner from "./ProBanner.js";
+import { CHAT_STORAGE_KEY, ChatMarkdown, createChatMessage, getRandomSuggestions, stripThoughtProcess } from "./aiChat/helpers";
+import { useAIChatPersistence } from "./aiChat/useAIChatPersistence";
 const LazyProPaywall = React.lazy(() => import("./ProPaywall.js"));
 
   import type {
-    AiMemory,
     AskAiNegotiationPayload,
-    AtRestEncryptedPayload,
     AuditRecord,
     ChatHistoryMessage,
     ChatQuotaState,
@@ -56,30 +54,12 @@ const LazyProPaywall = React.lazy(() => import("./ProPaywall.js"));
 // full financial profile. Streams responses in real-time.
 // ═══════════════════════════════════════════════════════════════
 
-const CHAT_STORAGE_KEY = "ai-chat-history";
-const CHAT_SUMMARY_KEY = "ai-chat-summary"; // Cross-session conversation memory
-const MAX_MESSAGES = 50; // Rolling window — reduced for privacy
-const MAX_CONTEXT_MESSAGES = 12; // How many prior messages to send to the AI
-const CONTEXT_SUMMARIZE_THRESHOLD = 8; // When history exceeds this, summarize older messages
-const MESSAGE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours — auto-expire
-const SUMMARY_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — summary memory window
-
 interface AIChatTabProps {
   proEnabled?: boolean;
   initialPrompt?: string | null;
   clearInitialPrompt?: (() => void) | null;
   onBack?: (() => void) | null;
   embedded?: boolean;
-}
-
-interface Suggestion {
-  emoji: string;
-  text: string;
-}
-
-interface SessionSummaryRecord {
-  text: string;
-  ts?: number;
 }
 
 interface NavigationState {
@@ -94,11 +74,6 @@ interface NavigationApi {
 
 interface SecurityApi {
   privacyMode: boolean;
-}
-
-interface ChatMarkdownProps {
-  text: string;
-  isStreaming: boolean;
 }
 
 interface ProBannerProps {
@@ -159,185 +134,6 @@ const streamAuditTyped = streamAudit as (
   isChat?: boolean
 ) => AsyncGenerator<string, void, unknown>;
 
-// ── PII Scrubber — strips sensitive patterns before persisting ──
-const PII_PATTERNS = [
-  /\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b/g, // Credit card numbers
-  /\b\d{3}[- ]?\d{2}[- ]?\d{4}\b/g, // SSN
-  /\b\d{9}\b/g, // Routing / account numbers (9 digits)
-  /\b\d{10,17}\b/g, // Long account numbers
-];
-function scrubPII(text: string | null | undefined): string {
-  if (!text || typeof text !== "string") return "";
-  let clean = text;
-  for (const pattern of PII_PATTERNS) {
-    clean = clean.replace(pattern, (match: string) => {
-      // Keep last 4 digits for context, mask the rest
-      if (match.length >= 8) return "•".repeat(match.length - 4) + match.slice(-4);
-      return "•".repeat(match.length);
-    });
-  }
-  return clean;
-}
-
-// ── Prune expired messages ──
-function pruneExpired(msgs: ChatHistoryMessage[]): ChatHistoryMessage[] {
-  const cutoff = Date.now() - MESSAGE_TTL_MS;
-  return msgs.filter(m => (m.ts || 0) > cutoff);
-}
-
-function createChatMessage(role: ChatHistoryMessage["role"], content: string, ts = Date.now()): ChatHistoryMessage {
-  return { role, content, ts };
-}
-
-// Suggested quick questions — rotated randomly
-const SUGGESTIONS: Suggestion[] = [
-  { emoji: "💰", text: "Can I afford a $500 purchase this week?" },
-  { emoji: "💳", text: "Which credit card should I pay off first?" },
-  { emoji: "📊", text: "How am I trending compared to last month?" },
-  { emoji: "🏦", text: "Am I on track to hit my savings goals?" },
-  { emoji: "🔥", text: "What's my biggest financial risk right now?" },
-  { emoji: "📉", text: "When will I be debt-free at my current pace?" },
-  { emoji: "💡", text: "Give me 3 quick wins to improve my score" },
-  { emoji: "🎯", text: "Am I safe until my next paycheck?" },
-  { emoji: "🍔", text: "How much did I spend on dining out this month?" },
-  { emoji: "📋", text: "Are there any subscriptions I should cancel?" },
-  { emoji: "📈", text: "What's my current net worth?" },
-  { emoji: "💸", text: "Where did my money go last week?" },
-  { emoji: "🚗", text: "Can I comfortably afford a car payment right now?" },
-  { emoji: "🏠", text: "How much should I be saving for a house down payment?" },
-  { emoji: "✈️", text: "Am I saving enough for my upcoming vacation?" },
-  { emoji: "🛍️", text: "Did I overspend on shopping recently?" },
-];
-
-// Get 4 random suggestions from the pool
-function getRandomSuggestions(): Suggestion[] {
-  const shuffled = [...SUGGESTIONS].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, 4);
-}
-
-// ── Markdown-lite renderer for chat bubbles ──
-// Handles partial streaming gracefully by avoiding broken markdown
-function ChatMarkdown({ text, isStreaming: live }: ChatMarkdownProps) {
-  if (!text) return null;
-  const lines = text.trim().split("\n");
-
-  return (
-    <div>
-      {lines.map((line, i) => {
-        // During streaming, the last line may have incomplete markdown
-        // — render it raw so partial **bold** doesn't flicker
-        const isLastLine = i === lines.length - 1;
-
-        // Heading lines (##, ###) — strip markdown markers
-        if (/^#{1,3}\s+/.test(line)) {
-          const content = line.replace(/^#{1,3}\s+/, "");
-          return (
-            <div
-              key={i}
-              style={{
-                fontSize: 14,
-                fontWeight: 800,
-                color: T.text.primary,
-                marginTop: i > 0 ? 10 : 0,
-                marginBottom: 4,
-                letterSpacing: "-0.01em",
-              }}
-            >
-              {content}
-            </div>
-          );
-        }
-
-        // Bullet points
-        if (/^\s*[-•*]\s+/.test(line)) {
-          const content = line.replace(/^\s*[-•*]\s+/, "");
-          return (
-            <div key={i} style={{ display: "flex", gap: 8, marginBottom: 4, paddingLeft: 4 }}>
-              <span style={{ color: T.accent.primary, fontWeight: 700, flexShrink: 0 }}>•</span>
-              <span>{live && isLastLine ? content : renderInline(content)}</span>
-            </div>
-          );
-        }
-
-        // Numbered lists
-        if (/^\s*\d+[.)]\s+/.test(line)) {
-          const num = line.match(/^\s*(\d+)/)?.[1];
-          const content = line.replace(/^\s*\d+[.)]\s+/, "");
-          return (
-            <div key={i} style={{ display: "flex", gap: 8, marginBottom: 4, paddingLeft: 4 }}>
-              <span
-                style={{
-                  color: T.accent.primary,
-                  fontWeight: 700,
-                  flexShrink: 0,
-                  fontFamily: T.font.mono,
-                  fontSize: 11,
-                }}
-              >
-                {num}.
-              </span>
-              <span>{live && isLastLine ? content : renderInline(content)}</span>
-            </div>
-          );
-        }
-
-        // Empty lines = spacing
-        if (!line.trim()) return <div key={i} style={{ height: 8 }} />;
-
-        // Regular text
-        return (
-          <p key={i} style={{ margin: "0 0 4px 0" }}>
-            {live && isLastLine ? line : renderInline(line)}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
-
-function renderInline(text: string): ReactNode[] {
-  // Bold **text** and `code`
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
-  return parts.map((p, j) => {
-    if (p.startsWith("**") && p.endsWith("**")) {
-      return (
-        <strong key={j} style={{ color: T.text.primary, fontWeight: 700 }}>
-          {p.slice(2, -2)}
-        </strong>
-      );
-    }
-    if (p.startsWith("`") && p.endsWith("`")) {
-      return (
-        <code
-          key={j}
-          style={{
-            fontFamily: T.font.mono,
-            fontSize: 11,
-            color: T.accent.primary,
-            background: T.accent.primaryDim,
-            padding: "2px 6px",
-            borderRadius: 4,
-          }}
-        >
-          {p.slice(1, -1)}
-        </code>
-      );
-    }
-    return <span key={j}>{p}</span>;
-  });
-}
-
-// ── Strip internal <thought_process> blocks from AI output ──
-function stripThoughtProcess(text: string): string {
-  if (!text) return text;
-  // Remove complete <thought_process>...</thought_process> blocks (including multiline)
-  let cleaned = text.replace(/<thought_process>[\s\S]*?<\/thought_process>/gi, "");
-  // If an opening tag exists but is not yet closed (still streaming), hide everything from it onward
-  const openIdx = cleaned.search(/<thought_process>/i);
-  if (openIdx !== -1) cleaned = cleaned.slice(0, openIdx);
-  return cleaned.trimStart();
-}
-
 // ── Typing indicator (accessible) ──
 
 export default memo(function AIChatTab({
@@ -356,15 +152,12 @@ export default memo(function AIChatTab({
   const { navState, clearNavState, registerChatStreamAbort } = useNavigation() as NavigationApi;
   const toast = useToast() as { error?: (message: string) => void } | undefined;
 
-  const [messages, setMessages] = useState<ChatHistoryMessage[]>([]);
   const [input, setInput] = useState<string>("");
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [showScrollDown, setShowScrollDown] = useState<boolean>(false);
   const [chatQuota, setChatQuota] = useState<ChatQuotaState>({ allowed: true, remaining: Infinity, limit: Infinity, used: 0 });
   const [inputFocused, setInputFocused] = useState<boolean>(false);
-  const [sessionSummary, setSessionSummary] = useState<string | null>(null);
-  const [memoryData, setMemoryData] = useState<AiMemory | null>(null);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
 
   const suggestionsScrollRef = useRef<HTMLDivElement | null>(null);
@@ -392,6 +185,19 @@ export default memo(function AIChatTab({
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const initialPromptSent = useRef<boolean>(false);
   const lastUserMsgRef = useRef<string | null>(null);
+  const {
+    messages,
+    setMessages,
+    memoryData,
+    persistMessages,
+    buildAPIMessages,
+    rememberFacts,
+    getMemoryBlock,
+  } = useAIChatPersistence({
+    privacyMode,
+    aiProvider,
+    aiModel,
+  });
 
   const chatStrategy = useMemo<Record<string, unknown> | null>(() => {
     if (!current?.form || !financialConfig) return null;
@@ -418,47 +224,6 @@ export default memo(function AIChatTab({
     }
   }, [current, financialConfig, cards, renewals]);
 
-  // ── Load messages + session summary from DB ──
-  useEffect(() => {
-    void (async () => {
-      if (privacyMode) return;
-      let saved = (await db.get(CHAT_STORAGE_KEY)) as ChatHistoryMessage[] | AtRestEncryptedPayload | null;
-      // Decrypt if stored encrypted
-      if (isEncrypted(saved)) {
-        try {
-          const decrypted = await decryptAtRestDetailed(saved as AtRestEncryptedPayload, db);
-          saved = decrypted.data as ChatHistoryMessage[] | null;
-          if (decrypted.usedLegacyKey && Array.isArray(saved)) {
-            const migrated = await encryptAtRest(saved, db).catch(() => saved);
-            await db.set(CHAT_STORAGE_KEY, migrated);
-          }
-        } catch {
-          saved = null; // Decryption failed — start fresh
-        }
-      }
-      if (Array.isArray(saved) && saved.length) {
-        const fresh = pruneExpired(saved);
-        setMessages(fresh);
-        if (fresh.length !== saved.length) {
-          // Re-encrypt pruned messages
-          const encrypted = await encryptAtRest(fresh, db).catch(() => fresh);
-          db.set(CHAT_STORAGE_KEY, encrypted);
-        }
-      }
-      // Load prior session summary for cross-session memory
-      const summary = (await db.get(CHAT_SUMMARY_KEY)) as SessionSummaryRecord | null;
-      if (summary?.text && Date.now() - (summary.ts || 0) < SUMMARY_TTL_MS) {
-        setSessionSummary(summary.text);
-      } else if (summary) {
-        db.del(CHAT_SUMMARY_KEY); // Expired
-      }
-      // Load persistent AI memory
-      loadMemory()
-        .then((memory: AiMemory) => setMemoryData(memory))
-        .catch(() => { });
-    })();
-  }, [privacyMode]);
-
   // ── Refresh chat quota on mount and periodically ──
   useEffect(() => {
     const refreshQuota = async () => {
@@ -467,36 +232,6 @@ export default memo(function AIChatTab({
     };
     refreshQuota();
   }, [messages.length]);
-
-  // ── Persist messages (with PII scrubbing + encryption + privacy guard) ──
-  const persistMessages = useCallback(
-    async (msgs: ChatHistoryMessage[]): Promise<void> => {
-      if (privacyMode) return;
-      const trimmed = msgs.slice(-MAX_MESSAGES);
-      const scrubbed: ChatHistoryMessage[] = trimmed.map((message: ChatHistoryMessage) => ({
-        ...message,
-        content: scrubPII(message.content),
-      }));
-      // Encrypt at rest before storing
-      const payload = await encryptAtRest(scrubbed, db).catch(() => scrubbed);
-      db.set(CHAT_STORAGE_KEY, payload);
-
-      // Save session summary for cross-session memory (compact topic extraction)
-      if (trimmed.length >= CONTEXT_SUMMARIZE_THRESHOLD) {
-        const topics = trimmed
-          .filter((message: ChatHistoryMessage) => message.role === "user")
-          .slice(-6)
-          .map((message: ChatHistoryMessage) =>
-            message.content.length > 80 ? message.content.slice(0, 77) + "..." : message.content
-          )
-          .join(" | ");
-        if (topics) {
-          db.set(CHAT_SUMMARY_KEY, { text: `Prior session topics: ${topics}`, ts: Date.now() });
-        }
-      }
-    },
-    [privacyMode]
-  );
 
   // ── Auto-scroll to bottom ──
   const scrollToBottom = useCallback((smooth = true): void => {
@@ -516,74 +251,6 @@ export default memo(function AIChatTab({
     const { scrollTop, scrollHeight, clientHeight } = currentScroll;
     setShowScrollDown(scrollHeight - scrollTop - clientHeight > 120);
   }, []);
-
-  // ── Build API messages for context (with sliding window + summarization) ──
-  const buildAPIMessages = useCallback(
-    (msgs: ChatHistoryMessage[]): ChatHistoryMessage[] | GeminiHistoryMessage[] => {
-      const allValid = msgs.filter((message: ChatHistoryMessage) => message.content && message.content.trim().length > 0);
-
-      // Prepend cross-session memory if available and this is a fresh conversation
-      let withMemory = allValid;
-      if (sessionSummary && allValid.length <= 2) {
-        withMemory = [
-          createChatMessage("user", `[Context from prior sessions] ${sessionSummary}`),
-          createChatMessage("assistant", "Got it — I remember our previous discussions. How can I help today?"),
-          ...allValid,
-        ];
-      }
-
-      let contextMsgs: ChatHistoryMessage[];
-      if (withMemory.length > CONTEXT_SUMMARIZE_THRESHOLD) {
-        const oldMsgs = withMemory.slice(0, -CONTEXT_SUMMARIZE_THRESHOLD);
-        const recentMsgs = withMemory.slice(-CONTEXT_SUMMARIZE_THRESHOLD);
-
-        const summaryParts: string[] = [];
-        for (const message of oldMsgs) {
-          const role = message.role === "user" ? "User" : "CFO";
-          const content = message.content.length > 150 ? message.content.slice(0, 147) + "..." : message.content;
-          summaryParts.push(`${role}: ${content}`);
-        }
-        const summaryText = `[Earlier conversation summary — ${oldMsgs.length} messages]\n${summaryParts.join("\n")}`;
-
-        contextMsgs = [
-          createChatMessage("user", summaryText),
-          createChatMessage("assistant", "Understood, I have the conversation context. Continuing from where we left off."),
-          ...recentMsgs,
-        ];
-      } else {
-        contextMsgs = withMemory.slice(-MAX_CONTEXT_MESSAGES);
-      }
-
-      const isGemini =
-        aiProvider === "gemini" || (aiProvider === "backend" && getBackendProvider(aiModel) === "gemini");
-
-      if (isGemini) {
-        // Gemini uses { role, parts: [{ text }] } format
-        // Gemini also requires alternating user/model turns — merge consecutive same-role messages
-        const merged: GeminiHistoryMessage[] = [];
-        for (const message of contextMsgs) {
-          const role = message.role === "assistant" ? "model" : "user";
-          const last = merged[merged.length - 1];
-          if (last && last.role === role) {
-            // Merge into previous turn
-            last.parts[0].text += "\n" + message.content;
-          } else {
-            merged.push({ role, parts: [{ text: message.content }] });
-          }
-        }
-        // Gemini requires the last message to be from "user"
-        const lastMerged = merged[merged.length - 1];
-        if (lastMerged && lastMerged.role === "model") {
-          merged.pop();
-        }
-        return merged;
-      }
-
-      // OpenAI + Claude + Backend use { role, content } format
-      return contextMsgs.map((message: ChatHistoryMessage) => ({ role: message.role, content: message.content }));
-    },
-    [aiProvider, aiModel, sessionSummary]
-  );
 
   // ── Send message ──
   const sendMessage = useCallback(
@@ -640,7 +307,7 @@ export default memo(function AIChatTab({
       isStreamingRef.current = true;
       haptic.light();
 
-      const memBlock = memoryData ? getMemoryBlock(memoryData) : "";
+      const memBlock = getMemoryBlock();
       const promptContext = {
         variant: extraPromptContext?.variant || "default",
         current,
@@ -713,11 +380,7 @@ export default memo(function AIChatTab({
           void persistMessages(finalMsgs);
           // Persist any new facts the AI learned
           if (normalizedResponse.valid && newFacts.length > 0) {
-            addFacts(newFacts)
-              .then((memory: AiMemory | undefined) => {
-                if (memory) setMemoryData(memory);
-              })
-              .catch(() => { });
+            void rememberFacts(newFacts);
           }
           if (normalizedResponse.valid) {
             // Record usage after successful response
@@ -784,8 +447,10 @@ export default memo(function AIChatTab({
       aiProvider,
       aiModel,
       buildAPIMessages,
+      getMemoryBlock,
       persistMessages,
       chatQuota,
+      rememberFacts,
       toast,
     ]
   );

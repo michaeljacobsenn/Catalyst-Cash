@@ -1,10 +1,12 @@
 import { normalizeAppError } from "./appErrors.js";
+import { getBackendUrl } from "./api.js";
 import { decrypt, encrypt } from "./crypto.js";
+import { buildIdentityHeaders } from "./identitySession.js";
 import { log } from "./logger.js";
 import { isSecuritySensitiveKey, sanitizePlaidForBackup } from "./securityKeys.js";
 import { db } from "./utils.js";
 
-const WORKER_URL = "https://api.catalystcash.app/api/household/sync";
+const WORKER_URL = () => `${getBackendUrl()}/api/household/sync`;
 const HOUSEHOLD_SYNC_VERSION_KEY = "household-sync-version";
 const HOUSEHOLD_LAST_SYNC_TS_KEY = "household-last-sync-ts";
 const HOUSEHOLD_SYNC_EXCLUDED_KEYS = new Set([
@@ -88,9 +90,9 @@ async function collectSyncPayload() {
 }
 
 async function postHouseholdRequest(body) {
-  const response = await fetch(WORKER_URL, {
+  const response = await fetch(WORKER_URL(), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await buildIdentityHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   }).catch(() => null);
 

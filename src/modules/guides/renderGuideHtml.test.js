@@ -1,0 +1,25 @@
+import { describe, expect, it } from "vitest";
+
+import { renderGuideHtml } from "./renderGuideHtml.js";
+
+describe("renderGuideHtml", () => {
+  it("renders the free guide with current limits and upgrade CTA", () => {
+    const html = renderGuideHtml("free");
+
+    expect(html).toContain("2 audits / week");
+    expect(html).toContain("10 AskAI / day");
+    expect(html).toContain("1 Plaid institution");
+    expect(html).toContain("See what Pro adds");
+    expect(html).toContain("Catalyst AI");
+  });
+
+  it("renders the pro guide with current limits and pricing", () => {
+    const html = renderGuideHtml("pro");
+
+    expect(html).toContain("20 audits / month");
+    expect(html).toContain("25 AskAI / day");
+    expect(html).toContain("Up to 6 Plaid institutions");
+    expect(html).toContain("$89.99/yr");
+    expect(html).toContain("Catalyst AI CFO + Boardroom");
+  });
+});

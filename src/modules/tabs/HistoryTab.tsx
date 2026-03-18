@@ -14,7 +14,8 @@
   import { Calendar,CheckCircle,Download,Edit3,Filter,Plus,Trash2,type LucideIcon } from "../icons";
   import { shouldShowGating } from "../subscription.js";
   import { Badge as UIBadge,Card as UICard } from "../ui.js";
-  import { exportAllAudits,exportAudit,exportAuditCSV,exportSelectedAudits,fmt,fmtDate } from "../utils.js";
+  import { exportAllAudits,exportAuditCSV,exportSelectedAudits,fmt,fmtDate } from "../utils.js";
+  import AuditExportSheet from "./AuditExportSheet.js";
   import ProBannerBase from "./ProBanner.js";
 
   import type { AuditFormDebt,AuditFormInvestment,AuditRecord } from "../../types/index.js";
@@ -163,6 +164,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false }: HistoryTa
   const [manualPasteText, setManualPasteText] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<AuditStatusFilter>(null);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
+  const [exportAuditRecord, setExportAuditRecord] = useState<AuditRecord | null>(null);
 
   const filteredAudits = statusFilter ? audits.filter((audit) => getAuditColor(audit) === statusFilter) : audits;
   const allSel = sel.size === filteredAudits.length && filteredAudits.length > 0;
@@ -202,6 +204,9 @@ export default memo(function HistoryTab({ toast, proEnabled = false }: HistoryTa
           <Suspense fallback={null}>
             <TypedLazyProPaywall onClose={() => setShowPaywall(false)} />
           </Suspense>
+        )}
+        {exportAuditRecord && (
+          <AuditExportSheet audit={exportAuditRecord} onClose={() => setExportAuditRecord(null)} toast={toast} />
         )}
         <div
           style={{
@@ -730,7 +735,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false }: HistoryTa
                               <button
                                 onClick={(event: MouseEvent<HTMLButtonElement>) => {
                                   event.stopPropagation();
-                                  exportAudit(audit);
+                                  setExportAuditRecord(audit);
                                 }}
                                 style={{
                                   width: 32,

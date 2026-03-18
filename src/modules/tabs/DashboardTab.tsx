@@ -1,5 +1,4 @@
-  import { lazy,memo,Suspense,useEffect,useRef,useState,type CSSProperties,type ReactNode } from "react";
-  import Confetti from "react-confetti";
+  import { lazy,memo,Suspense,useCallback,useEffect,useState,type CSSProperties,type ReactNode } from "react";
   import { T } from "../constants.js";
   import {
     AlertTriangle,
@@ -8,7 +7,6 @@
     CalendarClock,
     CheckCircle,
     ChevronRight,
-    CloudUpload,
     MessageCircle,
     ReceiptText,
     RefreshCw,
@@ -17,17 +15,19 @@
     Zap,
   } from "../icons";
 
-  import { uploadToICloud } from "../cloudSync.js";
   import { Md } from "../components.js";
   import { useSecurity } from "../contexts/SecurityContext.js";
   import { haptic } from "../haptics.js";
   import { isGatingEnforced,shouldShowGating } from "../subscription.js";
-  import { getTracking,Card as UICard } from "../ui.js";
+  import { buildPromoLine } from "../planCatalog.js";
+  import { Card as UICard } from "../ui.js";
   import { usePlaidSync } from "../usePlaidSync.js";
   import { db,fmt,stripPaycheckParens } from "../utils.js";
   import "./DashboardTab.css";
   import ProBanner from "./ProBanner.js";
   import EmptyDashboard from "../dashboard/EmptyDashboard.js";
+  import { DashboardTopChrome } from "../dashboard/DashboardTopChrome.js";
+  import { useDashboardChrome } from "../dashboard/useDashboardChrome.js";
 
   import type { CatalystCashConfig,HealthScore } from "../../types/index.js";
   import { useAudit } from "../contexts/AuditContext.js";
@@ -38,11 +38,11 @@
 
 // ── Extracted dashboard components ──
   import AlertStrip from "../dashboard/AlertStrip.js";
-  import HealthGauge from "../dashboard/HealthGauge.js";
   import useDashboardData from "../dashboard/useDashboardData.js";
 
 let _autoSyncDone = false; // Survives component remounts — only auto-sync once per app session
 const LazyProPaywall = lazy(() => import("./ProPaywall.js"));
+const LazyConfetti = lazy(() => import("react-confetti"));
 
 interface DashboardSectionProps {
   children: ReactNode;
@@ -57,16 +57,6 @@ interface DashboardTabProps {
   onRefreshDashboard?: () => void;
   onViewTransactions?: () => void;
   onDiscussWithCFO?: (prompt: string) => void;
-}
-
-interface WindowSize {
-  width: number;
-  height: number;
-}
-
-interface StreakMilestone {
-  emoji: string;
-  label: string;
 }
 
 interface SetupStep {
@@ -84,14 +74,6 @@ interface CompactMetric {
   value: number;
   color: string;
 }
-
-interface BackupEnvelope {
-  app: string;
-  version: string;
-  exportedAt: string;
-  data: Record<string, unknown>;
-}
-
 
 interface DashboardCardProps {
   children?: ReactNode;
@@ -168,119 +150,42 @@ export default memo(function DashboardTab({
     safetySnapshot,
     portfolioMetrics,
   } = useDashboardData();
-
-  // Confetti
-  const [runConfetti, setRunConfetti] = useState(false);
-  const [windowSize, setWindowSize] = useState<WindowSize>({ width: window.innerWidth, height: window.innerHeight });
-  const prevCurrentTs = useRef<string | undefined>(current?.ts);
-
-  useEffect(() => {
-    const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  // ── Streak milestone celebration ──
-  const STREAK_MILESTONES: Record<number, StreakMilestone> = {
-    4: { emoji: "🔥", label: "1 Month Strong!" },
-    8: { emoji: "💪", label: "2 Months of Consistency!" },
-    12: { emoji: "🏆", label: "Quarter Master!" },
-    26: { emoji: "⚡", label: "Half-Year Hero!" },
-    52: { emoji: "👑", label: "Full Year. Legend." },
-  };
-  const streakMilestoneChecked = useRef(false);
-
-  useEffect(() => {
-    if (current?.ts !== prevCurrentTs.current) {
-      prevCurrentTs.current = current?.ts;
-      const latestScore = current?.parsed?.healthScore?.score;
-      if ((latestScore ?? 0) >= 95 && !current?.isTest) {
-        setRunConfetti(true);
-        setTimeout(() => setRunConfetti(false), 8000);
-      }
-    }
-  }, [current]);
-
-  useEffect(() => {
-    if (streakMilestoneChecked.current || !streak) return;
-    streakMilestoneChecked.current = true;
-    const m = STREAK_MILESTONES[streak];
-    if (m) {
-      (async () => {
-        const key = `streak-milestone-${streak}`;
-        const seen = await db.get(key);
-        if (!seen) {
-          await db.set(key, true);
-          setRunConfetti(true);
-          setTimeout(() => setRunConfetti(false), 6000);
-          window.toast?.success?.(`${m.emoji} W${streak}: ${m.label}`);
-        }
-      })();
-    }
-  }, [streak]);
-
-  // ── Backup nudge logic ──
-  const [showBackupNudge, setShowBackupNudge] = useState(false);
-  const [backingUp, setBackingUp] = useState(false);
-  useEffect(() => {
-    if (autoBackupInterval && autoBackupInterval !== "off") return; // auto-backup is on, no nudge needed
-    (async () => {
-      const dismissed = (await db.get("backup-nudge-dismissed")) as number | null;
-      if (dismissed && Date.now() - dismissed < 7 * 86400000) return; // dismissed within 7 days
-      const lastTs = (await db.get("last-backup-ts")) as number | null;
-      if (!lastTs || Date.now() - lastTs > 7 * 86400000) {
-        setShowBackupNudge(true);
-      }
-    })();
-  }, [autoBackupInterval]);
-
-  const handleBackupNow = async () => {
-    setBackingUp(true);
-    try {
-      const backup: BackupEnvelope = { app: "Catalyst Cash", version: "2.0", exportedAt: new Date().toISOString(), data: {} };
+  const handleNativeBackup = useCallback(
+    async (passcode: string | null) => {
+      const backup = { app: "Catalyst Cash", version: "2.0", exportedAt: new Date().toISOString(), data: {} as Record<string, unknown> };
       const keys = (await db.keys()) as string[];
       for (const key of keys) {
         if (isSecuritySensitiveKey(key)) continue;
         const val = await db.get(key);
         if (val !== null) backup.data[key] = val;
       }
-      // Include sanitized Plaid metadata for reconnect deduplication
       const plaidConns = await db.get("plaid-connections");
       if (Array.isArray(plaidConns) && plaidConns.length > 0) {
         backup.data["plaid-connections-sanitized"] = sanitizePlaidForBackup(plaidConns);
       }
-      const success = await uploadToICloud(backup, appPasscode || null);
+      const { uploadToICloud } = await import("../cloudSync.js");
+      const success = await uploadToICloud(backup, passcode);
       if (!success) {
-        window.toast?.error?.("Automatic iCloud backup is available in the native iPhone app only.");
-        return;
+        throw new Error("Automatic iCloud backup is available in the native iPhone app only.");
       }
-      await db.set("last-backup-ts", Date.now());
-      setShowBackupNudge(false);
-      window.toast?.success?.("✅ Backed up to iCloud");
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      window.toast?.error?.("Backup failed: " + message);
-    }
-    setBackingUp(false);
-  };
-
-  const dismissBackupNudge = async () => {
-    await db.set("backup-nudge-dismissed", Date.now());
-    setShowBackupNudge(false);
-  };
-
-  // ── Welcome-back greeting ──
-  const greeting = (() => {
-    const hour = new Date().getHours();
-    const timeGreet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-    // Check days since last audit
-    if (current?.date) {
-      const daysSince = Math.floor((Date.now() - new Date(current.date).getTime()) / 86400000);
-      if (daysSince >= 7) return `Welcome back! It's been ${daysSince} days — let's catch up.`;
-    }
-    if (streak > 1) return `${timeGreet}. W${streak} streak going strong 🔥`;
-    return `${timeGreet}. Let's check your numbers.`;
-  })();
+    },
+    []
+  );
+  const {
+    greeting,
+    runConfetti,
+    windowSize,
+    showBackupNudge,
+    backingUp,
+    handleBackupNow,
+    dismissBackupNudge,
+  } = useDashboardChrome({
+    current,
+    streak,
+    autoBackupInterval,
+    appPasscode,
+    onNativeBackup: handleNativeBackup,
+  });
 
   // ── Setup Checklist ──
   const hasCards = cards.length > 0;
@@ -366,125 +271,25 @@ export default memo(function DashboardTab({
     return (
       <div className="page-body stagger-container" aria-live="polite" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
         <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
-          {runConfetti && (
-            <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, pointerEvents: "none" }}>
-              <Confetti
-                width={windowSize.width}
-                height={windowSize.height}
-                recycle={false}
-                numberOfPieces={400}
-                gravity={0.15}
-              />
-            </div>
-          )}
-
-          <div style={{ paddingTop: 16, paddingBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <div>
-              <h1 style={{ fontSize: 22, fontWeight: 900, letterSpacing: getTracking(22, "bold"), margin: 0 }}>Dashboard</h1>
-              <p style={{ fontSize: 11, color: T.text.dim, margin: "2px 0 0", fontWeight: 500, letterSpacing: "0.01em" }}>{greeting}</p>
-            </div>
-            {streak > 1 && (
-              <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: `${T.accent.emerald}12`, border: `1px solid ${T.status.green}25`, flexShrink: 0 }}>
-                <span style={{ fontSize: 12 }}>🔥</span>
-                <span style={{ fontSize: 10, fontWeight: 800, color: T.status.green, fontFamily: T.font.mono }}>W{streak}</span>
-              </div>
-            )}
-          </div>
-
-          {showBackupNudge && (
-            <Card
-              style={{
-                borderLeft: `3px solid ${T.status.amber}`,
-                background: `${T.status.amberDim}`,
-                padding: "10px 14px",
-                marginBottom: 10,
-                animation: "fadeInUp .4s ease-out",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <Shield size={14} color={T.status.amber} />
-                <span
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 800,
-                    color: T.status.amber,
-                    fontFamily: T.font.mono,
-                    letterSpacing: "0.04em",
-                  }}
-                >
-                  BACKUP REMINDER
-                </span>
-                <button
-                  onClick={dismissBackupNudge}
-                  style={{
-                    marginLeft: "auto",
-                    background: "none",
-                    border: "none",
-                    color: T.text.dim,
-                    cursor: "pointer",
-                    fontSize: 16,
-                    padding: 4,
-                    lineHeight: 1,
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-              <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.4, margin: "0 0 8px" }}>
-                Your data hasn't been backed up recently. Protect your financial data.
-              </p>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={handleBackupNow}
-                  disabled={backingUp}
-                  className="hover-btn"
-               style={{
-                  flex: "1 1 160px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 5,
-                    padding: "8px 12px",
-                    borderRadius: T.radius.md,
-                    border: "none",
-                    background: `linear-gradient(135deg, ${T.status.amber}, #D97706)`,
-                    color: "#fff",
-                    fontSize: 11,
-                    fontWeight: 800,
-                    cursor: "pointer",
-                    opacity: backingUp ? 0.6 : 1,
-                  }}
-                >
-                  <CloudUpload size={13} />
-                  {backingUp ? "Backing up..." : "Back Up Now"}
-                </button>
-                <button
-                  onClick={() => {
-                    dismissBackupNudge();
-                    navTo("settings");
-                  }}
-                  className="hover-btn"
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 5,
-                    padding: "8px 12px",
-                    borderRadius: T.radius.md,
-                    border: `1px solid ${T.status.amber}40`,
-                    background: `${T.status.amber}10`,
-                    color: T.status.amber,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  Enable Auto-Backup
-                </button>
-              </div>
-            </Card>
-          )}
+          <DashboardTopChrome
+            greeting={greeting}
+            streak={streak}
+            runConfetti={runConfetti}
+            windowSize={windowSize}
+            LazyConfetti={LazyConfetti}
+            showBackupNudge={showBackupNudge}
+            backingUp={backingUp}
+            onBackupNow={() => {
+              void handleBackupNow();
+            }}
+            onDismissBackupNudge={() => {
+              void dismissBackupNudge();
+            }}
+            onEnableAutoBackup={() => {
+              void dismissBackupNudge();
+              navTo("settings");
+            }}
+          />
 
           {typeof onDemoAudit === "function" && (
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
@@ -523,128 +328,25 @@ export default memo(function DashboardTab({
   return (
     <div className="page-body stagger-container" aria-live="polite" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
-      {runConfetti && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, pointerEvents: "none" }}>
-          <Confetti
-            width={windowSize.width}
-            height={windowSize.height}
-            recycle={false}
-            numberOfPieces={400}
-            gravity={0.15}
-          />
-        </div>
-      )}
-
-      {/* ═══ Header + inline greeting ═══ */}
-      <div style={{ paddingTop: 16, paddingBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 900, letterSpacing: getTracking(22, "bold"), margin: 0 }}>Dashboard</h1>
-          <p style={{ fontSize: 11, color: T.text.dim, margin: "2px 0 0", fontWeight: 500, letterSpacing: "0.01em" }}>{greeting}</p>
-        </div>
-        {streak > 1 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: `${T.accent.emerald}12`, border: `1px solid ${T.status.green}25`, flexShrink: 0 }}>
-            <span style={{ fontSize: 12 }}>🔥</span>
-            <span style={{ fontSize: 10, fontWeight: 800, color: T.status.green, fontFamily: T.font.mono }}>W{streak}</span>
-          </div>
-        )}
-      </div>
-
-
-      {/* ═══ BACKUP NUDGE ═══ */}
-      {showBackupNudge && (
-        <Card
-          style={{
-            borderLeft: `3px solid ${T.status.amber}`,
-            background: `${T.status.amberDim}`,
-            padding: "10px 14px",
-            marginBottom: 10,
-            animation: "fadeInUp .4s ease-out",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <Shield size={14} color={T.status.amber} />
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 800,
-                color: T.status.amber,
-                fontFamily: T.font.mono,
-                letterSpacing: "0.04em",
-              }}
-            >
-              BACKUP REMINDER
-            </span>
-            <button
-              onClick={dismissBackupNudge}
-              style={{
-                marginLeft: "auto",
-                background: "none",
-                border: "none",
-                color: T.text.dim,
-                cursor: "pointer",
-                fontSize: 16,
-                padding: 4,
-                lineHeight: 1,
-              }}
-            >
-              ×
-            </button>
-          </div>
-          <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.4, margin: "0 0 8px" }}>
-            Your data hasn't been backed up recently. Protect your financial data.
-          </p>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={handleBackupNow}
-              disabled={backingUp}
-              className="hover-btn"
-              style={{
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 5,
-                padding: "8px 12px",
-                borderRadius: T.radius.md,
-                border: "none",
-                background: `linear-gradient(135deg, ${T.status.amber}, #D97706)`,
-                color: "#fff",
-                fontSize: 11,
-                fontWeight: 800,
-                cursor: "pointer",
-                opacity: backingUp ? 0.6 : 1,
-              }}
-            >
-              <CloudUpload size={13} />
-              {backingUp ? "Backing up..." : "Back Up Now"}
-            </button>
-            <button
-              onClick={() => {
-                dismissBackupNudge();
-                navTo("settings");
-              }}
-              className="hover-btn"
-              style={{
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 5,
-                padding: "8px 12px",
-                borderRadius: T.radius.md,
-                border: `1px solid ${T.status.amber}40`,
-                background: `${T.status.amber}10`,
-                color: T.status.amber,
-                fontSize: 11,
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              Enable Auto-Backup
-            </button>
-          </div>
-        </Card>
-      )}
+      <DashboardTopChrome
+        greeting={greeting}
+        streak={streak}
+        runConfetti={runConfetti}
+        windowSize={windowSize}
+        LazyConfetti={LazyConfetti}
+        showBackupNudge={showBackupNudge}
+        backingUp={backingUp}
+        onBackupNow={() => {
+          void handleBackupNow();
+        }}
+        onDismissBackupNudge={() => {
+          void dismissBackupNudge();
+        }}
+        onEnableAutoBackup={() => {
+          void dismissBackupNudge();
+          navTo("settings");
+        }}
+      />
 
       {/* ═══ COMMAND CENTER ═══ */}
       <>
@@ -768,50 +470,41 @@ export default memo(function DashboardTab({
                  </div>
                </div>
 
-               <div style={{ display: "flex", gap: isSmallPhone ? 14 : 18, alignItems: "center", flexWrap: isSmallPhone ? "wrap" : "nowrap" }}>
-                 <div style={{ flex: 1, minWidth: 0 }}>
-                   <div style={{ fontSize: "clamp(22px, 7vw, 24px)", fontWeight: 900, color: safetyColor, letterSpacing: "-0.03em", marginBottom: 4, overflowWrap: "anywhere" }}>
+                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                 <div style={{ minWidth: 0 }}>
+                   <div style={{ fontSize: "clamp(20px, 6.4vw, 22px)", fontWeight: 900, color: safetyColor, letterSpacing: "-0.03em", marginBottom: 4, overflowWrap: "anywhere" }}>
                      {safetySnapshot.headline}
                    </div>
-                   <p style={{ fontSize: 13, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 14px" }}>
+                   <p style={{ fontSize: 13, color: T.text.secondary, lineHeight: 1.5, margin: 0 }}>
                      {safetySnapshot.summary}
                    </p>
-
-                   <div
-                     style={{
-                       padding: "12px 14px",
-                       borderRadius: T.radius.lg,
-                       background: `${T.bg.elevated}`,
-                       border: `1px solid ${T.border.subtle}`,
-                       marginBottom: 12,
-                     }}
-                   >
-                     <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 6 }}>
-                       SAFE TO SPEND
+                 </div>
+                   <div style={{ display: "grid", gridTemplateColumns: isSmallPhone ? "1fr 1fr" : "1.2fr 1fr 1fr 1fr", gap: 8 }}>
+                     <div
+                       style={{
+                         padding: "12px 14px",
+                         borderRadius: T.radius.lg,
+                         background: `${T.bg.elevated}`,
+                         border: `1px solid ${T.border.subtle}`,
+                         gridColumn: isSmallPhone ? "1 / -1" : "auto",
+                       }}
+                     >
+                       <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 6 }}>
+                         SAFE TO SPEND
+                       </div>
+                       <div style={{ fontSize: 24, fontWeight: 900, color: privacyMode ? T.text.dim : safetyColor, letterSpacing: "-0.04em", fontFamily: T.font.mono }}>
+                         {privacyMode ? "••••••" : fmt(Math.max(0, safetySnapshot.safeToSpend))}
+                       </div>
+                       <div style={{ fontSize: 11, color: T.text.dim, marginTop: 4 }}>
+                         Protected need: {privacyMode ? "••••" : fmt(safetySnapshot.protectedNeed)}
+                       </div>
                      </div>
-                     <div style={{ fontSize: 28, fontWeight: 900, color: privacyMode ? T.text.dim : safetyColor, letterSpacing: "-0.04em", fontFamily: T.font.mono }}>
-                       {privacyMode ? "••••••" : fmt(Math.max(0, safetySnapshot.safeToSpend))}
-                     </div>
-                     <div style={{ fontSize: 11, color: T.text.dim, marginTop: 4 }}>
-                       Protected cash need this cycle: {privacyMode ? "••••" : fmt(safetySnapshot.protectedNeed)}
-                     </div>
-                   </div>
-
-                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(136px, 1fr))", gap: 8 }}>
                      <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}` }}>
                        <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 4 }}>
                          RUNWAY
                        </div>
                        <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary }}>
-                         {safetySnapshot.runwayWeeks != null ? `${safetySnapshot.runwayWeeks.toFixed(1)} weeks` : "No allowance set"}
-                       </div>
-                     </div>
-                     <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}` }}>
-                       <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 4 }}>
-                         PRIMARY RISK
-                       </div>
-                       <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary }}>
-                         {primaryRiskLabel}
+                         {safetySnapshot.runwayWeeks != null ? `${safetySnapshot.runwayWeeks.toFixed(1)}w` : "Set budget"}
                        </div>
                      </div>
                      <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}` }}>
@@ -832,32 +525,48 @@ export default memo(function DashboardTab({
                      </div>
                    </div>
 
-                   {p?.sections?.nextAction && (
-                     <div
-                       style={{
-                         marginTop: 12,
-                         padding: "12px 14px",
-                         borderRadius: T.radius.lg,
-                         background: `${safetyColor}10`,
-                         border: `1px solid ${safetyColor}20`,
-                       }}
-                     >
-                       <div style={{ fontSize: 10, fontWeight: 800, color: safetyColor, fontFamily: T.font.mono, letterSpacing: "0.05em", marginBottom: 6 }}>
-                         NEXT MOVE
+                   <div
+                     style={{
+                       display: "flex",
+                       alignItems: "center",
+                       justifyContent: "space-between",
+                       gap: 12,
+                       padding: "12px 14px",
+                       borderRadius: T.radius.lg,
+                       background: `${T.bg.surface}`,
+                       border: `1px solid ${T.border.subtle}`,
+                       flexWrap: "wrap",
+                     }}
+                   >
+                     <div style={{ minWidth: 0, flex: 1 }}>
+                       <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, fontFamily: T.font.mono, letterSpacing: "0.05em", marginBottom: 4 }}>
+                         PRIMARY RISK
                        </div>
-                       <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.45 }}>
-                         {stripPaycheckParens(p.sections.nextAction)}
+                       <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary }}>
+                         {primaryRiskLabel}
                        </div>
                      </div>
-                   )}
-                 </div>
-
-                 {hs?.score != null && (
-                   <div style={{ display: "flex", justifyContent: "center", flexShrink: 0, width: isSmallPhone ? "100%" : "auto" }}>
-                     <HealthGauge score={score} grade={grade} scoreColor={scoreColor} percentile={percentile} />
+                     {hs?.score != null && (
+                       <div
+                         style={{
+                           display: "inline-flex",
+                           alignItems: "center",
+                           gap: 6,
+                           padding: "6px 10px",
+                           borderRadius: 999,
+                           background: `${scoreColor}12`,
+                           border: `1px solid ${scoreColor}25`,
+                           flexShrink: 0,
+                         }}
+                       >
+                         <div style={{ width: 6, height: 6, borderRadius: "50%", background: scoreColor }} />
+                         <span style={{ fontSize: 11, fontWeight: 800, color: scoreColor, fontFamily: T.font.mono, letterSpacing: "0.02em" }}>
+                           {grade} · {score}/100
+                         </span>
+                       </div>
+                     )}
                    </div>
-                 )}
-               </div>
+                 </div>
              </Card>
            )}
 
@@ -877,7 +586,7 @@ export default memo(function DashboardTab({
              }}
            >
              {/* Top row: label + health pill */}
-             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
+             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
                <span style={{ fontSize: 12, fontWeight: 600, color: T.text.dim, letterSpacing: "0.02em" }}>
                  Balance Sheet
                </span>
@@ -922,11 +631,11 @@ export default memo(function DashboardTab({
 
              {/* Big number block mimicking Portfolio hero style */}
            <div style={{
-             display: "flex", flexDirection: "column", gap: 16,
+             display: "flex", flexDirection: "column", gap: 14,
              background: `linear-gradient(180deg, ${T.bg.card} 0%, transparent 100%)`,
              border: `1px solid ${T.border.subtle}`,
              borderRadius: T.radius.lg,
-             padding: "20px 16px 24px",
+             padding: "18px 16px 20px",
              boxShadow: `0 16px 48px rgba(16,185,129,0.06), 0 8px 24px rgba(138,99,210,0.1), inset 0 1px 0 rgba(255,255,255,0.05)`,
              marginBottom: 6
            }}>
@@ -1068,7 +777,12 @@ export default memo(function DashboardTab({
 
            {/* Pro upsell — compact strip for free users only */}
            {shouldShowGating() && !proEnabled && (
-             <ProBanner compact onUpgrade={() => setShowPaywall(true)} label="Unlock Catalyst Cash Pro" sublabel="50 AI chats/day · Plaid sync · Smart card matches" />
+             <ProBanner
+               compact
+               onUpgrade={() => setShowPaywall(true)}
+               label="Unlock Catalyst Cash Pro"
+               sublabel={buildPromoLine(["chats", "plaid", "ledger"])}
+             />
            )}
 
            {/* 📋 SETUP CHECKLIST — Minimalist & Premium */}
@@ -1198,7 +912,7 @@ export default memo(function DashboardTab({
               aria-labelledby="dashboard-cfo-insights"
               className="fade-in"
               style={{
-                padding: isSmallPhone ? "20px 16px" : "24px 20px",
+                padding: isSmallPhone ? "18px 16px" : "20px 18px",
                 marginBottom: 24,
                 background: "transparent",
                 border: `1px solid ${T.border.subtle}`,
@@ -1212,7 +926,7 @@ export default memo(function DashboardTab({
               </div>
               
               {summary && (
-                <p style={{ fontSize: 13, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 16px" }}>
+                <p style={{ fontSize: 13, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 12px" }}>
                   {summary}
                 </p>
               )}
@@ -1222,6 +936,7 @@ export default memo(function DashboardTab({
                   {hs.narrative
                     .split(/(?<=[.?!])\s+/)
                     .filter(Boolean)
+                    .slice(0, 2)
                     .map((sentence, i: number) => {
                       // First sentence = positive/summary; subsequent = action/advisory
                       const isPositive = i === 0;

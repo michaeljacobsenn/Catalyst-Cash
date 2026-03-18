@@ -1,10 +1,24 @@
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
 import { log } from "./logger.js";
 
 const FALLBACK_PREFIX = "secure:";
+const DEFAULT_NATIVE_TIMEOUT_MS = 1800;
+const NATIVE_PROBE_RETRY_DELAY_MS = 350;
+const NATIVE_PLUGIN_NEGATIVE_TTL_MS = 30_000;
+const MISSING_KEY_NEGATIVE_TTL_MS = 15_000;
+const registeredSecureStoragePlugin = registerPlugin("SecureStoragePlugin");
 let securePluginPromise = null;
 let nativeAvailabilityWarningShown = false;
+let nativeBridgeTimeoutWarningShown = false;
+let nativeProbePromise = null;
+let nativePluginUnavailableUntil = 0;
+let cachedSecretStatus = null;
+let cachedSecretStatusAt = 0;
+let secretStatusPromise = null;
+let nativeStatusTimeoutWarned = false;
+const SECRET_STATUS_TTL_MS = 30_000;
+const missingKeyCache = new Map();
 
 function getTestSecureStoreOverride() {
   const override =
@@ -22,9 +36,49 @@ function getTestSecurityStatusOverride() {
   return override.storageStatus;
 }
 
+function getNativeOperationTimeoutMs() {
+  const override =
+    (typeof globalThis !== "undefined" && globalThis.__E2E_SECURE_STORE_TIMEOUT_MS__) ||
+    (typeof window !== "undefined" && window.__E2E_SECURE_STORE_TIMEOUT_MS__);
+  if (typeof override === "number" && Number.isFinite(override) && override > 0) {
+    return override;
+  }
+  return DEFAULT_NATIVE_TIMEOUT_MS;
+}
+
 function hasSecureStorageRuntime() {
   return Capacitor.isNativePlatform() || Boolean(getTestSecureStoreOverride());
 }
+
+function getGlobalSecureStoragePlugin() {
+  const globalCapacitor =
+    (typeof globalThis !== "undefined" && globalThis.Capacitor) ||
+    (typeof window !== "undefined" && window.Capacitor);
+  return globalCapacitor?.Plugins?.SecureStoragePlugin || Capacitor?.Plugins?.SecureStoragePlugin || null;
+}
+
+function isValidPlugin(plugin) {
+  if (!plugin) return null;
+  if (typeof plugin.get !== "function" || typeof plugin.set !== "function" || typeof plugin.remove !== "function") {
+    return null;
+  }
+  return plugin;
+}
+
+function getRegisteredSecureStoragePlugin() {
+  const isAvailable = typeof Capacitor?.isPluginAvailable === "function"
+    ? Capacitor.isPluginAvailable("SecureStoragePlugin")
+    : false;
+  if (!isAvailable) return null;
+  return isValidPlugin(registeredSecureStoragePlugin);
+}
+
+function isSecureStoragePluginRegistered() {
+  return typeof Capacitor?.isPluginAvailable === "function"
+    ? Capacitor.isPluginAvailable("SecureStoragePlugin")
+    : false;
+}
+
 
 function serialize(value) {
   return JSON.stringify(value);
@@ -39,42 +93,189 @@ function deserialize(value) {
   }
 }
 
-async function getPlugin() {
+function createTimeoutError(operation) {
+  const error = new Error(`${operation} timed out`);
+  error.name = "SecureStoreTimeoutError";
+  return error;
+}
+
+function isMissingKeyError(error) {
+  const message = error?.message || error?.errorMessage || String(error);
+  return message.includes("Item with given key does not exist");
+}
+
+function hasRecentMissingKey(key) {
+  const expiresAt = missingKeyCache.get(key);
+  if (!expiresAt) return false;
+  if (expiresAt <= Date.now()) {
+    missingKeyCache.delete(key);
+    return false;
+  }
+  return true;
+}
+
+function rememberMissingKey(key) {
+  if (!key) return;
+  missingKeyCache.set(key, Date.now() + MISSING_KEY_NEGATIVE_TTL_MS);
+}
+
+function clearMissingKey(key) {
+  if (!key) return;
+  missingKeyCache.delete(key);
+}
+
+async function withTimeout(promise, operation) {
+  let timer = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(createTimeoutError(operation)), getNativeOperationTimeoutMs());
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function isBridgeTimeoutError(error) {
+  return error?.name === "SecureStoreTimeoutError";
+}
+
+function logBridgeTimeoutOnce(operation, error) {
+  if (nativeBridgeTimeoutWarningShown) return;
+  nativeBridgeTimeoutWarningShown = true;
+  void log.warn("secure-store", "Native secure storage bridge timed out", {
+    operation,
+    error: error?.message || String(error),
+  });
+}
+
+function logStatusTimeoutOnce(error) {
+  if (nativeStatusTimeoutWarned) return;
+  nativeStatusTimeoutWarned = true;
+  void log.warn("secure-store", "Secure storage status check timed out", {
+    error: error?.message || String(error),
+  });
+}
+
+async function callNativePlugin(plugin, operation, payload) {
+  if (!plugin || typeof plugin[operation] !== "function") {
+    throw new Error(`SecureStoragePlugin.${operation} is unavailable`);
+  }
+  try {
+    return await withTimeout(Promise.resolve(plugin[operation](payload)), `SecureStoragePlugin.${operation}`);
+  } catch (error) {
+    if (isBridgeTimeoutError(error)) {
+      logBridgeTimeoutOnce(operation, error);
+    }
+    throw error;
+  }
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function probeNativePlugin(plugin) {
+  if (!plugin) return false;
+  if (nativeProbePromise) return nativeProbePromise;
+
+  const probeKey = `__cc_secure_probe__:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  nativeProbePromise = (async () => {
+    let lastError = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await callNativePlugin(plugin, "get", { key: probeKey });
+        return true;
+      } catch (error) {
+        const msg = error?.message || error?.errorMessage || String(error);
+        if (isMissingKeyError(error)) {
+          return true; // The bridge is working perfectly, it just correctly reported the key is missing
+        }
+        lastError = error;
+        if (attempt < 1) {
+          await sleep(NATIVE_PROBE_RETRY_DELAY_MS);
+        }
+      }
+    }
+
+    if (!nativeAvailabilityWarningShown) {
+      nativeAvailabilityWarningShown = true;
+      void log.error("secure-store", "Native secure storage unavailable", {
+        platform: "native",
+        canPersistSecrets: false,
+        reason: lastError?.message || String(lastError),
+      });
+    }
+    nativePluginUnavailableUntil = Date.now() + NATIVE_PLUGIN_NEGATIVE_TTL_MS;
+    return false;
+  })();
+
+  const available = await nativeProbePromise;
+  if (!available) {
+    nativeProbePromise = null;
+  }
+  return available;
+}
+
+function getResolvedNativePlugin() {
+  const globalPlugin = isValidPlugin(getGlobalSecureStoragePlugin());
+  if (globalPlugin) return globalPlugin;
+  return getRegisteredSecureStoragePlugin();
+}
+
+async function resolveAndProbePlugin() {
+  const plugin = getResolvedNativePlugin();
+  if (!plugin) {
+    if (Capacitor.isNativePlatform() && !nativeAvailabilityWarningShown) {
+      nativeAvailabilityWarningShown = true;
+      void log.error("secure-store", "Native secure storage unavailable", {
+        platform: "native",
+        canPersistSecrets: false,
+      });
+    }
+    return { instance: null };
+  }
+
+  const available = await probeNativePlugin(plugin);
+  if (!available) {
+    return { instance: null };
+  }
+  nativePluginUnavailableUntil = 0;
+  return { instance: plugin };
+}
+
+function getPlugin() {
   if (securePluginPromise) return securePluginPromise;
   const testOverride = getTestSecureStoreOverride();
   if (testOverride?.plugin) {
-    securePluginPromise = Promise.resolve(testOverride.plugin);
+    securePluginPromise = Promise.resolve({ instance: testOverride.plugin });
     return securePluginPromise;
   }
   if (!Capacitor.isNativePlatform()) {
-    securePluginPromise = Promise.resolve(null);
+    securePluginPromise = Promise.resolve({ instance: null });
     return securePluginPromise;
   }
-  securePluginPromise = Promise.race([
-    import("capacitor-secure-storage-plugin")
-      .then(mod => mod.SecureStoragePlugin || mod.default?.SecureStoragePlugin || mod.default || null)
-      .catch(() => null),
-    new Promise(resolve => setTimeout(() => resolve(null), 3000)), // 3s timeout — never hang
-  ]).then(plugin => {
-    if (!plugin && Capacitor.isNativePlatform() && !nativeAvailabilityWarningShown) {
-      nativeAvailabilityWarningShown = true;
-      void log.error(
-        "secure-store",
-        "Native secure storage unavailable",
-        {
-          platform: "native",
-          canPersistSecrets: false,
-        }
-      );
-    }
-    return plugin;
-  });
-  return securePluginPromise;
-}
+  if (nativePluginUnavailableUntil > Date.now()) {
+    return Promise.resolve({ instance: null });
+  }
 
-async function getNativePluginOnly() {
-  const plugin = await getPlugin();
-  return plugin || null;
+  securePluginPromise = resolveAndProbePlugin().catch(error => {
+    if (!nativeAvailabilityWarningShown) {
+      nativeAvailabilityWarningShown = true;
+      void log.error("secure-store", "Native secure storage unavailable", {
+        platform: "native",
+        canPersistSecrets: false,
+        reason: error?.message || String(error),
+      });
+    }
+    nativePluginUnavailableUntil = Date.now() + NATIVE_PLUGIN_NEGATIVE_TTL_MS;
+    securePluginPromise = null;
+    return { instance: null };
+  });
+
+  return securePluginPromise;
 }
 
 async function removeFallback(key) {
@@ -94,13 +295,21 @@ export async function getSecureItem(key) {
   if (!hasSecureStorageRuntime()) {
     return null;
   }
+  if (hasRecentMissingKey(key)) {
+    return null;
+  }
 
-  const plugin = await getPlugin();
+  const wrapper = await getPlugin();
+  const plugin = wrapper?.instance;
   if (plugin) {
     try {
-      const result = await plugin.get({ key });
+      const result = await callNativePlugin(plugin, "get", { key });
+      clearMissingKey(key);
       return deserialize(result?.value);
-    } catch {
+    } catch (error) {
+      if (isMissingKeyError(error)) {
+        rememberMissingKey(key);
+      }
       // Native plugin get failures should not leak or fall through to insecure storage.
     }
   }
@@ -108,12 +317,20 @@ export async function getSecureItem(key) {
 }
 
 export async function getNativeSecureItem(key) {
-  const plugin = await getNativePluginOnly();
+  if (hasRecentMissingKey(key)) {
+    return null;
+  }
+  const wrapper = await getPlugin();
+  const plugin = wrapper?.instance;
   if (!plugin) return null;
   try {
-    const result = await plugin.get({ key });
+    const result = await callNativePlugin(plugin, "get", { key });
+    clearMissingKey(key);
     return deserialize(result?.value);
-  } catch {
+  } catch (error) {
+    if (isMissingKeyError(error)) {
+      rememberMissingKey(key);
+    }
     return null;
   }
 }
@@ -124,11 +341,13 @@ export async function setSecureItem(key, value) {
     return false;
   }
 
-  const plugin = await getPlugin();
+  const wrapper = await getPlugin();
+  const plugin = wrapper?.instance;
   const serialized = serialize(value);
+  clearMissingKey(key);
   if (plugin) {
     try {
-      await plugin.set({ key, value: serialized });
+      await callNativePlugin(plugin, "set", { key, value: serialized });
       return true;
     } catch {
       // Native secret persistence fails closed on native platforms.
@@ -139,10 +358,12 @@ export async function setSecureItem(key, value) {
 }
 
 export async function setNativeSecureItem(key, value) {
-  const plugin = await getNativePluginOnly();
+  const wrapper = await getPlugin();
+  const plugin = wrapper?.instance;
   if (!plugin) return false;
+  clearMissingKey(key);
   try {
-    await plugin.set({ key, value: serialize(value) });
+    await callNativePlugin(plugin, "set", { key, value: serialize(value) });
     return true;
   } catch {
     return false;
@@ -154,11 +375,13 @@ export async function deleteSecureItem(key) {
     await removeFallback(key);
     return true;
   }
+  clearMissingKey(key);
 
-  const plugin = await getPlugin();
+  const wrapper = await getPlugin();
+  const plugin = wrapper?.instance;
   if (plugin) {
     try {
-      await plugin.remove({ key });
+      await callNativePlugin(plugin, "remove", { key });
     } catch {
       await removeFallback(key);
       return false;
@@ -169,10 +392,12 @@ export async function deleteSecureItem(key) {
 }
 
 export async function deleteNativeSecureItem(key) {
-  const plugin = await getNativePluginOnly();
+  const wrapper = await getPlugin();
+  const plugin = wrapper?.instance;
   if (!plugin) return false;
+  clearMissingKey(key);
   try {
-    await plugin.remove({ key });
+    await callNativePlugin(plugin, "remove", { key });
     return true;
   } catch {
     return false;
@@ -192,11 +417,12 @@ export async function migrateToSecureItem(key, legacyValue, removeLegacy) {
 }
 
 export function secureStoreUsesNativeKeychain() {
-  return hasSecureStorageRuntime();
+  return Capacitor.isNativePlatform() || Boolean(getTestSecureStoreOverride());
 }
 
 export async function hasNativeSecureStore() {
-  return Boolean(await getNativePluginOnly());
+  const wrapper = await getPlugin();
+  return Boolean(wrapper?.instance);
 }
 
 export async function getSecretStorageStatus() {
@@ -205,8 +431,17 @@ export async function getSecretStorageStatus() {
     return statusOverride;
   }
 
+  if (cachedSecretStatus && Date.now() - cachedSecretStatusAt < SECRET_STATUS_TTL_MS) {
+    return cachedSecretStatus;
+  }
+
+  if (secretStatusPromise) {
+    return secretStatusPromise;
+  }
+
+  secretStatusPromise = (async () => {
   if (getTestSecureStoreOverride()?.plugin) {
-    return {
+    const status = {
       platform: "native",
       available: true,
       mode: "native-secure",
@@ -214,10 +449,13 @@ export async function getSecretStorageStatus() {
       isHardwareBacked: true,
       message: "",
     };
+    cachedSecretStatus = status;
+    cachedSecretStatusAt = Date.now();
+    return status;
   }
 
   if (!Capacitor.isNativePlatform()) {
-    return {
+    const status = {
       platform: "web",
       available: false,
       mode: "web-limited",
@@ -226,27 +464,63 @@ export async function getSecretStorageStatus() {
       message:
         "Browser storage is not treated as secure storage. App Lock, linked identity, cloud sync credentials, and other secrets are available only in the native iPhone app.",
     };
+    cachedSecretStatus = status;
+    cachedSecretStatusAt = Date.now();
+    return status;
   }
 
-  const available = Boolean(await getNativePluginOnly());
-  if (available) {
-    return {
+  let available = false;
+  let timedOut = false;
+  try {
+    const wrapper = await withTimeout(getPlugin(), "SecureStoragePlugin.status");
+    available = Boolean(wrapper?.instance);
+  } catch (error) {
+    if (isBridgeTimeoutError(error)) {
+      timedOut = true;
+      logStatusTimeoutOnce(error);
+    }
+  }
+
+  if (!available && timedOut && isSecureStoragePluginRegistered()) {
+    const status = {
       platform: "native",
       available: true,
-      mode: "native-secure",
+      mode: "native-checking",
       canPersistSecrets: true,
       isHardwareBacked: true,
       message: "",
     };
+    cachedSecretStatus = status;
+    cachedSecretStatusAt = Date.now();
+    return status;
   }
 
-  return {
-    platform: "native",
-    available: false,
-    mode: "native-unavailable",
-    canPersistSecrets: false,
-    isHardwareBacked: false,
-    message:
-      "Secure iOS storage is unavailable. App passcodes, linked identity, API keys, and device secrets will not be persisted until native secure storage is restored.",
-  };
+  const status = available
+    ? {
+        platform: "native",
+        available: true,
+        mode: "native-secure",
+        canPersistSecrets: true,
+        isHardwareBacked: true,
+        message: "",
+      }
+    : {
+        platform: "native",
+        available: false,
+        mode: "native-unavailable",
+        canPersistSecrets: false,
+        isHardwareBacked: false,
+        message:
+          "Secure iOS storage is unavailable. App passcodes, linked identity, API keys, and device secrets will not be persisted until native secure storage is restored.",
+      };
+
+  cachedSecretStatus = status;
+  cachedSecretStatusAt = Date.now();
+  return status;
+  })()
+    .finally(() => {
+      secretStatusPromise = null;
+    });
+
+  return secretStatusPromise;
 }

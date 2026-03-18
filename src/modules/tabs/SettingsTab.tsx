@@ -224,6 +224,10 @@ export default function SettingsTab({
     }
     try {
       const { SignInWithApple } = await loadAppleSignIn();
+      if (!SignInWithApple?.authorize) {
+        window.toast?.error?.("Apple Sign-In is not available in this build.");
+        return;
+      }
       const result = await SignInWithApple.authorize({
         clientId: "com.jacobsen.portfoliopro",
         redirectURI: "https://api.catalystcash.app/auth/apple/callback",
@@ -231,11 +235,16 @@ export default function SettingsTab({
       });
       const userIdentifier = result.response.user;
       setAppleLinkedId(userIdentifier);
-      window.toast?.success?.("Apple ID linked for App Unlocking.");
+      window.toast?.success?.("Apple ID linked for app unlock and iCloud backup.");
     } catch (error) {
       const failure = normalizeAppError(error, { context: "security" });
       log.warn("security", "Apple Sign-In failed", { error: failure.rawMessage, kind: failure.kind });
-      window.toast?.error?.("Apple Sign-In couldn't be completed.");
+      const raw = String(failure.rawMessage || "").toLowerCase();
+      window.toast?.error?.(
+        raw.includes("not implemented") || raw.includes("unimplemented")
+          ? "Apple Sign-In is not enabled in this build."
+          : "Apple Sign-In couldn't be completed."
+      );
     }
   };
 
@@ -301,9 +310,9 @@ export default function SettingsTab({
         const now = Date.now();
         await db.set("last-backup-ts", now);
         setLastBackupTS(now);
-        window.toast?.success?.("iCloud backup successful");
+        window.toast?.success?.("Backup saved to iCloud Drive");
       } else {
-        window.toast?.error?.("Failed to backup to iCloud");
+        window.toast?.error?.("Backup could not be verified in iCloud Drive");
       }
     } catch (e) {
       const failure = normalizeAppError(e, { context: "restore" });
@@ -494,6 +503,8 @@ export default function SettingsTab({
   const selectedModel: ProviderModel = selectedModelCandidate;
   const isNonGemini = (aiProvider || "gemini") !== "gemini";
   const hasApiKey = Boolean((apiKey || "").trim());
+  const gatingVisible = shouldShowGating();
+  const hasPremiumModelAccess = proEnabled || !gatingVisible;
   const currencyLabel = CURRENCIES.find(currency => currency.code === (financialConfig?.currencyCode || "USD"))?.label || "USD ($)";
   const payFrequencyLabel =
     financialConfig?.payFrequency === "weekly"
@@ -721,7 +732,7 @@ export default function SettingsTab({
           paddingTop: "calc(env(safe-area-inset-top, 0px) + 6px)",
           paddingLeft: 16,
           paddingRight: 16,
-          paddingBottom: 8,
+          paddingBottom: 10,
           background: T.bg.navGlass,
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
@@ -765,7 +776,7 @@ export default function SettingsTab({
         <div style={{ textAlign: "center", flex: 1, minWidth: 0, overflow: "hidden" }}>
           <h1
             style={{
-              fontSize: 18,
+              fontSize: 20,
               fontWeight: 800,
               color: T.text.primary,
               margin: 0,
@@ -791,7 +802,7 @@ export default function SettingsTab({
                           : "Settings"}
           </h1>
           {!activeMenu && (
-            <p style={{ fontSize: 10, color: T.text.dim, marginTop: 2, fontFamily: T.font.mono, margin: 0 }}>
+            <p style={{ fontSize: 10, color: T.text.dim, marginTop: 3, fontFamily: T.font.mono, margin: 0 }}>
               VERSION {APP_VERSION}
             </p>
           )}
@@ -807,14 +818,14 @@ export default function SettingsTab({
         style={{
           flex: 1,
           WebkitOverflowScrolling: "touch",
-          paddingTop: 4,
+          paddingTop: 8,
           overflowY: "auto",
           overscrollBehavior: "contain",
           display: "flex",
           flexDirection: "column",
         }}
       >
-        <div style={{ width: "100%", maxWidth: 768, margin: "0 auto", display: "flex", flexDirection: "column", flex: 1 }}>
+        <div style={{ width: "100%", maxWidth: 760, margin: "0 auto", display: "flex", flexDirection: "column", flex: 1, padding: "0 0 12px" }}>
         <div
           key={activeMenu || "root"}
           style={{
@@ -828,15 +839,14 @@ export default function SettingsTab({
             display: "flex",
             flexDirection: "column",
             flex: 1,
-            // Offset the .page-body top padding for sub-menus so they sit flush with the header's aesthetic bottom border
-            marginTop: activeMenu ? -4 : 0,
+            marginTop: 0,
           }}
         >
           {!activeMenu && (
             <RootSettingsSection
               enablePlaid={ENABLE_PLAID}
               proEnabled={proEnabled}
-              shouldShowGating={shouldShowGating()}
+              shouldShowGating={gatingVisible}
               activeMenu={activeMenu}
               onSelectMenu={(menu) => {
                 setActiveMenu(menu);
@@ -888,8 +898,8 @@ export default function SettingsTab({
                setUseStreaming={setUseStreaming}
                currentProvider={currentProvider}
                selectedModel={selectedModel}
-               proEnabled={proEnabled}
-               showModelSelector={rawTierId === "pro"}
+               showUpgradeCta={gatingVisible && !hasPremiumModelAccess}
+               showModelSelector={hasPremiumModelAccess}
                setShowPaywall={setShowPaywall}
                apiKey={apiKey}
                setApiKey={setApiKey}

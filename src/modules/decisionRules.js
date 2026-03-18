@@ -230,6 +230,8 @@ export function detectToxicDebtTriage(financialState = {}) {
 
 export function detectCreditUtilizationSpike(financialState = {}) {
   const cards = Array.isArray(financialState.cards) ? financialState.cards : [];
+  const financialConfig = financialState?.financialConfig || {};
+  const computedStrategy = financialState?.computedStrategy || {};
   const modeledCards = cards
     .map(card => {
       const limit = toNumber(card?.limit);
@@ -248,6 +250,19 @@ export function detectCreditUtilizationSpike(financialState = {}) {
   const aggregateUtilizationPct = totalLimit > 0 ? (totalBalance / totalLimit) * 100 : 0;
   const spikingCards = modeledCards.filter(card => card.utilizationPct > 85);
   const elevatedCards = modeledCards.filter(card => card.utilizationPct >= 70);
+  const liquidCash = estimateLiquidCash(financialState);
+  const emergencyFloor = Math.max(
+    toNumber(financialConfig?.emergencyFloor),
+    toNumber(financialConfig?.minCashFloor)
+  );
+  const transferNeeded = Math.max(
+    toNumber(computedStrategy?.requiredTransfer),
+    toNumber(computedStrategy?.auditSignals?.liquidity?.transferNeeded)
+  );
+  const lowCashStress =
+    transferNeeded > 0 ||
+    (emergencyFloor > 0 && liquidCash <= emergencyFloor * 1.25) ||
+    toNumber(computedStrategy?.auditSignals?.liquidity?.checkingAfterFloorAndBills) < 0;
 
   if (!spikingCards.length && !elevatedCards.length && aggregateUtilizationPct < 70) {
     return buildRecommendation(
@@ -260,13 +275,19 @@ export function detectCreditUtilizationSpike(financialState = {}) {
   }
 
   const leadCard = [...modeledCards].sort((a, b) => b.utilizationPct - a.utilizationPct)[0];
-  const severity = spikingCards.length > 0 || aggregateUtilizationPct > 85 ? "high" : "medium";
-  return buildRecommendation(
+  const severity =
+    spikingCards.length > 0 || aggregateUtilizationPct > 85 || (aggregateUtilizationPct >= 70 && lowCashStress)
+      ? "high"
+      : "medium";
+  return buildEnhancedRecommendation(
     "credit-utilization-spike",
     true,
     severity,
     `${leadCard.name} is reporting ${formatPercent(leadCard.utilizationPct)} utilization on ${formatMoney(leadCard.balance)} of ${formatMoney(leadCard.limit)} available credit, with overall revolving utilization near ${formatPercent(aggregateUtilizationPct)}.`,
-    "Consider paying this balance down below 30% utilization before resuming the normal debt order to reduce acute score pressure."
+    lowCashStress
+      ? "Consider preserving the checking floor, covering due-soon obligations, and paying this balance down below 30% utilization before resuming optional investing or lower-priority debt moves."
+      : "Consider paying this balance down below 30% utilization before resuming the normal debt order to reduce acute score pressure.",
+    { confidence: severity === "high" && lowCashStress ? "medium" : "high" }
   );
 }
 
@@ -275,6 +296,29 @@ export function detectInsolvencyRisk(financialState = {}) {
   const { debtMinimums: totalMinimumPayments, structuralRequiredCosts } = estimateMonthlyStructuralCosts(financialState);
   const debtMinimumRatioPct = monthlyNetIncome > 0 ? (totalMinimumPayments / monthlyNetIncome) * 100 : null;
   const structuralRatioPct = monthlyNetIncome > 0 ? (structuralRequiredCosts / monthlyNetIncome) * 100 : null;
+  const computedStrategy = financialState?.computedStrategy || {};
+  const transferNeeded = Math.max(
+    toNumber(computedStrategy?.requiredTransfer),
+    toNumber(computedStrategy?.auditSignals?.liquidity?.transferNeeded)
+  );
+  const checkingAfterBills = toNumber(computedStrategy?.auditSignals?.liquidity?.checkingAfterFloorAndBills);
+
+  if (monthlyNetIncome <= 0 && structuralRequiredCosts > 0) {
+    return buildEnhancedRecommendation(
+      "insolvency-risk",
+      true,
+      "high",
+      `Modeled required outflows total about ${formatMoney(structuralRequiredCosts)} per month, but usable monthly net income is missing or zero. The snapshot may reflect either severe cash-flow stress or incomplete income inputs.`,
+      "Treat the plan as stabilization-first and directional only until income inputs are verified. Avoid aggressive payoff, investing, or transfer recommendations until the user confirms real monthly take-home pay.",
+      {
+        confidence: "low",
+        directionalOnly: true,
+        requiresProfessionalHelp: true,
+        professionalHelpReason:
+          "Required outflows exist but usable income is missing, so insolvency triage or hardship planning may need human review.",
+      }
+    );
+  }
 
   if (
     (debtMinimumRatioPct == null || debtMinimumRatioPct <= 50) &&
@@ -293,14 +337,16 @@ export function detectInsolvencyRisk(financialState = {}) {
   }
 
   const severity =
-    monthlyNetIncome <= 0 ||
-    (structuralRatioPct != null && structuralRatioPct > 100) ||
-    (debtMinimumRatioPct != null && debtMinimumRatioPct > 50)
+    (structuralRatioPct != null && structuralRatioPct >= 95) ||
+    (debtMinimumRatioPct != null && debtMinimumRatioPct > 50) ||
+    transferNeeded > 0 ||
+    checkingAfterBills < 0
       ? "high"
       : "medium";
   const requiresProfessionalHelp =
     severity === "high" &&
-    (monthlyNetIncome <= 0 || (structuralRatioPct != null && structuralRatioPct >= 100));
+    ((structuralRatioPct != null && structuralRatioPct >= 100) ||
+      ((structuralRatioPct != null && structuralRatioPct >= 95) && (transferNeeded > 0 || checkingAfterBills < 0)));
   return buildEnhancedRecommendation(
     "insolvency-risk",
     true,
@@ -343,10 +389,11 @@ export function detectFreelancerTaxReserveWarning(financialState = {}) {
   const severity =
     taxSetupMissing ||
     monthlyNetIncome <= 0 ||
-    (recommendedMonthlyReserve > 0 && liquidCash < recommendedMonthlyReserve * 0.5)
+    (recommendedMonthlyReserve > 0 && reserveCoverageMonths < 1)
       ? "high"
       : "medium";
-  const requiresProfessionalHelp = severity === "high" && (taxSetupMissing || monthlyNetIncome <= 0);
+  const requiresProfessionalHelp =
+    severity === "high" && (taxSetupMissing || monthlyNetIncome <= 0 || reserveCoverageMonths < 0.5);
   return buildEnhancedRecommendation(
     "freelancer-tax-reserve-warning",
     true,
@@ -360,6 +407,7 @@ export function detectFreelancerTaxReserveWarning(financialState = {}) {
     {
       confidence: severity === "high" ? "low" : "medium",
       requiresProfessionalHelp,
+      directionalOnly: taxSetupMissing || monthlyNetIncome <= 0,
       professionalHelpReason: requiresProfessionalHelp
         ? "Contractor tax setup is incomplete enough that a CPA or tax professional should confirm reserve assumptions."
         : "",
@@ -600,7 +648,10 @@ export function detectCashTimingConflict(financialState = {}) {
     transferNeeded > 0 || checkingAfterBills < 0 ? "high" : "medium",
     `Near-term bills and minimums create a timing conflict: ${formatMoney(timeCriticalBills)} is due before the next paycheck, with ${formatMoney(transferNeeded)} needing to move from reserves and checking after floors/bills at ${formatMoney(checkingAfterBills)}.${nextPaycheckAmount <= 0 && timeCriticalBills > 0 ? " The next-paycheck amount is also missing or zero, which makes payoff acceleration guidance less reliable." : ""}`,
     "Do not recommend extra investing, accelerated low-APR arbitrage, or optional spending until due-before-payday obligations are covered and checking is back above the floor.",
-    { confidence: nextPaycheckAmount <= 0 ? "medium" : "high" }
+    {
+      confidence: nextPaycheckAmount <= 0 ? "low" : "high",
+      directionalOnly: nextPaycheckAmount <= 0,
+    }
   );
 }
 
@@ -643,6 +694,15 @@ export function detectContradictoryFinancialInputs(financialState = {}) {
   ) {
     contradictions.push("contractor income selected without a tax reserve setup");
   }
+  if (
+    Math.max(
+      toNumber(financialState?.computedStrategy?.timeCriticalAmount),
+      toNumber(financialState?.computedStrategy?.auditSignals?.liquidity?.timeCriticalBills)
+    ) > 0 &&
+    Math.max(toNumber(financialConfig?.paycheckStandard), toNumber(financialConfig?.averagePaycheck)) <= 0
+  ) {
+    contradictions.push("time-critical bills modeled without a usable next-paycheck input");
+  }
 
   if (!contradictions.length) {
     return buildEnhancedRecommendation(
@@ -683,11 +743,11 @@ export function detectMixedDebtPortfolioComplexity(financialState = {}) {
     );
   }
 
-  const requiresProfessionalHelp = hasStudentLoan && hasHighAprRevolving;
+  const requiresProfessionalHelp = hasStudentLoan && (hasHighAprRevolving || hasPromo);
   return buildEnhancedRecommendation(
     "mixed-debt-portfolio-complexity",
     true,
-    hasPromo || requiresProfessionalHelp ? "high" : "medium",
+    hasPromo || requiresProfessionalHelp || (hasHighAprRevolving && debtEntries.length >= 4) ? "high" : "medium",
     `The debt portfolio mixes revolving cards with installment debt${hasStudentLoan ? ", including student-loan exposure," : ""}${hasPromo ? " plus promo APR timing," : ""} which makes one-size-fits-all payoff advice less reliable.`,
     requiresProfessionalHelp
       ? "Prioritize toxic or score-damaging revolving debt first, but avoid refinancing or consolidating student-loan balances until you review federal protections, repayment options, and tax consequences with a professional."

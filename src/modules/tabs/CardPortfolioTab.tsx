@@ -1,4 +1,4 @@
-  import { memo,useEffect,useMemo,useState } from "react";
+  import { Suspense,lazy,memo,useEffect,useMemo,useState } from "react";
   import type { BankAccount,CatalystCashConfig,PlaidInvestmentAccount,Card as PortfolioCard } from "../../types/index.js";
   import { T } from "../constants.js";
   import { haptic } from "../haptics.js";
@@ -20,12 +20,12 @@
   import BankAccountsSection from "../portfolio/BankAccountsSection.js";
   import CreditCardsSection from "../portfolio/CreditCardsSection.js";
   import CreditUtilizationWidget from "../portfolio/CreditUtilizationWidget.js";
-  import InvestmentsSection from "../portfolio/InvestmentsSection.js";
   import OtherAssetsSection from "../portfolio/OtherAssetsSection.js";
-  import TransactionsSection from "../portfolio/TransactionsSection.js";
   import { usePlaidSync } from "../usePlaidSync.js";
   import { fmt } from "../utils.js";
-  import AddAccountSheet from "./AddAccountSheet.js";
+const InvestmentsSection = lazy(() => import("../portfolio/InvestmentsSection.js"));
+const TransactionsSection = lazy(() => import("../portfolio/TransactionsSection.js"));
+const AddAccountSheet = lazy(() => import("./AddAccountSheet.js"));
 
 const ENABLE_PLAID = true;
 
@@ -235,6 +235,16 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
   const totalDebtBalance = (portfolioMetrics?.totalDebtBalance || 0) + (portfolioMetrics?.ccDebt || 0);
   const investTotalValue = portfolioMetrics?.totalInvestments || 0;
   const totalOtherAssets = portfolioMetrics?.totalOtherAssets || 0;
+  const breakdownValueStyle = {
+    fontSize: 16,
+    fontWeight: 800,
+    fontFamily: T.font.mono,
+    fontVariantNumeric: "tabular-nums",
+    letterSpacing: "-0.02em",
+    whiteSpace: "nowrap" as const,
+    display: "block",
+    lineHeight: 1.05,
+  };
 
   // ── CREDIT UTILIZATION WIDGET (Moved to separate module) ──
 
@@ -313,15 +323,15 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
           <div style={{ background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: "12px 10px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4 }}>Liquid Cash</div>
-            <span style={{ fontSize: 16, fontWeight: 800, color: T.accent.emerald, fontFamily: T.font.mono }}>{fmt(totalCash)}</span>
+            <span style={{ ...breakdownValueStyle, color: T.accent.emerald }}>{fmt(totalCash)}</span>
           </div>
           <div style={{ background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: "12px 10px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4 }}>Investments</div>
-            <span style={{ fontSize: 16, fontWeight: 800, color: T.status.blue, fontFamily: T.font.mono }}>{fmt(investTotalValue + totalOtherAssets)}</span>
+            <span style={{ ...breakdownValueStyle, color: T.status.blue }}>{fmt(investTotalValue + totalOtherAssets)}</span>
           </div>
           <div style={{ background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: "12px 10px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4 }}>Liabilities</div>
-            <span style={{ fontSize: 16, fontWeight: 800, color: T.status.red, fontFamily: T.font.mono }}>{fmt(-totalDebtBalance)}</span>
+            <span style={{ ...breakdownValueStyle, color: T.status.red }}>{fmt(Math.abs(totalDebtBalance))}</span>
           </div>
         </div>
       </div>
@@ -357,7 +367,10 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
               className="hover-btn"
               style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 16, border: `1px solid ${T.status.blue}25`, background: `${T.status.blue}08`, color: T.status.blue, fontSize: 10, fontWeight: 700, cursor: plaidRefreshing ? "wait" : "pointer", transition: "all .2s" }}
             >
-              <RefreshCw size={10} className={plaidRefreshing ? "spin" : ""} />
+              <RefreshCw
+                size={10}
+                style={plaidRefreshing ? { animation: "spin .8s linear infinite", transformOrigin: "center" } : undefined}
+              />
               {plaidRefreshing ? "Syncing..." : "Sync Plaid"}
             </button>
           )}
@@ -387,19 +400,24 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
   // ─── Investment Accounts Section (JSX) ─────────────────────────────────
 
   const investmentsSection = (
-    <InvestmentsSection
-      collapsedSections={collapsedSections}
-      setCollapsedSections={setCollapsedSections}
-    />
+    <Suspense fallback={null}>
+      <InvestmentsSection
+        collapsedSections={collapsedSections}
+        setCollapsedSections={setCollapsedSections}
+      />
+    </Suspense>
   );
 
   // ─── Transactions Section (JSX) ─────────────────────────────────────────
 
   const transactionsSection = (
-    <TransactionsSection
-      collapsedSections={collapsedSections}
-      setCollapsedSections={setCollapsedSections}
-    />
+    <Suspense fallback={null}>
+      <TransactionsSection
+        collapsedSections={collapsedSections}
+        setCollapsedSections={setCollapsedSections}
+        proEnabled={proEnabled}
+      />
+    </Suspense>
   );
 
   const combinedOtherAssetsSection = (
@@ -412,7 +430,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
 
   return (
     <PortfolioContext.Provider value={demoOverrideContext}>
-      <div className="page-body stagger-container" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", gap: 0 }}>
+      <div className="page-body" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", gap: 0 }}>
         <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
         <style>{`
             @keyframes spin { 100% { transform: rotate(360deg); } }
@@ -439,75 +457,79 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
       {combinedOtherAssetsSection}
 
       {/* ═══ UNIFIED ADD BOTTOM SHEET ═══ */}
-      <AddAccountSheet
-        show={showAddSheet}
-        step={addSheetStep}
-        onClose={closeSheet}
-        onSetStep={setAddSheetStep}
-        onAddCard={data => {
-          haptic.success();
-          setCards([
-            ...cards,
-            {
-              id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `card_${Date.now()}`,
-              ...data,
-              annualFeeDue: "",
-              annualFeeWaived: false,
-              notes: "",
-              apr: null,
-              hasPromoApr: false,
-              promoAprAmount: null,
-              promoAprExp: "",
-              statementCloseDay: null,
-              paymentDueDay: null,
-              minPayment: null,
-            },
-          ]);
-          setCollapsedSections(p => ({ ...p, creditCards: false }));
-        }}
-        onAddBank={data => {
-          haptic.success();
-          setBankAccounts([
-            ...bankAccounts,
-            {
-              id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `bank_${Date.now()}`,
-              ...data,
-            },
-          ]);
-          setCollapsedSections(p => ({ ...p, bankAccounts: false }));
-        }}
-        onAddInvestment={(key, symbol, shares) => {
-          const cur = financialConfig?.holdings || {};
-          setFinancialConfig({
-            ...financialConfig,
-            holdings: { ...cur, [key]: [...(cur[key] || []), { symbol, shares }] },
-          });
-          setCollapsedSections(p => ({ ...p, investments: false }));
-        }}
-        onAddGoal={goal => {
-          setFinancialConfig({ ...financialConfig, savingsGoals: [...(financialConfig?.savingsGoals || []), goal] });
-          setCollapsedSections(p => ({ ...p, savingsGoals: false }));
-        }}
-        onAddDebt={debt => {
-          setFinancialConfig({
-            ...financialConfig,
-            nonCardDebts: [...(financialConfig?.nonCardDebts || []), { id: "debt_" + Date.now(), ...debt }],
-          });
-          setCollapsedSections(p => ({ ...p, debts: false }));
-        }}
-        onAddAsset={asset => {
-          setFinancialConfig({ ...financialConfig, otherAssets: [...(financialConfig?.otherAssets || []), asset] });
-          setCollapsedSections(p => ({ ...p, otherAssets: false }));
-        }}
-        onPlaidConnect={() => {
-          haptic.medium();
-          void handlePlaidConnect();
-        }}
-        plaidLoading={plaidLoading}
-        plaidResult={plaidResult}
-        plaidError={plaidError}
-        cardCatalog={cardCatalog}
-      />
+      {showAddSheet && (
+        <Suspense fallback={null}>
+          <AddAccountSheet
+            show={showAddSheet}
+            step={addSheetStep}
+            onClose={closeSheet}
+            onSetStep={setAddSheetStep}
+            onAddCard={data => {
+              haptic.success();
+              setCards([
+                ...cards,
+                {
+                  id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `card_${Date.now()}`,
+                  ...data,
+                  annualFeeDue: "",
+                  annualFeeWaived: false,
+                  notes: "",
+                  apr: null,
+                  hasPromoApr: false,
+                  promoAprAmount: null,
+                  promoAprExp: "",
+                  statementCloseDay: null,
+                  paymentDueDay: null,
+                  minPayment: null,
+                },
+              ]);
+              setCollapsedSections(p => ({ ...p, creditCards: false }));
+            }}
+            onAddBank={data => {
+              haptic.success();
+              setBankAccounts([
+                ...bankAccounts,
+                {
+                  id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `bank_${Date.now()}`,
+                  ...data,
+                },
+              ]);
+              setCollapsedSections(p => ({ ...p, bankAccounts: false }));
+            }}
+            onAddInvestment={(key, symbol, shares) => {
+              const cur = financialConfig?.holdings || {};
+              setFinancialConfig({
+                ...financialConfig,
+                holdings: { ...cur, [key]: [...(cur[key] || []), { symbol, shares }] },
+              });
+              setCollapsedSections(p => ({ ...p, investments: false }));
+            }}
+            onAddGoal={goal => {
+              setFinancialConfig({ ...financialConfig, savingsGoals: [...(financialConfig?.savingsGoals || []), goal] });
+              setCollapsedSections(p => ({ ...p, savingsGoals: false }));
+            }}
+            onAddDebt={debt => {
+              setFinancialConfig({
+                ...financialConfig,
+                nonCardDebts: [...(financialConfig?.nonCardDebts || []), { id: "debt_" + Date.now(), ...debt }],
+              });
+              setCollapsedSections(p => ({ ...p, debts: false }));
+            }}
+            onAddAsset={asset => {
+              setFinancialConfig({ ...financialConfig, otherAssets: [...(financialConfig?.otherAssets || []), asset] });
+              setCollapsedSections(p => ({ ...p, otherAssets: false }));
+            }}
+            onPlaidConnect={() => {
+              haptic.medium();
+              void handlePlaidConnect();
+            }}
+            plaidLoading={plaidLoading}
+            plaidResult={plaidResult}
+            plaidError={plaidError}
+            cardCatalog={cardCatalog}
+          />
+        </Suspense>
+      )}
       </div>
       </div>
     </PortfolioContext.Provider>

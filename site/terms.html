@@ -21,7 +21,7 @@
     href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap"
     rel="stylesheet" />
   <meta name="robots" content="index, follow" />
-  <link rel="stylesheet" href="/style.css?v=2.8" />
+  <link rel="stylesheet" href="/style.css?v=3.0" />
 </head>
 
 <body>
@@ -224,13 +224,14 @@
         <div class="footer-links">
           <div class="footer-col">
             <h4>Product</h4>
-            <a href="/#sample-audit">Sample Audit</a>
-            <a href="/#difference">Why It Wins</a>
+            <a href="/#difference">What It Does</a>
+            <a href="/#workflow">How It Works</a>
             <a href="/#pricing">Pricing</a>
           </div>
           <div class="footer-col">
             <h4>Resources</h4>
             <a href="/guide.html">Guide</a>
+            <a href="/security.html">Security</a>
             <a href="/privacy.html">Privacy Policy</a>
             <a href="/terms.html">Terms of Service</a>
           </div>
@@ -248,36 +249,7 @@
       </div>
     </footer>
   </div>
-  <script>
-    (() => {
-      var btn = document.getElementById('hamburger-btn');
-      var nav = document.getElementById('nav-links');
-      var overlay = document.getElementById('mobile-overlay');
-      if (!btn || !nav) return;
-      function toggle() {
-        var open = nav.classList.toggle('open');
-        btn.classList.toggle('active');
-        btn.setAttribute('aria-expanded', String(open));
-        if (overlay) overlay.classList.toggle('active', open);
-      }
-      function close() {
-        nav.classList.remove('open');
-        btn.classList.remove('active');
-        btn.setAttribute('aria-expanded', 'false');
-        if (overlay) overlay.classList.remove('active');
-      }
-      btn.addEventListener('click', toggle);
-      if (overlay) overlay.addEventListener('click', close);
-            nav.querySelectorAll('a').forEach((a) => {
-                a.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const target = a.getAttribute('href');
-                    close();
-                    setTimeout(() => { window.location.href = target; }, 350);
-                });
-            });
-    })();
-  </script>
+  <script src="/main.js"></script>
 </body>
 
 </html>

@@ -19,6 +19,7 @@
   import { loadCardCatalog } from "../issuerCards.js";
   import { log } from "../logger.js";
   import { fetchMarketPrices } from "../marketData.js";
+  import { getConnections,materializeManualFallbackForConnections,reconcilePlaidConnectionAccess } from "../plaid.js";
   import { scheduleBillReminders } from "../notifications.js";
   import { advanceExpiredDate,db } from "../utils.js";
   import { useSettings } from "./SettingsContext.js";
@@ -79,13 +80,14 @@ export function PortfolioProvider({ children }: PortfolioProviderProps) {
       setBadges({});
       setMarketPrices({});
 
-      const [rn, cp, ba, renewalsSeedVersion, loadedBadges] = (await Promise.all([
+      const [rn, cp, ba, renewalsSeedVersion, loadedBadges, plaidConnections] = (await Promise.all([
         db.get("renewals"),
         db.get("card-portfolio"),
         db.get("bank-accounts"),
         db.get("renewals-seed-version"),
         db.get("unlocked-badges"),
-      ])) as [Renewal[] | null, Card[] | null, BankAccount[] | null, string | null, BadgeMap | null];
+        getConnections().catch(() => []),
+      ])) as [Renewal[] | null, Card[] | null, BankAccount[] | null, string | null, BadgeMap | null, Array<{ id?: string; _needsReconnect?: boolean }>];
 
       if (loadedBadges) setBadges(loadedBadges);
 
@@ -117,7 +119,9 @@ export function PortfolioProvider({ children }: PortfolioProviderProps) {
       scheduleBillReminders(activeRenewals).catch(() => {});
 
       let activeCards: Card[] = cp || [];
+      let activeBankAccounts: BankAccount[] = ba || [];
       let cardsChanged = false;
+      let banksChanged = false;
       activeCards = activeCards.map((card: Card) => {
         if (!card.annualFeeDue) return card;
         const newDate = advanceExpiredDate(card.annualFeeDue, 1, "years");
@@ -136,10 +140,35 @@ export function PortfolioProvider({ children }: PortfolioProviderProps) {
         cardsChanged = true;
         activeCards = normalizedCards;
       }
+      const reconnectIds = (plaidConnections || [])
+        .filter(connection => connection?._needsReconnect)
+        .map(connection => String(connection.id || "").trim())
+        .filter(Boolean);
+      if (reconnectIds.length > 0) {
+        const fallbackState = materializeManualFallbackForConnections(activeCards, activeBankAccounts, reconnectIds, {
+          keepLinkMetadata: true,
+        });
+        if (fallbackState.changed) {
+          activeCards = fallbackState.updatedCards;
+          activeBankAccounts = fallbackState.updatedBankAccounts;
+          cardsChanged = true;
+          banksChanged = true;
+        }
+      }
+      const accessState = await reconcilePlaidConnectionAccess(activeCards, activeBankAccounts);
+      if (accessState.cardsChanged || accessState.bankAccountsChanged) {
+        activeCards = accessState.updatedCards;
+        activeBankAccounts = accessState.updatedBankAccounts;
+        cardsChanged = cardsChanged || accessState.cardsChanged;
+        banksChanged = banksChanged || accessState.bankAccountsChanged;
+      }
       if (cardsChanged) db.set("card-portfolio", activeCards);
       setCards(activeCards);
 
-      if (ba) setBankAccounts(ba);
+      if (banksChanged) {
+        db.set("bank-accounts", activeBankAccounts);
+      }
+      setBankAccounts(activeBankAccounts);
 
       const catalogResult = (await loadCardCatalog()) as {
         catalog?: IssuerCardCatalog;

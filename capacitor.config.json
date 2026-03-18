@@ -24,5 +24,14 @@
     "Preferences": {
       "group": "CatalystCashStorage"
     }
-  }
+  },
+  "packageClassList": [
+    "SignInWithApple",
+    "SecureStoragePlugin",
+    "PurchasesPlugin",
+    "RevenueCatUIPlugin",
+    "FaceIdPlugin",
+    "PdfViewerPlugin",
+    "ICloudSyncPlugin"
+  ]
 }

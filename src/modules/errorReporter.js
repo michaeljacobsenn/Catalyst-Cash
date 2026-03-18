@@ -1,3 +1,4 @@
+import { getBackendUrl } from "./api.js";
 import { log, redactForLog } from "./logger.js";
 
 /**
@@ -64,7 +65,7 @@ export async function reportError(error, context = {}) {
   try {
     // Only send in production environment to avoid noise
     if (import.meta.env.PROD) {
-       fetch("https://api.catalystcash.app/api/v1/telemetry/errors", {
+       fetch(`${getBackendUrl()}/api/v1/telemetry/errors`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(entry),

@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // PRO PAYWALL — Unified upgrade sheet for Catalyst Cash
-// Shows feature comparison, pricing, and IAP placeholders.
+// Shows feature comparison, pricing, and purchase entry points.
 // Only visible when shouldShowGating() returns true.
 // ═══════════════════════════════════════════════════════════════
   import type { TouchEvent } from "react";
@@ -8,6 +8,7 @@
   import { createPortal } from "react-dom";
   import { Mono } from "../components.js";
   import { T } from "../constants.js";
+  import { PAYWALL_FEATURES,PRICING_FACTS } from "../guides/guideData.js";
   import { haptic } from "../haptics.js";
   import { IAP_PRICING } from "../subscription.js";
   import { log } from "../logger.js";
@@ -25,28 +26,6 @@ interface LocalToastApi {
   info?: (message: string) => void;
 }
 
-// ── Feature comparison: generous Free vs premium Pro ──────────
-const FEATURES = [
-  { label: "AI Audits", free: "2 / week", pro: "20 / month", icon: "📊" },
-  { label: "AskAI Chat", free: "10 / day", pro: "25 / day", icon: "💬" },
-  { label: "AI Models", free: "Standard AI", pro: "Fast AI + Precision AI", icon: "🧠" },
-  { label: "Audit History", free: "Last 12", pro: "Full archive", icon: "📜" },
-  { label: "Dashboard & Charts", free: "✓ Full", pro: "✓ Full", icon: "📈" },
-  { label: "Debt & Tax Simulator", free: "✓ Full", pro: "✓ Full", icon: "⚠️" },
-  { label: "Cash Flow Calendar", free: "✓ Full", pro: "✓ Full", icon: "📅" },
-  { label: "AI Bill Negotiation", free: "—", pro: "Drafts negotiation scripts", icon: "🗣️" },
-  { label: "Bank Sync (Plaid)", free: "2 manual snapshots", pro: "5 institutions live", icon: "🏦" },
-  { label: "Automatic Account Updates", free: "—", pro: "✓ Live sync", icon: "🔁" },
-  { label: "Transaction Ledger", free: "—", pro: "✓", icon: "📒" },
-  { label: "Categories & Rules", free: "✓", pro: "✓", icon: "🏷️" },
-  { label: "Multi-Currency (28)", free: "✓", pro: "✓", icon: "🌍" },
-  { label: "Share Score Card", free: "Branded", pro: "Clean", icon: "🎴" },
-  { label: "CSV / PDF Export", free: "—", pro: "✓", icon: "📤" },
-  { label: "Advanced Insights", free: "—", pro: "✓", icon: "🔔" },
-  { label: "Market Refresh", free: "60 min", pro: "5 min", icon: "⚡" },
-  { label: "Encrypted Backup, CCPA", free: "✓", pro: "✓", icon: "🛡️" },
-];
-
 // ── Coming soon features (creates anticipation) ──────────────
 const COMING_SOON = [
   { label: "Net Worth Projections", icon: "🔮", desc: "See where you could be in 1, 5, 10 years" },
@@ -55,7 +34,7 @@ const COMING_SOON = [
 ];
 
 export default function ProPaywall({ onClose }: ProPaywallProps) {
-  const [plan, setPlan] = useState<"yearly" | "monthly">("yearly");
+  const [plan, setPlan] = useState<"yearly" | "monthly">("monthly");
   const [purchasing, setPurchasing] = useState(false);
   const [dragY, setDragY] = useState(0);
   const [closing, setClosing] = useState(false);
@@ -226,7 +205,7 @@ export default function ProPaywall({ onClose }: ProPaywallProps) {
           <div style={{ fontSize: 36, marginBottom: 8 }}>⚡</div>
           <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 6px", color: T.text.primary }}>Upgrade to Pro</h2>
           <p style={{ fontSize: 13, color: T.text.dim, margin: "0 0 10px", lineHeight: 1.4 }}>
-            20 audits/month, premium AI models, and advanced financial tools.
+            20 audits per month, 25 AskAI messages per day, broader Plaid coverage, and the full Catalyst power stack.
           </p>
           {/* Social proof / positioning */}
           <div
@@ -291,12 +270,12 @@ export default function ProPaywall({ onClose }: ProPaywallProps) {
             >
               PRO
             </div>
-            {FEATURES.map((f, i) => (
+            {PAYWALL_FEATURES.map((f, i) => (
               <div key={i} style={{ display: "contents", animation: `fadeInUp .3s ease-out ${i * 0.04}s both` }}>
                 <div
                   style={{
                     padding: "10px 14px",
-                    borderBottom: i < FEATURES.length - 1 ? `1px solid ${T.border.subtle}` : "none",
+                    borderBottom: i < PAYWALL_FEATURES.length - 1 ? `1px solid ${T.border.subtle}` : "none",
                     fontSize: 12,
                     fontWeight: 600,
                     display: "flex",
@@ -309,7 +288,7 @@ export default function ProPaywall({ onClose }: ProPaywallProps) {
                 <div
                   style={{
                     padding: "10px 14px",
-                    borderBottom: i < FEATURES.length - 1 ? `1px solid ${T.border.subtle}` : "none",
+                    borderBottom: i < PAYWALL_FEATURES.length - 1 ? `1px solid ${T.border.subtle}` : "none",
                     fontSize: 11,
                     color: f.free === "—" ? T.text.muted : T.text.secondary,
                     textAlign: "center",
@@ -324,7 +303,7 @@ export default function ProPaywall({ onClose }: ProPaywallProps) {
                 <div
                   style={{
                     padding: "10px 14px",
-                    borderBottom: i < FEATURES.length - 1 ? `1px solid ${T.border.subtle}` : "none",
+                    borderBottom: i < PAYWALL_FEATURES.length - 1 ? `1px solid ${T.border.subtle}` : "none",
                     fontSize: 11,
                     color: T.accent.primary,
                     fontWeight: 700,
@@ -372,7 +351,7 @@ export default function ProPaywall({ onClose }: ProPaywallProps) {
                   border: `1px solid ${T.border.subtle}`,
                   textAlign: "center",
                   minWidth: 0,
-                  animation: `fadeInUp .35s ease-out ${(FEATURES.length + i) * 0.04}s both`,
+                  animation: `fadeInUp .35s ease-out ${(PAYWALL_FEATURES.length + i) * 0.04}s both`,
                 }}
               >
                 <div
@@ -537,7 +516,7 @@ export default function ProPaywall({ onClose }: ProPaywallProps) {
           >
             <span style={{ fontSize: 14, flexShrink: 0 }}>💡</span>
             <span style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>
-              Annual plan includes {IAP_PRICING.yearly.savings} — that's {IAP_PRICING.yearly.perMonth}/mo for professional-grade
+              Annual plan includes {PRICING_FACTS.yearlySavings} and works out to {PRICING_FACTS.yearlyPerMonth} for professional-grade
               financial intelligence.
             </span>
           </div>

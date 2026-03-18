@@ -412,6 +412,7 @@ test.describe("Catalyst Cash end-to-end", () => {
   });
 
   test("links a mocked Plaid account and reflects it in portfolio", async ({ page }) => {
+    await installMockNativeSecureStorage(page);
     await seedStorage(page, {});
     await mockPlaidFlow(page);
     page.on("dialog", dialog => dialog.accept());
@@ -436,6 +437,7 @@ test.describe("Catalyst Cash end-to-end", () => {
   });
 
   test("leaves the portfolio unchanged when Plaid Link exits without linking", async ({ page }) => {
+    await installMockNativeSecureStorage(page);
     await seedStorage(page, {});
     await mockPlaidFlow(page, "exit");
     await completeOnboarding(page);
@@ -453,6 +455,7 @@ test.describe("Catalyst Cash end-to-end", () => {
   });
 
   test("shows a visible error and keeps the portfolio unchanged when Plaid exchange fails", async ({ page }) => {
+    await installMockNativeSecureStorage(page);
     await seedStorage(page, {});
     await mockPlaidFlow(page, "exchange-failure");
     await completeOnboarding(page);

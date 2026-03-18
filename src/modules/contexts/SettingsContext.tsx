@@ -1,8 +1,9 @@
-  import {
-    createContext,
-    useCallback,
-    useContext,
-    useEffect,
+import { Capacitor } from "@capacitor/core";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
     useReducer,
     useState,
     type Dispatch,
@@ -102,6 +103,52 @@ export interface SettingsContextValue {
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
+const SETTINGS_BOOT_TIMEOUT_MS = 1500;
+const SETTINGS_STORAGE_BOOT_TIMEOUT_MS = 4200;
+
+function getFallbackStorageStatus() {
+  if (Capacitor.isNativePlatform()) {
+    return {
+      platform: "native",
+      available: false,
+      mode: "native-unavailable",
+      canPersistSecrets: false,
+      isHardwareBacked: false,
+      message:
+        "Secure iOS storage is unavailable. App passcodes, linked identity, API keys, and device secrets will not be persisted until native secure storage is restored.",
+    };
+  }
+
+  return {
+    platform: "web",
+    available: false,
+    mode: "web-limited",
+    canPersistSecrets: false,
+    isHardwareBacked: false,
+    message:
+      "Browser storage is not treated as secure storage. App Lock, linked identity, cloud sync credentials, and other secrets are available only in the native iPhone app.",
+  };
+}
+
+async function withSettingsBootFallback<T>(step: string, task: () => Promise<T>, fallback: T, timeoutMs = SETTINGS_BOOT_TIMEOUT_MS): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(task),
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${step} timed out`)), timeoutMs);
+      }),
+    ]);
+  } catch (error) {
+    void log.warn("settings", "Settings boot step failed", {
+      step,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return fallback;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 export const DEFAULT_FINANCIAL_CONFIG: CatalystCashConfig = {
   payday: "Friday",
@@ -246,10 +293,12 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       dispatchFinConfig({ type: "REPLACE", payload: DEFAULT_FINANCIAL_CONFIG });
       setActiveCurrencyCode(DEFAULT_FINANCIAL_CONFIG.currencyCode || "USD");
 
-      const secretStorageStatus = await getSecretStorageStatus();
-      const notifPromise: Promise<boolean> = getNotificationPermission()
-        .then((status) => status === "granted")
-        .catch(() => false);
+      const secretStorageStatus = await withSettingsBootFallback(
+        "secret-storage-status",
+        () => getSecretStorageStatus(),
+        getFallbackStorageStatus(),
+        SETTINGS_STORAGE_BOOT_TIMEOUT_MS
+      );
 
       const [
         legacyKey,
@@ -261,7 +310,6 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         savedPersona,
         backupInterval,
         savedTheme,
-        notifGranted,
       ] = (await Promise.all([
         db.get("api-key"),
         db.get("ai-provider"),
@@ -272,7 +320,6 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         db.get("ai-persona"),
         db.get("auto-backup-interval"),
         db.get("theme-mode"),
-        notifPromise,
       ])) as [
         string | null,
         string | null,
@@ -283,12 +330,21 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         PersonaMode,
         BackupInterval | null,
         ThemeMode | null,
-        boolean,
       ];
+
+      const notifGranted = await withSettingsBootFallback(
+        "notification-permission",
+        async () => (await getNotificationPermission()) === "granted",
+        false
+      );
 
       setNotifPermission(notifGranted ? "granted" : "denied");
 
-      const rawTier = await getRawTier();
+      const rawTier = await withSettingsBootFallback(
+        "subscription-tier",
+        () => getRawTier(),
+        { id: "free" }
+      );
       const validProvider = getProvider(provId || DEFAULT_PROVIDER_ID) as ProviderConfig;
       const validModelId = normalizeModelForTier(
         rawTier.id,
@@ -301,8 +357,13 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         await db.set("ai-model", validModelId);
       }
 
-      const provKey = validProvider.keyStorageKey
-        ? ((await migrateToSecureItem(validProvider.keyStorageKey, legacyKey, () => db.del("api-key"))) as string | null)
+      const provKey = validProvider.keyStorageKey && secretStorageStatus.canPersistSecrets
+        ? ((await withSettingsBootFallback(
+            "provider-key-migration",
+            () => migrateToSecureItem(validProvider.keyStorageKey, legacyKey, () => db.del("api-key")),
+            null,
+            SETTINGS_STORAGE_BOOT_TIMEOUT_MS
+          )) as string | null)
         : null;
 
       if (provKey) {

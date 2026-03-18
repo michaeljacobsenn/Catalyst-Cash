@@ -17,7 +17,8 @@
     type LucideIcon,
   } from "../icons";
   import { Badge as UIBadge,Card as UICard,InlineTooltip as UIInlineTooltip } from "../ui.js";
-  import { exportAudit,fmtDate,stripPaycheckParens } from "../utils.js";
+  import { fmtDate,stripPaycheckParens } from "../utils.js";
+  import AuditExportSheet from "./AuditExportSheet.js";
 
   import type { AuditRecord,MoveCheckState,ParsedMoveItem } from "../../types/index.js";
   import { useAudit } from "../contexts/AuditContext.js";
@@ -92,27 +93,27 @@ const ReportSection = ({ title, icon: Icon, content, accentColor, badge, isLast 
   return (
     <section
       aria-labelledby={`report-section-${title.replace(/\s+/g, "-").toLowerCase()}`}
-      style={{ padding: "22px 0", borderBottom: isLast ? "none" : `1px solid ${T.border.subtle}` }}
+      style={{ padding: "18px 0", borderBottom: isLast ? "none" : `1px solid ${T.border.subtle}` }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
         {Icon && (
           <div
             style={{
-              width: 32,
-              height: 32,
-              borderRadius: 10,
+              width: 30,
+              height: 30,
+              borderRadius: 9,
               background: `${accentColor}15`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Icon size={16} color={accentColor} strokeWidth={2.5} />
+            <Icon size={15} color={accentColor} strokeWidth={2.5} />
           </div>
         )}
         <h2
           id={`report-section-${title.replace(/\s+/g, "-").toLowerCase()}`}
-          style={{ fontSize: "clamp(17px, 4.8vw, 20px)", fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em", margin: 0 }}
+          style={{ fontSize: "clamp(16px, 4.5vw, 19px)", fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em", margin: 0 }}
         >
           {title}
         </h2>
@@ -129,6 +130,7 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
   const { navTo } = useNavigation() as NavigationApi;
 
   const [showRaw, setShowRaw] = useState<boolean>(false);
+  const [showExportSheet, setShowExportSheet] = useState<boolean>(false);
   const isSmallPhone = typeof window !== "undefined" ? window.innerWidth <= 390 : false;
   if (!audit)
     return (
@@ -174,7 +176,7 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
   return (
     <main className="page-body" aria-label="Audit results">
       <div
-        style={{ padding: "12px 0 10px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}
+        style={{ padding: "8px 0 12px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}
       >
         <div>
           <button
@@ -207,7 +209,7 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
         <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
           {audit.isTest && <Badge variant="amber">TEST · NOT SAVED</Badge>}
           <button
-            onClick={() => exportAudit(audit)}
+            onClick={() => setShowExportSheet(true)}
             title="Export Audit"
             style={{
               width: 36,
@@ -227,6 +229,10 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
           </button>
         </div>
       </div>
+
+      {showExportSheet && audit && (
+        <AuditExportSheet audit={audit} onClose={() => setShowExportSheet(false)} />
+      )}
 
       {isDegraded && (
         <Card
@@ -502,11 +508,12 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
         className="slide-up"
         style={{
           animationDelay: "0.35s",
-          background: `linear-gradient(135deg, ${T.status.green}0A, ${T.status.blue}0A)`,
-          borderColor: `${T.status.green}20`,
+          background: `linear-gradient(135deg, ${T.status.green}08, ${T.status.blue}06)`,
+          borderColor: `${T.status.green}18`,
+          padding: isSmallPhone ? "14px 14px 12px" : "16px 16px 14px",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
           <div
             style={{
               width: 28,
@@ -520,7 +527,7 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
           >
             <Target size={14} color={T.status.green} strokeWidth={2.5} />
           </div>
-          <span style={{ fontSize: 13, fontWeight: 800, color: T.text.primary }}>Freedom Journey</span>
+          <span style={{ fontSize: 12, fontWeight: 800, color: T.text.primary, letterSpacing: "0.03em", textTransform: "uppercase" }}>Freedom Journey</span>
         </div>
 
         {(() => {
@@ -624,8 +631,8 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
         })()}
       </Card>
 
-      <Card className="slide-up" style={{ animationDelay: "0.38s", background: T.bg.elevated }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+      <Card className="slide-up" style={{ animationDelay: "0.38s", background: T.bg.elevated, padding: isSmallPhone ? "14px" : undefined }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
           <div
             style={{
               width: 28,
@@ -639,16 +646,16 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
           >
             <Activity size={14} color={T.status.blue} strokeWidth={2.5} />
           </div>
-          <span style={{ fontSize: 13, fontWeight: 800, color: T.text.primary }}>How the Math Works</span>
+          <span style={{ fontSize: 12, fontWeight: 800, color: T.text.primary, letterSpacing: "0.03em", textTransform: "uppercase" }}>How the Math Works</span>
         </div>
         <div
           style={{
             fontSize: 11,
             color: T.text.secondary,
-            lineHeight: 1.5,
+            lineHeight: 1.55,
             display: "flex",
             flexDirection: "column",
-            gap: 8,
+            gap: 6,
           }}
         >
           <p>
@@ -673,7 +680,7 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
       </Card>
 
       {sections.qualityScore && (
-        <Card style={{ marginTop: 16 }}>
+        <Card style={{ marginTop: 14, background: T.bg.elevated }}>
           <ReportSection
             title="Quality Score"
             icon={CheckCircle}
@@ -691,7 +698,7 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
           <ReportSection title="Auto-Updates" icon={RefreshCw} content={sections.autoUpdates} accentColor={T.text.dim} isLast={true} />
         </Card>
       )}
-      <Card style={{ background: T.bg.elevated }}>
+      <Card style={{ background: T.bg.elevated, padding: isSmallPhone ? "12px 14px" : undefined }}>
         <div
           onClick={() => setShowRaw(!showRaw)}
           onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
@@ -709,10 +716,10 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
             alignItems: "center",
             justifyContent: "space-between",
             cursor: "pointer",
-            minHeight: 36,
+            minHeight: 42,
           }}
         >
-          <span style={{ fontSize: 11, color: T.text.dim, fontWeight: 600 }}>Raw Output</span>
+          <span style={{ fontSize: 11, color: T.text.dim, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>Raw Output</span>
           {showRaw ? <ChevronUp size={13} color={T.text.dim} /> : <ChevronDown size={13} color={T.text.dim} />}
         </div>
         {showRaw && (
@@ -740,7 +747,7 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
 
       <div
         style={{
-          marginTop: 12,
+          marginTop: 10,
           padding: isSmallPhone ? "12px 14px" : "14px 16px",
           borderRadius: T.radius.md,
           background: `${T.bg.elevated}80`,
@@ -752,7 +759,7 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
       >
         <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>⚖️</span>
         <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.6, margin: 0 }}>
-          <strong style={{ color: T.text.dim }}>Disclaimer:</strong> This analysis is generated by AI for educational and informational purposes only. It is <strong>not</strong> professional financial, tax, legal, or investment advice. Always consult a licensed financial advisor before making financial decisions. The app developer assumes no liability for actions taken based on this output.
+          <strong style={{ color: T.text.dim }}>AI Disclaimer:</strong> This analysis is educational and informational. It is <strong>not</strong> financial, tax, legal, or investment advice. Use it to frame decisions, then confirm major moves with a licensed professional.
         </p>
       </div>
     </main>

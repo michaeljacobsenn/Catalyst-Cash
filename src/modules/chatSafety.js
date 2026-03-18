@@ -41,8 +41,15 @@ function collectActiveRecommendations(decisionRecommendations = []) {
   const weight = { high: 3, medium: 2, low: 1, none: 0 };
   return decisionRecommendations
     .filter(rule => rule?.active)
-    .sort((a, b) => (weight[b?.severity] || 0) - (weight[a?.severity] || 0))
-    .slice(0, 3);
+    .sort((a, b) => {
+      const severityDelta = (weight[b?.severity] || 0) - (weight[a?.severity] || 0);
+      if (severityDelta !== 0) return severityDelta;
+      const professionalDelta = Number(Boolean(b?.requiresProfessionalHelp)) - Number(Boolean(a?.requiresProfessionalHelp));
+      if (professionalDelta !== 0) return professionalDelta;
+      const confidenceWeight = { low: 3, medium: 2, high: 1, none: 0 };
+      return (confidenceWeight[b?.confidence] || 0) - (confidenceWeight[a?.confidence] || 0);
+    })
+    .slice(0, 4);
 }
 
 function formatBulletLines(items = []) {
@@ -112,6 +119,9 @@ export function buildDeterministicChatFallback({
       ? computedStrategy.auditSignals.riskFlags
       : [];
   const activeRecommendations = collectActiveRecommendations(decisionRecommendations);
+  const highSeverityCount = activeRecommendations.filter(rule => rule?.severity === "high").length;
+  const requiresProfessionalHelp = activeRecommendations.some(rule => rule?.requiresProfessionalHelp);
+  const directionalOnly = activeRecommendations.some(rule => rule?.directionalOnly);
 
   const intro = error
     ? "The full AI response is unavailable right now, so here's the deterministic app view from your current data."
@@ -125,6 +135,13 @@ export function buildDeterministicChatFallback({
     snapshotParts.push(`Safety state: ${safetyState.headline || safetyState.summary}`);
   } else if (Array.isArray(parsed?.weeklyMoves) && parsed.weeklyMoves[0]) {
     snapshotParts.push(`Top next move: ${parsed.weeklyMoves[0]}`);
+  }
+  if (directionalOnly || highSeverityCount >= 2) {
+    snapshotParts.push(
+      requiresProfessionalHelp
+        ? "Confidence is limited because the current snapshot has stacked high-risk or conflicting signals. Use this as a stabilization-first view, not precise professional advice."
+        : "Confidence is limited because the current snapshot has stacked high-risk or conflicting signals. Prefer safety-first stabilization over optimization."
+    );
   }
 
   const priorities = [];

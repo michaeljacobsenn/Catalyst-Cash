@@ -1,15 +1,23 @@
-  import { Suspense,lazy } from "react";
+  import { Suspense,lazy,useEffect } from "react";
   import { useReducedMotion } from "framer-motion";
   import { T } from "../constants.js";
   import type { AppTab,NavViewState } from "../contexts/NavigationContext.js";
   import type { ToastApi } from "../Toast.js";
   import { ErrorBoundary } from "../ui.js";
 
-const DashboardTab = lazy(() => import("../tabs/DashboardTab.js"));
-const AIChatTab = lazy(() => import("../tabs/AIChatTab.js"));
-const CashflowTab = lazy(() => import("../tabs/CashflowTab.js"));
-const PortfolioTab = lazy(() => import("../tabs/PortfolioTab.js"));
-const AuditTab = lazy(() => import("../tabs/AuditTab.js"));
+const loadDashboardTab = () => import("../tabs/DashboardTab.js");
+const loadAIChatTab = () => import("../tabs/AIChatTab.js");
+const loadCashflowTab = () => import("../tabs/CashflowTab.js");
+const loadPortfolioTab = () => import("../tabs/PortfolioTab.js");
+const loadAuditTab = () => import("../tabs/AuditTab.js");
+const loadCardPortfolioTab = () => import("../tabs/CardPortfolioTab.js");
+const loadCardWizardTab = () => import("../tabs/CardWizardTab.js");
+
+const DashboardTab = lazy(loadDashboardTab);
+const AIChatTab = lazy(loadAIChatTab);
+const CashflowTab = lazy(loadCashflowTab);
+const PortfolioTab = lazy(loadPortfolioTab);
+const AuditTab = lazy(loadAuditTab);
 
 const TabFallback = () => (
   <div className="skeleton-loader" style={{ padding: "20px 16px" }}>
@@ -51,6 +59,35 @@ export default function TabRenderer({
   onPageScroll,
 }: TabRendererProps) {
   const prefersReducedMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const warmup = () => {
+      void Promise.allSettled([
+        loadDashboardTab(),
+        loadAIChatTab(),
+        loadCashflowTab(),
+        loadPortfolioTab(),
+        loadAuditTab(),
+        loadCardPortfolioTab(),
+        loadCardWizardTab(),
+      ]);
+    };
+
+    const idleId =
+      typeof window.requestIdleCallback === "function"
+        ? window.requestIdleCallback(warmup, { timeout: 1200 })
+        : window.setTimeout(warmup, 180);
+
+    return () => {
+      if (typeof idleId !== "number" && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(idleId);
+        return;
+      }
+      window.clearTimeout(idleId as number);
+    };
+  }, []);
 
   return (
     <>

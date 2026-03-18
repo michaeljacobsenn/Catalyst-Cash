@@ -383,7 +383,7 @@ export function PagePass3({
         </div>
       </WizField>
       {isPro ? (
-        <WizField label="Model" hint="Fast AI is selected by default. Switch anytime.">
+        <WizField label="Model" hint="Catalyst AI CFO is selected by default. Switch anytime.">
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {provider.models.map(m => {
               const active = ai.aiModel === m.id;
@@ -437,7 +437,7 @@ export function PagePass3({
           </div>
         </WizField>
       ) : (
-        <WizField label="AI Model" hint="Free includes Standard AI. Upgrade later for Fast AI and Precision AI.">
+        <WizField label="AI Model" hint="Free includes Catalyst AI. Upgrade later for Catalyst AI CFO and Boardroom reasoning.">
           <div
             style={{
               padding: "14px 16px",
@@ -449,7 +449,7 @@ export function PagePass3({
               lineHeight: 1.5,
             }}
           >
-            Standard AI is enabled automatically on Free. You can unlock Fast AI and Precision AI anytime after setup.
+            Catalyst AI is enabled automatically on Free. You can unlock Catalyst AI CFO and Boardroom reasoning anytime after setup.
           </div>
         </WizField>
       )}

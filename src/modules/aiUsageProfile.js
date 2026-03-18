@@ -1,15 +1,15 @@
 export const AI_USAGE_PROFILES = {
   audit: {
-    leanPromptTokens: 12000,
-    richPromptTokens: 14800,
-    typicalPromptTokens: 13300,
-    typicalCompletionTokens: 2200,
+    leanPromptTokens: 2200,
+    richPromptTokens: 4000,
+    typicalPromptTokens: 3000,
+    typicalCompletionTokens: 1800,
   },
   chat: {
-    leanPromptTokens: 2200,
-    richPromptTokens: 3400,
-    typicalPromptTokens: 2800,
-    typicalCompletionTokens: 500,
+    leanPromptTokens: 2100,
+    richPromptTokens: 3200,
+    typicalPromptTokens: 2600,
+    typicalCompletionTokens: 450,
   },
 };
 

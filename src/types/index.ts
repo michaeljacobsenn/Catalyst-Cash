@@ -498,6 +498,7 @@ export interface Card {
   _plaidConnectionId?: string;
   _plaidBalance?: number | null;
   _plaidAvailable?: number | null;
+  _plaidManualFallback?: boolean;
 }
 
 export interface BankAccount {
@@ -512,6 +513,7 @@ export interface BankAccount {
   _plaidConnectionId?: string;
   _plaidBalance?: number | null;
   _plaidAvailable?: number | null;
+  _plaidManualFallback?: boolean;
 }
 
 export interface Renewal {

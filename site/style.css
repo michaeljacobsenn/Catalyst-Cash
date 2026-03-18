@@ -64,6 +64,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+body.nav-open {
+  overflow: hidden;
+}
+
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-sans);
   color: var(--text);
@@ -858,14 +862,104 @@ h2 {
   gap: 20px;
 }
 
+.fit-grid,
+.app-map-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.fit-card,
+.app-map-card,
+.guide-stat-card {
+  padding: 22px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.fit-card h3,
+.app-map-card h3,
+.guide-stat-card strong {
+  font-size: 1.02rem;
+  letter-spacing: -0.03em;
+  margin-bottom: 8px;
+}
+
+.fit-card p,
+.app-map-card p,
+.guide-stat-card p {
+  color: var(--muted);
+  line-height: 1.62;
+  font-size: 0.95rem;
+}
+
+.guide-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.guide-hero-copy {
+  max-width: 54rem;
+}
+
+.guide-hero-side {
+  display: grid;
+  gap: 16px;
+}
+
+.guide-stat-card span {
+  display: inline-flex;
+  margin-bottom: 10px;
+  color: var(--blue);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+.guide-nav {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.guide-nav a {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--muted);
+  font-size: 13px;
+  transition: border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.guide-nav a:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+
 @media (max-width: 900px) {
   .bento-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .fit-grid,
+  .app-map-grid,
+  .guide-hero {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 600px) {
-  .bento-grid {
+  .bento-grid,
+  .fit-grid,
+  .app-map-grid {
     grid-template-columns: 1fr;
   }
 }

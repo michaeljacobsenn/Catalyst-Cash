@@ -31,6 +31,106 @@ export const FaceId = {
 export const PdfViewer = registerPlugin("PdfViewer");
 
 const _exportLocks = {};
+const EXPORT_ERROR_MESSAGES = {
+  nativeUnavailable: "Native export is unavailable in this build. Falling back to an in-app download.",
+};
+
+function isUnimplementedPluginError(error) {
+  const code = String(error?.code || "").toUpperCase();
+  const message = String(error?.message || error || "").toLowerCase();
+  return code === "UNIMPLEMENTED" || message.includes("unimplemented") || message.includes("not implemented");
+}
+
+function decodeBase64ToBlob(base64, mimeType) {
+  const byteCharacters = atob(base64);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  return new Blob([new Uint8Array(byteNumbers)], { type: mimeType });
+}
+
+function createExportBlob(content, mimeType, isBase64) {
+  if (isBase64) return decodeBase64ToBlob(content, mimeType);
+  return new Blob([content], { type: mimeType });
+}
+
+async function triggerBrowserDownload(filename, content, mimeType, isBase64 = false) {
+  const blob = createExportBlob(content, mimeType, isBase64);
+  const url = URL.createObjectURL(blob);
+  try {
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.target = "_blank";
+    anchor.rel = "noopener";
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+}
+
+function csvEscape(value) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function buildCsvContent(rows) {
+  return rows.map(row => row.map(csvEscape).join(",")).join("\n");
+}
+
+function normalizeExportValue(value) {
+  if (value == null) return "";
+  if (Array.isArray(value)) return value.filter(Boolean).join(" | ");
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function pushAuditExportRow(rows, section, field, value) {
+  const normalized = normalizeExportValue(value);
+  if (!normalized) return;
+  rows.push([section, field, normalized]);
+}
+
+function buildSingleAuditCsv(audit) {
+  const parsed = audit?.parsed || {};
+  const metrics = extractDashboardMetrics(parsed);
+  const rows = [["Section", "Field", "Value"]];
+
+  pushAuditExportRow(rows, "Audit", "Executed On", audit?.date || "");
+  pushAuditExportRow(rows, "Audit", "Timestamp", audit?.ts || "");
+  pushAuditExportRow(rows, "Audit", "Status", parsed?.status || "");
+  pushAuditExportRow(rows, "Audit", "Mode", parsed?.mode || "");
+  pushAuditExportRow(rows, "Audit", "Model", audit?.model || "");
+  pushAuditExportRow(rows, "Audit", "Net Worth", parsed?.netWorth ?? "");
+  pushAuditExportRow(rows, "Audit", "Net Worth Delta", parsed?.netWorthDelta ?? "");
+  pushAuditExportRow(rows, "Audit", "Health Score", parsed?.healthScore?.score ?? "");
+  pushAuditExportRow(rows, "Audit", "Health Grade", parsed?.healthScore?.grade ?? "");
+  pushAuditExportRow(rows, "Cash", "Checking", metrics.checking ?? "");
+  pushAuditExportRow(rows, "Cash", "Vault", metrics.vault ?? "");
+  pushAuditExportRow(rows, "Cash", "Pending", metrics.pending ?? "");
+  pushAuditExportRow(rows, "Cash", "Debts", metrics.debts ?? "");
+  pushAuditExportRow(rows, "Cash", "Available", metrics.available ?? "");
+  pushAuditExportRow(rows, "Narrative", "Headline", parsed?.structured?.headerCard?.headline ?? "");
+  pushAuditExportRow(rows, "Narrative", "Next Action", parsed?.nextAction || parsed?.sections?.nextAction || "");
+  pushAuditExportRow(rows, "Narrative", "Alerts", parsed?.alertsCard || []);
+  pushAuditExportRow(rows, "Narrative", "Weekly Moves", parsed?.weeklyMoves || []);
+  pushAuditExportRow(rows, "Narrative", "Risk Flags", parsed?.structured?.riskFlags || parsed?.degraded?.riskFlags || []);
+  pushAuditExportRow(rows, "Narrative", "Executive Summary", parsed?.raw || "");
+
+  (parsed?.dashboardCard || []).forEach((row, index) => {
+    pushAuditExportRow(rows, "Dashboard", `Card ${index + 1} Category`, row?.category || "");
+    pushAuditExportRow(rows, "Dashboard", `Card ${index + 1} Amount`, row?.amount || "");
+    pushAuditExportRow(rows, "Dashboard", `Card ${index + 1} Status`, row?.status || "");
+  });
+
+  (parsed?.moveItems || []).forEach((move, index) => {
+    pushAuditExportRow(rows, "Moves", `Move ${index + 1}`, move?.text || "");
+  });
+
+  return buildCsvContent(rows);
+}
 
 export async function nativeExport(filename, content, mimeType = "text/plain", isBase64 = false) {
   if (_exportLocks[filename] && Date.now() - _exportLocks[filename] < 1500) return;
@@ -43,41 +143,36 @@ export async function nativeExport(filename, content, mimeType = "text/plain", i
       const res = await Filesystem.writeFile(opts);
       // Only pass `files` — passing both `url` and `files` causes iOS to show 2 items
       await Share.share({ files: [res.uri], dialogTitle: "Export File" });
+      return;
     } catch (e) {
       console.error("Native export failed:", e);
+      if (isUnimplementedPluginError(e)) {
+        if (window.toast) window.toast.info(EXPORT_ERROR_MESSAGES.nativeUnavailable);
+        await triggerBrowserDownload(filename, content, mimeType, isBase64);
+        return;
+      }
       if (window.toast) window.toast.error("Export failed. Please check permissions.");
       throw e;
     }
-  } else {
-    // web fallback
-    let blob;
-    if (isBase64) {
-      const byteCharacters = atob(content);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      blob = new Blob([new Uint8Array(byteNumbers)], { type: mimeType });
-    } else {
-      blob = new Blob([content], { type: mimeType });
-    }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   }
+  await triggerBrowserDownload(filename, content, mimeType, isBase64);
+}
+
+const PREFS_TIMEOUT_MS = 2000;
+
+function withPrefsTimeout(promise) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Preferences bridge timed out")), PREFS_TIMEOUT_MS)),
+  ]);
 }
 
 export const db = {
   async get(k) {
     try {
-      const { value } = await Preferences.get({ key: k });
+      const { value } = await withPrefsTimeout(Preferences.get({ key: k }));
       return value ? JSON.parse(value) : null;
-    } catch {
+    } catch (e) {
       try {
         const r = localStorage.getItem(k);
         return r ? JSON.parse(r) : null;
@@ -88,7 +183,7 @@ export const db = {
   },
   async set(k, v) {
     try {
-      await Preferences.set({ key: k, value: JSON.stringify(v) });
+      await withPrefsTimeout(Preferences.set({ key: k, value: JSON.stringify(v) }));
       return true;
     } catch {
       try {
@@ -101,7 +196,7 @@ export const db = {
   },
   async del(k) {
     try {
-      await Preferences.remove({ key: k });
+      await withPrefsTimeout(Preferences.remove({ key: k }));
     } catch {
       try {
         localStorage.removeItem(k);
@@ -112,7 +207,7 @@ export const db = {
   },
   async keys() {
     try {
-      const { keys } = await Preferences.keys();
+      const { keys } = await withPrefsTimeout(Preferences.keys());
       return keys;
     } catch {
       try {
@@ -124,7 +219,7 @@ export const db = {
   },
   async clear() {
     try {
-      await Preferences.clear();
+      await withPrefsTimeout(Preferences.clear());
     } catch {
       try {
         localStorage.clear();
@@ -1111,6 +1206,32 @@ export async function exportAudit(audit) {
   }
 }
 
+export async function exportAuditJson(audit) {
+  if (!audit) return;
+  const payload = {
+    app: "Catalyst Cash",
+    version: APP_VERSION,
+    exportedAt: new Date().toISOString(),
+    type: "single-audit",
+    audit,
+  };
+  await nativeExport(
+    `CatalystCash_Audit_${audit.date || new Date().toISOString().split("T")[0]}.json`,
+    JSON.stringify(payload, null, 2),
+    "application/json"
+  );
+}
+
+export async function exportAuditCsv(audit) {
+  if (!audit) return;
+  const csv = buildSingleAuditCsv(audit);
+  await nativeExport(
+    `CatalystCash_Audit_${audit.date || new Date().toISOString().split("T")[0]}.csv`,
+    csv,
+    "text/csv"
+  );
+}
+
 export async function exportAllAudits(audits) {
   if (!audits?.length) return;
   const payload = {
@@ -1164,7 +1285,7 @@ export async function exportAuditCSV(audits) {
       d.available ?? "",
     ]);
   });
-  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const csv = buildCsvContent(rows);
   await nativeExport(`CatalystCash_History_${new Date().toISOString().split("T")[0]}.csv`, csv, "text/csv");
 }
 

@@ -30,7 +30,35 @@
   import { db } from "./utils.js";
 
 const PLAID_STORAGE_KEY = "plaid-connections";
+const PLAID_FREE_ACTIVE_CONNECTION_KEY = "plaid-free-active-connection-id";
 const API_BASE = getBackendUrl();
+const LINK_TOKEN_TIMEOUT_MS = 20_000;
+const EXCHANGE_TIMEOUT_MS = 20_000;
+const SYNC_FORCE_TIMEOUT_MS = 120_000;
+const SYNC_STATUS_TIMEOUT_MS = 30_000;
+const PLAID_LINK_UI_TIMEOUT_MS = 600_000; // 10 minutes
+let activePlaidLinkPromise = null;
+
+function createAbortTimeout(ms, label = "Plaid request") {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error(`${label} timed out`)), ms);
+  return {
+    signal: controller.signal,
+    cancel: () => clearTimeout(timer),
+  };
+}
+
+function withPlaidTimeout(promiseFactory, ms, label) {
+  let timer = null;
+  return Promise.race([
+    Promise.resolve().then(promiseFactory),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
 
 async function buildPlaidBackendHeaders(extra = {}) {
   return buildIdentityHeaders({
@@ -39,21 +67,40 @@ async function buildPlaidBackendHeaders(extra = {}) {
   });
 }
 
-async function fetchPlaidBackend(url, init = {}) {
-  let response = await fetchWithRetry(url, {
-    ...init,
-    headers: await buildPlaidBackendHeaders(init.headers || {}),
-  });
-
-  if (response.status === 401) {
-    await clearIdentitySession().catch(() => false);
-    response = await fetchWithRetry(url, {
+async function fetchPlaidBackend(url, init = {}, options = {}) {
+  const requestTimeoutMs = options.timeoutMs || LINK_TOKEN_TIMEOUT_MS;
+  const authBootstrapTimeoutMs = options.authBootstrapTimeoutMs || LINK_TOKEN_TIMEOUT_MS;
+  const timeout = createAbortTimeout(requestTimeoutMs, "Plaid backend request");
+  try {
+    const headers = await withPlaidTimeout(
+      () => buildPlaidBackendHeaders(init.headers || {}),
+      authBootstrapTimeoutMs,
+      "Plaid auth bootstrap"
+    );
+    let response = await fetchWithRetry(url, {
       ...init,
-      headers: await buildPlaidBackendHeaders(init.headers || {}),
+      headers,
+      signal: init.signal || timeout.signal,
     });
-  }
 
-  return response;
+    if (response.status === 401) {
+      await clearIdentitySession().catch(() => false);
+      const retryHeaders = await withPlaidTimeout(
+        () => buildPlaidBackendHeaders(init.headers || {}),
+        authBootstrapTimeoutMs,
+        "Plaid auth bootstrap"
+      );
+      response = await fetchWithRetry(url, {
+        ...init,
+        headers: retryHeaders,
+        signal: init.signal || timeout.signal,
+      });
+    }
+
+    return response;
+  } finally {
+    timeout.cancel();
+  }
 }
 
 // ─── Connection State Management ──────────────────────────────
@@ -68,11 +115,30 @@ export async function getConnections() {
   if (!Array.isArray(stored) || stored.length === 0) return [];
 
   const sanitized = stored.map(sanitizeConnectionForStorage);
-  if (stored.some(connection => connection && "accessToken" in connection)) {
-    console.warn("[Plaid] Removed legacy access tokens from local connection storage.");
-    await db.set(PLAID_STORAGE_KEY, sanitized);
+  
+  const uniqueConns = [];
+  const seenIds = new Set();
+  let deduplicated = false;
+
+  for (let i = sanitized.length - 1; i >= 0; i--) {
+    const conn = sanitized[i];
+    if (conn.id && seenIds.has(conn.id)) {
+      deduplicated = true;
+      continue;
+    }
+    if (conn.id) seenIds.add(conn.id);
+    uniqueConns.unshift(conn);
   }
-  return sanitized;
+
+  const hasLegacyTokens = stored.some(connection => connection && "accessToken" in connection);
+  
+  if (deduplicated || hasLegacyTokens) {
+    if (deduplicated) console.warn("[Plaid] Cleaned up duplicate connections from local storage.");
+    if (hasLegacyTokens) console.warn("[Plaid] Removed legacy access tokens from local connection storage.");
+    await db.set(PLAID_STORAGE_KEY, uniqueConns);
+  }
+  
+  return uniqueConns;
 }
 
 /**
@@ -81,6 +147,121 @@ export async function getConnections() {
  */
 async function saveConnections(conns) {
   await db.set(PLAID_STORAGE_KEY, (conns || []).map(sanitizeConnectionForStorage));
+}
+
+function sortConnectionsForPriority(connections = []) {
+  return [...connections].sort((a, b) => {
+    const aReconnect = a?._needsReconnect ? 1 : 0;
+    const bReconnect = b?._needsReconnect ? 1 : 0;
+    if (aReconnect !== bReconnect) return aReconnect - bReconnect;
+
+    const aLastSync = a?.lastSync ? new Date(a.lastSync).getTime() : 0;
+    const bLastSync = b?.lastSync ? new Date(b.lastSync).getTime() : 0;
+    if (aLastSync !== bLastSync) return bLastSync - aLastSync;
+
+    return String(a?.institutionName || "").localeCompare(String(b?.institutionName || ""));
+  });
+}
+
+function choosePreferredFreeConnectionId(connections = [], preferredId = null) {
+  const viableConnections = sortConnectionsForPriority(
+    (connections || []).filter(connection => connection?.id)
+  );
+  if (viableConnections.length === 0) return null;
+
+  if (preferredId && viableConnections.some(connection => connection.id === preferredId)) {
+    return preferredId;
+  }
+
+  return viableConnections[0]?.id || null;
+}
+
+export async function getPreferredFreeConnectionId() {
+  return (await db.get(PLAID_FREE_ACTIVE_CONNECTION_KEY)) || null;
+}
+
+export async function setPreferredFreeConnectionId(connectionId) {
+  const normalizedId = String(connectionId || "").trim() || null;
+  await db.set(PLAID_FREE_ACTIVE_CONNECTION_KEY, normalizedId);
+  return normalizedId;
+}
+
+export async function reconcilePlaidConnectionAccess(cards = [], bankAccounts = []) {
+  const conns = await getConnections();
+  const subscriptionState = await getSubscriptionState();
+  const gatingEnforced = isGatingEnforced();
+  const limit = gatingEnforced ? (INSTITUTION_LIMITS[subscriptionState?.tier] || INSTITUTION_LIMITS.free) : Infinity;
+
+  const preferredId = await getPreferredFreeConnectionId();
+  const activeConnectionId =
+    gatingEnforced && subscriptionState?.tier === "free"
+      ? choosePreferredFreeConnectionId(conns, preferredId)
+      : null;
+
+  const nextConnections = conns.map(connection => {
+    const shouldPause =
+      gatingEnforced &&
+      subscriptionState?.tier === "free" &&
+      limit !== Infinity &&
+      conns.length > limit &&
+      connection?.id &&
+      connection.id !== activeConnectionId;
+
+    return {
+      ...connection,
+      _freeTierPaused: shouldPause,
+    };
+  });
+
+  const pausedIds = nextConnections
+    .filter(connection => connection?._freeTierPaused)
+    .map(connection => String(connection.id || "").trim())
+    .filter(Boolean);
+  const syncableConnections = nextConnections.filter(connection => !connection?._freeTierPaused);
+  const syncableConnectionIds = syncableConnections
+    .map(connection => String(connection.id || "").trim())
+    .filter(Boolean);
+
+  const connectionsChanged =
+    nextConnections.length !== conns.length ||
+    nextConnections.some((connection, index) => Boolean(connection?._freeTierPaused) !== Boolean(conns[index]?._freeTierPaused));
+
+  if (connectionsChanged) {
+    await saveConnections(nextConnections);
+  }
+
+  const resolvedPreferredId =
+    gatingEnforced && subscriptionState?.tier === "free" && activeConnectionId
+      ? activeConnectionId
+      : null;
+  if (resolvedPreferredId !== preferredId) {
+    await setPreferredFreeConnectionId(resolvedPreferredId);
+  }
+
+  const fallbackState =
+    pausedIds.length > 0
+      ? materializeManualFallbackForConnections(cards, bankAccounts, pausedIds, {
+          keepLinkMetadata: true,
+        })
+      : { updatedCards: cards, updatedBankAccounts: bankAccounts, changed: false };
+
+  return {
+    connections: nextConnections,
+    syncableConnections,
+    syncableConnectionIds,
+    pausedConnectionIds: pausedIds,
+    activeFreeConnectionId: resolvedPreferredId,
+    updatedCards: fallbackState.updatedCards,
+    updatedBankAccounts: fallbackState.updatedBankAccounts,
+    cardsChanged: fallbackState.changed,
+    bankAccountsChanged: fallbackState.changed,
+  };
+}
+
+function toFiniteMoney(value) {
+  if (value == null || value === "") return null;
+  const num = typeof value === "number" ? value : parseFloat(String(value));
+  return Number.isFinite(num) ? num : null;
 }
 
 /**
@@ -94,6 +275,101 @@ function sanitizeConnectionForStorage(connection = {}) {
     ...rest,
     accounts: (connection.accounts || []).map(account => ({ ...account })),
   };
+}
+
+/**
+ * Convert Plaid-managed balances for lost connections into editable manual values.
+ * Keeps link IDs by default so reconnect can still repair the account in place.
+ */
+export function materializeManualFallbackForConnections(
+  cards = [],
+  bankAccounts = [],
+  connectionIds = [],
+  options = {}
+) {
+  const keepLinkMetadata = options.keepLinkMetadata !== false;
+  const targetConnectionIds = new Set(
+    Array.from(connectionIds || []).map(id => String(id || "").trim()).filter(Boolean)
+  );
+
+  if (targetConnectionIds.size === 0) {
+    return { updatedCards: cards, updatedBankAccounts: bankAccounts, changed: false };
+  }
+
+  let changed = false;
+
+  const updatedCards = cards.map(card => {
+    const connectionId = String(card?._plaidConnectionId || "").trim();
+    if (!connectionId || !targetConnectionIds.has(connectionId)) return card;
+
+    const nextBalance = toFiniteMoney(card._plaidBalance ?? card.balance);
+    const nextLimit = toFiniteMoney(card._plaidLimit ?? card.limit ?? card.creditLimit);
+
+    const nextCard = {
+      ...card,
+      balance: nextBalance ?? card.balance ?? null,
+      limit: nextLimit ?? card.limit ?? null,
+      _plaidBalance: null,
+      _plaidAvailable: null,
+      _plaidLimit: null,
+      _plaidManualFallback: true,
+      _plaidLiability: null,
+      _plaidLastSync: null,
+    };
+
+    if (!keepLinkMetadata) {
+      nextCard._plaidAccountId = undefined;
+      nextCard._plaidConnectionId = undefined;
+    }
+
+    if (
+      nextCard.balance !== card.balance ||
+      nextCard.limit !== card.limit ||
+      card._plaidBalance != null ||
+      card._plaidAvailable != null ||
+      card._plaidLimit != null ||
+      card._plaidManualFallback !== true ||
+      (!keepLinkMetadata && (card._plaidAccountId || card._plaidConnectionId))
+    ) {
+      changed = true;
+    }
+
+    return nextCard;
+  });
+
+  const updatedBankAccounts = bankAccounts.map(account => {
+    const connectionId = String(account?._plaidConnectionId || "").trim();
+    if (!connectionId || !targetConnectionIds.has(connectionId)) return account;
+
+    const nextBalance = toFiniteMoney(account._plaidAvailable ?? account._plaidBalance ?? account.balance);
+    const nextAccount = {
+      ...account,
+      balance: nextBalance ?? account.balance ?? null,
+      _plaidBalance: null,
+      _plaidAvailable: null,
+      _plaidManualFallback: true,
+      _plaidLastSync: null,
+    };
+
+    if (!keepLinkMetadata) {
+      nextAccount._plaidAccountId = undefined;
+      nextAccount._plaidConnectionId = undefined;
+    }
+
+    if (
+      nextAccount.balance !== account.balance ||
+      account._plaidBalance != null ||
+      account._plaidAvailable != null ||
+      account._plaidManualFallback !== true ||
+      (!keepLinkMetadata && (account._plaidAccountId || account._plaidConnectionId))
+    ) {
+      changed = true;
+    }
+
+    return nextAccount;
+  });
+
+  return { updatedCards, updatedBankAccounts, changed };
 }
 
 /**
@@ -116,6 +392,10 @@ export async function removeConnection(connectionId) {
   }
 
   await saveConnections(conns.filter(c => c.id !== connectionId));
+  const preferredId = await getPreferredFreeConnectionId();
+  if (preferredId && preferredId === connectionId) {
+    await setPreferredFreeConnectionId(null);
+  }
 }
 
 /**
@@ -142,25 +422,34 @@ export async function purgeBrokenConnections() {
  * The backend calls Plaid's /link/token/create endpoint.
  */
 export async function createLinkToken() {
-  const res = await fetchPlaidBackend(`${API_BASE}/plaid/link-token`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => "");
-    console.error(`[Plaid] link-token response ${res.status}:`, errBody.substring(0, 500));
-    // Try to extract Plaid's specific error message
-    let detail = `HTTP ${res.status}`;
-    try {
-      const parsed = JSON.parse(errBody);
-      detail = parsed.error_message || parsed.error || detail;
-    } catch {
-      /* not JSON */
+  const timeout = createAbortTimeout(LINK_TOKEN_TIMEOUT_MS, "Plaid link token");
+  try {
+    const res = await fetchPlaidBackend(`${API_BASE}/plaid/link-token`, {
+      method: "POST",
+      body: JSON.stringify({}),
+      signal: timeout.signal,
+    });
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      console.error(`[Plaid] link-token response ${res.status}:`, errBody.substring(0, 500));
+      // Try to extract Plaid's specific error message
+      let detail = `HTTP ${res.status}`;
+      try {
+        const parsed = JSON.parse(errBody);
+        detail = parsed.error_message || parsed.error || detail;
+      } catch {
+        /* not JSON */
+      }
+      throw new Error(`Link token failed: ${detail}`);
     }
-    throw new Error(`Link token failed: ${detail}`);
+    const data = await res.json();
+    return data.link_token;
+  } catch (err) {
+    console.error(`[Plaid] fetch backend link-token network error:`, err?.message || err);
+    throw err;
+  } finally {
+    timeout.cancel();
   }
-  const data = await res.json();
-  return data.link_token;
 }
 
 /**
@@ -169,67 +458,115 @@ export async function createLinkToken() {
  * Returns the public_token and metadata from the Link session.
  */
 export async function openPlaidLink(options = {}) {
-  console.warn("[Plaid] openPlaidLink() called");
-  const { skipLimit = false } = options;
-
-  // Enforce Institution Limits before opening Link
-  const conns = await getConnections();
-  const subState = await getSubscriptionState();
-  const limit = INSTITUTION_LIMITS[subState.tier] || INSTITUTION_LIMITS.free;
-
-  if (!skipLimit && isGatingEnforced() && conns.length >= limit) {
-    throw new Error(`Institution limit reached. Your ${subState.tier === "pro" ? "Pro" : "Free"} plan allows up to ${limit} bank connections.`);
+  if (activePlaidLinkPromise) {
+    console.warn("[Plaid] Reusing active Link flow");
+    return activePlaidLinkPromise;
   }
 
-  // Dynamically load Plaid Link SDK if not already loaded
-  if (!window.Plaid) {
-    console.warn("[Plaid] Loading Plaid Link SDK from CDN...");
-    await new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
-      script.onload = () => {
-        console.warn("[Plaid] SDK script loaded");
-        resolve();
+  activePlaidLinkPromise = withPlaidTimeout(async () => {
+    const { skipLimit = false } = options;
+
+    const conns = await getConnections();
+
+    if (!skipLimit) {
+      let subState = null;
+      try {
+        subState = await getSubscriptionState();
+      } catch (err) {
+        console.warn("[Plaid] Subscription state unavailable:", err?.message || err);
+      }
+      const tierId = subState?.tier || "free";
+      const limit = INSTITUTION_LIMITS[tierId] || INSTITUTION_LIMITS.free;
+
+      if (isGatingEnforced() && conns.length >= limit) {
+        throw new Error(`Institution limit reached. Your ${tierId === "pro" ? "Pro" : "Free"} plan allows up to ${limit} bank connections.`);
+      }
+    }
+
+    // Dynamically load Plaid Link SDK if not already loaded
+    if (!window.Plaid) {
+      console.warn("[Plaid] Loading Plaid Link SDK from CDN...");
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
+        
+        const timer = setTimeout(() => {
+          reject(new Error("Plaid Link SDK failed to load within 10 seconds. Please disable content blockers or adblockers and try again."));
+        }, 10000);
+
+        script.onload = () => {
+          clearTimeout(timer);
+          console.warn("[Plaid] SDK script loaded");
+          resolve();
+        };
+        script.onerror = e => {
+          clearTimeout(timer);
+          console.error("[Plaid] SDK script FAILED to load:", e);
+          reject(new Error("Failed to load Plaid Link SDK — check network connectivity"));
+        };
+        document.head.appendChild(script);
+      });
+    }
+    if (!window.Plaid) {
+      throw new Error("Plaid Link SDK loaded but window.Plaid is undefined");
+    }
+
+    console.warn("[Plaid] Creating link token...");
+    let linkToken;
+    try {
+      linkToken = await createLinkToken();
+      console.warn("[Plaid] Link token obtained:", linkToken ? "OK" : "EMPTY");
+    } catch (e) {
+      console.error("[Plaid] createLinkToken failed:", e?.message || e);
+      throw e;
+    }
+
+    return new Promise((resolve, reject) => {
+      console.warn("[Plaid] Creating Plaid.create handler...");
+      let settled = false;
+      let timeoutId = null;
+      const finish = (fn) => {
+        if (settled) return;
+        settled = true;
+        if (timeoutId) clearTimeout(timeoutId);
+        fn();
       };
-      script.onerror = e => {
-        console.error("[Plaid] SDK script FAILED to load:", e);
-        reject(new Error("Failed to load Plaid Link SDK — check network connectivity"));
-      };
-      document.head.appendChild(script);
+      const handler = window.Plaid.create({
+        token: linkToken,
+        onSuccess: (publicToken, metadata) => {
+          finish(() => resolve({ publicToken, metadata }));
+        },
+        onExit: (err, _metadata) => {
+          if (err) {
+            finish(() => reject(new Error(err.display_message || err.error_message || "Plaid Link exited")));
+          } else {
+            finish(() => reject(new Error("cancelled")));
+          }
+        },
+        onEvent: (/* eventName, metadata */) => {
+          // Could log analytics here
+        },
+      });
+      timeoutId = setTimeout(() => {
+        try {
+          handler.exit?.({ force: true });
+        } catch {
+          /* best-effort close */
+        }
+        finish(() => reject(new Error("Plaid Link timed out. Please try again.")));
+      }, PLAID_LINK_UI_TIMEOUT_MS);
+      try {
+        handler.open();
+        console.warn("[Plaid] handler.open() called");
+      } catch (err) {
+        finish(() => reject(new Error(err?.message || "Plaid Link failed to open")));
+      }
     });
-  }
-  if (!window.Plaid) {
-    throw new Error("Plaid Link SDK loaded but window.Plaid is undefined");
-  }
-
-  console.warn("[Plaid] Creating link token...");
-  let linkToken;
-  try {
-    linkToken = await createLinkToken();
-    console.warn("[Plaid] Link token obtained:", linkToken ? "OK" : "EMPTY");
-  } catch (e) {
-    console.error("[Plaid] createLinkToken failed:", e);
-    throw e;
-  }
-
-  return new Promise((resolve, reject) => {
-    console.warn("[Plaid] Creating Plaid.create handler...");
-    const handler = window.Plaid.create({
-      token: linkToken,
-      onSuccess: (publicToken, metadata) => {
-        resolve({ publicToken, metadata });
-      },
-      onExit: (err, _metadata) => {
-        if (err) reject(new Error(err.display_message || err.error_message || "Plaid Link exited"));
-        else reject(new Error("cancelled"));
-      },
-      onEvent: (/* eventName, metadata */) => {
-        // Could log analytics here
-      },
-    });
-    handler.open();
-    console.warn("[Plaid] handler.open() called");
+  }, PLAID_LINK_UI_TIMEOUT_MS + 10000, "Plaid Link flow").finally(() => {
+    activePlaidLinkPromise = null;
   });
+
+  return activePlaidLinkPromise;
 }
 
 /**
@@ -237,13 +574,19 @@ export async function openPlaidLink(options = {}) {
  * The backend calls Plaid's /item/public_token/exchange.
  */
 export async function exchangeToken(publicToken) {
-  const res = await fetchPlaidBackend(`${API_BASE}/plaid/exchange`, {
-    method: "POST",
-    body: JSON.stringify({ publicToken }),
-  });
-  if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`);
-  const data = await res.json();
-  return { itemId: data.item_id };
+  const timeout = createAbortTimeout(EXCHANGE_TIMEOUT_MS, "Plaid exchange");
+  try {
+    const res = await fetchPlaidBackend(`${API_BASE}/plaid/exchange`, {
+      method: "POST",
+      body: JSON.stringify({ publicToken }),
+      signal: timeout.signal,
+    });
+    if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`);
+    const data = await res.json();
+    return { itemId: data.item_id };
+  } finally {
+    timeout.cancel();
+  }
 }
 
 /**
@@ -343,10 +686,15 @@ export async function reconnectBank(connection, onSuccess, onError) {
  * Force the backend to fetch fresh data from Plaid immediately
  * Used by Manual Sync. Respects backend tier cooldowns.
  */
-export async function forceBackendSync() {
+export async function forceBackendSync(options = {}) {
+  const body = {};
+  if (options.connectionId) body.connectionId = options.connectionId;
   const res = await fetchPlaidBackend(`${API_BASE}/api/sync/force`, {
     method: "POST",
-    body: JSON.stringify({}),
+    body: JSON.stringify(body),
+  }, {
+    timeoutMs: SYNC_FORCE_TIMEOUT_MS,
+    authBootstrapTimeoutMs: LINK_TOKEN_TIMEOUT_MS,
   });
   if (!res.ok) {
     if (res.status === 429) {
@@ -363,7 +711,7 @@ export async function forceBackendSync() {
  * Fetch fresh balances for a connection from Plaid.
  * Our backend calls Plaid's /accounts/balance/get.
  */
-export async function fetchBalances(connectionId) {
+export async function fetchBalances(connectionId, retryCount = 0) {
   const conns = await getConnections();
   const conn = conns.find(c => c.id === connectionId);
   if (!conn) throw new Error(`Connection ${connectionId} not found`);
@@ -371,6 +719,9 @@ export async function fetchBalances(connectionId) {
   const res = await fetchPlaidBackend(`${API_BASE}/api/sync/status`, {
     method: "POST",
     body: JSON.stringify({}),
+  }, {
+    timeoutMs: SYNC_STATUS_TIMEOUT_MS,
+    authBootstrapTimeoutMs: LINK_TOKEN_TIMEOUT_MS,
   });
   if (!res.ok) {
     const errBody = await res.text().catch(() => "");
@@ -379,8 +730,13 @@ export async function fetchBalances(connectionId) {
   }
   const data = await res.json();
   if (!data.hasData) {
+    if (retryCount < 20) {
+      console.warn(`[Plaid] No pre-fetched sync data available for connection ${connectionId} yet. Retrying in 2s...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      return fetchBalances(connectionId, retryCount + 1);
+    }
     console.warn(`[Plaid] No pre-fetched sync data available for connection ${connectionId} yet. Waiting for Webhook.`);
-    return conn; // Return unchanged
+    return { ...conn, _pendingSync: true, _syncStatus: "pending" };
   }
 
   const { accounts } = data.balances || { accounts: [] };
@@ -434,7 +790,7 @@ export async function fetchAllBalances() {
  *     last_payment_date, last_statement_balance, last_statement_issue_date,
  *     minimum_payment_amount, next_payment_due_date }
  */
-export async function fetchLiabilities(connectionId) {
+export async function fetchLiabilities(connectionId, retryCount = 0) {
   const conns = await getConnections();
   const conn = conns.find(c => c.id === connectionId);
   if (!conn) throw new Error("Connection not found");
@@ -442,10 +798,19 @@ export async function fetchLiabilities(connectionId) {
   const res = await fetchPlaidBackend(`${API_BASE}/api/sync/status`, {
     method: "POST",
     body: JSON.stringify({}),
+  }, {
+    timeoutMs: SYNC_STATUS_TIMEOUT_MS,
+    authBootstrapTimeoutMs: LINK_TOKEN_TIMEOUT_MS,
   });
   if (!res.ok) throw new Error(`Liabilities fetch failed: ${res.status}`);
   const data = await res.json();
-  if (!data.hasData) return conn;
+  if (!data.hasData) {
+    if (retryCount < 20) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      return fetchLiabilities(connectionId, retryCount + 1);
+    }
+    return { ...conn, _pendingSync: true, _syncStatus: "pending" };
+  }
 
   // Plaid returns { liabilities: { credit: [...] }, accounts: [...] } inside data.liabilities
   const creditLiabilities = data.liabilities?.liabilities?.credit || [];
@@ -486,21 +851,30 @@ export async function fetchBalancesAndLiabilities(connectionId) {
   // Run sequentially to avoid concurrent read→modify→save race condition.
   // Both functions read connections, modify, and saveConnections();
   // running them in parallel causes the last writer to overwrite the other's changes.
-  await fetchBalances(connectionId);
+  const balanceResult = await fetchBalances(connectionId);
+  let pendingSync = Boolean(balanceResult?._pendingSync);
   try {
-    await fetchLiabilities(connectionId);
+    const liabilityResult = await fetchLiabilities(connectionId);
+    pendingSync = pendingSync || Boolean(liabilityResult?._pendingSync);
   } catch (e) {
     console.warn(`[Plaid] liabilities skipped for ${connectionId}: ${e.message}`);
   }
   const conns = await getConnections();
-  return conns.find(c => c.id === connectionId);
+  const fresh = conns.find(c => c.id === connectionId);
+  return pendingSync ? { ...fresh, _pendingSync: true, _syncStatus: "pending" } : fresh;
 }
 
 /**
  * Fetch balances + liabilities for ALL connections in parallel.
  */
-export async function fetchAllBalancesAndLiabilities() {
+export async function fetchAllBalancesAndLiabilities(options = {}) {
+  const allowedConnectionIds = new Set(
+    Array.from(options.connectionIds || []).map(id => String(id || "").trim()).filter(Boolean)
+  );
   let conns = await getConnections();
+  if (allowedConnectionIds.size > 0) {
+    conns = conns.filter(conn => allowedConnectionIds.has(String(conn?.id || "").trim()));
+  }
 
   // Deduplicate: if multiple connections share the same institutionId, keep only the latest
   const seen = new Map();
@@ -559,6 +933,9 @@ export async function fetchTransactions(connectionId, _days = 30) {
   const res = await fetchPlaidBackend(`${API_BASE}/api/sync/status`, {
     method: "POST",
     body: JSON.stringify({}),
+  }, {
+    timeoutMs: SYNC_STATUS_TIMEOUT_MS,
+    authBootstrapTimeoutMs: LINK_TOKEN_TIMEOUT_MS,
   });
 
   if (!res.ok) {
@@ -572,7 +949,7 @@ export async function fetchTransactions(connectionId, _days = 30) {
   const data = await res.json();
   if (!data.hasData) return [];
 
-  const raw = data.transactions?.transactions || [];
+  const raw = filterTransactionsForConnection(data.transactions?.transactions || [], conn);
 
   // Normalize Plaid transaction format → app format
   return raw.map(t => {
@@ -595,14 +972,33 @@ export async function fetchTransactions(connectionId, _days = 30) {
   });
 }
 
+export function filterTransactionsForConnection(transactions = [], connection = null) {
+  if (!Array.isArray(transactions) || transactions.length === 0) return [];
+  const accountIds = new Set(
+    (connection?.accounts || [])
+      .map(account => account?.plaidAccountId)
+      .filter(Boolean)
+  );
+  if (accountIds.size === 0) return transactions.filter(Boolean);
+  return transactions.filter(transaction => accountIds.has(transaction?.account_id));
+}
+
 /**
  * Fetch transactions for ALL connections and store locally.
  * Includes On-Device AI Categorization Engine pipeline.
  * @param {number} [days=30] - How many days back
+ * @param {{ maxTransactions?: number, categorizeWithAi?: boolean }} [options]
  * @returns {{ transactions: Array, fetchedAt: string }}
  */
-export async function fetchAllTransactions(days = 30) {
-  const conns = await getConnections();
+export async function fetchAllTransactions(days = 30, options = {}) {
+  const maxTransactions = Number.isFinite(options.maxTransactions) ? Math.max(0, Number(options.maxTransactions)) : Infinity;
+  const categorizeWithAi = options.categorizeWithAi !== false;
+  const allowedConnectionIds = new Set(
+    Array.from(options.connectionIds || []).map(id => String(id || "").trim()).filter(Boolean)
+  );
+  const conns = (await getConnections()).filter(conn =>
+    allowedConnectionIds.size === 0 || allowedConnectionIds.has(String(conn?.id || "").trim())
+  );
   let all = [];
 
   for (const conn of conns) {
@@ -624,6 +1020,10 @@ export async function fetchAllTransactions(days = 30) {
       return true;
     })
     .sort((a, b) => b.date.localeCompare(a.date));
+
+  if (Number.isFinite(maxTransactions)) {
+    all = all.slice(0, maxTransactions);
+  }
 
   // --- AI CATEGORIZATION PIPELINE ---
   
@@ -648,7 +1048,7 @@ export async function fetchAllTransactions(days = 30) {
 
   // 2. Second pass: AI Fallback for unknowns
   const uniqueUnknowns = Array.from(uncategorizedItems.keys());
-  if (uniqueUnknowns.length > 0) {
+  if (categorizeWithAi && uniqueUnknowns.length > 0) {
     console.warn(`[Plaid] Sending ${uniqueUnknowns.length} unknown merchants to AI Categorization Engine...`);
     const aiCategoryMap = await batchCategorizeTransactions(uniqueUnknowns);
     
@@ -1108,6 +1508,7 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
           _plaidLastSync: connection.lastSync || connection.lastLiabilitySync,
           _plaidAccountId: acct.plaidAccountId,
           _plaidConnectionId: connection.id,
+          _plaidManualFallback: false,
           // ── Liability metadata (store raw for reference) ──
           _plaidLiability: liab,
           // ── Plaid-wins: authoritative data overwrites local when Plaid provides it ──
@@ -1169,6 +1570,7 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
           _plaidLastSync: connection.lastSync,
           _plaidAccountId: acct.plaidAccountId,
           _plaidConnectionId: connection.id,
+          _plaidManualFallback: false,
         };
         balanceSummary.push({
           name: updatedBankAccounts[idx].name,

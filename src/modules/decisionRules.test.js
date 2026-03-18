@@ -48,6 +48,29 @@ describe("decisionRules", () => {
     expect(result.severity).toBe("high");
   });
 
+  it("escalates utilization risk when elevated balances coincide with weak cash reserves", () => {
+    const result = detectCreditUtilizationSpike({
+      financialConfig: {
+        emergencyFloor: 1500,
+      },
+      current: {
+        form: { checking: 900, savings: 200 },
+      },
+      computedStrategy: {
+        auditSignals: {
+          liquidity: {
+            checkingAfterFloorAndBills: -75,
+          },
+        },
+      },
+      cards: [{ name: "Tight Cash Card", balance: 720, limit: 1000 }],
+    });
+
+    expect(result.active).toBe(true);
+    expect(result.severity).toBe("high");
+    expect(result.recommendation).toContain("checking floor");
+  });
+
   it("does not trigger insolvency risk at exactly 50% minimum-payment load", () => {
     const result = detectInsolvencyRisk({
       cards: [{ name: "Card A", minPayment: 500, balance: 1000, apr: 20 }],
@@ -81,6 +104,23 @@ describe("decisionRules", () => {
     expect(result.severity).toBe("high");
   });
 
+  it("treats missing income against live obligations as high-risk directional guidance", () => {
+    const result = detectInsolvencyRisk({
+      financialConfig: {
+        payFrequency: "monthly",
+        paycheckStandard: 0,
+        monthlyRent: 1700,
+        weeklySpendAllowance: 250,
+      },
+      cards: [{ name: "Card A", minPayment: 110, balance: 2400, apr: 24 }],
+    });
+
+    expect(result.active).toBe(true);
+    expect(result.severity).toBe("high");
+    expect(result.directionalOnly).toBe(true);
+    expect(result.requiresProfessionalHelp).toBe(true);
+  });
+
   it("does not trigger freelancer tax reserve warning for stable salary income", () => {
     const result = detectFreelancerTaxReserveWarning({
       financialConfig: { incomeType: "salary", isContractor: false },
@@ -104,6 +144,26 @@ describe("decisionRules", () => {
     expect(result.active).toBe(true);
     expect(result.severity).toBe("medium");
     expect(result.recommendation).toContain("32%");
+  });
+
+  it("escalates contractor tax reserve risk when liquid cash does not cover one month of modeled reserve", () => {
+    const result = detectFreelancerTaxReserveWarning({
+      financialConfig: {
+        incomeType: "variable",
+        isContractor: true,
+        taxBracketPercent: 30,
+        averagePaycheck: 1200,
+        payFrequency: "weekly",
+      },
+      current: {
+        form: { checking: 350, savings: 250 },
+      },
+    });
+
+    expect(result.active).toBe(true);
+    expect(result.severity).toBe("high");
+    expect(result.confidence).toBe("low");
+    expect(result.recommendation).toContain("do not yet cover one month");
   });
 
   it("does not trigger contractor tax warning for variable income that is not marked contractor", () => {
@@ -442,7 +502,8 @@ describe("decisionRules", () => {
     });
 
     expect(result.active).toBe(true);
-    expect(result.confidence).toBe("medium");
+    expect(result.confidence).toBe("low");
+    expect(result.directionalOnly).toBe(true);
     expect(result.rationale).toContain("next paycheck");
   });
 
@@ -463,6 +524,21 @@ describe("decisionRules", () => {
     expect(result.rationale).toContain("contractor income selected without a tax reserve setup");
   });
 
+  it("flags time-critical bills without paycheck inputs as contradictory", () => {
+    const result = detectContradictoryFinancialInputs({
+      financialConfig: {
+        paycheckStandard: 0,
+        averagePaycheck: 0,
+      },
+      computedStrategy: {
+        timeCriticalAmount: 450,
+      },
+    });
+
+    expect(result.active).toBe(true);
+    expect(result.rationale).toContain("time-critical bills modeled without a usable next-paycheck input");
+  });
+
   it("escalates mixed debt portfolios with student loans and high-APR revolving debt", () => {
     const result = detectMixedDebtPortfolioComplexity({
       financialConfig: {
@@ -481,5 +557,23 @@ describe("decisionRules", () => {
     expect(result.severity).toBe("high");
     expect(result.requiresProfessionalHelp).toBe(true);
     expect(result.confidence).toBe("low");
+  });
+
+  it("escalates mixed debt portfolios with student loans and promo timing even without toxic APR", () => {
+    const result = detectMixedDebtPortfolioComplexity({
+      financialConfig: {
+        nonCardDebts: [
+          { name: "Federal Student Loan", balance: 22000, minimum: 240, apr: 5.9 },
+          { name: "Auto Loan", balance: 8000, minimum: 260, apr: 4.5 },
+        ],
+      },
+      cards: [
+        { name: "Promo Card", balance: 4200, minPayment: 110, apr: 7.9, hasPromoApr: true, promoAprExp: "2026-05-01" },
+      ],
+    });
+
+    expect(result.active).toBe(true);
+    expect(result.severity).toBe("high");
+    expect(result.requiresProfessionalHelp).toBe(true);
   });
 });

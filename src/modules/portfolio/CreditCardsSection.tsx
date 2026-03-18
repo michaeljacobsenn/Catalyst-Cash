@@ -1,5 +1,5 @@
   import type { Dispatch,SetStateAction } from "react";
-  import { useMemo,useState } from "react";
+  import { useEffect,useMemo,useState } from "react";
   import type { Card as CardRecord } from "../../types/index.js";
   import SearchableSelect from "../SearchableSelect.js";
   import { Mono } from "../components.js";
@@ -8,6 +8,7 @@
   import { haptic } from "../haptics.js";
   import { Check,CheckCircle2,ChevronDown,CreditCard,Edit3 } from "../icons";
   import { getIssuerCards,getPinnedForIssuer } from "../issuerCards.js";
+  import { getConnections } from "../plaid.js";
   import { Badge } from "../ui.js";
   import { fmt } from "../utils.js";
   import type { PortfolioCollapsedSections } from "./types.js";
@@ -15,6 +16,7 @@
 interface EditCardForm {
     institution: string;
     name: string;
+    balance: string;
     limit: string;
     annualFee: string;
     annualFeeDue: string;
@@ -43,9 +45,11 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
     const setCollapsedSections = propSetCollapsed || internalSetCollapsed;
     const [editingCard, setEditingCard] = useState<string | null>(null);
     const [editStep, setEditStep] = useState(0);
+    const [reconnectConnectionIds, setReconnectConnectionIds] = useState<Set<string>>(new Set());
     const [editForm, setEditForm] = useState<EditCardForm>({
         institution: "",
         name: "",
+        balance: "",
         limit: "",
         annualFee: "",
         annualFeeDue: "",
@@ -68,12 +72,37 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
         }),
     [cards]);
 
+    useEffect(() => {
+        let active = true;
+        getConnections()
+            .then(connections => {
+                if (!active) return;
+                const nextReconnectIds = new Set(
+                    (connections || [])
+                        .filter(connection => connection?._needsReconnect)
+                        .map(connection => connection.id)
+                        .filter(Boolean)
+                );
+                setReconnectConnectionIds(new Set<string>(Array.from(nextReconnectIds) as string[]));
+            })
+            .catch(() => { });
+        return () => {
+            active = false;
+        };
+    }, [cards]);
+
     const startEdit = (card: CardRecord) => {
+        const needsReconnect = !!(card._plaidConnectionId && reconnectConnectionIds.has(card._plaidConnectionId));
+        const usesManualFallback = !!card._plaidManualFallback || needsReconnect;
+        const visibleBalance = !usesManualFallback && card._plaidBalance != null
+            ? card._plaidBalance
+            : Number(card.balance || 0);
         setEditingCard(card.id);
         setEditStep(0);
         setEditForm({
             institution: card.institution || "",
             name: card.name || "",
+            balance: visibleBalance != null ? String(visibleBalance) : String(card.balance || ""),
             limit: String(card.limit || ""),
             annualFee: String(card.annualFee || ""),
             annualFeeDue: card.annualFeeDue || "",
@@ -98,6 +127,7 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
                         ...c,
                         institution: editForm.institution || c.institution,
                         name: (editForm.name || "").trim() || c.name,
+                        balance: editForm.balance === "" ? null : parseFloat(editForm.balance) || 0,
                         limit: editForm.limit === "" ? null : parseFloat(editForm.limit) || null,
                         annualFee: editForm.annualFee === "" ? null : parseFloat(editForm.annualFee) || null,
                         ...(editForm.annualFeeDue ? { annualFeeDue: editForm.annualFeeDue } : {}),
@@ -212,6 +242,12 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
                     <div style={{ padding: "4px 8px 8px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
                         {sortedCards.map((card) => {
                             const colors = ic(card.institution);
+                            const needsReconnect = !!(card._plaidConnectionId && reconnectConnectionIds.has(card._plaidConnectionId));
+                            const usesManualFallback = !!card._plaidManualFallback || needsReconnect;
+                            const visibleBalance = !usesManualFallback && card._plaidBalance != null
+                                ? card._plaidBalance
+                                : Number(card.balance || 0);
+                            const balanceColor = !usesManualFallback && card._plaidBalance != null ? T.status.red : colors.text;
                             const annualFee = typeof card.annualFee === "number" ? card.annualFee : Number(card.annualFee || 0);
                             const apr = card.apr ?? 0;
                             const limit = card.limit ?? 0;
@@ -223,7 +259,7 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
                                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                                             {(() => {
                                                 const tabs = [
-                                                    { label: "Card", filled: !!(editForm.institution || editForm.name || editForm.limit) },
+                                                    { label: "Card", filled: !!(editForm.institution || editForm.name || editForm.limit || editForm.balance) },
                                                     { label: "Rates", filled: !!(editForm.annualFee || editForm.apr) },
                                                     { label: "Billing", filled: !!(editForm.paymentDueDay || editForm.statementCloseDay || editForm.minPayment) },
                                                 ];
@@ -243,6 +279,22 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
                                             {editStep === 0 && (
                                                 <>
                                                     <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 700, letterSpacing: 0.5 }}>CARD DETAILS</span>
+                                                    {(() => {
+                                                        const hasLivePlaidSync = !!card._plaidAccountId && !card._plaidManualFallback && !needsReconnect && card._plaidBalance != null;
+                                                        if (hasLivePlaidSync) {
+                                                            return (
+                                                                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.subtle}`, background: T.bg.elevated }}>
+                                                                    <span style={{ fontSize: 11, color: T.text.dim }}>⚡ Live Plaid balance active. Manual balance edits stay locked until the bank is disconnected or reconnect is required.</span>
+                                                                </div>
+                                                            );
+                                                        }
+                                                        return (
+                                                            <div style={{ position: "relative" }}>
+                                                                <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600 }}>$</span>
+                                                                <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={editForm.balance} onChange={e => setEditForm(p => ({ ...p, balance: e.target.value }))} placeholder="Current Balance" aria-label="Current card balance" style={{ width: "100%", paddingLeft: 28, fontFamily: T.font.mono, fontWeight: 600, boxSizing: "border-box" }} />
+                                                            </div>
+                                                        );
+                                                    })()}
                                                     <div style={{ display: "flex", gap: 8 }}>
                                                         <SearchableSelect value={editForm.institution} onChange={v => setEditForm(p => ({ ...p, institution: v }))} placeholder="Issuer" options={INSTITUTIONS.map(i => ({ value: i, label: i }))} />
                                                         <SearchableSelect value={editForm.name} onChange={v => setEditForm(p => ({ ...p, name: v }))} placeholder="Select Card" displayValue={editForm.name ? editForm.name.replace(new RegExp(`^${editForm.institution}\\s*`, "i"), "") : ""} options={(() => {
@@ -356,21 +408,21 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
                                                 <Mono size={10} color={T.text.dim} style={{ display: "block", marginTop: 3, lineHeight: 1.4 }}>
                                                     {[
                                                         card.nickname && card.name,
+                                                        needsReconnect && "Reconnect required",
+                                                        usesManualFallback && "Manual balance",
                                                         annualFee > 0 && (card.annualFeeWaived ? "AF waived" : `AF ${fmt(annualFee)}${card.annualFeeDue ? ` · ${card.annualFeeDue}` : ""}`),
                                                         apr > 0 && `${apr}% APR`,
                                                         card.hasPromoApr && `Promo ${card.promoAprAmount}%${card.promoAprExp ? ` till ${card.promoAprExp}` : ""}`,
                                                         card.paymentDueDay && `Due day ${card.paymentDueDay}${minPayment ? ` · min ${fmt(minPayment)}` : ""}`,
-                                                        card._plaidAccountId && `⚡ ···${(card.notes || "").match(/···(\d+)/)?.[1] || "Plaid"}`,
+                                                        card._plaidAccountId && !usesManualFallback && `⚡ ···${(card.notes || "").match(/···(\d+)/)?.[1] || "Plaid"}`,
                                                     ].filter(Boolean).join("  ·  ")}
                                                 </Mono>
                                             </div>
                                             <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                                                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                                                    {card._plaidBalance != null && (
-                                                        <Mono size={14} weight={900} color={T.status.red}>{fmt(card._plaidBalance)}</Mono>
-                                                    )}
-                                                    <Mono size={card._plaidBalance != null ? 10 : 13} weight={700} color={card._plaidBalance != null ? T.text.dim : colors.text}>
-                                                        {card._plaidBalance != null ? "Limit " : ""}{fmt(limit)}
+                                                    <Mono size={14} weight={900} color={balanceColor}>{fmt(visibleBalance)}</Mono>
+                                                    <Mono size={10} weight={700} color={T.text.dim}>
+                                                        {`Limit ${fmt(limit)}`}
                                                     </Mono>
                                                 </div>
                                                 <button onClick={() => startEdit(card)} style={{ width: 32, height: 32, borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={11} /></button>

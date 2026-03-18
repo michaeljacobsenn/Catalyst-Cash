@@ -1,8 +1,9 @@
-  import type { Dispatch,ReactNode,SetStateAction } from "react";
-  import { createContext,useContext,useEffect,useRef,useState } from "react";
-  import { log } from "../logger.js";
-  import { deleteSecureItem,getSecretStorageStatus,migrateToSecureItem,setSecureItem } from "../secureStore.js";
-  import { db } from "../utils.js";
+import { Capacitor } from "@capacitor/core";
+import type { Dispatch,ReactNode,SetStateAction } from "react";
+import { createContext,useContext,useEffect,useRef,useState } from "react";
+import { log } from "../logger.js";
+import { deleteSecureItem,getSecretStorageStatus,migrateToSecureItem,setSecureItem } from "../secureStore.js";
+import { db } from "../utils.js";
 
 interface SecurityProviderProps {
   children?: ReactNode;
@@ -38,6 +39,52 @@ interface SecurityContextValue {
 type SecretStorageStatus = SecurityContextValue["secretStorageStatus"];
 
 const SecurityContext = createContext<SecurityContextValue | null>(null);
+const SECURITY_BOOT_TIMEOUT_MS = 1500;
+const SECURITY_STORAGE_BOOT_TIMEOUT_MS = 4200;
+
+function getFallbackStorageStatus(): SecretStorageStatus {
+  if (Capacitor.isNativePlatform()) {
+    return {
+      platform: "native",
+      available: false,
+      mode: "native-unavailable",
+      canPersistSecrets: false,
+      isHardwareBacked: false,
+      message:
+        "Secure iOS storage is unavailable. App passcodes, linked identity, API keys, and device secrets will not be persisted until native secure storage is restored.",
+    };
+  }
+
+  return {
+    platform: "web",
+    available: false,
+    mode: "web-limited",
+    canPersistSecrets: false,
+    isHardwareBacked: false,
+    message:
+      "Browser storage is not treated as secure storage. App Lock, linked identity, cloud sync credentials, and other secrets are available only in the native iPhone app.",
+  };
+}
+
+async function withSecurityBootFallback<T>(step: string, task: () => Promise<T>, fallback: T, timeoutMs = SECURITY_BOOT_TIMEOUT_MS): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(task),
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${step} timed out`)), timeoutMs);
+      }),
+    ]);
+  } catch (error) {
+    void log.warn("security", "Security boot step failed", {
+      step,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return fallback;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 function getSecurityTestOverride(): {
   storageStatus?: SecretStorageStatus;
@@ -57,7 +104,7 @@ export function SecurityProvider({ children }: SecurityProviderProps) {
   const [appPasscode, setAppPasscode] = useState("");
   const [useFaceId, setUseFaceId] = useState(false);
   const [isLocked, setIsLocked] = useState(true);
-  const [privacyMode, setPrivacyMode] = useState(false);
+  const [privacyMode, setPrivacyModeState] = useState(false);
   const [lockTimeout, setLockTimeout] = useState(0);
   const [appleLinkedId, setAppleLinkedId] = useState<string | null>(null);
   const [isSecurityReady, setIsSecurityReady] = useState(false);
@@ -72,32 +119,63 @@ export function SecurityProvider({ children }: SecurityProviderProps) {
 
   const lastBackgrounded = useRef<number | null>(null);
 
+  const syncPrivacyMode = (next: boolean) => {
+    (window as Window & { __privacyMode?: boolean }).__privacyMode = next;
+  };
+
+  const setPrivacyMode = (value: boolean | ((prev: boolean) => boolean)) => {
+    setPrivacyModeState((prev) => {
+      const next = typeof value === "function" ? (value as (prev: boolean) => boolean)(prev) : value;
+      syncPrivacyMode(next);
+      return next;
+    });
+  };
+
   const rehydrateSecurity = async () => {
     try {
       setRequireAuth(false);
       setAppPasscode("");
       setUseFaceId(false);
       setIsLocked(false);
-      setPrivacyMode(false);
+      setPrivacyModeState(false);
+      syncPrivacyMode(false);
       setLockTimeout(0);
       setAppleLinkedId(null);
 
       const testOverride = getSecurityTestOverride();
       const storageStatus = ((testOverride?.storageStatus as SecretStorageStatus | undefined) ??
-        ((await getSecretStorageStatus()) as SecretStorageStatus));
+        (await withSecurityBootFallback(
+          "secret-storage-status",
+          () => getSecretStorageStatus(),
+          getFallbackStorageStatus(),
+          SECURITY_STORAGE_BOOT_TIMEOUT_MS
+        )));
       setSecretStorageStatus(storageStatus);
-      const [ra, uf, lt, legacyPin, legacyAppleLinkedId, pm] = await Promise.all([
-        db.get("require-auth"),
-        db.get("use-face-id"),
-        db.get("lock-timeout"),
-        db.get("app-passcode"),
-        db.get("apple-linked-id"),
-        db.get("privacy-mode"),
-      ]);
-      const [pin, appLinked] = await Promise.all([
-        migrateToSecureItem("app-passcode", legacyPin, () => db.del("app-passcode")),
-        migrateToSecureItem("apple-linked-id", legacyAppleLinkedId, () => db.del("apple-linked-id")),
-      ]);
+      const [ra, uf, lt, legacyPin, legacyAppleLinkedId, pm] = await withSecurityBootFallback(
+        "security-db-load",
+        () =>
+          Promise.all([
+            db.get("require-auth"),
+            db.get("use-face-id"),
+            db.get("lock-timeout"),
+            db.get("app-passcode"),
+            db.get("apple-linked-id"),
+            db.get("privacy-mode"),
+          ]),
+        [null, null, null, null, null, null]
+      );
+      const [pin, appLinked] = storageStatus.mode === "native-secure"
+        ? await withSecurityBootFallback(
+            "security-secret-migration",
+            () =>
+              Promise.all([
+                migrateToSecureItem("app-passcode", legacyPin, () => db.del("app-passcode")),
+                migrateToSecureItem("apple-linked-id", legacyAppleLinkedId, () => db.del("apple-linked-id")),
+              ]),
+            [null, null],
+            SECURITY_STORAGE_BOOT_TIMEOUT_MS
+          )
+        : [null, null];
 
       const resolvedRequireAuth = typeof testOverride?.requireAuth === "boolean" ? testOverride.requireAuth : Boolean(ra);
       const resolvedUseFaceId = typeof testOverride?.useFaceId === "boolean" ? testOverride.useFaceId : Boolean(uf);
@@ -127,7 +205,10 @@ export function SecurityProvider({ children }: SecurityProviderProps) {
       if (resolvedUseFaceId) setUseFaceId(true);
       setLockTimeout(resolvedLockTimeout);
       if (resolvedAppleLinkedId) setAppleLinkedId(resolvedAppleLinkedId);
-      if (pm) setPrivacyMode(true);
+      if (pm) {
+        setPrivacyModeState(true);
+        syncPrivacyMode(true);
+      }
     } catch (e) {
       void log.error("security", "Security context initialization failed", e);
     }

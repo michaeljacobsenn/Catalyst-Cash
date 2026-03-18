@@ -24,22 +24,23 @@ interface StoredTransactionsPayload {
 interface TransactionsSectionProps {
     collapsedSections: PortfolioCollapsedSections;
     setCollapsedSections: Dispatch<SetStateAction<PortfolioCollapsedSections>>;
+    proEnabled?: boolean;
 }
 
-export default function TransactionsSection({ collapsedSections, setCollapsedSections }: TransactionsSectionProps) {
+export default function TransactionsSection({ collapsedSections, setCollapsedSections, proEnabled = false }: TransactionsSectionProps) {
     const [plaidTxns, setPlaidTxns] = useState<StoredTransaction[]>([]);
 
     useEffect(() => {
         const loadStoredTransactions = async () => {
             try {
                 const stored = (await getStoredTransactions()) as StoredTransactionsPayload | null;
-                if (stored?.data) setPlaidTxns(stored.data.slice(0, 15));
+                if (stored?.data) setPlaidTxns(stored.data.slice(0, proEnabled ? 15 : 5));
             } catch {
                 // Ignore local cache read failures.
             }
         };
         void loadStoredTransactions();
-    }, []);
+    }, [proEnabled]);
 
     if (plaidTxns.length === 0) return null;
 

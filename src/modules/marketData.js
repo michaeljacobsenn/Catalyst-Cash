@@ -4,8 +4,9 @@
 // Used for auto-tracking Roth IRA, 401k, Brokerage, and Crypto holdings.
 // ═══════════════════════════════════════════════════════════════
 
-  import { getMarketRefreshTTL } from "./subscription.js";
-  import { db } from "./utils.js";
+import { getBackendUrl } from "./api.js";
+import { getMarketRefreshTTL } from "./subscription.js";
+import { db } from "./utils.js";
 
 const CACHE_KEY = "market-data-cache";
 const CACHE_TS_KEY = "market-data-ts";
@@ -642,8 +643,7 @@ export function getTickerOptions(accountKey) {
   return [...POPULAR_FUNDS, ...POPULAR_STOCKS];
 }
 function getWorkerUrl() {
-  const proxy = import.meta.env.VITE_PROXY_URL;
-  return proxy ? `${proxy.replace(/\/$/, "")}/market` : "";
+  return `${getBackendUrl().replace(/\/$/, "")}/market`;
 }
 
 /**

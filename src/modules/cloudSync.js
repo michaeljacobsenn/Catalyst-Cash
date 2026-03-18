@@ -59,8 +59,17 @@ export async function uploadToICloud(payload, passphrase = null) {
     // Native iOS — use ubiquity container
     const result = await ICloudSync.save({ data });
     if (result?.success) {
-      void log.info("icloud", "Backup saved to ubiquity container", { native: true, fileName: FILE_NAME });
-      return true;
+      const verify = await ICloudSync.restore().catch(() => null);
+      const verified = typeof verify?.data === "string" && verify.data === data;
+      if (verified) {
+        void log.info("icloud", "Backup saved to ubiquity container", { native: true, fileName: FILE_NAME });
+        return true;
+      }
+      void log.warn("icloud", "Backup write succeeded but read-back verification failed", {
+        native: true,
+        reason: verify?.data ? "verify-mismatch" : verify?.reason || "verify-missing",
+      });
+      return false;
     }
     void log.warn("icloud", "Backup save returned without success", {
       native: true,

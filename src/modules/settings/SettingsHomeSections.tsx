@@ -1,4 +1,5 @@
 import { Building2, ChevronRight, Cpu, Database, Info, Lock, Target, Terminal } from "../icons";
+import { buildPromoLine } from "../planCatalog.js";
 import { T } from "../constants.js";
 import ProBanner from "../tabs/ProBanner.js";
 
@@ -85,12 +86,12 @@ export function RootSettingsSection({
   const showSetupProgress = pct !== 100 && daysSinceInstall < 30 && !setupDismissed;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingBottom: 40, marginTop: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, paddingBottom: 28, marginTop: 8 }}>
       {rootGroups.map((group) => (
         <div key={group.heading}>
           <span
             style={{
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: 800,
               color: T.text.secondary,
               marginLeft: 16,
@@ -117,7 +118,8 @@ export function RootSettingsSection({
                 style={{
                   margin: 0,
                   width: "100%",
-                  padding: "14px 16px",
+                  minHeight: 64,
+                  padding: "12px 16px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
@@ -131,8 +133,8 @@ export function RootSettingsSection({
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   <div
                     style={{
-                      width: 28,
-                      height: 28,
+                      width: 30,
+                      height: 30,
                       borderRadius: 8,
                       background: `${item.color}20`,
                       display: "flex",
@@ -143,8 +145,8 @@ export function RootSettingsSection({
                     <item.icon size={16} color={item.color} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: T.text.primary }}>{item.label}</div>
-                    <div style={{ fontSize: 11, color: T.text.muted, marginTop: 2 }}>{item.desc}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: T.text.primary, lineHeight: 1.2 }}>{item.label}</div>
+                    <div style={{ fontSize: 11, color: T.text.muted, marginTop: 3, lineHeight: 1.45 }}>{item.desc}</div>
                   </div>
                 </div>
                 <ChevronRight className="chevron-icon" size={18} color={T.text.muted} />
@@ -194,7 +196,7 @@ export function RootSettingsSection({
               <ChevronRight className="chevron-icon" size={18} color={T.accent.primary} />
             </button>
           ) : (
-            <ProBanner onUpgrade={onUpgrade} label="Upgrade to Pro" sublabel="50 audits/mo, premium models, 5m market data" />
+            <ProBanner onUpgrade={onUpgrade} label="Upgrade to Pro" sublabel={buildPromoLine(["audits", "models", "plaid"])} />
           )}
         </div>
       )}
@@ -203,7 +205,7 @@ export function RootSettingsSection({
         <div style={{ marginBottom: 4 }}>
           <span
             style={{
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: 800,
               color: T.text.secondary,
               marginLeft: 16,
@@ -220,8 +222,8 @@ export function RootSettingsSection({
               background: `linear-gradient(145deg, ${T.bg.card}, ${T.bg.surface})`,
               borderRadius: T.radius.xl,
               border: `1px solid ${T.border.subtle}`,
-              padding: "16px 20px",
-              boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+              padding: "15px 16px",
+              boxShadow: "0 6px 18px rgba(0,0,0,0.10)",
               backdropFilter: "blur(12px)",
               position: "relative",
             }}
@@ -253,7 +255,7 @@ export function RootSettingsSection({
             >
               ×
             </button>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div
                   style={{
@@ -274,7 +276,7 @@ export function RootSettingsSection({
                     {pct === 100 ? "You're all set!" : "Let's finish up"}
                   </span>
                   <span style={{ fontSize: 11, color: T.text.muted, fontWeight: 500 }}>
-                    {done} of {total} steps completed
+                    Complete the essentials first, then refine later
                   </span>
                 </div>
               </div>
@@ -302,7 +304,7 @@ export function RootSettingsSection({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: "8px 12px",
+                    padding: "9px 12px",
                     background: step.done ? `${T.bg.surface}80` : T.bg.elevated,
                     borderRadius: T.radius.md,
                     border: `1px solid ${step.done ? T.border.subtle : T.border.default}`,

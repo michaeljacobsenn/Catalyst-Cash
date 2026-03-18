@@ -1,19 +1,20 @@
   import type { Dispatch,SetStateAction } from "react";
-  import { useEffect,useState } from "react";
+import { useEffect,useState } from "react";
   import type { BankAccount,CatalystCashConfig,PlaidInvestmentAccount,Card as PortfolioCard } from "../../types/index.js";
   import { T } from "../constants.js";
   import type { SetFinancialConfig } from "../contexts/SettingsContext.js";
-  import { Building2,Loader2,Plus,RefreshCw,Unplug } from "../icons";
+  import { Building2,Plus,RefreshCw,Unplug } from "../icons";
   import { log } from "../logger.js";
   import {
     applyBalanceSync,
     autoMatchAccounts,
     connectBank,
     fetchBalancesAndLiabilities,
-    getConnections,
+    reconcilePlaidConnectionAccess,
     reconnectBank,
     removeConnection,
     saveConnectionLinks,
+    setPreferredFreeConnectionId,
   } from "../plaid.js";
   import { Card,Label } from "../ui.js";
 
@@ -26,6 +27,7 @@ interface PlaidConnection {
   institutionName?: string;
   institutionLogo?: string;
   _needsReconnect?: boolean;
+  _freeTierPaused?: boolean;
   accounts?: PlaidConnectionAccount[];
 }
 
@@ -60,17 +62,24 @@ export default function PlaidSection({
   setFinancialConfig,
   cardCatalog,
 }: PlaidSectionProps) {
+  const spinningIconStyle = { animation: "spin .8s linear infinite", transformOrigin: "center" } as const;
   const [plaidConnections, setPlaidConnections] = useState<PlaidConnection[]>([]);
   const [isPlaidConnecting, setIsPlaidConnecting] = useState(false);
   const [reconnectingId, setReconnectingId] = useState<string | null>(null);
+  const [switchingActiveId, setSwitchingActiveId] = useState<string | null>(null);
   const [confirmingDisconnect, setConfirmingDisconnect] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<{ tone: "error" | "info"; message: string } | null>(null);
 
+  const reloadConnections = async () => {
+    const accessState = await reconcilePlaidConnectionAccess(cards, bankAccounts);
+    if (accessState.cardsChanged) setCards(accessState.updatedCards);
+    if (accessState.bankAccountsChanged) setBankAccounts(accessState.updatedBankAccounts);
+    setPlaidConnections(accessState.connections || []);
+  };
+
   // Load connections on mount
   useEffect(() => {
-    getConnections()
-      .then(c => setPlaidConnections(c || []))
-      .catch(() => { });
+    reloadConnections().catch(() => {});
   }, []);
 
   const handleDisconnect = async (conn: PlaidConnection) => {
@@ -86,7 +95,7 @@ export default function PlaidSection({
     if (filteredInvests.length !== plaidInvests.length) {
       setFinancialConfig({ type: "SET_FIELD", field: "plaidInvestments", value: filteredInvests });
     }
-    setPlaidConnections(await getConnections());
+    await reloadConnections();
     setConnectionStatus(null);
     window.toast?.success?.("Connection and imported accounts removed");
   };
@@ -160,7 +169,7 @@ export default function PlaidSection({
         window.toast?.info?.("Connected. If balances do not refresh yet, tap Sync after the backend finishes updating.");
       }
 
-      setPlaidConnections(await getConnections());
+      await reloadConnections();
       setConnectionStatus(null);
       window.toast?.success?.(successToast);
 
@@ -206,7 +215,27 @@ export default function PlaidSection({
       window.toast?.error?.(message);
     } finally {
       setReconnectingId(null);
-      setPlaidConnections(await getConnections());
+      await reloadConnections();
+    }
+  };
+
+  const handleKeepLive = async (conn: PlaidConnection) => {
+    if (!conn?.id || switchingActiveId) return;
+    setSwitchingActiveId(conn.id);
+    try {
+      await setPreferredFreeConnectionId(conn.id);
+      await reloadConnections();
+      setConnectionStatus({
+        tone: "info",
+        message: `${conn.institutionName || "This bank"} is now your active live-sync institution on Free. Other linked banks stay available as manual snapshots.`,
+      });
+      window.toast?.success?.(`${conn.institutionName || "Bank"} kept as your live sync institution`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not switch active bank";
+      setConnectionStatus({ tone: "error", message });
+      window.toast?.error?.(message);
+    } finally {
+      setSwitchingActiveId(null);
     }
   };
 
@@ -295,15 +324,44 @@ export default function PlaidSection({
                       {conn.institutionName || "Unknown Bank"}
                     </span>
                     <span style={{ fontSize: 11, color: T.text.muted, marginTop: 2, display: "block" }}>
-                      {conn._needsReconnect ? "Reconnect required" : `${conn.accounts?.length || 0} Accounts Linked`}
+                      {conn._freeTierPaused
+                        ? "Paused on Free plan"
+                        : conn._needsReconnect
+                          ? "Reconnect required"
+                          : `${conn.accounts?.length || 0} Accounts Linked`}
                     </span>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
+                  {conn._freeTierPaused && confirmingDisconnect !== conn.id && (
+                    <button
+                      onClick={() => handleKeepLive(conn)}
+                      disabled={switchingActiveId === conn.id}
+                      aria-label={`Keep ${conn.institutionName || "bank"} as your active live sync institution`}
+                      style={{
+                        padding: "0 12px",
+                        height: 36,
+                        borderRadius: T.radius.sm,
+                        border: `1px solid ${T.accent.emerald}35`,
+                        background: `${T.accent.emerald}12`,
+                        color: T.accent.emerald,
+                        cursor: switchingActiveId === conn.id ? "not-allowed" : "pointer",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        opacity: switchingActiveId === conn.id ? 0.7 : 1,
+                      }}
+                    >
+                      {switchingActiveId === conn.id ? <RefreshCw size={14} style={spinningIconStyle} /> : null}
+                      {switchingActiveId === conn.id ? "Applying..." : "Keep Live"}
+                    </button>
+                  )}
                   {conn._needsReconnect && confirmingDisconnect !== conn.id && (
                     <button
                       onClick={() => handleReconnect(conn)}
-                      disabled={reconnectingId === conn.id}
+                      disabled={reconnectingId === conn.id || conn._freeTierPaused}
                       aria-label={`Reconnect ${conn.institutionName || "bank"}`}
                       style={{
                         padding: "0 12px",
@@ -312,16 +370,20 @@ export default function PlaidSection({
                         border: `1px solid ${T.accent.primary}35`,
                         background: `${T.accent.primary}14`,
                         color: T.accent.primary,
-                        cursor: reconnectingId === conn.id ? "not-allowed" : "pointer",
+                        cursor: reconnectingId === conn.id || conn._freeTierPaused ? "not-allowed" : "pointer",
                         fontSize: 12,
                         fontWeight: 700,
                         display: "flex",
                         alignItems: "center",
                         gap: 6,
-                        opacity: reconnectingId === conn.id ? 0.7 : 1,
+                        opacity: reconnectingId === conn.id || conn._freeTierPaused ? 0.7 : 1,
                       }}
                     >
-                      {reconnectingId === conn.id ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
+                      {reconnectingId === conn.id ? (
+                        <RefreshCw size={14} style={spinningIconStyle} />
+                      ) : (
+                        <RefreshCw size={14} />
+                      )}
                       {reconnectingId === conn.id ? "Reconnecting..." : "Reconnect"}
                     </button>
                   )}
@@ -407,7 +469,7 @@ export default function PlaidSection({
           transition: "opacity .2s",
         }}
       >
-        {isPlaidConnecting ? <Loader2 size={18} className="spin" /> : <Plus size={18} />}
+        {isPlaidConnecting ? <RefreshCw size={18} style={spinningIconStyle} /> : <Plus size={18} />}
         {isPlaidConnecting ? "Connecting..." : "Link New Bank"}
       </button>
     </Card>

@@ -4,7 +4,6 @@
 // filtering, and CSV/JSON export.
 // ═══════════════════════════════════════════════════════════════
 
-  import type { TouchEvent } from "react";
   import { useCallback,useEffect,useMemo,useRef,useState } from "react";
   import type { CustomValuations,Card as PortfolioCard } from "../../types/index.js";
   import { EmptyState } from "../components.js";
@@ -53,10 +52,12 @@
     Zap
   } from "../icons";
   import { fetchAllTransactions,getConnections,getStoredTransactions } from "../plaid.js";
-  import { getOptimalCard } from "../rewardsCatalog.js";
+  import { log } from "../logger.js";
   import { Card } from "../ui.js";
   import { nativeExport } from "../utils.js";
   import "./TransactionFeed.css";
+  import { buildCSV, buildRewardComparison, formatDateHeader, formatMoney, formatRewardRate, getCategoryMeta, isTransactionInSameMonth, normalizeTransactionResult } from "./transactionFeed/helpers";
+  import { useTransactionFeedGestures } from "./transactionFeed/useTransactionFeedGestures";
 
 interface ToastApi {
   success?: (message: string) => void;
@@ -68,6 +69,16 @@ interface TransactionFeedProps {
   onClose: () => void;
   proEnabled?: boolean;
   onConnectPlaid?: () => void;
+}
+
+interface TransactionRewardComparison {
+  usedDisplayName: string;
+  actualYield: number;
+  optimalYield: number;
+  actualRewardValue: number;
+  optimalRewardValue: number;
+  incrementalRewardValue: number;
+  usedCardMatched: boolean;
 }
 
 interface TransactionRecord {
@@ -83,11 +94,7 @@ interface TransactionRecord {
   isCredit?: boolean;
   optimalCard?: { name?: string; effectiveYield?: number } | null;
   usedOptimal?: boolean;
-}
-
-interface TransactionResult {
-  data: TransactionRecord[];
-  fetchedAt: string;
+  rewardComparison?: TransactionRewardComparison | null;
 }
 
 interface LegacyTransactionResult {
@@ -105,115 +112,6 @@ interface PlaidConnection {
   _needsReconnect?: boolean;
 }
 
-interface SwipeState {
-  x: number;
-  y: number;
-  t: number;
-}
-
-interface PullState {
-  y: number;
-  hapticFired: boolean;
-}
-
-// ── Category → Icon + Color Mapping (full Plaid v2 coverage) ──
-const CATEGORY_MAP = {
-  // Food & Drink
-  "food and drink": { icon: Utensils, color: "#F59E0B", bg: "rgba(245,158,11,0.10)" },
-  groceries: { icon: ShoppingCart, color: "#F59E0B", bg: "rgba(245,158,11,0.10)" },
-  restaurants: { icon: Utensils, color: "#F59E0B", bg: "rgba(245,158,11,0.10)" },
-  // Shopping
-  shops: { icon: ShoppingCart, color: "#8B5CF6", bg: "rgba(139,92,246,0.10)" },
-  "general merchandise": { icon: ShoppingCart, color: "#8B5CF6", bg: "rgba(139,92,246,0.10)" },
-  // Travel & Transportation
-  travel: { icon: Plane, color: "#3B82F6", bg: "rgba(59,130,246,0.10)" },
-  transportation: { icon: Car, color: "#6366F1", bg: "rgba(99,102,241,0.10)" },
-  automotive: { icon: Car, color: "#6366F1", bg: "rgba(99,102,241,0.10)" },
-  // Transfers & Payments
-  transfer: { icon: ArrowUpRight, color: "#6B7280", bg: "rgba(107,114,128,0.10)" },
-  "transfer in": { icon: ArrowDownLeft, color: "#2ECC71", bg: "rgba(46,204,113,0.10)" },
-  "transfer out": { icon: ArrowUpRight, color: "#6B7280", bg: "rgba(107,114,128,0.10)" },
-  payment: { icon: CreditCard, color: "#7B5EA7", bg: "rgba(123,94,167,0.10)" },
-  "loan payments": { icon: Building2, color: "#F97316", bg: "rgba(249,115,22,0.10)" },
-  // Housing & Utilities
-  "rent and utilities": { icon: Home, color: "#0EA5E9", bg: "rgba(14,165,233,0.10)" },
-  utilities: { icon: Zap, color: "#0EA5E9", bg: "rgba(14,165,233,0.10)" },
-  "home improvement": { icon: Wrench, color: "#0EA5E9", bg: "rgba(14,165,233,0.10)" },
-  // Services
-  service: { icon: Briefcase, color: "#14B8A6", bg: "rgba(20,184,166,0.10)" },
-  "general services": { icon: Briefcase, color: "#14B8A6", bg: "rgba(20,184,166,0.10)" },
-  subscription: { icon: Wifi, color: "#A855F7", bg: "rgba(168,85,247,0.10)" },
-  // Health & Personal
-  healthcare: { icon: Stethoscope, color: "#EF4444", bg: "rgba(239,68,68,0.10)" },
-  medical: { icon: Stethoscope, color: "#EF4444", bg: "rgba(239,68,68,0.10)" },
-  "personal care": { icon: Heart, color: "#EC4899", bg: "rgba(236,72,153,0.10)" },
-  fitness: { icon: Dumbbell, color: "#10B981", bg: "rgba(16,185,129,0.10)" },
-  // Entertainment & Recreation
-  recreation: { icon: Gamepad2, color: "#EC4899", bg: "rgba(236,72,153,0.10)" },
-  entertainment: { icon: Gamepad2, color: "#EC4899", bg: "rgba(236,72,153,0.10)" },
-  // Education
-  education: { icon: GraduationCap, color: "#2563EB", bg: "rgba(37,99,235,0.10)" },
-  // Community & Giving
-  community: { icon: Heart, color: "#F43F5E", bg: "rgba(244,63,94,0.10)" },
-  "gifts and donations": { icon: Gift, color: "#F43F5E", bg: "rgba(244,63,94,0.10)" },
-  "government and non profit": { icon: Landmark, color: "#3B82F6", bg: "rgba(59,130,246,0.10)" },
-  // Income & Banking
-  income: { icon: Banknote, color: "#2ECC71", bg: "rgba(46,204,113,0.10)" },
-  "bank fees": { icon: Building2, color: "#EF4444", bg: "rgba(239,68,68,0.10)" },
-  interest: { icon: PiggyBank, color: "#2ECC71", bg: "rgba(46,204,113,0.10)" },
-  // Children
-  childcare: { icon: Baby, color: "#F59E0B", bg: "rgba(245,158,11,0.10)" },
-};
-
-function getCategoryMeta(category: string | null | undefined) {
-  if (!category) return { icon: HelpCircle, color: T.text.dim, bg: "rgba(107,114,128,0.08)" };
-  const key = category.toLowerCase().trim();
-  return CATEGORY_MAP[key] || { icon: HelpCircle, color: T.text.dim, bg: "rgba(107,114,128,0.08)" };
-}
-
-// ── Date formatting helpers ──────────────────────────────────
-function formatDateHeader(dateStr: string) {
-  const d = new Date(dateStr + "T12:00:00"); // Avoid timezone shift
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-
-  if (d.toDateString() === today.toDateString()) return "Today";
-  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
-
-  return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
-}
-
-function formatMoney(amount: number, isCredit: boolean) {
-  const formatted = amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
-  return isCredit ? `+${formatted}` : formatted;
-}
-
-// ── CSV builder ──────────────────────────────────────────────
-function buildCSV(transactions: TransactionRecord[]) {
-  const headers = ["Date", "Description", "Amount", "Type", "Category", "Account", "Institution", "Pending"];
-  const rows = transactions.map(t =>
-    [
-      t.date,
-      `"${(t.description || "").replace(/"/g, '""')}"`,
-      t.isCredit ? t.amount : -t.amount,
-      t.isCredit ? "Credit" : "Debit",
-      `"${t.category || ""}"`,
-      `"${t.accountName || ""}"`,
-      `"${t.institution || ""}"`,
-      t.pending ? "Yes" : "No",
-    ].join(",")
-  );
-  return [headers.join(","), ...rows].join("\n");
-}
-
-function normalizeTransactionResult(result: LegacyTransactionResult | null | undefined): TransactionResult {
-  return {
-    data: result?.data || result?.transactions || [],
-    fetchedAt: result?.fetchedAt || "",
-  };
-}
-
 // ═══════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
@@ -221,6 +119,33 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
   const { cards } = usePortfolio();
   const { financialConfig } = useSettings();
   const appWindow = window as Window & { toast?: ToastApi };
+  const categoryIconMap = {
+    AlertCircle,
+    ArrowDownLeft,
+    ArrowUpRight,
+    Baby,
+    Banknote,
+    Briefcase,
+    Building2,
+    Car,
+    CreditCard,
+    Dumbbell,
+    Gamepad2,
+    Gift,
+    GraduationCap,
+    Heart,
+    HelpCircle,
+    Home,
+    Landmark,
+    PiggyBank,
+    Plane,
+    ShoppingCart,
+    Stethoscope,
+    Utensils,
+    Wifi,
+    Wrench,
+    Zap,
+  };
   
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
@@ -233,114 +158,9 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
   const [showFilters, setShowFilters] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [visibleCount, setVisibleCount] = useState(50);
-  const [slideOffset, setSlideOffset] = useState(0);
   const [showBreakdown, setShowBreakdown] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
-  const swipeRef = useRef<SwipeState | null>(null);
-  const pullRef = useRef<PullState | null>(null);
-  const [pullDistance, setPullDistance] = useState(0);
-  const [isPulling, setIsPulling] = useState(false);
-
-  // ── Swipe-from-edge-to-dismiss (iOS native feel) ──
-  const handleOverlayTouchStart = useCallback((e: TouchEvent<HTMLDivElement>) => {
-    const touch = e.touches[0];
-    if (!touch) return;
-    const x = touch.clientX;
-    if (x < 40) {
-      // Left edge only
-      swipeRef.current = { x, y: touch.clientY, t: Date.now() };
-    } else {
-      swipeRef.current = null;
-    }
-  }, []);
-
-  const handleOverlayTouchMove = useCallback(
-    (e: TouchEvent<HTMLDivElement>) => {
-      if (!swipeRef.current) {
-        // Pull-to-refresh logic (tolerance for momentum scroll artifacts)
-        if (scrollRef.current && scrollRef.current.scrollTop <= 2 && !refreshing) {
-          const touch = e.touches[0];
-          if (!touch) return;
-          if (!pullRef.current) {
-            pullRef.current = { y: touch.clientY, hapticFired: false };
-            setIsPulling(true);
-          }
-          const dy = Math.max(0, touch.clientY - pullRef.current.y);
-          const distance = Math.min(dy * 0.5, 80);
-          setPullDistance(distance);
-          // Haptic bump when crossing the refresh threshold
-          if (distance >= 60 && !pullRef.current.hapticFired) {
-            pullRef.current.hapticFired = true;
-            haptic.light();
-          }
-        }
-        return;
-      }
-      const touch = e.touches[0];
-      if (!touch) return;
-      const dx = touch.clientX - swipeRef.current.x;
-      if (dx > 0) {
-        setSlideOffset(dx);
-        e.preventDefault();
-      }
-    },
-    [refreshing]
-  );
-
-  const handleOverlayTouchEnd = useCallback(
-    (e: TouchEvent<HTMLDivElement>) => {
-      // Pull-to-refresh release
-      if (pullRef.current) {
-        if (pullDistance >= 60 && !refreshing) {
-          handleRefreshFromPull();
-        }
-        pullRef.current = null;
-        setIsPulling(false);
-        setPullDistance(0);
-      }
-      // Swipe-back release
-      if (!swipeRef.current) {
-        setSlideOffset(0);
-        return;
-      }
-      const touch = e.changedTouches[0];
-      if (!touch) {
-        setSlideOffset(0);
-        return;
-      }
-      const dx = touch.clientX - swipeRef.current.x;
-      const dt = Date.now() - swipeRef.current.t;
-      const velocity = dx / dt;
-      swipeRef.current = null;
-      if (dx > 100 || velocity > 0.5) {
-        setSlideOffset(window.innerWidth);
-        haptic.light();
-        setTimeout(() => onClose(), 200);
-      } else {
-        setSlideOffset(0);
-      }
-    },
-    [pullDistance, refreshing, onClose]
-  );
-
-  const handleRefreshFromPull = useCallback(async () => {
-    setRefreshing(true);
-    haptic.light();
-    try {
-      const result = normalizeTransactionResult((await fetchAllTransactions(30)) as LegacyTransactionResult);
-      const connections = (await getConnections()) as PlaidConnection[];
-      setTransactions(result.data);
-      setFetchedAt(result.fetchedAt);
-      setPlaidConnections(connections || []);
-      appWindow.toast?.success?.(`Synced ${result.data.length} transactions`);
-    } catch (e) {
-      console.warn("[TransactionFeed] Pull refresh failed:", e);
-      appWindow.toast?.error?.("Failed to refresh transactions");
-    } finally {
-      setRefreshing(false);
-    }
-  }, [appWindow]);
 
   // ── Load stored transactions on mount ──
   useEffect(() => {
@@ -357,7 +177,9 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
         }
         setPlaidConnections((connections || []) as PlaidConnection[]);
       } catch (e) {
-        console.warn("[TransactionFeed] Failed to load:", e);
+        log.warn("transactions", "Failed to load transaction feed cache", {
+          error: e instanceof Error ? e.message : "unknown",
+        });
       } finally {
         setLoading(false);
       }
@@ -369,19 +191,43 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
     setRefreshing(true);
     haptic.light();
     try {
-      const result = normalizeTransactionResult((await fetchAllTransactions(30)) as LegacyTransactionResult);
+      const result = normalizeTransactionResult(
+        (await fetchAllTransactions(
+          proEnabled ? 30 : 14,
+          proEnabled ? undefined : { maxTransactions: 5, categorizeWithAi: false }
+        )) as LegacyTransactionResult
+      );
       const connections = (await getConnections()) as PlaidConnection[];
       setTransactions(result.data);
       setFetchedAt(result.fetchedAt);
       setPlaidConnections(connections || []);
-      appWindow.toast?.success?.(`Synced ${result.data.length} transactions`);
+      appWindow.toast?.success?.(
+        proEnabled
+          ? `Synced ${result.data.length} transactions`
+          : `Updated your free ledger preview (${result.data.length} transactions)`
+      );
     } catch (e) {
-      console.warn("[TransactionFeed] Refresh failed:", e);
+      log.warn("transactions", "Transaction feed refresh failed", {
+        error: e instanceof Error ? e.message : "unknown",
+      });
       appWindow.toast?.error?.("Failed to refresh transactions");
     } finally {
       setRefreshing(false);
     }
-  }, [appWindow]);
+  }, [appWindow, proEnabled]);
+
+  const {
+    slideOffset,
+    pullDistance,
+    isPulling,
+    handleOverlayTouchStart,
+    handleOverlayTouchMove,
+    handleOverlayTouchEnd,
+  } = useTransactionFeedGestures({
+    refreshing,
+    onClose,
+    onRefresh: handleRefresh,
+  });
 
   const hasPlaidConnections = plaidConnections.length > 0;
   const needsReconnectOnly = hasPlaidConnections && plaidConnections.every(connection => connection._needsReconnect);
@@ -469,9 +315,9 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
         category: cat,
         amount,
         pct: total > 0 ? (amount / total) * 100 : 0,
-        meta: getCategoryMeta(cat),
+        meta: getCategoryMeta(cat, categoryIconMap),
       }));
-  }, [filtered]);
+  }, [categoryIconMap, filtered]);
 
   // ── Missed Opportunity Radar ──
   const missedOpportunities = useMemo(() => {
@@ -480,44 +326,42 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
     let totalMissedValue = 0;
     let optimalTxns = 0;
     let badTxns = 0;
+
+    for (const txn of filtered) {
+      delete txn.optimalCard;
+      delete txn.usedOptimal;
+      delete txn.rewardComparison;
+    }
     
-    // Only analyze debit transactions with recognizable categories
-    const analyzableTxns = filtered.filter(t => !t.isCredit && t.category && t.amount > 0);
+    // Only analyze current-month debit transactions with recognizable categories.
+    const analyzableTxns = filtered.filter(
+      t => !t.isCredit && t.category && t.amount > 0 && isTransactionInSameMonth(t.date)
+    );
     
     for (const txn of analyzableTxns) {
-      const bestCard = getOptimalCard(cards as PortfolioCard[], txn.category || "catch-all", financialConfig?.customValuations as CustomValuations | undefined);
-      if (!bestCard) continue;
-      
-      const optimalYield = bestCard.effectiveYield;
-      
-      // Attempt to figure out what card was actually used
-      // Since Plaid gives us the account name, we can try matching it to our portfolio
-      const usedCard = (cards as PortfolioCard[]).find(c => 
-        (txn.accountName && c.name.toLowerCase().includes(txn.accountName.toLowerCase())) || 
-        (txn.institution && c.name.toLowerCase().includes(txn.institution.toLowerCase()))
+      const comparison = buildRewardComparison(
+        txn,
+        cards as PortfolioCard[],
+        financialConfig?.customValuations as CustomValuations | undefined
       );
-      
-      let actualYield = 1.0; // Assume 1% baseline if we can't identify the card
-      if (usedCard) {
-        // If we know the card they used, calculate its true yield for this category
-        const usedCardData = getOptimalCard([usedCard], txn.category || "catch-all", financialConfig?.customValuations as CustomValuations | undefined);
-        if (usedCardData) {
-          actualYield = usedCardData.effectiveYield;
-        }
-      }
-      
-      // Calculate delta
-      if (optimalYield > actualYield) {
-        const yieldDiff = optimalYield - actualYield;
-        const dollarImpact = (txn.amount * yieldDiff) / 100;
-        totalMissedValue += dollarImpact;
+      if (!comparison) continue;
+
+      txn.optimalCard = comparison.bestCard;
+      txn.rewardComparison = {
+        usedDisplayName: comparison.usedDisplayName,
+        actualYield: comparison.actualYield,
+        optimalYield: comparison.optimalYield,
+        actualRewardValue: comparison.actualRewardValue,
+        optimalRewardValue: comparison.optimalRewardValue,
+        incrementalRewardValue: comparison.incrementalRewardValue,
+        usedCardMatched: comparison.usedCardMatched,
+      };
+
+      if (!comparison.usedOptimal) {
+        totalMissedValue += comparison.incrementalRewardValue;
         badTxns++;
-        
-        // Attach optimal card data to the transaction for rendering the taglet later
-        txn.optimalCard = bestCard;
       } else {
         optimalTxns++;
-        txn.optimalCard = bestCard;
         txn.usedOptimal = true;
       }
     }
@@ -584,7 +428,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
   return (
     <div
       onTouchStart={handleOverlayTouchStart}
-      onTouchMove={handleOverlayTouchMove}
+      onTouchMove={e => handleOverlayTouchMove(e, scrollRef)}
       onTouchEnd={handleOverlayTouchEnd}
       style={{
         position: "fixed",
@@ -629,7 +473,8 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
               size={16}
               color={T.accent.primary}
               style={{
-                animation: refreshing ? "ringSweep 1s linear infinite" : `rotate(${pullDistance * 4}deg)`,
+                animation: refreshing ? "spin 0.9s linear infinite" : "none",
+                transform: refreshing ? undefined : `rotate(${pullDistance * 4}deg)`,
                 transition: refreshing ? "none" : "transform 0.1s ease-out",
               }}
             />
@@ -691,26 +536,28 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
         </span>
 
         <div style={{ display: "flex", gap: 6 }}>
-          <button
-            onClick={() => {
-              haptic.light();
-              setShowExportMenu(!showExportMenu);
-            }}
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 12,
-              border: `1px solid ${T.border.default}`,
-              background: T.bg.glass,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              color: T.text.secondary,
-            }}
-          >
-            <Download size={17} strokeWidth={2} />
-          </button>
+          {proEnabled && (
+            <button
+              onClick={() => {
+                haptic.light();
+                setShowExportMenu(!showExportMenu);
+              }}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                border: `1px solid ${T.border.default}`,
+                background: T.bg.glass,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                color: T.text.secondary,
+              }}
+            >
+              <Download size={17} strokeWidth={2} />
+            </button>
+          )}
           <button
             onClick={handleRefresh}
             disabled={refreshing}
@@ -732,7 +579,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
               size={17}
               strokeWidth={2}
               style={{
-                animation: refreshing ? "ringSweep 1s linear infinite" : "none",
+                animation: refreshing ? "spin 0.9s linear infinite" : "none",
               }}
             />
           </button>
@@ -740,7 +587,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
       </header>
 
       {/* ─── EXPORT DROPDOWN ─── */}
-      {showExportMenu && (
+      {proEnabled && showExportMenu && (
         <div
           style={{
             position: "absolute",
@@ -802,397 +649,6 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
         </div>
       )}
 
-      {/* ─── SUMMARY BAR ─── */}
-      {!loading && transactions.length > 0 && (
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            padding: "10px 16px",
-            borderBottom: `1px solid ${T.border.subtle}`,
-            background: T.bg.card,
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
-            <TrendingDown size={13} color={T.status.red} />
-            <span style={{ fontSize: 11, color: T.text.dim, fontWeight: 600 }}>Spent</span>
-            <span style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, fontVariantNumeric: "tabular-nums" }}>
-              {stats.totalSpent.toLocaleString("en-US", { style: "currency", currency: "USD" })}
-            </span>
-          </div>
-          <div style={{ width: 1, background: T.border.default }} />
-          <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
-            <TrendingUp size={13} color={T.status.green} />
-            <span style={{ fontSize: 11, color: T.text.dim, fontWeight: 600 }}>Received</span>
-            <span style={{ fontSize: 13, fontWeight: 800, color: T.status.green, fontVariantNumeric: "tabular-nums" }}>
-              {stats.totalReceived.toLocaleString("en-US", { style: "currency", currency: "USD" })}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* ─── MISSED OPPORTUNITY RADAR ─── */}
-      {!loading && missedOpportunities.totalMissedValue > 0 && (
-        <div 
-          className="txn-missed-opp-banner"
-          style={{
-            margin: "12px 16px",
-            background: `linear-gradient(135deg, ${T.status.redDim}, ${T.bg.surface})`,
-            border: `1px solid ${T.status.red}40`,
-            borderRadius: T.radius.lg,
-            padding: 16,
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 12,
-            boxShadow: T.shadow.sm,
-            animation: "txnSlideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
-          }}
-        >
-          <div 
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 16,
-              background: T.status.red,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-              boxShadow: `0 4px 12px ${T.status.red}40`
-            }}
-          >
-            <Zap size={16} color="#FFF" strokeWidth={2.5} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h4 style={{ 
-              fontSize: 14, 
-              fontWeight: 800, 
-              color: T.status.red, 
-              margin: "0 0 4px 0",
-              letterSpacing: "-0.01em"
-            }}>
-              Missed Opportunity Radar
-            </h4>
-            <p style={{ 
-              fontSize: 12, 
-              color: T.text.secondary, 
-              lineHeight: 1.4,
-              margin: 0 
-            }}>
-              You lost <strong style={{ color: T.text.primary, fontVariantNumeric: "tabular-nums" }}>{missedOpportunities.totalMissedValue.toLocaleString("en-US", { style: "currency", currency: "USD" })}</strong> in value this month by using the wrong card on {missedOpportunities.badTxns} past transactions. Look for the <span style={{ color: T.accent.primary, fontWeight: 700 }}>Best Card</span> badges below.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* ─── SPENDING BREAKDOWN ─── */}
-      {!loading && transactions.length > 0 && categoryBreakdown.length > 0 && (
-        <div
-          style={{
-            borderBottom: `1px solid ${T.border.subtle}`,
-            background: T.bg.card,
-            flexShrink: 0,
-          }}
-        >
-          <button
-            onClick={() => {
-              haptic.light();
-              setShowBreakdown(!showBreakdown);
-            }}
-            style={{
-              width: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "10px 16px",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: T.text.secondary,
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: "0.04em",
-              fontFamily: T.font.mono,
-            }}
-          >
-            <span>SPENDING BREAKDOWN</span>
-            <ChevronDown
-              size={14}
-              style={{
-                transform: showBreakdown ? "rotate(180deg)" : "rotate(0deg)",
-                transition: "transform 0.2s ease",
-              }}
-            />
-          </button>
-          {showBreakdown && (
-            <div
-              style={{
-                padding: "0 16px 12px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-                animation: "txnSlideDown 0.2s ease-out",
-              }}
-            >
-              {categoryBreakdown.map(({ category, amount, pct, meta }) => {
-                const Icon = meta.icon;
-                return (
-                  <div key={category} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 8,
-                        background: meta.bg,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Icon size={14} color={meta.color} strokeWidth={2} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "baseline",
-                          marginBottom: 3,
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: T.text.primary,
-                            textTransform: "capitalize",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                        >
-                          {category}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: T.text.dim,
-                            fontVariantNumeric: "tabular-nums",
-                            flexShrink: 0,
-                            marginLeft: 8,
-                          }}
-                        >
-                          {amount.toLocaleString("en-US", { style: "currency", currency: "USD" })}
-                          <span style={{ opacity: 0.5, marginLeft: 4 }}>{pct.toFixed(0)}%</span>
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          height: 4,
-                          borderRadius: 2,
-                          background: T.bg.surface,
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${pct}%`,
-                            height: "100%",
-                            borderRadius: 2,
-                            background: meta.color,
-                            transition: "width 0.5s ease-out",
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ─── SEARCH BAR ─── */}
-      {!loading && transactions.length > 0 && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "8px 16px",
-            borderBottom: `1px solid ${T.border.subtle}`,
-            background: T.bg.card,
-            flexShrink: 0,
-          }}
-        >
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              background: T.bg.surface,
-              borderRadius: T.radius.md,
-              padding: "8px 12px",
-              border: `1px solid ${T.border.subtle}`,
-            }}
-          >
-            <Search size={15} color={T.text.dim} style={{ flexShrink: 0 }} />
-            <input
-              ref={searchRef}
-              className="txn-search-input"
-              type="text"
-              placeholder="Search transactions..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              style={{ color: T.text.primary }}
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 2,
-                  display: "flex",
-                  color: T.text.dim,
-                }}
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
-          <button
-            onClick={() => {
-              haptic.light();
-              setShowFilters(!showFilters);
-            }}
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: T.radius.md,
-              border: `1px solid ${showFilters || hasFilters ? T.accent.primary + "60" : T.border.default}`,
-              background: showFilters || hasFilters ? T.accent.primaryDim : T.bg.glass,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              color: showFilters || hasFilters ? T.accent.primary : T.text.dim,
-              transition: "all 0.2s",
-            }}
-          >
-            <Filter size={16} strokeWidth={2} />
-          </button>
-        </div>
-      )}
-
-      {/* ─── FILTER PILLS ─── */}
-      {showFilters && (
-        <div
-          style={{
-            padding: "8px 0 4px",
-            borderBottom: `1px solid ${T.border.subtle}`,
-            background: T.bg.card,
-            flexShrink: 0,
-            animation: "txnSlideDown 0.2s ease-out",
-          }}
-        >
-          {/* Category Row */}
-          <div style={{ padding: "0 16px 4px", display: "flex", alignItems: "center", gap: 6 }}>
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                color: T.text.dim,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                flexShrink: 0,
-              }}
-            >
-              CAT
-            </span>
-            <div className="txn-filter-strip">
-              {hasFilters && (
-                <button
-                  onClick={clearFilters}
-                  className="txn-filter-pill"
-                  style={{
-                    background: T.status.redDim,
-                    color: T.status.red,
-                    border: `1px solid ${T.status.red}30`,
-                  }}
-                >
-                  Clear All
-                </button>
-              )}
-              {categories.map(cat => {
-                const active = activeCategory === cat;
-                const meta = getCategoryMeta(cat);
-                return (
-                  <button
-                    key={cat}
-                    onClick={() => {
-                      haptic.light();
-                      setActiveCategory(active ? null : cat);
-                    }}
-                    className="txn-filter-pill"
-                    style={{
-                      background: active ? meta.bg : "transparent",
-                      color: active ? meta.color : T.text.dim,
-                      border: `1px solid ${active ? meta.color + "40" : T.border.default}`,
-                    }}
-                  >
-                    {cat}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          {/* Account Row */}
-          <div style={{ padding: "0 16px 4px", display: "flex", alignItems: "center", gap: 6 }}>
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                color: T.text.dim,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                flexShrink: 0,
-              }}
-            >
-              ACCT
-            </span>
-            <div className="txn-filter-strip">
-              {accounts.map(acct => {
-                const active = activeAccount === acct;
-                return (
-                  <button
-                    key={acct}
-                    onClick={() => {
-                      haptic.light();
-                      setActiveAccount(active ? null : acct);
-                    }}
-                    className="txn-filter-pill"
-                    style={{
-                      background: active ? T.accent.primaryDim : "transparent",
-                      color: active ? T.accent.primary : T.text.dim,
-                      border: `1px solid ${active ? T.accent.primary + "40" : T.border.default}`,
-                    }}
-                  >
-                    {acct}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ─── TRANSACTION LIST ─── */}
       <div
         ref={scrollRef}
@@ -1205,6 +661,395 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
           paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)",
         }}
       >
+        {/* ─── SUMMARY BAR ─── */}
+        {!loading && transactions.length > 0 && proEnabled && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 8,
+              padding: "10px 16px 8px",
+              borderBottom: `1px solid ${T.border.subtle}`,
+              background: T.bg.card,
+            }}
+          >
+            <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", borderRadius: T.radius.md, background: T.bg.elevated }}>
+              <TrendingDown size={13} color={T.status.red} />
+              <span style={{ fontSize: 11, color: T.text.dim, fontWeight: 600 }}>Spent</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, fontVariantNumeric: "tabular-nums" }}>
+                {stats.totalSpent.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+              </span>
+            </div>
+            <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", borderRadius: T.radius.md, background: T.bg.elevated }}>
+              <TrendingUp size={13} color={T.status.green} />
+              <span style={{ fontSize: 11, color: T.text.dim, fontWeight: 600 }}>Received</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: T.status.green, fontVariantNumeric: "tabular-nums" }}>
+                {stats.totalReceived.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* ─── MISSED OPPORTUNITY RADAR ─── */}
+        {!loading && proEnabled && missedOpportunities.totalMissedValue > 0 && (
+          <div 
+            className="txn-missed-opp-banner"
+            style={{
+              margin: "10px 16px",
+              background: `linear-gradient(135deg, ${T.status.redDim}, ${T.bg.card})`,
+              border: `1px solid ${T.status.red}26`,
+              borderRadius: T.radius.lg,
+              padding: 14,
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 12,
+              boxShadow: "none",
+              animation: "txnSlideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
+            }}
+          >
+            <div 
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: 15,
+                background: `${T.status.red}18`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Zap size={15} color={T.status.red} strokeWidth={2.5} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h4 style={{ 
+                fontSize: 13, 
+                fontWeight: 800, 
+                color: T.status.red, 
+                margin: "0 0 4px 0",
+                letterSpacing: "0.02em",
+                textTransform: "uppercase",
+              }}>
+                Missed Opportunity
+              </h4>
+              <p style={{ 
+                fontSize: 12, 
+                color: T.text.secondary, 
+                lineHeight: 1.45,
+                margin: 0 
+              }}>
+                You lost <strong style={{ color: T.text.primary, fontVariantNumeric: "tabular-nums" }}>{missedOpportunities.totalMissedValue.toLocaleString("en-US", { style: "currency", currency: "USD" })}</strong> in value this month by using the wrong card on {missedOpportunities.badTxns} past transactions. Look for the <span style={{ color: T.accent.primary, fontWeight: 700 }}>Best Card</span> badges below.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ─── SPENDING BREAKDOWN ─── */}
+        {!loading && proEnabled && transactions.length > 0 && categoryBreakdown.length > 0 && (
+          <div
+            style={{
+              borderBottom: `1px solid ${T.border.subtle}`,
+              background: T.bg.card,
+            }}
+          >
+            <button
+              onClick={() => {
+                haptic.light();
+                setShowBreakdown(!showBreakdown);
+              }}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                minHeight: 44,
+                padding: "10px 16px",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: T.text.secondary,
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                fontFamily: T.font.mono,
+              }}
+            >
+              <span>SPENDING BREAKDOWN</span>
+              <ChevronDown
+                size={14}
+                style={{
+                  transform: showBreakdown ? "rotate(180deg)" : "rotate(0deg)",
+                  transition: "transform 0.2s ease",
+                }}
+              />
+            </button>
+            {showBreakdown && (
+              <div
+                style={{
+                  padding: "0 16px 12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                  animation: "txnSlideDown 0.2s ease-out",
+                }}
+              >
+                {categoryBreakdown.map(({ category, amount, pct, meta }) => {
+                  const Icon = meta.icon;
+                  return (
+                    <div key={category} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 8,
+                          background: meta.bg,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Icon size={14} color={meta.color} strokeWidth={2} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "baseline",
+                            marginBottom: 3,
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: T.text.primary,
+                              textTransform: "capitalize",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {category}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: T.text.dim,
+                              fontVariantNumeric: "tabular-nums",
+                              flexShrink: 0,
+                              marginLeft: 8,
+                            }}
+                          >
+                            {amount.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                            <span style={{ opacity: 0.5, marginLeft: 4 }}>{pct.toFixed(0)}%</span>
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            height: 4,
+                            borderRadius: 2,
+                            background: T.bg.surface,
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${pct}%`,
+                              height: "100%",
+                              borderRadius: 2,
+                              background: meta.color,
+                              transition: "width 0.5s ease-out",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── SEARCH BAR ─── */}
+        {!loading && transactions.length > 0 && proEnabled && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 16px",
+              borderBottom: `1px solid ${T.border.subtle}`,
+              background: T.bg.card,
+            }}
+          >
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                background: T.bg.surface,
+                borderRadius: T.radius.md,
+                padding: "8px 12px",
+                border: `1px solid ${T.border.subtle}`,
+              }}
+            >
+              <Search size={15} color={T.text.dim} style={{ flexShrink: 0 }} />
+              <input
+                ref={searchRef}
+                className="txn-search-input"
+                type="text"
+                placeholder="Search transactions..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                style={{ color: T.text.primary }}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 2,
+                    display: "flex",
+                    color: T.text.dim,
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                haptic.light();
+                setShowFilters(!showFilters);
+              }}
+              aria-label={showFilters ? "Hide transaction filters" : "Show transaction filters"}
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: T.radius.md,
+                border: `1px solid ${showFilters || hasFilters ? T.accent.primary + "60" : T.border.default}`,
+                background: showFilters || hasFilters ? T.accent.primaryDim : T.bg.glass,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                color: showFilters || hasFilters ? T.accent.primary : T.text.dim,
+                transition: "all 0.2s",
+              }}
+            >
+              <Filter size={16} strokeWidth={2} />
+            </button>
+          </div>
+        )}
+
+        {/* ─── FILTER PILLS ─── */}
+        {proEnabled && showFilters && (
+          <div
+            style={{
+              padding: "8px 0 4px",
+              borderBottom: `1px solid ${T.border.subtle}`,
+              background: T.bg.card,
+              animation: "txnSlideDown 0.2s ease-out",
+            }}
+          >
+            {/* Category Row */}
+            <div style={{ padding: "0 16px 4px", display: "flex", alignItems: "center", gap: 6 }}>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: T.text.dim,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  flexShrink: 0,
+                }}
+              >
+                CAT
+              </span>
+              <div className="txn-filter-strip">
+                {hasFilters && (
+                  <button
+                    onClick={clearFilters}
+                    className="txn-filter-pill"
+                    style={{
+                      background: T.status.redDim,
+                      color: T.status.red,
+                      border: `1px solid ${T.status.red}30`,
+                    }}
+                  >
+                    Clear All
+                  </button>
+                )}
+                {categories.map(cat => {
+                  const active = activeCategory === cat;
+                  const meta = getCategoryMeta(cat, categoryIconMap);
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => {
+                        haptic.light();
+                        setActiveCategory(active ? null : cat);
+                      }}
+                      className="txn-filter-pill"
+                      style={{
+                        background: active ? meta.bg : "transparent",
+                        color: active ? meta.color : T.text.dim,
+                        border: `1px solid ${active ? meta.color + "40" : T.border.default}`,
+                      }}
+                    >
+                      {cat}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Account Row */}
+            <div style={{ padding: "0 16px 4px", display: "flex", alignItems: "center", gap: 6 }}>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: T.text.dim,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  flexShrink: 0,
+                }}
+              >
+                ACCT
+              </span>
+              <div className="txn-filter-strip">
+                {accounts.map(acct => {
+                  const active = activeAccount === acct;
+                  return (
+                    <button
+                      key={acct}
+                      onClick={() => {
+                        haptic.light();
+                        setActiveAccount(active ? null : acct);
+                      }}
+                      className="txn-filter-pill"
+                      style={{
+                        background: active ? T.accent.primaryDim : "transparent",
+                        color: active ? T.accent.primary : T.text.dim,
+                        border: `1px solid ${active ? T.accent.primary + "40" : T.border.default}`,
+                      }}
+                    >
+                      {acct}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           /* Skeleton Loader */
           <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1359,7 +1204,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
 
                 {/* Transaction Rows */}
                 {group.txns.map((txn, ti) => {
-                  const meta = getCategoryMeta(txn.category);
+                  const meta = getCategoryMeta(txn.category, categoryIconMap);
                   const Icon = meta.icon;
                   return (
                     <div
@@ -1367,7 +1212,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                       className="txn-row"
                       style={{
                         display: "flex",
-                        alignItems: "center",
+                        alignItems: "flex-start",
                         gap: 12,
                         padding: "12px 16px",
                         borderBottom: `1px solid ${T.border.subtle}`,
@@ -1460,8 +1305,8 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                           )}
                         </div>
                         {/* ─── BEST CARD TAGLET ─── */}
-                        {txn.optimalCard && !txn.isCredit && (
-                          <div style={{ marginTop: 4, display: "flex", alignItems: "center" }}>
+                        {txn.optimalCard && txn.rewardComparison && !txn.isCredit && (
+                          <div style={{ marginTop: 4, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
                             <span style={{
                               fontSize: 9,
                               fontWeight: 800,
@@ -1474,31 +1319,66 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                               textTransform: "uppercase",
                               display: "inline-flex",
                               alignItems: "center",
-                              gap: 3
+                              gap: 3,
+                              maxWidth: "100%"
                             }}>
                               <Sparkles size={10} />
-                              {txn.usedOptimal ? "Used Best Card: " : "Should've Used: "} 
+                              {txn.usedOptimal ? "Used Best Card" : "Should've Used"}:{" "}
                               {(() => {
                                 const optimalCardName = txn.optimalCard.name || "Best Card";
                                 return optimalCardName.length > 18 ? `${optimalCardName.substring(0, 15)}...` : optimalCardName;
-                              })()} ({txn.optimalCard.effectiveYield}x)
+                              })()}
+                              {!txn.usedOptimal &&
+                                ` (+${txn.rewardComparison.incrementalRewardValue.toLocaleString("en-US", { style: "currency", currency: "USD" })})`}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 10,
+                                color: T.text.dim,
+                                lineHeight: 1.35,
+                                display: "block",
+                                maxWidth: "100%",
+                              }}
+                            >
+                              {txn.rewardComparison.usedCardMatched ? "Earned" : "Estimated earned"}{" "}
+                              <span style={{ color: T.text.secondary, fontWeight: 700 }}>
+                                {txn.rewardComparison.actualRewardValue.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                              </span>{" "}
+                              with {txn.rewardComparison.usedDisplayName}
+                              {!txn.rewardComparison.usedCardMatched && " (baseline estimate)"}
+                              {!txn.usedOptimal && (
+                                <>
+                                  {" "}• Best would be{" "}
+                                  <span style={{ color: T.accent.primary, fontWeight: 700 }}>
+                                    {txn.rewardComparison.optimalRewardValue.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                                  </span>{" "}
+                                  at {formatRewardRate(txn.rewardComparison.optimalYield)}
+                                </>
+                              )}
+                              {txn.usedOptimal && <> • {formatRewardRate(txn.rewardComparison.actualYield)}</>}
                             </span>
                           </div>
                         )}
                       </div>
 
                       {/* Amount */}
-                      <span
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 800,
-                          flexShrink: 0,
-                          fontVariantNumeric: "tabular-nums",
-                          color: txn.isCredit ? T.status.green : T.text.primary,
-                        }}
-                      >
-                        {formatMoney(txn.amount, !!txn.isCredit)}
-                      </span>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0, minWidth: 84 }}>
+                        <span
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 800,
+                            fontVariantNumeric: "tabular-nums",
+                            color: txn.isCredit ? T.status.green : T.text.primary,
+                          }}
+                        >
+                          {formatMoney(txn.amount, !!txn.isCredit)}
+                        </span>
+                        {txn.date && (
+                          <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono }}>
+                            {new Date(txn.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -1506,7 +1386,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
             ))}
 
             {/* Pro Teaser Banner */}
-            {!proEnabled && filtered.length > 5 && (
+            {!proEnabled && transactions.length > 0 && (
               <div style={{ padding: "8px 16px 24px" }}>
                 <Card
                   style={{
@@ -1539,7 +1419,8 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                       Unlock Full Ledger
                     </h4>
                     <p style={{ fontSize: 13, color: T.text.secondary, margin: 0, lineHeight: 1.5 }}>
-                      You have {filtered.length - 5} more transactions hidden. Upgrade to Pro to search, filter, and export your entire financial history.
+                      Free includes a live 5-transaction preview for one linked institution. Upgrade to Pro to unlock search,
+                      filters, export, and your full multi-account ledger.
                     </p>
                   </div>
                 </Card>
