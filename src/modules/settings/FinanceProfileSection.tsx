@@ -296,7 +296,7 @@ export function FinanceProfileSection({
                         setFinancialConfig(JSON.parse(saved));
                         window.toast?.success?.("Baseline restored.");
                       } catch {
-                        void 0;
+                        window.toast?.error?.("Saved baseline is corrupted.");
                       }
                     } else {
                       window.toast?.error?.("No baseline saved.");

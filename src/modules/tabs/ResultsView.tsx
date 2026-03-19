@@ -4,6 +4,7 @@
   import {
     Activity,
     AlertTriangle,
+    ArrowLeft,
     CheckCircle,
     CheckSquare,
     ChevronDown,
@@ -174,60 +175,103 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
   };
 
   return (
-    <main className="page-body" aria-label="Audit results">
+    <main
+      className="safe-scroll-body safe-bottom page-body"
+      aria-label="Audit results"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        width: "100%",
+        paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
+        ["--page-bottom-clearance" as string]: "calc(env(safe-area-inset-bottom, 0px) + 28px)",
+      }}
+    >
+      <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column", gap: 12 }}>
       <div
-        style={{ padding: "8px 0 12px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 12,
+          paddingBottom: 4,
+        }}
       >
-        <div>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, minWidth: 0 }}>
           <button
             onClick={handleExitResults}
+            aria-label="Back"
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "6px 14px",
-              marginBottom: 10,
-              background: T.bg.elevated,
+              width: 46,
+              height: 46,
+              borderRadius: 16,
               border: `1px solid ${T.border.default}`,
-              borderRadius: 99,
-              color: T.accent.primary,
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: "pointer",
-              transition: "all .2s ease",
+              background: T.bg.glass,
+              color: T.text.primary,
+              boxShadow: T.shadow.soft,
+              flexShrink: 0,
             }}
           >
-            ← Back
+            <ArrowLeft size={18} strokeWidth={2.4} />
           </button>
-          <h1 style={{ fontSize: "clamp(20px, 6vw, 24px)", fontWeight: 800, margin: 0 }}>Full Results</h1>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-            <Mono size={11} color={T.text.dim}>
-              {fmtDate(audit.date)}
-            </Mono>
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 800,
+                color: T.accent.primary,
+                fontFamily: T.font.mono,
+                letterSpacing: "0.08em",
+                marginBottom: 4,
+              }}
+            >
+              AUDIT REPORT
+            </div>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: "clamp(28px, 8vw, 36px)",
+                lineHeight: 1.02,
+                letterSpacing: "-0.04em",
+                color: T.text.primary,
+                fontWeight: 900,
+              }}
+            >
+              Full Results
+            </h1>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+              <Mono size={11} color={T.text.dim}>
+                {fmtDate(audit.date)}
+              </Mono>
+              {audit.isTest && <Badge variant="amber">TEST · NOT SAVED</Badge>}
+            </div>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
-          {audit.isTest && <Badge variant="amber">TEST · NOT SAVED</Badge>}
-          <button
-            onClick={() => setShowExportSheet(true)}
-            title="Export Audit"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: T.radius.md,
-              border: `1px solid ${T.border.default}`,
-              background: T.bg.elevated,
-              color: T.text.secondary,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transition: "all .2s",
-            }}
-          >
-            <Share2 size={15} strokeWidth={2.5} />
-          </button>
-        </div>
+        <button
+          onClick={() => setShowExportSheet(true)}
+          title="Export Audit"
+          style={{
+            height: 46,
+            padding: "0 16px",
+            borderRadius: 16,
+            border: `1px solid ${T.border.default}`,
+            background: T.bg.glass,
+            color: T.text.primary,
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            boxShadow: T.shadow.soft,
+            flexShrink: 0,
+            fontSize: 12,
+            fontWeight: 800,
+            fontFamily: T.font.mono,
+          }}
+        >
+          <Share2 size={15} strokeWidth={2.5} />
+          Export
+        </button>
       </div>
 
       {showExportSheet && audit && (
@@ -296,14 +340,15 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
                 display: "flex",
                 alignItems: "center",
                 gap: 14,
-                padding: "12px 16px",
-                background: allDone ? `${T.status.green}12` : `${pctColor}08`,
-                border: `1px solid ${allDone ? T.status.green : pctColor}20`,
-                borderRadius: T.radius.lg,
-                marginBottom: 10,
+                padding: isSmallPhone ? "14px 16px" : "15px 18px",
+                background: `linear-gradient(180deg, ${T.bg.card}, ${allDone ? `${T.status.green}10` : `${pctColor}08`})`,
+                border: `1px solid ${allDone ? T.status.green : pctColor}22`,
+                borderRadius: T.radius.xl,
+                marginBottom: 6,
                 animation: allDone ? "glowPulse 2s ease-in-out infinite" : "fadeInUp .4s ease-out both",
                 position: "relative",
                 overflow: "hidden",
+                boxShadow: T.shadow.soft,
               }}
             >
               {allDone && (
@@ -375,12 +420,12 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
                 <span style={{ fontSize: 11, fontWeight: 900, color: pctColor, fontFamily: T.font.mono }}>{pct}%</span>
               </div>
               <div style={{ marginLeft: 4 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary }}>
                   {done}/{total} Moves Complete
                 </div>
                 <div
                   style={{
-                    fontSize: 10,
+                    fontSize: 11,
                     color: allDone ? T.status.green : T.text.dim,
                     fontWeight: allDone ? 700 : 400,
                   }}
@@ -395,9 +440,9 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
       <Card
         className="slide-up"
         style={{
-          padding: isSmallPhone ? "6px 16px 16px" : "8px 20px 20px",
-          marginTop: 14,
-          background: T.bg.card,
+          padding: isSmallPhone ? "14px 16px 18px" : "18px 22px 22px",
+          marginTop: 6,
+          background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.surface})`,
           border: `1px solid ${T.border.default}`,
           boxShadow: `0 12px 40px ${T.shadow.base}`,
         }}
@@ -433,7 +478,7 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
         )}
 
         {sections.nextAction && (
-          <section aria-labelledby="results-next-action" style={{ padding: "22px 0", borderBottom: `1px solid ${T.border.subtle}` }}>
+          <section aria-labelledby="results-next-action" style={{ padding: "4px 0 22px", borderBottom: `1px solid ${T.border.subtle}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
               <div
                 style={{
@@ -448,9 +493,19 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
               >
                 <Zap size={16} color={T.accent.primary} strokeWidth={2.5} />
               </div>
-              <h2 id="results-next-action" style={{ fontSize: "clamp(16px, 4.6vw, 18px)", fontWeight: 800, color: T.accent.primary, margin: 0, letterSpacing: "-0.01em" }}>Immediate Next Action</h2>
+                <h2 id="results-next-action" style={{ fontSize: "clamp(16px, 4.6vw, 18px)", fontWeight: 800, color: T.accent.primary, margin: 0, letterSpacing: "-0.01em" }}>Immediate Next Action</h2>
+              </div>
+            <div
+              style={{
+                padding: isSmallPhone ? "16px" : "18px 20px",
+                borderRadius: T.radius.lg,
+                background: `${T.accent.primary}10`,
+                border: `1px solid ${T.accent.primary}18`,
+                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
+              }}
+            >
+              <Md text={stripPaycheckParens(sections.nextAction)} />
             </div>
-            <Md text={stripPaycheckParens(sections.nextAction)} />
           </section>
         )}
 
@@ -761,6 +816,7 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
         <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.6, margin: 0 }}>
           <strong style={{ color: T.text.dim }}>AI Disclaimer:</strong> This analysis is educational and informational. It is <strong>not</strong> financial, tax, legal, or investment advice. Use it to frame decisions, then confirm major moves with a licensed professional.
         </p>
+      </div>
       </div>
     </main>
   );

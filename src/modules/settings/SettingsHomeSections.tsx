@@ -384,7 +384,7 @@ export function DeveloperToolsSection({
     >
       <div style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginBottom: 12 }}>Simulators</div>
       <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.6, marginBottom: 16 }}>
-        Trigger simulated native bridging events for testing features on web.
+        Trigger native local-notification and geofence previews for QA. On iPhone this uses the OS notification path when permission is available.
       </p>
       <button
         onClick={() => void onLoadFullProfileQaSeed()}
@@ -424,7 +424,7 @@ export function DeveloperToolsSection({
             marginBottom: store === "Whole Foods" ? 12 : 0,
           }}
         >
-          Simulate: Arrive at {store}
+          Preview Local Alert: {store}
         </button>
       ))}
     </div>

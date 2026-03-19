@@ -7,6 +7,7 @@ import { APP_VERSION } from "../constants.js";
 import { haptic } from "../haptics.js";
 import { log } from "../logger.js";
 import { extractCategoryByKeywords } from "../merchantDatabase.js";
+import { triggerStoreArrivalNotification } from "../notifications.js";
 import { syncOTAData } from "../ota.js";
 import { initRevenueCat } from "../revenuecat.js";
 import { getOptimalCard } from "../rewardsCatalog.js";
@@ -77,6 +78,7 @@ export function useSimulatedGeofenceNotification(
   valuations: Record<string, unknown> | undefined
 ) {
   const [simulatedNotification, setSimulatedNotification] = useState<SimulatedNotification | null>(null);
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const handleSimulate = (event: Event) => {
@@ -90,16 +92,29 @@ export function useSimulatedGeofenceNotification(
         recommendation = `Use your ${optimal.cardName} here for ${parseFloat((optimal.yield * 100).toFixed(1))}% back!`;
       }
 
-      setSimulatedNotification({
-        title: `${store} Nearby`,
-        body: recommendation,
-        store,
-      });
-      setTimeout(() => setSimulatedNotification(null), 6000);
+      void (async () => {
+        const shownNatively = await triggerStoreArrivalNotification(store, recommendation);
+        if (shownNatively) {
+          if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+          setSimulatedNotification(null);
+          return;
+        }
+
+        setSimulatedNotification({
+          title: `${store} Nearby`,
+          body: recommendation,
+          store,
+        });
+        if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+        dismissTimerRef.current = setTimeout(() => setSimulatedNotification(null), 6000);
+      })();
     };
 
     window.addEventListener("simulate-geo-fence", handleSimulate);
-    return () => window.removeEventListener("simulate-geo-fence", handleSimulate);
+    return () => {
+      window.removeEventListener("simulate-geo-fence", handleSimulate);
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+    };
   }, [cards, valuations]);
 
   return {

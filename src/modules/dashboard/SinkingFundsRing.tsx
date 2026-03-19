@@ -33,7 +33,18 @@ export default function SinkingFundsRing({ paceData }) {
       <span id="sinking-funds-chart-hint" className="sr-only">
         Each circular chart represents one sinking fund progress from zero to one hundred percent of target.
       </span>
-      <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4, WebkitOverflowScrolling: "touch" }}>
+      <div
+        data-swipe-nav-blocker="true"
+        style={{
+          display: "flex",
+          gap: 10,
+          overflowX: "auto",
+          paddingBottom: 4,
+          WebkitOverflowScrolling: "touch",
+          touchAction: "pan-x",
+          overscrollBehaviorX: "contain",
+        }}
+      >
         {paceData.map((d, i) => {
           const pct = d.target > 0 ? Math.min((d.saved / d.target) * 100, 100) : 0;
           const rc = pct >= 90 ? T.status.green : pct >= 50 ? T.status.amber : T.status.red;

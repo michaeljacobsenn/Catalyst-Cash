@@ -10,6 +10,7 @@ export default function AlertStrip({ alerts }) {
   return (
     <div
       className="alert-strip"
+      data-swipe-nav-blocker="true"
       role="status"
       aria-live="polite"
       aria-label="Financial alerts"
@@ -22,6 +23,8 @@ export default function AlertStrip({ alerts }) {
         WebkitOverflowScrolling: "touch",
         scrollbarWidth: "none",
         msOverflowStyle: "none",
+        touchAction: "pan-x",
+        overscrollBehaviorX: "contain",
       }}
     >
       {alerts.map((a, i) => (

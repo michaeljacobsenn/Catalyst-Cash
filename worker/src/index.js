@@ -38,6 +38,7 @@ import {
 import {
   fetchPlaidJson,
   getDbFirstResult,
+  getStoredSyncRow,
   syncTransactionsForItem,
   writeSyncRow,
 } from "./lib/plaidSync.js";
@@ -64,6 +65,16 @@ const MAX_BODY_SIZE = 512_000; // 512KB max request body (rich audit prompt is n
 const PLAID_ENV = "production"; // "sandbox", "development", or "production"
 const PLAID_TIMEOUT_MS = 15_000;
 const MARKET_TIMEOUT_MS = 10_000;
+const PLAID_INSTITUTION_LIMITS = {
+  free: 1,
+  pro: 6,
+};
+const PLAID_LINK_TOKEN_COOLDOWN_MS = 15_000;
+const PLAID_EXCHANGE_COOLDOWN_MS = 30_000;
+const PLAID_DIRECT_FETCH_COOLDOWNS = {
+  free: 7 * 24 * 60 * 60 * 1000,
+  pro: 24 * 60 * 60 * 1000,
+};
 const MODEL_ALLOWLIST = {
   free: new Set(["gemini-2.5-flash"]),
   pro: new Set([
@@ -96,6 +107,77 @@ function buildPersonaProfile(persona) {
     };
   }
   return null;
+}
+
+function parseStoredJson(value, fallback = {}) {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function getLatestTimestampMillis(rows = [], allowedItemIds = null) {
+  const allowed = allowedItemIds instanceof Set ? allowedItemIds : null;
+  let latest = 0;
+  for (const row of rows || []) {
+    if (allowed && !allowed.has(row?.item_id)) continue;
+    if (String(row?.item_id || "").startsWith("_plaid_meta:")) continue;
+    if (row?.item_id === "deep_sync_meta") continue;
+    if (!row?.last_synced_at) continue;
+    const timestamp = new Date(`${row.last_synced_at}Z`).getTime();
+    if (Number.isFinite(timestamp) && timestamp > latest) latest = timestamp;
+  }
+  return latest;
+}
+
+function getPlaidActionMetaItemId(action, scope = "global") {
+  return `_plaid_meta:${action}:${scope}`;
+}
+
+async function getPlaidActionTimestamp(db, userId, action, scope = "global") {
+  if (!db) return 0;
+  const row = await getStoredSyncRow(db, userId, getPlaidActionMetaItemId(action, scope));
+  if (!row?.last_synced_at) return 0;
+  const timestamp = new Date(`${row.last_synced_at}Z`).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+async function markPlaidAction(db, userId, action, scope = "global") {
+  if (!db) return;
+  await writeSyncRow(db, userId, getPlaidActionMetaItemId(action, scope), {
+    balancesJson: "{}",
+    liabilitiesJson: "{}",
+    transactionsJson: "{}",
+  });
+}
+
+async function buildPlaidCooldownResponse({
+  db,
+  userId,
+  action,
+  scope = "global",
+  cooldownMs,
+  message,
+  cors,
+  extra = {},
+}) {
+  const lastActionAt = await getPlaidActionTimestamp(db, userId, action, scope);
+  if (!lastActionAt || (Date.now() - lastActionAt) >= cooldownMs) return null;
+  const retryAfterMs = Math.max(0, cooldownMs - (Date.now() - lastActionAt));
+  return new Response(
+    JSON.stringify({
+      error: "cooldown",
+      message,
+      retryAfterMs,
+      ...extra,
+    }),
+    {
+      status: 429,
+      headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+    }
+  );
 }
 
 function buildCriticalRetryPrompt(context = {}) {
@@ -237,6 +319,14 @@ function getWorkerGatingMode(env) {
 
 function isWorkerGatingEnforced(env) {
   return getWorkerGatingMode(env) === "live";
+}
+
+function isPlaidCostTierEnforced(env) {
+  return true;
+}
+
+function getPlaidCostTierId(tierResolution, env) {
+  return isPlaidCostTierEnforced(env) ? tierResolution.tier : "pro";
 }
 
 function getDefaultModelForTier(provider, tier) {
@@ -564,6 +654,16 @@ export default {
         const reqBody = await request.json();
 
         if (url.pathname === "/plaid/link-token") {
+          const linkTokenCooldownResponse = await buildPlaidCooldownResponse({
+            db: env.DB,
+            userId: plaidActor.userId,
+            action: "link-token",
+            cooldownMs: PLAID_LINK_TOKEN_COOLDOWN_MS,
+            message: "Please wait a moment before starting another Plaid connection flow.",
+            cors,
+          });
+          if (linkTokenCooldownResponse) return linkTokenCooldownResponse;
+
           plaidEndpoint = "/link/token/create";
           const webhookUrl = env.PLAID_WEBHOOK_URL || `${url.origin}/plaid/webhook`;
           plaidBody = {
@@ -578,11 +678,52 @@ export default {
             webhook: webhookUrl,
           };
           const plaidData = await fetchPlaidJson(plaidDomain, plaidEndpoint, env, plaidBody);
+          await markPlaidAction(env.DB, plaidActor.userId, "link-token");
           return new Response(JSON.stringify({ link_token: plaidData.link_token }), {
             status: 200,
             headers: buildHeaders(cors, { "Content-Type": "application/json" }),
           });
         } else if (url.pathname === "/plaid/exchange") {
+          const tierResolution = await resolveEffectiveTier(request, env, plaidActor);
+          const tierId = getPlaidCostTierId(tierResolution, env);
+          const replaceItemId = String(reqBody.replaceItemId || "").trim();
+          const exchangeCooldownResponse = await buildPlaidCooldownResponse({
+            db: env.DB,
+            userId: plaidActor.userId,
+            action: "exchange",
+            scope: replaceItemId || "global",
+            cooldownMs: PLAID_EXCHANGE_COOLDOWN_MS,
+            message: "Please wait a moment before trying to connect or reconnect this bank again.",
+            cors,
+          });
+          if (exchangeCooldownResponse) return exchangeCooldownResponse;
+
+          const { results: existingItems } = await env.DB.prepare(
+            "SELECT access_token, item_id FROM plaid_items WHERE user_id = ?"
+          ).bind(plaidActor.userId).all();
+          const replacementItem = replaceItemId
+            ? await getDbFirstResult(
+                env.DB,
+                "SELECT user_id, access_token FROM plaid_items WHERE item_id = ? AND user_id = ?",
+                [replaceItemId, plaidActor.userId]
+              )
+            : null;
+          const existingCount = Math.max(0, (existingItems?.length || 0) - (replacementItem ? 1 : 0));
+          const institutionLimit = PLAID_INSTITUTION_LIMITS[tierId] || PLAID_INSTITUTION_LIMITS.free;
+
+          if (existingCount >= institutionLimit) {
+            return new Response(
+              JSON.stringify({
+                error: "institution_limit",
+                message: `Your ${tierId === "pro" ? "Pro" : "Free"} plan allows up to ${institutionLimit} Plaid institution${institutionLimit === 1 ? "" : "s"}.`,
+              }),
+              {
+                status: 403,
+                headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+              }
+            );
+          }
+
           plaidEndpoint = "/item/public_token/exchange";
           plaidBody = {
             client_id: env.PLAID_CLIENT_ID,
@@ -601,10 +742,27 @@ export default {
 
           // Store Access Token + Item ID mapping in D1
           if (env.DB) {
+            if (replacementItem?.access_token) {
+              try {
+                await fetchPlaidJson(plaidDomain, "/item/remove", env, {
+                  access_token: replacementItem.access_token,
+                });
+              } catch (removeErr) {
+                workerLog(env, "warn", "plaid-proxy", "Failed to revoke replaced Plaid item", {
+                  error: removeErr,
+                  replaceItemId,
+                });
+              }
+            }
+            if (replaceItemId && replaceItemId !== plaidData.item_id) {
+              await env.DB.prepare("DELETE FROM sync_data WHERE user_id = ? AND item_id = ?").bind(plaidActor.userId, replaceItemId).run();
+              await env.DB.prepare("DELETE FROM plaid_items WHERE item_id = ? AND user_id = ?").bind(replaceItemId, plaidActor.userId).run();
+            }
             await env.DB.prepare(
               "INSERT OR REPLACE INTO plaid_items (item_id, user_id, access_token, transactions_cursor) VALUES (?, ?, ?, ?)"
             ).bind(plaidData.item_id, plaidActor.userId, plaidData.access_token, null).run();
           }
+          await markPlaidAction(env.DB, plaidActor.userId, "exchange", replaceItemId || "global");
 
           return new Response(
             JSON.stringify({
@@ -616,7 +774,10 @@ export default {
             }
           );
         } else if (url.pathname === "/plaid/balances") {
+          const tierResolution = await resolveEffectiveTier(request, env, plaidActor);
+          const tierId = getPlaidCostTierId(tierResolution, env);
           let accessToken = reqBody.accessToken || "";
+          let itemId = String(reqBody.itemId || "").trim();
           if (accessToken && env.DB) {
             const ownedToken = await getDbFirstResult(
               env.DB,
@@ -625,17 +786,38 @@ export default {
             );
             accessToken = ownedToken?.access_token || "";
           }
-          if (!accessToken && reqBody.itemId && env.DB) {
+          if (!accessToken && itemId && env.DB) {
             const itemRow = await getDbFirstResult(
               env.DB,
               "SELECT access_token FROM plaid_items WHERE item_id = ? AND user_id = ?",
-              [reqBody.itemId, plaidActor.userId]
+              [itemId, plaidActor.userId]
             );
             accessToken = itemRow?.access_token || "";
           }
           if (!accessToken) {
             return new Response(JSON.stringify({ error: "Plaid item not found for actor" }), {
               status: 404,
+              headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+            });
+          }
+          if (!itemId && env.DB) {
+            itemId = (
+              await getDbFirstResult(
+                env.DB,
+                "SELECT item_id FROM plaid_items WHERE access_token = ? AND user_id = ?",
+                [accessToken, plaidActor.userId]
+              )
+            )?.item_id || "";
+          }
+          const cachedBalancesRow = itemId ? await getStoredSyncRow(env.DB, plaidActor.userId, itemId) : null;
+          const cachedBalancesPayload = parseStoredJson(cachedBalancesRow?.balances_json, {});
+          const directFetchCooldownMs = PLAID_DIRECT_FETCH_COOLDOWNS[tierId] || PLAID_DIRECT_FETCH_COOLDOWNS.free;
+          const directBalancesTimestamp = cachedBalancesRow?.last_synced_at
+            ? new Date(`${cachedBalancesRow.last_synced_at}Z`).getTime()
+            : 0;
+          if (cachedBalancesPayload?.accounts?.length && directBalancesTimestamp > 0 && (Date.now() - directBalancesTimestamp) < directFetchCooldownMs) {
+            return new Response(JSON.stringify(cachedBalancesPayload), {
+              status: 200,
               headers: buildHeaders(cors, { "Content-Type": "application/json" }),
             });
           }
@@ -646,12 +828,20 @@ export default {
             access_token: accessToken,
           };
           const plaidData = await fetchPlaidJson(plaidDomain, plaidEndpoint, env, plaidBody);
+          if (itemId) {
+            await writeSyncRow(env.DB, plaidActor.userId, itemId, {
+              balancesJson: JSON.stringify(plaidData),
+            });
+          }
           return new Response(JSON.stringify(plaidData), {
             status: 200,
             headers: buildHeaders(cors, { "Content-Type": "application/json" }),
           });
         } else if (url.pathname === "/plaid/liabilities") {
+          const tierResolution = await resolveEffectiveTier(request, env, plaidActor);
+          const tierId = getPlaidCostTierId(tierResolution, env);
           let accessToken = reqBody.accessToken || "";
+          let itemId = String(reqBody.itemId || "").trim();
           if (accessToken && env.DB) {
             const ownedToken = await getDbFirstResult(
               env.DB,
@@ -660,17 +850,38 @@ export default {
             );
             accessToken = ownedToken?.access_token || "";
           }
-          if (!accessToken && reqBody.itemId && env.DB) {
+          if (!accessToken && itemId && env.DB) {
             const itemRow = await getDbFirstResult(
               env.DB,
               "SELECT access_token FROM plaid_items WHERE item_id = ? AND user_id = ?",
-              [reqBody.itemId, plaidActor.userId]
+              [itemId, plaidActor.userId]
             );
             accessToken = itemRow?.access_token || "";
           }
           if (!accessToken) {
             return new Response(JSON.stringify({ error: "Plaid item not found for actor" }), {
               status: 404,
+              headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+            });
+          }
+          if (!itemId && env.DB) {
+            itemId = (
+              await getDbFirstResult(
+                env.DB,
+                "SELECT item_id FROM plaid_items WHERE access_token = ? AND user_id = ?",
+                [accessToken, plaidActor.userId]
+              )
+            )?.item_id || "";
+          }
+          const cachedLiabilitiesRow = itemId ? await getStoredSyncRow(env.DB, plaidActor.userId, itemId) : null;
+          const cachedLiabilitiesPayload = parseStoredJson(cachedLiabilitiesRow?.liabilities_json, {});
+          const directFetchCooldownMs = PLAID_DIRECT_FETCH_COOLDOWNS[tierId] || PLAID_DIRECT_FETCH_COOLDOWNS.free;
+          const directLiabilitiesTimestamp = cachedLiabilitiesRow?.last_synced_at
+            ? new Date(`${cachedLiabilitiesRow.last_synced_at}Z`).getTime()
+            : 0;
+          if (cachedLiabilitiesPayload?.liabilities && directLiabilitiesTimestamp > 0 && (Date.now() - directLiabilitiesTimestamp) < directFetchCooldownMs) {
+            return new Response(JSON.stringify(cachedLiabilitiesPayload), {
+              status: 200,
               headers: buildHeaders(cors, { "Content-Type": "application/json" }),
             });
           }
@@ -681,6 +892,11 @@ export default {
             access_token: accessToken,
           };
           const plaidData = await fetchPlaidJson(plaidDomain, plaidEndpoint, env, plaidBody);
+          if (itemId) {
+            await writeSyncRow(env.DB, plaidActor.userId, itemId, {
+              liabilitiesJson: JSON.stringify(plaidData),
+            });
+          }
           return new Response(JSON.stringify(plaidData), {
             status: 200,
             headers: buildHeaders(cors, { "Content-Type": "application/json" }),
@@ -732,6 +948,8 @@ export default {
             headers: buildHeaders(cors, { "Content-Type": "application/json" }),
           });
         } else if (url.pathname === "/plaid/transactions") {
+          const tierResolution = await resolveEffectiveTier(request, env, plaidActor);
+          const tierId = getPlaidCostTierId(tierResolution, env);
           const itemId =
             reqBody.itemId ||
             (
@@ -745,6 +963,35 @@ export default {
           if (!itemId) {
             return new Response(JSON.stringify({ error: "Plaid item not found for actor" }), {
               status: 404,
+              headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+            });
+          }
+          const cachedTransactionsRow = await getStoredSyncRow(env.DB, plaidActor.userId, itemId);
+          const cachedTransactionsPayload = parseStoredJson(cachedTransactionsRow?.transactions_json, {});
+          const directFetchCooldownMs = PLAID_DIRECT_FETCH_COOLDOWNS[tierId] || PLAID_DIRECT_FETCH_COOLDOWNS.free;
+          const directTransactionsTimestamp = cachedTransactionsRow?.last_synced_at
+            ? new Date(`${cachedTransactionsRow.last_synced_at}Z`).getTime()
+            : 0;
+          if (Array.isArray(cachedTransactionsPayload?.transactions) && cachedTransactionsPayload.transactions.length > 0) {
+            if (tierId === "free") {
+              return new Response(JSON.stringify(cachedTransactionsPayload), {
+                status: 200,
+                headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+              });
+            }
+            if (directTransactionsTimestamp > 0 && (Date.now() - directTransactionsTimestamp) < directFetchCooldownMs) {
+              return new Response(JSON.stringify(cachedTransactionsPayload), {
+                status: 200,
+                headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+              });
+            }
+          }
+          if (tierId === "free") {
+            return new Response(JSON.stringify({
+              error: "upgrade_required",
+              message: "Use the cached ledger on Free, or upgrade for additional live Plaid transaction refreshes.",
+            }), {
+              status: 403,
               headers: buildHeaders(cors, { "Content-Type": "application/json" }),
             });
           }
@@ -791,8 +1038,10 @@ export default {
               const { user_id, access_token } = itemResults[0];
 
               // --- Tier Rate Limiting ---
-              let tierId = await resolveStoredUserTier(user_id, env);
-              if (isWorkerGatingEnforced(env) && tierId === "free") {
+              const tierId = await resolveStoredUserTier(user_id, env, {
+                isWorkerGatingEnforced: isPlaidCostTierEnforced,
+              });
+              if (tierId === "free") {
                 // Free users: manual sync only — ignore webhook
                 return; // Completely ignore webhooks for free users
               }
@@ -847,15 +1096,12 @@ export default {
           // Manually trigger a sync for a user, respecting the tier cooldown.
           if (request.method !== "POST") return new Response("{}", { status: 405 });
           if (!env.DB) return new Response(JSON.stringify({ error: "DB not configured" }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
-          const requestBody = await request.json().catch(() => ({}));
+          const requestBody = reqBody && typeof reqBody === "object" ? reqBody : {};
           const tierResolution = await resolveEffectiveTier(request, env, plaidActor);
-          const tierId = !isWorkerGatingEnforced(env) ? "pro" : tierResolution.tier;
+          const tierId = getPlaidCostTierId(tierResolution, env);
 
-          const { results: syncResults } = await env.DB.prepare("SELECT item_id, last_synced_at FROM sync_data WHERE user_id = ?").bind(plaidActor.userId).all();
+          const { results: syncResults } = await env.DB.prepare("SELECT * FROM sync_data WHERE user_id = ?").bind(plaidActor.userId).all();
           let lastSyncTime = 0;
-          if (syncResults && syncResults.length > 0 && syncResults[0].last_synced_at) {
-            lastSyncTime = new Date(syncResults[0].last_synced_at + "Z").getTime();
-          }
 
           const COOLDOWNS = {
             free: 7 * 24 * 60 * 60 * 1000,
@@ -880,18 +1126,16 @@ export default {
             limitedToItemId = matchedRequestedItem.item_id || "default";
           }
 
-          if (isWorkerGatingEnforced(env) && tierId === "free") {
+          if (tierId === "free") {
             const selectedItem = matchedRequestedItem || itemResults[0];
             if (!selectedItem) {
               return new Response(JSON.stringify({ error: "No plaid items found" }), { status: 404, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
             }
             targetItems = [selectedItem];
             limitedToItemId = selectedItem.item_id || "default";
-            const targetedSyncRow = (syncResults || []).find(row => row.item_id === limitedToItemId);
-            lastSyncTime = targetedSyncRow?.last_synced_at
-              ? new Date(targetedSyncRow.last_synced_at + "Z").getTime()
-              : 0;
           }
+          const targetedItemIds = new Set(targetItems.map(item => item.item_id || "default"));
+          lastSyncTime = getLatestTimestampMillis(syncResults || [], targetedItemIds);
 
           const now = Date.now();
           if (lastSyncTime > 0 && (now - lastSyncTime) < cooldownMs) {
@@ -955,10 +1199,10 @@ export default {
           if (request.method !== "POST") return new Response("{}", { status: 405 });
           if (!env.DB) return new Response(JSON.stringify({ error: "DB not configured" }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           const tierResolution = await resolveEffectiveTier(request, env, plaidActor);
-          const deepTierId = !isWorkerGatingEnforced(env) ? "pro" : tierResolution.tier;
+          const deepTierId = getPlaidCostTierId(tierResolution, env);
 
-          if (isWorkerGatingEnforced(env) && deepTierId === "free") {
-            return new Response(JSON.stringify({ error: "upgrade_required", message: "Deep sync is a Pro feature when live gating is enabled." }), { status: 403, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+          if (deepTierId === "free") {
+            return new Response(JSON.stringify({ error: "upgrade_required", message: "Deep sync is a Pro feature." }), { status: 403, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
 
           const { results: deepSyncResults } = await env.DB.prepare("SELECT last_synced_at FROM sync_data WHERE user_id = ? AND item_id = 'deep_sync_meta'").bind(plaidActor.userId).all();

@@ -189,9 +189,6 @@ export const ISSUER_COLORS = {
 // ═══════════════════════════════════════════════════════════════
 export const DEFAULT_CARD_PORTFOLIO = [];
 
-// CARD_PORTFOLIO alias for backward compatibility (InputForm dropdown)
-export const CARD_PORTFOLIO = DEFAULT_CARD_PORTFOLIO;
-
 // ═══════════════════════════════════════════════════════════════
 // DEFAULT RENEWALS — Public v1 ships empty (fresh install)
 // ═══════════════════════════════════════════════════════════════

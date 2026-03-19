@@ -20,7 +20,13 @@
   import { getPreferredModelForTier,getRawTier,normalizeModelForTier,shouldShowGating } from "../subscription.js";
   import { useToast } from "../Toast.js";
   import { db } from "../utils.js";
-  import { PageDone,PageImport,PagePass1,PagePass2,PagePass3,PageProfile,PageWelcome } from "./SetupWizardPages.js";
+  import { PageWelcome } from "./setupWizard/PageWelcome.js";
+  import PageImport from "./setupWizard/PageImport.js";
+  import { PageProfile } from "./setupWizard/PageProfile.js";
+  import { PagePass1 } from "./setupWizard/PagePass1.js";
+  import { PagePass2 } from "./setupWizard/PagePass2.js";
+  import { PagePass3 } from "./setupWizard/PagePass3.js";
+  import { PageDone } from "./setupWizard/PageDone.js";
 
 interface ToastApi {
   success?: (message: string) => void;

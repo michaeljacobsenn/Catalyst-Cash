@@ -2,15 +2,30 @@ import { useDrag } from "@use-gesture/react";
 import { animate,useMotionValue,useMotionValueEvent,useTransform,type MotionValue } from "framer-motion";
 import { useCallback,useEffect,useMemo,useRef } from "react";
 import { haptic } from "../haptics.js";
+import { clamp } from "../mathHelpers.js";
 
 type SwipeAxis = "x" | "y";
 
-interface SwipeGestureHandlers {
+export interface SwipeGestureHandlers {
   paneRef: React.RefObject<HTMLDivElement | null>;
   bind: ReturnType<typeof useDrag>;
+  axis: SwipeAxis;
+  edgeOnly: boolean;
+  edgeSize: number;
   motionStyle: {
     x?: MotionValue<number>;
     y?: MotionValue<number>;
+  };
+  progress: MotionValue<number>;
+  underlayStyle?: {
+    x: MotionValue<number>;
+    scale: MotionValue<number>;
+    opacity: MotionValue<number>;
+  };
+  backdropStyle: {
+    opacity: MotionValue<number>;
+  };
+  edgeShadowStyle?: {
     opacity: MotionValue<number>;
   };
   dismiss: () => void;
@@ -21,14 +36,30 @@ interface InteractiveSwipeOptions {
   onDismiss: () => void;
   edgeOnly?: boolean;
   edgeSize?: number;
+  enabled?: boolean;
+  applyBaseParallax?: boolean;
 }
 
-const SPRING = { type: "spring" as const, stiffness: 300, damping: 30 };
-const DISMISS_THRESHOLD = 0.4;
-const VELOCITY_THRESHOLD = 0.45;
-const EDGE_SIZE_DEFAULT = 32;
+const SNAP_SPRING = {
+  type: "spring" as const,
+  stiffness: 540,
+  damping: 42,
+  mass: 0.92,
+};
+const DISMISS_SPRING = {
+  type: "spring" as const,
+  stiffness: 460,
+  damping: 34,
+  mass: 0.9,
+};
+const DISMISS_THRESHOLD = 0.3;
+const VELOCITY_THRESHOLD = 0.55;
+const EDGE_SIZE_DEFAULT = 28;
+const INTENT_THRESHOLD = 10;
+const INTENT_DOMINANCE = 1.15;
 
 const clampPositive = (value: number) => Math.max(0, value);
+const easeOutCubic = (value: number) => 1 - Math.pow(1 - clamp(value), 3);
 
 function getViewportSize(axis: SwipeAxis, pane: HTMLDivElement | null): number {
   if (typeof window === "undefined") return 0;
@@ -39,15 +70,20 @@ function getViewportSize(axis: SwipeAxis, pane: HTMLDivElement | null): number {
 function applyUnderlyingParallax(axis: SwipeAxis, progress: number) {
   const mainContent = document.getElementById("main-content");
   if (!mainContent) return;
-  const eased = Math.max(0, Math.min(progress, 1));
-  const scale = 0.985 + eased * 0.015;
-  const opacity = 0.88 + eased * 0.12;
-  const translate = axis === "x"
-    ? `${(-12 + eased * 12).toFixed(2)}px, 0px`
-    : `0px, ${(10 - eased * 10).toFixed(2)}px`;
+
+  const eased = easeOutCubic(progress);
+  const scale = axis === "x"
+    ? 0.962 + eased * 0.038
+    : 0.982 + eased * 0.018;
+  const opacity = axis === "x"
+    ? 0.84 + eased * 0.16
+    : 0.88 + eased * 0.12;
+  const translateX = axis === "x" ? -24 + eased * 24 : 0;
+  const translateY = axis === "y" ? 16 - eased * 16 : 0;
 
   mainContent.style.transition = "none";
-  mainContent.style.transform = `translate3d(${translate}, 0) scale(${scale.toFixed(4)})`;
+  mainContent.style.transformOrigin = "center center";
+  mainContent.style.transform = `translate3d(${translateX.toFixed(2)}px, ${translateY.toFixed(2)}px, 0) scale(${scale.toFixed(4)})`;
   mainContent.style.opacity = opacity.toFixed(4);
 }
 
@@ -55,23 +91,54 @@ function resetUnderlyingParallax() {
   const mainContent = document.getElementById("main-content");
   if (!mainContent) return;
   mainContent.style.transition = "";
+  mainContent.style.transformOrigin = "";
   mainContent.style.transform = "";
   mainContent.style.opacity = "";
 }
 
-function useInteractiveSwipe({ axis,onDismiss,edgeOnly = false,edgeSize = EDGE_SIZE_DEFAULT }: InteractiveSwipeOptions): SwipeGestureHandlers {
+function useInteractiveSwipe({
+  axis,
+  onDismiss,
+  edgeOnly = false,
+  edgeSize = EDGE_SIZE_DEFAULT,
+  enabled = true,
+  applyBaseParallax = true,
+}: InteractiveSwipeOptions): SwipeGestureHandlers {
   const paneRef = useRef<HTMLDivElement | null>(null);
   const motion = useMotionValue(0);
   const dismissingRef = useRef(false);
+  const animationRef = useRef<ReturnType<typeof animate> | null>(null);
+  const parallaxActiveRef = useRef(false);
+  const gestureAcceptedRef = useRef(false);
+  const gestureRejectedRef = useRef(false);
 
   const progress = useTransform(motion, (latest) => {
-    const pane = paneRef.current;
-    const size = Math.max(getViewportSize(axis, pane), 1);
-    return Math.max(0, Math.min(latest / size, 1));
+    const size = Math.max(getViewportSize(axis, paneRef.current), 1);
+    return clamp(latest / size);
   });
-  const opacity = useTransform(progress, [0, 1], axis === "y" ? [1, 0.72] : [1, 0.9]);
+
+  const backdropOpacity = useTransform(progress, (latest) => {
+    if (axis === "x") return 0.12 * (1 - latest);
+    return 1 - latest * 0.9;
+  });
+
+  const underlayX = useTransform(progress, (latest) => {
+    const eased = easeOutCubic(latest);
+    return -22 + eased * 22;
+  });
+  const underlayScale = useTransform(progress, (latest) => 0.976 + easeOutCubic(latest) * 0.024);
+  const underlayOpacity = useTransform(progress, (latest) => 0.88 + easeOutCubic(latest) * 0.12);
+  const edgeShadowOpacity = useTransform(progress, (latest) => 0.22 * (1 - easeOutCubic(latest)));
 
   useMotionValueEvent(progress, "change", (latest) => {
+    if (!enabled || !applyBaseParallax || latest <= 0.001) {
+      if (parallaxActiveRef.current) {
+        parallaxActiveRef.current = false;
+        resetUnderlyingParallax();
+      }
+      return;
+    }
+    parallaxActiveRef.current = true;
     applyUnderlyingParallax(axis, latest);
   });
 
@@ -82,25 +149,31 @@ function useInteractiveSwipe({ axis,onDismiss,edgeOnly = false,edgeSize = EDGE_S
     onDismiss();
   }, [onDismiss]);
 
-  const animateTo = useCallback((target: number, onComplete?: () => void) => {
-    const controls = animate(motion, target, {
-      ...SPRING,
-      onComplete: () => {
-        onComplete?.();
-      },
-    });
-    return controls;
-  }, [motion]);
+  const animateTo = useCallback(
+    (target: number, velocity = 0, onComplete?: () => void) => {
+      animationRef.current?.stop();
+      animationRef.current = animate(motion, target, {
+        ...(target === 0 ? SNAP_SPRING : DISMISS_SPRING),
+        velocity,
+        onComplete,
+      });
+      return animationRef.current;
+    },
+    [motion],
+  );
 
   const bind = useDrag(
-    ({ first,down,movement: [mx, my], velocity: [vx, vy], direction: [dx, dy], xy: [px, py], cancel }) => {
+    ({ first, down, movement: [mx, my], velocity: [vx, vy], direction: [dx, dy], xy: [px, py], cancel }) => {
+      if (!enabled) {
+        cancel?.();
+        return;
+      }
       if (dismissingRef.current) {
         cancel?.();
         return;
       }
 
-      const pane = paneRef.current;
-      const size = getViewportSize(axis, pane);
+      const size = getViewportSize(axis, paneRef.current);
       if (!size) {
         cancel?.();
         return;
@@ -112,79 +185,142 @@ function useInteractiveSwipe({ axis,onDismiss,edgeOnly = false,edgeSize = EDGE_S
           cancel?.();
           return;
         }
+        gestureAcceptedRef.current = false;
+        gestureRejectedRef.current = false;
       }
 
       const rawMovement = axis === "x" ? mx : my;
-      const direction = axis === "x" ? dx : dy;
-      const velocity = axis === "x" ? vx : vy;
+      const rawVelocity = axis === "x" ? vx : vy;
+      const rawDirection = axis === "x" ? dx : dy;
+      const crossMovement = axis === "x" ? my : mx;
+      const absPrimary = Math.abs(rawMovement);
+      const absCross = Math.abs(crossMovement);
       const nextValue = clampPositive(rawMovement);
 
       if (down) {
+        if (!gestureAcceptedRef.current) {
+          if (rawMovement <= 0) {
+            motion.set(0);
+            return;
+          }
+          if (
+            absCross >= INTENT_THRESHOLD &&
+            absCross > absPrimary * INTENT_DOMINANCE
+          ) {
+            gestureRejectedRef.current = true;
+            motion.set(0);
+            cancel?.();
+            return;
+          }
+          if (
+            absPrimary < INTENT_THRESHOLD ||
+            absPrimary <= absCross * INTENT_DOMINANCE
+          ) {
+            motion.set(0);
+            return;
+          }
+          gestureAcceptedRef.current = true;
+        }
+        if (gestureRejectedRef.current) {
+          motion.set(0);
+          return;
+        }
         motion.set(nextValue);
         return;
       }
 
+      if (!gestureAcceptedRef.current || gestureRejectedRef.current) {
+        motion.set(0);
+        return;
+      }
+
       const shouldDismiss =
-        nextValue > size * DISMISS_THRESHOLD ||
-        (direction > 0 && velocity > VELOCITY_THRESHOLD);
+        nextValue >= size * DISMISS_THRESHOLD ||
+        (rawDirection > 0 && rawVelocity >= VELOCITY_THRESHOLD);
 
       if (shouldDismiss) {
-        animateTo(size, completeDismiss);
+        animateTo(size + Math.min(64, size * 0.12), rawVelocity * size, completeDismiss);
       } else {
-        animateTo(0);
+        animateTo(0, rawVelocity * size);
       }
     },
     {
       axis,
       filterTaps: true,
-      threshold: 6,
+      threshold: 0,
       rubberband: false,
       pointer: { touch: true },
     },
   );
 
   const dismiss = useCallback(() => {
+    if (!enabled) return;
     if (dismissingRef.current) return;
-    const pane = paneRef.current;
-    const size = getViewportSize(axis, pane);
+    const size = getViewportSize(axis, paneRef.current);
     if (!size) {
       completeDismiss();
       return;
     }
-    animateTo(size, completeDismiss);
-  }, [animateTo, axis, completeDismiss]);
+    animateTo(size + Math.min(64, size * 0.12), 0, completeDismiss);
+  }, [animateTo, axis, completeDismiss, enabled]);
 
   useEffect(() => {
     dismissingRef.current = false;
+    gestureAcceptedRef.current = false;
+    gestureRejectedRef.current = false;
+    animationRef.current?.stop();
     motion.set(0);
-    resetUnderlyingParallax();
+    if (parallaxActiveRef.current) {
+      parallaxActiveRef.current = false;
+      resetUnderlyingParallax();
+    }
     return () => {
       dismissingRef.current = false;
+      gestureAcceptedRef.current = false;
+      gestureRejectedRef.current = false;
+      animationRef.current?.stop();
       motion.set(0);
-      resetUnderlyingParallax();
+      if (parallaxActiveRef.current) {
+        parallaxActiveRef.current = false;
+        resetUnderlyingParallax();
+      }
     };
-  }, [motion]);
+  }, [enabled, motion]);
 
   const motionStyle = useMemo(
-    () => ({
-      ...(axis === "x" ? { x: motion } : { y: motion }),
-      opacity,
-    }),
-    [axis, motion, opacity],
+    () => (axis === "x" ? { x: motion } : { y: motion }),
+    [axis, motion],
   );
 
   return {
     paneRef,
     bind,
+    axis,
+    edgeOnly,
+    edgeSize,
     motionStyle,
+    progress,
+    underlayStyle: axis === "x" ? { x: underlayX, scale: underlayScale, opacity: underlayOpacity } : undefined,
+    backdropStyle: { opacity: backdropOpacity },
+    edgeShadowStyle: axis === "x" ? { opacity: edgeShadowOpacity } : undefined,
     dismiss,
   };
 }
 
-export function useSwipeBack(onDismiss: () => void): SwipeGestureHandlers {
-  return useInteractiveSwipe({ axis: "x", onDismiss, edgeOnly: true });
+export function useSwipeBack(
+  onDismiss: () => void,
+  enabled = true,
+  options?: { applyBaseParallax?: boolean },
+): SwipeGestureHandlers {
+  return useInteractiveSwipe({
+    axis: "x",
+    onDismiss,
+    edgeOnly: true,
+    enabled,
+    applyBaseParallax: options?.applyBaseParallax ?? true,
+  });
 }
 
-export function useSwipeDown(onDismiss: () => void): SwipeGestureHandlers {
-  return useInteractiveSwipe({ axis: "y", onDismiss });
+export function useSwipeDown(onDismiss: () => void, enabled = true): SwipeGestureHandlers {
+  return useInteractiveSwipe({ axis: "y", onDismiss, enabled });
 }

@@ -31,6 +31,8 @@ interface OverlayContextValue {
   setupReturnTab: AppTab | null;
   setSetupReturnTab: Dispatch<SetStateAction<AppTab | null>>;
   lastCenterTab: MutableRefObject<AppTab>;
+  overlaySourceTab: AppTab | null;
+  overlayBaseTab: AppTab | null;
   cards: CardType[];
   bankAccounts: BankAccount[];
   renewals: Renewal[];

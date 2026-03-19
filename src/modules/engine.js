@@ -5,6 +5,7 @@
  */
 
   import { cmpString,fromCents,monthlyInterestCents,toBps,toCents } from "./moneyMath.js";
+  import { clamp, getGradeLetter } from "./mathHelpers.js";
 
 // Helper: Add days to a date string (YYYY-MM-DD)
 export function addDays(dateStr, days) {
@@ -131,26 +132,6 @@ function getCfiThreshold(payFrequency, daysToNextPaycheck) {
   return 25;
 }
 
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function getScoreGrade(score) {
-  if (score >= 97) return "A+";
-  if (score >= 93) return "A";
-  if (score >= 90) return "A-";
-  if (score >= 87) return "B+";
-  if (score >= 83) return "B";
-  if (score >= 80) return "B-";
-  if (score >= 77) return "C+";
-  if (score >= 73) return "C";
-  if (score >= 70) return "C-";
-  if (score >= 67) return "D+";
-  if (score >= 63) return "D";
-  if (score >= 60) return "D-";
-  return "F";
-}
-
 function round1(value) {
   return Math.round(value * 10) / 10;
 }
@@ -257,7 +238,7 @@ function buildAuditSignals(
   return {
     nativeScore: {
       score: nativeScore,
-      grade: getScoreGrade(nativeScore),
+      grade: getGradeLetter(nativeScore),
     },
     liquidity: {
       checkingAfterFloorAndBills: fromCents(liquidityBufferCents),

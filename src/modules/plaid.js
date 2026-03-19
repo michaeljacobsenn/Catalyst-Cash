@@ -573,15 +573,27 @@ export async function openPlaidLink(options = {}) {
  * Step 3: Exchange public_token for a worker-side Plaid item record.
  * The backend calls Plaid's /item/public_token/exchange.
  */
-export async function exchangeToken(publicToken) {
+export async function exchangeToken(publicToken, options = {}) {
   const timeout = createAbortTimeout(EXCHANGE_TIMEOUT_MS, "Plaid exchange");
   try {
+    const body = { publicToken };
+    if (options.replaceItemId) body.replaceItemId = options.replaceItemId;
     const res = await fetchPlaidBackend(`${API_BASE}/plaid/exchange`, {
       method: "POST",
-      body: JSON.stringify({ publicToken }),
+      body: JSON.stringify(body),
       signal: timeout.signal,
     });
-    if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`);
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      let detail = `HTTP ${res.status}`;
+      try {
+        const parsed = JSON.parse(errBody);
+        detail = parsed.message || parsed.error || detail;
+      } catch {
+        /* ignore non-JSON body */
+      }
+      throw new Error(`Token exchange failed: ${detail}`);
+    }
     const data = await res.json();
     return { itemId: data.item_id };
   } finally {
@@ -627,10 +639,12 @@ async function persistConnection(connection, itemId) {
   return normalized;
 }
 
-async function runLinkFlow({ onSuccess, onError, skipLimit = false } = {}) {
+async function runLinkFlow({ onSuccess, onError, skipLimit = false, replaceItemId = null } = {}) {
   try {
     const { publicToken, metadata } = await openPlaidLink({ skipLimit });
-    const { itemId } = await exchangeToken(publicToken);
+    const { itemId } = await exchangeToken(publicToken, {
+      replaceItemId,
+    });
 
     const connection = await persistConnection({
       institutionName: metadata.institution?.name || "Unknown Bank",
@@ -664,6 +678,7 @@ export async function connectBank(onSuccess, onError) {
 export async function reconnectBank(connection, onSuccess, onError) {
   return runLinkFlow({
     skipLimit: true,
+    replaceItemId: connection?.id || null,
     onSuccess: async nextConnection => {
       const conns = await getConnections();
       const merged = conns.map(conn =>
@@ -915,6 +930,9 @@ export async function fetchAllBalancesAndLiabilities(options = {}) {
 // ─── Transaction Fetching ─────────────────────────────────────
 
 const TRANSACTIONS_STORAGE_KEY = "plaid-transactions";
+const PLAID_AI_CATEGORIZATION_COOLDOWN_KEY = "plaid-ai-categorization-cooldown-until";
+const PLAID_AI_CATEGORIZATION_FAILURE_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+const PLAID_AI_CATEGORIZATION_MAX_BATCH = 40;
 
 /**
  * Format a Date as YYYY-MM-DD for Plaid API.
@@ -1049,21 +1067,36 @@ export async function fetchAllTransactions(days = 30, options = {}) {
   // 2. Second pass: AI Fallback for unknowns
   const uniqueUnknowns = Array.from(uncategorizedItems.keys());
   if (categorizeWithAi && uniqueUnknowns.length > 0) {
-    console.warn(`[Plaid] Sending ${uniqueUnknowns.length} unknown merchants to AI Categorization Engine...`);
-    const aiCategoryMap = await batchCategorizeTransactions(uniqueUnknowns);
-    
-    // 3. Apply AI results and learn them so we never hit the AI again for these
-    for (const [desc, category] of Object.entries(aiCategoryMap)) {
-      if (!category) continue;
-      
-      // Update the transaction objects in memory
-      const txnsToUpdate = uncategorizedItems.get(desc) || [];
-      for (const t of txnsToUpdate) {
-        t.category = category;
+    const storage = typeof localStorage !== "undefined" ? localStorage : null;
+    const cooldownUntil = Number(storage?.getItem(PLAID_AI_CATEGORIZATION_COOLDOWN_KEY) || 0);
+    if (cooldownUntil > Date.now()) {
+      console.warn("[Plaid] AI categorization cooldown active; skipping retry for uncategorized merchants.");
+    } else {
+      const batchedUnknowns = uniqueUnknowns.slice(0, PLAID_AI_CATEGORIZATION_MAX_BATCH);
+      console.warn(`[Plaid] Sending ${batchedUnknowns.length} unknown merchants to AI Categorization Engine...`);
+      const aiCategoryMap = await batchCategorizeTransactions(batchedUnknowns);
+      if (!aiCategoryMap || Object.keys(aiCategoryMap).length === 0) {
+        storage?.setItem(
+          PLAID_AI_CATEGORIZATION_COOLDOWN_KEY,
+          String(Date.now() + PLAID_AI_CATEGORIZATION_FAILURE_COOLDOWN_MS)
+        );
+      } else {
+        storage?.removeItem(PLAID_AI_CATEGORIZATION_COOLDOWN_KEY);
       }
-      
-      // Learn it locally (saves to IndexedDB)
-      await learn(desc, category);
+
+      // 3. Apply AI results and learn them so we never hit the AI again for these
+      for (const [desc, category] of Object.entries(aiCategoryMap)) {
+        if (!category) continue;
+
+        // Update the transaction objects in memory
+        const txnsToUpdate = uncategorizedItems.get(desc) || [];
+        for (const t of txnsToUpdate) {
+          t.category = category;
+        }
+
+        // Learn it locally (saves to IndexedDB)
+        await learn(desc, category);
+      }
     }
   }
   

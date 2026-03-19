@@ -8,6 +8,7 @@
   import { Share } from "@capacitor/share";
   import { APP_VERSION } from "./constants.js";
   import { buildDashboardSafetyModel } from "./dashboard/safetyModel.js";
+  import { clamp, getGradeLetter } from "./mathHelpers.js";
 
   import { registerPlugin } from "@capacitor/core";
 
@@ -354,26 +355,6 @@ export function parseCurrency(value) {
   // Banker's Rounding (Round half to even for financial precision) is not strictly needed here
   // since it's just parsing input, but we enforce strict float handling.
   return Number.isFinite(n) ? n : null;
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function getGradeLetter(score) {
-  if (score >= 97) return "A+";
-  if (score >= 93) return "A";
-  if (score >= 90) return "A-";
-  if (score >= 87) return "B+";
-  if (score >= 83) return "B";
-  if (score >= 80) return "B-";
-  if (score >= 77) return "C+";
-  if (score >= 73) return "C";
-  if (score >= 70) return "C-";
-  if (score >= 67) return "D+";
-  if (score >= 63) return "D";
-  if (score >= 60) return "D-";
-  return "F";
 }
 
 const CANONICAL_DASHBOARD_CATEGORIES = new Map([

@@ -160,6 +160,8 @@ function CatalystCashShell() {
     showGuide,
     setShowGuide,
     lastCenterTab,
+    overlaySourceTab,
+    overlayBaseTab,
     abortActiveChatStream,
     rehydrateNavigation,
     resetNavigationState,
@@ -171,7 +173,12 @@ function CatalystCashShell() {
   const lastScrollY = useRef(0);
   const [transactionFeedTab, setTransactionFeedTab] = useState<AppTab | null>(null);
   const [chatInitialPrompt, setChatInitialPrompt] = useState<string | null>(null);
-  const showShellHeader = tab !== "settings" && tab !== "history" && tab !== "results" && tab !== "input";
+  const renderedBaseTab = useMemo(() => {
+    if (SWIPE_TAB_ORDER.includes(tab)) return tab;
+    if (overlayBaseTab && SWIPE_TAB_ORDER.includes(overlayBaseTab)) return overlayBaseTab;
+    return SWIPE_TAB_ORDER.includes(lastCenterTab.current) ? lastCenterTab.current : "dashboard";
+  }, [SWIPE_TAB_ORDER, lastCenterTab, overlayBaseTab, tab]);
+  const showShellHeader = SWIPE_TAB_ORDER.includes(renderedBaseTab);
 
   const clearShellRefreshState = useCallback(() => {
     setTransactionFeedTab(null);
@@ -264,8 +271,8 @@ function CatalystCashShell() {
                 }
                 await saveConnectionLinks(refreshed);
               }
-            } catch {
-              void 0;
+            } catch (syncErr) {
+              console.warn("[Plaid] Post-link balance sync skipped:", syncErr);
             }
 
             window.toast?.success?.("Bank linked successfully!");
@@ -608,7 +615,7 @@ function CatalystCashShell() {
       <SkipToContentLink />
       {showShellHeader && (
         <AppShellHeader
-          tab={tab}
+          tab={renderedBaseTab}
           topBarRef={topBarRef}
           headerHidden={headerHidden}
           showGuide={showGuide}
@@ -623,14 +630,14 @@ function CatalystCashShell() {
       <ScrollSnapContainer
         ready={ready}
         onboardingComplete={onboardingComplete}
-        tab={tab}
+        tab={renderedBaseTab}
         syncTab={syncTab}
         SWIPE_TAB_ORDER={SWIPE_TAB_ORDER}
         hidden={tab === "settings" || tab === "results" || tab === "history" || tab === "guide" || tab === "input"}
       >
         <TabRenderer
           SWIPE_TAB_ORDER={SWIPE_TAB_ORDER}
-          activeTab={tab}
+          activeTab={renderedBaseTab}
           proEnabled={proEnabled}
           toast={toast}
           navTo={navTo}
@@ -665,6 +672,8 @@ function CatalystCashShell() {
         setupReturnTab={setupReturnTab}
         setSetupReturnTab={setSetupReturnTab}
         lastCenterTab={lastCenterTab}
+        overlaySourceTab={overlaySourceTab}
+        overlayBaseTab={overlayBaseTab}
         cards={cards}
         bankAccounts={bankAccounts}
         renewals={renewals}
@@ -701,6 +710,7 @@ function CatalystCashShell() {
         navTo={navTo}
         loading={loading}
         showGuide={showGuide}
+        hidden={!SWIPE_TAB_ORDER.includes(tab) || !!transactionFeedTab}
         transactionFeedTab={transactionFeedTab}
         setTransactionFeedTab={setTransactionFeedTab}
       />

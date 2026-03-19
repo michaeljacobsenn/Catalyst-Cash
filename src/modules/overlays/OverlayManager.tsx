@@ -1,13 +1,14 @@
-  import { Suspense,lazy,useCallback,useEffect } from "react";
-  import { motion } from "framer-motion";
+  import { Suspense,lazy,useCallback,useEffect,useState } from "react";
   import type { AuditFormData } from "../../types/index.js";
   import { StreamingView } from "../components.js";
+  import { T } from "../constants.js";
   import type { AppTab,NavViewState } from "../contexts/NavigationContext.js";
   import { useOverlay } from "../contexts/OverlayContext.js";
   import type { SetFinancialConfig } from "../contexts/SettingsContext.js";
 import { useSwipeBack } from "../hooks/useSwipeGesture.js";
   import { getModel } from "../providers.js";
-  import { buildSettingsRefreshActions } from "../recoveryFlows.js";
+import InteractiveStackPane from "../navigation/InteractiveStackPane.js";
+
   import type { ToastApi } from "../Toast.js";
   import { ErrorBoundary } from "../ui.js";
 
@@ -100,6 +101,7 @@ export default function OverlayManager({
     setupReturnTab,
     setSetupReturnTab,
     lastCenterTab,
+    overlaySourceTab,
     cards,
     bankAccounts,
     renewals,
@@ -113,6 +115,7 @@ export default function OverlayManager({
     setInstructionHash,
   } = useOverlay();
   const onShowGuide = useCallback(() => setShowGuide(true), [setShowGuide]);
+  const [settingsCanDismiss, setSettingsCanDismiss] = useState(true);
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
 
@@ -140,22 +143,66 @@ export default function OverlayManager({
       window.clearTimeout(idleId as number);
     };
   }, []);
-  const settingsRefreshActions = buildSettingsRefreshActions({
+  useEffect(() => {
+    if (tab !== "settings") {
+      setSettingsCanDismiss(true);
+    }
+  }, [tab]);
+  const settingsRefreshActions = {
     onRestoreComplete,
     onHouseholdSyncConfigured,
-  });
+  };
   const overlaySwipeResults = useSwipeBack(
     useCallback(() => {
       const target = resultsBackTarget === "history" ? "history" : "audit";
       setResultsBackTarget(null);
       navTo(target);
-    }, [navTo, resultsBackTarget, setResultsBackTarget])
+    }, [navTo, resultsBackTarget, setResultsBackTarget]),
+    tab === "results"
   );
 
   const overlaySwipeHistory = useSwipeBack(
     useCallback(() => {
-      navTo(lastCenterTab.current);
-    }, [lastCenterTab, navTo])
+      navTo(overlaySourceTab ?? lastCenterTab.current);
+    }, [lastCenterTab, navTo, overlaySourceTab]),
+    tab === "history"
+  );
+
+  const overlaySwipeInput = useSwipeBack(
+    useCallback(() => {
+      navTo(overlaySourceTab ?? "dashboard");
+    }, [navTo, overlaySourceTab]),
+    tab === "input"
+  );
+
+  const overlaySwipeSettings = useSwipeBack(
+    useCallback(() => {
+      if (setupReturnTab) {
+        navTo(setupReturnTab);
+        setSetupReturnTab(null);
+        return;
+      }
+      navTo(overlaySourceTab ?? lastCenterTab.current);
+    }, [lastCenterTab, navTo, overlaySourceTab, setSetupReturnTab, setupReturnTab]),
+    tab === "settings" && settingsCanDismiss,
+    { applyBaseParallax: false }
+  );
+
+  const historyUnderlay = (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        background: T.bg.base,
+        overflow: "hidden",
+      }}
+    >
+      <ErrorBoundary name="HistoryUnderlay">
+        <Suspense fallback={<TabFallback />}>
+          <HistoryTab toast={toast} proEnabled={proEnabled} />
+        </Suspense>
+      </ErrorBoundary>
+    </div>
   );
 
   return (
@@ -173,7 +220,7 @@ export default function OverlayManager({
       )}
 
       {tab === "input" && (
-        <div className="slide-pane safe-scroll-body" style={{ flex: 1, overflowY: "auto", position: "relative", zIndex: 20 }}>
+        <InteractiveStackPane swipe={overlaySwipeInput} scrollable>
           <ErrorBoundary name="InputForm">
             <Suspense fallback={<TabFallback />}>
               <InputForm
@@ -196,26 +243,18 @@ export default function OverlayManager({
                 setInstructionHash={(value: string | number | null) => setInstructionHash(value == null ? null : String(value))}
                 db={inputFormDb}
                 proEnabled={proEnabled}
-                onBack={() => navTo("dashboard")}
+                onBack={() => navTo(overlaySourceTab ?? "dashboard")}
               />
             </Suspense>
           </ErrorBoundary>
-        </div>
+        </InteractiveStackPane>
       )}
 
       {tab === "results" && (
-        <motion.div
-          ref={overlaySwipeResults.paneRef}
-          {...overlaySwipeResults.bind()}
-          className="slide-pane safe-scroll-body"
-          style={{
-            flex: 1,
-            overflowY: "auto",
-            position: "relative",
-            zIndex: 20,
-            touchAction: "pan-y",
-            ...overlaySwipeResults.motionStyle,
-          }}
+        <InteractiveStackPane
+          swipe={overlaySwipeResults}
+          scrollable
+          underlay={overlaySourceTab === "history" ? historyUnderlay : undefined}
         >
           {loading ? (
             <StreamingView
@@ -262,52 +301,47 @@ export default function OverlayManager({
               </Suspense>
             </ErrorBoundary>
           )}
-        </motion.div>
+        </InteractiveStackPane>
       )}
 
       {tab === "history" && (
-        <motion.div
-          ref={overlaySwipeHistory.paneRef}
-          {...overlaySwipeHistory.bind()}
-          className="slide-pane safe-scroll-body"
-          style={{
-            flex: 1,
-            overflowY: "auto",
-            position: "relative",
-            zIndex: 20,
-            touchAction: "pan-y",
-            ...overlaySwipeHistory.motionStyle,
-          }}
-        >
+        <InteractiveStackPane swipe={overlaySwipeHistory} scrollable>
           <ErrorBoundary name="History">
             <Suspense fallback={<TabFallback />}>
               <HistoryTab toast={toast} proEnabled={proEnabled} />
             </Suspense>
           </ErrorBoundary>
-        </motion.div>
+        </InteractiveStackPane>
       )}
 
       {tab === "settings" && (
-        <ErrorBoundary name="Settings">
-          <Suspense fallback={<TabFallback />}>
-            <SettingsTab
-              onClear={clearAll}
-              onFactoryReset={factoryReset}
-              onClearDemoData={handleRefreshDashboard}
-              proEnabled={proEnabled}
-              onShowGuide={onShowGuide}
-              onBack={() => {
-                if (setupReturnTab) {
-                  navTo(setupReturnTab);
-                  setSetupReturnTab(null);
-                } else {
-                  navTo(lastCenterTab.current);
-                }
-              }}
-              {...settingsRefreshActions}
-            />
-          </Suspense>
-        </ErrorBoundary>
+        <InteractiveStackPane
+          swipe={overlaySwipeSettings}
+          underlay={overlaySourceTab === "history" ? historyUnderlay : undefined}
+          gestureEnabled={settingsCanDismiss}
+        >
+          <ErrorBoundary name="Settings">
+            <Suspense fallback={<TabFallback />}>
+              <SettingsTab
+                onClear={clearAll}
+                onFactoryReset={factoryReset}
+                onClearDemoData={handleRefreshDashboard}
+                proEnabled={proEnabled}
+                onShowGuide={onShowGuide}
+                onBack={() => {
+                  if (setupReturnTab) {
+                    navTo(setupReturnTab);
+                    setSetupReturnTab(null);
+                  } else {
+                    navTo(overlaySourceTab ?? lastCenterTab.current);
+                  }
+                }}
+                onCanDismissChange={setSettingsCanDismiss}
+                {...settingsRefreshActions}
+              />
+            </Suspense>
+          </ErrorBoundary>
+        </InteractiveStackPane>
       )}
     </>
   );

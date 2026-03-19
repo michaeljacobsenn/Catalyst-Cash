@@ -1,4 +1,4 @@
-  import type { ChangeEvent,TouchEvent as ReactTouchEvent } from "react";
+  import type { ChangeEvent } from "react";
   import { lazy,Suspense,useCallback,useEffect,useRef,useState } from "react";
   import { normalizeAppError } from "../appErrors.js";
   import { APP_VERSION,T } from "../constants.js";
@@ -6,7 +6,9 @@
   import {
     ArrowLeft,
   } from "../icons";
+  import { useSwipeBack } from "../hooks/useSwipeGesture.js";
   import { log } from "../logger.js";
+  import InteractiveStackPane from "../navigation/InteractiveStackPane.js";
   import { AI_PROVIDERS,getProvider } from "../providers.js";
   import { isSecuritySensitiveKey,sanitizePlaidForBackup } from "../securityKeys.js";
   import { Card } from "../ui.js";
@@ -72,6 +74,7 @@ interface SettingsTabProps {
   onFactoryReset?: () => void | Promise<void>;
   onClearDemoData?: () => void | Promise<void>;
   onBack?: () => void;
+  onCanDismissChange?: (canDismiss: boolean) => void;
   onRestoreComplete?: () => void | Promise<void>;
   onHouseholdSyncConfigured?: () => void | Promise<void>;
   onShowGuide?: () => void;
@@ -85,6 +88,7 @@ export default function SettingsTab({
   onFactoryReset,
   onClearDemoData,
   onBack,
+  onCanDismissChange,
   onRestoreComplete,
   onHouseholdSyncConfigured,
   onShowGuide,
@@ -276,9 +280,9 @@ export default function SettingsTab({
   const [showApiSetup, setShowApiSetup] = useState(Boolean((apiKey || "").trim()));
   const [showPaywall, setShowPaywall] = useState(false);
 
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const swipeTouchStart = useRef<{ x: number; y: number } | null>(null);
+  const activeBodyRef = useRef<HTMLDivElement | null>(null);
   const navDir = useRef("forward"); // tracks animation direction: 'forward' | 'back'
+  const skipRootTransitionRef = useRef(false);
 
   const [isForceSyncing, setIsForceSyncing] = useState(false);
 
@@ -353,40 +357,45 @@ export default function SettingsTab({
     setRenewals,
   ]);
 
-  const handleSwipeTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
-    const touch = e.touches[0];
-    if (!touch) return;
-    swipeTouchStart.current = { x: touch.clientX, y: touch.clientY };
-  }, []);
-
-  const handleSwipeTouchEnd = useCallback(
-    (e: ReactTouchEvent<HTMLDivElement>) => {
-      if (!swipeTouchStart.current) return;
-      const touch = e.changedTouches[0];
-      if (!touch) return;
-      const dx = touch.clientX - swipeTouchStart.current.x;
-      const dy = Math.abs(touch.clientY - swipeTouchStart.current.y);
-      // Swipe right at least 60px, starting from left 80px, not too vertical
-      if (dx > 60 && swipeTouchStart.current.x < 80 && dy < 100) {
-        if (activeMenu) {
-          navDir.current = "back";
-          setActiveMenu(null);
-          haptic.light();
-        } else if (onBack) {
-          onBack();
-          haptic.light();
-        }
-      }
-      swipeTouchStart.current = null;
-    },
-    [activeMenu, onBack]
-  );
-
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = 0;
+    if (activeBodyRef.current) {
+      activeBodyRef.current.scrollTop = 0;
     }
   }, [activeMenu, activeSegment]);
+
+  useEffect(() => {
+    if (activeMenu) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      skipRootTransitionRef.current = false;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeMenu]);
+
+  useEffect(() => {
+    onCanDismissChange?.(!activeMenu);
+    return () => {
+      onCanDismissChange?.(true);
+    };
+  }, [activeMenu, onCanDismissChange]);
+
+  const closeActiveMenu = useCallback(
+    (interactive = false) => {
+      if (!activeMenu) return;
+      navDir.current = "back";
+      skipRootTransitionRef.current = interactive;
+      setActiveMenu(null);
+      haptic.light();
+    },
+    [activeMenu],
+  );
+
+  const detailSwipe = useSwipeBack(
+    useCallback(() => {
+      closeActiveMenu(true);
+    }, [closeActiveMenu]),
+    Boolean(activeMenu),
+    { applyBaseParallax: false },
+  );
 
   const showPassphraseModal = (mode: "export" | "import"): Promise<string> =>
     new Promise((resolve) => {
@@ -676,9 +685,363 @@ export default function SettingsTab({
     }
   };
 
+  const rootSettingsContent = (
+    <RootSettingsSection
+      enablePlaid={ENABLE_PLAID}
+      proEnabled={proEnabled}
+      shouldShowGating={gatingVisible}
+      activeMenu={null}
+      onSelectMenu={(menu) => {
+        skipRootTransitionRef.current = false;
+        setActiveMenu(menu);
+        navDir.current = "forward";
+        haptic.light();
+      }}
+      onGuide={() => {
+        if (typeof onShowGuide === "function") onShowGuide();
+      }}
+      onManageSubscription={async () => {
+        haptic.medium();
+        const { presentCustomerCenter } = await loadRevenueCat();
+        await presentCustomerCenter();
+      }}
+      onUpgrade={() => setShowPaywall(true)}
+      financialConfig={financialConfig}
+      cards={cards}
+      renewals={renewals}
+      navTo={(tabTarget) => {
+        navTo(tabTarget);
+        haptic.light();
+      }}
+      setupDismissed={setupDismissed}
+      setSetupDismissed={setSetupDismissed}
+      rawTierId={rawTierId}
+    />
+  );
+
+  const currentHeaderTitle =
+    activeMenu === "ai"
+      ? "AI & Engine"
+      : activeMenu === "backup"
+        ? "Backup & Data"
+        : activeMenu === "finance"
+          ? "Financial Profile"
+          : activeMenu === "plaid"
+            ? "Bank Connections"
+            : activeMenu === "security"
+              ? "Security"
+              : activeMenu === "profile"
+                ? "Appearance"
+                : activeMenu === "dev"
+                  ? "Developer Tools"
+                  : "Settings";
+
+  const renderHeader = (menu: SettingsMenu | null) => (
+    <div
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 10,
+        paddingTop: "calc(env(safe-area-inset-top, 0px) + 6px)",
+        paddingLeft: 16,
+        paddingRight: 16,
+        paddingBottom: 10,
+        background: T.bg.navGlass,
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderBottom: `1px solid ${T.border.subtle}`,
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+      }}
+    >
+      <div style={{ width: 36 }}>
+        {(onBack || menu) && (
+          <button
+            onClick={() => {
+              if (menu) {
+                closeActiveMenu(false);
+              } else if (onBack) {
+                onBack();
+              }
+            }}
+            aria-label={menu ? "Back to Settings" : "Close Settings"}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              border: `1px solid ${T.border.default}`,
+              background: T.bg.elevated,
+              color: T.text.secondary,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <ArrowLeft size={16} />
+          </button>
+        )}
+      </div>
+      <div style={{ textAlign: "center", flex: 1, minWidth: 0, overflow: "hidden" }}>
+        <h1
+          style={{
+            fontSize: 20,
+            fontWeight: 800,
+            color: T.text.primary,
+            margin: 0,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {menu
+            ? currentHeaderTitle
+            : "Settings"}
+        </h1>
+        {!menu && (
+          <p style={{ fontSize: 10, color: T.text.dim, marginTop: 3, fontFamily: T.font.mono, margin: 0 }}>
+            VERSION {APP_VERSION}
+          </p>
+        )}
+      </div>
+      <div style={{ width: 36 }}></div>
+    </div>
+  );
+
+  const detailSettingsContent = (
+    <div style={{ display: activeSegment === "app" ? "block" : "none" }}>
+      <FinanceProfileSection
+        activeMenu={activeMenu}
+        financialConfig={financialConfig}
+        financeSummaryItems={financeSummaryItems}
+        proEnabled={proEnabled}
+        setFinancialConfig={setFinancialConfig}
+        setShowPaywall={setShowPaywall}
+      />
+
+      <AppearanceSection activeMenu={activeMenu} Toggle={Toggle} />
+
+      <AISection 
+         activeMenu={activeMenu}
+         aiModel={aiModel}
+         setAiModel={setAiModel}
+         setAiProvider={setAiProvider}
+         useStreaming={useStreaming}
+         setUseStreaming={setUseStreaming}
+         currentProvider={currentProvider}
+         selectedModel={selectedModel}
+         showUpgradeCta={gatingVisible && !hasPremiumModelAccess}
+         showModelSelector={hasPremiumModelAccess}
+         setShowPaywall={setShowPaywall}
+         apiKey={apiKey}
+         setApiKey={setApiKey}
+         handleKeyChange={handleKeyChange}
+         isNonGemini={isNonGemini}
+         hasApiKey={hasApiKey}
+         showApiSetup={showApiSetup}
+         setShowApiSetup={setShowApiSetup}
+         personalRules={personalRules}
+         setPersonalRules={setPersonalRules}
+      />
+
+      <BackupSection 
+        activeMenu={activeMenu}
+        backupStatus={backupStatus}
+        setBackupStatus={setBackupStatus}
+        restoreStatus={restoreStatus}
+        setRestoreStatus={setRestoreStatus}
+        statusMsg={statusMsg}
+        setStatusMsg={setStatusMsg}
+        handleExport={handleExport}
+        handleExportSheet={handleExportSheet}
+        handleImport={handleImport}
+        householdId={householdId}
+        secretStorageStatus={secretStorageStatus}
+        setHouseholdId={setHouseholdId}
+        householdPasscode={householdPasscode}
+        setHouseholdPasscode={setHouseholdPasscode}
+        showHouseholdModal={showHouseholdModal}
+        setShowHouseholdModal={setShowHouseholdModal}
+        hsInputId={hsInputId}
+        setHsInputId={setHsInputId}
+        hsInputPasscode={hsInputPasscode}
+        setHsInputPasscode={setHsInputPasscode}
+        appleLinkedId={appleLinkedId}
+        handleAppleSignIn={handleAppleSignIn}
+        unlinkApple={unlinkApple}
+        autoBackupInterval={autoBackupInterval}
+        setAutoBackupInterval={setAutoBackupInterval}
+        lastBackupTS={lastBackupTS}
+        isForceSyncing={isForceSyncing}
+        forceICloudSync={forceICloudSync}
+        onClear={onClear}
+        onClearDemoData={onClearDemoData}
+        onFactoryReset={onFactoryReset}
+        confirmClear={confirmClear}
+        setConfirmClear={setConfirmClear}
+        confirmFactoryReset={confirmFactoryReset}
+        setConfirmFactoryReset={setConfirmFactoryReset}
+      />
+
+      <DeveloperToolsSection visible={activeMenu === "dev"} onLoadFullProfileQaSeed={handleLoadFullProfileQaSeed} />
+
+      <SecuritySection
+         activeMenu={activeMenu}
+         appPasscode={appPasscode}
+         handlePasscodeChange={handlePasscodeChange}
+         requireAuth={requireAuth}
+         handleRequireAuthToggle={handleRequireAuthToggle}
+         useFaceId={useFaceId}
+         handleUseFaceIdToggle={handleUseFaceIdToggle}
+         secretStorageStatus={secretStorageStatus}
+         lockTimeout={lockTimeout}
+         setLockTimeout={setLockTimeout}
+         confirmDataDeletion={confirmDataDeletion}
+         setConfirmDataDeletion={setConfirmDataDeletion}
+         deletionInProgress={deletionInProgress}
+         setDeletionInProgress={setDeletionInProgress}
+         onConfirmDataDeletion={onFactoryReset}
+      />
+
+      {ENABLE_PLAID && activeMenu === "plaid" && (
+        <Suspense
+          fallback={
+            <Card>
+              <div style={{ padding: 20, textAlign: "center", color: T.text.muted }}>Loading...</div>
+            </Card>
+          }
+        >
+          <LazyPlaidSection
+            cards={cards}
+            setCards={setCards}
+            bankAccounts={bankAccounts}
+            setBankAccounts={setBankAccounts}
+            financialConfig={financialConfig}
+            setFinancialConfig={setFinancialConfig}
+            cardCatalog={cardCatalog}
+          />
+        </Suspense>
+      )}
+    </div>
+  );
+
+  const renderRootBody = ({ attachRef, animated }: { attachRef: boolean; animated: boolean }) => (
+    <div
+      className="safe-scroll-body safe-bottom page-body"
+      ref={attachRef ? activeBodyRef : undefined}
+      style={{
+        flex: 1,
+        WebkitOverflowScrolling: "touch",
+        paddingTop: 8,
+        overflowY: "auto",
+        overscrollBehavior: "contain",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 760,
+          margin: "0 auto",
+          display: "flex",
+          flexDirection: "column",
+          flex: 1,
+          padding: "0 0 12px",
+        }}
+        >
+          <div
+            key="root"
+            style={{
+            animation: !animated || skipRootTransitionRef.current
+              ? undefined
+              : navDir.current === "back"
+                ? "settingsSlideOut .32s cubic-bezier(.16,1,.3,1) both"
+                : "settingsSlideIn .32s cubic-bezier(.16,1,.3,1) both",
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            marginTop: 0,
+          }}
+        >
+          {rootSettingsContent}
+        </div>
+      </div>
+    </div>
+  );
+
+  const detailBody = (
+    <div
+      className="safe-scroll-body safe-bottom page-body"
+      ref={(node) => {
+        activeBodyRef.current = node;
+      }}
+      style={{
+        flex: 1,
+        WebkitOverflowScrolling: "touch",
+        paddingTop: 8,
+        overflowY: "auto",
+        overscrollBehavior: "contain",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 760,
+          margin: "0 auto",
+          display: "flex",
+          flexDirection: "column",
+          flex: 1,
+          padding: "0 0 12px",
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, marginTop: 0 }}>
+          {detailSettingsContent}
+        </div>
+      </div>
+    </div>
+  );
+
+  const rootScreen = (
+    <>
+      {renderHeader(null)}
+      {renderRootBody({ attachRef: true, animated: true })}
+    </>
+  );
+
+  const detailScreen = (
+    <div style={{ position: "relative", flex: 1, minHeight: 0, overflow: "hidden" }}>
+      <InteractiveStackPane
+        swipe={detailSwipe}
+        underlay={(
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              background: T.bg.base,
+            }}
+          >
+            {renderHeader(null)}
+            {renderRootBody({ attachRef: false, animated: false })}
+          </div>
+        )}
+        containerStyle={{ position: "absolute", inset: 0 }}
+      >
+        {renderHeader(activeMenu)}
+        {detailBody}
+      </InteractiveStackPane>
+    </div>
+  );
+
   return (
     <div
-      className="slide-pane"
+      className="swipe-back-pane"
       style={{
         position: "relative",
         background: T.bg.base,
@@ -724,278 +1087,7 @@ export default function SettingsTab({
         onCancel={ppCancel}
         onConfirm={ppConfirm}
       />
-      <div
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
-          paddingTop: "calc(env(safe-area-inset-top, 0px) + 6px)",
-          paddingLeft: 16,
-          paddingRight: 16,
-          paddingBottom: 10,
-          background: T.bg.navGlass,
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
-          borderBottom: `1px solid ${T.border.subtle}`,
-          flexShrink: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <div style={{ width: 36 }}>
-          {(onBack || activeMenu) && (
-            <button
-              onClick={() => {
-                if (activeMenu) {
-                  navDir.current = "back";
-                  setActiveMenu(null);
-                  haptic.light();
-                } else if (onBack) {
-                  onBack();
-                }
-              }}
-              aria-label={activeMenu ? "Back to Settings" : "Close Settings"}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                border: `1px solid ${T.border.default}`,
-                background: T.bg.elevated,
-                color: T.text.secondary,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <ArrowLeft size={16} />
-            </button>
-          )}
-        </div>
-        <div style={{ textAlign: "center", flex: 1, minWidth: 0, overflow: "hidden" }}>
-          <h1
-            style={{
-              fontSize: 20,
-              fontWeight: 800,
-              color: T.text.primary,
-              margin: 0,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {activeMenu === "ai"
-              ? "AI & Engine"
-              : activeMenu === "backup"
-                ? "Backup & Data"
-                : activeMenu === "finance"
-                  ? "Financial Profile"
-                  : activeMenu === "plaid"
-                    ? "Bank Connections"
-                    : activeMenu === "security"
-                      ? "Security"
-                      : activeMenu === "profile"
-                        ? "Appearance"
-                        : activeMenu === "dev"
-                          ? "Developer Tools"
-                          : "Settings"}
-          </h1>
-          {!activeMenu && (
-            <p style={{ fontSize: 10, color: T.text.dim, marginTop: 3, fontFamily: T.font.mono, margin: 0 }}>
-              VERSION {APP_VERSION}
-            </p>
-          )}
-        </div>
-        <div style={{ width: 36 }}></div> {/* Spacer to preserve center alignment */}
-      </div>
-      {/* Scrollable body */}
-      <div
-        className="safe-scroll-body safe-bottom page-body"
-        ref={scrollRef}
-        onTouchStart={handleSwipeTouchStart}
-        onTouchEnd={handleSwipeTouchEnd}
-        style={{
-          flex: 1,
-          WebkitOverflowScrolling: "touch",
-          paddingTop: 8,
-          overflowY: "auto",
-          overscrollBehavior: "contain",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div style={{ width: "100%", maxWidth: 760, margin: "0 auto", display: "flex", flexDirection: "column", flex: 1, padding: "0 0 12px" }}>
-        <div
-          key={activeMenu || "root"}
-          style={{
-            animation: activeMenu
-              ? navDir.current === "forward"
-                ? "settingsSlideIn .32s cubic-bezier(.16,1,.3,1) both"
-                : "settingsSlideOut .32s cubic-bezier(.16,1,.3,1) both"
-              : navDir.current === "back"
-                ? "settingsSlideOut .32s cubic-bezier(.16,1,.3,1) both"
-                : "settingsSlideIn .32s cubic-bezier(.16,1,.3,1) both",
-            display: "flex",
-            flexDirection: "column",
-            flex: 1,
-            marginTop: 0,
-          }}
-        >
-          {!activeMenu && (
-            <RootSettingsSection
-              enablePlaid={ENABLE_PLAID}
-              proEnabled={proEnabled}
-              shouldShowGating={gatingVisible}
-              activeMenu={activeMenu}
-              onSelectMenu={(menu) => {
-                setActiveMenu(menu);
-                navDir.current = "forward";
-                haptic.light();
-              }}
-              onGuide={() => {
-                if (typeof onShowGuide === "function") onShowGuide();
-              }}
-              onManageSubscription={async () => {
-                haptic.medium();
-                const { presentCustomerCenter } = await loadRevenueCat();
-                await presentCustomerCenter();
-              }}
-              onUpgrade={() => setShowPaywall(true)}
-              financialConfig={financialConfig}
-              cards={cards}
-              renewals={renewals}
-              navTo={(tabTarget) => {
-                navTo(tabTarget);
-                haptic.light();
-              }}
-              setupDismissed={setupDismissed}
-              setSetupDismissed={setSetupDismissed}
-              rawTierId={rawTierId}
-            />
-          )}
-
-          <div style={{ display: activeMenu && activeSegment === "app" ? "block" : "none" }}>
-            <FinanceProfileSection
-              activeMenu={activeMenu}
-              financialConfig={financialConfig}
-              financeSummaryItems={financeSummaryItems}
-              proEnabled={proEnabled}
-              setFinancialConfig={setFinancialConfig}
-              setShowPaywall={setShowPaywall}
-            />
-
-            <AppearanceSection activeMenu={activeMenu} Toggle={Toggle} />
-
-
-            {/* ── AI Provider ─────────────────────────────────────── */}
-            <AISection 
-               activeMenu={activeMenu}
-               aiModel={aiModel}
-               setAiModel={setAiModel}
-               setAiProvider={setAiProvider}
-               useStreaming={useStreaming}
-               setUseStreaming={setUseStreaming}
-               currentProvider={currentProvider}
-               selectedModel={selectedModel}
-               showUpgradeCta={gatingVisible && !hasPremiumModelAccess}
-               showModelSelector={hasPremiumModelAccess}
-               setShowPaywall={setShowPaywall}
-               apiKey={apiKey}
-               setApiKey={setApiKey}
-               handleKeyChange={handleKeyChange}
-               isNonGemini={isNonGemini}
-               hasApiKey={hasApiKey}
-               showApiSetup={showApiSetup}
-               setShowApiSetup={setShowApiSetup}
-               personalRules={personalRules}
-               setPersonalRules={setPersonalRules}
-            />
-
-            <BackupSection 
-              activeMenu={activeMenu}
-              backupStatus={backupStatus}
-              setBackupStatus={setBackupStatus}
-              restoreStatus={restoreStatus}
-              setRestoreStatus={setRestoreStatus}
-              statusMsg={statusMsg}
-              setStatusMsg={setStatusMsg}
-              handleExport={handleExport}
-              handleExportSheet={handleExportSheet}
-              handleImport={handleImport}
-              householdId={householdId}
-              secretStorageStatus={secretStorageStatus}
-              setHouseholdId={setHouseholdId}
-              householdPasscode={householdPasscode}
-              setHouseholdPasscode={setHouseholdPasscode}
-              showHouseholdModal={showHouseholdModal}
-              setShowHouseholdModal={setShowHouseholdModal}
-              hsInputId={hsInputId}
-              setHsInputId={setHsInputId}
-              hsInputPasscode={hsInputPasscode}
-              setHsInputPasscode={setHsInputPasscode}
-              appleLinkedId={appleLinkedId}
-              handleAppleSignIn={handleAppleSignIn}
-              unlinkApple={unlinkApple}
-              autoBackupInterval={autoBackupInterval}
-              setAutoBackupInterval={setAutoBackupInterval}
-              lastBackupTS={lastBackupTS}
-              isForceSyncing={isForceSyncing}
-              forceICloudSync={forceICloudSync}
-              onClear={onClear}
-              onClearDemoData={onClearDemoData}
-              onFactoryReset={onFactoryReset}
-              confirmClear={confirmClear}
-              setConfirmClear={setConfirmClear}
-              confirmFactoryReset={confirmFactoryReset}
-              setConfirmFactoryReset={setConfirmFactoryReset}
-            />
-
-            {/* ── Developer Tools ───────────────────────────────────────── */}
-            <DeveloperToolsSection visible={activeMenu === "dev"} onLoadFullProfileQaSeed={handleLoadFullProfileQaSeed} />
-
-            {/* ── Security Suite ───────────────────────────────────────── */}
-              <SecuritySection
-                 activeMenu={activeMenu}
-                 appPasscode={appPasscode}
-                 handlePasscodeChange={handlePasscodeChange}
-                 requireAuth={requireAuth}
-                 handleRequireAuthToggle={handleRequireAuthToggle}
-                 useFaceId={useFaceId}
-                 handleUseFaceIdToggle={handleUseFaceIdToggle}
-                 secretStorageStatus={secretStorageStatus}
-                 lockTimeout={lockTimeout}
-                 setLockTimeout={setLockTimeout}
-                 confirmDataDeletion={confirmDataDeletion}
-                 setConfirmDataDeletion={setConfirmDataDeletion}
-                 deletionInProgress={deletionInProgress}
-                 setDeletionInProgress={setDeletionInProgress}
-                 onConfirmDataDeletion={onFactoryReset}
-              />
-            {ENABLE_PLAID && activeMenu === "plaid" && (
-              <Suspense
-                fallback={
-                  <Card>
-                    <div style={{ padding: 20, textAlign: "center", color: T.text.muted }}>Loading...</div>
-                  </Card>
-                }
-              >
-                <LazyPlaidSection
-                  cards={cards}
-                  setCards={setCards}
-                  bankAccounts={bankAccounts}
-                  setBankAccounts={setBankAccounts}
-                  financialConfig={financialConfig}
-                  setFinancialConfig={setFinancialConfig}
-                  cardCatalog={cardCatalog}
-                />
-              </Suspense>
-            )}
-          </div>
-        </div>
-        </div>
-      </div>{" "}
-      {/* close animation wrapper */}
+      {activeMenu ? detailScreen : rootScreen}
       {showPaywall && (
         <Suspense fallback={null}>
           <LazyProPaywall onClose={() => setShowPaywall(false)} />

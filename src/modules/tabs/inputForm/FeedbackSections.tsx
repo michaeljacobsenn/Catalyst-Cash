@@ -253,12 +253,13 @@ export function SubmitBar({ canSubmit, isLoading, isTestMode, setIsTestMode, onS
         position: "sticky",
         bottom: 0,
         zIndex: 40,
-        padding: "24px 0px 4px 0px",
-        background: `linear-gradient(to top, ${T.bg.base} 65%, transparent)`,
+        marginTop: 12,
+        padding: "20px 0 calc(env(safe-area-inset-bottom, 0px) + 10px)",
+        background: `linear-gradient(to top, ${T.bg.base} 72%, rgba(6,8,15,0.78) 90%, transparent)`,
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
         display: "flex",
-        gap: 12,
+        gap: 10,
         alignItems: "center",
       }}
     >
@@ -266,9 +267,9 @@ export function SubmitBar({ canSubmit, isLoading, isTestMode, setIsTestMode, onS
         <div
           style={{
             position: "absolute",
-            left: "20%",
-            bottom: 10,
-            width: "60%",
+            left: "16%",
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)",
+            width: "68%",
             height: 40,
             background: isTestMode ? T.status.amber : T.accent.primary,
             filter: "blur(32px)",
@@ -284,7 +285,7 @@ export function SubmitBar({ canSubmit, isLoading, isTestMode, setIsTestMode, onS
         disabled={!canSubmit}
         style={{
           flex: 1,
-          padding: "16px",
+          padding: "16px 18px",
           borderRadius: 100,
           border: `1px solid ${canSubmit ? "rgba(255,255,255,0.15)" : "transparent"}`,
           background: canSubmit
@@ -293,7 +294,7 @@ export function SubmitBar({ canSubmit, isLoading, isTestMode, setIsTestMode, onS
               : `linear-gradient(135deg,${T.accent.primary},#6C60FF)`
             : T.bg.elevated,
           color: canSubmit ? "#fff" : T.text.dim,
-          fontSize: 16,
+          fontSize: 17,
           fontWeight: 800,
           cursor: canSubmit ? "pointer" : "not-allowed",
           display: "flex",
@@ -324,7 +325,7 @@ export function SubmitBar({ canSubmit, isLoading, isTestMode, setIsTestMode, onS
         disabled={!canSubmit}
         title="Toggle test mode — audit not saved"
         style={{
-          width: 56,
+          minWidth: 78,
           height: 56,
           borderRadius: 100,
           border: `1px solid ${isTestMode ? T.status.amber : "rgba(255,255,255,0.1)"}`,
@@ -334,11 +335,17 @@ export function SubmitBar({ canSubmit, isLoading, isTestMode, setIsTestMode, onS
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          gap: 6,
           flexShrink: 0,
           transition: "all 0.25s ease-out",
+          padding: "0 16px",
+          fontSize: 12,
+          fontWeight: 800,
+          fontFamily: T.font.mono,
         }}
       >
         <Zap size={20} strokeWidth={isTestMode ? 3 : 2} fill={isTestMode ? T.status.amber : "none"} />
+        {isTestMode ? "TEST" : "LIVE"}
       </button>
     </div>
   );

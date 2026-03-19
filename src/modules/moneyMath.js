@@ -1,8 +1,7 @@
 // Deterministic money math helpers.
 // All currency calculations in core financial logic should be done in integer cents.
 
-const MONEY_PATTERN = /[^0-9.()-]/g;
-const PERCENT_PATTERN = /[^0-9.()-]/g;
+const NUMERIC_STRIP = /[^0-9.()-]/g;
 
 function normalizeNumericInput(raw, pattern) {
   if (raw == null) return { negative: false, intPart: "0", fracPart: "00" };
@@ -29,7 +28,7 @@ export function toCents(value) {
     if (!Number.isFinite(value)) return 0;
     return Math.round((value + Number.EPSILON) * 100);
   }
-  const { negative, intPart, fracPart } = normalizeNumericInput(value, MONEY_PATTERN);
+  const { negative, intPart, fracPart } = normalizeNumericInput(value, NUMERIC_STRIP);
   const cents = Number(intPart) * 100 + Number(fracPart);
   return negative ? -cents : cents;
 }
@@ -45,7 +44,7 @@ export function toBps(value) {
     if (!Number.isFinite(value)) return 0;
     return Math.round(value * 100);
   }
-  const { negative, intPart, fracPart } = normalizeNumericInput(value, PERCENT_PATTERN);
+  const { negative, intPart, fracPart } = normalizeNumericInput(value, NUMERIC_STRIP);
   const bps = Number(intPart) * 100 + Number(fracPart);
   return negative ? -bps : bps;
 }

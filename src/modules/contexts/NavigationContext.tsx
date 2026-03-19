@@ -44,6 +44,8 @@ interface NavigationContextValue {
   setInputMounted: Dispatch<SetStateAction<boolean>>;
   lastCenterTab: React.MutableRefObject<AppTab>;
   inputBackTarget: React.MutableRefObject<AppTab>;
+  overlaySourceTab: AppTab | null;
+  overlayBaseTab: AppTab | null;
   registerChatStreamAbort: (handler: (() => void) | null) => void;
   abortActiveChatStream: () => void;
   SWIPE_TAB_ORDER: readonly AppTab[];
@@ -54,6 +56,7 @@ interface NavigationProviderProps {
 }
 
 const NavigationContext = createContext<NavigationContextValue | null>(null);
+const OVERLAY_TABS: readonly AppTab[] = ["settings", "results", "history", "input"];
 
 // ── Swipeable tab order ──
 // Mirrors the bottom nav bar order exactly: Dashboard | Cashflow | Audit | Portfolio | Ask AI
@@ -66,6 +69,8 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
   const [onboardingComplete, setOnboardingComplete] = useState(true); // true until proven otherwise
   const [showGuide, setShowGuide] = useState(false);
   const [inputMounted, setInputMounted] = useState(false);
+  const [overlaySourceTab, setOverlaySourceTab] = useState<AppTab | null>(null);
+  const [overlayBaseTab, setOverlayBaseTab] = useState<AppTab | null>(null);
 
   // We keep swipeAnimClass around for overlays that still use vertical/modal JS slides
   const [swipeAnimClass, setSwipeAnimClass] = useState("tab-transition");
@@ -73,6 +78,8 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
   const lastCenterTab = useRef<AppTab>("dashboard");
   const inputBackTarget = useRef<AppTab>("audit");
   const chatStreamAbortRef = useRef<(() => void) | null>(null);
+  const resultsBackTargetRef = useRef<AppTab | null>(null);
+  const overlayBaseTabRef = useRef<AppTab | null>(null);
 
   const rehydrateNavigation = useCallback(async () => {
     const obComplete = await db.get("onboarding-complete");
@@ -94,6 +101,8 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
     setSetupReturnTab(null);
     setShowGuide(false);
     setInputMounted(false);
+    setOverlaySourceTab(null);
+    setOverlayBaseTab(null);
     lastCenterTab.current = nextTab === "dashboard" || nextTab === "input" ? nextTab : "dashboard";
     inputBackTarget.current = "dashboard";
     window.history.replaceState({ tab: nextTab, viewingTs: null }, "", "");
@@ -103,6 +112,14 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
   useEffect(() => {
     void rehydrateNavigation();
   }, [rehydrateNavigation]);
+
+  useEffect(() => {
+    resultsBackTargetRef.current = resultsBackTarget;
+  }, [resultsBackTarget]);
+
+  useEffect(() => {
+    overlayBaseTabRef.current = overlayBaseTab;
+  }, [overlayBaseTab]);
 
   const registerChatStreamAbort = useCallback((handler: (() => void) | null) => {
     chatStreamAbortRef.current = handler;
@@ -124,7 +141,6 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
 
       // When leaving an overlay the snap-container transitions from display:none → flex.
       // We must wait for React to re-render so container.clientWidth > 0 before scrolling.
-      const OVERLAY_TABS = ["settings", "results", "history", "guide", "input"];
       if (OVERLAY_TABS.includes(prevTab)) {
         requestAnimationFrame(() => requestAnimationFrame(doScroll));
       } else {
@@ -134,6 +150,22 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
 
     if (viewState !== undefined && viewState !== null) {
         window.dispatchEvent(new CustomEvent<NavViewState>("app-nav-viewing", { detail: viewState }));
+    }
+
+    if (OVERLAY_TABS.includes(newTab)) {
+      const resolvedSource =
+        newTab === "results" && resultsBackTargetRef.current
+          ? resultsBackTargetRef.current
+          : prevTab;
+      setOverlaySourceTab(resolvedSource);
+      setOverlayBaseTab(
+        SWIPE_TAB_ORDER.includes(resolvedSource)
+          ? resolvedSource
+          : overlayBaseTabRef.current ?? lastCenterTab.current
+      );
+    } else {
+      setOverlaySourceTab(null);
+      setOverlayBaseTab(null);
     }
 
     if (newTab !== "results") setResultsBackTarget(null);
@@ -151,6 +183,8 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
       if (prev === newTab) return prev;
       if (newTab === "input") setInputMounted(true);
       if (newTab === "dashboard" || newTab === "input") lastCenterTab.current = newTab;
+      setOverlaySourceTab(null);
+      setOverlayBaseTab(null);
       window.history.pushState({ tab: newTab, viewingTs: null }, "", "");
       return newTab;
     });
@@ -190,7 +224,14 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
     const onPopState = (e: PopStateEvent) => {
       const st = e.state;
       if (st) {
-        if (st.tab) setTab(st.tab as AppTab);
+        if (st.tab) {
+          const nextTab = st.tab as AppTab;
+          setTab(nextTab);
+          if (!OVERLAY_TABS.includes(nextTab)) {
+            setOverlaySourceTab(null);
+            setOverlayBaseTab(null);
+          }
+        }
       }
     };
     window.addEventListener("popstate", onPopState);
@@ -219,6 +260,8 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
     setInputMounted,
     lastCenterTab,
     inputBackTarget,
+    overlaySourceTab,
+    overlayBaseTab,
     registerChatStreamAbort,
     abortActiveChatStream,
     SWIPE_TAB_ORDER,

@@ -445,12 +445,13 @@ export function AppFrame({ children }: { children: ReactNode }) {
       style={{
         width: "100%",
         height: "100dvh",
-        maxWidth: 800,
-        margin: "0 auto",
-        background: T.bg.base,
-        display: "flex",
-        flexDirection: "column",
-        fontFamily: T.font.sans,
+      maxWidth: 800,
+      margin: "0 auto",
+      background: T.bg.base,
+      position: "relative",
+      display: "flex",
+      flexDirection: "column",
+      fontFamily: T.font.sans,
         overflow: "hidden",
       }}
     >

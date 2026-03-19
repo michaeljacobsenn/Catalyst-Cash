@@ -30,6 +30,7 @@ export default function MetricsBar({ quickMetrics, privacyMode }) {
 
   return (
     <div
+      data-swipe-nav-blocker="true"
       style={{
         display: "flex",
         overflowX: "auto",
@@ -38,6 +39,8 @@ export default function MetricsBar({ quickMetrics, privacyMode }) {
         background: `${T.bg.base}60`,
         scrollbarWidth: "none",
         msOverflowStyle: "none",
+        touchAction: "pan-x",
+        overscrollBehaviorX: "contain",
       }}
     >
       <style>{`.metrics-strip::-webkit-scrollbar { display: none; }`}</style>

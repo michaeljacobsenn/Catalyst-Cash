@@ -1645,6 +1645,125 @@ describe("Plaid transaction sync migration", () => {
     });
   });
 
+  it("enforces the live institution limit during exchange for free users", async () => {
+    const env = makeEnv({
+      GATING_MODE: "live",
+      DB: new FakeD1(),
+    });
+    const session = await issueSessionFor(env, { "X-Device-ID": "free-limit-device" });
+    env.DB.plaidItems = [
+      {
+        item_id: "item-existing",
+        user_id: session.payload.actorId,
+        access_token: "access-existing",
+        transactions_cursor: null,
+      },
+    ];
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/plaid/exchange", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Subscription-Tier": "free",
+          ...session.authorization,
+        },
+        body: JSON.stringify({ publicToken: "public-token" }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "institution_limit",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("treats reconnect exchange as a replacement and revokes the old plaid item", async () => {
+    const env = makeEnv({
+      GATING_MODE: "live",
+      DB: new FakeD1({
+        syncData: [
+          {
+            user_id: "device:replace-device",
+            item_id: "item-old",
+            balances_json: '{"accounts":[{"account_id":"acct-old"}]}',
+            liabilities_json: "{}",
+            transactions_json: "{}",
+            last_synced_at: "2026-03-13 12:00:00",
+          },
+        ],
+      }),
+    });
+    const session = await issueSessionFor(env, { "X-Device-ID": "replace-device" });
+    env.DB.plaidItems = [
+      {
+        item_id: "item-old",
+        user_id: session.payload.actorId,
+        access_token: "access-old",
+        transactions_cursor: null,
+      },
+    ];
+    env.DB.syncData = [
+      {
+        user_id: session.payload.actorId,
+        item_id: "item-old",
+        balances_json: '{"accounts":[{"account_id":"acct-old"}]}',
+        liabilities_json: "{}",
+        transactions_json: "{}",
+        last_synced_at: "2026-03-13 12:00:00",
+      },
+    ];
+
+    const fetchMock = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/item/public_token/exchange")) {
+        return new Response(
+          JSON.stringify({
+            item_id: "item-new",
+            access_token: "access-new",
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.endsWith("/item/remove")) {
+        return new Response(JSON.stringify({ removed: true }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/plaid/exchange", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Subscription-Tier": "free",
+          ...session.authorization,
+        },
+        body: JSON.stringify({ publicToken: "public-token", replaceItemId: "item-old" }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ item_id: "item-new" });
+    expect(env.DB.plaidItems).toEqual([
+      expect.objectContaining({
+        item_id: "item-new",
+        access_token: "access-new",
+        user_id: session.payload.actorId,
+      }),
+    ]);
+    expect(env.DB.syncData.find(entry => entry.item_id === "item-old")).toBeUndefined();
+  });
+
   it("completes manual sync before returning so fresh balances are immediately readable", async () => {
     const env = makeEnv({
       DB: new FakeD1({
@@ -1710,7 +1829,7 @@ describe("Plaid transaction sync migration", () => {
       new Request("https://api.catalystcash.app/api/sync/force", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...session.authorization },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ connectionId: "item-recent" }),
       }),
       env,
       makeCtx()
@@ -1841,7 +1960,7 @@ describe("Plaid transaction sync migration", () => {
       new Request("https://api.catalystcash.app/api/sync/force", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...session.authorization },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ connectionId: "item-recent" }),
       }),
       env,
       makeCtx()
@@ -1929,6 +2048,115 @@ describe("Plaid transaction sync migration", () => {
         item_id: "item-1",
       }),
     ]);
+  });
+
+  it("uses the newest targeted sync timestamp when enforcing manual sync cooldowns", async () => {
+    const env = makeEnv({
+      DB: new FakeD1(),
+    });
+    const session = await issueSessionFor(env, { "X-Device-ID": "cooldown-device" });
+    env.DB.plaidItems = [
+      {
+        item_id: "item-old",
+        user_id: session.payload.actorId,
+        access_token: "access-old",
+        transactions_cursor: null,
+      },
+      {
+        item_id: "item-recent",
+        user_id: session.payload.actorId,
+        access_token: "access-recent",
+        transactions_cursor: null,
+      },
+    ];
+    env.DB.syncData = [
+      {
+        user_id: session.payload.actorId,
+        item_id: "item-old",
+        balances_json: "{}",
+        liabilities_json: "{}",
+        transactions_json: "{}",
+        last_synced_at: "2026-03-01 12:00:00",
+      },
+      {
+        user_id: session.payload.actorId,
+        item_id: "item-recent",
+        balances_json: "{}",
+        liabilities_json: "{}",
+        transactions_json: "{}",
+        last_synced_at: "2999-03-13 12:00:00",
+      },
+    ];
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/sync/force", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...session.authorization },
+        body: JSON.stringify({ connectionId: "item-recent" }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(429);
+    await expect(response.json()).resolves.toMatchObject({ error: "cooldown" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("serves cached plaid transactions to free users without re-hitting plaid", async () => {
+    const env = makeEnv({
+      GATING_MODE: "live",
+      DB: new FakeD1(),
+    });
+    const session = await issueSessionFor(env, { "X-Device-ID": "free-cached-transactions-device" });
+    env.DB.plaidItems = [
+      {
+        item_id: "item-cached",
+        user_id: session.payload.actorId,
+        access_token: "access-cached",
+        transactions_cursor: null,
+      },
+    ];
+    env.DB.syncData = [
+      {
+        user_id: session.payload.actorId,
+        item_id: "item-cached",
+        balances_json: "{}",
+        liabilities_json: "{}",
+        transactions_json: JSON.stringify({
+          transactions: [{ transaction_id: "txn-cached", date: "2026-03-18" }],
+          total_transactions: 1,
+        }),
+        last_synced_at: "2026-03-13 12:00:00",
+      },
+    ];
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/plaid/transactions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Subscription-Tier": "free",
+          ...session.authorization,
+        },
+        body: JSON.stringify({ itemId: "item-cached" }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      transactions: [expect.objectContaining({ transaction_id: "txn-cached" })],
+      total_transactions: 1,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("refuses a valid session from another actor", async () => {
@@ -2019,7 +2247,8 @@ describe("Plaid transaction sync migration", () => {
 
   it("uses /transactions/sync for a first deep sync and persists the new cursor", async () => {
     const env = makeEnv({
-      GATING_MODE: "off",
+      GATING_MODE: "soft",
+      REVENUECAT_SECRET_KEY: "rc-secret",
       DB: new FakeD1({
         plaidItems: [
           {
@@ -2031,7 +2260,10 @@ describe("Plaid transaction sync migration", () => {
         ],
       }),
     });
-    const session = await issueSessionFor(env, { "X-Device-ID": "device-1" });
+    const session = await issueSessionFor(env, {
+      "X-Device-ID": "device-1",
+      "X-RC-App-User-ID": "rc-pro-user",
+    });
     env.DB.plaidItems = [
       {
         item_id: "item-1",
@@ -2043,6 +2275,18 @@ describe("Plaid transaction sync migration", () => {
 
     const fetchMock = vi.fn(async (input, init) => {
       const url = String(input);
+      if (url.includes("api.revenuecat.com")) {
+        return new Response(
+          JSON.stringify({
+            subscriber: {
+              entitlements: {
+                "Catalyst Cash Pro": { expires_date: "2030-01-01T00:00:00Z" },
+              },
+            },
+          }),
+          { status: 200 }
+        );
+      }
       if (url.endsWith("/liabilities/get")) {
         return new Response(JSON.stringify({ liabilities: { credit: [] } }), { status: 200 });
       }
@@ -2070,7 +2314,11 @@ describe("Plaid transaction sync migration", () => {
     const response = await worker.fetch(
       new Request("https://api.catalystcash.app/api/sync/deep", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...session.authorization },
+        headers: {
+          "Content-Type": "application/json",
+          "X-RC-App-User-ID": "rc-pro-user",
+          ...session.authorization,
+        },
         body: JSON.stringify({ userId: "user-1" }),
       }),
       env,
@@ -2097,7 +2345,8 @@ describe("Plaid transaction sync migration", () => {
 
   it("uses the stored cursor for webhook incremental sync and merges delta updates", async () => {
     const env = makeEnv({
-      GATING_MODE: "off",
+      GATING_MODE: "soft",
+      REVENUECAT_SECRET_KEY: "rc-secret",
       DB: new FakeD1({
         plaidItems: [
           {
@@ -2124,9 +2373,48 @@ describe("Plaid transaction sync migration", () => {
         ],
       }),
     });
+    const session = await issueSessionFor(env, {
+      "X-Device-ID": "device-1",
+      "X-RC-App-User-ID": "rc-pro-user",
+    });
+    env.DB.plaidItems = [
+      {
+        item_id: "item-1",
+        user_id: session.payload.actorId,
+        access_token: "access-1",
+        transactions_cursor: "cursor-prev-1",
+      },
+    ];
+    env.DB.syncData = [
+      {
+        user_id: session.payload.actorId,
+        item_id: "item-1",
+        balances_json: "{}",
+        liabilities_json: "{}",
+        transactions_json: JSON.stringify({
+          transactions: [
+            { transaction_id: "txn-1", amount: 9, date: "2026-03-11", name: "Old 1" },
+            { transaction_id: "txn-2", amount: 24, date: "2026-03-10", name: "Old 2" },
+          ],
+        }),
+        last_synced_at: "2026-03-01 12:00:00",
+      },
+    ];
 
     const fetchMock = vi.fn(async (input, init) => {
       const url = String(input);
+      if (url.includes("api.revenuecat.com")) {
+        return new Response(
+          JSON.stringify({
+            subscriber: {
+              entitlements: {
+                "Catalyst Cash Pro": { expires_date: "2030-01-01T00:00:00Z" },
+              },
+            },
+          }),
+          { status: 200 }
+        );
+      }
       if (url.endsWith("/accounts/get")) {
         return new Response(JSON.stringify({ accounts: [{ account_id: "acct-1" }] }), { status: 200 });
       }
@@ -2166,7 +2454,7 @@ describe("Plaid transaction sync migration", () => {
 
     expect(response.status).toBe(200);
     const item = env.DB.plaidItems.find(entry => entry.item_id === "item-1");
-    const syncRow = env.DB.syncData.find(entry => entry.user_id === "device:device-1" && entry.item_id === "item-1");
+    const syncRow = env.DB.syncData.find(entry => entry.user_id === session.payload.actorId && entry.item_id === "item-1");
     const transactions = JSON.parse(syncRow.transactions_json);
 
     expect(item.transactions_cursor).toBe("cursor-next-2");

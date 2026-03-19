@@ -23,6 +23,7 @@ export default function BadgeStrip({ badges }) {
         </span>
       </div>
       <div
+        data-swipe-nav-blocker="true"
         style={{
           display: "flex",
           gap: 8,
@@ -30,6 +31,8 @@ export default function BadgeStrip({ badges }) {
           paddingBottom: 4,
           WebkitOverflowScrolling: "touch",
           scrollbarWidth: "none",
+          touchAction: "pan-x",
+          overscrollBehaviorX: "contain",
         }}
       >
         {unlockedBadges.length > 0 ? (

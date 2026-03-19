@@ -1,4 +1,3 @@
-  import { useDrag } from "@use-gesture/react";
   import { animate,motion,useMotionValue,useReducedMotion } from "framer-motion";
   import { useEffect,useLayoutEffect,useRef,useState,type ReactNode } from "react";
   import type { AppTab } from "../contexts/NavigationContext.js";
@@ -12,17 +11,7 @@ interface ScrollSnapContainerProps {
   hidden: boolean;
   children?: ReactNode;
 }
-
 const SPRING = { type: "spring" as const, stiffness: 300, damping: 30 };
-const VELOCITY_WEIGHT = 140;
-
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-
-const applyRubberBand = (value: number, min: number, max: number) => {
-  if (value < min) return min - (min - value) * 0.22;
-  if (value > max) return max + (value - max) * 0.22;
-  return value;
-};
 
 export default function ScrollSnapContainer({
   ready,
@@ -34,11 +23,9 @@ export default function ScrollSnapContainer({
   children,
 }: ScrollSnapContainerProps) {
   const containerRef = useRef<HTMLElement | null>(null);
-  const trackRef = useRef<HTMLDivElement | null>(null);
   const currentTabRef = useRef(tab);
   const transitionModeRef = useRef<"immediate" | "gesture">("immediate");
   const animationRef = useRef<ReturnType<typeof animate> | null>(null);
-  const dragIntentRef = useRef(false);
   const [paneWidth, setPaneWidth] = useState(0);
   const x = useMotionValue(0);
   const prefersReducedMotion = useReducedMotion();
@@ -63,18 +50,6 @@ export default function ScrollSnapContainer({
       return;
     }
     animationRef.current = animate(x, targetX, SPRING);
-  };
-
-  const snapToIndex = (index: number) => {
-    const clampedIndex = clamp(index, 0, Math.max(0, SWIPE_TAB_ORDER.length - 1));
-    const nextTab = SWIPE_TAB_ORDER[clampedIndex];
-    if (!nextTab) return;
-    if (nextTab === currentTabRef.current) {
-      snapToTab(nextTab, "gesture");
-      return;
-    }
-    transitionModeRef.current = "gesture";
-    syncTab(nextTab);
   };
 
   useEffect(() => {
@@ -123,65 +98,25 @@ export default function ScrollSnapContainer({
   }, [SWIPE_TAB_ORDER, syncTab]);
 
   useEffect(() => () => stopAnimation(), []);
-
-  const bind = useDrag(
-    ({ first, last, movement: [mx], velocity: [vx], direction: [dx], cancel, tap }) => {
-      if (!paneWidth || hidden) {
-        cancel?.();
-        return;
-      }
-
-      const baseIndex = getTabIndex(currentTabRef.current);
-      const minX = -Math.max(0, SWIPE_TAB_ORDER.length - 1) * paneWidth;
-      const maxX = 0;
-      const baseX = -(baseIndex * paneWidth);
-
-      if (first) {
-        dragIntentRef.current = false;
-        stopAnimation();
-      }
-
-      if (!last) {
-        dragIntentRef.current = true;
-        x.set(applyRubberBand(baseX + mx, minX, maxX));
-        return;
-      }
-
-      if (tap || !dragIntentRef.current) {
-        snapToTab(currentTabRef.current);
-        return;
-      }
-
-      const projectedX = baseX + mx + vx * dx * VELOCITY_WEIGHT;
-      const projectedIndex = Math.round(-projectedX / paneWidth);
-      snapToIndex(projectedIndex);
-    },
-    {
-      axis: "x",
-      filterTaps: true,
-      pointer: { touch: true },
-      rubberband: true,
-      threshold: 10,
-    },
-  );
   return (
     <main
       id="main-content"
       role="main"
       ref={containerRef}
       className="snap-container"
+      aria-hidden={hidden}
       style={{
         flex: 1,
         minHeight: 0,
-        display: hidden ? "none" : "flex",
+        display: "flex",
         overflow: "hidden",
         overscrollBehaviorX: "none",
-        touchAction: "pan-y",
+        touchAction: hidden ? "none" : "pan-y",
+        pointerEvents: hidden ? "none" : "auto",
       }}
     >
-      <div {...bind()} style={{ flex: 1, minHeight: 0, height: "100%", touchAction: "pan-y", overflow: "hidden" }}>
+      <div style={{ flex: 1, minHeight: 0, height: "100%", touchAction: "pan-y", overflow: "hidden" }}>
         <motion.div
-          ref={trackRef}
           className="snap-track"
           style={{
             ["--snap-pane-w" as string]: paneWidth ? `${paneWidth}px` : "100%",
@@ -190,6 +125,8 @@ export default function ScrollSnapContainer({
             height: "100%",
             width: paneWidth ? `${paneWidth * SWIPE_TAB_ORDER.length}px` : `${SWIPE_TAB_ORDER.length * 100}%`,
             touchAction: "pan-y",
+            willChange: "transform",
+            backfaceVisibility: "hidden",
           }}
         >
           {children}

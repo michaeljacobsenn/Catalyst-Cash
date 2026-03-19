@@ -1,4 +1,5 @@
   import { injectOTAMerchants } from "./merchantDatabase.js";
+  import { log } from "./logger.js";
   import { injectOTACatalog } from "./rewardsCatalog.js";
 
 const OTA_ENDPOINTS = {
@@ -13,7 +14,7 @@ function validateCatalogPayload(catalog) {
   if (!catalog || typeof catalog !== "object" || Array.isArray(catalog)) return false;
   for (const [cardName, rules] of Object.entries(catalog)) {
     if (typeof rules !== "object" || rules === null) {
-      console.warn(`[OTA] Invalid rules for card "${cardName}". Rejecting payload.`);
+      log.warn("ota", `Invalid rules for card "${cardName}". Rejecting payload.`);
       return false;
     }
     // Multiplier bounds check (0-20 is generous for hotel points like Hilton 14x)
@@ -21,7 +22,7 @@ function validateCatalogPayload(catalog) {
       if (["currency", "caps", "notes", "rotating", "mobileWallet", "highest-spend"].includes(key)) continue;
       if (key === "catch-all" || typeof val === "number") {
         if (typeof val === "number" && (val < 0 || val > 20)) {
-          console.warn(`[OTA] Multiplier out of bounds: ${cardName}.${key} = ${val}`);
+          log.warn("ota", `Multiplier out of bounds: ${cardName}.${key} = ${val}`);
           return false;
         }
       }
@@ -34,7 +35,7 @@ function validateValuationsPayload(valuations) {
   if (!valuations || typeof valuations !== "object" || Array.isArray(valuations)) return false;
   for (const [currency, cpp] of Object.entries(valuations)) {
     if (typeof cpp !== "number" || cpp < 0.1 || cpp > 5.0) {
-      console.warn(`[OTA] Valuation out of bounds: ${currency} = ${cpp}`);
+      log.warn("ota", `Valuation out of bounds: ${currency} = ${cpp}`);
       return false;
     }
   }
@@ -68,9 +69,9 @@ export function injectCachedOTA() {
 
       if (catalogValid && valuationsValid) {
         injectOTACatalog(parsedCatalog, parsedValuations);
-        console.log("[OTA] Synchronously injected cached Catalog.");
+        log.info("ota", "Synchronously injected cached Catalog.");
       } else {
-        console.warn("[OTA] Cached catalog/valuations failed validation. Using built-in defaults.");
+        log.warn("ota", "Cached catalog/valuations failed validation. Using built-in defaults.");
         // Clear invalid cache so it doesn't persist
         if (!catalogValid) localStorage.removeItem("ota_catalog");
         if (!valuationsValid) localStorage.removeItem("ota_valuations");
@@ -81,14 +82,14 @@ export function injectCachedOTA() {
       const parsedMerchants = JSON.parse(cachedMerchants);
       if (validateMerchantsPayload(parsedMerchants)) {
         injectOTAMerchants(parsedMerchants);
-        console.log("[OTA] Synchronously injected cached Merchants.");
+        log.info("ota", "Synchronously injected cached Merchants.");
       } else {
-        console.warn("[OTA] Cached merchants failed validation. Using built-in defaults.");
+        log.warn("ota", "Cached merchants failed validation. Using built-in defaults.");
         localStorage.removeItem("ota_merchants");
       }
     }
   } catch (e) {
-    console.error("[OTA] Failed to inject cached OTA payloads:", e);
+    log.error("ota", "Failed to inject cached OTA payloads", { error: e?.message || String(e) });
   }
 }
 
@@ -111,15 +112,15 @@ export async function syncOTAData() {
       if (payload.REWARDS_CATALOG && validateCatalogPayload(payload.REWARDS_CATALOG)) {
         localStorage.setItem("ota_catalog", JSON.stringify(payload.REWARDS_CATALOG));
         if (payload.version) localStorage.setItem("ota_catalog_version", payload.version);
-        console.log("[OTA] Cached latest Rewards Catalog payload for next boot.");
+        log.info("ota", "Cached latest Rewards Catalog payload for next boot.");
       } else if (payload.REWARDS_CATALOG) {
-        console.warn("[OTA] Remote catalog failed validation. Not caching.");
+        log.warn("ota", "Remote catalog failed validation. Not caching.");
       }
       if (payload.VALUATIONS && validateValuationsPayload(payload.VALUATIONS)) {
         localStorage.setItem("ota_valuations", JSON.stringify(payload.VALUATIONS));
-        console.log("[OTA] Cached latest Valuations payload for next boot.");
+        log.info("ota", "Cached latest Valuations payload for next boot.");
       } else if (payload.VALUATIONS) {
-        console.warn("[OTA] Remote valuations failed validation. Not caching.");
+        log.warn("ota", "Remote valuations failed validation. Not caching.");
       }
     }
 
@@ -127,13 +128,13 @@ export async function syncOTAData() {
       const merchants = merchantsResult.value.MERCHANT_DATABASE;
       if (Array.isArray(merchants) && validateMerchantsPayload(merchants)) {
         localStorage.setItem("ota_merchants", JSON.stringify(merchants));
-        console.log("[OTA] Cached latest Merchant Database payload for next boot.");
+        log.info("ota", "Cached latest Merchant Database payload for next boot.");
       } else if (merchants) {
-        console.warn("[OTA] Remote merchants failed validation. Not caching.");
+        log.warn("ota", "Remote merchants failed validation. Not caching.");
       }
     }
 
   } catch (err) {
-    console.warn("[OTA] Background sync failed or endpoints unavailable:", err);
+    log.warn("ota", "Background sync failed or endpoints unavailable", { error: err?.message || String(err) });
   }
 }

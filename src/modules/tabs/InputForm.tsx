@@ -10,6 +10,7 @@
   import { CustomSelect as UICustomSelect,DI as UIDI,Mono as UIMono } from "../components.js";
   import { T } from "../constants.js";
   import {
+    ArrowLeft,
     AlertTriangle,
     CheckCircle,
     Minus,
@@ -243,6 +244,7 @@ export default function InputForm({
   aiProvider,
   personalRules,
   setPersonalRules,
+  onBack,
 }: InputFormProps) {
   const { error } = useAudit();
   const initialToday = useMemo(() => new Date(), []);
@@ -382,15 +384,85 @@ export default function InputForm({
 
   return (
     <div
-      className="page-body stagger-container"
+      className="safe-scroll-body safe-bottom page-body stagger-container"
       style={{
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         width: "100%",
+        paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
+        ["--page-bottom-clearance" as string]: "calc(env(safe-area-inset-bottom, 0px) + 120px)",
       }}
     >
-      <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
+      <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column", gap: 12 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 12,
+          paddingBottom: 4,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, minWidth: 0 }}>
+          <button
+            onClick={() => {
+              haptic.light();
+              onBack();
+            }}
+            aria-label="Back"
+            style={{
+              width: 46,
+              height: 46,
+              borderRadius: 16,
+              border: `1px solid ${T.border.default}`,
+              background: T.bg.glass,
+              color: T.text.primary,
+              boxShadow: T.shadow.soft,
+              flexShrink: 0,
+            }}
+          >
+            <ArrowLeft size={18} strokeWidth={2.4} />
+          </button>
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 800,
+                color: T.accent.primary,
+                fontFamily: T.font.mono,
+                letterSpacing: "0.08em",
+                marginBottom: 4,
+              }}
+            >
+              WEEKLY AUDIT
+            </div>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 28,
+                lineHeight: 1.05,
+                letterSpacing: "-0.03em",
+                color: T.text.primary,
+                fontWeight: 900,
+              }}
+            >
+              Run Catalyst Audit
+            </h1>
+            <p
+              style={{
+                margin: "6px 0 0 0",
+                fontSize: 13,
+                lineHeight: 1.45,
+                color: T.text.secondary,
+                maxWidth: 460,
+              }}
+            >
+              Update this week&apos;s balances, pending charges, and context before the AI reviews your cash position.
+            </p>
+          </div>
+        </div>
+      </div>
       <InputFormErrorBanner error={error} />
       {/* ── SNAPSHOT ITEMS ── */}
       <div style={{ marginBottom: 20 }}>
@@ -700,7 +772,17 @@ export default function InputForm({
                 className="slide-up"
                 style={{ marginBottom: 6, animationDelay: `${i * 0.06}s` }}
               >
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      form.debts.length > 1
+                        ? "minmax(0, 1fr) minmax(132px, 0.58fr) 44px"
+                        : "minmax(0, 1fr) minmax(132px, 0.58fr)",
+                    gap: 8,
+                    alignItems: "center",
+                  }}
+                >
                   <CustomSelect
                     ariaLabel={`Debt card ${i + 1}`}
                     value={d.cardId || d.name || ""}
@@ -719,7 +801,7 @@ export default function InputForm({
                     placeholder="Card..."
                     options={cardOptions}
                   />
-                  <div style={{ flex: "0 0 90px" }}>
+                  <div style={{ minWidth: 0 }}>
                     {hasPlaid && !isOverridden ? (
                       <button
                         onClick={() => {
@@ -735,7 +817,7 @@ export default function InputForm({
                           background: `${T.accent.emerald}10`,
                           border: `1px solid ${T.accent.emerald}40`,
                           borderRadius: T.radius.md,
-                          padding: "0 8px",
+                          padding: "0 12px",
                           cursor: "pointer",
                         }}
                       >
@@ -784,8 +866,8 @@ export default function InputForm({
                     <button
                       onClick={() => rmD(i)}
                       style={{
-                        width: 32,
-                        height: 32,
+                        width: 44,
+                        height: 44,
                         borderRadius: T.radius.sm,
                         border: "none",
                         background: T.status.redDim,
@@ -821,19 +903,20 @@ export default function InputForm({
             alignItems: "center",
             justifyContent: "center",
             gap: 8,
-            padding: "14px",
+            padding: "16px 18px",
             borderRadius: T.radius.lg,
-            border: `1.5px dashed ${T.border.default}`,
-            background: `linear-gradient(135deg, ${T.bg.card}, transparent)`,
-            color: T.text.secondary,
-            fontSize: 13,
-            fontWeight: 700,
+            border: `1px solid ${T.border.default}`,
+            background: T.bg.glass,
+            color: T.text.primary,
+            fontSize: 14,
+            fontWeight: 800,
             cursor: "pointer",
             marginBottom: 10,
-            transition: "all .2s ease"
+            transition: "all .2s ease",
+            boxShadow: T.shadow.soft,
           }}
         >
-          <Plus size={15} color={T.text.dim} strokeWidth={2.5} /> Add Pending Charge
+          <Plus size={16} color={T.accent.primary} strokeWidth={2.8} /> Add Pending Charge
         </button>
       ) : (
         <Card variant="glass" style={{ padding: "12px 14px", position: "relative", overflow: "hidden", marginBottom: 10 }}>
@@ -895,7 +978,15 @@ export default function InputForm({
               }}
             >
               {/* Row 1: card picker + amount + remove */}
-              <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 1fr) minmax(124px, 0.56fr) 44px",
+                  gap: 8,
+                  alignItems: "center",
+                  marginBottom: 6,
+                }}
+              >
                 <CustomSelect
                   ariaLabel={`Pending charge card ${ci + 1}`}
                   value={charge.cardId || ""}
@@ -911,7 +1002,7 @@ export default function InputForm({
                   placeholder="Card..."
                     options={cardOptions}
                 />
-                <div style={{ flex: "0 0 90px" }}>
+                <div style={{ minWidth: 0 }}>
                   <DI
                     value={charge.amount}
                     onChange={e =>
@@ -934,8 +1025,8 @@ export default function InputForm({
                     }));
                   }}
                   style={{
-                    width: 34,
-                    height: 34,
+                    width: 44,
+                    height: 44,
                     borderRadius: T.radius.sm,
                     border: "none",
                     background: T.status.redDim,

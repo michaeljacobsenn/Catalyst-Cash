@@ -15,6 +15,7 @@ interface BottomNavBarProps {
   navTo: (newTab: AppTab, viewState?: NavViewState | null) => void;
   loading: boolean;
   showGuide: boolean;
+  hidden?: boolean;
   transactionFeedTab: AppTab | null;
   setTransactionFeedTab: (tab: AppTab | null) => void;
 }
@@ -24,6 +25,7 @@ export default function BottomNavBar({
   navTo,
   loading,
   showGuide,
+  hidden = false,
   transactionFeedTab,
   setTransactionFeedTab,
 }: BottomNavBarProps) {
@@ -49,7 +51,7 @@ export default function BottomNavBar({
         flexShrink: 0,
         padding: "8px 16px calc(env(safe-area-inset-bottom, 16px) + 8px)",
         zIndex: 200,
-        display: showGuide ? "none" : undefined,
+        display: showGuide || hidden ? "none" : undefined,
         pointerEvents: loading ? "none" : "auto",
         opacity: loading ? 0.45 : 1,
         transition: "opacity .3s ease",

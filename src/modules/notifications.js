@@ -4,6 +4,7 @@
 const PAYDAY_REMINDER_ID = 1001;
 const WEEKLY_AUDIT_NUDGE_ID = 1002;
 const BILL_REMINDER_BASE_ID = 2000; // IDs 2000-2099 reserved for bill reminders
+const GEOFENCE_SIM_NOTIFICATION_ID = 3001;
 
 const DAY_MAP = {
   Sunday: 0,
@@ -47,6 +48,37 @@ export async function getNotificationPermission() {
     return display; // "granted" | "denied" | "prompt"
   } catch {
     return "denied";
+  }
+}
+
+export async function triggerStoreArrivalNotification(store, body) {
+  if (!supportsLocalNotifications()) return false;
+  try {
+    let { display } = await LocalNotifications.checkPermissions();
+    if (display === "prompt") {
+      const permissionResult = await LocalNotifications.requestPermissions();
+      display = permissionResult.display;
+    }
+    if (display !== "granted") return false;
+
+    await LocalNotifications.cancel({ notifications: [{ id: GEOFENCE_SIM_NOTIFICATION_ID }] });
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          id: GEOFENCE_SIM_NOTIFICATION_ID,
+          title: `${store} Nearby`,
+          body,
+          schedule: { at: new Date(Date.now() + 750), allowWhileIdle: true },
+          sound: "default",
+          smallIcon: "ic_stat_icon_config_sample",
+          iconColor: "#7C6FFF",
+        },
+      ],
+    });
+    return true;
+  } catch (err) {
+    console.warn("[notifications] triggerStoreArrivalNotification failed:", err);
+    return false;
   }
 }
 

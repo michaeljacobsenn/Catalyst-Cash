@@ -13,6 +13,21 @@ const DB_NAME = "catalyst-errors";
 const STORE_NAME = "errors";
 const MAX_ERRORS = 50;
 
+// Lazily-cached device ID for telemetry auth header.
+// Avoids async overhead on every reportError call.
+let _cachedDeviceId = null;
+async function ensureDeviceId() {
+  if (_cachedDeviceId) return;
+  try {
+    const { getOrCreateDeviceId } = await import("./subscription.js");
+    _cachedDeviceId = await getOrCreateDeviceId();
+  } catch {
+    _cachedDeviceId = "unknown";
+  }
+}
+// Fire-and-forget on module load
+ensureDeviceId();
+
 let dbPromise = null;
 
 function openDB() {
@@ -65,9 +80,10 @@ export async function reportError(error, context = {}) {
   try {
     // Only send in production environment to avoid noise
     if (import.meta.env.PROD) {
+       const deviceId = _cachedDeviceId || "unknown";
        fetch(`${getBackendUrl()}/api/v1/telemetry/errors`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "X-Device-ID": deviceId },
           body: JSON.stringify(entry),
           // fire-and-forget, keepalive true so payload sends even if page unloads
           keepalive: true,
@@ -169,7 +185,26 @@ export function installGlobalHandlers() {
     if (!root || root.innerHTML.trim() === "") {
       const div = document.createElement("div");
       div.style.cssText = "position:fixed;inset:0;background:#ba0000;color:#fff;padding:60px 20px;z-index:999999;font-family:system-ui, sans-serif;overflow-y:auto;word-wrap:break-word;";
-      div.innerHTML = `<h3>⚠️ ${title}</h3><p style="font-weight:bold;margin-bottom:15px;">${msg}</p><pre style="white-space:pre-wrap;font-size:11px;background:rgba(0,0,0,0.3);padding:10px;border-radius:6px;">${stack}</pre><p style="margin-top:20px;font-size:14px;">Please screenshot this and send it to the developer.</p>`;
+
+      const h3 = document.createElement("h3");
+      h3.textContent = `⚠️ ${title}`;
+      div.appendChild(h3);
+
+      const p1 = document.createElement("p");
+      p1.style.cssText = "font-weight:bold;margin-bottom:15px;";
+      p1.textContent = msg;
+      div.appendChild(p1);
+
+      const pre = document.createElement("pre");
+      pre.style.cssText = "white-space:pre-wrap;font-size:11px;background:rgba(0,0,0,0.3);padding:10px;border-radius:6px;";
+      pre.textContent = stack;
+      div.appendChild(pre);
+
+      const p2 = document.createElement("p");
+      p2.style.cssText = "margin-top:20px;font-size:14px;";
+      p2.textContent = "Please screenshot this and send it to the developer.";
+      div.appendChild(p2);
+
       document.body.appendChild(div);
     }
   };

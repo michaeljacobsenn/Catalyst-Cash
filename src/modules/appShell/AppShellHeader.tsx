@@ -110,6 +110,7 @@ export default function AppShellHeader({
             transition: "color .2s, border-color .2s",
             visibility: tab === "chat" ? "hidden" : "visible",
           }}
+          aria-label={showGuide ? "Close Guide" : "Open Guide"}
         >
           <Info size={18} strokeWidth={1.8} />
         </button>
