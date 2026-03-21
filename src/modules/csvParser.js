@@ -68,7 +68,12 @@ function parseDateStr(val) {
   return null;
 }
 
-export function parseCSVTransactions(csvString) {
+/**
+ * Parse CSV transaction data.
+ * @param {string} csvString - raw CSV text
+ * @param {{ maxAgeDays?: number }} [options] - optional: limit import to last N days (default: all)
+ */
+export function parseCSVTransactions(csvString, { maxAgeDays = Infinity } = {}) {
   if (!csvString || !csvString.trim()) return [];
 
   const lines = csvString.split(/\r?\n/).filter(l => l.trim().length > 0);
@@ -109,8 +114,9 @@ export function parseCSVTransactions(csvString) {
   if (dateIdx === -1 || amountIdx === -1) return [];
 
   const transactions = [];
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const cutoffDate = Number.isFinite(maxAgeDays)
+    ? (() => { const d = new Date(); d.setDate(d.getDate() - maxAgeDays); return d; })()
+    : null;
 
   for (let i = 1; i < lines.length; i++) {
     const row = parseCSVLine(lines[i]);
@@ -120,8 +126,8 @@ export function parseCSVTransactions(csvString) {
     const dateObj = parseDateStr(rawDate);
     if (!dateObj) continue;
 
-    // Only import last 30 days
-    if (dateObj < thirtyDaysAgo) continue;
+    // Filter by configurable date window (default: import all)
+    if (cutoffDate && dateObj < cutoffDate) continue;
 
     const rawAmount = row[amountIdx];
     let amt = parseCurrency(rawAmount);

@@ -5,6 +5,13 @@ export const FREE_MARKET_REFRESH_MS = 60 * 60 * 1000;
 
 export const PRO_MONTHLY_AUDIT_CAP = 20;
 export const PRO_DAILY_CHAT_CAP = 25;
+
+// Per-model daily caps for Pro (must sum to PRO_DAILY_CHAT_CAP)
+export const PRO_MODEL_CAPS = {
+  "o3": 4,
+  "gpt-4.1": 6,
+  "gemini-2.5-flash": 15,
+};
 export const PRO_MARKET_REFRESH_MS = 5 * 60 * 1000;
 
 export const INSTITUTION_LIMITS = {

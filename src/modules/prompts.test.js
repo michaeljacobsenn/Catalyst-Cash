@@ -367,6 +367,45 @@ describe("getChatSystemPrompt — expanded coverage", () => {
     expect(prompt).toContain("Professional help recommended");
   });
 
+  it("forces safety-first response mode when multiple severe deterministic rules are active", () => {
+    const prompt = getChatSystemPrompt(
+      null,
+      chatConfig,
+      [],
+      [],
+      [],
+      null,
+      "",
+      null,
+      null,
+      null,
+      "",
+      [
+        {
+          flag: "cash-timing-conflict",
+          active: true,
+          severity: "high",
+          rationale: "Bills are due before the next paycheck.",
+          recommendation: "Cover near-term obligations first.",
+          confidence: "low",
+          directionalOnly: true,
+        },
+        {
+          flag: "promo-apr-cliff",
+          active: true,
+          severity: "high",
+          rationale: "A promo APR deadline is near.",
+          recommendation: "Treat the promo deadline as a hard priority.",
+          confidence: "high",
+        },
+      ]
+    );
+
+    expect(prompt).toContain("Response mode: SAFETY-FIRST STABILIZATION");
+    expect(prompt).toContain("Multiple high-severity rules are active");
+    expect(prompt).toContain("explicitly say the answer is directional");
+  });
+
   it("includes prompt-injection safety context when chat risk is provided", () => {
     const prompt = getChatSystemPrompt(
       null,
@@ -393,12 +432,13 @@ describe("getChatSystemPrompt — expanded coverage", () => {
 });
 
 describe("prompt size profiling", () => {
-  it("keeps a lean audit prompt under the current budget", () => {
+  it("keeps a lean audit prompt under the elite compact budget", () => {
     const prompt = getSystemPrompt("gemini", { ...minConfig, currencyCode: "USD" });
-    expect(estimatePromptTokens(prompt)).toBeLessThanOrEqual(12500);
+    expect(prompt.length).toBeLessThanOrEqual(12000);
+    expect(estimatePromptTokens(prompt)).toBeLessThanOrEqual(3000);
   });
 
-  it("keeps a rich audit prompt materially below the old 23k-token shape", () => {
+  it("keeps a rich audit prompt far below the old pre-history footprint", () => {
     const richConfig = {
       ...minConfig,
       currencyCode: "USD",
@@ -466,10 +506,11 @@ describe("prompt size profiling", () => {
     }));
 
     const prompt = getSystemPrompt("gemini", richConfig, cards, renewals, "Keep emergency fund first.", trends, "coach", strategy);
-    expect(estimatePromptTokens(prompt)).toBeLessThanOrEqual(15000);
+    expect(prompt.length).toBeLessThanOrEqual(20000);
+    expect(estimatePromptTokens(prompt)).toBeLessThanOrEqual(4500);
   });
 
-  it("keeps a rich chat prompt below the current budget while retaining safety anchors", () => {
+  it("keeps a rich chat prompt compact while retaining safety anchors", () => {
     const chatConfig = {
       ...minConfig,
       currencyCode: "USD",
@@ -511,7 +552,8 @@ describe("prompt size profiling", () => {
       [{ flag: "emergency-reserve-gap", active: true, severity: "high", rationale: "Emergency reserve is below target." }],
       null
     );
-    expect(Math.ceil(prompt.length / 4)).toBeLessThanOrEqual(3500);
+    expect(prompt.length).toBeLessThanOrEqual(13000);
+    expect(Math.ceil(prompt.length / 4)).toBeLessThanOrEqual(3300);
     expect(prompt).toContain("Deterministic Decision Rules");
     expect(prompt).toContain("MLM / PYRAMID SCHEMES");
   });

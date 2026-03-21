@@ -111,9 +111,9 @@ export default function TabRenderer({
               willChange: prefersReducedMotion ? undefined : "opacity, transform",
             }}
           >
-            {t === "dashboard" && (
-              <ErrorBoundary name="Dashboard">
-                <Suspense fallback={<TabFallback />}>
+            <ErrorBoundary name="Dashboard">
+              <Suspense fallback={<TabFallback />}>
+                {t === "dashboard" && (
                   <DashboardTab
                     proEnabled={proEnabled}
                     onRefreshDashboard={handleRefreshDashboard}
@@ -124,13 +124,13 @@ export default function TabRenderer({
                       navTo("chat");
                     }}
                   />
-                </Suspense>
-              </ErrorBoundary>
-            )}
+                )}
+              </Suspense>
+            </ErrorBoundary>
 
-            {t === "chat" && (
-              <ErrorBoundary name="AI Chat">
-                <Suspense fallback={<TabFallback />}>
+            <ErrorBoundary name="AI Chat">
+              <Suspense fallback={<TabFallback />}>
+                {t === "chat" && (
                   <AIChatTab
                     proEnabled={proEnabled}
                     initialPrompt={chatInitialPrompt}
@@ -140,33 +140,33 @@ export default function TabRenderer({
                     }}
                     embedded
                   />
-                </Suspense>
-              </ErrorBoundary>
-            )}
+                )}
+              </Suspense>
+            </ErrorBoundary>
 
-            {t === "cashflow" && (
-              <ErrorBoundary name="Cashflow">
-                <Suspense fallback={<TabFallback />}>
+            <ErrorBoundary name="Cashflow">
+              <Suspense fallback={<TabFallback />}>
+                {t === "cashflow" && (
                   <CashflowTab onRunAudit={handleDemoAudit} toast={toast} proEnabled={proEnabled} />
-                </Suspense>
-              </ErrorBoundary>
-            )}
+                )}
+              </Suspense>
+            </ErrorBoundary>
 
-            {t === "portfolio" && (
-              <ErrorBoundary name="Portfolio">
-                <Suspense fallback={<TabFallback />}>
+            <ErrorBoundary name="Portfolio">
+              <Suspense fallback={<TabFallback />}>
+                {t === "portfolio" && (
                   <PortfolioTab onViewTransactions={() => setTransactionFeedTab(t)} proEnabled={proEnabled} />
-                </Suspense>
-              </ErrorBoundary>
-            )}
+                )}
+              </Suspense>
+            </ErrorBoundary>
 
-            {t === "audit" && (
-              <ErrorBoundary name="Audit">
-                <Suspense fallback={<TabFallback />}>
+            <ErrorBoundary name="Audit">
+              <Suspense fallback={<TabFallback />}>
+                {t === "audit" && (
                   <AuditTab proEnabled={proEnabled} toast={toast} onDemoAudit={handleDemoAudit} />
-                </Suspense>
-              </ErrorBoundary>
-            )}
+                )}
+              </Suspense>
+            </ErrorBoundary>
           </div>
         </div>
       ))}

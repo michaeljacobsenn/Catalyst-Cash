@@ -84,3 +84,21 @@ src/modules/prompts*.js
 *.MOV
 *.heic
 *.HEIC
+
+# ── Security: Worker Secrets & Credentials ──
+worker/.dev.vars
+worker/.dev.vars.*
+*.wrangler.toml.bak
+wrangler.secrets.json
+
+# ── Security: Capacitor / iOS Signing ──
+ios/App/App/*.mobileprovision
+ios/App/App/*.p12
+ios/App/*.xcarchive/
+
+# ── Security: Keystores & Databases ──
+*.keystore
+*.jks
+*.sqlite
+*.sqlite3
+*.db

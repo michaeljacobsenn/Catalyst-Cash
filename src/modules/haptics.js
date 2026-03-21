@@ -9,8 +9,12 @@ const supportsHaptics =
   Capacitor.isNativePlatform() &&
   (typeof Capacitor.isPluginAvailable !== "function" || Capacitor.isPluginAvailable("Haptics"));
 
+// Respect iOS accessibility: skip haptic feedback when user prefers reduced motion
+const prefersReducedMotion =
+  typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
 const safe = fn => async () => {
-  if (!supportsHaptics) return;
+  if (!supportsHaptics || prefersReducedMotion) return;
   try {
     await fn();
   } catch {
@@ -21,8 +25,8 @@ const safe = fn => async () => {
 export const haptic = {
   /** Light tap — tab switch, checkbox toggle */
   light: safe(() => Haptics.impact({ style: ImpactStyle.Light })),
-  /** Selection tap — picker scrolling, active element selection */
-  selection: safe(() => Haptics.impact({ style: ImpactStyle.Light })),
+  /** Selection tap — picker scrolling, active element selection (UIKit-native) */
+  selection: safe(() => Haptics.selectionStart()),
   /** Medium tap — button press, card select */
   medium: safe(() => Haptics.impact({ style: ImpactStyle.Medium })),
   /** Heavy tap — destructive action confirmation */

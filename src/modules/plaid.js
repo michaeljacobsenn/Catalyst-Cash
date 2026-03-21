@@ -746,8 +746,9 @@ export async function fetchBalances(connectionId, retryCount = 0) {
   const data = await res.json();
   if (!data.hasData) {
     if (retryCount < 20) {
-      console.warn(`[Plaid] No pre-fetched sync data available for connection ${connectionId} yet. Retrying in 2s...`);
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const backoffMs = Math.min(2000 * Math.pow(2, Math.floor(retryCount / 3)), 8000);
+      console.warn(`[Plaid] No pre-fetched sync data available for connection ${connectionId} yet. Retrying in ${backoffMs}ms (attempt ${retryCount + 1}/20)...`);
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
       return fetchBalances(connectionId, retryCount + 1);
     }
     console.warn(`[Plaid] No pre-fetched sync data available for connection ${connectionId} yet. Waiting for Webhook.`);
@@ -821,7 +822,9 @@ export async function fetchLiabilities(connectionId, retryCount = 0) {
   const data = await res.json();
   if (!data.hasData) {
     if (retryCount < 20) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const backoffMs = Math.min(2000 * Math.pow(2, Math.floor(retryCount / 3)), 8000);
+      console.warn(`[Plaid] No liability sync data for ${connectionId} yet. Retrying in ${backoffMs}ms (attempt ${retryCount + 1}/20)...`);
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
       return fetchLiabilities(connectionId, retryCount + 1);
     }
     return { ...conn, _pendingSync: true, _syncStatus: "pending" };

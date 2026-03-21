@@ -23,7 +23,7 @@ import {
   rotateIdentityDeviceKey,
   resolveAuthenticatedActor,
 } from "./lib/identitySession.js";
-import { getQuotaWindow } from "./lib/quota.js";
+import { getQuotaWindow, getModelQuotaWindow } from "./lib/quota.js";
 import { buildHeaders, corsHeaders, fetchWithTimeout } from "./lib/http.js";
 import {
   DEFAULTS,
@@ -57,7 +57,7 @@ export {
 } from "./lib/identitySession.js";
 export { issueIdentitySessionToken } from "./lib/identitySession.js";
 export { verifyIdentitySessionToken } from "./lib/identitySession.js";
-export { getIsoWeekKey, getQuotaWindow, isRevenueCatEntitlementActive } from "./lib/quota.js";
+export { getIsoWeekKey, getQuotaWindow, getModelQuotaWindow, isRevenueCatEntitlementActive } from "./lib/quota.js";
 export { mergePlaidTransactions } from "./lib/plaidSync.js";
 export { resolveEffectiveTier } from "./lib/revenueCat.js";
 
@@ -1427,6 +1427,36 @@ export default {
       );
     }
 
+    // ─── Per-Model Rate Limit (Pro only) ──────────────────
+    const modelQuota = isChat ? getModelQuotaWindow(subscriptionTier, body.model || "") : null;
+    if (modelQuota) {
+      const modelLimitName = `${subscriptionTier}-${deviceId}-chat-${modelQuota.modelId}`;
+      const modelId = env.RATE_LIMITER?.idFromName(modelLimitName);
+      if (modelId) {
+        const modelStub = env.RATE_LIMITER.get(modelId);
+        const modelRes = await modelStub.fetch(`http://internal/?periodKey=${encodeURIComponent(modelQuota.periodKey)}&commit=false`);
+        const { count: modelCount } = await modelRes.json();
+        if (modelCount >= modelQuota.limit) {
+          const modelRetryAfter = Math.max(1, Math.ceil((modelQuota.resetAt.getTime() - Date.now()) / 1000));
+          return new Response(
+            JSON.stringify({
+              error: `Daily ${modelQuota.modelId} limit reached (${modelQuota.limit}/day). Try a different AI model.`,
+              modelCapReached: modelQuota.modelId,
+              retryAfter: modelRetryAfter,
+            }),
+            {
+              status: 429,
+              headers: buildHeaders(cors, {
+                "Content-Type": "application/json",
+                "Retry-After": String(modelRetryAfter),
+                ...tierHeaders,
+              }),
+            }
+          );
+        }
+      }
+    }
+
     const { snapshot, systemPrompt, context, type, history, model, stream, provider, responseFormat } = body;
     const resolvedType = type || (isChat ? "chat" : "audit");
 
@@ -1450,9 +1480,6 @@ export default {
     if (subscriptionTier !== "pro") {
       selectedProvider = "gemini";
       resolvedModel = "gemini-2.5-flash";
-    }
-    if (resolvedType === "chat" && resolvedModel === "o3") {
-      resolvedModel = "gpt-4.1";
     }
     if (!isModelAllowedForTier(resolvedModel, subscriptionTier)) {
       return new Response(
@@ -1505,6 +1532,14 @@ export default {
         responseFormat: responseFormat || "json",
       });
       const committedRateResult = await commitRateLimit(rateResult, env);
+
+      // Commit per-model rate limit (Pro only)
+      if (modelQuota && env.RATE_LIMITER) {
+        const modelLimitName = `${subscriptionTier}-${deviceId}-chat-${modelQuota.modelId}`;
+        const mId = env.RATE_LIMITER.idFromName(modelLimitName);
+        const mStub = env.RATE_LIMITER.get(mId);
+        await mStub.fetch(`http://internal/?periodKey=${encodeURIComponent(modelQuota.periodKey)}&commit=true`);
+      }
 
       // Streaming: pipe raw response through
       if (shouldStream && result instanceof Response) {

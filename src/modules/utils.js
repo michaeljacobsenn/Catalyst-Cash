@@ -75,6 +75,34 @@ async function triggerBrowserDownload(filename, content, mimeType, isBase64 = fa
   return { completed: true, source: "browser" };
 }
 
+async function writeNativeExportFile(filename, content, isBase64 = false) {
+  const exportPath = `exports/${Date.now()}-${filename}`;
+  const options = {
+    path: exportPath,
+    data: content,
+    directory: Directory.Cache,
+    recursive: true,
+  };
+  if (!isBase64) options.encoding = "utf8";
+  const result = await Filesystem.writeFile(options);
+  return {
+    path: exportPath,
+    uri: result?.uri || null,
+  };
+}
+
+async function cleanupNativeExportFile(path) {
+  if (!path) return;
+  try {
+    await Filesystem.deleteFile({
+      path,
+      directory: Directory.Cache,
+    });
+  } catch {
+    // Best-effort cleanup only.
+  }
+}
+
 function csvEscape(value) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
@@ -140,18 +168,37 @@ export async function nativeExport(filename, content, mimeType = "text/plain", i
   _exportLocks[filename] = Date.now();
 
   if (Capacitor.isNativePlatform()) {
+    let preparedFile = null;
     try {
-      return await ExportFile.share({ filename, data: content, mimeType, isBase64 });
+      preparedFile = await writeNativeExportFile(filename, content, isBase64);
+      if (!preparedFile?.uri) {
+        throw new Error("Native export file could not be created.");
+      }
+      await Share.share({
+        title: filename,
+        text: filename,
+        dialogTitle: "Export File",
+        files: [preparedFile.uri],
+      });
+      return { completed: true, source: "capacitor", path: preparedFile.uri };
     } catch (e) {
+      const isCancel = isUserCancelledShare(e);
+      if (isCancel) {
+        return { completed: false, source: "native" };
+      }
       console.error("Native export failed:", e);
       try {
-        const opts = { path: filename, data: content, directory: Directory.Cache, recursive: true };
-        if (!isBase64) opts.encoding = "utf8";
-        const res = await Filesystem.writeFile(opts);
-        await Share.share({ files: [res.uri], dialogTitle: "Export File" });
-        return { completed: true, source: "capacitor" };
+        const pluginResult = await ExportFile.share({ filename, data: content, mimeType, isBase64 });
+        if (pluginResult?.completed === false) {
+          return { completed: false, source: "native" };
+        }
+        return pluginResult ?? { completed: true, source: "native-plugin" };
       } catch (fallbackError) {
         console.error("Capacitor export fallback failed:", fallbackError);
+        const isFallbackCancel = isUserCancelledShare(fallbackError);
+        if (isFallbackCancel) {
+          return { completed: false, source: "native" };
+        }
         const nativeUnavailable = isUnimplementedPluginError(e) || isUnimplementedPluginError(fallbackError);
         if (nativeUnavailable && Capacitor.getPlatform() === "ios") {
           const error = new Error(EXPORT_ERROR_MESSAGES.nativeUnavailable);
@@ -164,6 +211,12 @@ export async function nativeExport(filename, content, mimeType = "text/plain", i
         }
         if (window.toast?.error) window.toast.error("Export failed. Please check permissions.");
         throw fallbackError;
+      }
+    } finally {
+      if (preparedFile?.path) {
+        setTimeout(() => {
+          void cleanupNativeExportFile(preparedFile.path);
+        }, 60_000);
       }
     }
   }

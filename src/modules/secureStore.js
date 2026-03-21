@@ -6,7 +6,8 @@ const FALLBACK_PREFIX = "secure:";
 const DEFAULT_NATIVE_TIMEOUT_MS = 1800;
 const NATIVE_PROBE_RETRY_DELAY_MS = 350;
 const NATIVE_PLUGIN_NEGATIVE_TTL_MS = 30_000;
-const MISSING_KEY_NEGATIVE_TTL_MS = 15_000;
+const MISSING_KEY_NEGATIVE_TTL_MS = 6 * 60 * 60 * 1000;
+const MISSING_KEY_CACHE_PREFIX = "secure-miss:";
 const registeredSecureStoragePlugin = registerPlugin("SecureStoragePlugin");
 let securePluginPromise = null;
 let nativeAvailabilityWarningShown = false;
@@ -19,6 +20,31 @@ let secretStatusPromise = null;
 let nativeStatusTimeoutWarned = false;
 const SECRET_STATUS_TTL_MS = 30_000;
 const missingKeyCache = new Map();
+const pendingNativeReadCache = new Map();
+
+function getPersistedMissingKeyExpiry(key) {
+  if (!key || typeof localStorage === "undefined") return 0;
+  try {
+    const raw = localStorage.getItem(`${MISSING_KEY_CACHE_PREFIX}${key}`);
+    const expiresAt = Number(raw || 0);
+    return Number.isFinite(expiresAt) ? expiresAt : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function persistMissingKeyExpiry(key, expiresAt) {
+  if (!key || typeof localStorage === "undefined") return;
+  try {
+    if (expiresAt > 0) {
+      localStorage.setItem(`${MISSING_KEY_CACHE_PREFIX}${key}`, String(expiresAt));
+    } else {
+      localStorage.removeItem(`${MISSING_KEY_CACHE_PREFIX}${key}`);
+    }
+  } catch {
+    // Best-effort cache only.
+  }
+}
 
 function getTestSecureStoreOverride() {
   const override =
@@ -106,9 +132,19 @@ function isMissingKeyError(error) {
 
 function hasRecentMissingKey(key) {
   const expiresAt = missingKeyCache.get(key);
-  if (!expiresAt) return false;
+  if (!expiresAt) {
+    const persistedExpiry = getPersistedMissingKeyExpiry(key);
+    if (!persistedExpiry) return false;
+    if (persistedExpiry <= Date.now()) {
+      persistMissingKeyExpiry(key, 0);
+      return false;
+    }
+    missingKeyCache.set(key, persistedExpiry);
+    return true;
+  }
   if (expiresAt <= Date.now()) {
     missingKeyCache.delete(key);
+    persistMissingKeyExpiry(key, 0);
     return false;
   }
   return true;
@@ -116,12 +152,15 @@ function hasRecentMissingKey(key) {
 
 function rememberMissingKey(key) {
   if (!key) return;
-  missingKeyCache.set(key, Date.now() + MISSING_KEY_NEGATIVE_TTL_MS);
+  const expiresAt = Date.now() + MISSING_KEY_NEGATIVE_TTL_MS;
+  missingKeyCache.set(key, expiresAt);
+  persistMissingKeyExpiry(key, expiresAt);
 }
 
 function clearMissingKey(key) {
   if (!key) return;
   missingKeyCache.delete(key);
+  persistMissingKeyExpiry(key, 0);
 }
 
 async function withTimeout(promise, operation) {
@@ -291,17 +330,15 @@ async function removeFallback(key) {
   }
 }
 
-export async function getSecureItem(key) {
-  if (!hasSecureStorageRuntime()) {
-    return null;
-  }
-  if (hasRecentMissingKey(key)) {
-    return null;
-  }
+async function readNativeSecureItemOnce(key) {
+  if (!key) return null;
+  const existing = pendingNativeReadCache.get(key);
+  if (existing) return existing;
 
-  const wrapper = await getPlugin();
-  const plugin = wrapper?.instance;
-  if (plugin) {
+  const readPromise = (async () => {
+    const wrapper = await getPlugin();
+    const plugin = wrapper?.instance;
+    if (!plugin) return null;
     try {
       const result = await callNativePlugin(plugin, "get", { key });
       clearMissingKey(key);
@@ -310,29 +347,31 @@ export async function getSecureItem(key) {
       if (isMissingKeyError(error)) {
         rememberMissingKey(key);
       }
-      // Native plugin get failures should not leak or fall through to insecure storage.
+      return null;
+    } finally {
+      pendingNativeReadCache.delete(key);
     }
+  })();
+
+  pendingNativeReadCache.set(key, readPromise);
+  return readPromise;
+}
+
+export async function getSecureItem(key) {
+  if (!hasSecureStorageRuntime()) {
+    return null;
   }
-  return null;
+  if (hasRecentMissingKey(key)) {
+    return null;
+  }
+  return readNativeSecureItemOnce(key);
 }
 
 export async function getNativeSecureItem(key) {
   if (hasRecentMissingKey(key)) {
     return null;
   }
-  const wrapper = await getPlugin();
-  const plugin = wrapper?.instance;
-  if (!plugin) return null;
-  try {
-    const result = await callNativePlugin(plugin, "get", { key });
-    clearMissingKey(key);
-    return deserialize(result?.value);
-  } catch (error) {
-    if (isMissingKeyError(error)) {
-      rememberMissingKey(key);
-    }
-    return null;
-  }
+  return readNativeSecureItemOnce(key);
 }
 
 export async function setSecureItem(key, value) {
@@ -344,6 +383,7 @@ export async function setSecureItem(key, value) {
   const wrapper = await getPlugin();
   const plugin = wrapper?.instance;
   const serialized = serialize(value);
+  pendingNativeReadCache.delete(key);
   clearMissingKey(key);
   if (plugin) {
     try {
@@ -361,6 +401,7 @@ export async function setNativeSecureItem(key, value) {
   const wrapper = await getPlugin();
   const plugin = wrapper?.instance;
   if (!plugin) return false;
+  pendingNativeReadCache.delete(key);
   clearMissingKey(key);
   try {
     await callNativePlugin(plugin, "set", { key, value: serialize(value) });
@@ -375,6 +416,7 @@ export async function deleteSecureItem(key) {
     await removeFallback(key);
     return true;
   }
+  pendingNativeReadCache.delete(key);
   clearMissingKey(key);
 
   const wrapper = await getPlugin();
@@ -395,6 +437,7 @@ export async function deleteNativeSecureItem(key) {
   const wrapper = await getPlugin();
   const plugin = wrapper?.instance;
   if (!plugin) return false;
+  pendingNativeReadCache.delete(key);
   clearMissingKey(key);
   try {
     await callNativePlugin(plugin, "remove", { key });

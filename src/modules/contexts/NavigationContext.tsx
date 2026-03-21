@@ -80,6 +80,7 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
   const chatStreamAbortRef = useRef<(() => void) | null>(null);
   const resultsBackTargetRef = useRef<AppTab | null>(null);
   const overlayBaseTabRef = useRef<AppTab | null>(null);
+  const tabRef = useRef<AppTab>("dashboard");
 
   const rehydrateNavigation = useCallback(async () => {
     const obComplete = await db.get("onboarding-complete");
@@ -114,6 +115,10 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
   }, [rehydrateNavigation]);
 
   useEffect(() => {
+    tabRef.current = tab;
+  }, [tab]);
+
+  useEffect(() => {
     resultsBackTargetRef.current = resultsBackTarget;
   }, [resultsBackTarget]);
 
@@ -130,7 +135,7 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
   }, []);
 
   const navTo = useCallback((newTab: AppTab, viewState: NavViewState | null = null) => {
-    const prevTab = tab;
+    const prevTab = tabRef.current;
     // 1) Set state internally so UI bottom bar highlights instantly
     setTab(newTab);
 
@@ -174,7 +179,7 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
     if (newTab === "input") inputBackTarget.current = "dashboard";
 
     window.history.pushState({ tab: newTab, viewingTs: viewState?.ts }, "", "");
-  }, [tab]);
+  }, []);
 
   // SyncTab is purely for the IntersectionObserver to tell the state:
   // "Hey, the user physically scrolled here, light up this icon"

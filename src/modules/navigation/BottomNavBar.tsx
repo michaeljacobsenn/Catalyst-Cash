@@ -65,6 +65,7 @@ export default function BottomNavBar({
             onTouchStart={() => setShowQuickMenu(false)}
           />
           <div
+            className="gesture-glass gesture-shadow-heavy"
             style={{
               position: "absolute",
               bottom: "calc(env(safe-area-inset-bottom, 16px) + 84px)",
@@ -149,6 +150,7 @@ export default function BottomNavBar({
       <div
         role="tablist"
         aria-label="Main navigation tabs"
+        className="gesture-glass gesture-shadow-heavy"
         style={{
           position: "relative",
           display: "flex",
@@ -243,6 +245,7 @@ export default function BottomNavBar({
             >
               {isCenter ? (
                 <div
+                  className={active ? "gesture-shadow-heavy" : "gesture-shadow-soft"}
                   style={{
                     width: 48,
                     height: 48,

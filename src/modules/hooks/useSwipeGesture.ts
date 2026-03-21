@@ -54,12 +54,22 @@ const DISMISS_SPRING = {
 };
 const DISMISS_THRESHOLD = 0.3;
 const VELOCITY_THRESHOLD = 0.55;
-const EDGE_SIZE_DEFAULT = 28;
+const EDGE_SIZE_DEFAULT = 36;
 const INTENT_THRESHOLD = 10;
 const INTENT_DOMINANCE = 1.15;
 
 const clampPositive = (value: number) => Math.max(0, value);
 const easeOutCubic = (value: number) => 1 - Math.pow(1 - clamp(value), 3);
+
+function setGesturePerformanceMode(active: boolean) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  if (active) {
+    root.setAttribute("data-gesture-nav", "active");
+    return;
+  }
+  root.removeAttribute("data-gesture-nav");
+}
 
 function getViewportSize(axis: SwipeAxis, pane: HTMLDivElement | null): number {
   if (typeof window === "undefined") return 0;
@@ -111,6 +121,7 @@ function useInteractiveSwipe({
   const parallaxActiveRef = useRef(false);
   const gestureAcceptedRef = useRef(false);
   const gestureRejectedRef = useRef(false);
+  const gesturePerformanceModeRef = useRef(false);
 
   const progress = useTransform(motion, (latest) => {
     const size = Math.max(getViewportSize(axis, paneRef.current), 1);
@@ -131,6 +142,11 @@ function useInteractiveSwipe({
   const edgeShadowOpacity = useTransform(progress, (latest) => 0.22 * (1 - easeOutCubic(latest)));
 
   useMotionValueEvent(progress, "change", (latest) => {
+    const shouldUseGestureMode = enabled && latest > 0.001;
+    if (gesturePerformanceModeRef.current !== shouldUseGestureMode) {
+      gesturePerformanceModeRef.current = shouldUseGestureMode;
+      setGesturePerformanceMode(shouldUseGestureMode);
+    }
     if (!enabled || !applyBaseParallax || latest <= 0.001) {
       if (parallaxActiveRef.current) {
         parallaxActiveRef.current = false;
@@ -149,17 +165,36 @@ function useInteractiveSwipe({
     onDismiss();
   }, [onDismiss]);
 
+  const resetGestureState = useCallback(() => {
+    gestureAcceptedRef.current = false;
+    gestureRejectedRef.current = false;
+    if (gesturePerformanceModeRef.current) {
+      gesturePerformanceModeRef.current = false;
+      setGesturePerformanceMode(false);
+    }
+    if (parallaxActiveRef.current) {
+      parallaxActiveRef.current = false;
+      resetUnderlyingParallax();
+    }
+    motion.set(0);
+  }, [motion]);
+
   const animateTo = useCallback(
     (target: number, velocity = 0, onComplete?: () => void) => {
       animationRef.current?.stop();
       animationRef.current = animate(motion, target, {
         ...(target === 0 ? SNAP_SPRING : DISMISS_SPRING),
         velocity,
-        onComplete,
+        onComplete: () => {
+          if (target === 0) {
+            resetGestureState();
+          }
+          onComplete?.();
+        },
       });
       return animationRef.current;
     },
-    [motion],
+    [motion, resetGestureState],
   );
 
   const bind = useDrag(
@@ -180,6 +215,7 @@ function useInteractiveSwipe({
       }
 
       if (first && edgeOnly) {
+        animationRef.current?.stop();
         const edgeCoordinate = axis === "x" ? px : py;
         if (edgeCoordinate > edgeSize) {
           cancel?.();
@@ -230,7 +266,7 @@ function useInteractiveSwipe({
       }
 
       if (!gestureAcceptedRef.current || gestureRejectedRef.current) {
-        motion.set(0);
+        animateTo(0, 0);
         return;
       }
 
@@ -266,26 +302,14 @@ function useInteractiveSwipe({
 
   useEffect(() => {
     dismissingRef.current = false;
-    gestureAcceptedRef.current = false;
-    gestureRejectedRef.current = false;
     animationRef.current?.stop();
-    motion.set(0);
-    if (parallaxActiveRef.current) {
-      parallaxActiveRef.current = false;
-      resetUnderlyingParallax();
-    }
+    resetGestureState();
     return () => {
       dismissingRef.current = false;
-      gestureAcceptedRef.current = false;
-      gestureRejectedRef.current = false;
       animationRef.current?.stop();
-      motion.set(0);
-      if (parallaxActiveRef.current) {
-        parallaxActiveRef.current = false;
-        resetUnderlyingParallax();
-      }
+      resetGestureState();
     };
-  }, [enabled, motion]);
+  }, [enabled, resetGestureState]);
 
   const motionStyle = useMemo(
     () => (axis === "x" ? { x: motion } : { y: motion }),
@@ -317,7 +341,7 @@ export function useSwipeBack(
     onDismiss,
     edgeOnly: true,
     enabled,
-    applyBaseParallax: options?.applyBaseParallax ?? true,
+    applyBaseParallax: options?.applyBaseParallax ?? false,
   });
 }
 

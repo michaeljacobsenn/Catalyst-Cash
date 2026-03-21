@@ -217,4 +217,34 @@ describe("secureStore", () => {
 
     expect(plugin.get).toHaveBeenCalledTimes(2);
   });
+
+  it("deduplicates concurrent native reads for the same missing key", async () => {
+    let release;
+    const started = new Promise(resolve => {
+      release = resolve;
+    });
+    const plugin = {
+      get: vi.fn(async ({ key }) => {
+        if (String(key).startsWith("__cc_secure_probe__")) {
+          throw new Error("Item with given key does not exist");
+        }
+        await started;
+        throw new Error("Item with given key does not exist");
+      }),
+      set: vi.fn(async () => ({ value: true })),
+      remove: vi.fn(async () => ({ value: true })),
+    };
+
+    const { mod } = await loadSecureStore({ native: true, plugin });
+
+    const reads = Promise.all([
+      mod.getNativeSecureItem("identity-session"),
+      mod.getNativeSecureItem("identity-session"),
+      mod.getNativeSecureItem("identity-session"),
+    ]);
+    release();
+
+    await expect(reads).resolves.toEqual([null, null, null]);
+    expect(plugin.get).toHaveBeenCalledTimes(2);
+  });
 });

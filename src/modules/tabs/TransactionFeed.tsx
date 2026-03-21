@@ -112,6 +112,35 @@ interface PlaidConnection {
   _needsReconnect?: boolean;
 }
 
+// ── Module-scoped icon map (created once, shared across renders) ──
+const CATEGORY_ICON_MAP = {
+  AlertCircle,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Baby,
+  Banknote,
+  Briefcase,
+  Building2,
+  Car,
+  CreditCard,
+  Dumbbell,
+  Gamepad2,
+  Gift,
+  GraduationCap,
+  Heart,
+  HelpCircle,
+  Home,
+  Landmark,
+  PiggyBank,
+  Plane,
+  ShoppingCart,
+  Stethoscope,
+  Utensils,
+  Wifi,
+  Wrench,
+  Zap,
+};
+
 // ═══════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
@@ -119,33 +148,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
   const { cards } = usePortfolio();
   const { financialConfig } = useSettings();
   const appWindow = window as Window & { toast?: ToastApi };
-  const categoryIconMap = {
-    AlertCircle,
-    ArrowDownLeft,
-    ArrowUpRight,
-    Baby,
-    Banknote,
-    Briefcase,
-    Building2,
-    Car,
-    CreditCard,
-    Dumbbell,
-    Gamepad2,
-    Gift,
-    GraduationCap,
-    Heart,
-    HelpCircle,
-    Home,
-    Landmark,
-    PiggyBank,
-    Plane,
-    ShoppingCart,
-    Stethoscope,
-    Utensils,
-    Wifi,
-    Wrench,
-    Zap,
-  };
+  const categoryIconMap = CATEGORY_ICON_MAP;
   
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
@@ -327,10 +330,14 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
     let optimalTxns = 0;
     let badTxns = 0;
 
+    // Reset derived data on copies — never mutate original state
+    const txnMap = new Map<TransactionRecord, TransactionRecord>();
     for (const txn of filtered) {
-      delete txn.optimalCard;
-      delete txn.usedOptimal;
-      delete txn.rewardComparison;
+      const copy = { ...txn };
+      delete copy.optimalCard;
+      delete copy.usedOptimal;
+      delete copy.rewardComparison;
+      txnMap.set(txn, copy);
     }
     
     // Only analyze current-month debit transactions with recognizable categories.
@@ -339,15 +346,16 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
     );
     
     for (const txn of analyzableTxns) {
+      const copy = txnMap.get(txn) || { ...txn };
       const comparison = buildRewardComparison(
-        txn,
+        copy,
         cards as PortfolioCard[],
         financialConfig?.customValuations as CustomValuations | undefined
       );
       if (!comparison) continue;
 
-      txn.optimalCard = comparison.bestCard;
-      txn.rewardComparison = {
+      copy.optimalCard = comparison.bestCard;
+      copy.rewardComparison = {
         usedDisplayName: comparison.usedDisplayName,
         actualYield: comparison.actualYield,
         optimalYield: comparison.optimalYield,
@@ -362,7 +370,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
         badTxns++;
       } else {
         optimalTxns++;
-        txn.usedOptimal = true;
+        copy.usedOptimal = true;
       }
     }
     

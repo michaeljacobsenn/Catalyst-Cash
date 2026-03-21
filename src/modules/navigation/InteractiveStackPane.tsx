@@ -41,6 +41,7 @@ export default function InteractiveStackPane({
       {underlay && (
         <motion.div
           aria-hidden="true"
+          className="gesture-shadow-soft"
           style={{
             position: "absolute",
             inset: 0,
@@ -55,6 +56,7 @@ export default function InteractiveStackPane({
       )}
       <motion.div
         aria-hidden="true"
+        className="gesture-shadow-soft"
         style={{
           position: "absolute",
           inset: 0,
@@ -89,6 +91,7 @@ export default function InteractiveStackPane({
         {children}
         <motion.div
           aria-hidden="true"
+          className="gesture-blur"
           style={{
             position: "absolute",
             top: 0,
@@ -112,7 +115,7 @@ export default function InteractiveStackPane({
             width: swipe.edgeSize,
             zIndex: 3,
             pointerEvents: "auto",
-            touchAction: "pan-y",
+            touchAction: swipe.axis === "x" ? "none" : "pan-x",
             background: "transparent",
           }}
         />

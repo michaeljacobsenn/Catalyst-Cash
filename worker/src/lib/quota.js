@@ -3,6 +3,27 @@ export const PRO_AUDITS_PER_MONTH = 20;
 export const FREE_CHATS_PER_DAY = 10;
 export const PRO_CHATS_PER_DAY = 25;
 
+// Per-model daily caps for Pro chat (must sum to PRO_CHATS_PER_DAY)
+export const PRO_MODEL_CAPS = {
+  "o3": 4,
+  "gpt-4.1": 6,
+  "gemini-2.5-flash": 15,
+};
+
+/**
+ * Get per-model quota window for Pro tier chat.
+ * Returns null if no per-model cap applies (e.g. free tier).
+ */
+export function getModelQuotaWindow(tier, modelId, now = new Date()) {
+  if (tier !== "pro" || !PRO_MODEL_CAPS[modelId]) return null;
+  return {
+    limit: PRO_MODEL_CAPS[modelId],
+    periodKey: `${now.toISOString().slice(0, 10)}:${modelId}`,
+    resetAt: getNextUtcBoundary("day", now),
+    modelId,
+  };
+}
+
 function getNextUtcBoundary(period, now = new Date()) {
   const next = new Date(now);
   if (period === "day") {

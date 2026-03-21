@@ -196,6 +196,42 @@ export const GlobalStyles = () => (
     .stagger-container > *:nth-child(n+9) { animation-delay: 0.45s; }
     /* Interactive swipe-back/down: disable CSS animation while user is dragging */
     .swipe-back-pane, .swipe-down-pane{will-change:transform;transition:none !important;animation:none !important;transform:translateZ(0);}
+    html[data-gesture-nav="active"] .swipe-back-pane,
+    html[data-gesture-nav="active"] .swipe-down-pane{
+      backface-visibility:hidden;
+      transform:translateZ(0);
+    }
+    html[data-gesture-nav="active"] .swipe-back-pane *,
+    html[data-gesture-nav="active"] .swipe-down-pane *{
+      transition:none !important;
+      animation-play-state:paused !important;
+      caret-color:transparent;
+    }
+    html[data-gesture-nav="active"] .gesture-glass,
+    html[data-gesture-nav="active"] .gesture-glass-soft{
+      backdrop-filter:none !important;
+      -webkit-backdrop-filter:none !important;
+    }
+    html[data-gesture-nav="active"] .gesture-shadow-heavy{
+      box-shadow:none !important;
+      filter:none !important;
+    }
+    html[data-gesture-nav="active"] .gesture-shadow-soft{
+      box-shadow:none !important;
+    }
+    html[data-gesture-nav="active"] .gesture-blur{
+      filter:none !important;
+    }
+    html[data-gesture-nav="active"] [style*="backdrop-filter"]{
+      backdrop-filter:none !important;
+      -webkit-backdrop-filter:none !important;
+    }
+    html[data-gesture-nav="active"] [style*="box-shadow"]{
+      box-shadow:none !important;
+    }
+    html[data-gesture-nav="active"] [style*="filter: blur"]{
+      filter:none !important;
+    }
 
     /* Top 0.00001% Micro-Animations & Haptic Press States */
     .hover-card {

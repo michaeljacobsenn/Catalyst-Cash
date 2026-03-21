@@ -19,6 +19,7 @@
   import { getCurrentTier,getRawTier,isGatingEnforced } from "./subscription.js";
 
 const SYNC_COOLDOWNS = {
+  free: 72 * 60 * 60 * 1000,
   pro: 24 * 60 * 60 * 1000,
 };
 
@@ -143,6 +144,12 @@ export function usePlaidSync({
   const sync = useCallback(async () => {
     if (_isSyncing) return;
 
+    // Offline guard — avoid cryptic network errors
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      if (window.toast) window.toast.info("You're offline — connect to the internet to sync.");
+      return;
+    }
+
     // 1. Check for existing connections
     const conns = await getConnections();
     if (conns.length === 0) {
@@ -189,7 +196,7 @@ export function usePlaidSync({
       return;
     }
 
-    const cooldown = SYNC_COOLDOWNS.pro;
+    const cooldown = SYNC_COOLDOWNS[rawTier.id] || SYNC_COOLDOWNS.free;
     const lastSyncAt = getMostRecentPlaidSyncTime(cards, bankAccounts, syncConnectionIds);
     if (lastSyncAt && Date.now() - lastSyncAt < cooldown) {
       const minsLeft = Math.ceil((cooldown - (Date.now() - lastSyncAt)) / 60000);

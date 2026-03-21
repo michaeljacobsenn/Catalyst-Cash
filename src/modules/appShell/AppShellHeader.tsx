@@ -63,6 +63,7 @@ export default function AppShellHeader({
     <header
       role="banner"
       ref={topBarRef}
+      className="gesture-glass gesture-shadow-soft"
       style={{
         position: "relative",
         top: 0,
@@ -94,6 +95,7 @@ export default function AppShellHeader({
       <div style={{ display: "flex", gap: 8 }}>
         <button
           onClick={() => setShowGuide((prev) => !prev)}
+          className="gesture-glass"
           style={{
             width: 44,
             height: 44,
@@ -116,6 +118,7 @@ export default function AppShellHeader({
         </button>
         <button
           onClick={() => setPrivacyMode((prev) => !prev)}
+          className="gesture-glass"
           style={{
             width: 44,
             height: 44,
@@ -161,6 +164,7 @@ export default function AppShellHeader({
 
       <button
         onClick={() => navTo("settings")}
+        className="gesture-glass"
         style={{
           width: 44,
           height: 44,

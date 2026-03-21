@@ -158,21 +158,24 @@ export default function OverlayManager({
       setResultsBackTarget(null);
       navTo(target);
     }, [navTo, resultsBackTarget, setResultsBackTarget]),
-    tab === "results"
+    tab === "results",
+    { applyBaseParallax: false }
   );
 
   const overlaySwipeHistory = useSwipeBack(
     useCallback(() => {
       navTo(overlaySourceTab ?? lastCenterTab.current);
     }, [lastCenterTab, navTo, overlaySourceTab]),
-    tab === "history"
+    tab === "history",
+    { applyBaseParallax: false }
   );
 
   const overlaySwipeInput = useSwipeBack(
     useCallback(() => {
       navTo(overlaySourceTab ?? "dashboard");
     }, [navTo, overlaySourceTab]),
-    tab === "input"
+    tab === "input",
+    { applyBaseParallax: false }
   );
 
   const overlaySwipeSettings = useSwipeBack(
