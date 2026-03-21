@@ -224,38 +224,42 @@ export default function OverlayManager({
         </Suspense>
       )}
 
-      {tab === "input" && (
-        <InteractiveStackPane swipe={overlaySwipeInput} scrollable>
-          <ErrorBoundary name="InputForm">
-            <Suspense fallback={<TabFallback />}>
-              <InputForm
-                onSubmit={handleSubmit}
-                isLoading={loading}
-                lastAudit={current}
-                renewals={renewals}
-                cardAnnualFees={cardAnnualFees}
-                cards={cards}
-                bankAccounts={bankAccounts}
-                onManualImport={handleManualImport}
-                toast={toast}
-                financialConfig={financialConfig}
-                setFinancialConfig={setFinancialConfig}
-                aiProvider={aiProvider}
-                aiModel={aiModel}
-                setAiModel={setAiModel}
-                personalRules={personalRules}
-                setPersonalRules={setPersonalRules}
-                persona={persona}
-                instructionHash={instructionHash}
-                setInstructionHash={(value: string | number | null) => setInstructionHash(value == null ? null : String(value))}
-                db={inputFormDb}
-                proEnabled={proEnabled}
-                onBack={() => navTo(overlaySourceTab ?? "dashboard")}
-              />
-            </Suspense>
-          </ErrorBoundary>
-        </InteractiveStackPane>
-      )}
+      {/* InputForm — always mounted so returning to it is instant (no remount/Suspense re-waterfall) */}
+      <InteractiveStackPane
+        swipe={overlaySwipeInput}
+        scrollable
+        gestureEnabled={tab === "input"}
+        {...(tab !== "input" ? { containerStyle: { zIndex: -1, pointerEvents: "none" as const, visibility: "hidden" as const } } : {})}
+      >
+        <ErrorBoundary name="InputForm">
+          <Suspense fallback={<TabFallback />}>
+            <InputForm
+              onSubmit={handleSubmit}
+              isLoading={loading}
+              lastAudit={current}
+              renewals={renewals}
+              cardAnnualFees={cardAnnualFees}
+              cards={cards}
+              bankAccounts={bankAccounts}
+              onManualImport={handleManualImport}
+              toast={toast}
+              financialConfig={financialConfig}
+              setFinancialConfig={setFinancialConfig}
+              aiProvider={aiProvider}
+              aiModel={aiModel}
+              setAiModel={setAiModel}
+              personalRules={personalRules}
+              setPersonalRules={setPersonalRules}
+              persona={persona}
+              instructionHash={instructionHash}
+              setInstructionHash={(value: string | number | null) => setInstructionHash(value == null ? null : String(value))}
+              db={inputFormDb}
+              proEnabled={proEnabled}
+              onBack={() => navTo(overlaySourceTab ?? "dashboard")}
+            />
+          </Suspense>
+        </ErrorBoundary>
+      </InteractiveStackPane>
 
       {tab === "results" && (
         <InteractiveStackPane
@@ -311,15 +315,19 @@ export default function OverlayManager({
         </InteractiveStackPane>
       )}
 
-      {tab === "history" && (
-        <InteractiveStackPane swipe={overlaySwipeHistory} scrollable>
-          <ErrorBoundary name="History">
-            <Suspense fallback={<TabFallback />}>
-              <HistoryTab toast={toast} proEnabled={proEnabled} />
-            </Suspense>
-          </ErrorBoundary>
-        </InteractiveStackPane>
-      )}
+      {/* HistoryTab — always mounted so navigating back from Results is instant */}
+      <InteractiveStackPane
+        swipe={overlaySwipeHistory}
+        scrollable
+        gestureEnabled={tab === "history"}
+        {...(tab !== "history" ? { containerStyle: { zIndex: -1, pointerEvents: "none" as const, visibility: "hidden" as const } } : {})}
+      >
+        <ErrorBoundary name="History">
+          <Suspense fallback={<TabFallback />}>
+            <HistoryTab toast={toast} proEnabled={proEnabled} />
+          </Suspense>
+        </ErrorBoundary>
+      </InteractiveStackPane>
 
       {tab === "settings" && (
         <InteractiveStackPane
