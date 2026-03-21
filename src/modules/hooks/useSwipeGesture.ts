@@ -57,9 +57,6 @@ const VELOCITY_THRESHOLD = 0.55;
 const EDGE_SIZE_DEFAULT = 36;
 // How many px of movement before we commit to a direction
 const INTENT_THRESHOLD = 12;
-// Cross-axis movement must be > primary * this ratio to reject as a scroll
-// 2.0 means finger can drift up to 2× downward vs rightward — natural for real swipes
-const INTENT_DOMINANCE = 2.0;
 
 const clampPositive = (value: number) => Math.max(0, value);
 const easeOutCubic = (value: number) => 1 - Math.pow(1 - clamp(value), 3);
@@ -245,44 +242,28 @@ function useInteractiveSwipe({
       const rawMovement = axis === "x" ? mx : my;
       const rawVelocity = axis === "x" ? vx : vy;
       const rawDirection = axis === "x" ? dx : dy;
-      const crossMovement = axis === "x" ? my : mx;
       const absPrimary = Math.abs(rawMovement);
-      const absCross = Math.abs(crossMovement);
       const nextValue = clampPositive(rawMovement);
 
       if (down) {
         if (!gestureAcceptedRef.current) {
+          // Ignore backward/neutral movement while waiting for intent
           if (rawMovement <= 0) {
             motion.set(0);
             return;
           }
-          if (
-            absCross >= INTENT_THRESHOLD &&
-            absCross > absPrimary * INTENT_DOMINANCE
-          ) {
-            gestureRejectedRef.current = true;
-            motion.set(0);
-            cancel?.();
-            return;
-          }
-          if (
-            absPrimary < INTENT_THRESHOLD ||
-            absPrimary <= absCross * INTENT_DOMINANCE
-          ) {
+          // Wait until primary movement exceeds threshold before committing
+          if (absPrimary < INTENT_THRESHOLD) {
             motion.set(0);
             return;
           }
           gestureAcceptedRef.current = true;
         }
-        if (gestureRejectedRef.current) {
-          motion.set(0);
-          return;
-        }
         motion.set(nextValue);
         return;
       }
 
-      if (!gestureAcceptedRef.current || gestureRejectedRef.current) {
+      if (!gestureAcceptedRef.current) {
         animateTo(0, 0);
         return;
       }
@@ -298,15 +279,14 @@ function useInteractiveSwipe({
       }
     },
     {
-      // Do NOT pass `axis` here — we handle direction intent ourselves above.
-      // Passing axis:x causes use-gesture to also lock/cancel on diagonals,
-      // double-filtering and rejecting natural diagonal finger swipes.
+      // axis MUST be set — use-gesture needs it to apply touch-action:none
+      // on the gesture target so iOS doesn't steal touches as native scroll.
+      // Direction intent is refined by our gestureAcceptedRef logic above.
+      axis,
       filterTaps: true,
       threshold: 2,
       rubberband: false,
       pointer: { touch: true },
-      // Tell the browser we'll handle x-axis scrolling so it doesn't compete
-      preventScrollAxis: axis as "x" | "y",
     },
   );
 
