@@ -55,8 +55,11 @@ const DISMISS_SPRING = {
 const DISMISS_THRESHOLD = 0.3;
 const VELOCITY_THRESHOLD = 0.55;
 const EDGE_SIZE_DEFAULT = 36;
-const INTENT_THRESHOLD = 10;
-const INTENT_DOMINANCE = 1.15;
+// How many px of movement before we commit to a direction
+const INTENT_THRESHOLD = 12;
+// Cross-axis movement must be > primary * this ratio to reject as a scroll
+// 2.0 means finger can drift up to 2× downward vs rightward — natural for real swipes
+const INTENT_DOMINANCE = 2.0;
 
 const clampPositive = (value: number) => Math.max(0, value);
 const easeOutCubic = (value: number) => 1 - Math.pow(1 - clamp(value), 3);
@@ -295,11 +298,15 @@ function useInteractiveSwipe({
       }
     },
     {
-      axis,
+      // Do NOT pass `axis` here — we handle direction intent ourselves above.
+      // Passing axis:x causes use-gesture to also lock/cancel on diagonals,
+      // double-filtering and rejecting natural diagonal finger swipes.
       filterTaps: true,
-      threshold: 0,
+      threshold: 2,
       rubberband: false,
       pointer: { touch: true },
+      // Tell the browser we'll handle x-axis scrolling so it doesn't compete
+      preventScrollAxis: axis as "x" | "y",
     },
   );
 
