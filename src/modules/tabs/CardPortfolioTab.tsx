@@ -1,4 +1,4 @@
-  import { Suspense,lazy,memo,useEffect,useMemo,useState } from "react";
+  import { Suspense,lazy,memo,useCallback,useEffect,useMemo,useRef,useState } from "react";
   import type { BankAccount,CatalystCashConfig,PlaidInvestmentAccount,Card as PortfolioCard } from "../../types/index.js";
   import { T } from "../constants.js";
   import { haptic } from "../haptics.js";
@@ -223,8 +223,33 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
     otherAssets: true,
     debts: true,
     transactions: true,
-  });
+  });  // ── Pull-to-refresh ──────────────────────────────────────────
+  const pullStartYRef = useRef<number | null>(null);
+  const [pullProgress, setPullProgress] = useState(0); // 0–1
+  const PULL_THRESHOLD = 64;
 
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    const el = e.currentTarget as HTMLDivElement;
+    if (el.scrollTop === 0) pullStartYRef.current = e.touches[0]?.clientY ?? null;
+  }, []);
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (pullStartYRef.current === null) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    const delta = touch.clientY - pullStartYRef.current;
+    if (delta <= 0) { setPullProgress(0); return; }
+    setPullProgress(Math.min(delta / PULL_THRESHOLD, 1));
+  }, []);
+
+  const onTouchEnd = useCallback(() => {
+    if (pullProgress >= 1) {
+      haptic.light();
+      void handleRefreshPlaid();
+    }
+    pullStartYRef.current = null;
+    setPullProgress(0);
+  }, [pullProgress, handleRefreshPlaid]);
 
 
 
@@ -430,7 +455,38 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
 
   return (
     <PortfolioContext.Provider value={demoOverrideContext}>
-      <div className="page-body" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", gap: 0 }}>
+      <div
+        className="page-body"
+        style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", gap: 0, overflowY: "auto", WebkitOverflowScrolling: "touch" }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        {/* Pull-to-refresh indicator */}
+        {pullProgress > 0.1 && (
+          <div style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: Math.round(pullProgress * 44),
+            overflow: "hidden",
+            transition: "height 0.1s",
+            pointerEvents: "none",
+          }}>
+            <RefreshCw
+              size={18}
+              color={T.accent.primary}
+              style={{
+                opacity: pullProgress,
+                transform: `rotate(${pullProgress * 360}deg)`,
+                transition: "none",
+              }}
+            />
+          </div>
+        )}
         <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
         <style>{`
             @keyframes spin { 100% { transform: rotate(360deg); } }
