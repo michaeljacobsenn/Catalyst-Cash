@@ -56,7 +56,6 @@ const DISMISS_THRESHOLD = 0.3;
 const VELOCITY_THRESHOLD = 0.55;
 const EDGE_SIZE_DEFAULT = 36;
 
-const clampPositive = (value: number) => Math.max(0, value);
 const easeOutCubic = (value: number) => 1 - Math.pow(1 - clamp(value), 3);
 
 function setGesturePerformanceMode(active: boolean) {
@@ -117,11 +116,9 @@ function useInteractiveSwipe({
   const dismissingRef = useRef(false);
   const animationRef = useRef<ReturnType<typeof animate> | null>(null);
   const parallaxActiveRef = useRef(false);
-  const gestureAcceptedRef = useRef(false);
-  const gestureRejectedRef = useRef(false);
   const gesturePerformanceModeRef = useRef(false);
-  // Increment each time we stop an animation so in-flight onComplete callbacks
-  // from the *previous* animation know they're stale and don't dirty refs.
+  // Increment each time we stop an animation so stale onComplete callbacks
+  // from the *previous* animation are ignored.
   const animationGenRef = useRef(0);
 
   const progress = useTransform(motion, (latest) => {
@@ -169,8 +166,6 @@ function useInteractiveSwipe({
   }, [onDismiss]);
 
   const resetGestureState = useCallback(() => {
-    gestureAcceptedRef.current = false;
-    gestureRejectedRef.current = false;
     if (gesturePerformanceModeRef.current) {
       gesturePerformanceModeRef.current = false;
       setGesturePerformanceMode(false);
@@ -205,77 +200,51 @@ function useInteractiveSwipe({
 
   const bind = useDrag(
     ({ first, down, movement: [mx, my], velocity: [vx, vy], direction: [dx, dy], xy: [px, py], cancel }) => {
-      if (!enabled) {
-        cancel?.();
-        return;
-      }
-      if (dismissingRef.current) {
-        cancel?.();
-        return;
-      }
+      if (!enabled) { cancel?.(); return; }
+      if (dismissingRef.current) { cancel?.(); return; }
 
       const size = getViewportSize(axis, paneRef.current);
-      if (!size) {
-        cancel?.();
-        return;
-      }
+      if (!size) { cancel?.(); return; }
 
-      // Always stop any in-flight animation at the start of a new gesture so it
-      // doesn't fight the drag. Previously this only ran inside the edgeOnly branch,
-      // causing the first pull to feel stuck when a prior spring was still settling.
       if (first) {
+        // Stop any in-flight spring AND immediately reset position so a
+        // previously-queued rAF frame from the stopped animation cannot
+        // fire after this point and override the drag value.
         animationRef.current?.stop();
-        gestureAcceptedRef.current = false;
-        gestureRejectedRef.current = false;
+        ++animationGenRef.current;
+        motion.set(0);
 
         if (edgeOnly) {
-          const edgeCoordinate = axis === "x" ? px : py;
-          if (edgeCoordinate > edgeSize) {
-            cancel?.();
-            return;
-          }
+          const coord = axis === "x" ? px : py;
+          if (coord > edgeSize) { cancel?.(); return; }
         }
       }
 
-      const rawMovement = axis === "x" ? mx : my;
-      const rawVelocity = axis === "x" ? vx : vy;
-      const rawDirection = axis === "x" ? dx : dy;
-      const nextValue = clampPositive(rawMovement);
+      const raw = axis === "x" ? mx : my;
+      const vel = axis === "x" ? vx : vy;
+      const dir = axis === "x" ? dx : dy;
+      // Clamp: don't let the pane move backward
+      const val = Math.max(0, raw);
 
       if (down) {
-        if (!gestureAcceptedRef.current) {
-          // Ignore backward/neutral movement
-          if (rawMovement <= 0) {
-            motion.set(0);
-            return;
-          }
-          // use-gesture's axis:x lock already confirmed this is horizontal,
-          // so accept immediately on any positive movement
-          gestureAcceptedRef.current = true;
-        }
-        motion.set(nextValue);
+        motion.set(val);
         return;
       }
 
-      if (!gestureAcceptedRef.current) {
-        animateTo(0, 0);
-        return;
-      }
-
+      // Released — decide dismiss or snap back
       const shouldDismiss =
-        nextValue >= size * DISMISS_THRESHOLD ||
-        (rawDirection > 0 && rawVelocity >= VELOCITY_THRESHOLD);
+        val >= size * DISMISS_THRESHOLD ||
+        (dir > 0 && vel >= VELOCITY_THRESHOLD);
 
       if (shouldDismiss) {
-        animateTo(size + Math.min(64, size * 0.12), rawVelocity * size, completeDismiss);
+        animateTo(size + Math.min(64, size * 0.12), vel * size, completeDismiss);
       } else {
-        animateTo(0, rawVelocity * size);
+        animateTo(0, vel * size);
       }
     },
     {
-      // axis MUST be set — use-gesture needs it to apply touch-action:none
-      // on the gesture target so iOS doesn't steal touches as native scroll.
-      // Direction intent is refined by our gestureAcceptedRef logic above.
+      // axis MUST be set — use-gesture applies touch-action:none on the target
+      // so iOS doesn't steal touches for its native scroll recognizer.
       axis,
       filterTaps: true,
       threshold: 2,
