@@ -264,16 +264,27 @@ function useInteractiveSwipe({
     animateTo(size + Math.min(64, size * 0.12), 0, completeDismiss);
   }, [animateTo, axis, completeDismiss, enabled]);
 
+  // When becoming ACTIVE: ensure clean starting state (motion at 0, refs clear).
+  // When becoming INACTIVE: only stop the animation — do NOT call motion.set(0).
+  // Calling motion.set(0) on enabled→false races with CSS visibility:hidden on the
+  // keep-alive pane, causing a 1-frame snap-back flash during dismiss.
   useEffect(() => {
+    if (!enabled) {
+      animationRef.current?.stop();
+      return;
+    }
     dismissingRef.current = false;
     animationRef.current?.stop();
     resetGestureState();
-    return () => {
-      dismissingRef.current = false;
-      animationRef.current?.stop();
-      resetGestureState();
-    };
   }, [enabled, resetGestureState]);
+
+  // Cleanup animation on unmount (handles non-keep-alive unmount case)
+  useEffect(() => {
+    return () => {
+      animationRef.current?.stop();
+      dismissingRef.current = false;
+    };
+  }, []);
 
   const motionStyle = useMemo(
     () => (axis === "x" ? { x: motion } : { y: motion }),
