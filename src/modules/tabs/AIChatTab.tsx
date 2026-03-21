@@ -173,10 +173,16 @@ export default memo(function AIChatTab({
     }
   }, []);
 
-  // Fetch quota on load
+  // Compute the effective model once for use throughout this render scope
+  const effectiveChatModel = useMemo<string>(
+    () => (aiModel === "gpt-4.1" || aiModel === "o3") ? "gpt-4.1" : aiModel,
+    [aiModel]
+  );
+
+  // Fetch quota on load and whenever the effective model changes
   useEffect(() => {
-    checkChatQuota().then(setChatQuota);
-  }, []);
+    checkChatQuota(effectiveChatModel).then(setChatQuota);
+  }, [effectiveChatModel]);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -224,14 +230,14 @@ export default memo(function AIChatTab({
     }
   }, [current, financialConfig, cards, renewals]);
 
-  // ── Refresh chat quota on mount and periodically ──
+  // ── Refresh chat quota on mount and after each message ──
   useEffect(() => {
     const refreshQuota = async () => {
-      const q = await checkChatQuota();
+      const q = await checkChatQuota(effectiveChatModel);
       setChatQuota(q);
     };
     refreshQuota();
-  }, [messages.length]);
+  }, [messages.length, effectiveChatModel]);
 
   // ── Auto-scroll to bottom ──
   const scrollToBottom = useCallback((smooth = true): void => {
@@ -339,12 +345,7 @@ export default memo(function AIChatTab({
       try {
         log.info("chat", "Chat message sent", { provider: aiProvider, model: aiModel });
 
-        // Resolve effective chat model:
-        // - gpt-4.1 (CFO) selected → use gpt-4.1
-        // - o3 (Boardroom, now removed from Pro) → degrade to gpt-4.1
-        // - gemini-2.5-flash → use gemini
-        const effectiveChatModel = (aiModel === "gpt-4.1" || aiModel === "o3") ? "gpt-4.1" : aiModel;
-
+        // effectiveChatModel is computed at the top of the component
         const stream = streamAuditTyped(
           apiKey,
           trimmedText,
@@ -387,9 +388,9 @@ export default memo(function AIChatTab({
             void rememberFacts(newFacts);
           }
           if (normalizedResponse.valid) {
-            // Record usage after successful response
-            recordChatUsage().catch(() => { });
-            const q = await checkChatQuota();
+            // Record usage after successful response (pass model for per-model pro tracking)
+            recordChatUsage(effectiveChatModel).catch(() => { });
+            const q = await checkChatQuota(effectiveChatModel);
             setChatQuota(q);
           } else {
             setError("AI response was incomplete. Showing native fallback guidance instead.");
@@ -1120,9 +1121,12 @@ export default memo(function AIChatTab({
             <span style={{ opacity: 0.8 }}>🔒 Privacy Mode · Chats are not stored</span>
           ) : chatQuota.limit !== Infinity ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", width: 140, fontWeight: 600, color: chatQuota.remaining <= 3 ? T.status.red : T.text.secondary }}>
+              <div style={{ display: "flex", justifyContent: "space-between", width: 150, fontWeight: 600, color: chatQuota.remaining <= 3 ? T.status.red : T.text.secondary }}>
                 <span>{chatQuota.remaining} chats left</span>
-                <span style={{ opacity: 0.5 }}>{chatQuota.limit} limit</span>
+                <span style={{ opacity: 0.5, fontSize: 11 }}>
+                  {chatQuota.modelId === "gpt-4.1" ? "CFO" : chatQuota.modelId === "gemini-2.5-flash" ? "Flash" : ""}
+                  {chatQuota.modelId ? ` · ${chatQuota.limit} limit` : ` ${chatQuota.limit} limit`}
+                </span>
               </div>
               <div style={{ width: 140, height: 4, background: T.border.subtle, borderRadius: 2, overflow: "hidden" }}>
                 <div style={{ 
@@ -1139,7 +1143,7 @@ export default memo(function AIChatTab({
           )}
         </div>
 
-        {/* Pro upsell when quota is running low */}
+        {/* Free tier: upsell when quota is running low */}
         {shouldShowGating() && chatQuota.remaining <= 3 && chatQuota.remaining > 0 && !proEnabled && (
           <div style={{ marginTop: 8 }}>
             <ProBannerTyped
@@ -1149,6 +1153,51 @@ export default memo(function AIChatTab({
             />
           </div>
         )}
+
+        {/* Pro: per-model cap exhausted — offer switch to alternate model */}
+        {proEnabled && chatQuota.remaining === 0 && chatQuota.alternateModel && (chatQuota.alternateRemaining ?? 0) > 0 && (
+          <div style={{
+            marginTop: 8,
+            padding: "10px 14px",
+            borderRadius: 14,
+            background: "rgba(220,177,91,0.08)",
+            border: "1px solid rgba(220,177,91,0.22)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+          }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 2 }}>
+                {chatQuota.modelId === "gpt-4.1" ? "Catalyst AI CFO" : "Catalyst AI"} daily limit reached
+              </div>
+              <div style={{ fontSize: 12, color: T.text.secondary }}>
+                Switch to {chatQuota.alternateModel === "gpt-4.1" ? "Catalyst AI CFO" : "Catalyst AI"} — {chatQuota.alternateRemaining} chats remaining
+              </div>
+            </div>
+            <button
+              style={{
+                padding: "7px 13px",
+                borderRadius: 10,
+                background: "linear-gradient(135deg,#dcb15b,#f3d084)",
+                border: "none",
+                color: "#07111a",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+              }}
+              onClick={() => {
+                (setAiModel as (m: string) => void)(chatQuota.alternateModel!);
+                haptic.light();
+              }}
+            >
+              Switch
+            </button>
+          </div>
+        )}
+
 
         {showPaywall && (
           <Suspense fallback={null}>

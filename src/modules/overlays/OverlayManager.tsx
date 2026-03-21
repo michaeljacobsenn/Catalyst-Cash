@@ -5,6 +5,7 @@
   import type { AppTab,NavViewState } from "../contexts/NavigationContext.js";
   import { useOverlay } from "../contexts/OverlayContext.js";
   import type { SetFinancialConfig } from "../contexts/SettingsContext.js";
+  import { useSettings } from "../contexts/SettingsContext.js";
 import { useSwipeBack } from "../hooks/useSwipeGesture.js";
   import { getModel } from "../providers.js";
 import InteractiveStackPane from "../navigation/InteractiveStackPane.js";
@@ -114,6 +115,7 @@ export default function OverlayManager({
     instructionHash,
     setInstructionHash,
   } = useOverlay();
+  const { setAiModel } = useSettings() as { setAiModel: (m: string) => void };
   const onShowGuide = useCallback(() => setShowGuide(true), [setShowGuide]);
   const [settingsCanDismiss, setSettingsCanDismiss] = useState(true);
   useEffect(() => {
@@ -239,6 +241,8 @@ export default function OverlayManager({
                 financialConfig={financialConfig}
                 setFinancialConfig={setFinancialConfig}
                 aiProvider={aiProvider}
+                aiModel={aiModel}
+                setAiModel={setAiModel}
                 personalRules={personalRules}
                 setPersonalRules={setPersonalRules}
                 persona={persona}

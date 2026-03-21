@@ -1,4 +1,5 @@
 import { T } from "../../constants.js";
+import { haptic } from "../../haptics.js";
 import { AlertCircle, AlertTriangle, ChevronDown, ChevronUp, Loader2, TrendingUp, Zap } from "../../icons";
 import { Badge } from "../../ui.js";
 import { isLikelyNetworkError } from "../../networkErrors.js";
@@ -42,6 +43,23 @@ interface PlaidTransactionsCardProps {
 
 interface AuditQuotaNoticeProps {
   auditQuota: AuditQuota | null;
+}
+
+interface ChatQuotaState {
+  allowed: boolean;
+  remaining: number;
+  limit: number;
+  used: number;
+  modelId?: string;
+  alternateModel?: string;
+  alternateRemaining?: number;
+  softBlocked?: boolean;
+}
+
+interface ModelChatQuotaWidgetProps {
+  chatQuota: ChatQuotaState | null;
+  setAiModel: (m: string) => void;
+  proEnabled?: boolean;
 }
 
 interface SubmitBarProps {
@@ -244,6 +262,81 @@ export function AuditQuotaNotice({ auditQuota }: AuditQuotaNoticeProps) {
       )}
     </>
   );
+}
+
+/**
+ * Shows the Pro per-model AskAI chat remaining on the Run Audit page.
+ * When the current model is exhausted, offers a one-tap switch to the alternate.
+ */
+export function ModelChatQuotaWidget({ chatQuota, setAiModel, proEnabled }: ModelChatQuotaWidgetProps) {
+  if (!chatQuota || chatQuota.limit === Infinity || !proEnabled) return null;
+
+  const modelLabel = chatQuota.modelId === "gpt-4.1" ? "CFO" : chatQuota.modelId === "gemini-2.5-flash" ? "Flash" : null;
+  const altLabel = chatQuota.alternateModel === "gpt-4.1" ? "Catalyst AI CFO" : chatQuota.alternateModel === "gemini-2.5-flash" ? "Catalyst AI" : null;
+  const altModelFull = chatQuota.alternateModel === "gpt-4.1" ? "Catalyst AI CFO" : "Catalyst AI";
+
+  // Only show if this is a Pro per-model quota
+  if (!modelLabel) return null;
+
+  const isExhausted = chatQuota.remaining === 0;
+
+  if (isExhausted && chatQuota.alternateModel && (chatQuota.alternateRemaining ?? 0) > 0) {
+    return (
+      <div style={{
+        marginBottom: 12,
+        padding: "10px 14px",
+        borderRadius: 14,
+        background: "rgba(220,177,91,0.08)",
+        border: "1px solid rgba(220,177,91,0.22)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 10,
+      }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 2 }}>
+            {modelLabel === "CFO" ? "Catalyst AI CFO" : "Catalyst AI"} daily AskAI limit reached
+          </div>
+          <div style={{ fontSize: 12, color: T.text.secondary }}>
+            Switch to {altLabel} — {chatQuota.alternateRemaining} chats remaining today
+          </div>
+        </div>
+        <button
+          style={{
+            padding: "7px 13px",
+            borderRadius: 10,
+            background: "linear-gradient(135deg,#dcb15b,#f3d084)",
+            border: "none",
+            color: "#07111a",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+          }}
+          onClick={() => {
+            setAiModel(chatQuota.alternateModel!);
+            haptic.light();
+          }}
+        >
+          Switch
+        </button>
+      </div>
+    );
+  }
+
+  // Show a small quota indicator when there are chats left
+  if (chatQuota.remaining > 0 && chatQuota.remaining <= 5) {
+    return (
+      <div style={{ textAlign: "center", marginBottom: 12 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: chatQuota.remaining <= 2 ? T.status.red : T.text.secondary }}>
+          {chatQuota.remaining} {altModelFull} AskAI chat{chatQuota.remaining === 1 ? "" : "s"} remaining today
+        </span>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 export function SubmitBar({ canSubmit, isLoading, isTestMode, setIsTestMode, onSubmit }: SubmitBarProps) {

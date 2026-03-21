@@ -36,6 +36,7 @@
     PRO_DAILY_CHAT_CAP,
     PRO_MARKET_REFRESH_MS,
     PRO_MONTHLY_AUDIT_CAP,
+    PRO_MODEL_CAPS,
     TIER_MODEL_IDS,
   } from "./planCatalog.js";
   import { getNativeSecureItem,setNativeSecureItem } from "./secureStore.js";
@@ -257,6 +258,17 @@ export const TIERS = {
 
 export { IAP_PRICING, IAP_PRODUCTS, INSTITUTION_LIMITS, PRO_MONTHLY_AUDIT_CAP, PRO_DAILY_CHAT_CAP };
 
+/**
+ * Returns the alternate Pro model when the given model's cap is exhausted.
+ * CFO (gpt-4.1) → Catalyst AI (gemini-2.5-flash) and vice-versa.
+ * @param {string} modelId
+ * @returns {string|null}
+ */
+export function getAlternateProModel(modelId) {
+  const order = Object.keys(PRO_MODEL_CAPS); // ["gpt-4.1", "gemini-2.5-flash"]
+  return order.find(m => m !== modelId) || null;
+}
+
 export function getPreferredModelForTier(tierId = "free") {
   return getDefaultModelIdForTier(tierId);
 }
@@ -288,6 +300,7 @@ const DEFAULT_STATE = {
   monthKey: null, // UTC calendar month key, e.g. "2026-03" (fallback)
   chatMessagesToday: 0, // Reset daily at midnight
   chatDayKey: null, // UTC day key, e.g. "2026-03-01"
+  chatMessagesByModel: {}, // Per-model daily usage map { modelId: count } — Pro only
 };
 
 /**
@@ -528,7 +541,12 @@ export async function getSubscriptionState() {
     const currentDay = getCurrentDayKey();
     if (state.chatDayKey !== currentDay) {
       state.chatMessagesToday = 0;
+      state.chatMessagesByModel = {}; // Reset per-model counts with the day
       state.chatDayKey = currentDay;
+    }
+    // Ensure per-model map is always an object (handles state from before this field existed)
+    if (!state.chatMessagesByModel || typeof state.chatMessagesByModel !== "object") {
+      state.chatMessagesByModel = {};
     }
     // Keychain daily merge: if same day, take the higher count
     if (kcState && kcState.chatDayKey === currentDay) {
@@ -654,16 +672,48 @@ export async function recordAuditUsage() {
 
 /**
  * Check if the user can send another AskAI chat message today.
- * Returns { allowed, remaining, limit, used }.
- * Returns the current chat quota after applying the current gating mode.
+ * @param {string} [modelId] - The model being used (for Pro per-model tracking).
+ * Returns { allowed, remaining, limit, used, modelId?, alternateModel?, alternateRemaining? }.
  */
-export async function checkChatQuota() {
+export async function checkChatQuota(modelId) {
   if (getGatingMode() === "off") {
     return { allowed: true, remaining: Infinity, limit: Infinity, used: 0 };
   }
 
   const state = await getSubscriptionState();
   const tier = TIERS[state.tier] || TIERS.free;
+
+  // ── Pro per-model quota ────────────────────────────────────────
+  if (state.tier === "pro" && modelId && PRO_MODEL_CAPS[modelId] !== undefined) {
+    const modelCap = PRO_MODEL_CAPS[modelId];
+    const modelUsed = (state.chatMessagesByModel?.[modelId] || 0);
+    const modelRemaining = Math.max(0, modelCap - modelUsed);
+
+    // Also check alternate model
+    const altModelId = getAlternateProModel(modelId);
+    const altCap = altModelId ? (PRO_MODEL_CAPS[altModelId] || 0) : 0;
+    const altUsed = altModelId ? (state.chatMessagesByModel?.[altModelId] || 0) : 0;
+    const altRemaining = Math.max(0, altCap - altUsed);
+
+    const result = {
+      allowed: modelRemaining > 0,
+      remaining: modelRemaining,
+      limit: modelCap,
+      used: modelUsed,
+      modelId,
+      alternateModel: altModelId || undefined,
+      alternateRemaining: altModelId ? altRemaining : undefined,
+    };
+
+    if (getGatingMode() === "soft") {
+      result.allowed = true;
+      result.softBlocked = modelRemaining <= 0;
+    }
+
+    return result;
+  }
+
+  // ── Free tier or Pro without a recognized model ────────────────
   const limit = tier.chatMessagesPerDay;
   const remaining = Math.max(0, limit - state.chatMessagesToday);
 
@@ -674,7 +724,7 @@ export async function checkChatQuota() {
     used: state.chatMessagesToday,
   };
 
-  // Pro daily cap check (anti-abuse)
+  // Pro daily cap check (anti-abuse fallback)
   if (state.tier === "pro" && state.chatMessagesToday >= PRO_DAILY_CHAT_CAP) {
     result.allowed = false;
     result.remaining = 0;
@@ -692,12 +742,22 @@ export async function checkChatQuota() {
 
 /**
  * Increment the daily chat message counter.
+ * @param {string} [modelId] - The model that was used (tracks per-model for Pro).
  * Call this AFTER a successful AskAI response completes.
  * Always records usage regardless of gating mode (for analytics).
  */
-export async function recordChatUsage() {
+export async function recordChatUsage(modelId) {
   const state = await getSubscriptionState();
   state.chatMessagesToday = (state.chatMessagesToday || 0) + 1;
+
+  // Track per-model usage for Pro users
+  if (modelId) {
+    if (!state.chatMessagesByModel || typeof state.chatMessagesByModel !== "object") {
+      state.chatMessagesByModel = {};
+    }
+    state.chatMessagesByModel[modelId] = (state.chatMessagesByModel[modelId] || 0) + 1;
+  }
+
   await db.set(STATE_KEY, state);
 
   // Persist to Keychain

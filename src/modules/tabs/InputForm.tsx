@@ -36,9 +36,11 @@
   import { haptic } from "../haptics.js";
   import { getPlaidAutoFill } from "../plaid.js";
   import { isGatingEnforced } from "../subscription.js";
+  import { checkChatQuota } from "../subscription.js";
   import {
     AuditQuotaNotice,
     InputFormErrorBanner,
+    ModelChatQuotaWidget,
     PlaidTransactionsCard,
     SubmitBar,
     ValidationFeedback,
@@ -173,6 +175,8 @@ interface InputFormProps {
   db: DbApi;
   onBack: () => void;
   proEnabled?: boolean;
+  aiModel?: string;
+  setAiModel?: (m: string) => void;
 }
 
 interface SelectOption {
@@ -245,6 +249,9 @@ export default function InputForm({
   personalRules,
   setPersonalRules,
   onBack,
+  proEnabled,
+  aiModel,
+  setAiModel,
 }: InputFormProps) {
   const { error } = useAudit();
   const initialToday = useMemo(() => new Date(), []);
@@ -283,6 +290,19 @@ export default function InputForm({
   useEffect(() => {
     void loadAuditQuota(setAuditQuota);
   }, []);
+
+  // Fetch per-model AskAI chat quota for Pro users
+  const effectiveAuditModel = useMemo(
+    () => (aiModel === "gpt-4.1" || aiModel === "o3") ? "gpt-4.1" : (aiModel || "gpt-4.1"),
+    [aiModel]
+  );
+  type ChatQuotaState = { allowed: boolean; remaining: number; limit: number; used: number; modelId?: string; alternateModel?: string; alternateRemaining?: number; softBlocked?: boolean };
+  const [chatQuota, setChatQuota] = useState<ChatQuotaState | null>(null);
+  useEffect(() => {
+    if (proEnabled) {
+      checkChatQuota(effectiveAuditModel).then(setChatQuota);
+    }
+  }, [effectiveAuditModel, proEnabled]);
 
   // Re-sync Plaid balances when cards or bankAccounts update (e.g. after Plaid sync finishes)
   useEffect(() => {
@@ -1772,6 +1792,11 @@ export default function InputForm({
         )
       }
 
+      <ModelChatQuotaWidget
+        chatQuota={chatQuota}
+        setAiModel={setAiModel ?? (() => {})}
+        proEnabled={!!proEnabled}
+      />
       <AuditQuotaNotice auditQuota={auditQuota} />
       <SubmitBar
         canSubmit={canSubmit}

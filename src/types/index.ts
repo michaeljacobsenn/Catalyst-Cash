@@ -29,6 +29,12 @@ export interface ChatQuotaState {
   used: number;
   dailyCapReached?: boolean;
   softBlocked?: boolean;
+  /** ID of the model this quota applies to (Pro per-model tracking) */
+  modelId?: string;
+  /** Alternate Pro model that still has quota when this model is exhausted */
+  alternateModel?: string;
+  /** Remaining chats on the alternate model */
+  alternateRemaining?: number;
 }
 
 export interface BackendHeaders {
