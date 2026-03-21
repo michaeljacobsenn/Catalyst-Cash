@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const SUBSCRIPTION_JS_PATH = path.join(__dirname, "../src/modules/subscription.js");
+const PLAN_CATALOG_PATH = path.join(__dirname, "../src/modules/planCatalog.js");
 const WORKER_INDEX_JS_PATH = path.join(__dirname, "../worker/src/index.js");
 const SITE_INDEX_HTM_PATH = path.join(__dirname, "../site/index.html");
 const SITE_COMPARE_HTM_PATH = path.join(__dirname, "../site/compare.html");
@@ -19,12 +19,12 @@ function getConstant(filePath, regex, fallback) {
   return fallback;
 }
 
-// Extract limits from source of truth
-const proAudits = getConstant(SUBSCRIPTION_JS_PATH, /PRO_MONTHLY_AUDIT_CAP\s*=\s*(\d+);/, "31");
-const freeAudits = getConstant(WORKER_INDEX_JS_PATH, /FREE_AUDITS_PER_WEEK\s*=\s*(\d+);/, "2");
-const proChats = getConstant(WORKER_INDEX_JS_PATH, /PRO_CHATS_PER_DAY\s*=\s*(\d+);/, "50");
-const freeChats = getConstant(WORKER_INDEX_JS_PATH, /FREE_CHATS_PER_DAY\s*=\s*(\d+);/, "10");
-const freePlaid = getConstant(SUBSCRIPTION_JS_PATH, /INSTITUTION_LIMITS\s*=\s*\{\s*free:\s*(\d+),/, "2");
+// Extract limits from source of truth (planCatalog.js)
+const proAudits = getConstant(PLAN_CATALOG_PATH, /PRO_MONTHLY_AUDIT_CAP\s*=\s*(\d+);/, "20");
+const freeAudits = getConstant(PLAN_CATALOG_PATH, /FREE_AUDIT_LIMIT\s*=\s*(\d+);/, "2");
+const proChats = getConstant(PLAN_CATALOG_PATH, /PRO_DAILY_CHAT_CAP\s*=\s*(\d+);/, "30");
+const freeChats = getConstant(PLAN_CATALOG_PATH, /FREE_CHAT_LIMIT\s*=\s*(\d+);/, "10");
+const freePlaid = getConstant(PLAN_CATALOG_PATH, /INSTITUTION_LIMITS\s*=\s*\{\s*free:\s*(\d+),/, "1");
 
 console.log("=== Found Limits ===");
 console.log(`Pro Audits: ${proAudits}/mo`);
