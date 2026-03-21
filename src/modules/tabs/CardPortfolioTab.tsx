@@ -226,12 +226,22 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
   });  // ── Pull-to-refresh ──────────────────────────────────────────
   const pullStartYRef = useRef<number | null>(null);
   const [pullProgress, setPullProgress] = useState(0); // 0–1
+  const [pullTriggered, setPullTriggered] = useState(false);
   const PULL_THRESHOLD = 64;
+  const hapticFiredRef = useRef(false);
+
+  const isAtScrollTop = useCallback((el: HTMLDivElement) => {
+    // Works universally: checks both the element and window scroll position
+    return el.scrollTop <= 0 && window.scrollY <= 0;
+  }, []);
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     const el = e.currentTarget as HTMLDivElement;
-    if (el.scrollTop === 0) pullStartYRef.current = e.touches[0]?.clientY ?? null;
-  }, []);
+    if (isAtScrollTop(el)) {
+      pullStartYRef.current = e.touches[0]?.clientY ?? null;
+      hapticFiredRef.current = false;
+    }
+  }, [isAtScrollTop]);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
     if (pullStartYRef.current === null) return;
@@ -239,17 +249,25 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
     if (!touch) return;
     const delta = touch.clientY - pullStartYRef.current;
     if (delta <= 0) { setPullProgress(0); return; }
-    setPullProgress(Math.min(delta / PULL_THRESHOLD, 1));
+    const progress = Math.min(delta / PULL_THRESHOLD, 1);
+    setPullProgress(progress);
+    // Fire haptic exactly once when crossing the threshold
+    if (progress >= 1 && !hapticFiredRef.current) {
+      hapticFiredRef.current = true;
+      haptic.impact?.() ?? haptic.medium?.();
+    }
   }, []);
 
   const onTouchEnd = useCallback(() => {
-    if (pullProgress >= 1) {
-      haptic.light();
-      void handleRefreshPlaid();
+    if (pullProgress >= 1 && !plaidRefreshing) {
+      setPullTriggered(true);
+      void handleRefreshPlaid().finally(() => setPullTriggered(false));
     }
     pullStartYRef.current = null;
     setPullProgress(0);
-  }, [pullProgress, handleRefreshPlaid]);
+    hapticFiredRef.current = false;
+  }, [pullProgress, plaidRefreshing, handleRefreshPlaid]);
+
 
 
 
@@ -463,30 +481,43 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
         onTouchEnd={onTouchEnd}
       >
         {/* Pull-to-refresh indicator */}
-        {pullProgress > 0.1 && (
-          <div style={{
-            position: "sticky",
-            top: 0,
-            zIndex: 10,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            height: Math.round(pullProgress * 44),
-            overflow: "hidden",
-            transition: "height 0.1s",
-            pointerEvents: "none",
-          }}>
-            <RefreshCw
-              size={18}
-              color={T.accent.primary}
-              style={{
-                opacity: pullProgress,
-                transform: `rotate(${pullProgress * 360}deg)`,
-                transition: "none",
-              }}
-            />
-          </div>
-        )}
+        {(pullProgress > 0.05 || pullTriggered) && (() => {
+          const r = 13;
+          const circ = 2 * Math.PI * r;
+          const ready = pullProgress >= 1;
+          const color = ready ? T.accent.emerald : T.accent.primary;
+          return (
+            <div style={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              height: pullTriggered ? 44 : Math.max(Math.round(pullProgress * 44), 0),
+              overflow: "hidden",
+              transition: pullTriggered ? "height 0.2s" : "none",
+              pointerEvents: "none",
+              flexShrink: 0,
+            }}>
+              {pullTriggered ? (
+                <RefreshCw size={18} color={T.accent.emerald} style={{ animation: "spin 0.8s linear infinite" }} />
+              ) : (
+                <svg width={32} height={32} viewBox="0 0 32 32" style={{ opacity: Math.max(pullProgress, 0.2) }}>
+                  {/* Track */}
+                  <circle cx={16} cy={16} r={r} fill="none" stroke={color} strokeOpacity={0.15} strokeWidth={2.5} />
+                  {/* Progress arc */}
+                  <circle
+                    cx={16} cy={16} r={r} fill="none"
+                    stroke={color} strokeWidth={2.5}
+                    strokeDasharray={`${pullProgress * circ} ${circ}`}
+                    strokeLinecap="round"
+                    transform="rotate(-90 16 16)"
+                    style={{ transition: "stroke 0.15s" }}
+                  />
+                  {ready && <circle cx={16} cy={16} r={5} fill={color} />}
+                </svg>
+              )}
+            </div>
+          );
+        })()}
         <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
         <style>{`
             @keyframes spin { 100% { transform: rotate(360deg); } }

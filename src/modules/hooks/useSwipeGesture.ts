@@ -55,8 +55,6 @@ const DISMISS_SPRING = {
 const DISMISS_THRESHOLD = 0.3;
 const VELOCITY_THRESHOLD = 0.55;
 const EDGE_SIZE_DEFAULT = 36;
-// How many px of movement before we commit to a direction
-const INTENT_THRESHOLD = 12;
 
 const clampPositive = (value: number) => Math.max(0, value);
 const easeOutCubic = (value: number) => 1 - Math.pow(1 - clamp(value), 3);
@@ -242,21 +240,17 @@ function useInteractiveSwipe({
       const rawMovement = axis === "x" ? mx : my;
       const rawVelocity = axis === "x" ? vx : vy;
       const rawDirection = axis === "x" ? dx : dy;
-      const absPrimary = Math.abs(rawMovement);
       const nextValue = clampPositive(rawMovement);
 
       if (down) {
         if (!gestureAcceptedRef.current) {
-          // Ignore backward/neutral movement while waiting for intent
+          // Ignore backward/neutral movement
           if (rawMovement <= 0) {
             motion.set(0);
             return;
           }
-          // Wait until primary movement exceeds threshold before committing
-          if (absPrimary < INTENT_THRESHOLD) {
-            motion.set(0);
-            return;
-          }
+          // use-gesture's axis:x lock already confirmed this is horizontal,
+          // so accept immediately on any positive movement
           gestureAcceptedRef.current = true;
         }
         motion.set(nextValue);
