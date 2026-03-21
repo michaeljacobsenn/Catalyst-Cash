@@ -1197,7 +1197,79 @@ h2 {
   color: var(--dim);
   font-size: 13px;
   line-height: 1.6;
+  margin-top: 14px;
 }
+
+/* ── Yearly plan highlight callout ──────────────────────── */
+.yearly-highlight {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 20px 0 22px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(255, 205, 107, 0.06));
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.08);
+}
+
+.yearly-badge {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--green-deep);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--green);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.yearly-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.yearly-price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.yearly-price strong {
+  font-size: 1.45rem;
+  letter-spacing: -0.05em;
+  color: var(--text);
+}
+
+.yearly-price span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.yearly-saving {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: var(--green) !important;
+  font-size: 11px !important;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+.yearly-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
 
 .faq {
   display: grid;
