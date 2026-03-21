@@ -214,15 +214,21 @@ function useInteractiveSwipe({
         return;
       }
 
-      if (first && edgeOnly) {
+      // Always stop any in-flight animation at the start of a new gesture so it
+      // doesn't fight the drag. Previously this only ran inside the edgeOnly branch,
+      // causing the first pull to feel stuck when a prior spring was still settling.
+      if (first) {
         animationRef.current?.stop();
-        const edgeCoordinate = axis === "x" ? px : py;
-        if (edgeCoordinate > edgeSize) {
-          cancel?.();
-          return;
-        }
         gestureAcceptedRef.current = false;
         gestureRejectedRef.current = false;
+
+        if (edgeOnly) {
+          const edgeCoordinate = axis === "x" ? px : py;
+          if (edgeCoordinate > edgeSize) {
+            cancel?.();
+            return;
+          }
+        }
       }
 
       const rawMovement = axis === "x" ? mx : my;
