@@ -143,8 +143,13 @@ async function* streamBackend(snapshot, model, context, history, deviceId, backe
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
     if (res.status === 429) {
-      log.warn("audit", "Rate limit reached", { status: 429 });
+      log.warn("audit", "Rate limit reached", { status: 429, modelCapReached: e.modelCapReached || null });
       emitRateLimit(res, responseFormat === "text");
+      if (e.modelCapReached) {
+        const err = new Error(e.error || `Daily ${e.modelCapReached} limit reached. Try a different AI model.`);
+        err.modelCapReached = e.modelCapReached;
+        throw err;
+      }
       const retryAfter = res.headers.get("Retry-After");
       const msg = retryAfter
         ? `Audit limit reached. Try again in ${retryAfter} seconds.`

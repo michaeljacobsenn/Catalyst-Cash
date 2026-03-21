@@ -146,7 +146,7 @@ export default memo(function AIChatTab({
   void onBack;
   void embedded;
   const { current, history, trendContext } = useAudit();
-  const { apiKey, aiProvider, aiModel, financialConfig, persona, personalRules } = useSettings();
+  const { apiKey, aiProvider, aiModel, financialConfig, persona, personalRules, setAiModel } = useSettings();
   const { cards, renewals } = usePortfolio();
   const { privacyMode } = useSecurity() as SecurityApi;
   const { navState, clearNavState, registerChatStreamAbort } = useNavigation() as NavigationApi;
@@ -411,6 +411,27 @@ export default memo(function AIChatTab({
             void persistMessages(finalMsgs);
           }
         } else {
+          // ── Per-model cap auto-switch (Pro only) ──
+          const modelCap = (err as Record<string, unknown>)?.modelCapReached;
+          if (modelCap && typeof modelCap === "string") {
+            // Priority order: gemini (cheapest) → gpt-4.1 → o3
+            const MODEL_FALLBACK_ORDER = ["gemini-2.5-flash", "gpt-4.1", "o3"];
+            const nextModel = MODEL_FALLBACK_ORDER.find(m => m !== modelCap);
+            if (nextModel) {
+              (setAiModel as (m: string) => void)(nextModel);
+              const modelNames: Record<string, string> = {
+                "gemini-2.5-flash": "Catalyst AI",
+                "gpt-4.1": "Catalyst AI CFO",
+                "o3": "Catalyst AI Boardroom",
+              };
+              setError(`Daily ${modelNames[modelCap] || modelCap} limit reached. Switched to ${modelNames[nextModel] || nextModel} — send your message again.`);
+              toast?.error?.(`Switched to ${modelNames[nextModel] || nextModel}`);
+              // Remove the failed assistant message so user can retry cleanly
+              setMessages(newMsgs);
+              return;
+            }
+          }
+
           const failure = toUserFacingRequestError(err, { context: "chat" });
           log.error("chat", "Chat error", { error: failure.rawMessage });
           const fallbackText = buildDeterministicChatFallbackTyped({
@@ -452,6 +473,7 @@ export default memo(function AIChatTab({
       chatQuota,
       rememberFacts,
       toast,
+      setAiModel,
     ]
   );
 
