@@ -9,454 +9,1001 @@
   <style>
     :root {
       --bg: #071019;
+      --bg2: #0f1724;
+      --panel: rgba(15, 23, 36, 0.88);
       --card: rgba(17, 27, 42, 0.92);
-      --border: rgba(255,255,255,0.09);
+      --border: rgba(255, 255, 255, 0.09);
       --text: #f4f7fb;
       --text2: #afbdd2;
       --text3: #70809a;
       --emerald: #40d9a4;
-      --emerald-soft: rgba(64,217,164,0.12);
+      --emerald-soft: rgba(64, 217, 164, 0.12);
+      --cyan: #67c6ff;
       --gold: #dcb15b;
-      --gold-soft: rgba(220,177,91,0.14);
-      --shadow: 0 16px 48px rgba(0,0,0,0.32);
-      --radius-xl: 24px;
-      --radius-lg: 18px;
-      --radius-md: 12px;
-      --font-sans: "SF Pro Display","Avenir Next","Segoe UI",sans-serif;
-      --font-mono: "SF Mono","Menlo",monospace;
+      --gold-soft: rgba(220, 177, 91, 0.14);
+      --red: #ff7d7d;
+      --shadow: 0 22px 60px rgba(0, 0, 0, 0.34);
+      --radius-xl: 28px;
+      --radius-lg: 20px;
+      --radius-md: 14px;
+      --font-sans: "SF Pro Display", "Avenir Next", "Segoe UI", sans-serif;
+      --font-mono: "SF Mono", "Menlo", monospace;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body {
+      margin: 0;
       font-family: var(--font-sans);
-      background: linear-gradient(180deg,#09141f 0%,#071019 100%);
+      background:
+        radial-gradient(circle at top, rgba(220, 177, 91, 0.18) 0%, rgba(7, 16, 25, 0) 34%),
+        linear-gradient(180deg, #08111b 0%, #071019 100%);
       color: var(--text);
-      line-height: 1.6;
-      padding-bottom: 60px;
+      line-height: 1.58;
+      padding-bottom: 80px;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 28px 28px;
+      mask-image: linear-gradient(180deg, rgba(0,0,0,0.45), transparent 80%);
+      opacity: 0.25;
     }
     .shell {
-      width: min(720px, calc(100vw - 20px));
+      width: min(960px, calc(100vw - 24px));
       margin: 0 auto;
+      position: relative;
+      z-index: 1;
     }
-
-    /* ── Hero ───────────────────────────────────── */
-    .hero { padding: 24px 0 16px; }
-    .hero-card {
-      background: linear-gradient(160deg, rgba(220,177,91,0.07) 0%, rgba(15,23,36,0.96) 40%);
-      border: 1px solid rgba(220,177,91,0.2);
+    .hero {
+      padding: 22px 0 18px;
+    }
+    .hero-panel,
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
       border-radius: var(--radius-xl);
       box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+    .hero-panel {
       overflow: hidden;
+      position: relative;
+    }
+    .hero-panel::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(220, 177, 91, 0.15) 0%, transparent 48%);
+      pointer-events: none;
     }
     .hero-top {
-      padding: 22px 22px 18px;
-      border-bottom: 1px solid var(--border);
+      padding: 24px 20px 18px;
+      display: grid;
+      gap: 14px;
+    }
+    .eyebrow-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
     }
     .eyebrow {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      font-family: var(--font-mono);
-      font-size: 10px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
+      gap: 8px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(220, 177, 91, 0.38);
+      background: var(--gold-soft);
       color: var(--gold);
-      margin-bottom: 10px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .eyebrow-sub {
+      color: var(--text3);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
     }
     h1 {
-      font-size: clamp(22px,5vw,30px);
-      letter-spacing: -0.04em;
-      line-height: 1.1;
-      margin-bottom: 8px;
+      margin: 0;
+      font-size: clamp(30px, 6vw, 46px);
+      line-height: 1;
+      letter-spacing: -0.05em;
+      max-width: 14ch;
     }
-    .hero-sub { color: var(--text2); font-size: 14px; max-width: 52ch; }
-    .stats-row {
+    .hero-copy {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 1px;
-      background: var(--border);
+      gap: 8px;
+      max-width: 62ch;
     }
-    .stat {
-      background: rgba(10,18,30,0.95);
-      padding: 14px 16px;
+    .hero-copy p,
+    .panel p,
+    .step-row p,
+    .faq-item p,
+    .coming-card p,
+    .info-card p {
+      margin: 0;
+      color: var(--text2);
+      font-size: 15px;
+    }
+    .hero-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .cta-button,
+    .ghost-button,
+    .nav-chip {
+      appearance: none;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      font: inherit;
+    }
+    .cta-button {
+      padding: 12px 16px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #dcb15b, #f3d084);
+      color: #071019;
+      font-weight: 800;
+    }
+    .ghost-button {
+      padding: 12px 16px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .hero-stats {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 1px;
+      background: rgba(255,255,255,0.05);
+    }
+    .stat-card {
+      background: var(--card);
+      padding: 14px 12px;
+      min-height: 84px;
     }
     .stat-label {
       font-family: var(--font-mono);
       font-size: 10px;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--text3);
-      margin-bottom: 5px;
+      margin-bottom: 8px;
     }
-    .stat-val { font-size: 15px; font-weight: 700; color: var(--gold); }
-
-    /* ── Nav chips ──────────────────────────────── */
+    .stat-value {
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
     .chip-row {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin-top: 14px;
-      padding: 0 22px 22px;
+      padding: 18px 0 0;
     }
-    .chip {
-      padding: 7px 13px;
+    .nav-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 12px;
       border-radius: 999px;
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.03);
       color: var(--text2);
       font-size: 12px;
-      text-decoration: none;
     }
-
-    /* ── Sections ───────────────────────────────── */
-    .section {
-      margin-top: 14px;
-      background: rgba(15,23,36,0.94);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-xl);
-      box-shadow: var(--shadow);
-      padding: 22px;
-    }
-    .kicker {
-      display: inline-block;
-      font-family: var(--font-mono);
-      font-size: 10px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--gold);
-      margin-bottom: 6px;
-    }
-    h2 {
-      font-size: clamp(18px,4vw,24px);
-      letter-spacing: -0.04em;
-      margin-bottom: 16px;
-    }
-    p { color: var(--text2); font-size: 14px; line-height: 1.65; }
-
-    /* ── Tab grid ───────────────────────────────── */
-    .tab-grid {
+    .content {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-      margin-top: 4px;
+      gap: 16px;
+      margin-top: 12px;
     }
-    .tab-card {
-      background: rgba(255,255,255,0.035);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 14px;
+    .panel {
+      padding: 20px;
     }
-    .tab-name { font-size: 14px; font-weight: 700; margin-bottom: 5px; }
-    .tab-note { font-size: 13px; color: var(--text2); }
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-family: var(--font-mono);
-      font-size: 10px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      margin-bottom: 6px;
-    }
-    .badge-pro {
-      background: var(--gold-soft);
-      border: 1px solid rgba(220,177,91,0.28);
-      color: var(--gold);
-    }
-    .badge-split {
-      background: rgba(103,198,255,0.1);
-      border: 1px solid rgba(103,198,255,0.25);
-      color: #67c6ff;
-    }
-
-    /* ── Steps ──────────────────────────────────── */
-    .steps { display: grid; gap: 12px; margin-top: 4px; }
-    .step {
-      display: grid;
-      grid-template-columns: 38px 1fr;
-      gap: 14px;
+    .section-head {
+      display: flex;
+      justify-content: space-between;
       align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
     }
-    .step-num {
-      width: 38px; height: 38px;
-      display: grid; place-items: center;
-      border-radius: 12px;
-      background: var(--gold-soft);
-      border: 1px solid rgba(220,177,91,0.25);
+    .section-kicker {
+      display: inline-block;
       color: var(--gold);
-      font-family: var(--font-mono);
-      font-weight: 700;
-      font-size: 14px;
-      flex-shrink: 0;
-    }
-    .step h3 { font-size: 15px; margin-bottom: 4px; }
-    .step p { font-size: 13px; }
-
-    /* ── Plan comparison ─────────────────────────── */
-    .plan-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-    .plan-table th {
-      text-align: left;
       font-family: var(--font-mono);
       font-size: 10px;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: var(--text3);
-      padding: 0 0 12px;
+      margin-bottom: 8px;
     }
-    .plan-table th:not(:first-child) { text-align: center; }
-    .plan-table td {
-      font-size: 13px;
-      color: var(--text2);
-      padding: 10px 0;
+    h2 {
+      margin: 0;
+      font-size: clamp(21px, 4vw, 28px);
+      letter-spacing: -0.04em;
+      line-height: 1.08;
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .info-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 15px;
+      min-height: 148px;
+    }
+    .info-card-locked {
+      background: linear-gradient(180deg, var(--card), rgba(220, 177, 91, 0.08));
+      border-color: rgba(220, 177, 91, 0.24);
+    }
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .card-top h3,
+    .step-row h3,
+    .coming-card h3 {
+      margin: 0;
+      font-size: 15px;
+      letter-spacing: -0.02em;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 25px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .status-all {
+      color: var(--emerald);
+      background: var(--emerald-soft);
+      border: 1px solid rgba(64, 217, 164, 0.26);
+    }
+    .status-pro {
+      color: var(--gold);
+      background: var(--gold-soft);
+      border: 1px solid rgba(220, 177, 91, 0.3);
+    }
+    .status-split {
+      color: var(--cyan);
+      background: rgba(103, 198, 255, 0.12);
+      border: 1px solid rgba(103, 198, 255, 0.28);
+    }
+    .status-native {
+      color: #f3a95f;
+      background: rgba(243, 169, 95, 0.12);
+      border: 1px solid rgba(243, 169, 95, 0.28);
+    }
+    .steps-list {
+      display: grid;
+      gap: 10px;
+    }
+    .step-row {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      gap: 12px;
+      align-items: flex-start;
+      padding: 12px 0;
       border-top: 1px solid rgba(255,255,255,0.06);
     }
-    .plan-table td:first-child { color: var(--text); font-weight: 600; }
-    .plan-table td:not(:first-child) { text-align: center; }
-    .pro-val { color: var(--gold); font-weight: 700; }
+    .step-row:first-child {
+      border-top: none;
+      padding-top: 0;
+    }
+    .step-index {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      background: var(--gold-soft);
+      border: 1px solid rgba(220, 177, 91, 0.28);
+      color: var(--gold);
+      font-weight: 800;
+      font-family: var(--font-mono);
+    }
+    .matrix {
+      overflow: hidden;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.025);
+    }
+    .matrix-header,
+    .matrix-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.8fr) minmax(110px, 0.8fr) minmax(130px, 0.9fr);
+      gap: 10px;
+      align-items: center;
+      padding: 12px 14px;
+    }
+    .matrix-header {
+      background: rgba(255,255,255,0.03);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text3);
+    }
+    .matrix-row {
+      border-top: 1px solid rgba(255,255,255,0.05);
+      font-size: 13px;
+    }
+    .matrix-label {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .matrix-free { color: var(--text2); }
+    .matrix-pro {
+      color: var(--gold);
+      font-weight: 700;
+    }
     .price-strip {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin-top: 16px;
+      margin-top: 18px;
     }
-    .price-pill {
-      padding: 6px 12px;
+    .price-strip span {
+      padding: 8px 10px;
       border-radius: 999px;
-      border: 1px solid rgba(220,177,91,0.28);
-      background: rgba(220,177,91,0.08);
+      border: 1px solid rgba(220, 177, 91, 0.24);
+      background: rgba(220, 177, 91, 0.08);
       color: #f0d094;
-      font-family: var(--font-mono);
       font-size: 12px;
+      font-family: var(--font-mono);
     }
-
-    /* ── FAQ ─────────────────────────────────────── */
-    details {
-      border-radius: var(--radius-md);
+    .faq-list {
+      display: grid;
+      gap: 10px;
+    }
+    .faq-item {
+      border-radius: 16px;
       border: 1px solid var(--border);
-      background: rgba(255,255,255,0.025);
+      background: rgba(255,255,255,0.03);
       padding: 13px 15px;
     }
-    details + details { margin-top: 8px; }
-    summary {
+    .faq-item summary {
       cursor: pointer;
       font-weight: 700;
-      font-size: 14px;
+      color: var(--text);
       list-style: none;
     }
-    summary::-webkit-details-marker { display: none; }
-    details p { margin-top: 10px; font-size: 13px; }
-
-    /* ── Footer ──────────────────────────────────── */
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item p { margin-top: 10px; }
+    .coming-grid {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .coming-card {
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      padding: 15px;
+    }
+    .coming-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 12px;
+      background: var(--gold-soft);
+      font-size: 20px;
+    }
     .footer {
       text-align: center;
-      padding: 20px 10px 0;
+      padding: 18px 10px 0;
       color: var(--text3);
       font-size: 11px;
-      line-height: 1.7;
+      line-height: 1.6;
     }
-
-    @media (max-width: 500px) {
-      .stats-row { grid-template-columns: repeat(2, 1fr); }
-      .tab-grid { grid-template-columns: 1fr; }
+    .footer strong {
+      color: var(--text2);
+    }
+    @media (max-width: 900px) {
+      .hero-stats,
+      .card-grid,
+      .coming-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 640px) {
+      .shell {
+        width: min(100vw - 14px, 960px);
+      }
+      .hero-top,
+      .panel {
+        padding: 16px;
+      }
+      .hero-stats,
+      .card-grid,
+      .coming-grid,
+      .matrix-header,
+      .matrix-row {
+        grid-template-columns: 1fr;
+      }
+      .matrix-header {
+        gap: 4px;
+      }
+      .matrix-row {
+        gap: 6px;
+      }
+      .matrix-free::before,
+      .matrix-pro::before {
+        display: inline-block;
+        margin-right: 8px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text3);
+      }
+      .matrix-free::before { content: "Free"; }
+      .matrix-pro::before { content: "Pro"; }
     }
   </style>
 </head>
 <body>
   <div class="shell">
-
-    <!-- Hero -->
-    <section class="hero">
-      <div class="hero-card">
+    <header class="hero">
+      <div class="hero-panel">
         <div class="hero-top">
-          <div class="eyebrow">Pro Plan · Guide</div>
-          <h1>Same workflow. More room and better AI.</h1>
-          <p class="hero-sub">Pro keeps the same weekly audit loop and adds higher limits, Catalyst AI CFO (GPT-4.1), a full ledger, and broader Plaid coverage.</p>
-          <nav class="chip-row" aria-label="Jump to section">
-            <a class="chip" href="#tabs">App tabs</a>
-            <a class="chip" href="#workflow">Weekly loop</a>
-            <a class="chip" href="#tips">Pro tips</a>
-            <a class="chip" href="#plans">Plan breakdown</a>
-            <a class="chip" href="#faq">FAQ</a>
-          </nav>
+          <div class="eyebrow-row">
+            <span class="eyebrow">Pro Guide</span>
+            <span class="eyebrow-sub">Unlocked · Pro Plan</span>
+          </div>
+          <div class="hero-copy">
+            <h1>Use the full version once you need more room.</h1>
+            <p>Pro keeps the same workflow, then adds more usage, better AI depth, full ledger tools, and broader Plaid coverage for heavier real-world use.</p>
+            <p>This is the same core workflow with more room, more depth, and better tools for heavier use.</p>
+          </div>
+          <div class="hero-actions">
+            <a class="ghost-button" href="#workflow">Best Pro workflow</a>
+            <a class="ghost-button" href="#matrix">Plan differences</a>
+          </div>
         </div>
-        <div class="stats-row">
-          <div class="stat">
-            <div class="stat-label">Audits</div>
-            <div class="stat-val">20 / month</div>
-          </div>
-          <div class="stat">
-            <div class="stat-label">AskAI</div>
-            <div class="stat-val">30 / day</div>
-          </div>
-          <div class="stat">
-            <div class="stat-label">AI model</div>
-            <div class="stat-val">AI + CFO</div>
-          </div>
-          <div class="stat">
-            <div class="stat-label">Plaid</div>
-            <div class="stat-val">Up to 6</div>
-          </div>
+        <div class="hero-stats">
+          
+    <div class="stat-card">
+      <div class="stat-label">Audit access</div>
+      <div class="stat-value">20 audits / month</div>
+    </div>
+  
+          
+    <div class="stat-card">
+      <div class="stat-label">AskAI</div>
+      <div class="stat-value">30 AskAI / day</div>
+    </div>
+  
+          
+    <div class="stat-card">
+      <div class="stat-label">AI models</div>
+      <div class="stat-value">Catalyst AI CFO + Boardroom</div>
+    </div>
+  
+          
+    <div class="stat-card">
+      <div class="stat-label">Plaid</div>
+      <div class="stat-value">Up to 6 Plaid institutions</div>
+    </div>
+  
+          
+    <div class="stat-card">
+      <div class="stat-label">History</div>
+      <div class="stat-value">Full audit archive</div>
+    </div>
+  
         </div>
       </div>
-    </section>
+      <nav class="chip-row" aria-label="Guide sections">
+        <a class="nav-chip" href="#tabs">Tabs</a>
+        <a class="nav-chip" href="#workflow">Weekly use</a>
+        <a class="nav-chip" href="#logic">What it looks at</a>
+        <a class="nav-chip" href="#privacy">Privacy</a>
+        <a class="nav-chip" href="#matrix">Plans</a>
+        <a class="nav-chip" href="#faq">Questions</a>
+      </nav>
+    </header>
 
-    <!-- Tabs -->
-    <section class="section" id="tabs">
-      <span class="kicker">App Map</span>
-      <h2>What each tab is for</h2>
-      <div class="tab-grid">
-        <div class="tab-card">
-          <div class="tab-name">Dashboard</div>
-          <div class="tab-note">Safe-to-spend, health score, upcoming pressure. Your weekly snapshot at a glance.</div>
+    <main class="content">
+      <section class="panel" id="tabs">
+        <div class="section-head">
+          <div>
+            <span class="section-kicker">Start Here</span>
+            <h2>What each tab does</h2>
+          </div>
         </div>
-        <div class="tab-card">
-          <div class="tab-name">Audit</div>
-          <div class="tab-note">Run the weekly review. Cash safety, debt priority, renewals, and ranked next moves.</div>
+        <div class="card-grid">
+          
+    <article class="info-card">
+      <div class="card-top">
+        <h3>Dashboard</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>Your snapshot. Check what is safe to spend, what is due soon, and whether your overall money picture is improving.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>Audit</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>Your main weekly check-in. Run this when you get paid, pay bills, or want a clear action list.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>AskAI</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>Ask simple follow-up questions like what to pay first, whether you can afford something, or how a decision changes your plan.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>Portfolio Vault</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>Keep your accounts, debts, investments, and recent activity in one place.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>Rewards</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>Search a store and see which card is best to use there.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>Cashflow</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>Track bills, subscriptions, and the next 30 days so fewer expenses catch you off guard.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>History</h3>
+        <span class="status-pill status-split">Free + Pro differ</span>
+      </div>
+      <p>Look back at older audits to see if things are moving in the right direction. Free shows the latest 12. Pro keeps the full archive.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>Settings</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>Manage security, Plaid, AI settings, backups, restore, and deletion controls.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>Transaction Ledger</h3>
+        <span class="status-pill status-pro">Pro unlock</span>
+      </div>
+      <p>Pro unlocks the full searchable transaction list, filters, exports, and deeper cleanup tools.</p>
+    </article>
+  
         </div>
-        <div class="tab-card">
-          <div class="tab-name">AskAI</div>
-          <div class="tab-note">Ask follow-up questions about any tradeoff, purchase, or debt sequence. 30/day on Pro.</div>
+      </section>
+
+      <section class="panel" id="workflow">
+        <div class="section-head">
+          <div>
+            <span class="section-kicker">Weekly Rhythm</span>
+            <h2>How to use the app each week</h2>
+          </div>
         </div>
-        <div class="tab-card">
-          <div class="tab-name">Portfolio</div>
-          <div class="tab-note">All accounts, debts, and investments in one place. Syncs up to 6 Plaid institutions.</div>
+        <div class="steps-list">
+          
+    <div class="step-row">
+      <div class="step-index">1</div>
+      <div>
+        <h3>Keep your balances current</h3>
+        <p>Before you run an audit, make sure your balances and bills are up to date.</p>
+      </div>
+    </div>
+  
+    <div class="step-row">
+      <div class="step-index">2</div>
+      <div>
+        <h3>Run an audit once a week</h3>
+        <p>That is enough for most people. Run another one after a paycheck, big purchase, or other major change.</p>
+      </div>
+    </div>
+  
+    <div class="step-row">
+      <div class="step-index">3</div>
+      <div>
+        <h3>Start with the top actions</h3>
+        <p>Do not read everything at once. Start with the main recommendations and the most urgent warnings.</p>
+      </div>
+    </div>
+  
+    <div class="step-row">
+      <div class="step-index">4</div>
+      <div>
+        <h3>Use AskAI when you feel stuck</h3>
+        <p>Ask one plain-English question at a time, like what to pay first or whether you can safely buy something.</p>
+      </div>
+    </div>
+  
+    <div class="step-row">
+      <div class="step-index">5</div>
+      <div>
+        <h3>Fix mistakes and check again</h3>
+        <p>If a balance, bill, or transaction is wrong, correct it and rerun. Better inputs lead to better guidance.</p>
+      </div>
+    </div>
+  
         </div>
-        <div class="tab-card">
-          <div class="tab-name">Cashflow &amp; Renewals</div>
-          <div class="tab-note">Budget envelopes, recurring bills, and auto-detected subscriptions with cancel/negotiate scripts.</div>
+      </section>
+
+      <section class="panel" id="logic">
+        <div class="section-head">
+          <div>
+            <span class="section-kicker">What Catalyst Watches</span>
+            <h2>What the app pays attention to</h2>
+          </div>
         </div>
-        <div class="tab-card">
-          <div class="tab-name">History</div>
-          <div class="badge badge-pro">Full archive on Pro</div>
-          <div class="tab-note">Browse any past audit to track whether your actions are actually improving your finances.</div>
+        <div class="card-grid">
+          
+    <article class="info-card">
+      <div class="card-top">
+        <h3>Cash buffer</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>Catalyst pays attention to the minimum cash you need to feel safe so you do not accidentally overspend.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>Debt cost</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>High-interest debt gets more attention because it usually costs you the most over time.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>Credit usage</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>The app watches credit card utilization because it can affect both your flexibility and your credit profile.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>Spending plan</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>The budget and cashflow views help you give each dollar a job before it disappears on accident.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>Bill timing</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>Recurring bills matter both by amount and by timing. A smaller bill at the wrong time can still create pressure.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>Progress over time</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>History is there to show whether your choices are actually improving your finances week by week.</p>
+    </article>
+  
         </div>
-        <div class="tab-card">
-          <div class="tab-name">Transaction Ledger</div>
-          <div class="badge badge-pro">Pro unlock</div>
-          <div class="tab-note">Full searchable transaction list with filters and CSV export. Good for auditing spending before a big decision.</div>
+      </section>
+
+      <section class="panel" id="privacy">
+        <div class="section-head">
+          <div>
+            <span class="section-kicker">Privacy and Backup</span>
+            <h2>The basics of where your data lives</h2>
+          </div>
         </div>
-        <div class="tab-card">
-          <div class="tab-name">Settings</div>
-          <div class="tab-note">AI model selection, Plaid, security, backups, and deletion controls.</div>
+        <div class="card-grid">
+          
+    <article class="info-card">
+      <div class="card-top">
+        <h3>Your data lives on your device first</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>Balances, renewals, and most settings are stored locally first instead of treating the server like the main home for your data.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>AI requests go through a scrubbed proxy</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>AI requests are routed through the Catalyst backend with sensitive details scrubbed before they are sent onward.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>Chat does not live forever</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>Saved AskAI chats are encrypted at rest and expire after 24 hours. Privacy Mode can avoid saving them at all.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>Plaid tokens stay off-device</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>The app does not keep Plaid access tokens on your phone. It keeps only local connection metadata and account state.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>Backup and restore</h3>
+        <span class="status-pill status-split">Free + Pro differ</span>
+      </div>
+      <p>Encrypted export and restore are built in. iCloud and household sync depend on secure native device storage.</p>
+    </article>
+  
+    <article class="info-card">
+      <div class="card-top">
+        <h3>You stay in control</h3>
+        <span class="status-pill status-all">All plans</span>
+      </div>
+      <p>Passcode, Face ID or Touch ID, re-lock timing, history clearing, and full deletion controls all live in Settings.</p>
+    </article>
+  
+        </div>
+      </section>
+
+      <section class="panel" id="matrix">
+        <div class="section-head">
+          <div>
+            <span class="section-kicker">Plans</span>
+            <h2>What Free and Pro change</h2>
+          </div>
+          <div class="price-strip">
+            <span>$9.99/mo</span>
+            <span>$89.99/yr</span>
+            <span>3 months free</span>
+          </div>
+        </div>
+        <div class="matrix">
+          <div class="matrix-header">
+            <div>Feature</div>
+            <div>Free</div>
+            <div>Pro</div>
+          </div>
+          
+    <div class="matrix-row">
+      <div class="matrix-label"><span>📊</span>AI Audits</div>
+      <div class="matrix-free">2 / week</div>
+      <div class="matrix-pro">20 / month</div>
+    </div>
+  
+    <div class="matrix-row">
+      <div class="matrix-label"><span>💬</span>AskAI Chat</div>
+      <div class="matrix-free">10 / day</div>
+      <div class="matrix-pro">30 / day</div>
+    </div>
+  
+    <div class="matrix-row">
+      <div class="matrix-label"><span>🧠</span>AI Models</div>
+      <div class="matrix-free">Catalyst AI</div>
+      <div class="matrix-pro">CFO + Boardroom</div>
+    </div>
+  
+    <div class="matrix-row">
+      <div class="matrix-label"><span>📜</span>Audit History</div>
+      <div class="matrix-free">Last 12</div>
+      <div class="matrix-pro">Full archive</div>
+    </div>
+  
+    <div class="matrix-row">
+      <div class="matrix-label"><span>📈</span>Dashboard &amp; Charts</div>
+      <div class="matrix-free">Included</div>
+      <div class="matrix-pro">Included</div>
+    </div>
+  
+    <div class="matrix-row">
+      <div class="matrix-label"><span>⚙️</span>Debt / Budget / FIRE</div>
+      <div class="matrix-free">Included</div>
+      <div class="matrix-pro">Included</div>
+    </div>
+  
+    <div class="matrix-row">
+      <div class="matrix-label"><span>🏦</span>Plaid Connections</div>
+      <div class="matrix-free">1 institution</div>
+      <div class="matrix-pro">6 institutions</div>
+    </div>
+  
+    <div class="matrix-row">
+      <div class="matrix-label"><span>📒</span>Transaction Ledger</div>
+      <div class="matrix-free">Vault preview only</div>
+      <div class="matrix-pro">Full search + export</div>
+    </div>
+  
+    <div class="matrix-row">
+      <div class="matrix-label"><span>💳</span>Rewards Ranking</div>
+      <div class="matrix-free">Best card winner</div>
+      <div class="matrix-pro">Full runner-up stack</div>
+    </div>
+  
+    <div class="matrix-row">
+      <div class="matrix-label"><span>🔁</span>Renewals AI Assist</div>
+      <div class="matrix-free">Manual tracking</div>
+      <div class="matrix-pro">Auto-detect + scripts</div>
+    </div>
+  
+    <div class="matrix-row">
+      <div class="matrix-label"><span>📅</span>Cash Flow Heatmap</div>
+      <div class="matrix-free">Timeline only</div>
+      <div class="matrix-pro">Timeline + heatmap</div>
+    </div>
+  
+    <div class="matrix-row">
+      <div class="matrix-label"><span>📤</span>Exports &amp; Sharing</div>
+      <div class="matrix-free">Audit export</div>
+      <div class="matrix-pro">Audit + ledger export</div>
+    </div>
+  
+    <div class="matrix-row">
+      <div class="matrix-label"><span>🛡️</span>Security &amp; Backup</div>
+      <div class="matrix-free">Included</div>
+      <div class="matrix-pro">Included</div>
+    </div>
+  
+        </div>
+        <p style="margin-top:16px;">Free is meant to be genuinely useful. Pro mainly adds more room, deeper AI, broader sync, and faster cleanup tools.</p>
+      </section>
+
+      
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <span class="section-kicker">Pro Tips</span>
+          <h2>How to get the most out of Pro</h2>
         </div>
       </div>
-    </section>
-
-    <!-- Workflow -->
-    <section class="section" id="workflow">
-      <span class="kicker">Weekly Loop</span>
-      <h2>The three steps that make it click</h2>
-      <div class="steps">
-        <div class="step">
-          <div class="step-num">1</div>
-          <div>
-            <h3>Keep your numbers current</h3>
-            <p>Update balances, bills, and debts before you run the audit. Plaid helps automate this — but manual entry works just as well.</p>
-          </div>
-        </div>
-        <div class="step">
-          <div class="step-num">2</div>
-          <div>
-            <h3>Run the audit</h3>
-            <p>Start with the week color and the top recommended action. Use Catalyst AI CFO for deeper analysis on harder weeks.</p>
-          </div>
-        </div>
-        <div class="step">
-          <div class="step-num">3</div>
-          <div>
-            <h3>Follow up when stuck</h3>
-            <p>AskAI handles tradeoffs and what-if questions. Renewals handles cost control. Ledger handles transaction cleanup.</p>
-          </div>
-        </div>
+      <div class="steps-list">
+        
+    <div class="step-row">
+      <div class="step-index">1</div>
+      <div>
+        <h3>Use CFO most of the time</h3>
+        <p>CFO should handle most paid audits and chats. Use Boardroom when the decision is unusually messy or high-stakes.</p>
+      </div>
+    </div>
+  
+    <div class="step-row">
+      <div class="step-index">2</div>
+      <div>
+        <h3>Clean your ledger before big decisions</h3>
+        <p>If your transaction list looks wrong, fix that before a serious audit so the advice starts from better data.</p>
+      </div>
+    </div>
+  
+    <div class="step-row">
+      <div class="step-index">3</div>
+      <div>
+        <h3>Review subscriptions once a month</h3>
+        <p>Use the renewals screen as a monthly savings check so bills do not slowly pile up unnoticed.</p>
+      </div>
+    </div>
+  
+    <div class="step-row">
+      <div class="step-index">4</div>
+      <div>
+        <h3>Use history to check if changes worked</h3>
+        <p>Compare current results to older audits to see whether a decision actually improved your cash, debt, or score.</p>
+      </div>
+    </div>
+  
+      </div>
+      <div class="coming-grid">
+        
+            <article class="coming-card">
+              <div class="coming-icon">🔮</div>
+              <h3>Net worth projections</h3>
+              <p>Longer-range planning beyond the current short-term operating view.</p>
+            </article>
+          
+            <article class="coming-card">
+              <div class="coming-icon">🏁</div>
+              <h3>Goal tracking</h3>
+              <p>Dedicated milestone tracking for debt freedom, savings targets, and major purchases.</p>
+            </article>
+          
+            <article class="coming-card">
+              <div class="coming-icon">📱</div>
+              <h3>Widgets</h3>
+              <p>Faster glanceability for score, cash pressure, and portfolio changes from the Home Screen.</p>
+            </article>
+          
       </div>
     </section>
+  
 
-    <!-- Pro Tips -->
-    <section class="section" id="tips">
-      <span class="kicker">Pro Tips</span>
-      <h2>Getting the most out of Pro</h2>
-      <div class="steps">
-        <div class="step">
-          <div class="step-num">1</div>
+      <section class="panel" id="faq">
+        <div class="section-head">
           <div>
-            <h3>Use Catalyst AI CFO for your main work</h3>
-            <p>CFO (GPT-4.1) handles all audits and deeper AskAI chats. Switch to standard Catalyst AI to conserve your monthly CFO quota on simpler questions.</p>
+            <span class="section-kicker">Common Questions</span>
+            <h2>Quick answers before you move on</h2>
           </div>
         </div>
-        <div class="step">
-          <div class="step-num">2</div>
-          <div>
-            <h3>Clean the ledger before big decisions</h3>
-            <p>If your transaction list has errors, fix them before a serious audit. The AI reads what you give it — better data leads to better guidance.</p>
-          </div>
+        <div class="faq-list">
+          
+    <details class="faq-item">
+      <summary>Do I need Plaid to use the app well?</summary>
+      <p>No. Plaid is optional. Manual entry still works, but live connections make audits faster and easier to trust.</p>
+    </details>
+  
+    <details class="faq-item">
+      <summary>Does Pro change the financial math?</summary>
+      <p>No. Pro mostly changes limits, model depth, history depth, and premium tools. The core budgeting, debt, and cashflow logic is available to everyone.</p>
+    </details>
+  
+    <details class="faq-item">
+      <summary>Is the output financial advice?</summary>
+      <p>No. The app produces educational analysis and decision support. It does not replace a licensed financial, tax, legal, or investment professional.</p>
+    </details>
+  
+          
         </div>
-        <div class="step">
-          <div class="step-num">3</div>
-          <div>
-            <h3>Review subscriptions monthly</h3>
-            <p>Use the Renewals tab as a monthly savings pass. Auto-detected subscriptions and cancel/negotiate scripts make it fast.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Plans -->
-    <section class="section" id="plans">
-      <span class="kicker">Plan Breakdown</span>
-      <h2>Free vs Pro</h2>
-      <table class="plan-table">
-        <thead>
-          <tr>
-            <th>Feature</th>
-            <th>Free</th>
-            <th>Pro</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>Audits</td><td>2 / week</td><td class="pro-val">20 / month</td></tr>
-          <tr><td>AskAI chats</td><td>10 / day</td><td class="pro-val">30 / day</td></tr>
-          <tr><td>AI model</td><td>Catalyst AI</td><td class="pro-val">AI + CFO (GPT-4.1)</td></tr>
-          <tr><td>Plaid</td><td>1 institution</td><td class="pro-val">Up to 6</td></tr>
-          <tr><td>Audit history</td><td>Last 12</td><td class="pro-val">Full archive</td></tr>
-          <tr><td>Transaction ledger</td><td>Preview only</td><td class="pro-val">Full + export</td></tr>
-          <tr><td>Budgeting, debt, FIRE</td><td>Included</td><td class="pro-val">Included</td></tr>
-          <tr><td>Renewals auto-detect</td><td>Manual</td><td class="pro-val">Auto + scripts</td></tr>
-        </tbody>
-      </table>
-      <div class="price-strip">
-        <span class="price-pill">$9.99 / month</span>
-        <span class="price-pill">$89.99 / year</span>
-        <span class="price-pill">2 months free</span>
-        <span class="price-pill">7-day free trial</span>
-      </div>
-    </section>
-
-    <!-- FAQ -->
-    <section class="section" id="faq">
-      <span class="kicker">FAQ</span>
-      <h2>Quick answers</h2>
-      <details>
-        <summary>Do I need Plaid to use the app well?</summary>
-        <p>No. Manual entry works for everything. Plaid keeps balances current automatically, which makes audits easier to trust — but it's always optional.</p>
-      </details>
-      <details>
-        <summary>Which AI model should I use for audits?</summary>
-        <p>Catalyst AI CFO (GPT-4.1) is the Pro default because it gives deeper reasoning on complex financial situations. Standard Catalyst AI is faster for quick daily questions and conserves your CFO quota.</p>
-      </details>
-      <details>
-        <summary>Does Pro change the financial math?</summary>
-        <p>No. The core audit logic, debt calculations, and budgeting math are identical on both plans. Pro changes limits, model depth, and history access.</p>
-      </details>
-      <details>
-        <summary>Is this financial advice?</summary>
-        <p>No. Catalyst Cash produces educational analysis and decision support, not licensed financial, tax, legal, or investment advice.</p>
-      </details>
-    </section>
+      </section>
+    </main>
 
     <footer class="footer">
-      <p><strong style="color:var(--text2);">Catalyst Cash</strong> provides educational analysis only — not tax, legal, investment, or professional financial advice.</p>
+      <p><strong>Catalyst Cash provides educational analysis only.</strong> It is not tax, legal, investment, or professional financial advice. Confirm major decisions with a qualified advisor when the stakes justify it.</p>
+      <p>Guide facts are aligned to the current app tier limits, pricing, and gating states.</p>
     </footer>
-
   </div>
+  <script>
+    document.querySelectorAll("[data-upgrade='true']").forEach(function (button) {
+      button.addEventListener("click", function () {
+        if (window.parent) {
+          window.parent.postMessage({ type: "OPEN_UPGRADE" }, "*");
+        }
+      });
+    });
+  </script>
 </body>
 </html>
