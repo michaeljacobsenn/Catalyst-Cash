@@ -196,7 +196,7 @@ export function usePlaidSync({
       return;
     }
 
-    const cooldown = SYNC_COOLDOWNS[rawTier.id] || SYNC_COOLDOWNS.free;
+    const cooldown = SYNC_COOLDOWNS[tier.id] || SYNC_COOLDOWNS.free;
     const lastSyncAt = getMostRecentPlaidSyncTime(cards, bankAccounts, syncConnectionIds);
     if (lastSyncAt && Date.now() - lastSyncAt < cooldown) {
       const minsLeft = Math.ceil((cooldown - (Date.now() - lastSyncAt)) / 60000);
