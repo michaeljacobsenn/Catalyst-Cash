@@ -23,7 +23,7 @@ import {
   rotateIdentityDeviceKey,
   resolveAuthenticatedActor,
 } from "./lib/identitySession.js";
-import { getQuotaWindow, getModelQuotaWindow } from "./lib/quota.js";
+import { getQuotaWindow, getModelQuotaWindow, getAuditModelQuotaWindow } from "./lib/quota.js";
 import { buildHeaders, corsHeaders, fetchWithTimeout } from "./lib/http.js";
 import {
   DEFAULTS,
@@ -57,7 +57,7 @@ export {
 } from "./lib/identitySession.js";
 export { issueIdentitySessionToken } from "./lib/identitySession.js";
 export { verifyIdentitySessionToken } from "./lib/identitySession.js";
-export { getIsoWeekKey, getQuotaWindow, getModelQuotaWindow, isRevenueCatEntitlementActive } from "./lib/quota.js";
+export { getIsoWeekKey, getQuotaWindow, getModelQuotaWindow, getAuditModelQuotaWindow, isRevenueCatEntitlementActive } from "./lib/quota.js";
 export { mergePlaidTransactions } from "./lib/plaidSync.js";
 export { resolveEffectiveTier } from "./lib/revenueCat.js";
 
@@ -1457,6 +1457,34 @@ export default {
       }
     }
 
+    // ─── Per-Model Audit Rate Limit (Pro only) ───────────────
+    const auditModelQuota = !isChat ? getAuditModelQuotaWindow(subscriptionTier, body.model || "") : null;
+    if (auditModelQuota && env.RATE_LIMITER) {
+      const auditModelLimitName = `${subscriptionTier}-${deviceId}-audit-${auditModelQuota.modelId}`;
+      const amId = env.RATE_LIMITER.idFromName(auditModelLimitName);
+      const amStub = env.RATE_LIMITER.get(amId);
+      const amRes = await amStub.fetch(`http://internal/?periodKey=${encodeURIComponent(auditModelQuota.periodKey)}&commit=false`);
+      const { count: auditModelCount } = await amRes.json();
+      if (auditModelCount >= auditModelQuota.limit) {
+        const amRetryAfter = Math.max(1, Math.ceil((auditModelQuota.resetAt.getTime() - Date.now()) / 1000));
+        return new Response(
+          JSON.stringify({
+            error: `Monthly ${auditModelQuota.modelId} audit limit reached (${auditModelQuota.limit}/mo). Switch AI model or wait until next month.`,
+            auditModelCapReached: auditModelQuota.modelId,
+            retryAfter: amRetryAfter,
+          }),
+          {
+            status: 429,
+            headers: buildHeaders(cors, {
+              "Content-Type": "application/json",
+              "Retry-After": String(amRetryAfter),
+              ...tierHeaders,
+            }),
+          }
+        );
+      }
+    }
+
     const { snapshot, systemPrompt, context, type, history, model, stream, provider, responseFormat } = body;
     const resolvedType = type || (isChat ? "chat" : "audit");
 
@@ -1533,12 +1561,20 @@ export default {
       });
       const committedRateResult = await commitRateLimit(rateResult, env);
 
-      // Commit per-model rate limit (Pro only)
+      // Commit per-model rate limit (Pro only — chat model)
       if (modelQuota && env.RATE_LIMITER) {
         const modelLimitName = `${subscriptionTier}-${deviceId}-chat-${modelQuota.modelId}`;
         const mId = env.RATE_LIMITER.idFromName(modelLimitName);
         const mStub = env.RATE_LIMITER.get(mId);
         await mStub.fetch(`http://internal/?periodKey=${encodeURIComponent(modelQuota.periodKey)}&commit=true`);
+      }
+
+      // Commit per-model audit quota (Pro only — audit model, monthly)
+      if (auditModelQuota && env.RATE_LIMITER) {
+        const auditModelLimitName = `${subscriptionTier}-${deviceId}-audit-${auditModelQuota.modelId}`;
+        const amId = env.RATE_LIMITER.idFromName(auditModelLimitName);
+        const amStub = env.RATE_LIMITER.get(amId);
+        await amStub.fetch(`http://internal/?periodKey=${encodeURIComponent(auditModelQuota.periodKey)}&commit=true`);
       }
 
       // Streaming: pipe raw response through

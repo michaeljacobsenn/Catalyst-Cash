@@ -164,7 +164,7 @@ export async function syncRemoteGatingMode() {
 //   AskAI:  Light-to-mid (~2.2K-3.4K prompt tokens in, ~500 out, natural language). Daily cap.
 //
 //   Free AskAI: 10/day — enough to experience the value proposition.
-//   Pro AskAI: 25/day total (per-model: 4 o3, 6 GPT-4.1, 15 Gemini).
+//   Pro AskAI: 30/day total (per-model: 15 GPT-4.1, 15 Gemini 2.5 Flash).
 //   These limits match the Cloudflare Worker enforcement exactly.
 //
 // ── BILLING CYCLE ANCHORING ─────────────────────────────────────
@@ -235,7 +235,7 @@ export const TIERS = {
       "export_pdf", // PDF report export
       "advanced_alerts", // Score change drivers, trend warnings
       "priority_refresh", // 15-min market data
-      "daily_pro_chat_cap", // 25/day AskAI total (4 o3 + 6 GPT-4.1 + 15 Gemini)
+      "daily_pro_chat_cap", // 30/day AskAI total (15 GPT-4.1 + 15 Gemini)
       "card_wizard", // Card Wizard feature
       "bill_negotiation", // AI Bill Negotiation scripts
 

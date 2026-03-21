@@ -17,7 +17,7 @@ describe("renderGuideHtml", () => {
     const html = renderGuideHtml("pro");
 
     expect(html).toContain("20 audits / month");
-    expect(html).toContain("25 AskAI / day");
+    expect(html).toContain("30 AskAI / day");
     expect(html).toContain("Up to 6 Plaid institutions");
     expect(html).toContain("$89.99/yr");
     expect(html).toContain("Catalyst AI CFO + Boardroom");

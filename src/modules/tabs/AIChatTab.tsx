@@ -260,7 +260,7 @@ export default memo(function AIChatTab({
 
       // ── Quota gate — check BEFORE adding message to state ──
       if (isGatingEnforced() && !chatQuota.allowed) {
-        setError("Daily message limit reached. Upgrade to Catalyst Cash Pro for 25 messages/day.");
+        setError("Daily message limit reached. Upgrade to Catalyst Cash Pro for 30 messages/day.");
         haptic.medium();
         return;
       }
@@ -339,13 +339,17 @@ export default memo(function AIChatTab({
       try {
         log.info("chat", "Chat message sent", { provider: aiProvider, model: aiModel });
 
-        // The user's message is the "snapshot" (what the audit system calls the user input)
-        // The system prompt contains the full financial context
+        // Resolve effective chat model:
+        // - gpt-4.1 (CFO) selected → use gpt-4.1
+        // - o3 (Boardroom, now removed from Pro) → degrade to gpt-4.1
+        // - gemini-2.5-flash → use gemini
+        const effectiveChatModel = (aiModel === "gpt-4.1" || aiModel === "o3") ? "gpt-4.1" : aiModel;
+
         const stream = streamAuditTyped(
           apiKey,
           trimmedText,
           aiProvider,
-          aiModel,
+          effectiveChatModel,
           promptContext,
           apiHistory,
           undefined, // deviceId — handled by backend
@@ -414,15 +418,14 @@ export default memo(function AIChatTab({
           // ── Per-model cap auto-switch (Pro only) ──
           const modelCap = (err as Record<string, unknown>)?.modelCapReached;
           if (modelCap && typeof modelCap === "string") {
-            // Priority order: gemini (cheapest) → gpt-4.1 → o3
-            const MODEL_FALLBACK_ORDER = ["gemini-2.5-flash", "gpt-4.1", "o3"];
+            // Priority order: gemini (cheapest/most quota) → gpt-4.1
+            const MODEL_FALLBACK_ORDER = ["gemini-2.5-flash", "gpt-4.1"];
             const nextModel = MODEL_FALLBACK_ORDER.find(m => m !== modelCap);
             if (nextModel) {
               (setAiModel as (m: string) => void)(nextModel);
               const modelNames: Record<string, string> = {
                 "gemini-2.5-flash": "Catalyst AI",
                 "gpt-4.1": "Catalyst AI CFO",
-                "o3": "Catalyst AI Boardroom",
               };
               setError(`Daily ${modelNames[modelCap] || modelCap} limit reached. Switched to ${modelNames[nextModel] || nextModel} — send your message again.`);
               toast?.error?.(`Switched to ${modelNames[nextModel] || nextModel}`);
@@ -1142,7 +1145,7 @@ export default memo(function AIChatTab({
             <ProBannerTyped
               onUpgrade={() => setShowPaywall(true)}
               label="⚡ Upgrade to Pro"
-              sublabel={`Only ${chatQuota.remaining} chats left today — Pro gives you 25/day`}
+              sublabel={`Only ${chatQuota.remaining} chats left today — Pro gives you 30/day`}
             />
           </div>
         )}

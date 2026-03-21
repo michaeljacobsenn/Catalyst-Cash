@@ -1,13 +1,18 @@
 export const FREE_AUDITS_PER_WEEK = 2;
 export const PRO_AUDITS_PER_MONTH = 20;
 export const FREE_CHATS_PER_DAY = 10;
-export const PRO_CHATS_PER_DAY = 25;
+export const PRO_CHATS_PER_DAY = 30;
 
 // Per-model daily caps for Pro chat (must sum to PRO_CHATS_PER_DAY)
 export const PRO_MODEL_CAPS = {
-  "o3": 4,
-  "gpt-4.1": 6,
+  "gpt-4.1": 15,
   "gemini-2.5-flash": 15,
+};
+
+// Per-model monthly caps for Pro audits (must sum to PRO_AUDITS_PER_MONTH)
+export const PRO_MODEL_AUDIT_CAPS = {
+  "gpt-4.1": 10,
+  "gemini-2.5-flash": 10,
 };
 
 /**
@@ -20,6 +25,20 @@ export function getModelQuotaWindow(tier, modelId, now = new Date()) {
     limit: PRO_MODEL_CAPS[modelId],
     periodKey: `${now.toISOString().slice(0, 10)}:${modelId}`,
     resetAt: getNextUtcBoundary("day", now),
+    modelId,
+  };
+}
+
+/**
+ * Get per-model quota window for Pro tier audits (monthly).
+ * Returns null if no per-model cap applies.
+ */
+export function getAuditModelQuotaWindow(tier, modelId, now = new Date()) {
+  if (tier !== "pro" || !PRO_MODEL_AUDIT_CAPS[modelId]) return null;
+  return {
+    limit: PRO_MODEL_AUDIT_CAPS[modelId],
+    periodKey: `${now.toISOString().slice(0, 7)}:audit:${modelId}`,
+    resetAt: getNextUtcBoundary("month", now),
     modelId,
   };
 }

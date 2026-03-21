@@ -4,12 +4,11 @@ export const FREE_HISTORY_LIMIT = 12;
 export const FREE_MARKET_REFRESH_MS = 60 * 60 * 1000;
 
 export const PRO_MONTHLY_AUDIT_CAP = 20;
-export const PRO_DAILY_CHAT_CAP = 25;
+export const PRO_DAILY_CHAT_CAP = 30;
 
 // Per-model daily caps for Pro (must sum to PRO_DAILY_CHAT_CAP)
 export const PRO_MODEL_CAPS = {
-  "o3": 4,
-  "gpt-4.1": 6,
+  "gpt-4.1": 15,
   "gemini-2.5-flash": 15,
 };
 export const PRO_MARKET_REFRESH_MS = 5 * 60 * 1000;
@@ -21,7 +20,7 @@ export const INSTITUTION_LIMITS = {
 
 export const TIER_MODEL_IDS = {
   free: ["gemini-2.5-flash"],
-  pro: ["gpt-4.1", "gemini-2.5-flash", "o3"],
+  pro: ["gpt-4.1", "gemini-2.5-flash"],
 };
 
 export const IAP_PRODUCTS = {

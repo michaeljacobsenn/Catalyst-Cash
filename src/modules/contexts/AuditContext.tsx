@@ -130,6 +130,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
     personalRules,
     aiConsent,
     setShowAiConsent,
+    setAiModel,
   } = useSettings();
 
   const { cards, renewals, cardAnnualFees, setBadges } = usePortfolio();
@@ -659,6 +660,30 @@ export function AuditProvider({ children }: AuditProviderProps) {
           }
         }
       } catch (submitError: unknown) {
+        // ── Per-model audit cap auto-switch (Pro only) ──
+        const auditModelCap = (submitError as Record<string, unknown>)?.auditModelCapReached;
+        if (auditModelCap && typeof auditModelCap === "string") {
+          const AUDIT_FALLBACK: Record<string, string> = {
+            "gpt-4.1": "gemini-2.5-flash",
+            "gemini-2.5-flash": "gpt-4.1",
+          };
+          const nextModel = AUDIT_FALLBACK[auditModelCap];
+          const modelNames: Record<string, string> = {
+            "gemini-2.5-flash": "Catalyst AI",
+            "gpt-4.1": "Catalyst AI CFO",
+          };
+          if (nextModel) {
+            (setAiModel as (m: string) => void)(nextModel);
+            setError(`Monthly ${modelNames[auditModelCap] || auditModelCap} audit limit reached. Switched to ${modelNames[nextModel] || nextModel} — run your audit again.`);
+            toast.error(`Switched to ${modelNames[nextModel] || nextModel} for audits`);
+            haptic.error();
+            // Stay on input — user just needs to tap Run Audit again
+            setLoading(false);
+            if (timerRef.current) clearInterval(timerRef.current);
+            return;
+          }
+        }
+
         const failure = toUserFacingRequestError(submitError, { context: "audit" });
         const isBackgroundAbort = auditAbortReasonRef.current === "background-pause";
         const isAbort = isBackgroundAbort || auditAbortReasonRef.current === "user-cancelled" || isLikelyAbortError(submitError);
@@ -712,6 +737,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
       setBadges,
       setFinancialConfig,
       setShowAiConsent,
+      setAiModel,
       toast,
       trendContext,
       useStreaming,
