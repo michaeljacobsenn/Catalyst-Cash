@@ -53,7 +53,7 @@
 // returns gatingMode:"live" and ALL app versions enforce it —
 // even old builds that have "off" hardcoded here.
 // ────────────────────────────────────────────────────────────
-const GATING_MODE_DEFAULT = "soft";
+const GATING_MODE_DEFAULT = "off";
 let _effectiveGatingMode = GATING_MODE_DEFAULT;
 
 /**

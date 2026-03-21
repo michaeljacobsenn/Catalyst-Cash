@@ -122,6 +122,9 @@ function useInteractiveSwipe({
   const gestureAcceptedRef = useRef(false);
   const gestureRejectedRef = useRef(false);
   const gesturePerformanceModeRef = useRef(false);
+  // Increment each time we stop an animation so in-flight onComplete callbacks
+  // from the *previous* animation know they're stale and don't dirty refs.
+  const animationGenRef = useRef(0);
 
   const progress = useTransform(motion, (latest) => {
     const size = Math.max(getViewportSize(axis, paneRef.current), 1);
@@ -163,6 +166,8 @@ function useInteractiveSwipe({
     dismissingRef.current = true;
     haptic.light();
     onDismiss();
+    // Reset dismissingRef after a tick so the next gesture on re-mount is clean
+    Promise.resolve().then(() => { dismissingRef.current = false; });
   }, [onDismiss]);
 
   const resetGestureState = useCallback(() => {
@@ -182,10 +187,13 @@ function useInteractiveSwipe({
   const animateTo = useCallback(
     (target: number, velocity = 0, onComplete?: () => void) => {
       animationRef.current?.stop();
+      const gen = ++animationGenRef.current;
       animationRef.current = animate(motion, target, {
         ...(target === 0 ? SNAP_SPRING : DISMISS_SPRING),
         velocity,
         onComplete: () => {
+          // Ignore callbacks from animations that were stopped mid-flight
+          if (animationGenRef.current !== gen) return;
           if (target === 0) {
             resetGestureState();
           }
@@ -330,11 +338,13 @@ function useInteractiveSwipe({
     edgeSize,
     motionStyle,
     progress,
-    underlayStyle: axis === "x" ? { x: underlayX, scale: underlayScale, opacity: underlayOpacity } : undefined,
     backdropStyle: { opacity: backdropOpacity },
-    edgeShadowStyle: axis === "x" ? { opacity: edgeShadowOpacity } : undefined,
     dismiss,
-  };
+    ...(axis === "x" ? {
+      underlayStyle: { x: underlayX, scale: underlayScale, opacity: underlayOpacity },
+      edgeShadowStyle: { opacity: edgeShadowOpacity },
+    } : {}),
+  } as SwipeGestureHandlers;
 }
 
 export function useSwipeBack(
