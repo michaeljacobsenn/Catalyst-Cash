@@ -199,7 +199,7 @@ function useInteractiveSwipe({
   );
 
   const bind = useDrag(
-    ({ first, down, movement: [mx, my], velocity: [vx, vy], direction: [dx, dy], xy: [px, py], cancel }) => {
+    ({ first, down, movement: [mx, my], velocity: [vx, vy], direction: [dx, dy], cancel }) => {
       if (!enabled) { cancel?.(); return; }
       if (dismissingRef.current) { cancel?.(); return; }
 
@@ -213,11 +213,6 @@ function useInteractiveSwipe({
         animationRef.current?.stop();
         ++animationGenRef.current;
         motion.set(0);
-
-        if (edgeOnly) {
-          const coord = axis === "x" ? px : py;
-          if (coord > edgeSize) { cancel?.(); return; }
-        }
       }
 
       const raw = axis === "x" ? mx : my;
@@ -247,6 +242,7 @@ function useInteractiveSwipe({
       // so iOS doesn't steal touches for its native scroll recognizer.
       axis,
       filterTaps: true,
+      preventScroll: true, // Crucial: prevents iOS from stealing touch for vertical scroll if finger wiggles
       threshold: 2,
       rubberband: false,
       pointer: { touch: true },

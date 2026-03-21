@@ -6,7 +6,7 @@
     "contentInset": "never",
     "preferredContentMode": "mobile",
     "allowsLinkPreview": false,
-    "allowsBackForwardNavigationGestures": true
+    "allowsBackForwardNavigationGestures": false
   },
   "plugins": {
     "SplashScreen": {
