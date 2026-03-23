@@ -2052,6 +2052,7 @@ describe("Plaid transaction sync migration", () => {
 
   it("uses the newest targeted sync timestamp when enforcing manual sync cooldowns", async () => {
     const env = makeEnv({
+      GATING_MODE: "live",
       DB: new FakeD1(),
     });
     const session = await issueSessionFor(env, { "X-Device-ID": "cooldown-device" });
@@ -2104,6 +2105,81 @@ describe("Plaid transaction sync migration", () => {
     expect(response.status).toBe(429);
     await expect(response.json()).resolves.toMatchObject({ error: "cooldown" });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("bypasses manual sync cooldowns when gating mode is soft", async () => {
+    const env = makeEnv({
+      GATING_MODE: "soft",
+      DB: new FakeD1(),
+    });
+    const session = await issueSessionFor(env, { "X-Device-ID": "soft-cooldown-device" });
+    env.DB.plaidItems = [
+      {
+        item_id: "item-soft",
+        user_id: session.payload.actorId,
+        access_token: "access-soft",
+        transactions_cursor: null,
+      },
+    ];
+    env.DB.syncData = [
+      {
+        user_id: session.payload.actorId,
+        item_id: "item-soft",
+        balances_json: "{}",
+        liabilities_json: "{}",
+        transactions_json: "{}",
+        last_synced_at: "2999-03-13 12:00:00",
+      },
+    ];
+
+    const fetchMock = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.includes("/accounts/get")) {
+        return new Response(
+          JSON.stringify({
+            accounts: [
+              {
+                account_id: "acct-soft",
+                balances: { current: 55.55 },
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/transactions/sync")) {
+        return new Response(
+          JSON.stringify({
+            added: [],
+            modified: [],
+            removed: [],
+            has_more: false,
+            next_cursor: "cursor-soft-1",
+          }),
+          { status: 200 }
+        );
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/sync/force", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...session.authorization },
+        body: JSON.stringify({ connectionId: "item-soft" }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      syncedItemIds: ["item-soft"],
+      limitedToItemId: "item-soft",
+    });
+    expect(fetchMock).toHaveBeenCalled();
   });
 
   it("serves cached plaid transactions to free users without re-hitting plaid", async () => {

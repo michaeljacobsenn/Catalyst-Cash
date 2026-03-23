@@ -25,6 +25,7 @@
   import { fetchWithRetry } from "./fetchWithRetry.js";
   import { buildIdentityHeaders,clearIdentitySession } from "./identitySession.js";
   import { getIssuerCards } from "./issuerCards.js";
+  import { log } from "./logger.js";
   import { categorizeBatch,learn } from "./merchantMap.js";
   import { getSubscriptionState,INSTITUTION_LIMITS,isGatingEnforced } from "./subscription.js";
   import { db } from "./utils.js";
@@ -133,8 +134,8 @@ export async function getConnections() {
   const hasLegacyTokens = stored.some(connection => connection && "accessToken" in connection);
   
   if (deduplicated || hasLegacyTokens) {
-    if (deduplicated) console.warn("[Plaid] Cleaned up duplicate connections from local storage.");
-    if (hasLegacyTokens) console.warn("[Plaid] Removed legacy access tokens from local connection storage.");
+    if (deduplicated) void log.warn("plaid", "Cleaned up duplicate connections from local storage.");
+    if (hasLegacyTokens) void log.warn("plaid", "Removed legacy access tokens from local connection storage.");
     await db.set(PLAID_STORAGE_KEY, uniqueConns);
   }
   
@@ -407,8 +408,8 @@ export async function purgeBrokenConnections() {
   const conns = await getConnections();
   const broken = conns.filter(c => !c.id);
   if (broken.length > 0) {
-    console.warn(
-      `[Plaid] Purging ${broken.length} broken connection(s): ${broken.map(c => c.institutionName).join(", ")}`
+    void log.warn("plaid", 
+      `Purging ${broken.length} broken connection(s): ${broken.map(c => c.institutionName).join(", ")}`
     );
     await saveConnections(conns.filter(c => !broken.includes(c)));
   }
@@ -431,7 +432,7 @@ export async function createLinkToken() {
     });
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
-      console.error(`[Plaid] link-token response ${res.status}:`, errBody.substring(0, 500));
+      void log.error("plaid", `link-token response ${res.status}`, { body: errBody.substring(0, 500) });
       // Try to extract Plaid's specific error message
       let detail = `HTTP ${res.status}`;
       try {
@@ -445,7 +446,7 @@ export async function createLinkToken() {
     const data = await res.json();
     return data.link_token;
   } catch (err) {
-    console.error(`[Plaid] fetch backend link-token network error:`, err?.message || err);
+    void log.error("plaid", "fetch backend link-token network error", { error: err?.message || err });
     throw err;
   } finally {
     timeout.cancel();
@@ -459,7 +460,7 @@ export async function createLinkToken() {
  */
 export async function openPlaidLink(options = {}) {
   if (activePlaidLinkPromise) {
-    console.warn("[Plaid] Reusing active Link flow");
+    void log.warn("plaid", "Reusing active Link flow");
     return activePlaidLinkPromise;
   }
 
@@ -473,7 +474,7 @@ export async function openPlaidLink(options = {}) {
       try {
         subState = await getSubscriptionState();
       } catch (err) {
-        console.warn("[Plaid] Subscription state unavailable:", err?.message || err);
+        void log.warn("plaid", "Subscription state unavailable:", err?.message || err);
       }
       const tierId = subState?.tier || "free";
       const limit = INSTITUTION_LIMITS[tierId] || INSTITUTION_LIMITS.free;
@@ -485,7 +486,7 @@ export async function openPlaidLink(options = {}) {
 
     // Dynamically load Plaid Link SDK if not already loaded
     if (!window.Plaid) {
-      console.warn("[Plaid] Loading Plaid Link SDK from CDN...");
+      void log.warn("plaid", "Loading Plaid Link SDK from CDN...");
       await new Promise((resolve, reject) => {
         const script = document.createElement("script");
         script.src = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
@@ -496,12 +497,12 @@ export async function openPlaidLink(options = {}) {
 
         script.onload = () => {
           clearTimeout(timer);
-          console.warn("[Plaid] SDK script loaded");
+          void log.warn("plaid", "SDK script loaded");
           resolve();
         };
         script.onerror = e => {
           clearTimeout(timer);
-          console.error("[Plaid] SDK script FAILED to load:", e);
+          void log.error("plaid", "SDK script FAILED to load", { error: e });
           reject(new Error("Failed to load Plaid Link SDK — check network connectivity"));
         };
         document.head.appendChild(script);
@@ -511,18 +512,18 @@ export async function openPlaidLink(options = {}) {
       throw new Error("Plaid Link SDK loaded but window.Plaid is undefined");
     }
 
-    console.warn("[Plaid] Creating link token...");
+    void log.warn("plaid", "Creating link token...");
     let linkToken;
     try {
       linkToken = await createLinkToken();
-      console.warn("[Plaid] Link token obtained:", linkToken ? "OK" : "EMPTY");
+      void log.warn("plaid", "Link token obtained:", linkToken ? "OK" : "EMPTY");
     } catch (e) {
-      console.error("[Plaid] createLinkToken failed:", e?.message || e);
+      void log.error("plaid", "createLinkToken failed", { error: e?.message || e });
       throw e;
     }
 
     return new Promise((resolve, reject) => {
-      console.warn("[Plaid] Creating Plaid.create handler...");
+      void log.warn("plaid", "Creating Plaid.create handler...");
       let settled = false;
       let timeoutId = null;
       const finish = (fn) => {
@@ -557,7 +558,7 @@ export async function openPlaidLink(options = {}) {
       }, PLAID_LINK_UI_TIMEOUT_MS);
       try {
         handler.open();
-        console.warn("[Plaid] handler.open() called");
+        void log.warn("plaid", "handler.open() called");
       } catch (err) {
         finish(() => reject(new Error(err?.message || "Plaid Link failed to open")));
       }
@@ -713,10 +714,10 @@ export async function forceBackendSync(options = {}) {
   });
   if (!res.ok) {
     if (res.status === 429) {
-      console.warn(`[Plaid] Force sync throttled by backend cooldown. Using cached D1 data.`);
+      void log.warn("plaid", `Force sync throttled by backend cooldown. Using cached D1 data.`);
       return false;
     }
-    console.error(`[Plaid] Force sync failed: HTTP ${res.status}`);
+    void log.error("plaid", `Force sync failed: HTTP ${res.status}`);
     return false;
   }
   return true;
@@ -740,18 +741,18 @@ export async function fetchBalances(connectionId, retryCount = 0) {
   });
   if (!res.ok) {
     const errBody = await res.text().catch(() => "");
-    console.warn(`[Plaid] sync status FAILED: HTTP ${res.status} — ${errBody.substring(0, 200)}`);
+    void log.warn("plaid", `sync status FAILED: HTTP ${res.status} — ${errBody.substring(0, 200)}`);
     throw new Error(`Sync status failed: ${res.status}`);
   }
   const data = await res.json();
   if (!data.hasData) {
     if (retryCount < 20) {
       const backoffMs = Math.min(2000 * Math.pow(2, Math.floor(retryCount / 3)), 8000);
-      console.warn(`[Plaid] No pre-fetched sync data available for connection ${connectionId} yet. Retrying in ${backoffMs}ms (attempt ${retryCount + 1}/20)...`);
+      void log.warn("plaid", `No pre-fetched sync data available for connection ${connectionId} yet. Retrying in ${backoffMs}ms (attempt ${retryCount + 1}/20)...`);
       await new Promise(resolve => setTimeout(resolve, backoffMs));
       return fetchBalances(connectionId, retryCount + 1);
     }
-    console.warn(`[Plaid] No pre-fetched sync data available for connection ${connectionId} yet. Waiting for Webhook.`);
+    void log.warn("plaid", `No pre-fetched sync data available for connection ${connectionId} yet. Waiting for Webhook.`);
     return { ...conn, _pendingSync: true, _syncStatus: "pending" };
   }
 
@@ -767,8 +768,8 @@ export async function fetchBalances(connectionId, retryCount = 0) {
         limit: fresh.balances?.limit,
         currency: fresh.balances?.iso_currency_code || "USD",
       };
-      console.warn(
-        `[Plaid]   → ${acct.name}: bal=${fresh.balances?.current}, limit=${fresh.balances?.limit}, avail=${fresh.balances?.available}`
+      void log.warn("plaid", 
+        `  → ${acct.name}: bal=${fresh.balances?.current}, limit=${fresh.balances?.limit}, avail=${fresh.balances?.available}`
       );
     }
   }
@@ -823,7 +824,7 @@ export async function fetchLiabilities(connectionId, retryCount = 0) {
   if (!data.hasData) {
     if (retryCount < 20) {
       const backoffMs = Math.min(2000 * Math.pow(2, Math.floor(retryCount / 3)), 8000);
-      console.warn(`[Plaid] No liability sync data for ${connectionId} yet. Retrying in ${backoffMs}ms (attempt ${retryCount + 1}/20)...`);
+      void log.warn("plaid", `No liability sync data for ${connectionId} yet. Retrying in ${backoffMs}ms (attempt ${retryCount + 1}/20)...`);
       await new Promise(resolve => setTimeout(resolve, backoffMs));
       return fetchLiabilities(connectionId, retryCount + 1);
     }
@@ -875,7 +876,7 @@ export async function fetchBalancesAndLiabilities(connectionId) {
     const liabilityResult = await fetchLiabilities(connectionId);
     pendingSync = pendingSync || Boolean(liabilityResult?._pendingSync);
   } catch (e) {
-    console.warn(`[Plaid] liabilities skipped for ${connectionId}: ${e.message}`);
+    void log.warn("plaid", `liabilities skipped for ${connectionId}: ${e.message}`);
   }
   const conns = await getConnections();
   const fresh = conns.find(c => c.id === connectionId);
@@ -912,7 +913,7 @@ export async function fetchAllBalancesAndLiabilities(options = {}) {
     const removed = conns.length - seen.size;
     conns = Array.from(seen.values());
     await saveConnections(conns);
-    console.warn(`[Plaid] Deduped connections: removed ${removed} duplicate(s), ${conns.length} remaining`);
+    void log.warn("plaid", `Deduped connections: removed ${removed} duplicate(s), ${conns.length} remaining`);
   }
 
   const results = [];
@@ -923,7 +924,7 @@ export async function fetchAllBalancesAndLiabilities(options = {}) {
     try {
       results.push(await fetchBalancesAndLiabilities(conn.id));
     } catch (e) {
-      console.warn(`[Plaid] sync failed for ${conn.institutionName}: ${e.message}`);
+      void log.warn("plaid", `sync failed for ${conn.institutionName}: ${e.message}`);
       results.push({ ...conn, _error: e.message });
     }
   }
@@ -961,8 +962,8 @@ export async function fetchTransactions(connectionId, _days = 30) {
 
   if (!res.ok) {
     const errBody = await res.text().catch(() => "");
-    console.warn(
-      `[Plaid] fetchTransactions FAILED for ${conn.institutionName}: HTTP ${res.status} — ${errBody.substring(0, 200)}`
+    void log.warn("plaid", 
+      `fetchTransactions FAILED for ${conn.institutionName}: HTTP ${res.status} — ${errBody.substring(0, 200)}`
     );
     throw new Error(`Transaction fetch failed: ${res.status}`);
   }
@@ -1026,9 +1027,9 @@ export async function fetchAllTransactions(days = 30, options = {}) {
     try {
       const txns = await fetchTransactions(conn.id, days);
       all = all.concat(txns);
-      console.warn(`[Plaid] Fetched ${txns.length} transactions from ${conn.institutionName}`);
+      void log.warn("plaid", `Fetched ${txns.length} transactions from ${conn.institutionName}`);
     } catch (e) {
-      console.warn(`[Plaid] Transaction fetch skipped for ${conn.institutionName}: ${e.message}`);
+      void log.warn("plaid", `Transaction fetch skipped for ${conn.institutionName}: ${e.message}`);
     }
   }
 
@@ -1073,10 +1074,10 @@ export async function fetchAllTransactions(days = 30, options = {}) {
     const storage = typeof localStorage !== "undefined" ? localStorage : null;
     const cooldownUntil = Number(storage?.getItem(PLAID_AI_CATEGORIZATION_COOLDOWN_KEY) || 0);
     if (cooldownUntil > Date.now()) {
-      console.warn("[Plaid] AI categorization cooldown active; skipping retry for uncategorized merchants.");
+      void log.warn("plaid", "AI categorization cooldown active; skipping retry for uncategorized merchants.");
     } else {
       const batchedUnknowns = uniqueUnknowns.slice(0, PLAID_AI_CATEGORIZATION_MAX_BATCH);
-      console.warn(`[Plaid] Sending ${batchedUnknowns.length} unknown merchants to AI Categorization Engine...`);
+      void log.warn("plaid", `Sending ${batchedUnknowns.length} unknown merchants to AI Categorization Engine...`);
       const aiCategoryMap = await batchCategorizeTransactions(batchedUnknowns);
       if (!aiCategoryMap || Object.keys(aiCategoryMap).length === 0) {
         storage?.setItem(
@@ -1510,8 +1511,8 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
       if (inst && acctLast4) {
         fallbackCard = updatedCards.find(c => sameInstitution(c.institution, inst) && extractLast4(c) === acctLast4);
         if (fallbackCard) {
-          console.warn(
-            `[Plaid] applyBalanceSync: matched card "${fallbackCard.nickname || fallbackCard.name}" by institution+last4 (${inst} ···${acctLast4})`
+          void log.warn("plaid", 
+            `applyBalanceSync: matched card "${fallbackCard.nickname || fallbackCard.name}" by institution+last4 (${inst} ···${acctLast4})`
           );
           // Repair the stale plaid account id for future syncs
           fallbackCard._plaidAccountId = acct.plaidAccountId;
@@ -1554,8 +1555,8 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
           paymentDueDay: plaidDueDay != null ? plaidDueDay : (card.paymentDueDay ?? null),
           minPayment: liab.minimumPayment != null ? liab.minimumPayment : (card.minPayment ?? null),
         };
-        console.warn(
-          `[Plaid] synced card "${updatedCards[idx].nickname || updatedCards[idx].name}": bal=${acct.balance?.current}, limit=${updatedCards[idx].limit}`
+        void log.warn("plaid", 
+          `synced card "${updatedCards[idx].nickname || updatedCards[idx].name}": bal=${acct.balance?.current}, limit=${updatedCards[idx].limit}`
         );
         balanceSummary.push({
           name: updatedCards[idx].nickname || updatedCards[idx].name,
@@ -1585,8 +1586,8 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
                   .length === 1))
         );
         if (fallbackBank) {
-          console.warn(
-            `[Plaid] applyBalanceSync: matched bank "${fallbackBank.name}" by institution+mask/subtype (${inst})`
+          void log.warn("plaid", 
+            `applyBalanceSync: matched bank "${fallbackBank.name}" by institution+mask/subtype (${inst})`
           );
           fallbackBank._plaidAccountId = acct.plaidAccountId;
           fallbackBank._plaidConnectionId = connection.id;

@@ -149,7 +149,7 @@ export async function initRevenueCat() {
  */
 export async function presentPaywall() {
   if (!isNative) {
-    console.warn("RevenueCat paywall is only available on native iOS. Falling back to simple web paywall.");
+    void log.info("revenuecat", "Paywall unavailable on web — falling back to simple web paywall");
     return null; // Signals the caller to show the web UI fallback
   }
   if (!getRevenueCatApiKey()) {
@@ -202,7 +202,7 @@ export async function restorePurchases() {
  */
 export async function presentCustomerCenter() {
   if (!isNative) {
-    console.warn("Customer Center is only available on native iOS.");
+    void log.info("revenuecat", "Customer Center unavailable on web");
     if (window.toast) window.toast.error("Subscription management is only available in the iOS app.");
     return;
   }

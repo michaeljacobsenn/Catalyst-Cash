@@ -2,6 +2,7 @@
   import type { CatalystCashConfig,Card as PortfolioCard } from "../../types/index.js";
   import { classifyMerchant } from "../api.js";
   import { T } from "../constants.js";
+  import { log } from "../logger.js";
   import { usePortfolio } from "../contexts/PortfolioContext.js";
   import { useSettings } from "../contexts/SettingsContext.js";
   import GeoSuggestWidget from "../dashboard/GeoSuggestWidget.js";
@@ -292,7 +293,7 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
       setShowAllRunners(false);
       haptic.success();
     } catch (err) {
-      console.warn("AI categorization failed:", err);
+      void log.warn("card-wizard", "AI categorization failed", { error: err });
       // Soft graceful degradation message instead of harsh red alert
       setError("AI is temporarily unavailable or uncertain. Please verify the category below:");
     } finally {

@@ -56,6 +56,7 @@ const LazyProPaywall = React.lazy(() => import("./ProPaywall.js"));
 
 interface AIChatTabProps {
   proEnabled?: boolean;
+  privacyMode?: boolean;
   initialPrompt?: string | null;
   clearInitialPrompt?: (() => void) | null;
   onBack?: (() => void) | null;
@@ -138,11 +139,13 @@ const streamAuditTyped = streamAudit as (
 
 export default memo(function AIChatTab({
   proEnabled = false,
+  privacyMode: _privacyModeTick = false,
   initialPrompt = null,
   clearInitialPrompt = null,
   onBack = null,
   embedded = false,
 }: AIChatTabProps) {
+  void _privacyModeTick;
   void onBack;
   void embedded;
   const { current, history, trendContext } = useAudit();

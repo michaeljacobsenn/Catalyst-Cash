@@ -5,6 +5,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { getBackendUrl } from "./api.js";
+import { log } from "./logger.js";
 import { getMarketRefreshTTL } from "./subscription.js";
 import { db } from "./utils.js";
 
@@ -656,7 +657,7 @@ export async function fetchMarketPrices(symbols, forceRefresh = false, options =
 
   const refreshReason = options.reason === "manual" || forceRefresh ? "manual" : "launch";
   if (await shouldThrottleRefresh(refreshReason)) {
-    console.warn(`[MarketData] ${refreshReason} refresh throttled; serving cache only`);
+    void log.warn("market-data", `${refreshReason} refresh throttled; serving cache only`);
     return getCachedPrices(symbols);
   }
 
@@ -698,13 +699,13 @@ async function _fetchMarketPricesImpl(symbols, forceRefresh) {
           }
           // If all symbols are cached, return immediately
           if (missing.length === 0) {
-            console.warn("[MarketData] serving from cache:", Object.keys(filtered).join(", "));
+            void log.warn("market-data", "serving from cache:", Object.keys(filtered).join(", "));
             return { data: filtered, source: "cache" };
           }
           // If most are cached, fetch only the missing ones and merge
           if (Object.keys(filtered).length > 0 && missing.length < symbols.length) {
-            console.warn(
-              `[MarketData] partial cache hit (${Object.keys(filtered).length}/${symbols.length}), fetching missing: ${missing.join(", ")}`
+            void log.warn("market-data", 
+              `partial cache hit (${Object.keys(filtered).length}/${symbols.length}), fetching missing: ${missing.join(", ")}`
             );
             // fetch missing in background, return cached immediately + merge later
             const url = getWorkerUrl();
@@ -725,18 +726,18 @@ async function _fetchMarketPricesImpl(symbols, forceRefresh) {
         }
       }
     } catch (cacheErr) {
-      console.warn("[MarketData] cache read error:", cacheErr.message);
+      void log.warn("market-data", "cache read error:", cacheErr.message);
     }
   }
 
   const url = getWorkerUrl();
   if (!url) {
-    console.warn("[MarketData] no worker URL configured — falling back to stale cache");
+    void log.warn("market-data", "no worker URL configured — falling back to stale cache");
     const filtered = await getCachedPrices(symbols);
     return { data: filtered, source: Object.keys(filtered).length > 0 ? "fallback-cache" : "empty" };
   }
 
-  console.warn(`[MarketData] fetching: ${url}?symbols=${symbols.join(",")}`);
+  void log.warn("market-data", `fetching: ${url}?symbols=${symbols.join(",")}`);
 
   try {
     const res = await fetch(`${url}?symbols=${symbols.join(",")}`, {
@@ -747,13 +748,13 @@ async function _fetchMarketPricesImpl(symbols, forceRefresh) {
     const json = await res.json();
     const data = json.data || {};
 
-    console.warn(`[MarketData] received ${Object.keys(data).length} prices`);
+    void log.warn("market-data", `received ${Object.keys(data).length} prices`);
 
     // Identify symbols the worker didn't return (e.g., mutual funds like VFIFX)
     const missing = symbols.filter(s => !data[s] || !data[s].price);
     if (missing.length > 0) {
-      console.warn(
-        `[MarketData] worker missing ${missing.length} symbols, trying Yahoo fallback: ${missing.join(", ")}`
+      void log.warn("market-data", 
+        `worker missing ${missing.length} symbols, trying Yahoo fallback: ${missing.join(", ")}`
       );
       // Rate-limited sequential fetch — 300ms delay between requests to avoid Yahoo 429s
       const YAHOO_DELAY_MS = 300;
@@ -767,7 +768,7 @@ async function _fetchMarketPricesImpl(symbols, forceRefresh) {
               const yUrl = `https://corsproxy.io/?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`)}`;
               const yRes = await fetch(yUrl);
               if (yRes.status === 429) {
-                console.warn(`[MarketData] Yahoo rate limited on ${sym}`);
+                void log.warn("market-data", `Yahoo rate limited on ${sym}`);
                 return null;
               }
               if (!yRes.ok) return null;
@@ -799,14 +800,14 @@ async function _fetchMarketPricesImpl(symbols, forceRefresh) {
           const sym = batch[j];
           if (result.status === "fulfilled" && result.value) {
             data[sym] = result.value;
-            console.warn(`[MarketData] Yahoo fallback got ${sym}: $${result.value.price}`);
+            void log.warn("market-data", `Yahoo fallback got ${sym}: $${result.value.price}`);
           } else {
-            console.warn(`[MarketData] Yahoo failed for ${sym}, attempting to use last known cached price.`);
+            void log.warn("market-data", `Yahoo failed for ${sym}, attempting to use last known cached price.`);
             try {
               const cached = await db.get(CACHE_KEY);
               if (cached && cached[sym]) {
                 data[sym] = cached[sym];
-                console.warn(`[MarketData] Recovered cached price for ${sym}: $${cached[sym].price}`);
+                void log.warn("market-data", `Recovered cached price for ${sym}: $${cached[sym].price}`);
               }
             } catch {
               // Cache recovery is best-effort only.
@@ -830,7 +831,7 @@ async function _fetchMarketPricesImpl(symbols, forceRefresh) {
 
     return { data, source: "network" };
   } catch (err) {
-    console.warn("[MarketData] fetch failed:", err.message);
+    void log.warn("market-data", "fetch failed:", err.message);
     // Fall back to stale cache
     const filtered = await getCachedPrices(symbols);
     return { data: filtered, source: Object.keys(filtered).length > 0 ? "fallback-cache" : "empty" };

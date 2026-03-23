@@ -1,4 +1,5 @@
   import { useEffect,useState } from "react";
+  import { log } from "./logger.js";
   import { getStoredTransactions } from "./plaid.js";
   import { db } from "./utils.js";
 
@@ -139,7 +140,7 @@ export function useSubscriptions(existingRenewals = [], isPro = false) {
 
                 setDetected(results);
             } catch (e) {
-                console.error("Subscription scan failed:", e);
+                void log.error("subscriptions", "Subscription scan failed", { error: e });
             } finally {
                 setLoading(false);
             }

@@ -132,7 +132,7 @@ export default function SettingsTab({
     setRenewals,
     refreshLiabilities,
   } = usePortfolio();
-  const { navTo } = useNavigation();
+  const { navTo, overlaySourceTab, lastCenterTab } = useNavigation();
 
   // Auth Plugins state management
   const [lastBackupTS, setLastBackupTS] = useState<number | null>(null);
@@ -338,15 +338,13 @@ export default function SettingsTab({
       setAiModel("gemini-2.5-flash");
       setPersonalRules("Prioritize cash safety first, then highest-interest debt payoff.");
       await refreshLiabilities?.();
-      window.toast?.success?.(`${FULL_PROFILE_QA_LABEL} loaded. Review the audit inputs and run a full test.`);
-      navTo("input");
+      window.toast?.success?.(`${FULL_PROFILE_QA_LABEL} loaded. Open Weekly Audit when you want to run the seeded flow.`);
     } catch (error) {
       const failure = normalizeAppError(error, { context: "restore" });
       log.error("settings", "Failed to load QA seed", { error: failure.rawMessage, kind: failure.kind });
       window.toast?.error?.("Failed to load the QA test profile.");
     }
   }, [
-    navTo,
     refreshLiabilities,
     setAiModel,
     setAiProvider,
@@ -356,6 +354,20 @@ export default function SettingsTab({
     setPersonalRules,
     setRenewals,
   ]);
+
+  const handleOpenQaAudit = useCallback(() => {
+    const baseTab = overlaySourceTab ?? lastCenterTab.current ?? "dashboard";
+    navDir.current = "back";
+    skipRootTransitionRef.current = true;
+    setActiveMenu(null);
+    haptic.light();
+    navTo(baseTab);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        navTo("input");
+      });
+    });
+  }, [lastCenterTab, navTo, overlaySourceTab]);
 
   useEffect(() => {
     if (activeBodyRef.current) {
@@ -733,7 +745,7 @@ export default function SettingsTab({
               : activeMenu === "profile"
                 ? "Appearance"
                 : activeMenu === "dev"
-                  ? "Developer Tools"
+                  ? "QA Tools"
                   : "Settings";
 
   const renderHeader = (menu: SettingsMenu | null) => (
@@ -885,7 +897,11 @@ export default function SettingsTab({
         setConfirmFactoryReset={setConfirmFactoryReset}
       />
 
-      <DeveloperToolsSection visible={activeMenu === "dev"} onLoadFullProfileQaSeed={handleLoadFullProfileQaSeed} />
+      <DeveloperToolsSection
+        visible={activeMenu === "dev"}
+        onLoadFullProfileQaSeed={handleLoadFullProfileQaSeed}
+        onOpenQaAudit={handleOpenQaAudit}
+      />
 
       <SecuritySection
          activeMenu={activeMenu}

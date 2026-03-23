@@ -1163,11 +1163,24 @@ export const CustomSelect = ({ value, onChange, options, placeholder = "Select..
           textOverflow: "ellipsis",
           transition: "all .2s ease",
           boxShadow: isOpen ? `0 0 0 3px ${T.accent.primaryDim}, 0 4px 12px rgba(0,0,0,0.2)` : "none",
+          transform: "translateZ(0)",
+          backfaceVisibility: "hidden",
+          WebkitBackfaceVisibility: "hidden",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
           {icon && <span style={{ color: T.accent.primary, display: "flex", flexShrink: 0 }}>{icon}</span>}
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+          <span
+            style={{
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              color: "inherit",
+              WebkitTextFillColor: "currentColor",
+              transform: "translateZ(0)",
+              backfaceVisibility: "hidden",
+              WebkitBackfaceVisibility: "hidden",
+            }}
+          >
             {selectedOption ? selectedOption.label : placeholder}
           </span>
         </div>

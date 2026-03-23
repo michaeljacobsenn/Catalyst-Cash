@@ -1,5 +1,6 @@
   import { Capacitor } from "@capacitor/core";
   import { LocalNotifications } from "@capacitor/local-notifications";
+  import { log } from "./logger.js";
 
 const PAYDAY_REMINDER_ID = 1001;
 const WEEKLY_AUDIT_NUDGE_ID = 1002;
@@ -77,7 +78,7 @@ export async function triggerStoreArrivalNotification(store, body) {
     });
     return true;
   } catch (err) {
-    console.warn("[notifications] triggerStoreArrivalNotification failed:", err);
+    void log.warn("notifications", "triggerStoreArrivalNotification failed", { error: err });
     return false;
   }
 }
@@ -141,7 +142,7 @@ export async function schedulePaydayReminder(payday, paycheckTime) {
     // Guard: verify notification permission before scheduling
     const { display } = await LocalNotifications.checkPermissions();
     if (display !== "granted") {
-      console.warn("[notifications] schedulePaydayReminder skipped — permission not granted:", display);
+      void log.info("notifications", "schedulePaydayReminder skipped — permission not granted", { display });
       return false;
     }
 
@@ -169,7 +170,7 @@ export async function schedulePaydayReminder(payday, paycheckTime) {
 
     return true;
   } catch (err) {
-    console.warn("[notifications] schedulePaydayReminder failed:", err);
+    void log.warn("notifications", "schedulePaydayReminder failed", { error: err });
     return false;
   }
 }
@@ -233,7 +234,7 @@ export async function schedulePostAuditCelebration(score, streak) {
     });
     return true;
   } catch (err) {
-    console.warn("[notifications] schedulePostAuditCelebration failed:", err);
+    void log.warn("notifications", "schedulePostAuditCelebration failed", { error: err });
     return false;
   }
 }
@@ -277,7 +278,7 @@ export async function scheduleMidWeekCheckIn(weeklyAllowance) {
     });
     return true;
   } catch (err) {
-    console.warn("[notifications] scheduleMidWeekCheckIn failed:", err);
+    void log.warn("notifications", "scheduleMidWeekCheckIn failed", { error: err });
     return false;
   }
 }
@@ -317,7 +318,7 @@ export async function scheduleMonthEndSummary() {
     });
     return true;
   } catch (err) {
-    console.warn("[notifications] scheduleMonthEndSummary failed:", err);
+    void log.warn("notifications", "scheduleMonthEndSummary failed", { error: err });
     return false;
   }
 }
@@ -356,7 +357,7 @@ export async function scheduleWeeklyAuditNudge() {
 
     return true;
   } catch (err) {
-    console.warn("[notifications] scheduleWeeklyAuditNudge failed:", err);
+    void log.warn("notifications", "scheduleWeeklyAuditNudge failed", { error: err });
     return false;
   }
 }
@@ -422,7 +423,7 @@ export async function scheduleStreakAtRiskNudge(hasAuditThisWeek) {
 
     return true;
   } catch (err) {
-    console.warn("[notifications] scheduleStreakAtRiskNudge failed:", err);
+    void log.warn("notifications", "scheduleStreakAtRiskNudge failed", { error: err });
     return false;
   }
 }
@@ -490,7 +491,7 @@ export async function scheduleBillReminders(renewals = []) {
 
     return notifications.length;
   } catch (err) {
-    console.warn("[notifications] scheduleBillReminders failed:", err);
+    void log.warn("notifications", "scheduleBillReminders failed", { error: err });
     return 0;
   }
 }

@@ -2,6 +2,7 @@
   import type { BankAccount,CatalystCashConfig,PlaidInvestmentAccount,Card as PortfolioCard } from "../../types/index.js";
   import { T } from "../constants.js";
   import { haptic } from "../haptics.js";
+  import { log } from "../logger.js";
   import {
     Link2,
     Loader2,
@@ -53,9 +54,11 @@ type PlaidConnectResult = "success" | "error" | null;
 interface CardPortfolioTabProps {
   onViewTransactions?: (() => void) | null;
   proEnabled?: boolean;
+  privacyMode?: boolean;
 }
 
-export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled = false }: CardPortfolioTabProps) {
+export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled = false, privacyMode: _privacyModeTick = false }: CardPortfolioTabProps) {
+  void _privacyModeTick;
   const { current } = useAudit();
   const portfolioContext = usePortfolio();
   const isTest = current?.isTest;
@@ -160,7 +163,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
             }
           } catch (balErr) {
             const message = balErr instanceof Error ? balErr.message : String(balErr);
-            console.error("[Plaid] Balance fetch after connect failed:", message);
+            void log.error("plaid", "Balance fetch after connect failed", { error: message });
             window.toast?.info?.("Connected! Tap Sync to fetch balances.");
           }
 

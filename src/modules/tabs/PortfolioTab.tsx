@@ -13,6 +13,7 @@ type PortfolioView = "vault" | "rewards";
 interface PortfolioTabProps {
   onViewTransactions?: (() => void) | undefined;
   proEnabled?: boolean;
+  privacyMode?: boolean;
 }
 
 interface SwitchPortfolioViewEvent extends Event {
@@ -29,11 +30,13 @@ interface CardPortfolioTabProps {
   onViewTransactions?: (() => void) | undefined;
   proEnabled?: boolean;
   embedded?: boolean;
+  privacyMode?: boolean;
 }
 
 interface CardWizardTabProps {
   proEnabled?: boolean;
   embedded?: boolean;
+  privacyMode?: boolean;
 }
 
 const TypedViewToggle = ViewToggle as unknown as (props: ViewToggleProps) => React.ReactNode;
@@ -53,7 +56,7 @@ const PortfolioViewFallback = () => (
   </div>
 );
 
-export default function PortfolioTab({ onViewTransactions, proEnabled = false }: PortfolioTabProps) {
+export default function PortfolioTab({ onViewTransactions, proEnabled = false, privacyMode = false }: PortfolioTabProps) {
   const [activeView, setActiveView] = useState<PortfolioView>("vault");
   const _portfolioTypesAnchor: { cards?: Card[]; bankAccounts?: BankAccount[] } = {};
   void _portfolioTypesAnchor;
@@ -113,12 +116,12 @@ export default function PortfolioTab({ onViewTransactions, proEnabled = false }:
       <div style={{ flex: 1, position: "relative", display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{ display: activeView === "vault" ? "flex" : "none", flex: 1, minHeight: 0 }}>
           <Suspense fallback={<PortfolioViewFallback />}>
-            <TypedCardPortfolioTab onViewTransactions={onViewTransactions} proEnabled={proEnabled} embedded />
+            <TypedCardPortfolioTab onViewTransactions={onViewTransactions} proEnabled={proEnabled} embedded privacyMode={privacyMode} />
           </Suspense>
         </div>
         <div style={{ display: activeView === "rewards" ? "flex" : "none", flex: 1, minHeight: 0, width: "100%" }}>
           <Suspense fallback={<PortfolioViewFallback />}>
-            <TypedCardWizardTab proEnabled={proEnabled} embedded />
+            <TypedCardWizardTab proEnabled={proEnabled} embedded privacyMode={privacyMode} />
           </Suspense>
         </div>
       </div>

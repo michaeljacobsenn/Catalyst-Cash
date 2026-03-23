@@ -4,7 +4,7 @@ compatibility_date = "2024-12-01"
 
 [vars]
 ALLOWED_ORIGIN = "https://catalystcash.app"
-GATING_MODE = "soft"
+GATING_MODE = "off"
 
 # Custom domain: attach api.catalystcash.app to the catalystcash-api Worker after validation.
 

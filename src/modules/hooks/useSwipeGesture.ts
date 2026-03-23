@@ -177,6 +177,17 @@ function useInteractiveSwipe({
     motion.set(0);
   }, [motion]);
 
+  const clearGestureRuntimeState = useCallback(() => {
+    if (gesturePerformanceModeRef.current) {
+      gesturePerformanceModeRef.current = false;
+      setGesturePerformanceMode(false);
+    }
+    if (parallaxActiveRef.current) {
+      parallaxActiveRef.current = false;
+      resetUnderlyingParallax();
+    }
+  }, []);
+
   const animateTo = useCallback(
     (target: number, velocity = 0, onComplete?: () => void) => {
       animationRef.current?.stop();
@@ -267,20 +278,22 @@ function useInteractiveSwipe({
   useEffect(() => {
     if (!enabled) {
       animationRef.current?.stop();
+      clearGestureRuntimeState();
       return;
     }
     dismissingRef.current = false;
     animationRef.current?.stop();
     resetGestureState();
-  }, [enabled, resetGestureState]);
+  }, [clearGestureRuntimeState, enabled, resetGestureState]);
 
   // Cleanup animation on unmount (handles non-keep-alive unmount case)
   useEffect(() => {
     return () => {
       animationRef.current?.stop();
       dismissingRef.current = false;
+      clearGestureRuntimeState();
     };
-  }, []);
+  }, [clearGestureRuntimeState]);
 
   const motionStyle = useMemo(
     () => (axis === "x" ? { x: motion } : { y: motion }),

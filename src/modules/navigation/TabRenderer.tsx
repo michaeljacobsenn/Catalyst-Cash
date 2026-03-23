@@ -4,8 +4,8 @@
   import type { AppTab,NavViewState } from "../contexts/NavigationContext.js";
   import type { ToastApi } from "../Toast.js";
   import { ErrorBoundary } from "../ui.js";
+  import DashboardTab from "../tabs/DashboardTab.js";
 
-const loadDashboardTab = () => import("../tabs/DashboardTab.js");
 const loadAIChatTab = () => import("../tabs/AIChatTab.js");
 const loadCashflowTab = () => import("../tabs/CashflowTab.js");
 const loadPortfolioTab = () => import("../tabs/PortfolioTab.js");
@@ -13,7 +13,6 @@ const loadAuditTab = () => import("../tabs/AuditTab.js");
 const loadCardPortfolioTab = () => import("../tabs/CardPortfolioTab.js");
 const loadCardWizardTab = () => import("../tabs/CardWizardTab.js");
 
-const DashboardTab = lazy(loadDashboardTab);
 const AIChatTab = lazy(loadAIChatTab);
 const CashflowTab = lazy(loadCashflowTab);
 const PortfolioTab = lazy(loadPortfolioTab);
@@ -35,6 +34,7 @@ interface TabRendererProps {
   SWIPE_TAB_ORDER: readonly AppTab[];
   activeTab: AppTab;
   proEnabled: boolean;
+  privacyMode: boolean;
   toast: ToastApi;
   navTo: (newTab: AppTab, viewState?: NavViewState | null) => void;
   handleRefreshDashboard: () => Promise<void>;
@@ -49,6 +49,7 @@ export default function TabRenderer({
   SWIPE_TAB_ORDER,
   activeTab,
   proEnabled,
+  privacyMode,
   toast,
   navTo,
   handleRefreshDashboard,
@@ -65,7 +66,6 @@ export default function TabRenderer({
 
     const warmup = () => {
       void Promise.allSettled([
-        loadDashboardTab(),
         loadAIChatTab(),
         loadCashflowTab(),
         loadPortfolioTab(),
@@ -133,6 +133,7 @@ export default function TabRenderer({
                 {t === "chat" && (
                   <AIChatTab
                     proEnabled={proEnabled}
+                    privacyMode={privacyMode}
                     initialPrompt={chatInitialPrompt}
                     clearInitialPrompt={() => setChatInitialPrompt(null)}
                     onBack={() => {
@@ -147,7 +148,7 @@ export default function TabRenderer({
             <ErrorBoundary name="Cashflow">
               <Suspense fallback={<TabFallback />}>
                 {t === "cashflow" && (
-                  <CashflowTab onRunAudit={handleDemoAudit} toast={toast} proEnabled={proEnabled} />
+                  <CashflowTab onRunAudit={handleDemoAudit} toast={toast} proEnabled={proEnabled} privacyMode={privacyMode} />
                 )}
               </Suspense>
             </ErrorBoundary>
@@ -155,7 +156,7 @@ export default function TabRenderer({
             <ErrorBoundary name="Portfolio">
               <Suspense fallback={<TabFallback />}>
                 {t === "portfolio" && (
-                  <PortfolioTab onViewTransactions={() => setTransactionFeedTab(t)} proEnabled={proEnabled} />
+                  <PortfolioTab onViewTransactions={() => setTransactionFeedTab(t)} proEnabled={proEnabled} privacyMode={privacyMode} />
                 )}
               </Suspense>
             </ErrorBoundary>
@@ -163,7 +164,7 @@ export default function TabRenderer({
             <ErrorBoundary name="Audit">
               <Suspense fallback={<TabFallback />}>
                 {t === "audit" && (
-                  <AuditTab proEnabled={proEnabled} toast={toast} onDemoAudit={handleDemoAudit} />
+                  <AuditTab proEnabled={proEnabled} privacyMode={privacyMode} toast={toast} onDemoAudit={handleDemoAudit} />
                 )}
               </Suspense>
             </ErrorBoundary>

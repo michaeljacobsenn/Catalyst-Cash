@@ -322,11 +322,16 @@ function isWorkerGatingEnforced(env) {
 }
 
 function isPlaidCostTierEnforced(env) {
-  return true;
+  return isWorkerGatingEnforced(env);
 }
 
 function getPlaidCostTierId(tierResolution, env) {
   return isPlaidCostTierEnforced(env) ? tierResolution.tier : "pro";
+}
+
+function getPlaidCooldownMs(env, cooldowns, tierId) {
+  if (!isPlaidCostTierEnforced(env)) return 0;
+  return cooldowns[tierId] || cooldowns.free;
 }
 
 function getDefaultModelForTier(provider, tier) {
@@ -811,7 +816,7 @@ export default {
           }
           const cachedBalancesRow = itemId ? await getStoredSyncRow(env.DB, plaidActor.userId, itemId) : null;
           const cachedBalancesPayload = parseStoredJson(cachedBalancesRow?.balances_json, {});
-          const directFetchCooldownMs = PLAID_DIRECT_FETCH_COOLDOWNS[tierId] || PLAID_DIRECT_FETCH_COOLDOWNS.free;
+          const directFetchCooldownMs = getPlaidCooldownMs(env, PLAID_DIRECT_FETCH_COOLDOWNS, tierId);
           const directBalancesTimestamp = cachedBalancesRow?.last_synced_at
             ? new Date(`${cachedBalancesRow.last_synced_at}Z`).getTime()
             : 0;
@@ -875,7 +880,7 @@ export default {
           }
           const cachedLiabilitiesRow = itemId ? await getStoredSyncRow(env.DB, plaidActor.userId, itemId) : null;
           const cachedLiabilitiesPayload = parseStoredJson(cachedLiabilitiesRow?.liabilities_json, {});
-          const directFetchCooldownMs = PLAID_DIRECT_FETCH_COOLDOWNS[tierId] || PLAID_DIRECT_FETCH_COOLDOWNS.free;
+          const directFetchCooldownMs = getPlaidCooldownMs(env, PLAID_DIRECT_FETCH_COOLDOWNS, tierId);
           const directLiabilitiesTimestamp = cachedLiabilitiesRow?.last_synced_at
             ? new Date(`${cachedLiabilitiesRow.last_synced_at}Z`).getTime()
             : 0;
@@ -968,7 +973,7 @@ export default {
           }
           const cachedTransactionsRow = await getStoredSyncRow(env.DB, plaidActor.userId, itemId);
           const cachedTransactionsPayload = parseStoredJson(cachedTransactionsRow?.transactions_json, {});
-          const directFetchCooldownMs = PLAID_DIRECT_FETCH_COOLDOWNS[tierId] || PLAID_DIRECT_FETCH_COOLDOWNS.free;
+          const directFetchCooldownMs = getPlaidCooldownMs(env, PLAID_DIRECT_FETCH_COOLDOWNS, tierId);
           const directTransactionsTimestamp = cachedTransactionsRow?.last_synced_at
             ? new Date(`${cachedTransactionsRow.last_synced_at}Z`).getTime()
             : 0;
@@ -1047,14 +1052,14 @@ export default {
               }
 
               // Item-level cooldown (48h per institution for Pro)
-              const ITEM_COOLDOWN = 48 * 60 * 60 * 1000; // 48 hours
+              const ITEM_COOLDOWN = isPlaidCostTierEnforced(env) ? 48 * 60 * 60 * 1000 : 0; // 48 hours
               const { results: itemSyncResults } = await env.DB.prepare("SELECT last_synced_at FROM sync_data WHERE user_id = ? AND item_id = ?").bind(user_id, itemId).all();
               let itemLastSync = 0;
               if (itemSyncResults && itemSyncResults.length > 0 && itemSyncResults[0].last_synced_at) {
                 itemLastSync = new Date(itemSyncResults[0].last_synced_at + "Z").getTime();
               }
               const now = Date.now();
-              if (itemLastSync > 0 && (now - itemLastSync) < ITEM_COOLDOWN) {
+              if (ITEM_COOLDOWN > 0 && itemLastSync > 0 && (now - itemLastSync) < ITEM_COOLDOWN) {
                 // Item cooldown not elapsed — skip
                 return;
               }
@@ -1107,7 +1112,7 @@ export default {
             free: 7 * 24 * 60 * 60 * 1000,
             pro: 24 * 60 * 60 * 1000,
           };
-          const cooldownMs = COOLDOWNS[tierId] || COOLDOWNS.free;
+          const cooldownMs = getPlaidCooldownMs(env, COOLDOWNS, tierId);
 
           const { results: itemResults } = await env.DB.prepare("SELECT access_token, item_id FROM plaid_items WHERE user_id = ?").bind(plaidActor.userId).all();
           if (!itemResults || itemResults.length === 0) {
@@ -1138,7 +1143,7 @@ export default {
           lastSyncTime = getLatestTimestampMillis(syncResults || [], targetedItemIds);
 
           const now = Date.now();
-          if (lastSyncTime > 0 && (now - lastSyncTime) < cooldownMs) {
+          if (cooldownMs > 0 && lastSyncTime > 0 && (now - lastSyncTime) < cooldownMs) {
             return new Response(JSON.stringify({ error: "cooldown", message: "Cooldown active", cooldownMs, tier: tierId, limitedToItemId }), { status: 429, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
 
@@ -1210,8 +1215,8 @@ export default {
           if (deepSyncResults && deepSyncResults.length > 0 && deepSyncResults[0].last_synced_at) {
             lastDeepSync = new Date(deepSyncResults[0].last_synced_at + "Z").getTime();
           }
-          const DEEP_COOLDOWN = 7 * 24 * 60 * 60 * 1000;
-          if (lastDeepSync > 0 && (Date.now() - lastDeepSync) < DEEP_COOLDOWN) {
+          const DEEP_COOLDOWN = isPlaidCostTierEnforced(env) ? 7 * 24 * 60 * 60 * 1000 : 0;
+          if (DEEP_COOLDOWN > 0 && lastDeepSync > 0 && (Date.now() - lastDeepSync) < DEEP_COOLDOWN) {
             return new Response(JSON.stringify({ error: "cooldown", message: "Deep sync on cooldown (7 days)" }), { status: 429, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
 

@@ -32,6 +32,7 @@ interface RootSettingsSectionProps {
 interface DeveloperToolsSectionProps {
   visible: boolean;
   onLoadFullProfileQaSeed: () => Promise<void> | void;
+  onOpenQaAudit: () => void;
 }
 
 export function RootSettingsSection({
@@ -64,7 +65,7 @@ export function RootSettingsSection({
         { id: "backup", label: "Backup & Sync", icon: Database, color: T.status.green, desc: "Backup data, restore, export history" },
         { id: "security", label: "App Security", icon: Lock, color: T.status.red, desc: "Passcodes, Face ID" },
         { id: "guide", label: "Help & Guide", icon: Info, color: T.text.secondary, desc: "Learn how Catalyst works" },
-        { id: "dev", label: "Developer Tools", icon: Terminal, color: T.text.dim, desc: "Simulators & testing" },
+        { id: "dev", label: "QA Tools", icon: Terminal, color: T.text.dim, desc: "Seed test data & preview alerts" },
       ],
     },
   ] as const;
@@ -371,6 +372,7 @@ export function RootSettingsSection({
 export function DeveloperToolsSection({
   visible,
   onLoadFullProfileQaSeed,
+  onOpenQaAudit,
 }: DeveloperToolsSectionProps) {
   if (!visible) return null;
   return (
@@ -382,9 +384,9 @@ export function DeveloperToolsSection({
         padding: 18,
       }}
     >
-      <div style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginBottom: 12 }}>Simulators</div>
+      <div style={{ fontSize: 13, fontWeight: 800, color: T.text.secondary, marginBottom: 12 }}>Internal QA</div>
       <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.6, marginBottom: 16 }}>
-        Trigger native local-notification and geofence previews for QA. On iPhone this uses the OS notification path when permission is available.
+        These controls are only for internal testing. They seed a realistic profile, open the weekly audit flow with that seeded data, and preview local-notification alerts without needing to wait for real-world triggers.
       </p>
       <button
         onClick={() => void onLoadFullProfileQaSeed()}
@@ -403,6 +405,24 @@ export function DeveloperToolsSection({
         }}
       >
         Load Full-Profile QA Seed
+      </button>
+      <button
+        onClick={onOpenQaAudit}
+        className="hover-btn"
+        style={{
+          width: "100%",
+          padding: "14px",
+          borderRadius: T.radius.md,
+          border: `1px solid ${T.border.default}`,
+          background: T.bg.elevated,
+          color: T.text.primary,
+          fontSize: 13,
+          fontWeight: 700,
+          cursor: "pointer",
+          marginBottom: 12,
+        }}
+      >
+        Open Weekly Audit
       </button>
       {["Whole Foods", "Shell Gas"].map((store) => (
         <button

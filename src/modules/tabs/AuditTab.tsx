@@ -34,6 +34,7 @@ interface ToastApi {
 
 interface AuditTabProps {
   proEnabled?: boolean;
+  privacyMode?: boolean;
   toast?: ToastApi;
   onDemoAudit?: () => void;
 }
@@ -136,7 +137,8 @@ const TrendSparkline = ({ history }) => {
 // ═══════════════════════════════════════════════════════════════
 // AuditTab
 // ═══════════════════════════════════════════════════════════════
-export default memo(function AuditTab({ proEnabled = false, toast, onDemoAudit }: AuditTabProps) {
+export default memo(function AuditTab({ proEnabled = false, privacyMode: _privacyModeTick = false, toast, onDemoAudit }: AuditTabProps) {
+  void _privacyModeTick;
   const { current, history: audits, deleteHistoryItem: onDelete, handleManualImport, quota } = useAudit();
   const { navTo, setResultsBackTarget } = useNavigation();
   const [showPaywall, setShowPaywall] = useState(false);

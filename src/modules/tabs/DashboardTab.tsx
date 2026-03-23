@@ -270,7 +270,7 @@ export default memo(function DashboardTab({
 
   if (showEmptyDashboard) {
     return (
-      <div className="page-body stagger-container" aria-live="polite" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+      <div className="page-body" aria-live="polite" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
         <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
           <DashboardTopChrome
             greeting={greeting}
@@ -327,7 +327,7 @@ export default memo(function DashboardTab({
 
 
   return (
-    <div className="page-body stagger-container" aria-live="polite" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+    <div className="page-body" aria-live="polite" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
       <DashboardTopChrome
         greeting={greeting}

@@ -34,6 +34,7 @@ const LazyProPaywall = React.lazy(() => import("./ProPaywall.js"));
 interface RenewalsTabProps {
   proEnabled?: boolean;
   embedded?: boolean;
+  privacyMode?: boolean;
 }
 
 interface NegotiationSheetState {
@@ -187,7 +188,8 @@ function formatRenewalDueDate(dateValue?: string) {
 }
 const SearchableSelect = SearchableSelectBase as unknown as (props: SearchableSelectProps) => ReactNode;
 
-export default memo(function RenewalsTab({ proEnabled = false }: RenewalsTabProps) {
+export default memo(function RenewalsTab({ proEnabled = false, privacyMode: _privacyModeTick = false }: RenewalsTabProps) {
+  void _privacyModeTick;
   const { current } = useAudit();
   const portfolioContext = usePortfolio();
   const { navTo } = useNavigation();

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   getMostRecentPlaidSyncTime,
+  hasCachedPlaidSnapshot,
+  shouldEnforcePlaidSyncCooldown,
   shouldFetchTransactionsForSync,
   summarizeSyncOutcome,
 } from "./usePlaidSync.js";
@@ -43,6 +45,20 @@ describe("usePlaidSync helpers", () => {
     ).toBe(true);
   });
 
+  it("enforces manual sync cooldowns only when gating is live", () => {
+    expect(
+      shouldEnforcePlaidSyncCooldown({
+        gatingEnforced: true,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldEnforcePlaidSyncCooldown({
+        gatingEnforced: false,
+      })
+    ).toBe(false);
+  });
+
   it("reports partial syncs as informational instead of claiming full success", () => {
     expect(
       summarizeSyncOutcome({
@@ -69,6 +85,49 @@ describe("usePlaidSync helpers", () => {
     ).toEqual({
       kind: "success",
       message: "Balances synced successfully",
+    });
+  });
+
+  it("treats existing linked plaid balances as cached fallback data", () => {
+    expect(
+      hasCachedPlaidSnapshot(
+        [
+          {
+            _plaidConnectionId: "item_1",
+            _plaidBalance: 123.45,
+          },
+        ],
+        [],
+        ["item_1"]
+      )
+    ).toBe(true);
+
+    expect(
+      hasCachedPlaidSnapshot(
+        [
+          {
+            _plaidConnectionId: "item_other",
+            _plaidBalance: 123.45,
+          },
+        ],
+        [],
+        ["item_1"]
+      )
+    ).toBe(false);
+  });
+
+  it("reports cached fallback cleanly when live sync fails but saved plaid data exists", () => {
+    expect(
+      summarizeSyncOutcome({
+        requestedCount: 2,
+        successCount: 0,
+        pendingCount: 0,
+        forceSyncSucceeded: false,
+        hadCachedSnapshot: true,
+      })
+    ).toEqual({
+      kind: "info",
+      message: "Live sync did not complete, but Catalyst kept showing your most recent saved bank data.",
     });
   });
 });

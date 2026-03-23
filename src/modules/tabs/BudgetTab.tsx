@@ -39,7 +39,8 @@ function getBucketId(name) {
   return "personal";
 }
 
-export default function BudgetTab({ embedded, proEnabled = false }) {
+export default function BudgetTab({ embedded, proEnabled = false, privacyMode: _privacyModeTick = false }) {
+  void _privacyModeTick;
   const { envelopes, monthlyIncome, updateMonthlyIncome, allocateToEnvelope, getReadyToAssign } = useBudget();
   const { current } = useAudit();
 

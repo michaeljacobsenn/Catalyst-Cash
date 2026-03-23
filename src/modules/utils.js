@@ -8,6 +8,7 @@
   import { Share } from "@capacitor/share";
   import { APP_VERSION } from "./constants.js";
   import { buildDashboardSafetyModel } from "./dashboard/safetyModel.js";
+  import { log } from "./logger.js";
   import { clamp, getGradeLetter } from "./mathHelpers.js";
 
   import { registerPlugin } from "@capacitor/core";
@@ -20,7 +21,7 @@ export const FaceId = {
       if (!Capacitor.isNativePlatform()) return { isAvailable: false };
       return await BiometricAuth.checkBiometry();
     } catch (e) {
-      console.warn("Biometry check failed:", e);
+      void log.warn("biometry", "Biometry check failed", { error: e });
       return { isAvailable: false };
     }
   },
@@ -186,7 +187,7 @@ export async function nativeExport(filename, content, mimeType = "text/plain", i
       if (isCancel) {
         return { completed: false, source: "native" };
       }
-      console.error("Native export failed:", e);
+      void log.error("export", "Native export failed", { error: e });
       try {
         const pluginResult = await ExportFile.share({ filename, data: content, mimeType, isBase64 });
         if (pluginResult?.completed === false) {
@@ -194,7 +195,7 @@ export async function nativeExport(filename, content, mimeType = "text/plain", i
         }
         return pluginResult ?? { completed: true, source: "native-plugin" };
       } catch (fallbackError) {
-        console.error("Capacitor export fallback failed:", fallbackError);
+        void log.error("export", "Capacitor export fallback failed", { error: fallbackError });
         const isFallbackCancel = isUserCancelledShare(fallbackError);
         if (isFallbackCancel) {
           return { completed: false, source: "native" };
@@ -574,7 +575,7 @@ export function parseJSON(raw) {
     }
   } catch (e) {
     // NOTE: never log raw response content — it may contain financial PII
-    console.warn("[parseJSON] JSON.parse failed:", e.message, "— raw length:", raw?.length);
+    void log.warn("parseJSON", "JSON.parse failed", { error: e.message, rawLength: raw?.length });
     return null; // Stream hasn't finished accumulating enough valid JSON
   }
 
@@ -596,7 +597,7 @@ export function parseJSON(raw) {
 
   // Schema Validation (Lightweight)
   if (!j || !j.headerCard) {
-    console.warn("[parseJSON] Missing headerCard. Keys found:", j ? Object.keys(j).join(", ") : "null");
+    void log.warn("parseJSON", "Missing headerCard", { keys: j ? Object.keys(j).join(", ") : "null" });
     return null;
   }
 
@@ -803,9 +804,9 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
   }
 
   if (Array.isArray(consistency.nonCanonicalDashboardCategories) && consistency.nonCanonicalDashboardCategories.length > 0) {
-    console.warn(
-      "[audit] Non-canonical dashboard categories detected:",
-      consistency.nonCanonicalDashboardCategories.join(", ")
+    void log.warn(
+      "audit", "Non-canonical dashboard categories detected",
+      { categories: consistency.nonCanonicalDashboardCategories.join(", ") }
     );
   }
 
@@ -841,8 +842,8 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
         grade: correctedGrade,
       };
       consistency.scoreAnchoredToNative = true;
-      console.warn(
-        `[audit] Health score deviated materially from native anchor (${scoreDelta > 0 ? "+" : ""}${scoreDelta}). Re-anchoring to ${expectedNativeScore}.`
+      void log.warn(
+        "audit", `Health score deviated materially from native anchor (${scoreDelta > 0 ? "+" : ""}${scoreDelta}). Re-anchoring to ${expectedNativeScore}.`
       );
       auditFlags.push({
         code: "health-score-reanchored-to-native",
@@ -886,8 +887,8 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
 
     if (expectedOperationalSurplus - weeklyMoveDollarTotal > 50) {
       const shortfall = Number((expectedOperationalSurplus - weeklyMoveDollarTotal).toFixed(2));
-      console.warn(
-        `[audit] Weekly moves under-allocate operational surplus by $${shortfall.toFixed(2)}.`,
+      void log.warn(
+        "audit", `Weekly moves under-allocate operational surplus by $${shortfall.toFixed(2)}.`
       );
       auditFlags.push({
         code: "weekly-moves-underallocated",
@@ -1245,7 +1246,7 @@ export async function exportAudit(audit) {
   } catch (err) {
     const isCancel = isUserCancelledShare(err);
     if (!isCancel) {
-      console.error("PDF generation or Share sheet failed:", err);
+      void log.error("export", "PDF generation or Share sheet failed", { error: err });
       // Fallback
       const h = `<!DOCTYPE html><html><body>${container.innerHTML}</body></html>`;
       return await nativeExport(`CatalystCash_Audit_${dateStr}.html`, h, "text/html");

@@ -68,11 +68,41 @@ export function shouldFetchTransactionsForSync({
   return Boolean(autoFetchTransactions && (!gatingEnforced || effectiveTierId === "pro"));
 }
 
+export function shouldEnforcePlaidSyncCooldown({
+  gatingEnforced = false,
+} = {}) {
+  return Boolean(gatingEnforced);
+}
+
+export function hasCachedPlaidSnapshot(cards = [], bankAccounts = [], connectionIds = []) {
+  const allowedConnectionIds = new Set(
+    Array.from(connectionIds || []).map(id => String(id || "").trim()).filter(Boolean)
+  );
+  const belongsToAllowedConnection = item => {
+    const connectionId = String(item?._plaidConnectionId || "").trim();
+    if (allowedConnectionIds.size === 0) return Boolean(connectionId);
+    return Boolean(connectionId) && allowedConnectionIds.has(connectionId);
+  };
+
+  const hasCachedData = item => {
+    if (!belongsToAllowedConnection(item)) return false;
+    return Boolean(
+      item?._plaidLastSync ||
+      item?._plaidBalance != null ||
+      item?._plaidAvailable != null ||
+      item?._plaidLimit != null
+    );
+  };
+
+  return [...cards, ...bankAccounts].some(hasCachedData);
+}
+
 export function summarizeSyncOutcome({
   requestedCount = 0,
   successCount = 0,
   pendingCount = 0,
   forceSyncSucceeded = true,
+  hadCachedSnapshot = false,
   successMessage = "Balances synced successfully",
 } = {}) {
   const normalizedRequestedCount = Math.max(requestedCount, successCount + pendingCount);
@@ -96,6 +126,13 @@ export function summarizeSyncOutcome({
     return {
       kind: "info",
       message: "Catalyst loaded your last cached bank data, but live sync did not complete.",
+    };
+  }
+
+  if (!forceSyncSucceeded && hadCachedSnapshot) {
+    return {
+      kind: "info",
+      message: "Live sync did not complete, but Catalyst kept showing your most recent saved bank data.",
     };
   }
 
@@ -197,8 +234,9 @@ export function usePlaidSync({
     }
 
     const cooldown = SYNC_COOLDOWNS[tier.id] || SYNC_COOLDOWNS.free;
+    const cooldownEnforced = shouldEnforcePlaidSyncCooldown({ gatingEnforced });
     const lastSyncAt = getMostRecentPlaidSyncTime(cards, bankAccounts, syncConnectionIds);
-    if (lastSyncAt && Date.now() - lastSyncAt < cooldown) {
+    if (cooldownEnforced && lastSyncAt && Date.now() - lastSyncAt < cooldown) {
       const minsLeft = Math.ceil((cooldown - (Date.now() - lastSyncAt)) / 60000);
       const hoursLeft = Math.floor(minsLeft / 60);
       const daysLeft = Math.floor(hoursLeft / 24);
@@ -262,11 +300,13 @@ export function usePlaidSync({
       setBankAccounts(allBanks);
       if (investmentsChanged) setFinancialConfig({ ...financialConfig, plaidInvestments: allInvests });
 
+      const hadCachedSnapshot = hasCachedPlaidSnapshot(cards, bankAccounts, syncConnectionIds);
       const syncOutcome = summarizeSyncOutcome({
         requestedCount,
         successCount,
         pendingCount,
         forceSyncSucceeded,
+        hadCachedSnapshot,
         successMessage,
       });
 

@@ -398,6 +398,7 @@
 				CURRENT_PROJECT_VERSION = 35;
 				DEVELOPMENT_TEAM = 4ETPMUFF46;
 				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -423,6 +424,7 @@
 				CURRENT_PROJECT_VERSION = 35;
 				DEVELOPMENT_TEAM = 4ETPMUFF46;
 				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

@@ -17,6 +17,7 @@
 
   import { Capacitor } from "@capacitor/core";
   import { APP_VERSION } from "./constants.js";
+  import { log } from "./logger.js";
   import {
     AI_PROVIDERS,
     DEFAULT_FREE_MODEL_ID,
@@ -136,11 +137,11 @@ export async function syncRemoteGatingMode() {
     // Check minimum version — if below, force live mode
     if (config.minVersion && compareVersions(APP_VERSION, config.minVersion) < 0) {
       _effectiveGatingMode = "live";
-      console.warn(`[Gating] App version ${APP_VERSION} below minimum ${config.minVersion} — forcing live mode`);
+      void log.warn("gating", `App version ${APP_VERSION} below minimum ${config.minVersion} — forcing live mode`);
     }
   } catch (e) {
     // Fail silently — keep hardcoded default
-    console.warn("[Gating] Remote config sync failed:", e?.message);
+    void log.warn("gating", "Remote config sync failed", { error: e?.message });
   }
 }
 
@@ -426,10 +427,10 @@ async function keychainSet(key, value) {
   try {
     const saved = await setNativeSecureItem(key, value);
     if (!saved) {
-      console.warn("[Keychain] Native secure storage unavailable:", key);
+      void log.warn("keychain", "Native secure storage unavailable", { key });
     }
   } catch (e) {
-    console.warn("[Keychain] Failed to write:", key, e?.message);
+    void log.warn("keychain", "Failed to write", { key, error: e?.message });
   }
 }
 

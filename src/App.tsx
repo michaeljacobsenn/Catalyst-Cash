@@ -635,10 +635,11 @@ function CatalystCashShell() {
         SWIPE_TAB_ORDER={SWIPE_TAB_ORDER}
         hidden={tab === "settings" || tab === "results" || tab === "history" || tab === "guide" || tab === "input"}
       >
-        <TabRenderer
+      <TabRenderer
           SWIPE_TAB_ORDER={SWIPE_TAB_ORDER}
           activeTab={renderedBaseTab}
           proEnabled={proEnabled}
+          privacyMode={privacyMode}
           toast={toast}
           navTo={navTo}
           handleRefreshDashboard={handleRefreshDashboard}

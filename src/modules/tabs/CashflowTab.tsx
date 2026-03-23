@@ -18,6 +18,7 @@ interface CashflowTabProps {
   onRunAudit?: (() => void) | undefined;
   toast?: ToastApi | undefined;
   proEnabled?: boolean;
+  privacyMode?: boolean;
 }
 
 interface SwitchCashflowViewEvent extends Event {
@@ -35,18 +36,20 @@ interface BudgetTabProps {
   toast?: ToastApi | undefined;
   embedded?: boolean;
   proEnabled?: boolean;
+  privacyMode?: boolean;
 }
 
 interface RenewalsTabProps {
   proEnabled?: boolean;
   embedded?: boolean;
+  privacyMode?: boolean;
 }
 
 const TypedViewToggle = ViewToggle as unknown as (props: ViewToggleProps) => React.ReactNode;
 const TypedBudgetTab = BudgetTab as unknown as (props: BudgetTabProps) => React.ReactNode;
 const TypedRenewalsTab = RenewalsTab as unknown as (props: RenewalsTabProps) => React.ReactNode;
 
-export default function CashflowTab({ onRunAudit, toast, proEnabled = false }: CashflowTabProps) {
+export default function CashflowTab({ onRunAudit, toast, proEnabled = false, privacyMode = false }: CashflowTabProps) {
   const [activeView, setActiveView] = useState<CashflowView>("renewals");
   const _cashflowTypesAnchor: {
     cards?: Card[];
@@ -91,10 +94,10 @@ export default function CashflowTab({ onRunAudit, toast, proEnabled = false }: C
 
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         <div style={{ display: activeView === "budget" ? "block" : "none", height: "100%", minHeight: 0 }}>
-          <TypedBudgetTab onRunAudit={onRunAudit} toast={toast} embedded proEnabled={proEnabled} />
+          <TypedBudgetTab onRunAudit={onRunAudit} toast={toast} embedded proEnabled={proEnabled} privacyMode={privacyMode} />
         </div>
         <div style={{ display: activeView === "renewals" ? "block" : "none", height: "100%", minHeight: 0 }}>
-          <TypedRenewalsTab proEnabled={proEnabled} embedded />
+          <TypedRenewalsTab proEnabled={proEnabled} embedded privacyMode={privacyMode} />
         </div>
       </div>
     </div>

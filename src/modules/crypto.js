@@ -109,10 +109,10 @@ async function getOrCreateDeviceSalt(db) {
   let saltHex = await db.get(DEVICE_SALT_KEY);
   let salt = hexToBytes(saltHex);
   if (!salt || salt.length < 16) {
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    saltHex = bytesToHex(salt);
+    const newSalt = crypto.getRandomValues(new Uint8Array(16));
+    saltHex = bytesToHex(newSalt);
     await db.set(DEVICE_SALT_KEY, saltHex);
-    return salt;
+    return newSalt;
   }
   return salt;
 }
