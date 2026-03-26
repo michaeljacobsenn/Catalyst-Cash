@@ -49,6 +49,7 @@ class FakeD1 {
   constructor(seed = {}) {
     this.plaidItems = [...(seed.plaidItems || [])];
     this.syncData = [...(seed.syncData || [])];
+    this.plaidUsageDaily = [...(seed.plaidUsageDaily || [])];
     this.auditLog = [...(seed.auditLog || [])];
     this.householdSync = [...(seed.householdSync || [])];
     this.identityActors = [...(seed.identityActors || [])];
@@ -114,6 +115,10 @@ class FakeD1 {
       return this.plaidItems
         .filter(entry => entry.user_id === params[0])
         .map(entry => ({ access_token: entry.access_token, item_id: entry.item_id }));
+    }
+
+    if (sql.includes("SELECT user_id, item_id FROM plaid_items")) {
+      return this.plaidItems.map(entry => ({ user_id: entry.user_id, item_id: entry.item_id }));
     }
 
     if (sql.includes("FROM identity_actor_aliases aliases")) {
@@ -194,6 +199,31 @@ class FakeD1 {
 
     if (sql.includes("SELECT * FROM sync_data WHERE user_id = ?")) {
       return this.syncData.filter(entry => entry.user_id === params[0]);
+    }
+
+    if (sql.includes("SELECT user_id, item_id, balances_json") && sql.includes("FROM sync_data")) {
+      return this.syncData
+        .filter(entry => !String(entry.item_id || "").startsWith("_plaid_meta:") && entry.item_id !== "deep_sync_meta")
+        .map(entry => ({
+          user_id: entry.user_id,
+          item_id: entry.item_id,
+          balances_json: entry.balances_json,
+        }));
+    }
+
+    if (sql.includes("FROM plaid_usage_daily")) {
+      const sinceDayKey = params[0];
+      return this.plaidUsageDaily
+        .filter(entry => String(entry.day_key || "") >= sinceDayKey)
+        .sort((a, b) => {
+          const dayCompare = String(b.day_key || "").localeCompare(String(a.day_key || ""));
+          if (dayCompare !== 0) return dayCompare;
+          const userCompare = String(a.user_id || "").localeCompare(String(b.user_id || ""));
+          if (userCompare !== 0) return userCompare;
+          const itemCompare = String(a.item_id || "").localeCompare(String(b.item_id || ""));
+          if (itemCompare !== 0) return itemCompare;
+          return String(a.source || "").localeCompare(String(b.source || ""));
+        });
     }
 
     if (sql.includes("SELECT * FROM audit_log WHERE id = ?")) {
@@ -421,6 +451,38 @@ class FakeD1 {
         liabilities_json: liabilitiesJson,
         transactions_json: transactionsJson,
       });
+      return;
+    }
+
+    if (sql.includes("INSERT INTO plaid_usage_daily")) {
+      const [dayKey, userId, itemId, source, balanceCalls, transactionRefreshCalls, liabilityCalls] = params;
+      const index = this.plaidUsageDaily.findIndex(entry =>
+        entry.day_key === dayKey &&
+        entry.user_id === userId &&
+        entry.item_id === itemId &&
+        entry.source === source
+      );
+      const next = {
+        day_key: dayKey,
+        user_id: userId,
+        item_id: itemId,
+        source,
+        balance_calls: Number(balanceCalls || 0),
+        transaction_refresh_calls: Number(transactionRefreshCalls || 0),
+        liability_calls: Number(liabilityCalls || 0),
+        updated_at: "2026-03-13 12:00:00",
+      };
+      if (index >= 0) {
+        this.plaidUsageDaily[index] = {
+          ...this.plaidUsageDaily[index],
+          balance_calls: Number(this.plaidUsageDaily[index].balance_calls || 0) + next.balance_calls,
+          transaction_refresh_calls: Number(this.plaidUsageDaily[index].transaction_refresh_calls || 0) + next.transaction_refresh_calls,
+          liability_calls: Number(this.plaidUsageDaily[index].liability_calls || 0) + next.liability_calls,
+          updated_at: "2026-03-13 12:00:00",
+        };
+      } else {
+        this.plaidUsageDaily.push(next);
+      }
       return;
     }
 
@@ -1292,6 +1354,142 @@ describe("AI provider routing and gating", () => {
     expect(payload.rows[0].drift_details).toBe(JSON.stringify(["health-score-drift:9"]));
   });
 
+  it("tracks plaid usage and exposes a 30-day ROI summary through the admin endpoint", async () => {
+    const env = makeEnv({
+      ADMIN_TOKEN: "admin-secret",
+      DB: new FakeD1(),
+    });
+    const session = await issueSessionFor(env, { "X-Device-ID": "roi-device" });
+    env.DB.plaidItems = [
+      {
+        item_id: "item-roi",
+        user_id: session.payload.actorId,
+        access_token: "access-roi",
+        transactions_cursor: null,
+      },
+    ];
+
+    const fetchMock = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.includes("/accounts/get")) {
+        return new Response(
+          JSON.stringify({
+            accounts: [
+              {
+                account_id: "acct-checking",
+                type: "depository",
+                balances: { current: 2500 },
+              },
+              {
+                account_id: "acct-amex",
+                type: "credit",
+                balances: { current: 1704.4 },
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/transactions/sync")) {
+        return new Response(
+          JSON.stringify({
+            added: [
+              {
+                transaction_id: "txn-roi-1",
+                date: "2026-03-13",
+                pending: false,
+              },
+            ],
+            modified: [],
+            removed: [],
+            has_more: false,
+            next_cursor: "cursor-roi-1",
+          }),
+          { status: 200 }
+        );
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const syncResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/sync/force", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...session.authorization },
+        body: JSON.stringify({ connectionId: "item-roi" }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(syncResponse.status).toBe(200);
+    expect(env.DB.plaidUsageDaily).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          user_id: session.payload.actorId,
+          item_id: "item-roi",
+          source: "manual",
+          balance_calls: 1,
+          transaction_refresh_calls: 1,
+          liability_calls: 0,
+        }),
+      ])
+    );
+
+    const reportResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/admin/plaid-roi?days=30", {
+        method: "GET",
+        headers: { Authorization: "Bearer admin-secret" },
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(reportResponse.status).toBe(200);
+    await expect(reportResponse.json()).resolves.toMatchObject({
+      days: 30,
+      linkedUsers: 1,
+      linkedInstitutions: 1,
+      avgInstitutionsPerLinkedUser: 1,
+      accountMix: {
+        totalAccounts: 2,
+        transactionPricedAccounts: 2,
+        recurringPricedAccounts: 2,
+        liabilityPricedAccounts: 1,
+      },
+      usageWindow: {
+        balanceCalls: 1,
+        transactionRefreshCalls: 1,
+        liabilityCalls: 0,
+        sources: [
+          {
+            source: "manual",
+            balanceCalls: 1,
+            transactionRefreshCalls: 1,
+            liabilityCalls: 0,
+          },
+        ],
+      },
+      costEstimate: {
+        variable30Day: {
+          balanceCalls: 0.1,
+          transactionRefreshCalls: 0.12,
+          liabilityCalls: 0,
+          total: 0.22,
+        },
+        subscription30DayRunRate: {
+          transactionsAccounts: 0.6,
+          recurringTransactionsAccounts: 0.3,
+          liabilitiesAccounts: 0.2,
+          total: 1.1,
+        },
+        projected30DayTotal: 1.32,
+        projected30DayCostPerLinkedUser: 1.32,
+        projected30DayCostPerInstitution: 1.32,
+      },
+    });
+  });
+
   it("blocks retired premium models even for pro users", async () => {
     vi.stubGlobal("caches", {
       default: {
@@ -1976,6 +2174,205 @@ describe("Plaid transaction sync migration", () => {
     });
   });
 
+  it("maintains stale pro plaid caches silently across balances, transactions, and liabilities", async () => {
+    const env = makeEnv({
+      GATING_MODE: "live",
+      REVENUECAT_SECRET_KEY: "rc-secret",
+      DB: new FakeD1(),
+    });
+    const session = await issueSessionFor(env, {
+      "X-Device-ID": "maintain-device",
+      "X-RC-App-User-ID": "rc-pro-user",
+    });
+    env.DB.plaidItems = [
+      {
+        item_id: "item-maintain",
+        user_id: session.payload.actorId,
+        access_token: "access-maintain",
+        transactions_cursor: null,
+      },
+    ];
+    env.DB.syncData = [
+      {
+        user_id: session.payload.actorId,
+        item_id: "item-maintain",
+        balances_json: "{}",
+        liabilities_json: "{}",
+        transactions_json: "{}",
+        last_synced_at: "2026-03-20 12:00:00",
+      },
+    ];
+
+    const fetchMock = vi.fn(async (input, init) => {
+      const url = String(input);
+      if (url.includes("api.revenuecat.com")) {
+        return new Response(
+          JSON.stringify({
+            subscriber: {
+              entitlements: {
+                "Catalyst Cash Pro": { expires_date: "2030-01-01T00:00:00Z" },
+              },
+            },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.endsWith("/accounts/get")) {
+        return new Response(JSON.stringify({
+          accounts: [{ account_id: "acct-maintain", type: "credit", balances: { current: 444.44 } }],
+        }), { status: 200 });
+      }
+      if (url.endsWith("/transactions/sync")) {
+        return new Response(JSON.stringify({
+          added: [{ transaction_id: "txn-maintain", amount: 22, date: "2026-03-26", name: "Lunch" }],
+          modified: [],
+          removed: [],
+          has_more: false,
+          next_cursor: "cursor-maintain-1",
+        }), { status: 200 });
+      }
+      if (url.endsWith("/liabilities/get")) {
+        return new Response(JSON.stringify({
+          liabilities: { credit: [{ account_id: "acct-maintain", minimum_payment_amount: 35 }] },
+        }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/sync/maintain", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-RC-App-User-ID": "rc-pro-user",
+          ...session.authorization,
+        },
+        body: JSON.stringify({}),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      refreshedItemIds: ["item-maintain"],
+      balancesRefreshed: 1,
+      transactionsRefreshed: 1,
+      liabilitiesRefreshed: 1,
+    });
+
+    const syncRow = env.DB.syncData.find(entry => entry.user_id === session.payload.actorId && entry.item_id === "item-maintain");
+    expect(JSON.parse(syncRow.balances_json)).toMatchObject({
+      accounts: [expect.objectContaining({ account_id: "acct-maintain" })],
+    });
+    expect(JSON.parse(syncRow.transactions_json)).toMatchObject({
+      transactions: [expect.objectContaining({ transaction_id: "txn-maintain" })],
+    });
+    expect(JSON.parse(syncRow.liabilities_json)).toMatchObject({
+      liabilities: { credit: [expect.objectContaining({ account_id: "acct-maintain" })] },
+    });
+  });
+
+  it("skips paid maintenance work when per-dataset plaid freshness is still current", async () => {
+    const dateNowSpy = vi.spyOn(Date, "now").mockReturnValue(new Date("2026-03-26T12:00:00.000Z").getTime());
+    const env = makeEnv({
+      GATING_MODE: "live",
+      REVENUECAT_SECRET_KEY: "rc-secret",
+      DB: new FakeD1(),
+    });
+    const session = await issueSessionFor(env, {
+      "X-Device-ID": "maintain-fresh-device",
+      "X-RC-App-User-ID": "rc-pro-user",
+    });
+    env.DB.plaidItems = [
+      {
+        item_id: "item-fresh",
+        user_id: session.payload.actorId,
+        access_token: "access-fresh",
+        transactions_cursor: "cursor-fresh",
+      },
+    ];
+    env.DB.syncData = [
+      {
+        user_id: session.payload.actorId,
+        item_id: "item-fresh",
+        balances_json: JSON.stringify({ accounts: [{ account_id: "acct-fresh", type: "credit" }] }),
+        liabilities_json: JSON.stringify({ liabilities: { credit: [{ account_id: "acct-fresh" }] } }),
+        transactions_json: JSON.stringify({ transactions: [{ transaction_id: "txn-fresh", date: "2026-03-25" }], total_transactions: 1 }),
+        last_synced_at: "2026-03-25 12:00:00",
+      },
+      {
+        user_id: session.payload.actorId,
+        item_id: "_plaid_meta:dataset-balances:item-fresh",
+        balances_json: "{}",
+        liabilities_json: "{}",
+        transactions_json: "{}",
+        last_synced_at: "2026-03-26 10:00:00",
+      },
+      {
+        user_id: session.payload.actorId,
+        item_id: "_plaid_meta:dataset-transactions:item-fresh",
+        balances_json: "{}",
+        liabilities_json: "{}",
+        transactions_json: "{}",
+        last_synced_at: "2026-03-26 10:00:00",
+      },
+      {
+        user_id: session.payload.actorId,
+        item_id: "_plaid_meta:dataset-liabilities:item-fresh",
+        balances_json: "{}",
+        liabilities_json: "{}",
+        transactions_json: "{}",
+        last_synced_at: "2026-03-25 12:00:00",
+      },
+    ];
+
+    const fetchMock = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.includes("api.revenuecat.com")) {
+        return new Response(
+          JSON.stringify({
+            subscriber: {
+              entitlements: {
+                "Catalyst Cash Pro": { expires_date: "2030-01-01T00:00:00Z" },
+              },
+            },
+          }),
+          { status: 200 }
+        );
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/sync/maintain", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-RC-App-User-ID": "rc-pro-user",
+          ...session.authorization,
+        },
+        body: JSON.stringify({}),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      refreshedItemIds: [],
+      balancesRefreshed: 0,
+      transactionsRefreshed: 0,
+      liabilitiesRefreshed: 0,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    dateNowSpy.mockRestore();
+  });
+
   it("allows free users to live-sync one plaid item under live gating", async () => {
     const env = makeEnv({
       GATING_MODE: "live",
@@ -2042,12 +2439,14 @@ describe("Plaid transaction sync migration", () => {
       syncedItemIds: ["item-1"],
       limitedToItemId: "item-1",
     });
-    expect(env.DB.syncData).toEqual([
-      expect.objectContaining({
-        user_id: session.payload.actorId,
-        item_id: "item-1",
-      }),
-    ]);
+    expect(env.DB.syncData).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          user_id: session.payload.actorId,
+          item_id: "item-1",
+        }),
+      ])
+    );
   });
 
   it("uses the newest targeted sync timestamp when enforcing manual sync cooldowns", async () => {
@@ -2321,7 +2720,7 @@ describe("Plaid transaction sync migration", () => {
     expect(merged.total_transactions).toBe(2);
   });
 
-  it("uses /transactions/sync for a first deep sync and persists the new cursor", async () => {
+  it("keeps deep sync liabilities-only so daily ledger freshness stays on the cheaper path", async () => {
     const env = makeEnv({
       GATING_MODE: "soft",
       REVENUECAT_SECRET_KEY: "rc-secret",
@@ -2364,24 +2763,12 @@ describe("Plaid transaction sync migration", () => {
         );
       }
       if (url.endsWith("/liabilities/get")) {
-        return new Response(JSON.stringify({ liabilities: { credit: [] } }), { status: 200 });
+        return new Response(JSON.stringify({ liabilities: { credit: [{ account_id: "acct-1" }] } }), { status: 200 });
       }
-      if (url.endsWith("/transactions/sync")) {
-        const body = JSON.parse(init.body);
-        expect(body.cursor).toBeUndefined();
-        return new Response(
-          JSON.stringify({
-            added: [
-              { transaction_id: "txn-100", amount: 12.5, date: "2026-03-13", name: "Coffee" },
-              { transaction_id: "txn-101", amount: -2200, date: "2026-03-12", name: "Payroll" },
-            ],
-            modified: [],
-            removed: [],
-            has_more: false,
-            next_cursor: "cursor-initial-1",
-          }),
-          { status: 200 }
-        );
+      if (url.endsWith("/accounts/get")) {
+        return new Response(JSON.stringify({
+          accounts: [{ account_id: "acct-1", type: "credit", balances: { current: 500 } }],
+        }), { status: 200 });
       }
       throw new Error(`Unexpected fetch ${url}`);
     });
@@ -2402,20 +2789,18 @@ describe("Plaid transaction sync migration", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(fetchMock).not.toHaveBeenCalledWith(
       "https://production.plaid.com/transactions/sync",
-      expect.objectContaining({ method: "POST" })
+      expect.anything()
     );
 
     const item = env.DB.plaidItems.find(entry => entry.item_id === "item-1");
     const syncRow = env.DB.syncData.find(entry => entry.user_id === session.payload.actorId && entry.item_id === "item-1");
-    expect(item.transactions_cursor).toBe("cursor-initial-1");
-    expect(JSON.parse(syncRow.transactions_json)).toMatchObject({
-      total_transactions: 2,
-      transactions: expect.arrayContaining([
-        expect.objectContaining({ transaction_id: "txn-100" }),
-        expect.objectContaining({ transaction_id: "txn-101" }),
-      ]),
+    expect(item.transactions_cursor).toBeNull();
+    expect(JSON.parse(syncRow.liabilities_json)).toMatchObject({
+      liabilities: {
+        credit: [expect.objectContaining({ account_id: "acct-1" })],
+      },
     });
   });
 
@@ -2537,6 +2922,120 @@ describe("Plaid transaction sync migration", () => {
     expect(transactions.transactions.map(transaction => transaction.transaction_id)).toEqual(["txn-3", "txn-1"]);
     expect(transactions.transactions[1]).toMatchObject({ amount: 11, name: "Updated" });
     expect(syncRow.balances_json).toContain("acct-1");
+  });
+
+  it("allows a pro webhook refresh again after 24 hours", async () => {
+    const dateNowSpy = vi.spyOn(Date, "now").mockReturnValue(new Date("2026-03-26T12:00:00.000Z").getTime());
+    const env = makeEnv({
+      GATING_MODE: "live",
+      REVENUECAT_SECRET_KEY: "rc-secret",
+      DB: new FakeD1({
+        plaidItems: [
+          {
+            item_id: "item-1",
+            user_id: "device:device-1",
+            access_token: "access-1",
+            transactions_cursor: "cursor-prev-1",
+          },
+        ],
+        syncData: [
+          {
+            user_id: "device:device-1",
+            item_id: "item-1",
+            balances_json: "{}",
+            liabilities_json: "{}",
+            transactions_json: JSON.stringify({
+              transactions: [{ transaction_id: "txn-1", amount: 9, date: "2026-03-11", name: "Old 1" }],
+            }),
+            last_synced_at: "2026-03-25 05:00:00",
+          },
+        ],
+      }),
+    });
+    const session = await issueSessionFor(env, {
+      "X-Device-ID": "device-1",
+      "X-RC-App-User-ID": "rc-pro-user",
+    });
+    env.DB.plaidItems = [
+      {
+        item_id: "item-1",
+        user_id: session.payload.actorId,
+        access_token: "access-1",
+        transactions_cursor: "cursor-prev-1",
+      },
+    ];
+    env.DB.syncData = [
+      {
+        user_id: session.payload.actorId,
+        item_id: "item-1",
+        balances_json: "{}",
+        liabilities_json: "{}",
+        transactions_json: JSON.stringify({
+          transactions: [{ transaction_id: "txn-1", amount: 9, date: "2026-03-11", name: "Old 1" }],
+        }),
+        last_synced_at: "2026-03-25 05:00:00",
+      },
+    ];
+
+    const fetchMock = vi.fn(async (input, init) => {
+      const url = String(input);
+      if (url.includes("api.revenuecat.com")) {
+        return new Response(
+          JSON.stringify({
+            subscriber: {
+              entitlements: {
+                "Catalyst Cash Pro": { expires_date: "2030-01-01T00:00:00Z" },
+              },
+            },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.endsWith("/accounts/get")) {
+        return new Response(JSON.stringify({ accounts: [{ account_id: "acct-1" }] }), { status: 200 });
+      }
+      if (url.endsWith("/transactions/sync")) {
+        const body = JSON.parse(init.body);
+        expect(body.cursor).toBe("cursor-prev-1");
+        return new Response(
+          JSON.stringify({
+            added: [{ transaction_id: "txn-2", amount: 50, date: "2026-03-26", name: "Added" }],
+            modified: [],
+            removed: [],
+            has_more: false,
+            next_cursor: "cursor-next-2",
+          }),
+          { status: 200 }
+        );
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ctx = makeCtx();
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/plaid/webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          webhook_type: "TRANSACTIONS",
+          webhook_code: "SYNC_UPDATES_AVAILABLE",
+          item_id: "item-1",
+        }),
+      }),
+      env,
+      ctx
+    );
+    await ctx.flush();
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://production.plaid.com/accounts/get",
+      expect.objectContaining({ method: "POST" })
+    );
+    const item = env.DB.plaidItems.find(entry => entry.item_id === "item-1");
+    expect(item.transactions_cursor).toBe("cursor-next-2");
+    dateNowSpy.mockRestore();
   });
 });
 

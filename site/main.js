@@ -59,6 +59,7 @@ function initFaqSearch() {
 
     return {
       item,
+      questionLabel: question,
       question: normalizeFaqText(question),
       searchable,
       tokens: buildFaqTokenSet(searchable),
@@ -87,6 +88,8 @@ function initFaqSearch() {
     const rawQueryTokens = tokenizeFaqText(normalizedQuery);
     const minScore = rawQueryTokens.length > 1 ? 40 : 20;
     let visibleCount = 0;
+    let topMatch = null;
+    let topScore = -1;
 
     items.forEach(entry => {
       const score = scoreFaqEntry(entry, normalizedQuery, queryTokens, rawQueryTokens);
@@ -94,8 +97,18 @@ function initFaqSearch() {
       entry.item.hidden = !visible;
       entry.item.style.order = visible ? String(Math.max(0, 200 - score)) : "999";
       entry.item.open = Boolean(normalizedQuery && score >= 42);
+      entry.item.classList.toggle("faq-search-match", Boolean(normalizedQuery && visible));
+      entry.item.classList.remove("faq-search-top");
       if (visible) visibleCount += 1;
+      if (normalizedQuery && visible && score > topScore) {
+        topScore = score;
+        topMatch = entry;
+      }
     });
+
+    if (topMatch) {
+      topMatch.item.classList.add("faq-search-top");
+    }
 
     sections.forEach(section => {
       const hasVisibleItems = Array.from(section.querySelectorAll("[data-faq-item]")).some(item => !item.hidden);
@@ -107,7 +120,8 @@ function initFaqSearch() {
       emptyState.hidden = true;
     } else if (visibleCount > 0) {
       const answerLabel = visibleCount === 1 ? "answer" : "answers";
-      resultLabel.textContent = `Showing ${visibleCount} ${answerLabel} for "${trimmed}".`;
+      const topLabel = topMatch ? ` Top match: ${topMatch.questionLabel}.` : "";
+      resultLabel.textContent = `Showing ${visibleCount} ${answerLabel} for "${trimmed}".${topLabel}`;
       emptyState.hidden = true;
     } else {
       resultLabel.textContent = `No exact match needed. Try "bank", "switch", "backup", or "Pro".`;

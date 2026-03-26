@@ -25,7 +25,7 @@ const PAGE_CONFIG = {
     eyebrow: "Pro Guide",
     accent: "gold",
     lead:
-      "This is the full version: broader sync, deeper AI, full ledger control, and the archive to run the system seriously.",
+      "This is the full version: up to 6 Plaid institutions, quiet balance and ledger upkeep, deeper AI, and the archive to run the system seriously.",
     secondaryCta: false,
   },
 };
@@ -718,7 +718,7 @@ export function renderGuideHtml(pageTier = "free") {
           </div>
           ${PAYWALL_FEATURES.map(renderMatrixRow).join("")}
         </div>
-        <p style="margin-top:16px;">Free is the proof version. Pro is the operating version: broader sync, stronger AI, full ledger cleanup, and enough history to see whether your decisions are compounding.</p>
+        <p style="margin-top:16px;">Free is the proof version. Pro is the operating version: broader account coverage, quieter balance and ledger upkeep, stronger AI, and enough history to see whether your decisions are compounding.</p>
       </section>
 
       <section class="panel" id="logic">

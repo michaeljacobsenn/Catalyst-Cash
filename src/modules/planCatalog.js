@@ -31,10 +31,10 @@ export const IAP_PRODUCTS = {
 export const IAP_PRICING = {
   monthly: { price: "$9.99", period: "month", savings: false },
   yearly: {
-    price: "$89.99",
+    price: "$99.99",
     period: "year",
-    savings: "3 months free",
-    perMonth: "$7.50",
+    savings: "about 2 months free",
+    perMonth: "$8.33",
     original: "$119.88",
     trial: "7-day free trial",
   },

@@ -122,6 +122,7 @@ export default memo(function DashboardTab({
     setFinancialConfig,
     cardCatalog,
     successMessage: "Balances synced — run a new audit to reflect updated numbers",
+    autoMaintain: true,
   });
 
   // ── Intelligent Auto-sync ──

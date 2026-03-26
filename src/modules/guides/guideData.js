@@ -28,7 +28,7 @@ export const PLAN_FACTS = {
     badge: "Unlocked",
     heroTitle: "Run the full Catalyst operating system.",
     heroBody:
-      "Pro is for people who want broader account coverage, deeper AI, full ledger control, and the archive needed to see whether decisions are actually working.",
+      "Pro is for people who want up to 6 Plaid institutions, quieter balance and ledger upkeep, deeper AI, and the archive needed to see whether decisions are actually working.",
     audits: PLAN_DISPLAY.pro.audits,
     chats: PLAN_DISPLAY.pro.chats,
     models: PLAN_DISPLAY.pro.models,
@@ -113,7 +113,7 @@ export const TAB_GUIDE_CARDS = [
     title: "Portfolio Vault",
     status: "all",
     body:
-      "Your source of truth for banks, cards, loans, assets, and live balances.",
+      "Your source of truth for banks, cards, loans, assets, and the freshest balances Catalyst has on hand.",
   },
   {
     title: "Rewards",
@@ -245,7 +245,7 @@ export const FREE_UPGRADE_CARDS = [
   {
     title: "Broader live coverage",
     body:
-      "Pro keeps up to 6 institutions in play so you stop choosing between your real accounts.",
+      "Pro keeps up to 6 institutions in play and quietly refreshes balances and ledger data so you stop babysitting which account matters today.",
   },
   {
     title: "Full ledger control",
@@ -291,12 +291,12 @@ export const COMMON_QUESTIONS = [
   {
     question: "What does Pro change day to day?",
     answer:
-      "It removes the main friction points: more audits, more AskAI, broader Plaid coverage, full ledger search and export, stronger models, and the archive needed to track progress over time.",
+      "It removes the main friction points: more audits, more AskAI, up to 6 Plaid institutions, quieter balance and ledger upkeep, full ledger search and export, stronger models, and the archive needed to track progress over time.",
   },
   {
     question: "Do I need Plaid to get value?",
     answer:
-      "No. Manual entry works. Plaid mainly saves time and keeps balances fresher, which matters more as your account set grows.",
+      "No. Manual entry works. Plaid mainly saves time and keeps balances and ledger data fresher in the background, which matters more as your account set grows.",
   },
   {
     question: "Is the output financial advice?",

@@ -42,6 +42,10 @@ import {
   syncTransactionsForItem,
   writeSyncRow,
 } from "./lib/plaidSync.js";
+import {
+  loadPlaidRoiSummary,
+  recordPlaidUsageDaily,
+} from "./lib/plaidRoi.js";
 import { getSafeClientError, redactForWorkerLogs, workerLog } from "./lib/observability.js";
 import { handleHouseholdRoute } from "./routes/householdRoutes.js";
 import { handleMarketRoute } from "./routes/marketRoutes.js";
@@ -74,6 +78,30 @@ const PLAID_EXCHANGE_COOLDOWN_MS = 30_000;
 const PLAID_DIRECT_FETCH_COOLDOWNS = {
   free: 7 * 24 * 60 * 60 * 1000,
   pro: 24 * 60 * 60 * 1000,
+};
+const PLAID_WEBHOOK_REFRESH_COOLDOWNS = {
+  free: 0,
+  pro: 24 * 60 * 60 * 1000,
+};
+const PLAID_MANUAL_SYNC_COOLDOWNS = {
+  free: 7 * 24 * 60 * 60 * 1000,
+  pro: 24 * 60 * 60 * 1000,
+};
+const PLAID_BALANCE_REFRESH_COOLDOWNS = {
+  free: 0,
+  pro: 24 * 60 * 60 * 1000,
+};
+const PLAID_TRANSACTION_REFRESH_COOLDOWNS = {
+  free: 0,
+  pro: 24 * 60 * 60 * 1000,
+};
+const PLAID_LIABILITY_REFRESH_COOLDOWNS = {
+  free: 0,
+  pro: 4 * 24 * 60 * 60 * 1000,
+};
+const PLAID_DEEP_SYNC_COOLDOWNS = {
+  free: 0,
+  pro: 7 * 24 * 60 * 60 * 1000,
 };
 const MODEL_ALLOWLIST = {
   free: new Set(["gemini-2.5-flash"]),
@@ -116,6 +144,29 @@ function parseStoredJson(value, fallback = {}) {
   } catch {
     return fallback;
   }
+}
+
+function hasPlaidBalancesPayload(payload = null) {
+  return Array.isArray(payload?.accounts) && payload.accounts.length > 0;
+}
+
+function hasPlaidTransactionsPayload(payload = null) {
+  return Array.isArray(payload?.transactions) && payload.transactions.length > 0;
+}
+
+function hasPlaidLiabilitiesPayload(payload = null) {
+  const liabilities = payload?.liabilities;
+  if (!liabilities || typeof liabilities !== "object") return false;
+  return Object.values(liabilities).some((value) =>
+    Array.isArray(value) ? value.length > 0 : Boolean(value && Object.keys(value).length > 0)
+  );
+}
+
+function hasLiabilityEligibleAccounts(payload = null) {
+  return Array.isArray(payload?.accounts) && payload.accounts.some((account) => {
+    const type = String(account?.type || "").toLowerCase();
+    return type === "credit" || type === "loan";
+  });
 }
 
 function getLatestTimestampMillis(rows = [], allowedItemIds = null) {
@@ -178,6 +229,121 @@ async function buildPlaidCooldownResponse({
       headers: buildHeaders(cors, { "Content-Type": "application/json" }),
     }
   );
+}
+
+function getPlaidDatasetAction(dataset) {
+  return `dataset-${dataset}`;
+}
+
+async function getPlaidDatasetTimestamp(db, userId, itemId, dataset, syncRow = null) {
+  const metaTimestamp = await getPlaidActionTimestamp(db, userId, getPlaidDatasetAction(dataset), itemId);
+  if (metaTimestamp > 0) return metaTimestamp;
+
+  if (!syncRow?.last_synced_at) return 0;
+  const payload = parseStoredJson(syncRow?.[`${dataset}_json`], {});
+  const hasPayload =
+    dataset === "balances"
+      ? hasPlaidBalancesPayload(payload)
+      : dataset === "transactions"
+        ? hasPlaidTransactionsPayload(payload)
+        : hasPlaidLiabilitiesPayload(payload);
+  if (!hasPayload) return 0;
+
+  const fallbackTimestamp = new Date(`${syncRow.last_synced_at}Z`).getTime();
+  return Number.isFinite(fallbackTimestamp) ? fallbackTimestamp : 0;
+}
+
+async function markPlaidDatasetTimestamp(db, userId, itemId, dataset) {
+  await markPlaidAction(db, userId, getPlaidDatasetAction(dataset), itemId);
+}
+
+async function refreshPlaidItemCache({
+  db,
+  userId,
+  itemId,
+  accessToken,
+  plaidDomain,
+  env,
+  existingRow = null,
+  refreshBalances = false,
+  refreshTransactions = false,
+  refreshLiabilities = false,
+  ignoreTransactionErrors = false,
+}) {
+  const existingBalances = parseStoredJson(existingRow?.balances_json, {});
+  const existingLiabilities = parseStoredJson(existingRow?.liabilities_json, {});
+  const existingTransactions = parseStoredJson(existingRow?.transactions_json, {});
+
+  let balancesPayload = existingBalances;
+  let liabilitiesPayload = existingLiabilities;
+  let transactionsPayload = existingTransactions;
+
+  let balancesRefreshed = false;
+  let transactionsRefreshed = false;
+  let liabilitiesRefreshed = false;
+
+  const needsBalanceFetchForLiabilities =
+    refreshLiabilities &&
+    !refreshBalances &&
+    !hasPlaidBalancesPayload(existingBalances);
+
+  if (refreshBalances || needsBalanceFetchForLiabilities) {
+    balancesPayload = await fetchPlaidJson(plaidDomain, "/accounts/get", env, {
+      access_token: accessToken,
+    });
+    balancesRefreshed = refreshBalances || needsBalanceFetchForLiabilities;
+  }
+
+  if (refreshTransactions) {
+    try {
+      const { mergedTransactions } = await syncTransactionsForItem({
+        db,
+        userId,
+        itemId,
+        accessToken,
+        plaidDomain,
+        env,
+      });
+      transactionsPayload = mergedTransactions;
+      transactionsRefreshed = true;
+    } catch (error) {
+      if (!ignoreTransactionErrors) throw error;
+      workerLog(env, "warn", "plaid-sync", "Transaction refresh failed; preserved existing ledger cache", {
+        error,
+        itemId,
+      });
+    }
+  }
+
+  if (refreshLiabilities && hasLiabilityEligibleAccounts(balancesPayload)) {
+    liabilitiesPayload = await fetchPlaidJson(plaidDomain, "/liabilities/get", env, {
+      access_token: accessToken,
+    });
+    liabilitiesRefreshed = true;
+  }
+
+  if (balancesRefreshed || transactionsRefreshed || liabilitiesRefreshed) {
+    await writeSyncRow(db, userId, itemId, {
+      balancesJson: JSON.stringify(balancesPayload),
+      liabilitiesJson: JSON.stringify(liabilitiesPayload),
+      transactionsJson: JSON.stringify(transactionsPayload),
+    });
+  }
+
+  const timestampUpdates = [];
+  if (balancesRefreshed) timestampUpdates.push(markPlaidDatasetTimestamp(db, userId, itemId, "balances"));
+  if (transactionsRefreshed) timestampUpdates.push(markPlaidDatasetTimestamp(db, userId, itemId, "transactions"));
+  if (liabilitiesRefreshed) timestampUpdates.push(markPlaidDatasetTimestamp(db, userId, itemId, "liabilities"));
+  await Promise.all(timestampUpdates);
+
+  return {
+    balancesRefreshed,
+    transactionsRefreshed,
+    liabilitiesRefreshed,
+    balancesPayload,
+    liabilitiesPayload,
+    transactionsPayload,
+  };
 }
 
 function buildCriticalRetryPrompt(context = {}) {
@@ -647,6 +813,7 @@ export default {
       completeIdentityChallenge,
       rotateIdentityDeviceKey,
       updateAuditLogRow,
+      loadPlaidRoiSummary,
       workerLog,
     });
     if (systemResponse) return systemResponse;
@@ -841,8 +1008,8 @@ export default {
           const cachedBalancesRow = itemId ? await getStoredSyncRow(env.DB, plaidActor.userId, itemId) : null;
           const cachedBalancesPayload = parseStoredJson(cachedBalancesRow?.balances_json, {});
           const directFetchCooldownMs = getPlaidCooldownMs(env, PLAID_DIRECT_FETCH_COOLDOWNS, tierId);
-          const directBalancesTimestamp = cachedBalancesRow?.last_synced_at
-            ? new Date(`${cachedBalancesRow.last_synced_at}Z`).getTime()
+          const directBalancesTimestamp = itemId
+            ? await getPlaidDatasetTimestamp(env.DB, plaidActor.userId, itemId, "balances", cachedBalancesRow)
             : 0;
           if (cachedBalancesPayload?.accounts?.length && directBalancesTimestamp > 0 && (Date.now() - directBalancesTimestamp) < directFetchCooldownMs) {
             return new Response(JSON.stringify(cachedBalancesPayload), {
@@ -860,6 +1027,13 @@ export default {
           if (itemId) {
             await writeSyncRow(env.DB, plaidActor.userId, itemId, {
               balancesJson: JSON.stringify(plaidData),
+            });
+            await markPlaidDatasetTimestamp(env.DB, plaidActor.userId, itemId, "balances");
+            await recordPlaidUsageDaily(env.DB, {
+              userId: plaidActor.userId,
+              itemId,
+              source: "direct-balances",
+              balancesRefreshed: true,
             });
           }
           return new Response(JSON.stringify(plaidData), {
@@ -905,8 +1079,8 @@ export default {
           const cachedLiabilitiesRow = itemId ? await getStoredSyncRow(env.DB, plaidActor.userId, itemId) : null;
           const cachedLiabilitiesPayload = parseStoredJson(cachedLiabilitiesRow?.liabilities_json, {});
           const directFetchCooldownMs = getPlaidCooldownMs(env, PLAID_DIRECT_FETCH_COOLDOWNS, tierId);
-          const directLiabilitiesTimestamp = cachedLiabilitiesRow?.last_synced_at
-            ? new Date(`${cachedLiabilitiesRow.last_synced_at}Z`).getTime()
+          const directLiabilitiesTimestamp = itemId
+            ? await getPlaidDatasetTimestamp(env.DB, plaidActor.userId, itemId, "liabilities", cachedLiabilitiesRow)
             : 0;
           if (cachedLiabilitiesPayload?.liabilities && directLiabilitiesTimestamp > 0 && (Date.now() - directLiabilitiesTimestamp) < directFetchCooldownMs) {
             return new Response(JSON.stringify(cachedLiabilitiesPayload), {
@@ -924,6 +1098,13 @@ export default {
           if (itemId) {
             await writeSyncRow(env.DB, plaidActor.userId, itemId, {
               liabilitiesJson: JSON.stringify(plaidData),
+            });
+            await markPlaidDatasetTimestamp(env.DB, plaidActor.userId, itemId, "liabilities");
+            await recordPlaidUsageDaily(env.DB, {
+              userId: plaidActor.userId,
+              itemId,
+              source: "direct-liabilities",
+              liabilitiesRefreshed: true,
             });
           }
           return new Response(JSON.stringify(plaidData), {
@@ -998,9 +1179,13 @@ export default {
           const cachedTransactionsRow = await getStoredSyncRow(env.DB, plaidActor.userId, itemId);
           const cachedTransactionsPayload = parseStoredJson(cachedTransactionsRow?.transactions_json, {});
           const directFetchCooldownMs = getPlaidCooldownMs(env, PLAID_DIRECT_FETCH_COOLDOWNS, tierId);
-          const directTransactionsTimestamp = cachedTransactionsRow?.last_synced_at
-            ? new Date(`${cachedTransactionsRow.last_synced_at}Z`).getTime()
-            : 0;
+          const directTransactionsTimestamp = await getPlaidDatasetTimestamp(
+            env.DB,
+            plaidActor.userId,
+            itemId,
+            "transactions",
+            cachedTransactionsRow
+          );
           if (Array.isArray(cachedTransactionsPayload?.transactions) && cachedTransactionsPayload.transactions.length > 0) {
             if (tierId === "free") {
               return new Response(JSON.stringify(cachedTransactionsPayload), {
@@ -1045,6 +1230,13 @@ export default {
             plaidDomain,
             env,
           });
+          await markPlaidDatasetTimestamp(env.DB, plaidActor.userId, itemId, "transactions");
+          await recordPlaidUsageDaily(env.DB, {
+            userId: plaidActor.userId,
+            itemId,
+            source: "direct-transactions",
+            transactionsRefreshed: true,
+          });
 
           return new Response(JSON.stringify(mergedTransactions), {
             status: 200,
@@ -1075,36 +1267,41 @@ export default {
                 return; // Completely ignore webhooks for free users
               }
 
-              // Item-level cooldown (48h per institution for Pro)
-              const ITEM_COOLDOWN = isPlaidCostTierEnforced(env) ? 48 * 60 * 60 * 1000 : 0; // 48 hours
-              const { results: itemSyncResults } = await env.DB.prepare("SELECT last_synced_at FROM sync_data WHERE user_id = ? AND item_id = ?").bind(user_id, itemId).all();
-              let itemLastSync = 0;
-              if (itemSyncResults && itemSyncResults.length > 0 && itemSyncResults[0].last_synced_at) {
-                itemLastSync = new Date(itemSyncResults[0].last_synced_at + "Z").getTime();
-              }
+              // Pro webhook refreshes should keep connected institutions reasonably fresh
+              // without waiting longer than the manual sync cadence.
+              const itemCooldown = getPlaidCooldownMs(env, PLAID_WEBHOOK_REFRESH_COOLDOWNS, tierId);
+              const syncRow = await getStoredSyncRow(env.DB, user_id, itemId);
+              const itemLastSync = await getPlaidDatasetTimestamp(
+                env.DB,
+                user_id,
+                itemId,
+                "transactions",
+                syncRow
+              );
               const now = Date.now();
-              if (ITEM_COOLDOWN > 0 && itemLastSync > 0 && (now - itemLastSync) < ITEM_COOLDOWN) {
+              if (itemCooldown > 0 && itemLastSync > 0 && (now - itemLastSync) < itemCooldown) {
                 // Item cooldown not elapsed — skip
                 return;
               }
               // --------------------------
-
-              // Background sync: Use free /accounts/get since webhook means data is fresh
-              const balances = await fetchPlaidJson(plaidDomain, "/accounts/get", env, {
-                access_token: access_token,
-              });
-              const { mergedTransactions } = await syncTransactionsForItem({
+              const result = await refreshPlaidItemCache({
                 db: env.DB,
                 userId: user_id,
                 itemId,
                 accessToken: access_token,
                 plaidDomain,
                 env,
+                existingRow: syncRow,
+                refreshBalances: true,
+                refreshTransactions: true,
               });
-
-              await writeSyncRow(env.DB, user_id, itemId, {
-                balancesJson: JSON.stringify(balances),
-                transactionsJson: JSON.stringify(mergedTransactions),
+              await recordPlaidUsageDaily(env.DB, {
+                userId: user_id,
+                itemId,
+                source: "webhook",
+                balancesRefreshed: result.balancesRefreshed,
+                transactionsRefreshed: result.transactionsRefreshed,
+                liabilitiesRefreshed: result.liabilitiesRefreshed,
               });
               // Balance sync persisted to D1
             };
@@ -1121,6 +1318,102 @@ export default {
             JSON.stringify({ received: true }),
             { status: 200, headers: buildHeaders(cors, { "Content-Type": "application/json" }) }
           );
+        } else if (url.pathname === "/api/sync/maintain") {
+          if (request.method !== "POST") return new Response("{}", { status: 405 });
+          if (!env.DB) return new Response(JSON.stringify({ error: "DB not configured" }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+
+          const tierResolution = await resolveEffectiveTier(request, env, plaidActor);
+          const tierId = getPlaidCostTierId(tierResolution, env);
+          if (tierId === "free") {
+            return new Response(JSON.stringify({
+              success: true,
+              skipped: true,
+              reason: "manual_only",
+            }), { status: 200, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+          }
+
+          const { results: maintainItems } = await env.DB.prepare("SELECT access_token, item_id FROM plaid_items WHERE user_id = ?").bind(plaidActor.userId).all();
+          if (!maintainItems || maintainItems.length === 0) {
+            return new Response(JSON.stringify({ error: "No plaid items found" }), { status: 404, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+          }
+
+          const balanceCooldownMs = getPlaidCooldownMs(env, PLAID_BALANCE_REFRESH_COOLDOWNS, tierId);
+          const transactionCooldownMs = getPlaidCooldownMs(env, PLAID_TRANSACTION_REFRESH_COOLDOWNS, tierId);
+          const liabilityCooldownMs = getPlaidCooldownMs(env, PLAID_LIABILITY_REFRESH_COOLDOWNS, tierId);
+          const now = Date.now();
+          const refreshedItemIds = [];
+          let balancesRefreshed = 0;
+          let transactionsRefreshed = 0;
+          let liabilitiesRefreshed = 0;
+
+          for (const item of maintainItems) {
+            const syncItemId = item.item_id || "default";
+            const existingRow = await getStoredSyncRow(env.DB, plaidActor.userId, syncItemId);
+            const cachedBalances = parseStoredJson(existingRow?.balances_json, {});
+            const cachedTransactions = parseStoredJson(existingRow?.transactions_json, {});
+            const cachedLiabilities = parseStoredJson(existingRow?.liabilities_json, {});
+            const balancesTimestamp = await getPlaidDatasetTimestamp(env.DB, plaidActor.userId, syncItemId, "balances", existingRow);
+            const transactionsTimestamp = await getPlaidDatasetTimestamp(env.DB, plaidActor.userId, syncItemId, "transactions", existingRow);
+            const liabilitiesTimestamp = await getPlaidDatasetTimestamp(env.DB, plaidActor.userId, syncItemId, "liabilities", existingRow);
+
+            const refreshBalances =
+              !hasPlaidBalancesPayload(cachedBalances) ||
+              balanceCooldownMs <= 0 ||
+              balancesTimestamp <= 0 ||
+              (now - balancesTimestamp) >= balanceCooldownMs;
+            const refreshTransactions =
+              !hasPlaidTransactionsPayload(cachedTransactions) ||
+              transactionCooldownMs <= 0 ||
+              transactionsTimestamp <= 0 ||
+              (now - transactionsTimestamp) >= transactionCooldownMs;
+            const refreshLiabilities =
+              !hasPlaidLiabilitiesPayload(cachedLiabilities) ||
+              liabilityCooldownMs <= 0 ||
+              liabilitiesTimestamp <= 0 ||
+              (now - liabilitiesTimestamp) >= liabilityCooldownMs;
+
+            if (!refreshBalances && !refreshTransactions && !refreshLiabilities) continue;
+
+            try {
+              const result = await refreshPlaidItemCache({
+                db: env.DB,
+                userId: plaidActor.userId,
+                itemId: syncItemId,
+                accessToken: item.access_token,
+                plaidDomain,
+                env,
+                existingRow,
+                refreshBalances,
+                refreshTransactions,
+                refreshLiabilities,
+              });
+              await recordPlaidUsageDaily(env.DB, {
+                userId: plaidActor.userId,
+                itemId: syncItemId,
+                source: "maintenance",
+                balancesRefreshed: result.balancesRefreshed,
+                transactionsRefreshed: result.transactionsRefreshed,
+                liabilitiesRefreshed: result.liabilitiesRefreshed,
+              });
+              refreshedItemIds.push(syncItemId);
+              if (result.balancesRefreshed) balancesRefreshed += 1;
+              if (result.transactionsRefreshed) transactionsRefreshed += 1;
+              if (result.liabilitiesRefreshed) liabilitiesRefreshed += 1;
+            } catch (err) {
+              workerLog(env, "warn", "plaid-sync", "Maintenance sync item failed", {
+                error: err,
+                itemId: syncItemId,
+              });
+            }
+          }
+
+          return new Response(JSON.stringify({
+            success: true,
+            refreshedItemIds,
+            balancesRefreshed,
+            transactionsRefreshed,
+            liabilitiesRefreshed,
+          }), { status: 200, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
         } else if (url.pathname === "/api/sync/force") {
           // Manually trigger a sync for a user, respecting the tier cooldown.
           if (request.method !== "POST") return new Response("{}", { status: 405 });
@@ -1132,11 +1425,7 @@ export default {
           const { results: syncResults } = await env.DB.prepare("SELECT * FROM sync_data WHERE user_id = ?").bind(plaidActor.userId).all();
           let lastSyncTime = 0;
 
-          const COOLDOWNS = {
-            free: 7 * 24 * 60 * 60 * 1000,
-            pro: 24 * 60 * 60 * 1000,
-          };
-          const cooldownMs = getPlaidCooldownMs(env, COOLDOWNS, tierId);
+          const cooldownMs = getPlaidCooldownMs(env, PLAID_MANUAL_SYNC_COOLDOWNS, tierId);
 
           const { results: itemResults } = await env.DB.prepare("SELECT access_token, item_id FROM plaid_items WHERE user_id = ?").bind(plaidActor.userId).all();
           if (!itemResults || itemResults.length === 0) {
@@ -1176,35 +1465,27 @@ export default {
             const { access_token, item_id: syncItemId } = item;
             try {
               // Manual sync should complete before we return so the client can read fresh data immediately.
-              const balances = await fetchPlaidJson(plaidDomain, "/accounts/get", env, {
-                access_token,
+              const result = await refreshPlaidItemCache({
+                db: env.DB,
+                userId: plaidActor.userId,
+                itemId: syncItemId || "default",
+                accessToken: access_token,
+                plaidDomain,
+                env,
+                existingRow: await getStoredSyncRow(env.DB, plaidActor.userId, syncItemId || "default"),
+                refreshBalances: true,
+                refreshTransactions: true,
+                ignoreTransactionErrors: true,
               });
-
-              await writeSyncRow(env.DB, plaidActor.userId, syncItemId || "default", {
-                balancesJson: JSON.stringify(balances),
+              await recordPlaidUsageDaily(env.DB, {
+                userId: plaidActor.userId,
+                itemId: syncItemId || "default",
+                source: "manual",
+                balancesRefreshed: result.balancesRefreshed,
+                transactionsRefreshed: result.transactionsRefreshed,
+                liabilitiesRefreshed: result.liabilitiesRefreshed,
               });
               anySuccess = true;
-
-              try {
-                const { mergedTransactions } = await syncTransactionsForItem({
-                  db: env.DB,
-                  userId: plaidActor.userId,
-                  itemId: syncItemId || "default",
-                  accessToken: access_token,
-                  plaidDomain,
-                  env,
-                });
-
-                await writeSyncRow(env.DB, plaidActor.userId, syncItemId || "default", {
-                  balancesJson: JSON.stringify(balances),
-                  transactionsJson: JSON.stringify(mergedTransactions),
-                });
-              } catch (transactionErr) {
-                workerLog(env, "warn", "plaid-sync", "Manual sync transactions failed; balances were still cached", {
-                  error: transactionErr,
-                  itemId: syncItemId || "default",
-                });
-              }
             } catch (err) {
               workerLog(env, "warn", "plaid-sync", "Manual sync item failed", {
                 error: err,
@@ -1223,7 +1504,7 @@ export default {
             return new Response(JSON.stringify({ error: "Failed to sync items" }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
         } else if (url.pathname === "/api/sync/deep") {
-          // On-demand deep sync: fetch transactions + liabilities.
+          // On-demand deep sync: liabilities-only enrichment.
           // Deep sync is intentionally paid-only under live gating because Plaid usage is the primary marginal cost.
           if (request.method !== "POST") return new Response("{}", { status: 405 });
           if (!env.DB) return new Response(JSON.stringify({ error: "DB not configured" }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
@@ -1239,8 +1520,8 @@ export default {
           if (deepSyncResults && deepSyncResults.length > 0 && deepSyncResults[0].last_synced_at) {
             lastDeepSync = new Date(deepSyncResults[0].last_synced_at + "Z").getTime();
           }
-          const DEEP_COOLDOWN = isPlaidCostTierEnforced(env) ? 7 * 24 * 60 * 60 * 1000 : 0;
-          if (DEEP_COOLDOWN > 0 && lastDeepSync > 0 && (Date.now() - lastDeepSync) < DEEP_COOLDOWN) {
+          const deepCooldown = getPlaidCooldownMs(env, PLAID_DEEP_SYNC_COOLDOWNS, deepTierId);
+          if (deepCooldown > 0 && lastDeepSync > 0 && (Date.now() - lastDeepSync) < deepCooldown) {
             return new Response(JSON.stringify({ error: "cooldown", message: "Deep sync on cooldown (7 days)" }), { status: 429, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
 
@@ -1251,21 +1532,23 @@ export default {
 
           for (const dItem of deepItems) {
             try {
-              const liabilities = await fetchPlaidJson(plaidDomain, "/liabilities/get", env, {
-                access_token: dItem.access_token,
-              });
-              const { mergedTransactions } = await syncTransactionsForItem({
+              const result = await refreshPlaidItemCache({
                 db: env.DB,
                 userId: plaidActor.userId,
                 itemId: dItem.item_id || "default",
                 accessToken: dItem.access_token,
                 plaidDomain,
                 env,
+                existingRow: await getStoredSyncRow(env.DB, plaidActor.userId, dItem.item_id || "default"),
+                refreshLiabilities: true,
               });
-
-              await writeSyncRow(env.DB, plaidActor.userId, dItem.item_id || "default", {
-                liabilitiesJson: JSON.stringify(liabilities),
-                transactionsJson: JSON.stringify(mergedTransactions),
+              await recordPlaidUsageDaily(env.DB, {
+                userId: plaidActor.userId,
+                itemId: dItem.item_id || "default",
+                source: "deep",
+                balancesRefreshed: result.balancesRefreshed,
+                transactionsRefreshed: result.transactionsRefreshed,
+                liabilitiesRefreshed: result.liabilitiesRefreshed,
               });
             } catch (err) {
               workerLog(env, "warn", "plaid-sync", "Deep sync item failed", {
@@ -1288,6 +1571,25 @@ export default {
 
           const { results } = await env.DB.prepare("SELECT * FROM sync_data WHERE user_id = ?").bind(plaidActor.userId).all();
           if (!results || results.length === 0) {
+            return new Response(JSON.stringify({ hasData: false }), { status: 200, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+          }
+
+          const payloadRows = results.filter((row) => {
+            const itemId = String(row?.item_id || "");
+            return itemId && !itemId.startsWith("_plaid_meta:") && itemId !== "deep_sync_meta";
+          });
+          const freshnessRows = new Map();
+          for (const row of results) {
+            const itemId = String(row?.item_id || "");
+            if (!itemId.startsWith("_plaid_meta:dataset-")) continue;
+            const [, action = "", scope = ""] = itemId.split(":");
+            const dataset = action.replace(/^dataset-/, "");
+            if (!scope) continue;
+            const entry = freshnessRows.get(scope) || {};
+            entry[dataset] = row?.last_synced_at || null;
+            freshnessRows.set(scope, entry);
+          }
+          if (payloadRows.length === 0) {
             return new Response(JSON.stringify({ hasData: false }), { status: 200, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
 
@@ -1329,7 +1631,7 @@ export default {
             return aggregated;
           };
 
-          const latestSyncedAt = [...results]
+          const latestSyncedAt = [...payloadRows]
             .map(result => result?.last_synced_at)
             .filter(Boolean)
             .sort()
@@ -1338,9 +1640,10 @@ export default {
           return new Response(JSON.stringify({
             hasData: true,
             last_synced_at: latestSyncedAt,
-            balances: aggregatePayload(results, "balances_json"),
-            liabilities: aggregatePayload(results, "liabilities_json"),
-            transactions: aggregatePayload(results, "transactions_json"),
+            balances: aggregatePayload(payloadRows, "balances_json"),
+            liabilities: aggregatePayload(payloadRows, "liabilities_json"),
+            transactions: aggregatePayload(payloadRows, "transactions_json"),
+            sync_freshness: Object.fromEntries(freshnessRows),
           }), { status: 200, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
         } else {
           return new Response(JSON.stringify({ error: "Unknown Plaid endpoint" }), {

@@ -78,9 +78,9 @@ describe("IAP Constants", () => {
 
   it("has display pricing", () => {
     expect(IAP_PRICING.monthly.price).toBe("$9.99");
-    expect(IAP_PRICING.yearly.price).toBe("$89.99");
-    expect(IAP_PRICING.yearly.perMonth).toBe("$7.50");
-    expect(IAP_PRICING.yearly.savings).toBe("3 months free");
+    expect(IAP_PRICING.yearly.price).toBe("$99.99");
+    expect(IAP_PRICING.yearly.perMonth).toBe("$8.33");
+    expect(IAP_PRICING.yearly.savings).toBe("about 2 months free");
   });
 });
 

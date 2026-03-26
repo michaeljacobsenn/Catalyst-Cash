@@ -797,6 +797,28 @@ export async function forceBackendSync(options = {}) {
   return true;
 }
 
+export async function maintainBackendSync() {
+  const res = await fetchPlaidBackend(`${API_BASE}/api/sync/maintain`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  }, {
+    timeoutMs: SYNC_FORCE_TIMEOUT_MS,
+    authBootstrapTimeoutMs: LINK_TOKEN_TIMEOUT_MS,
+  });
+
+  if (!res.ok) {
+    if (res.status === 429) return { success: false, throttled: true };
+    void log.warn("plaid", `Maintenance sync failed: HTTP ${res.status}`);
+    return { success: false };
+  }
+
+  try {
+    return await res.json();
+  } catch {
+    return { success: true };
+  }
+}
+
 async function fetchCachedSyncStatus() {
   const res = await fetchPlaidBackend(`${API_BASE}/api/sync/status`, {
     method: "POST",

@@ -3,6 +3,8 @@
  * Uses module-level state so sync status persists across tab switches.
  * Used by DashboardTab and CardPortfolioTab to avoid code duplication.
  */
+  import { App as CapApp } from "@capacitor/app";
+  import { Capacitor } from "@capacitor/core";
   import { useCallback,useEffect,useState } from "react";
   import { normalizeAppError } from "./appErrors.js";
   import { haptic } from "./haptics.js";
@@ -15,6 +17,7 @@
     fetchAllTransactions,
     forceBackendSync,
     getConnections,
+    maintainBackendSync,
     reconcilePlaidConnectionAccess,
     saveConnectionLinks,
   } from "./plaid.js";
@@ -25,13 +28,24 @@
 // switches tabs (component unmount/remount). All mounted
 // instances of usePlaidSync share the same underlying state.
 let _isSyncing = false;
+let _lastBackgroundSyncAt = 0;
 const _subscribers = new Set();
+const BACKGROUND_PLAID_MAINTENANCE_MIN_INTERVAL_MS = 15 * 60 * 1000;
 function _notifySubs() {
   _subscribers.forEach(fn => fn(_isSyncing));
 }
 function _setSyncing(v) {
   _isSyncing = v;
   _notifySubs();
+}
+
+export function shouldRunBackgroundPlaidMaintenance(
+  lastAttemptAt = 0,
+  now = Date.now(),
+  minIntervalMs = BACKGROUND_PLAID_MAINTENANCE_MIN_INTERVAL_MS
+) {
+  if (!lastAttemptAt) return true;
+  return (now - lastAttemptAt) >= minIntervalMs;
 }
 
 export function getMostRecentPlaidSyncTime(cards = [], bankAccounts = [], connectionIds = []) {
@@ -154,6 +168,7 @@ export function summarizeSyncOutcome({
  * @param {unknown}  [opts.cardCatalog]
  * @param {string}   [opts.successMessage] — custom toast on success
  * @param {boolean}  [opts.autoFetchTransactions] — also pull transactions (Accounts tab)
+ * @param {boolean}  [opts.autoMaintain] — silent background Plaid upkeep on mount/foreground
  */
 export function usePlaidSync({
   cards,
@@ -165,6 +180,7 @@ export function usePlaidSync({
   cardCatalog = null,
   successMessage = "Balances synced successfully",
   autoFetchTransactions = false,
+  autoMaintain = false,
 }) {
   const [syncing, setSyncing] = useState(_isSyncing);
 
@@ -177,24 +193,25 @@ export function usePlaidSync({
     return () => _subscribers.delete(handler);
   }, []);
 
-  const sync = useCallback(async () => {
+  const sync = useCallback(async (options = {}) => {
+    const background = options.background === true;
     if (_isSyncing) return;
 
     // Offline guard — avoid cryptic network errors
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      if (window.toast) window.toast.info("You're offline — connect to the internet to sync.");
+      if (!background && window.toast) window.toast.info("You're offline — connect to the internet to sync.");
       return;
     }
 
     // 1. Check for existing connections
     const conns = await getConnections();
     if (conns.length === 0) {
-      if (window.toast) window.toast.info("No bank connections — connect via Settings → Plaid");
+      if (!background && window.toast) window.toast.info("No bank connections — connect via Settings → Plaid");
       return;
     }
     const reconnectRequired = conns.filter(conn => conn?._needsReconnect);
     if (reconnectRequired.length === conns.length) {
-      if (window.toast) {
+      if (!background && window.toast) {
         window.toast.info("Your linked banks need to be reconnected in Settings → Bank Connections before balances can sync.");
       }
       return;
@@ -217,12 +234,12 @@ export function usePlaidSync({
       setBankAccounts(accessState.updatedBankAccounts);
     }
 
-    if (gatingEnforced && rawTier.id === "free" && accessState.pausedConnectionIds.length > 0 && window.toast) {
+    if (!background && gatingEnforced && rawTier.id === "free" && accessState.pausedConnectionIds.length > 0 && window.toast) {
       window.toast.info("Free keeps live sync on one linked institution. Extra bank links stay as editable manual snapshots until you upgrade.");
     }
 
     if (syncConnectionIds.length === 0) {
-      if (window.toast) {
+      if (!background && window.toast) {
         window.toast.info(
           reconnectRequired.length === conns.length
             ? "Your linked banks need to be reconnected in Settings → Bank Connections before balances can sync."
@@ -232,10 +249,14 @@ export function usePlaidSync({
       return;
     }
 
+    if (background && !shouldRunBackgroundPlaidMaintenance(_lastBackgroundSyncAt)) {
+      return;
+    }
+
     const cooldown = PLAID_MANUAL_SYNC_COOLDOWNS[tier.id] || PLAID_MANUAL_SYNC_COOLDOWNS.free;
     const cooldownEnforced = shouldEnforcePlaidSyncCooldown({ gatingEnforced });
     const lastSyncAt = getMostRecentPlaidSyncTime(cards, bankAccounts, syncConnectionIds);
-    if (cooldownEnforced && lastSyncAt && Date.now() - lastSyncAt < cooldown) {
+    if (!background && cooldownEnforced && lastSyncAt && Date.now() - lastSyncAt < cooldown) {
       const minsLeft = Math.ceil((cooldown - (Date.now() - lastSyncAt)) / 60000);
       const hoursLeft = Math.floor(minsLeft / 60);
       const daysLeft = Math.floor(hoursLeft / 24);
@@ -255,13 +276,21 @@ export function usePlaidSync({
     }
 
     _setSyncing(true);
+    if (background) {
+      _lastBackgroundSyncAt = Date.now();
+    }
 
     // 3. Force backend to perform a live Plaid sync
     let forceSyncSucceeded = true;
     try {
-      forceSyncSucceeded = await forceBackendSync({
-        connectionId: gatingEnforced && rawTier.id === "free" ? syncConnectionIds[0] : null,
-      });
+      if (background) {
+        const maintainResult = await maintainBackendSync();
+        forceSyncSucceeded = Boolean(maintainResult?.success);
+      } else {
+        forceSyncSucceeded = await forceBackendSync({
+          connectionId: gatingEnforced && rawTier.id === "free" ? syncConnectionIds[0] : null,
+        });
+      }
     } catch (e) {
       forceSyncSucceeded = false;
       const failure = normalizeAppError(e, { context: "sync" });
@@ -327,7 +356,15 @@ export function usePlaidSync({
       });
 
       if (syncOutcome) {
-        if (syncOutcome.kind === "success") {
+        if (background) {
+          const shouldRefreshTransactionsInBackground = !gatingEnforced || tier.id === "pro";
+          if (shouldRefreshTransactionsInBackground) {
+            await fetchAllTransactions(30, {
+              connectionIds: syncConnectionIds,
+              categorizeWithAi: false,
+            }).catch(() => {});
+          }
+        } else if (syncOutcome.kind === "success") {
           haptic.success();
           if (window.toast) window.toast.success(syncOutcome.message);
           if (restoredCount > 0 && window.toast) {
@@ -353,20 +390,20 @@ export function usePlaidSync({
       } else {
         const firstErr = results.find(r => r._error)?._error || "No connections available";
         const reconnectCount = reconnectRequired.length;
-        if (reconnectCount > 0 && window.toast) {
+        if (!background && reconnectCount > 0 && window.toast) {
           window.toast.error(
             reconnectCount === conns.length
               ? "Sync unavailable until your Plaid connections are reconnected in Settings."
               : `Sync failed for active connections. ${reconnectCount} linked bank${reconnectCount > 1 ? "s" : ""} also need reconnection in Settings.`
           );
-        } else if (window.toast) {
+        } else if (!background && window.toast) {
           window.toast.error(`Sync failed: ${firstErr}`);
         }
       }
     } catch (e) {
       const failure = normalizeAppError(e, { context: "sync" });
       log.error("sync", "Balance sync failed", { error: failure.rawMessage, kind: failure.kind });
-      if (window.toast) window.toast.error(failure.userMessage);
+      if (!background && window.toast) window.toast.error(failure.userMessage);
     } finally {
       _setSyncing(false);
     }
@@ -380,6 +417,40 @@ export function usePlaidSync({
     successMessage,
     autoFetchTransactions,
   ]);
+
+  useEffect(() => {
+    if (!autoMaintain) return;
+
+    let cancelled = false;
+    let resumeHandle = null;
+
+    const runBackgroundSync = () => {
+      if (cancelled) return;
+      void sync({ background: true });
+    };
+
+    runBackgroundSync();
+
+    const onVisibility = () => {
+      if (!document.hidden) runBackgroundSync();
+    };
+
+    document.addEventListener("visibilitychange", onVisibility);
+
+    if (Capacitor.isNativePlatform()) {
+      CapApp.addListener("resume", () => {
+        setTimeout(runBackgroundSync, 1500);
+      }).then(handle => {
+        resumeHandle = handle;
+      }).catch(() => {});
+    }
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibility);
+      resumeHandle?.remove?.().catch?.(() => {});
+    };
+  }, [autoMaintain, sync]);
 
   return { syncing, sync };
 }

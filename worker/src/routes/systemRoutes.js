@@ -12,6 +12,7 @@ export async function handleSystemRoute({
   completeIdentityChallenge,
   rotateIdentityDeviceKey,
   updateAuditLogRow,
+  loadPlaidRoiSummary,
   workerLog,
 }) {
   if (url.pathname === "/health") {
@@ -207,6 +208,38 @@ export async function handleSystemRoute({
       status: 200,
       headers: buildHeaders(cors, { "Content-Type": "application/json" }),
     });
+  }
+
+  if (url.pathname === "/api/admin/plaid-roi" && request.method === "GET") {
+    const authHeader = request.headers.get("Authorization") || "";
+    const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+    if (!env.ADMIN_TOKEN || bearerToken !== env.ADMIN_TOKEN) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+      });
+    }
+
+    if (!env.DB) {
+      return new Response(JSON.stringify({ error: "DB not configured" }), {
+        status: 500,
+        headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+      });
+    }
+
+    const days = Number(url.searchParams.get("days") || 30);
+    const summary = await loadPlaidRoiSummary(env.DB, env, { days });
+
+    return new Response(
+      JSON.stringify({
+        generatedAt: new Date().toISOString(),
+        ...summary,
+      }),
+      {
+        status: 200,
+        headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+      }
+    );
   }
 
   if (url.pathname === "/api/audit-log/outcome" && request.method === "POST") {

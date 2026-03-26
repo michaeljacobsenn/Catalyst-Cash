@@ -24,7 +24,7 @@
     href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap"
     rel="stylesheet" />
   <meta name="robots" content="index, follow" />
-  <link rel="stylesheet" href="/style.css?v=3.3" />
+  <link rel="stylesheet" href="/style.css?v=3.5" />
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -67,7 +67,7 @@
         "name": "What does Pro unlock?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Pro expands usage and depth: 20 audits per month, 30 AskAI chats per day, up to 6 Plaid institutions, the full audit archive, the full searchable ledger with export, and the premium AI models."
+          "text": "Pro expands usage and depth: 20 audits per month, 30 AskAI chats per day, up to 6 Plaid institutions, quieter balance and ledger upkeep, the full audit archive, the full searchable ledger with export, and the premium AI models."
         }
       }
     ]
@@ -106,48 +106,21 @@
 
     <main class="shell" id="main-content" data-faq-root>
       <section class="faq-hero" aria-label="FAQ hero">
-        <div class="faq-hero-grid">
-          <div class="faq-copy fade-up">
-            <div class="eyebrow">FAQ | updated March 26, 2026</div>
-            <h1>The questions people ask before they trust a new money app.</h1>
-            <p class="hero-sub">
-              This page is built for people switching from dashboard-first, subscription-tracking, or category-heavy
-              finance tools. It covers fit, sync behavior, privacy, backups, and what changes when you move your
-              weekly money workflow into Catalyst Cash.
-            </p>
-            <div class="faq-trust-row">
-              <span>Switching from Mint or Credit Karma</span>
-              <span>Moving off Rocket Money or Monarch</span>
-              <span>Evaluating against YNAB-style workflows</span>
-            </div>
-          </div>
-
-          <div class="faq-brief-grid fade-up delay-1" aria-label="FAQ highlights">
-            <article class="faq-brief-card">
-              <span>Best fit</span>
-              <h3>Weekly decisions, not passive dashboard watching.</h3>
-              <p>The product is centered on the audit: what is safe, what is risky, and what move should happen next.</p>
-            </article>
-            <article class="faq-brief-card">
-              <span>Transition</span>
-              <h3>You do not need a perfect migration to get value fast.</h3>
-              <p>Current balances, major cards, and recurring costs matter more than rebuilding every old category first.</p>
-            </article>
-            <article class="faq-brief-card">
-              <span>Trust boundary</span>
-              <h3>Local-first records with networked features only when needed.</h3>
-              <p>Manual data stays usable, Plaid is optional, and backups exist without turning the app into a cloud ledger first.</p>
-            </article>
-          </div>
+        <div class="faq-copy faq-copy-minimal fade-up">
+          <div class="eyebrow">FAQ | updated March 26, 2026</div>
+          <h1>Clear answers before you trust a new money app.</h1>
+          <p class="hero-sub">
+            Search switching, sync, privacy, backup, and plan questions without digging through marketing copy.
+          </p>
         </div>
 
         <div class="faq-search-panel fade-up delay-2">
           <div class="faq-search-top">
             <div>
               <div class="micro-label">Smart Search</div>
-              <h2>Search by intent, not exact wording.</h2>
+              <h2>Search the FAQ</h2>
             </div>
-            <p>Try phrases like "bank not syncing", "switching from Mint", "where is my data", or "what does Pro unlock".</p>
+            <p>Try “bank not syncing”, “Mint”, “backup”, or “Pro”.</p>
           </div>
 
           <div class="faq-search-field">
@@ -162,17 +135,14 @@
           </div>
 
           <div class="faq-chip-row" aria-label="Popular searches">
-            <button type="button" class="faq-chip" data-faq-query="switching from Mint">Switching from Mint</button>
-            <button type="button" class="faq-chip" data-faq-query="bank not syncing">Bank not syncing</button>
-            <button type="button" class="faq-chip" data-faq-query="import history">Import history</button>
+            <button type="button" class="faq-chip" data-faq-query="Mint">Mint</button>
+            <button type="button" class="faq-chip" data-faq-query="bank not syncing">Bank sync</button>
             <button type="button" class="faq-chip" data-faq-query="backup and restore">Backup and restore</button>
-            <button type="button" class="faq-chip" data-faq-query="do I need Plaid">Do I need Plaid</button>
-            <button type="button" class="faq-chip" data-faq-query="what does Pro unlock">What does Pro unlock</button>
+            <button type="button" class="faq-chip" data-faq-query="what does Pro unlock">Pro</button>
           </div>
 
           <div class="faq-search-meta">
             <div class="faq-search-results" data-faq-results>Browse answers across the full FAQ.</div>
-            <a href="/compare.html" class="faq-search-link">Need fit context? Read the compare page.</a>
           </div>
 
           <div class="faq-empty" data-faq-empty hidden>
@@ -186,8 +156,8 @@
           <section class="faq-category" data-faq-section>
             <div class="section-head faq-category-head">
               <div class="micro-label">Switching</div>
-              <h2>Moving from another finance app without rebuilding your life.</h2>
-              <p>Most people switching do not want another migration project. These answers are about fit, setup order, and what you should keep versus replace.</p>
+              <h2>Switching from another app</h2>
+              <p>What to keep, what to skip, and how to get useful value fast.</p>
             </div>
 
             <div class="faq-accordion">
@@ -244,8 +214,8 @@
           <section class="faq-category" data-faq-section>
             <div class="section-head faq-category-head">
               <div class="micro-label">Accounts and Sync</div>
-              <h2>Plaid, refreshing, and what happens when a bank is messy.</h2>
-              <p>Bank connections are where finance apps usually feel magical or fragile. These answers explain the boundaries so the product feels predictable instead of random.</p>
+              <h2>Accounts and sync</h2>
+              <p>Plaid, refresh behavior, and what to expect when banks are messy.</p>
             </div>
 
             <div class="faq-accordion">
@@ -280,8 +250,8 @@
                   <span class="faq-toggle" aria-hidden="true">+</span>
                 </summary>
                 <div class="faq-answer">
-                  <p>Because good finance UX should not waste network calls just to feel busy. Catalyst Cash uses cached sync status where it can, and only performs paid or rate-limited live refreshes when the request is actually useful and allowed by plan limits.</p>
-                  <p>That keeps costs lower, avoids unnecessary provider churn, and still gives you current-enough information for the weekly decision loop.</p>
+                  <p>Because good finance UX should not waste network calls just to feel busy. Catalyst Cash reads cached sync state first, keeps Pro balances and ledger data quietly refreshed in the background, and saves heavier liability refreshes for a slower cadence.</p>
+                  <p>That keeps the product more current without asking you to micromanage refreshes or forcing unnecessary paid pulls every time you open the app.</p>
                 </div>
               </details>
 
@@ -293,7 +263,7 @@
                 </summary>
                 <div class="faq-answer">
                   <p>Free supports 1 Plaid institution. Pro supports up to 6 Plaid institutions. Manual entry remains available either way.</p>
-                  <p>The split is meant to keep Free genuinely useful while reserving heavier live-sync usage for the people who need broader coverage.</p>
+                  <p>On Pro, Catalyst is built to keep all 6 usable without constant user input by quietly maintaining balances and ledger data behind the scenes.</p>
                 </div>
               </details>
             </div>
@@ -302,8 +272,8 @@
           <section class="faq-category" data-faq-section>
             <div class="section-head faq-category-head">
               <div class="micro-label">Privacy and Backup</div>
-              <h2>Where the record lives, what leaves the device, and how recovery works.</h2>
-              <p>Finance FAQ pages usually get vague when privacy and backups come up. These answers are direct because that boundary matters.</p>
+              <h2>Privacy and backup</h2>
+              <p>Where data lives, what leaves the device, and how recovery works.</p>
             </div>
 
             <div class="faq-accordion">
@@ -360,8 +330,8 @@
           <section class="faq-category" data-faq-section>
             <div class="section-head faq-category-head">
               <div class="micro-label">Plans and Workflow</div>
-              <h2>What Free includes, what Pro changes, and how often you should use the app.</h2>
-              <p>The simplest plan question is not which tier sounds bigger. It is whether the workflow is useful enough that you need more room.</p>
+              <h2>Plans and workflow</h2>
+              <p>What Free includes, what Pro changes, and how often to use the app.</p>
             </div>
 
             <div class="faq-accordion">
@@ -372,7 +342,7 @@
                   <span class="faq-toggle" aria-hidden="true">+</span>
                 </summary>
                 <div class="faq-answer">
-                  <p>Pro expands usage and depth: 20 audits per month, 30 AskAI chats per day, up to 6 Plaid institutions, the full audit archive, the full searchable ledger with export, and the premium AI models.</p>
+                  <p>Pro expands usage and depth: 20 audits per month, 30 AskAI chats per day, up to 6 Plaid institutions, quieter balance and ledger upkeep, the full audit archive, the full searchable ledger with export, and the premium AI models.</p>
                   <p>The core workflow stays the same. Pro mostly removes constraints once the weekly rhythm is already working for you.</p>
                 </div>
               </details>
@@ -421,9 +391,9 @@
         <div class="final-cta">
           <div>
             <div class="micro-label">Next Step</div>
-            <h2>Use the FAQ to remove friction, then test the workflow honestly.</h2>
+            <h2>Ready to test it?</h2>
             <p>
-              If the weekly audit matches the job you need done, the fastest proof is still a real check-in with current numbers.
+              The fastest proof is still one real weekly check-in with current numbers.
             </p>
           </div>
           <div class="button-stack">
@@ -474,7 +444,7 @@
     </footer>
   </div>
 
-  <script src="/main.js"></script>
+  <script src="/main.js?v=3.5"></script>
 </body>
 
 </html>

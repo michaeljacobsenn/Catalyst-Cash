@@ -217,6 +217,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
     cardCatalog,
     successMessage: "Synced balances successfully",
     autoFetchTransactions: true,
+    autoMaintain: true,
   });
   // Master collapsible sections (all collapsed by default for a clean, compact view)
   const [collapsedSections, setCollapsedSections] = useState<PortfolioCollapsedSections>({

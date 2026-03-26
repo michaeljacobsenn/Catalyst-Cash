@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getMostRecentPlaidSyncTime,
   hasCachedPlaidSnapshot,
+  shouldRunBackgroundPlaidMaintenance,
   shouldEnforcePlaidSyncCooldown,
   shouldFetchTransactionsForSync,
   summarizeSyncOutcome,
@@ -57,6 +58,13 @@ describe("usePlaidSync helpers", () => {
         gatingEnforced: false,
       })
     ).toBe(false);
+  });
+
+  it("rate-limits silent background maintenance locally between foreground events", () => {
+    const now = new Date("2026-03-26T16:00:00.000Z").getTime();
+    expect(shouldRunBackgroundPlaidMaintenance(0, now)).toBe(true);
+    expect(shouldRunBackgroundPlaidMaintenance(now - (5 * 60 * 1000), now)).toBe(false);
+    expect(shouldRunBackgroundPlaidMaintenance(now - (16 * 60 * 1000), now)).toBe(true);
   });
 
   it("reports partial syncs as informational instead of claiming full success", () => {
