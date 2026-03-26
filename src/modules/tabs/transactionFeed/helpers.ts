@@ -1,3 +1,4 @@
+import type React from "react";
 import type { Card as PortfolioCard, CustomValuations } from "../../../types/index.js";
 
 import { T } from "../../constants.js";
@@ -167,13 +168,15 @@ export function buildRewardComparison(
   };
 }
 
-export function getCategoryMeta(category: string | null | undefined, iconMap: Record<string, unknown>) {
-  if (!category) return { icon: iconMap.HelpCircle, color: T.text.dim, bg: "rgba(107,114,128,0.08)" };
+type IconComponent = React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+
+export function getCategoryMeta(category: string | null | undefined, iconMap: Record<string, IconComponent>) {
+  if (!category) return { icon: iconMap.HelpCircle as IconComponent | undefined, color: T.text.dim, bg: "rgba(107,114,128,0.08)" };
   const key = category.toLowerCase().trim();
-  const meta = CATEGORY_MAP[key];
-  if (!meta) return { icon: iconMap.HelpCircle, color: T.text.dim, bg: "rgba(107,114,128,0.08)" };
+  const meta = CATEGORY_MAP[key as keyof typeof CATEGORY_MAP];
+  if (!meta) return { icon: iconMap.HelpCircle as IconComponent | undefined, color: T.text.dim, bg: "rgba(107,114,128,0.08)" };
   return {
-    icon: iconMap[meta.icon],
+    icon: iconMap[meta.icon] as IconComponent | undefined,
     color: meta.color,
     bg: meta.bg,
   };

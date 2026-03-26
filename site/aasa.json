@@ -1,0 +1,19 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "4ETPMUFF46.com.jacobsen.portfoliopro",
+        "paths": [
+          "/audit",
+          "/history",
+          "/settings",
+          "/cards",
+          "/portfolio",
+          "/chat",
+          "/*"
+        ]
+      }
+    ]
+  }
+}

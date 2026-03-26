@@ -16,6 +16,7 @@ function getRevenueCatApiKey() {
 const isNative = Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
 let cachedRevenueCatAppUserId = null;
 let revenueCatUiPromise = null;
+let revenueCatConfigured = false;
 
 function withRevenueCatTimeout(promiseFactory, label) {
   let timer = null;
@@ -64,6 +65,7 @@ async function applyCustomerInfo(customerInfo) {
 export async function getRevenueCatAppUserId() {
   if (!isNative) return null;
   if (!getRevenueCatApiKey()) return null;
+  if (!revenueCatConfigured) return cachedRevenueCatAppUserId;
   if (cachedRevenueCatAppUserId) return cachedRevenueCatAppUserId;
 
   try {
@@ -88,6 +90,7 @@ export async function getRevenueCatAppUserId() {
 export async function syncProStatus() {
   if (!isNative) return false;
   if (!getRevenueCatApiKey()) return false;
+  if (!revenueCatConfigured) return false;
 
   try {
     const customerInfo = await withRevenueCatTimeout(
@@ -127,6 +130,7 @@ export async function initRevenueCat() {
         }),
       "RevenueCat configure"
     );
+    revenueCatConfigured = true;
     await getRevenueCatAppUserId();
 
     // Listen for real-time changes to the customer's purchase status
@@ -137,6 +141,7 @@ export async function initRevenueCat() {
     // Sync state on boot
     await syncProStatus();
   } catch (error) {
+    revenueCatConfigured = false;
     log.error("revenuecat", "Failed to initialize RevenueCat", {
       error: error instanceof Error ? error.message : "unknown",
     });

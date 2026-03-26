@@ -213,6 +213,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
     setCards,
     setBankAccounts,
     setFinancialConfig,
+    cardCatalog,
     successMessage: "Synced balances successfully",
     autoFetchTransactions: true,
   });

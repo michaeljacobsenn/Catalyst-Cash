@@ -1,7 +1,7 @@
 import {
   COMMON_QUESTIONS,
-  COMING_SOON_FEATURES,
   FINANCE_LOGIC_CARDS,
+  FIRST_ACTION_STEPS,
   FREE_UPGRADE_CARDS,
   GUIDE_BADGES,
   PAYWALL_FEATURES,
@@ -18,14 +18,14 @@ const PAGE_CONFIG = {
     eyebrow: "Free Guide",
     accent: "emerald",
     lead:
-      "Start here if you want the simplest way to use the app well without learning finance jargon first.",
+      "Use this to get the workflow right quickly, then decide whether you want the fuller Pro toolset.",
     secondaryCta: true,
   },
   pro: {
     eyebrow: "Pro Guide",
     accent: "gold",
     lead:
-      "This is the same core workflow with more room, more depth, and better tools for heavier use.",
+      "This is the full version: broader sync, deeper AI, full ledger control, and the archive to run the system seriously.",
     secondaryCta: false,
   },
 };
@@ -105,8 +105,8 @@ function renderCallout(pageTier) {
     <section class="panel upgrade-panel">
       <div class="section-head">
         <div>
-          <span class="section-kicker">When Pro Helps</span>
-          <h2>Upgrade only when Free starts to feel tight</h2>
+          <span class="section-kicker">Why People Upgrade</span>
+          <h2>Pro turns the audit into a full operating system</h2>
         </div>
         <button class="cta-button" type="button" data-upgrade="true">Start ${escapeHtml(PRICING_FACTS.trial)}</button>
       </div>
@@ -130,22 +130,11 @@ function renderTierSpecificSection(pageTier) {
       <div class="section-head">
         <div>
           <span class="section-kicker">Pro Tips</span>
-          <h2>How to get the most out of Pro</h2>
+          <h2>Run Pro like an operator</h2>
         </div>
       </div>
       <div class="steps-list">
         ${PRO_PLAYBOOK.map(renderStep).join("")}
-      </div>
-      <div class="coming-grid">
-        ${COMING_SOON_FEATURES.map(
-          item => `
-            <article class="coming-card">
-              <div class="coming-icon">${escapeHtml(item.icon)}</div>
-              <h3>${escapeHtml(item.label)}</h3>
-              <p>${escapeHtml(item.desc)}</p>
-            </article>
-          `
-        ).join("")}
       </div>
     </section>
   `;
@@ -649,8 +638,8 @@ export function renderGuideHtml(pageTier = "free") {
             <p>${escapeHtml(page.lead)}</p>
           </div>
           <div class="hero-actions">
-            ${tier === "free" ? `<a class="ghost-button" href="#workflow">How to use it each week</a>` : `<a class="ghost-button" href="#workflow">Best Pro workflow</a>`}
-            ${page.secondaryCta ? `<button class="cta-button" type="button" data-upgrade="true">See what Pro adds</button>` : `<a class="ghost-button" href="#matrix">Plan differences</a>`}
+            <a class="ghost-button" href="#start">${tier === "free" ? "What to set up first" : "Best setup order"}</a>
+            ${page.secondaryCta ? `<button class="cta-button" type="button" data-upgrade="true">See what Pro unlocks</button>` : `<a class="ghost-button" href="#matrix">Plan differences</a>`}
           </div>
         </div>
         <div class="hero-stats">
@@ -662,25 +651,26 @@ export function renderGuideHtml(pageTier = "free") {
         </div>
       </div>
       <nav class="chip-row" aria-label="Guide sections">
-        <a class="nav-chip" href="#tabs">Tabs</a>
+        <a class="nav-chip" href="#start">Start</a>
         <a class="nav-chip" href="#workflow">Weekly use</a>
+        <a class="nav-chip" href="#tabs">Surfaces</a>
+        <a class="nav-chip" href="#matrix">Plans</a>
         <a class="nav-chip" href="#logic">What it looks at</a>
         <a class="nav-chip" href="#privacy">Privacy</a>
-        <a class="nav-chip" href="#matrix">Plans</a>
         <a class="nav-chip" href="#faq">Questions</a>
       </nav>
     </header>
 
     <main class="content">
-      <section class="panel" id="tabs">
+      <section class="panel" id="start">
         <div class="section-head">
           <div>
             <span class="section-kicker">Start Here</span>
-            <h2>What each tab does</h2>
+            <h2>Set up the smallest honest version of your finances</h2>
           </div>
         </div>
-        <div class="card-grid">
-          ${TAB_GUIDE_CARDS.map(card => renderCard(card, tier)).join("")}
+        <div class="steps-list">
+          ${FIRST_ACTION_STEPS.map(renderStep).join("")}
         </div>
       </section>
 
@@ -688,7 +678,7 @@ export function renderGuideHtml(pageTier = "free") {
         <div class="section-head">
           <div>
             <span class="section-kicker">Weekly Rhythm</span>
-            <h2>How to use the app each week</h2>
+            <h2>Use the app in this order each week</h2>
           </div>
         </div>
         <div class="steps-list">
@@ -696,27 +686,15 @@ export function renderGuideHtml(pageTier = "free") {
         </div>
       </section>
 
-      <section class="panel" id="logic">
+      <section class="panel" id="tabs">
         <div class="section-head">
           <div>
-            <span class="section-kicker">What Catalyst Watches</span>
-            <h2>What the app pays attention to</h2>
+            <span class="section-kicker">App Surfaces</span>
+            <h2>Open the right screen for the right question</h2>
           </div>
         </div>
         <div class="card-grid">
-          ${FINANCE_LOGIC_CARDS.map(card => renderCard({ ...card, status: "all" }, tier)).join("")}
-        </div>
-      </section>
-
-      <section class="panel" id="privacy">
-        <div class="section-head">
-          <div>
-            <span class="section-kicker">Privacy and Backup</span>
-            <h2>The basics of where your data lives</h2>
-          </div>
-        </div>
-        <div class="card-grid">
-          ${PRIVACY_CARDS.map(card => renderCard(card, tier)).join("")}
+          ${TAB_GUIDE_CARDS.map(card => renderCard(card, tier)).join("")}
         </div>
       </section>
 
@@ -724,7 +702,7 @@ export function renderGuideHtml(pageTier = "free") {
         <div class="section-head">
           <div>
             <span class="section-kicker">Plans</span>
-            <h2>What Free and Pro change</h2>
+            <h2>Free proves the system. Pro runs the full system.</h2>
           </div>
           <div class="price-strip">
             <span>${escapeHtml(PRICING_FACTS.monthly)}</span>
@@ -740,7 +718,31 @@ export function renderGuideHtml(pageTier = "free") {
           </div>
           ${PAYWALL_FEATURES.map(renderMatrixRow).join("")}
         </div>
-        <p style="margin-top:16px;">Free is meant to be genuinely useful. Pro mainly adds more room, deeper AI, broader sync, and faster cleanup tools.</p>
+        <p style="margin-top:16px;">Free is the proof version. Pro is the operating version: broader sync, stronger AI, full ledger cleanup, and enough history to see whether your decisions are compounding.</p>
+      </section>
+
+      <section class="panel" id="logic">
+        <div class="section-head">
+          <div>
+            <span class="section-kicker">What Catalyst Watches</span>
+            <h2>The signals behind the recommendations</h2>
+          </div>
+        </div>
+        <div class="card-grid">
+          ${FINANCE_LOGIC_CARDS.map(card => renderCard({ ...card, status: "all" }, tier)).join("")}
+        </div>
+      </section>
+
+      <section class="panel" id="privacy">
+        <div class="section-head">
+          <div>
+            <span class="section-kicker">Privacy and Backup</span>
+            <h2>What stays local, what goes over the network</h2>
+          </div>
+        </div>
+        <div class="card-grid">
+          ${PRIVACY_CARDS.map(card => renderCard(card, tier)).join("")}
+        </div>
       </section>
 
       ${renderTierSpecificSection(tier)}

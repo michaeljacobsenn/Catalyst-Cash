@@ -25,6 +25,10 @@ CatalystCash_CloudSync*.json
 # ── Logs ──
 *.log
 .DS_Store
+*.bundle
+*.tgz
+*.tar.gz
+*.zip
 
 # ── Personal / Dev-only Files ──
 personal_rules_to_paste.txt

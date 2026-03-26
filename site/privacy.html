@@ -44,6 +44,7 @@
         <div class="nav-links" id="nav-links">
           <a href="/">Home</a>
           <a href="/guide.html">Guide</a>
+          <a href="/faq.html">FAQ</a>
           <a href="/privacy.html">Privacy</a>
           <a href="/terms.html">Terms</a>
           <a href="/compare.html">Compare</a>
@@ -60,8 +61,10 @@
         <h1>Your core financial data stays close to you.</h1>
         <p class="subtitle" style="text-align: left; max-width: 800px; margin-bottom: 24px;">
           Catalyst Cash is built around local-first storage. The app keeps your core financial records on your device.
-          When you use shipped AI features, the app sends scrubbed prompts through the Catalyst Cash backend proxy to
-          the selected model provider. Raw financial payloads are not retained on our servers.
+          When you use AI features, the app sends scrubbed prompts through the Catalyst Cash backend proxy to
+          the selected model provider. Your raw financial payloads are not stored on our servers. The backend
+          logs a short scrubbed excerpt of the AI response (up to 600 characters) for service reliability;
+          this fragment never contains account numbers, balances, or other raw financial data.
         </p>
         <div class="meta">Effective date: 2026-03-05 | Last updated: 2026-03-05</div>
       </div>
@@ -111,7 +114,9 @@
               <li>When you run an audit or AskAI chat, the app sends a scrubbed request through the Catalyst Cash
                 backend proxy.</li>
               <li>The proxy forwards the request to the selected provider such as OpenAI or Google.</li>
-              <li>Raw financial payloads are not retained on our servers after routing.</li>
+              <li>Your raw financial payload is not stored on our servers. A short scrubbed excerpt of the AI
+                response (up to 600 characters, no account numbers or balances) is logged for service reliability
+                analysis and automatically purged on a rolling basis.</li>
             </ul>
           </div>
           <div class="policy-card">
@@ -159,7 +164,8 @@
             <ul>
               <li>We do not sell your personal data.</li>
               <li>We do not use your financial data for advertising profiles.</li>
-              <li>We do not retain raw financial payloads on our servers after AI request routing.</li>
+              <li>We do not store raw financial payloads on our servers. Only a short scrubbed AI response
+                excerpt is logged for reliability; it is purged on a rolling basis.</li>
             </ul>
           </div>
           <div class="policy-card">
@@ -232,6 +238,7 @@
           <div class="footer-col">
             <h4>Resources</h4>
             <a href="/guide.html">Guide</a>
+            <a href="/faq.html">FAQ</a>
             <a href="/security.html">Security</a>
             <a href="/privacy.html">Privacy Policy</a>
             <a href="/terms.html">Terms of Service</a>

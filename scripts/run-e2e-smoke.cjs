@@ -133,10 +133,10 @@ async function runSmoke() {
     await waitVisible(page.getByRole("tab", { name: "Home", selected: true }), "Home tab");
     await waitVisible(page.getByRole("heading", { name: "Dashboard" }).first(), "Dashboard heading");
 
-    await page.getByRole("button", { name: "Begin audit", exact: true }).click();
+    await page.getByRole("button", { name: /Begin.*audit|Run.*audit/i }).first().click();
 
     await waitVisible(page.getByRole("spinbutton", { name: "Checking balance" }), "Checking balance input");
-    await waitVisible(page.getByLabel("Notes for this week"), "Notes field");
+    await waitVisible(page.getByLabel(/Notes for this/i), "Notes field");
 
     process.stdout.write("Smoke E2E passed: dashboard boot -> new audit overlay.\n");
   } finally {

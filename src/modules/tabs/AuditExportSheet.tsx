@@ -169,7 +169,7 @@ export default function AuditExportSheet({ audit, onClose, toast }: AuditExportS
                     flexShrink: 0,
                   }}
                 >
-                  {activeExportId === action.id ? <Loader2 size={16} strokeWidth={2.2} className="spin" /> : <action.Icon size={16} strokeWidth={2.2} />}
+                  {activeExportId === action.id ? <Loader2 size={16} strokeWidth={2.2} className="spin" style={{ animation: "spin 0.8s linear infinite" }} /> : <action.Icon size={16} strokeWidth={2.2} />}
                 </div>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary }}>{action.title}</div>

@@ -8,6 +8,7 @@ import { normalizeAppError } from "../../appErrors.js";
 import { downloadFromICloud } from "../../cloudSync.js";
 import { T } from "../../constants.js";
 import { decrypt, isEncrypted } from "../../crypto.js";
+import { loadWorkbookRows } from "../../excelWorkbook.js";
 import { log } from "../../logger.js";
 import { isSecuritySensitiveKey } from "../../securityKeys.js";
 import { db, nativeExport } from "../../utils.js";
@@ -16,7 +17,6 @@ import type {
   AppleSignInResult,
   BackupPayload,
   ConnectionWithId,
-  SpreadsheetModule,
   ToastApi,
 } from "./types.js";
 
@@ -53,18 +53,16 @@ export default function PageImport({
 
   const applyBackup = async (backup: BackupPayload): Promise<boolean> => {
     if (backup && backup.type === "spreadsheet-backup") {
-      const XLSX = (await import("xlsx")) as unknown as SpreadsheetModule;
       const binaryString = window.atob(backup.base64 || "");
       const len = binaryString.length;
       const bytes = new Uint8Array(len);
       for (let i = 0; i < len; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
-      const wb = XLSX.read(bytes.buffer, { type: "array" });
-      const sheetName = wb.SheetNames.find((name) => name.includes("Setup Data")) || wb.SheetNames[0];
+      const workbook = await loadWorkbookRows(bytes.buffer);
+      const sheetName = workbook.sheetNames.find((name) => name.includes("Setup Data")) || workbook.sheetNames[0];
       if (!sheetName) return false;
-      const ws = wb.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+      const rows = workbook.getSheetRows(sheetName) || [];
       const config: Record<string, string | number | boolean> = {};
       for (const row of rows) {
         const key = String(row[0] || "").trim();
@@ -189,24 +187,21 @@ export default function PageImport({
   };
 
   const parseSpreadsheet = async (file: File): Promise<Record<string, unknown>> => {
-    const XLSX = (await import("xlsx")) as unknown as SpreadsheetModule;
     const buf = await new Promise<ArrayBuffer>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (event: ProgressEvent<FileReader>) => resolve(event.target?.result as ArrayBuffer);
       reader.onerror = () => reject(new Error("Could not read spreadsheet from iOS filesystem."));
       reader.readAsArrayBuffer(file);
     });
-    const wb = XLSX.read(buf, { type: "array" });
+    const workbook = await loadWorkbookRows(buf);
 
     const config: Record<string, unknown> = {};
 
     const getSheetRows = (sheetName: string): Array<Array<string | number>> | null => {
-      const name = wb.SheetNames.find((namePart) => namePart.includes(sheetName));
-      if (!name) return null;
-      return XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: "" });
+      return workbook.getSheetRows(sheetName);
     };
 
-    const firstSheetName = wb.SheetNames[0];
+    const firstSheetName = workbook.sheetNames[0];
     const setupRows = getSheetRows("Setup Data") || (firstSheetName ? getSheetRows(firstSheetName) : null);
     if (setupRows) {
       for (const row of setupRows) {
@@ -494,7 +489,26 @@ export default function PageImport({
                 );
 
                 if (!imported) {
-                  const backup = await downloadFromICloud(null);
+                  let backup: BackupPayload | null = null;
+                  try {
+                    backup = await downloadFromICloud(null);
+                  } catch (e) {
+                    if (e instanceof Error && e.message.includes("passphrase required")) {
+                      const pass = window.prompt("This iCloud backup is encrypted. Enter the App Passcode used to create it:");
+                      if (!pass) {
+                        toast?.error?.("Passcode is required to restore this backup.");
+                        return;
+                      }
+                      backup = await downloadFromICloud(pass).catch(() => null);
+                      if (!backup) {
+                        toast?.error?.("Wrong passcode or backup corrupted.");
+                        return;
+                      }
+                    } else {
+                      throw e;
+                    }
+                  }
+
                   if (backup?.data && typeof backup.data === "object") {
                     const success = await applyBackup(backup);
 

@@ -28,8 +28,6 @@ interface AISectionProps {
   aiModel: string;
   setAiModel: Dispatch<SetStateAction<string>>;
   setAiProvider: Dispatch<SetStateAction<string>>;
-  useStreaming: boolean;
-  setUseStreaming: Dispatch<SetStateAction<boolean>>;
   currentProvider: ProviderConfig;
   selectedModel: ProviderModel;
   showUpgradeCta: boolean;
@@ -48,51 +46,13 @@ interface AISectionProps {
 }
 
 const PRIVACY_URL = "https://catalystcash.app/privacy";
-const Toggle = ({ value, onChange }) => (
-  <button
-    onClick={() => onChange(!value)}
-    style={{
-      width: 48,
-      height: 28,
-      minWidth: 48,
-      minHeight: 28,
-      borderRadius: 14,
-      border: "none",
-      padding: 0,
-      margin: 0,
-      WebkitAppearance: "none",
-      appearance: "none",
-      background: value ? T.accent.primary : T.text.muted,
-      cursor: "pointer",
-      position: "relative",
-      flexShrink: 0,
-      transition: "background .25s ease",
-      boxShadow: value ? `0 0 10px ${T.accent.primaryDim}` : "none",
-    }}
-  >
-    <div
-      style={{
-        width: 22,
-        height: 22,
-        borderRadius: 11,
-        background: "white",
-        position: "absolute",
-        top: 3,
-        left: value ? 23 : 3,
-        transition: "left .25s cubic-bezier(.16,1,.3,1)",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-      }}
-    />
-  </button>
-);
+
 
 export default function AISection({
   activeMenu,
   aiModel,
   setAiModel,
   setAiProvider,
-  useStreaming,
-  setUseStreaming,
   currentProvider,
   selectedModel,
   showUpgradeCta,
@@ -346,29 +306,7 @@ export default function AISection({
         </div>
       )}
       
-      <div style={{ paddingTop: 16 }}>
-        <Label>Engine Options</Label>
-        {[{ l: "Streaming", d: "See output live as it generates", v: useStreaming, fn: setUseStreaming }].map(
-          ({ l, d, v, fn }) => (
-            <div
-              key={l}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "12px 0",
-                borderBottom: `1px solid ${T.border.subtle}`,
-              }}
-            >
-              <div style={{ flex: 1, paddingRight: 12 }}>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>{l}</span>
-                <p style={{ fontSize: 10, color: T.text.muted, marginTop: 2 }}>{d}</p>
-              </div>
-              <Toggle value={v} onChange={fn} />
-            </div>
-          )
-        )}
-      </div>
+
 
       <div style={{ paddingTop: 16 }}>
         <Label>System Info</Label>
@@ -377,8 +315,7 @@ export default function AISection({
           ["Provider", currentProvider.name],
           ["Model", `${selectedModel.name} · ${selectedModelTierLabel}`],
           ["Tokens", getAiUsageDisplayLabel()],
-          ["Output", "JSON"],
-          ["Stream", useStreaming ? "ON" : "OFF"],
+          ["Output", "JSON · Streaming"],
         ].map(([label, value]) => (
           <div
             key={label}

@@ -75,6 +75,8 @@ function parseDueDay(value) {
 }
 
 function isCardChargedRenewal(renewal, cards) {
+  if (String(renewal?.chargedToType || "").trim().toLowerCase() === "card") return true;
+
   const chargedToId = String(renewal?.chargedToId || "").trim();
   if (chargedToId && cards.some(c => String(c?.id || "") === chargedToId)) return true;
 

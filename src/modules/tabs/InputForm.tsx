@@ -1158,10 +1158,10 @@ export default function InputForm({
             pointerEvents: "none",
           }}
         />
-        <Label style={{ fontWeight: 800, marginBottom: 6 }}>Notes for this Week</Label>
+        <Label style={{ fontWeight: 800, marginBottom: 6 }}>Notes for this Paycheck</Label>
         <p style={{ fontSize: 10, color: T.text.muted, marginBottom: 8, lineHeight: 1.4 }}>
           Tell the AI anything it needs to know — e.g. "I already paid rent", "expecting a reimbursement", "skip gas
-          budget this week".
+          budget this paycheck".
         </p>
         <textarea
           aria-label="Notes for this week"
@@ -1681,9 +1681,9 @@ export default function InputForm({
             )}
             {activeConfig.budgetCategories?.length > 0 && (
               <Card>
-                <Label>Weekly Budget Actuals</Label>
+                <Label>Budget Actuals</Label>
                 <p style={{ fontSize: 10, color: T.text.muted, marginBottom: 10, lineHeight: 1.4 }}>
-                  Enter actual spending per category this week. The AI will compare vs. your monthly targets.
+                  Enter actual spending per category this paycheck. The AI will compare vs. your targets.
                 </p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   {activeConfig.budgetCategories

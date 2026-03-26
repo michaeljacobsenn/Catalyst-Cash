@@ -2,10 +2,13 @@
 // backup.js — Export & Import backup logic
 // Extracted from SettingsTab.jsx for clarity and testability.
 // ═══════════════════════════════════════════════════════════════
-  import { APP_VERSION } from "./constants.js";
-  import { decrypt,encrypt,isEncrypted } from "./crypto.js";
-  import { isSafeImportKey,isSecuritySensitiveKey,sanitizePlaidForBackup } from "./securityKeys.js";
-  import { db,nativeExport } from "./utils.js";
+import { APP_VERSION } from "./constants.js";
+import { decrypt, encrypt, isEncrypted } from "./crypto.js";
+import { loadWorkbookRows } from "./excelWorkbook.js";
+import { FULL_PROFILE_QA_ACTIVE_KEY, shouldRecoverFromFullProfileQaSeed } from "./qaSeed.js";
+import { relinkRenewalPaymentMethods } from "./renewalPaymentLinking.js";
+import { isSafeImportKey, isSecuritySensitiveKey, sanitizePlaidForBackup } from "./securityKeys.js";
+import { db, nativeExport } from "./utils.js";
 
 const SUPPORTED_BACKUP_EXTENSIONS = [".enc", ".json"];
 const SUPPORTED_BACKUP_MIME_TYPES = new Set([
@@ -37,13 +40,63 @@ export function mergeUniqueById(existing = [], incoming = []) {
   return Array.from(map.values());
 }
 
-/**
- * Export a full encrypted backup of all non-sensitive db keys.
- * @param {string} passphrase - Passphrase used to encrypt the backup
- * @returns {{count: number, exportedAt: string, filename: string, plaidConnectionCount: number}} Backup metadata
- */
-export async function exportBackup(passphrase) {
-  const exportedAt = new Date().toISOString();
+function toLocalDayKey(timestamp) {
+  const date = new Date(Number(timestamp) || 0);
+  if (!Number.isFinite(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function shouldRunAutoBackup(interval, lastBackupTs, now = Date.now()) {
+  if (!interval || interval === "off") return false;
+  const lastTs = Number(lastBackupTs) || 0;
+  if (!lastTs) return true;
+
+  if (interval === "daily") {
+    return toLocalDayKey(lastTs) !== toLocalDayKey(now);
+  }
+
+  const dayMs = 24 * 60 * 60 * 1000;
+  const requiredDeltaMs =
+    interval === "weekly" ? dayMs * 7
+      : interval === "monthly" ? dayMs * 30
+        : dayMs;
+
+  return now - lastTs >= requiredDeltaMs;
+}
+
+function isDemoCard(card) {
+  return String(card?.id || "").startsWith("demo-card-");
+}
+
+function isDemoBankAccount(account) {
+  return String(account?.id || "").startsWith("demo-");
+}
+
+function isDemoRenewal(renewal) {
+  return String(renewal?.id || "").startsWith("demo-ren-");
+}
+
+export function sanitizeBackupPortfolioData({
+  cards = [],
+  bankAccounts = [],
+  renewals = [],
+} = {}) {
+  const sanitizedCards = Array.isArray(cards) ? cards.filter(card => !isDemoCard(card)) : [];
+  const sanitizedBankAccounts = Array.isArray(bankAccounts) ? bankAccounts.filter(account => !isDemoBankAccount(account)) : [];
+  const sanitizedRenewals = Array.isArray(renewals) ? renewals.filter(renewal => !isDemoRenewal(renewal)) : [];
+  const relinkedRenewals = relinkRenewalPaymentMethods(sanitizedRenewals, sanitizedCards, sanitizedBankAccounts).renewals;
+
+  return {
+    cards: sanitizedCards,
+    bankAccounts: sanitizedBankAccounts,
+    renewals: relinkedRenewals,
+  };
+}
+
+export async function buildBackupPayload({ personalRules = "", exportedAt = new Date().toISOString() } = {}) {
   const backup = { app: "Catalyst Cash", version: APP_VERSION, exportedAt, data: {} };
 
   const keys = await db.keys();
@@ -52,20 +105,116 @@ export async function exportBackup(passphrase) {
     const val = await db.get(key);
     if (val !== null) backup.data[key] = val;
   }
+
   if (!("personal-rules" in backup.data)) {
-    const pr = await db.get("personal-rules");
-    backup.data["personal-rules"] = pr ?? "";
+    backup.data["personal-rules"] = personalRules ?? "";
   }
 
-  // Include sanitized Plaid connections (metadata only, no access tokens)
-  // so reconnecting after restore can deduplicate instead of creating new entries
+  const sanitizedPortfolio = sanitizeBackupPortfolioData({
+    cards: backup.data["card-portfolio"],
+    bankAccounts: backup.data["bank-accounts"],
+    renewals: backup.data["renewals"],
+  });
+  if ("card-portfolio" in backup.data) backup.data["card-portfolio"] = sanitizedPortfolio.cards;
+  if ("bank-accounts" in backup.data) backup.data["bank-accounts"] = sanitizedPortfolio.bankAccounts;
+  if ("renewals" in backup.data) backup.data["renewals"] = sanitizedPortfolio.renewals;
+
   const plaidConns = await db.get("plaid-connections");
-  let plaidConnectionCount = 0;
   if (Array.isArray(plaidConns) && plaidConns.length > 0) {
-    const sanitizedConnections = sanitizePlaidForBackup(plaidConns);
-    backup.data["plaid-connections-sanitized"] = sanitizedConnections;
-    plaidConnectionCount = sanitizedConnections.length;
+    backup.data["plaid-connections-sanitized"] = sanitizePlaidForBackup(plaidConns);
   }
+
+  return backup;
+}
+
+export async function getCloudBackupBlockReason() {
+  const [cards, bankAccounts, renewals, plaidConnections, qaSeedActive] = await Promise.all([
+    db.get("card-portfolio"),
+    db.get("bank-accounts"),
+    db.get("renewals"),
+    db.get("plaid-connections"),
+    db.get(FULL_PROFILE_QA_ACTIVE_KEY),
+  ]);
+
+  const shouldBlock = shouldRecoverFromFullProfileQaSeed({
+    qaSeedActive: Boolean(qaSeedActive),
+    cards: Array.isArray(cards) ? cards : [],
+    bankAccounts: Array.isArray(bankAccounts) ? bankAccounts : [],
+    renewals: Array.isArray(renewals) ? renewals : [],
+    plaidConnections: Array.isArray(plaidConnections) ? plaidConnections : [],
+  });
+
+  if (!shouldBlock) return null;
+  return "Cloud backup skipped because seeded QA data was detected while linked bank connections still exist.";
+}
+
+let activeCloudBackupPromise = null;
+
+/**
+ * @param {{
+ *   upload: (payload: unknown, passphrase?: string | null) => Promise<boolean>;
+ *   passphrase?: string | null;
+ *   personalRules?: string;
+ *   interval?: "off" | "daily" | "weekly" | "monthly" | null;
+ *   force?: boolean;
+ * }} [options]
+ */
+export async function performCloudBackup({
+  upload,
+  passphrase = null,
+  personalRules = "",
+  interval = null,
+  force = false,
+} = {}) {
+  if (typeof upload !== "function") {
+    throw new Error("Cloud backup upload handler is required");
+  }
+
+  if (activeCloudBackupPromise) return activeCloudBackupPromise;
+
+  activeCloudBackupPromise = (async () => {
+    if (!passphrase) {
+      return { success: false, skipped: true, reason: "Encrypted iCloud backups require an App Passcode." };
+    }
+
+    const now = Date.now();
+    const lastBackupTs = await db.get("last-backup-ts");
+    if (!force && interval && !shouldRunAutoBackup(interval, lastBackupTs, now)) {
+      return { success: false, skipped: true, reason: "not-due" };
+    }
+
+    const blockReason = await getCloudBackupBlockReason();
+    if (blockReason) {
+      return { success: false, skipped: true, reason: blockReason };
+    }
+
+    const backup = await buildBackupPayload({ personalRules });
+    const success = await upload(backup, passphrase);
+    if (!success) {
+      return { success: false, skipped: false, reason: "upload-failed" };
+    }
+
+    await db.set("last-backup-ts", now);
+    return { success: true, skipped: false, reason: null, timestamp: now };
+  })().finally(() => {
+    activeCloudBackupPromise = null;
+  });
+
+  return activeCloudBackupPromise;
+}
+
+/**
+ * Export a full encrypted backup of all non-sensitive db keys.
+ * @param {string} passphrase - Passphrase used to encrypt the backup
+ * @returns {{count: number, exportedAt: string, filename: string, plaidConnectionCount: number}} Backup metadata
+ */
+export async function exportBackup(passphrase) {
+  const exportedAt = new Date().toISOString();
+  const pr = await db.get("personal-rules");
+  const backup = await buildBackupPayload({ personalRules: pr ?? "", exportedAt });
+  const plaidConnectionCount = Array.isArray(backup.data["plaid-connections-sanitized"])
+    ? backup.data["plaid-connections-sanitized"].length
+    : 0;
 
   if (!passphrase) throw new Error("Backup cancelled — passphrase required");
   const envelope = await encrypt(JSON.stringify(backup), passphrase);
@@ -76,7 +225,7 @@ export async function exportBackup(passphrase) {
 }
 
 /**
- * Import a backup file (encrypted .enc or spreadsheet .xlsx).
+ * Import a backup file (Catalyst Cash .enc or .json format).
  * @param {File} file - The file to import
  * @param {Function} getPassphrase - Async function that returns the passphrase
  * @returns {Promise<{count: number, exportedAt: string, plaidReconnectCount: number}>}
@@ -117,25 +266,24 @@ export async function importBackup(file, getPassphrase) {
         }
 
         if (backup && backup.type === "spreadsheet-backup") {
-          const XLSX = await import("xlsx");
           const binary_string = window.atob(backup.base64);
           const len = binary_string.length;
           const bytes = new Uint8Array(len);
           for (let i = 0; i < len; i++) {
             bytes[i] = binary_string.charCodeAt(i);
           }
-          const wb = XLSX.read(bytes.buffer, { type: "array" });
+          const workbook = await loadWorkbookRows(bytes.buffer);
           const config = {};
 
           // Helper to get sheet data
           const getSheetRows = sheetName => {
-            const name = wb.SheetNames.find(n => n.includes(sheetName));
-            if (!name) return null;
-            return XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: "" });
+            return workbook.getSheetRows(sheetName);
           };
 
           // 1. Parse Setup Data (Key/Value list)
-          const setupRows = getSheetRows("Setup Data") || getSheetRows(wb.SheetNames[0]);
+          const setupRows =
+            getSheetRows("Setup Data") ||
+            (workbook.sheetNames[0] ? getSheetRows(workbook.sheetNames[0]) : null);
           if (setupRows) {
             for (const row of setupRows) {
               const key = String(row[0] || "").trim();
@@ -214,6 +362,16 @@ export async function importBackup(file, getPassphrase) {
           reject(new Error("Invalid Catalyst Cash backup file"));
           return;
         }
+
+        const sanitizedPortfolio = sanitizeBackupPortfolioData({
+          cards: backup.data["card-portfolio"],
+          bankAccounts: backup.data["bank-accounts"],
+          renewals: backup.data["renewals"],
+        });
+        if ("card-portfolio" in backup.data) backup.data["card-portfolio"] = sanitizedPortfolio.cards;
+        if ("bank-accounts" in backup.data) backup.data["bank-accounts"] = sanitizedPortfolio.bankAccounts;
+        if ("renewals" in backup.data) backup.data["renewals"] = sanitizedPortfolio.renewals;
+
         let count = 0;
         for (const [key, val] of Object.entries(backup.data)) {
           if (!isSafeImportKey(key)) continue;

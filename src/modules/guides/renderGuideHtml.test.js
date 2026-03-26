@@ -9,8 +9,9 @@ describe("renderGuideHtml", () => {
     expect(html).toContain("2 audits / week");
     expect(html).toContain("10 AskAI / day");
     expect(html).toContain("1 Plaid institution");
-    expect(html).toContain("See what Pro adds");
+    expect(html).toContain("See what Pro unlocks");
     expect(html).toContain("Catalyst AI");
+    expect(html).toContain("Set up the smallest honest version of your finances");
   });
 
   it("renders the pro guide with current limits and pricing", () => {
@@ -21,5 +22,6 @@ describe("renderGuideHtml", () => {
     expect(html).toContain("Up to 6 Plaid institutions");
     expect(html).toContain("$89.99/yr");
     expect(html).toContain("Catalyst AI CFO + Boardroom");
+    expect(html).toContain("Run Pro like an operator");
   });
 });

@@ -2,7 +2,6 @@ const fs = require("fs");
 const path = require("path");
 
 const PLAN_CATALOG_PATH = path.join(__dirname, "../src/modules/planCatalog.js");
-const WORKER_INDEX_JS_PATH = path.join(__dirname, "../worker/src/index.js");
 const SITE_INDEX_HTM_PATH = path.join(__dirname, "../site/index.html");
 const SITE_COMPARE_HTM_PATH = path.join(__dirname, "../site/compare.html");
 

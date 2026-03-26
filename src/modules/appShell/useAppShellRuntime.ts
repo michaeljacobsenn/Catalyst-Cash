@@ -3,7 +3,7 @@ import { Capacitor } from "@capacitor/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AuditRecord, Card as CardType, Renewal } from "../../types/index.js";
 import { normalizeAppError } from "../appErrors.js";
-import { APP_VERSION } from "../constants.js";
+import { performCloudBackup } from "../backup.js";
 import { haptic } from "../haptics.js";
 import { log } from "../logger.js";
 import { extractCategoryByKeywords } from "../merchantDatabase.js";
@@ -11,10 +11,8 @@ import { triggerStoreArrivalNotification } from "../notifications.js";
 import { syncOTAData } from "../ota.js";
 import { initRevenueCat } from "../revenuecat.js";
 import { getOptimalCard } from "../rewardsCatalog.js";
-import { isSecuritySensitiveKey, sanitizePlaidForBackup } from "../securityKeys.js";
 import { getGatingMode, isPro, syncRemoteGatingMode } from "../subscription.js";
 import type { ToastApi } from "../Toast.js";
-import { db } from "../utils.js";
 import { uploadToICloud } from "../cloudSync.js";
 
 type AppTab = "dashboard" | "cashflow" | "audit" | "portfolio" | "chat" | "settings" | "history" | "results" | "input";
@@ -93,7 +91,8 @@ export function useSimulatedGeofenceNotification(
       }
 
       void (async () => {
-        const shownNatively = await triggerStoreArrivalNotification(store, recommendation);
+        // QA simulation bypasses cooldown with forceReset so previews always fire
+        const shownNatively = await triggerStoreArrivalNotification(store, recommendation, { forceReset: true });
         if (shownNatively) {
           if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
           setSimulatedNotification(null);
@@ -126,7 +125,7 @@ export function useSimulatedGeofenceNotification(
 interface AutoBackupParams {
   ready: boolean;
   appleLinkedId: string | null | undefined;
-  autoBackupInterval: string;
+  autoBackupInterval: "off" | "daily" | "weekly" | "monthly";
   history: AuditRecord[];
   renewals: Renewal[];
   cards: CardType[];
@@ -156,44 +155,12 @@ export function useAutoICloudBackup({
 
     iCloudSyncTimer.current = setTimeout(async () => {
       try {
-        const lastBackupStr = await db.get("last-backup-ts");
-        const lastBackup = lastBackupStr ? Number(lastBackupStr) : 0;
-        const now = Date.now();
-        const hrs24 = 24 * 60 * 60 * 1000;
-        let requiredDeltaMs = 0;
-
-        if (autoBackupInterval === "daily") requiredDeltaMs = hrs24;
-        else if (autoBackupInterval === "weekly") requiredDeltaMs = hrs24 * 7;
-        else if (autoBackupInterval === "monthly") requiredDeltaMs = hrs24 * 30;
-
-        if (now - lastBackup < requiredDeltaMs) return;
-
-        const backup: { app: string; version: string; exportedAt: string; data: Record<string, unknown> } = {
-          app: "Catalyst Cash",
-          version: APP_VERSION,
-          exportedAt: new Date().toISOString(),
-          data: {},
-        };
-        const keys = await db.keys();
-        for (const key of keys) {
-          if (typeof key !== "string") continue;
-          if (key && isSecuritySensitiveKey(key)) continue;
-          const val = await db.get(key);
-          if (val !== null) backup.data[key] = val;
-        }
-        if (!("personal-rules" in backup.data)) {
-          backup.data["personal-rules"] = personalRules ?? "";
-        }
-
-        const plaidConns = await db.get("plaid-connections");
-        if (Array.isArray(plaidConns) && plaidConns.length > 0) {
-          backup.data["plaid-connections-sanitized"] = sanitizePlaidForBackup(plaidConns);
-        }
-
-        const success = await uploadToICloudTyped(backup, appPasscode || null);
-        if (success) {
-          await db.set("last-backup-ts", now);
-        }
+        await performCloudBackup({
+          upload: uploadToICloudTyped,
+          passphrase: appPasscode || null,
+          personalRules,
+          interval: autoBackupInterval,
+        });
       } catch (error) {
         const failure = normalizeAppError(error, { context: "restore" });
         log.warn("icloud", "Auto-backup failed", { error: failure.rawMessage, kind: failure.kind });
@@ -502,6 +469,88 @@ export function useLoadReadyHaptic(ready: boolean) {
       haptic.light();
     }
   }, [ready]);
+}
+
+/**
+ * Refresh app state when returning from background.
+ * Waits 1.5s after resume to avoid firing during momentary interruptions
+ * (e.g. biometric prompt, system dialogs).
+ */
+export function useAppForegroundRefresh(
+  ready: boolean,
+  refreshAppState: () => Promise<void>
+) {
+  const refreshRef = useRef(refreshAppState);
+  useEffect(() => { refreshRef.current = refreshAppState; }, [refreshAppState]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || !ready) return;
+
+    let resumeHandle: { remove: () => Promise<void> } | null = null;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const register = async () => {
+      resumeHandle = await CapApp.addListener("resume", () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          refreshRef.current().catch(() => {});
+        }, 1500);
+      });
+    };
+
+    register().catch(() => {});
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      resumeHandle?.remove().catch(() => {});
+    };
+  }, [ready]);
+}
+
+/**
+ * Routes deep links / Universal Links to the correct tab.
+ * Handles catalystcash.app URLs and custom scheme com.jacobsen.portfoliopro://
+ *
+ * URL pattern → tab:
+ *   /audit         → input (start audit)
+ *   /history       → history
+ *   /settings      → settings
+ *   /cards         → portfolio
+ *   / (default)    → dashboard
+ */
+export function useDeepLinkRouting(navTo: (tab: AppTab) => void) {
+  const navToRef = useRef(navTo);
+  useEffect(() => { navToRef.current = navTo; }, [navTo]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    let handle: { remove: () => Promise<void> } | null = null;
+
+    const register = async () => {
+      handle = await CapApp.addListener("appUrlOpen", (event: { url: string }) => {
+        try {
+          const url = new URL(event.url);
+          const path = url.pathname.replace(/^\//, "").toLowerCase();
+          const TAB_MAP: Record<string, AppTab> = {
+            audit: "input",
+            history: "history",
+            settings: "settings",
+            cards: "portfolio",
+            portfolio: "portfolio",
+            chat: "chat",
+          };
+          navToRef.current(TAB_MAP[path] ?? "dashboard");
+          void log.info("deeplink", "Routed deep link", { url: event.url, path });
+        } catch {
+          navToRef.current("dashboard");
+        }
+      });
+    };
+
+    register().catch(() => {});
+    return () => { handle?.remove().catch(() => {}); };
+  }, []);
 }
 
 export { getHouseholdSyncDelayMs, type SimulatedNotification };

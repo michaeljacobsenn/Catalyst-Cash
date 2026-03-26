@@ -13,9 +13,9 @@ export const PLAN_FACTS = {
     id: "free",
     label: "Free Plan",
     badge: "Included",
-    heroTitle: "Get clear on your money without the overwhelm.",
+    heroTitle: "Build a clean weekly money rhythm.",
     heroBody:
-      "Use Free to track your accounts, run a weekly audit, and get clear next steps. It is meant to be simple enough for everyday use, not just finance power users.",
+      "Free gives you the core Catalyst loop: keep your key accounts honest, run a sharp weekly audit, and leave with a short list of next moves.",
     audits: PLAN_DISPLAY.free.audits,
     chats: PLAN_DISPLAY.free.chats,
     models: PLAN_DISPLAY.free.models,
@@ -26,9 +26,9 @@ export const PLAN_FACTS = {
     id: "pro",
     label: "Pro Plan",
     badge: "Unlocked",
-    heroTitle: "Use the full version once you need more room.",
+    heroTitle: "Run the full Catalyst operating system.",
     heroBody:
-      "Pro keeps the same workflow, then adds more usage, better AI depth, full ledger tools, and broader Plaid coverage for heavier real-world use.",
+      "Pro is for people who want broader account coverage, deeper AI, full ledger control, and the archive needed to see whether decisions are actually working.",
     audits: PLAN_DISPLAY.pro.audits,
     chats: PLAN_DISPLAY.pro.chats,
     models: PLAN_DISPLAY.pro.models,
@@ -61,88 +61,111 @@ export const PAYWALL_FEATURES = [
   { label: "Security & Backup", free: "Included", pro: "Included", icon: "🛡️" },
 ];
 
+export const FIRST_ACTION_STEPS = [
+  {
+    title: "Load the accounts that decide your week",
+    body:
+      "Start with checking, savings, credit cards, and any loan or bill that can create pressure this month.",
+  },
+  {
+    title: "Add recurring pulls on cash",
+    body:
+      "Rent, subscriptions, minimum payments, and other known charges make the audit materially smarter.",
+  },
+  {
+    title: "Run one honest audit fast",
+    body:
+      "Do not wait for perfect setup. Current cash, debt, and due dates are enough to get a useful first action list.",
+  },
+  {
+    title: "Come back after paydays and big moves",
+    body:
+      "Catalyst works best as a weekly operating rhythm, not a once-a-quarter reporting app.",
+  },
+];
+
 export const TAB_GUIDE_CARDS = [
   {
     title: "Dashboard",
     status: "all",
     body:
-      "Your snapshot. Check what is safe to spend, what is due soon, and whether your overall money picture is improving.",
+      "Read this first. It tells you whether the week is under control, what is due next, and whether your position improved.",
   },
   {
     title: "Audit",
     status: "all",
     body:
-      "Your main weekly check-in. Run this when you get paid, pay bills, or want a clear action list.",
-  },
-  {
-    title: "AskAI",
-    status: "all",
-    body:
-      "Ask simple follow-up questions like what to pay first, whether you can afford something, or how a decision changes your plan.",
-  },
-  {
-    title: "Portfolio Vault",
-    status: "all",
-    body:
-      "Keep your accounts, debts, investments, and recent activity in one place.",
-  },
-  {
-    title: "Rewards",
-    status: "all",
-    body:
-      "Search a store and see which card is best to use there.",
+      "This is the decision engine. Run it when you get paid, before large purchases, or anytime you need the clearest next moves.",
   },
   {
     title: "Cashflow",
     status: "all",
     body:
-      "Track bills, subscriptions, and the next 30 days so fewer expenses catch you off guard.",
+      "Use this to stage bills, subscriptions, and the next 30 days so timing problems show up before they hurt.",
+  },
+  {
+    title: "AskAI",
+    status: "all",
+    body:
+      "Use it after the audit for tradeoffs: what to pay first, whether you can afford something, or how a choice changes runway.",
+  },
+  {
+    title: "Portfolio Vault",
+    status: "all",
+    body:
+      "Your source of truth for banks, cards, loans, assets, and live balances.",
+  },
+  {
+    title: "Rewards",
+    status: "all",
+    body:
+      "Use it at the point of purchase to pick the right card instead of guessing.",
   },
   {
     title: "History",
     status: "split",
     body:
-      "Look back at older audits to see if things are moving in the right direction. Free shows the latest 12. Pro keeps the full archive.",
-  },
-  {
-    title: "Settings",
-    status: "all",
-    body:
-      "Manage security, Plaid, AI settings, backups, restore, and deletion controls.",
+      "This is where you verify progress. Free keeps the latest 12 audits. Pro keeps the full archive so you can see whether changes actually worked.",
   },
   {
     title: "Transaction Ledger",
     status: "pro",
     body:
-      "Pro unlocks the full searchable transaction list, filters, exports, and deeper cleanup tools.",
+      "Pro turns raw transactions into a usable tool: search, filter, export, and clean up the details behind the audit.",
+  },
+  {
+    title: "Settings",
+    status: "all",
+    body:
+      "Control security, backup, restore, Plaid, AI behavior, and the deletion tools that keep you in charge.",
   },
 ];
 
 export const WORKFLOW_STEPS = [
   {
-    title: "Keep your balances current",
+    title: "Refresh only the numbers that changed reality",
     body:
-      "Before you run an audit, make sure your balances and bills are up to date.",
+      "Update the balances, due dates, and renewals that could change this week's decisions.",
   },
   {
-    title: "Run an audit once a week",
+    title: "Read the top three moves first",
     body:
-      "That is enough for most people. Run another one after a paycheck, big purchase, or other major change.",
+      "Start with the strongest actions, urgent warnings, and safe-to-spend read before opening every card.",
   },
   {
-    title: "Start with the top actions",
+    title: "Open the tool that resolves the bottleneck",
     body:
-      "Do not read everything at once. Start with the main recommendations and the most urgent warnings.",
+      "Use AskAI for tradeoffs, Cashflow for timing, Renewals for recurring waste, and Ledger for cleanup.",
   },
   {
-    title: "Use AskAI when you feel stuck",
+    title: "Record the truth after you act",
     body:
-      "Ask one plain-English question at a time, like what to pay first or whether you can safely buy something.",
+      "If you paid a card, canceled a bill, or corrected a balance, reflect that so the next audit starts cleaner.",
   },
   {
-    title: "Fix mistakes and check again",
+    title: "Use history to validate, not admire",
     body:
-      "If a balance, bill, or transaction is wrong, correct it and rerun. Better inputs lead to better guidance.",
+      "Look back to confirm that your choices improved cash safety, debt pressure, or trend direction.",
   },
 ];
 
@@ -150,32 +173,32 @@ export const FINANCE_LOGIC_CARDS = [
   {
     title: "Cash buffer",
     body:
-      "Catalyst pays attention to the minimum cash you need to feel safe so you do not accidentally overspend.",
+      "Catalyst watches the floor beneath your checking balance so you do not mistake temporary cash for safe cash.",
   },
   {
-    title: "Debt cost",
+    title: "Debt drag",
     body:
-      "High-interest debt gets more attention because it usually costs you the most over time.",
+      "High-interest balances get priority because they quietly tax every month you keep them alive.",
   },
   {
-    title: "Credit usage",
+    title: "Utilization pressure",
     body:
-      "The app watches credit card utilization because it can affect both your flexibility and your credit profile.",
+      "Card usage matters because it changes both flexibility and credit profile, even before interest is due.",
   },
   {
-    title: "Spending plan",
+    title: "Timing pressure",
     body:
-      "The budget and cashflow views help you give each dollar a job before it disappears on accident.",
+      "A smaller bill at the wrong time can still create a bad week. Timing matters as much as totals.",
   },
   {
-    title: "Bill timing",
+    title: "Recurring waste",
     body:
-      "Recurring bills matter both by amount and by timing. A smaller bill at the wrong time can still create pressure.",
+      "Subscriptions and repeat charges are treated like ongoing claims on future cash, not harmless background noise.",
   },
   {
-    title: "Progress over time",
+    title: "Trend validation",
     body:
-      "History is there to show whether your choices are actually improving your finances week by week.",
+      "History exists to prove whether your decisions are making the system safer, cleaner, and easier to run.",
   },
 ];
 
@@ -220,55 +243,60 @@ export const PRIVACY_CARDS = [
 
 export const FREE_UPGRADE_CARDS = [
   {
-    title: "More room, same workflow",
+    title: "Broader live coverage",
     body:
-      "Pro does not make you relearn the app. It mostly removes limits and unlocks the deeper tools.",
+      "Pro keeps up to 6 institutions in play so you stop choosing between your real accounts.",
   },
   {
-    title: "Full ledger and more connected accounts",
+    title: "Full ledger control",
     body:
-      "The biggest unlocks are the full searchable ledger and support for up to 6 Plaid institutions instead of 1.",
+      "Search, filter, export, and fix transactions when the details matter, instead of living with a partial view.",
   },
   {
-    title: "Stronger AI for harder questions",
+    title: "Deeper AI for harder calls",
     body:
-      "Catalyst AI CFO and Boardroom are best for harder tradeoffs, heavier debt situations, and deeper planning questions.",
+      "CFO and Boardroom are built for multi-account tradeoffs, debt strategy, and more consequential decisions.",
   },
 ];
 
 export const PRO_PLAYBOOK = [
   {
-    title: "Use CFO most of the time",
+    title: "Treat the audit as your command center",
     body:
-      "CFO should handle most paid audits and chats. Use Boardroom when the decision is unusually messy or high-stakes.",
+      "Run the audit first, then use CFO or Boardroom only on the decision that still needs judgment.",
   },
   {
-    title: "Clean your ledger before big decisions",
+    title: "Use the ledger before major planning",
     body:
-      "If your transaction list looks wrong, fix that before a serious audit so the advice starts from better data.",
+      "A few minutes of cleanup before a serious audit makes the answers materially better.",
   },
   {
-    title: "Review subscriptions once a month",
+    title: "Review renewals monthly, not reactively",
     body:
-      "Use the renewals screen as a monthly savings check so bills do not slowly pile up unnoticed.",
+      "Let recurring charges earn their place. Small leaks become meaningful over a year.",
   },
   {
-    title: "Use history to check if changes worked",
+    title: "Watch the trend, not just the score",
     body:
-      "Compare current results to older audits to see whether a decision actually improved your cash, debt, or score.",
+      "The archive matters because direction is more useful than a single snapshot.",
   },
 ];
 
 export const COMMON_QUESTIONS = [
   {
-    question: "Do I need Plaid to use the app well?",
+    question: "Should I start on Free or go straight to Pro?",
     answer:
-      "No. Plaid is optional. Manual entry still works, but live connections make audits faster and easier to trust.",
+      "Start on Free if you want to prove the workflow first. Go straight to Pro if you already know you need multiple institutions, the full ledger, deeper AI, or a complete audit archive.",
   },
   {
-    question: "Does Pro change the financial math?",
+    question: "What does Pro change day to day?",
     answer:
-      "No. Pro mostly changes limits, model depth, history depth, and premium tools. The core budgeting, debt, and cashflow logic is available to everyone.",
+      "It removes the main friction points: more audits, more AskAI, broader Plaid coverage, full ledger search and export, stronger models, and the archive needed to track progress over time.",
+  },
+  {
+    question: "Do I need Plaid to get value?",
+    answer:
+      "No. Manual entry works. Plaid mainly saves time and keeps balances fresher, which matters more as your account set grows.",
   },
   {
     question: "Is the output financial advice?",

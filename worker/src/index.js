@@ -285,7 +285,8 @@ function buildSystemPrompt(type, context = {}, resolvedProvider = "gemini") {
       context.providerId || resolvedProvider,
       context.memoryBlock || "",
       context.decisionRecommendations || [],
-      context.chatInputRisk || null
+      context.chatInputRisk || null,
+      context.budgetContext || null
     );
   }
   return getSystemPrompt(
@@ -298,7 +299,8 @@ function buildSystemPrompt(type, context = {}, resolvedProvider = "gemini") {
     context.persona || null,
     context.computedStrategy || null,
     context.chatContext || null,
-    context.memoryBlock || ""
+    context.memoryBlock || "",
+    context
   );
 }
 
@@ -444,8 +446,30 @@ function generateAuditLogId() {
   return crypto.randomUUID();
 }
 
+/**
+ * Scrubs PII patterns from AI response text before logging to D1.
+ * Covers: account/routing numbers, SSN-shaped strings, all dollar-amount
+ * variants (with or without cents, with or without commas, negative), and
+ * bare 2-decimal floats that could be a specific balance.
+ * Truncates to 600 chars after scrubbing.
+ * This backs the privacy policy claim that the logged excerpt
+ * "never contains account numbers or balances."
+ */
 function trimResponsePreview(text) {
-  return String(text || "").slice(0, 600);
+  let s = String(text || "");
+  // Account / routing numbers: 8-17 consecutive digits
+  s = s.replace(/\b\d{8,17}\b/g, "[redacted]");
+  // SSN-shaped: 3-2-4 with dashes or spaces
+  s = s.replace(/\b\d{3}[-\s]\d{2}[-\s]\d{4}\b/g, "[redacted]");
+  // Dollar sign followed by any digit string (with optional commas/decimals)
+  // e.g. $150, $3,200, $3,200.00, -$150
+  s = s.replace(/-?\$[\d,]+(?:\.\d+)?\b/g, "$[amount]");
+  // Bare comma-formatted numbers e.g. 3,200.00 or 3,200
+  s = s.replace(/\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b/g, "[amount]");
+  // Bare 2-decimal floats that look like dollar amounts e.g. 3200.00, 150.00
+  // Must be ≥ 3 digits before decimal to avoid clobbering "1.50 hours" style text
+  s = s.replace(/\b\d{3,}\.\d{2}\b/g, "[amount]");
+  return s.slice(0, 600);
 }
 
 function buildUsage(promptTokens = 0, completionTokens = 0) {
@@ -1513,6 +1537,11 @@ export default {
     if (subscriptionTier !== "pro") {
       selectedProvider = "gemini";
       resolvedModel = "gemini-2.5-flash";
+    }
+    // o3 is a Pro reasoning model — remap chat requests to gpt-4.1 to keep costs bounded.
+    // Audit (one-shot) requests are allowed to use o3 directly when explicitly set.
+    if (resolvedModel === "o3" && isChat) {
+      resolvedModel = "gpt-4.1";
     }
     if (!isModelAllowedForTier(resolvedModel, subscriptionTier)) {
       return new Response(

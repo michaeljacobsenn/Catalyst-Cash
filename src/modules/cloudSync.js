@@ -51,10 +51,11 @@ export async function uploadToICloud(payload, passphrase = null) {
     }
 
     let data = JSON.stringify(payload);
-    if (passphrase) {
-      const envelope = await encrypt(data, passphrase);
-      data = JSON.stringify(envelope);
+    if (!passphrase) {
+      throw new Error("Encrypted iCloud backups require an App Passcode. Please set one in Security settings.");
     }
+    const envelope = await encrypt(data, passphrase);
+    data = JSON.stringify(envelope);
 
     // Native iOS — use ubiquity container
     const result = await ICloudSync.save({ data });

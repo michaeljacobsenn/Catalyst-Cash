@@ -7,9 +7,10 @@ import { useEffect,useState } from "react";
   import { log } from "../logger.js";
   import {
     applyBalanceSync,
-    autoMatchAccounts,
     connectBank,
+    ensureConnectionAccountsPresent,
     fetchBalancesAndLiabilities,
+    forceBackendSync,
     reconcilePlaidConnectionAccess,
     reconnectBank,
     removeConnection,
@@ -48,11 +49,6 @@ interface BalanceSyncResult {
   balanceSummary: unknown;
 }
 
-function mergeUniqueById<T extends { id?: string | null }>(existing: T[] = [], incoming: T[] = []) {
-  const ids = new Set(existing.map(e => e.id).filter(Boolean));
-  return [...existing, ...incoming.filter(i => i.id && !ids.has(i.id))];
-}
-
 export default function PlaidSection({
   cards,
   setCards,
@@ -69,12 +65,17 @@ export default function PlaidSection({
   const [switchingActiveId, setSwitchingActiveId] = useState<string | null>(null);
   const [confirmingDisconnect, setConfirmingDisconnect] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<{ tone: "error" | "info"; message: string } | null>(null);
+  const [activeFreeConnectionId, setActiveFreeConnectionId] = useState<string | null>(null);
+  const [hasFreeTierPausedConnections, setHasFreeTierPausedConnections] = useState(false);
 
   const reloadConnections = async () => {
     const accessState = await reconcilePlaidConnectionAccess(cards, bankAccounts);
     if (accessState.cardsChanged) setCards(accessState.updatedCards);
     if (accessState.bankAccountsChanged) setBankAccounts(accessState.updatedBankAccounts);
     setPlaidConnections(accessState.connections || []);
+    setActiveFreeConnectionId(accessState.activeFreeConnectionId || null);
+    setHasFreeTierPausedConnections(accessState.pausedConnectionIds.length > 0);
+    return accessState;
   };
 
   // Load connections on mount
@@ -130,21 +131,32 @@ export default function PlaidSection({
   const finalizeConnection = async (connection: PlaidConnection, successToast: string) => {
     try {
       const plaidInvestments = financialConfig?.plaidInvestments || [];
-      const { newCards, newBankAccounts, newPlaidInvestments } = autoMatchAccounts(
+      const {
+        updatedCards: allCards,
+        updatedBankAccounts: allBanks,
+        updatedPlaidInvestments: allInvests,
+        importedCards,
+        importedBankAccounts,
+        importedPlaidInvestments,
+      } = ensureConnectionAccountsPresent(
         connection,
         cards,
         bankAccounts,
         cardCatalog as null | undefined,
         plaidInvestments
-      ) as { newCards: PortfolioCard[]; newBankAccounts: BankAccount[]; newPlaidInvestments: PlaidInvestmentAccount[] };
+      ) as {
+        updatedCards: PortfolioCard[];
+        updatedBankAccounts: BankAccount[];
+        updatedPlaidInvestments: PlaidInvestmentAccount[];
+        importedCards: number;
+        importedBankAccounts: number;
+        importedPlaidInvestments: number;
+      };
       await saveConnectionLinks(connection);
 
-      const allCards = mergeUniqueById(cards, newCards);
-      const allBanks = mergeUniqueById(bankAccounts, newBankAccounts);
-      const allInvests = mergeUniqueById(plaidInvestments, newPlaidInvestments);
       setCards(allCards);
       setBankAccounts(allBanks);
-      if (newPlaidInvestments.length > 0) {
+      if (importedPlaidInvestments > 0) {
         setFinancialConfig({ type: "SET_FIELD", field: "plaidInvestments", value: allInvests });
       }
 
@@ -173,7 +185,7 @@ export default function PlaidSection({
       setConnectionStatus(null);
       window.toast?.success?.(successToast);
 
-      const importedCount = newCards.length + newBankAccounts.length + newPlaidInvestments.length;
+      const importedCount = importedCards + importedBankAccounts + importedPlaidInvestments;
       if (importedCount > 0) {
         setTimeout(() => {
           window.alert(
@@ -224,7 +236,64 @@ export default function PlaidSection({
     setSwitchingActiveId(conn.id);
     try {
       await setPreferredFreeConnectionId(conn.id);
-      await reloadConnections();
+      const accessState = await reloadConnections();
+      const baseCards = accessState.cardsChanged ? accessState.updatedCards : cards;
+      const baseBankAccounts = accessState.bankAccountsChanged ? accessState.updatedBankAccounts : bankAccounts;
+      const basePlaidInvestments = financialConfig?.plaidInvestments || [];
+
+      try {
+        const forceSyncSucceeded = await forceBackendSync({ connectionId: conn.id });
+        const refreshed = await fetchBalancesAndLiabilities(conn.id);
+        if (refreshed && !refreshed._error && !refreshed._pendingSync) {
+          const hydratedState = ensureConnectionAccountsPresent(
+            refreshed,
+            baseCards,
+            baseBankAccounts,
+            cardCatalog as null | undefined,
+            basePlaidInvestments
+          ) as {
+            updatedCards: PortfolioCard[];
+            updatedBankAccounts: BankAccount[];
+            updatedPlaidInvestments: PlaidInvestmentAccount[];
+            importedCards: number;
+            importedBankAccounts: number;
+            importedPlaidInvestments: number;
+          };
+          const syncData = applyBalanceSync(
+            refreshed,
+            hydratedState.updatedCards,
+            hydratedState.updatedBankAccounts,
+            hydratedState.updatedPlaidInvestments
+          ) as BalanceSyncResult;
+          setCards(syncData.updatedCards);
+          setBankAccounts(syncData.updatedBankAccounts);
+          if (syncData.updatedPlaidInvestments) {
+            setFinancialConfig({
+              type: "SET_FIELD",
+              field: "plaidInvestments",
+              value: syncData.updatedPlaidInvestments,
+            });
+          }
+          await saveConnectionLinks(refreshed);
+          const restoredCount =
+            hydratedState.importedCards +
+            hydratedState.importedBankAccounts +
+            hydratedState.importedPlaidInvestments;
+          if (restoredCount > 0) {
+            window.toast?.info?.(
+              `Restored ${restoredCount} ${restoredCount === 1 ? "linked account" : "linked accounts"} from ${conn.institutionName || "this bank"}.`
+            );
+          }
+        } else if (!forceSyncSucceeded || refreshed?._pendingSync) {
+          window.toast?.info?.(`${conn.institutionName || "This bank"} is now live. Fresh balances may take another moment to arrive.`);
+        }
+      } catch (error) {
+        void log.warn("plaid", "Active live bank refresh did not complete immediately", {
+          connectionId: conn.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
       setConnectionStatus({
         tone: "info",
         message: `${conn.institutionName || "This bank"} is now your active live-sync institution on Free. Other linked banks stay available as manual snapshots.`,
@@ -326,6 +395,8 @@ export default function PlaidSection({
                     <span style={{ fontSize: 11, color: T.text.muted, marginTop: 2, display: "block" }}>
                       {conn._freeTierPaused
                         ? "Paused on Free plan"
+                        : hasFreeTierPausedConnections && activeFreeConnectionId === conn.id
+                          ? "Active live sync on Free plan"
                         : conn._needsReconnect
                           ? "Reconnect required"
                           : `${conn.accounts?.length || 0} Accounts Linked`}

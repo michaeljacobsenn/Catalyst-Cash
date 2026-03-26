@@ -1192,7 +1192,7 @@ export default memo(function AIChatTab({
                 flexShrink: 0,
               }}
               onClick={() => {
-                (setAiModel as (m: string) => void)(chatQuota.alternateModel!);
+                (setAiModel as (m: string) => void)(chatQuota.alternateModel ?? "");
                 haptic.light();
               }}
             >

@@ -1,4 +1,4 @@
-import { Building2, ChevronRight, Cpu, Database, Info, Lock, Target, Terminal } from "../icons";
+import { Building2, ChevronRight, Cpu, Database, Info, Lock, Target } from "../icons";
 import { buildPromoLine } from "../planCatalog.js";
 import { T } from "../constants.js";
 import ProBanner from "../tabs/ProBanner.js";
@@ -65,7 +65,6 @@ export function RootSettingsSection({
         { id: "backup", label: "Backup & Sync", icon: Database, color: T.status.green, desc: "Backup data, restore, export history" },
         { id: "security", label: "App Security", icon: Lock, color: T.status.red, desc: "Passcodes, Face ID" },
         { id: "guide", label: "Help & Guide", icon: Info, color: T.text.secondary, desc: "Learn how Catalyst works" },
-        { id: "dev", label: "QA Tools", icon: Terminal, color: T.text.dim, desc: "Seed test data & preview alerts" },
       ],
     },
   ] as const;

@@ -1,76 +1,103 @@
   import type { ReactNode } from "react";
-  import { createContext,useContext,useEffect,useState } from "react";
+  import { createContext, useCallback, useContext, useEffect, useState } from "react";
+  import { useSettings } from "./SettingsContext.js";
+  import { computeBudgetStatus, computeCycleIncome, suggestLinesFromAudit } from "../budgetEngine.js";
   import { db } from "../utils.js";
 
-type BudgetEnvelopes = Record<string, number>;
+export interface BudgetLine {
+  id: string;
+  name: string;
+  amount: number;
+  bucket: "fixed" | "flex" | "invest";
+  icon: string;
+  isAuto?: boolean;
+}
 
 interface BudgetContextValue {
-  envelopes: BudgetEnvelopes;
-  monthlyIncome: number;
-  updateMonthlyIncome: (newAmount: number) => Promise<void>;
-  allocateToEnvelope: (category: string, amount: number) => Promise<void>;
-  getReadyToAssign: () => number;
+  lines: BudgetLine[];
+  cycleIncome: number;
+  addLine: (line: Omit<BudgetLine, "id">) => Promise<void>;
+  updateLine: (id: string, patch: Partial<BudgetLine>) => Promise<void>;
+  deleteLine: (id: string) => Promise<void>;
+  suggestFromAudit: (auditCategories: Record<string, { total?: number }>) => Promise<void>;
+  totalFixed: number;
+  totalFlex: number;
+  totalInvest: number;
+  totalAssigned: number;
+  readyToAssign: number;
+  isBudgetReady: boolean;
 }
 
-interface BudgetProviderProps {
-  children?: ReactNode;
-}
+interface BudgetProviderProps { children?: ReactNode; }
 
 const BudgetContext = createContext<BudgetContextValue | null>(null);
+const DB_KEY = "budget-lines-v2";
 
 export function BudgetProvider({ children }: BudgetProviderProps) {
-  const [envelopes, setEnvelopes] = useState<BudgetEnvelopes>({});
-  const [monthlyIncome, setMonthlyIncome] = useState(0);
+  const { financialConfig } = useSettings();
+  const [lines, setLines] = useState<BudgetLine[]>([]);
+  const [isBudgetReady, setIsBudgetReady] = useState(false);
 
-  // Load saved budget data from IndexedDB on boot
+  const cycleIncome = computeCycleIncome(financialConfig) as number;
+  const status = computeBudgetStatus(lines, cycleIncome) as {
+    totalFixed: number; totalFlex: number; totalInvest: number;
+    totalAssigned: number; readyToAssign: number;
+  };
+
+  // Boot: load persisted lines
   useEffect(() => {
     (async () => {
-      const savedEnvelopes = await db.get("budget-envelopes");
-      if (savedEnvelopes) setEnvelopes(savedEnvelopes);
-
-      const savedIncome = await db.get("budget-income");
-      if (savedIncome) setMonthlyIncome(savedIncome);
+      const saved = (await db.get(DB_KEY)) as BudgetLine[] | null;
+      if (Array.isArray(saved)) setLines(saved);
+      setIsBudgetReady(true);
     })();
   }, []);
 
-  // Set absolute monthly income
-  const updateMonthlyIncome = async (newAmount: number) => {
-    setMonthlyIncome(newAmount);
-    await db.set("budget-income", newAmount);
-  };
+  const persist = useCallback(async (next: BudgetLine[]) => {
+    setLines(next);
+    await db.set(DB_KEY, next);
+  }, []);
 
-  // Add or update an envelope classification
-  const allocateToEnvelope = async (category: string, amount: number) => {
-    setEnvelopes((prev) => {
-      const updated = { ...prev, [category]: amount };
-      db.set("budget-envelopes", updated); // store async
-      return updated;
-    });
-  };
+  const addLine = useCallback(async (line: Omit<BudgetLine, "id">) => {
+    const next = [...lines, { ...line, id: `line-${Date.now()}-${Math.random().toString(36).slice(2)}` }];
+    await persist(next);
+  }, [lines, persist]);
 
-  // Calculate remaining money to allocate
-  const getReadyToAssign = () => {
-    const totalAssigned = (Object.values(envelopes) as number[]).reduce((sum, val) => sum + val, 0);
-    return monthlyIncome - totalAssigned;
-  };
+  const updateLine = useCallback(async (id: string, patch: Partial<BudgetLine>) => {
+    const next = lines.map(l => l.id === id ? { ...l, ...patch } : l);
+    await persist(next);
+  }, [lines, persist]);
+
+  const deleteLine = useCallback(async (id: string) => {
+    await persist(lines.filter(l => l.id !== id));
+  }, [lines, persist]);
+
+  /**
+   * Auto-suggest budget lines from audit categories.
+   * Only adds lines that don't already have a matching name.
+   */
+  const suggestFromAudit = useCallback(async (auditCategories: Record<string, { total?: number }>) => {
+    const suggestions = suggestLinesFromAudit(auditCategories, financialConfig.payFrequency) as BudgetLine[];
+    const existingNames = new Set(lines.map(l => l.name.toLowerCase()));
+    const newLines = suggestions.filter(s => !existingNames.has(s.name.toLowerCase()));
+    if (newLines.length > 0) await persist([...lines, ...newLines]);
+  }, [lines, persist, financialConfig.payFrequency]);
 
   return (
-    <BudgetContext.Provider
-      value={{
-        envelopes,
-        monthlyIncome,
-        updateMonthlyIncome,
-        allocateToEnvelope,
-        getReadyToAssign,
-      }}
-    >
+    <BudgetContext.Provider value={{
+      lines,
+      cycleIncome,
+      addLine, updateLine, deleteLine, suggestFromAudit,
+      ...status,
+      isBudgetReady,
+    }}>
       {children}
     </BudgetContext.Provider>
   );
 }
 
-export function useBudget() {
-  const context = useContext(BudgetContext);
-  if (!context) throw new Error("useBudget must be used within a BudgetProvider");
-  return context;
+export function useBudget(): BudgetContextValue {
+  const ctx = useContext(BudgetContext);
+  if (!ctx) throw new Error("useBudget must be used within a BudgetProvider");
+  return ctx;
 }

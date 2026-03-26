@@ -193,7 +193,7 @@ describe("secureStore", () => {
     const { mod } = await loadSecureStore({ native: true, plugin });
 
     await expect(mod.getSecretStorageStatus()).resolves.toMatchObject({
-      mode: "native-checking",
+      mode: "native-secure",
       canPersistSecrets: true,
       isHardwareBacked: true,
     });
@@ -203,6 +203,7 @@ describe("secureStore", () => {
 
   it("negative-caches missing native keys to avoid repeated bridge misses", async () => {
     const plugin = {
+      keys: vi.fn(async () => ({ value: [] })),
       get: vi.fn(async () => {
         throw new Error("Item with given key does not exist");
       }),
@@ -215,7 +216,8 @@ describe("secureStore", () => {
     await expect(mod.getSecureItem("apple-linked-id")).resolves.toBeNull();
     await expect(mod.getSecureItem("apple-linked-id")).resolves.toBeNull();
 
-    expect(plugin.get).toHaveBeenCalledTimes(2);
+    expect(plugin.get).not.toHaveBeenCalled();
+    expect(plugin.keys).toHaveBeenCalledTimes(1);
   });
 
   it("deduplicates concurrent native reads for the same missing key", async () => {
@@ -245,6 +247,6 @@ describe("secureStore", () => {
     release();
 
     await expect(reads).resolves.toEqual([null, null, null]);
-    expect(plugin.get).toHaveBeenCalledTimes(2);
+    expect(plugin.get).toHaveBeenCalledTimes(1);
   });
 });

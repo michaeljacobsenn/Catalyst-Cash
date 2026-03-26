@@ -32,12 +32,18 @@
 
 const PLAID_STORAGE_KEY = "plaid-connections";
 const PLAID_FREE_ACTIVE_CONNECTION_KEY = "plaid-free-active-connection-id";
+const PLAID_FREE_ACTIVE_CONNECTION_CHANGED_AT_KEY = "plaid-free-active-connection-changed-at";
 const API_BASE = getBackendUrl();
 const LINK_TOKEN_TIMEOUT_MS = 20_000;
 const EXCHANGE_TIMEOUT_MS = 20_000;
 const SYNC_FORCE_TIMEOUT_MS = 120_000;
 const SYNC_STATUS_TIMEOUT_MS = 30_000;
 const PLAID_LINK_UI_TIMEOUT_MS = 600_000; // 10 minutes
+export const PLAID_MANUAL_SYNC_COOLDOWNS = {
+  free: 7 * 24 * 60 * 60 * 1000,
+  pro: 24 * 60 * 60 * 1000,
+};
+export const FREE_PLAID_CONNECTION_SWITCH_COOLDOWN_MS = PLAID_MANUAL_SYNC_COOLDOWNS.free;
 let activePlaidLinkPromise = null;
 
 function createAbortTimeout(ms, label = "Plaid request") {
@@ -177,13 +183,81 @@ function choosePreferredFreeConnectionId(connections = [], preferredId = null) {
   return viableConnections[0]?.id || null;
 }
 
+export function getPreferredFreeConnectionSwitchCooldownRemaining(lastChangedAt, now = Date.now()) {
+  if (!lastChangedAt) return 0;
+  const changedAtMs = new Date(lastChangedAt).getTime();
+  if (!Number.isFinite(changedAtMs)) return 0;
+  return Math.max(0, FREE_PLAID_CONNECTION_SWITCH_COOLDOWN_MS - (now - changedAtMs));
+}
+
+export function shouldEnforcePreferredFreeConnectionSwitchCooldown({
+  gatingEnforced = false,
+  tier = "free",
+  connectionCount = 0,
+  limit = INSTITUTION_LIMITS.free,
+} = {}) {
+  return Boolean(
+    gatingEnforced &&
+    tier === "free" &&
+    Number.isFinite(limit) &&
+    connectionCount > limit
+  );
+}
+
+function formatPlaidCooldownDuration(ms) {
+  const minsLeft = Math.max(1, Math.ceil(ms / 60000));
+  const hoursLeft = Math.floor(minsLeft / 60);
+  const daysLeft = Math.floor(hoursLeft / 24);
+
+  if (daysLeft > 0) {
+    return `${daysLeft} day${daysLeft > 1 ? "s" : ""} ${hoursLeft % 24}h`;
+  }
+  if (hoursLeft > 0) {
+    return `${hoursLeft}h ${minsLeft % 60}m`;
+  }
+  return `${minsLeft} min`;
+}
+
+async function getPreferredFreeConnectionChangedAt() {
+  return (await db.get(PLAID_FREE_ACTIVE_CONNECTION_CHANGED_AT_KEY)) || null;
+}
+
 export async function getPreferredFreeConnectionId() {
   return (await db.get(PLAID_FREE_ACTIVE_CONNECTION_KEY)) || null;
 }
 
-export async function setPreferredFreeConnectionId(connectionId) {
+export async function setPreferredFreeConnectionId(connectionId, options = {}) {
+  const force = options.force === true;
   const normalizedId = String(connectionId || "").trim() || null;
+  const currentId = await getPreferredFreeConnectionId();
+
+  if (!force && normalizedId && currentId && normalizedId !== currentId) {
+    const subscriptionState = await getSubscriptionState();
+    const conns = await getConnections();
+    const shouldEnforceCooldown = shouldEnforcePreferredFreeConnectionSwitchCooldown({
+      gatingEnforced: isGatingEnforced(),
+      tier: subscriptionState?.tier || "free",
+      connectionCount: conns.length,
+      limit: INSTITUTION_LIMITS[subscriptionState?.tier] || INSTITUTION_LIMITS.free,
+    });
+
+    if (shouldEnforceCooldown) {
+      const lastChangedAt = await getPreferredFreeConnectionChangedAt();
+      const remainingMs = getPreferredFreeConnectionSwitchCooldownRemaining(lastChangedAt);
+      if (remainingMs > 0) {
+        throw new Error(`You can switch your active live bank again in ${formatPlaidCooldownDuration(remainingMs)}.`);
+      }
+    }
+  }
+
   await db.set(PLAID_FREE_ACTIVE_CONNECTION_KEY, normalizedId);
+
+  if (!normalizedId) {
+    await db.del(PLAID_FREE_ACTIVE_CONNECTION_CHANGED_AT_KEY);
+  } else if (!force && normalizedId !== currentId) {
+    await db.set(PLAID_FREE_ACTIVE_CONNECTION_CHANGED_AT_KEY, new Date().toISOString());
+  }
+
   return normalizedId;
 }
 
@@ -236,7 +310,7 @@ export async function reconcilePlaidConnectionAccess(cards = [], bankAccounts = 
       ? activeConnectionId
       : null;
   if (resolvedPreferredId !== preferredId) {
-    await setPreferredFreeConnectionId(resolvedPreferredId);
+    await setPreferredFreeConnectionId(resolvedPreferredId, { force: true });
   }
 
   const fallbackState =
@@ -395,7 +469,7 @@ export async function removeConnection(connectionId) {
   await saveConnections(conns.filter(c => c.id !== connectionId));
   const preferredId = await getPreferredFreeConnectionId();
   if (preferredId && preferredId === connectionId) {
-    await setPreferredFreeConnectionId(null);
+    await setPreferredFreeConnectionId(null, { force: true });
   }
 }
 
@@ -723,6 +797,24 @@ export async function forceBackendSync(options = {}) {
   return true;
 }
 
+async function fetchCachedSyncStatus() {
+  const res = await fetchPlaidBackend(`${API_BASE}/api/sync/status`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  }, {
+    timeoutMs: SYNC_STATUS_TIMEOUT_MS,
+    authBootstrapTimeoutMs: LINK_TOKEN_TIMEOUT_MS,
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    void log.warn("plaid", `sync status FAILED: HTTP ${res.status} — ${errBody.substring(0, 200)}`);
+    throw new Error(`Sync status failed: ${res.status}`);
+  }
+
+  return res.json();
+}
+
 /**
  * Fetch fresh balances for a connection from Plaid.
  * Our backend calls Plaid's /accounts/balance/get.
@@ -732,19 +824,7 @@ export async function fetchBalances(connectionId, retryCount = 0) {
   const conn = conns.find(c => c.id === connectionId);
   if (!conn) throw new Error(`Connection ${connectionId} not found`);
 
-  const res = await fetchPlaidBackend(`${API_BASE}/api/sync/status`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  }, {
-    timeoutMs: SYNC_STATUS_TIMEOUT_MS,
-    authBootstrapTimeoutMs: LINK_TOKEN_TIMEOUT_MS,
-  });
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => "");
-    void log.warn("plaid", `sync status FAILED: HTTP ${res.status} — ${errBody.substring(0, 200)}`);
-    throw new Error(`Sync status failed: ${res.status}`);
-  }
-  const data = await res.json();
+  const data = await fetchCachedSyncStatus();
   if (!data.hasData) {
     if (retryCount < 20) {
       const backoffMs = Math.min(2000 * Math.pow(2, Math.floor(retryCount / 3)), 8000);
@@ -947,28 +1027,9 @@ const PLAID_AI_CATEGORIZATION_MAX_BATCH = 40;
  * @param {number} [_days=30] - Reserved for future per-call transaction windows
  * @returns {Array} Normalized transaction array
  */
-export async function fetchTransactions(connectionId, _days = 30) {
-  const conns = await getConnections();
-  const conn = conns.find(c => c.id === connectionId);
-  if (!conn) throw new Error(`Connection ${connectionId} not found`);
-
-  const res = await fetchPlaidBackend(`${API_BASE}/api/sync/status`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  }, {
-    timeoutMs: SYNC_STATUS_TIMEOUT_MS,
-    authBootstrapTimeoutMs: LINK_TOKEN_TIMEOUT_MS,
-  });
-
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => "");
-    void log.warn("plaid", 
-      `fetchTransactions FAILED for ${conn.institutionName}: HTTP ${res.status} — ${errBody.substring(0, 200)}`
-    );
-    throw new Error(`Transaction fetch failed: ${res.status}`);
-  }
-
-  const data = await res.json();
+function mapTransactionsFromSyncStatus(connection, data) {
+  const conn = connection;
+  if (!conn) return [];
   if (!data.hasData) return [];
 
   const raw = filterTransactionsForConnection(data.transactions?.transactions || [], conn);
@@ -987,11 +1048,27 @@ export async function fetchTransactions(connectionId, _days = 30) {
       category: rawCat.replace(/_/g, " ").toLowerCase().trim(),
       subcategory: rawSub.replace(/_/g, " ").toLowerCase().trim(),
       institution: conn.institutionName,
+      accountId: t.account_id,
       accountName: (conn.accounts.find(a => a.plaidAccountId === t.account_id) || {}).name || "",
       accountType: (conn.accounts.find(a => a.plaidAccountId === t.account_id) || {}).subtype || "",
       pending: t.pending || false,
     };
   });
+}
+
+export async function fetchTransactions(connectionId, _days = 30, options = {}) {
+  const conns = await getConnections();
+  const conn = conns.find(c => c.id === connectionId);
+  if (!conn) throw new Error(`Connection ${connectionId} not found`);
+
+  try {
+    const data = options.cachedStatusData || await fetchCachedSyncStatus();
+    return mapTransactionsFromSyncStatus(conn, data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    void log.warn("plaid", `fetchTransactions FAILED for ${conn.institutionName}: ${message}`);
+    throw error instanceof Error ? error : new Error(message);
+  }
 }
 
 export function filterTransactionsForConnection(transactions = [], connection = null) {
@@ -1022,10 +1099,11 @@ export async function fetchAllTransactions(days = 30, options = {}) {
     allowedConnectionIds.size === 0 || allowedConnectionIds.has(String(conn?.id || "").trim())
   );
   let all = [];
+  const cachedStatusData = await fetchCachedSyncStatus();
 
   for (const conn of conns) {
     try {
-      const txns = await fetchTransactions(conn.id, days);
+      const txns = await fetchTransactions(conn.id, days, { cachedStatusData });
       all = all.concat(txns);
       void log.warn("plaid", `Fetched ${txns.length} transactions from ${conn.institutionName}`);
     } catch (e) {
@@ -1446,6 +1524,40 @@ export function autoMatchAccounts(
   }
 
   return { matched, unmatched, newCards, newBankAccounts, newPlaidInvestments };
+}
+
+function mergeUniqueById(existing = [], incoming = []) {
+  if (!Array.isArray(incoming) || incoming.length === 0) return [...existing];
+  const map = new Map((existing || []).map(item => [item?.id, item]));
+  for (const item of incoming) {
+    if (item?.id && !map.has(item.id)) map.set(item.id, item);
+  }
+  return Array.from(map.values());
+}
+
+export function ensureConnectionAccountsPresent(
+  connection,
+  cards = [],
+  bankAccounts = [],
+  cardCatalog = null,
+  plaidInvestments = []
+) {
+  const { newCards, newBankAccounts, newPlaidInvestments } = autoMatchAccounts(
+    connection,
+    cards,
+    bankAccounts,
+    cardCatalog,
+    plaidInvestments
+  );
+
+  return {
+    updatedCards: mergeUniqueById(cards, newCards),
+    updatedBankAccounts: mergeUniqueById(bankAccounts, newBankAccounts),
+    updatedPlaidInvestments: mergeUniqueById(plaidInvestments, newPlaidInvestments),
+    importedCards: newCards.length,
+    importedBankAccounts: newBankAccounts.length,
+    importedPlaidInvestments: newPlaidInvestments.length,
+  };
 }
 
 /**

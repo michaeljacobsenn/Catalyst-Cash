@@ -1,5 +1,6 @@
   import { createRoot } from "react-dom/client";
   import App from "./App.js";
+  import ErrorBoundary from "./modules/ErrorBoundary.js";
   import { AuditProvider } from "./modules/contexts/AuditContext.js";
   import { BudgetProvider } from "./modules/contexts/BudgetContext.js";
   import { NavigationProvider } from "./modules/contexts/NavigationContext.js";
@@ -23,21 +24,23 @@ if (!rootElement) {
 
 const root = createRoot(rootElement);
 root.render(
-  <ToastProvider>
-    <SettingsProvider>
-      <SecurityProvider>
-        <PortfolioProvider>
-          <BudgetProvider>
-            <NavigationProvider>
-              <AuditProvider>
-                <App />
-              </AuditProvider>
-            </NavigationProvider>
-          </BudgetProvider>
-        </PortfolioProvider>
-      </SecurityProvider>
-    </SettingsProvider>
-  </ToastProvider>
+  <ErrorBoundary name="App">
+    <ToastProvider>
+      <SettingsProvider>
+        <SecurityProvider>
+          <PortfolioProvider>
+            <BudgetProvider>
+              <NavigationProvider>
+                <AuditProvider>
+                  <App />
+                </AuditProvider>
+              </NavigationProvider>
+            </BudgetProvider>
+          </PortfolioProvider>
+        </SecurityProvider>
+      </SettingsProvider>
+    </ToastProvider>
+  </ErrorBoundary>
 );
 
 // Splash is now dismissed from App.jsx after React has painted the loading screen.

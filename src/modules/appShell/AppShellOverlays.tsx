@@ -172,52 +172,67 @@ export function SimulatedNotificationBanner({
   onDismiss: () => void;
 }) {
   if (!notification) return null;
+  const isCardRec = notification.body.includes("% back");
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: 16,
-        left: 16,
-        right: 16,
-        zIndex: 9999,
-        background: `linear-gradient(135deg, ${T.bg.card}, ${T.bg.surface})`,
-        borderRadius: T.radius.xl,
-        padding: 16,
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 12,
-        boxShadow: `0 12px 32px rgba(0,0,0,0.8), 0 0 0 1px ${T.border.default}`,
-        backdropFilter: "blur(24px)",
-        WebkitBackdropFilter: "blur(24px)",
-        animation: "slideDownNotif 0.4s cubic-bezier(0.16,1,0.3,1)",
-        cursor: "pointer",
-      }}
-      onClick={onDismiss}
-    >
+    <>
+      <style>{`
+        @keyframes slideDownNotif {
+          from { opacity: 0; transform: translateY(-16px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}</style>
       <div
         style={{
-          width: 40,
-          height: 40,
-          borderRadius: 12,
-          background: T.accent.primaryDim,
+          position: "fixed",
+          top: "calc(env(safe-area-inset-top, 44px) + 8px)",
+          left: 12,
+          right: 12,
+          zIndex: 9999,
+          background: `linear-gradient(135deg, ${T.bg.card} 0%, ${T.bg.elevated} 100%)`,
+          borderRadius: 20,
+          padding: "14px 16px",
           display: "flex",
           alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
+          gap: 12,
+          boxShadow: `0 16px 48px rgba(0,0,0,0.85), 0 0 0 1px ${T.border.default}`,
+          backdropFilter: "blur(32px)",
+          WebkitBackdropFilter: "blur(32px)",
+          animation: "slideDownNotif 0.38s cubic-bezier(0.16,1,0.3,1) both",
+          cursor: "pointer",
         }}
+        onClick={onDismiss}
+        role="alert"
+        aria-live="assertive"
       >
-        <MapPin size={22} color={T.accent.primary} />
-      </div>
-      <div style={{ flex: 1 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-          <span style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
-            {notification.title}
-          </span>
-          <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono }}>NOW</span>
+        {/* App icon pill */}
+        <div
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 13,
+            background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+            boxShadow: `0 4px 12px ${T.accent.primary}50`,
+          }}
+        >
+          <MapPin size={22} color="white" strokeWidth={2.5} />
         </div>
-        <p style={{ margin: 0, fontSize: 12, color: T.text.secondary, lineHeight: 1.4 }}>{notification.body}</p>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
+              {notification.title}
+            </span>
+            <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, flexShrink: 0, marginLeft: 8 }}>NOW</span>
+          </div>
+          <p style={{ margin: 0, fontSize: 12, color: isCardRec ? T.accent.primary : T.text.secondary, lineHeight: 1.4, fontWeight: isCardRec ? 700 : 400 }}>
+            {notification.body}
+          </p>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

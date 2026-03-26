@@ -1,6 +1,8 @@
   import { useEffect,useState } from "react";
   import { log } from "./logger.js";
+  import { getShortCardLabel } from "./cards.js";
   import { getStoredTransactions } from "./plaid.js";
+  import { getBankAccountLabel,RENEWAL_PAYMENT_TYPES } from "./renewalPaymentSources.js";
   import { db } from "./utils.js";
 
 // Common subscription names and keywords to match against transaction descriptions.
@@ -21,7 +23,7 @@ const IGNORE_KEYWORDS = ["payroll", "deposit", "transfer", "payment", "atm", "ca
  * Custom hook that scans locally stored Plaid transactions for likely recurring
  * subscriptions and bills that are NOT already tracked in the user's Renewals.
  */
-export function useSubscriptions(existingRenewals = [], isPro = false) {
+export function useSubscriptions(existingRenewals = [], cards = [], bankAccounts = [], isPro = false) {
     const [detected, setDetected] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -105,6 +107,11 @@ export function useSubscriptions(existingRenewals = [], isPro = false) {
                             txDate.setMonth(txDate.getMonth() + 1);
                             const nextDue = txDate.toISOString().split("T")[0];
 
+                            const matchingCard = cards.find(card => card?._plaidAccountId === t.accountId);
+                            const matchingBankAccount = !matchingCard
+                                ? bankAccounts.find(account => account?._plaidAccountId === t.accountId)
+                                : null;
+
                             candidates.set(key, {
                                 id: suggestionId,
                                 name: cleanName.charAt(0).toUpperCase() + cleanName.slice(1).toLowerCase(), // Cleaner display name
@@ -114,7 +121,17 @@ export function useSubscriptions(existingRenewals = [], isPro = false) {
                                 cadence: "1 month",
                                 category: category,
                                 source: "Detected from account",
-                                chargedTo: t.accountName || t.institution,
+                                chargedTo: matchingCard
+                                    ? getShortCardLabel(cards, matchingCard)
+                                    : matchingBankAccount
+                                        ? getBankAccountLabel(bankAccounts, matchingBankAccount)
+                                        : t.accountName || t.institution,
+                                chargedToId: matchingCard?.id || matchingBankAccount?.id || "",
+                                chargedToType: matchingCard
+                                    ? RENEWAL_PAYMENT_TYPES.card
+                                    : matchingBankAccount
+                                        ? RENEWAL_PAYMENT_TYPES.bank
+                                        : "",
                                 nextDue: nextDue,
                                 txDate: t.date, // keep for internal sorting
                                 confidence: 0.8

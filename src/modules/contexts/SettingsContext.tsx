@@ -93,6 +93,8 @@ export interface SettingsContextValue {
   setAiConsent: Dispatch<SetStateAction<boolean>>;
   showAiConsent: boolean;
   setShowAiConsent: Dispatch<SetStateAction<boolean>>;
+  showNotifPrePrompt: boolean;
+  dismissNotifPrePrompt: (allowed: boolean) => Promise<void>;
   themeMode: ThemeMode;
   setThemeMode: (mode: ThemeMode) => void;
   themeTick: number;
@@ -262,6 +264,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
   const [notifPermission, setNotifPermission] = useState<NotificationPermissionState>("prompt");
   const [aiConsent, setAiConsent] = useState<boolean>(false);
   const [showAiConsent, setShowAiConsent] = useState<boolean>(false);
+  const [showNotifPrePrompt, setShowNotifPrePrompt] = useState<boolean>(false);
   const [themeMode, setThemeModeRaw] = useState<ThemeMode>("dark");
   const [themeTick, forceRender] = useState<number>(0);
   const [financialConfig, dispatchFinConfig] = useReducer(financialConfigReducer, DEFAULT_FINANCIAL_CONFIG);
@@ -332,13 +335,19 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         ThemeMode | null,
       ];
 
-      const notifGranted = await withSettingsBootFallback(
+      const notifStatus = await withSettingsBootFallback(
         "notification-permission",
-        async () => (await getNotificationPermission()) === "granted",
-        false
+        () => getNotificationPermission(),
+        "denied" as const
       );
+      const notifGranted = notifStatus === "granted";
 
-      setNotifPermission(notifGranted ? "granted" : "denied");
+      setNotifPermission(notifGranted ? "granted" : notifStatus === "prompt" ? "prompt" : "denied");
+
+      // Show pre-prompt if OS hasn't been asked yet and the user is new (no saved config)
+      if (notifStatus === "prompt" && !finConf) {
+        setShowNotifPrePrompt(true);
+      }
 
       const rawTier = await withSettingsBootFallback(
         "subscription-tier",
@@ -472,7 +481,17 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
   useEffect(() => {
     if (!isSettingsReady || !financialConfig.payday) return;
     if (financialConfig.paydayReminderEnabled !== false) {
-      schedulePaydayReminder(financialConfig.payday, financialConfig.paycheckTime).catch(() => {});
+      // If OS hasn't been asked yet, show the pre-prompt modal
+      // (covers settings-toggle case, not just first boot)
+      getNotificationPermission().then(status => {
+        if (status === "prompt") {
+          setShowNotifPrePrompt(true);
+        } else {
+          schedulePaydayReminder(financialConfig.payday, financialConfig.paycheckTime).catch(() => {});
+        }
+      }).catch(() => {
+        schedulePaydayReminder(financialConfig.payday, financialConfig.paycheckTime).catch(() => {});
+      });
     } else {
       cancelPaydayReminder().catch(() => {});
     }
@@ -497,6 +516,20 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     setAiConsent,
     showAiConsent,
     setShowAiConsent,
+    showNotifPrePrompt,
+    dismissNotifPrePrompt: async (allowed: boolean) => {
+      setShowNotifPrePrompt(false);
+      if (allowed) {
+        const { requestNotificationPermission } = await import("../notifications.js");
+        const granted = await requestNotificationPermission();
+        setNotifPermission(granted ? "granted" : "denied");
+        if (granted) {
+          dispatchFinConfig({ type: "SET_FIELD", field: "paydayReminderEnabled", value: true });
+        }
+      } else {
+        dispatchFinConfig({ type: "SET_FIELD", field: "paydayReminderEnabled", value: false });
+      }
+    },
     themeMode,
     setThemeMode,
     themeTick,

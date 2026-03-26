@@ -19,7 +19,10 @@
     usePrivacyModeMirror,
     useRecoverableAuditLifecycle,
     useSimulatedGeofenceNotification,
+    useAppForegroundRefresh,
+    useDeepLinkRouting,
   } from "./modules/appShell/useAppShellRuntime.js";
+  import NotificationPrePrompt from "./modules/tabs/NotificationPrePrompt.js";
   import { refreshAppState as refreshAppStateModel,resetAppState } from "./modules/appRefreshModel.js";
   import { T } from "./modules/constants.js";
   import { useAudit } from "./modules/contexts/AuditContext.js";
@@ -101,6 +104,8 @@ function CatalystCashShell() {
     setAiConsent,
     showAiConsent,
     setShowAiConsent,
+    showNotifPrePrompt,
+    dismissNotifPrePrompt,
     financialConfig,
     setFinancialConfig,
     isSettingsReady,
@@ -315,6 +320,8 @@ function CatalystCashShell() {
 
   const [proEnabled, setProEnabled] = useState(true);
   useBootServices(setProEnabled);
+  useAppForegroundRefresh(ready, refreshAppState);
+  useDeepLinkRouting(navTo);
 
   const { simulatedNotification, dismissSimulatedNotification } = useSimulatedGeofenceNotification(
     cards,
@@ -612,6 +619,12 @@ function CatalystCashShell() {
           toast.success("Consent saved");
         }}
       />
+      {showNotifPrePrompt && (
+        <NotificationPrePrompt
+          onAllow={() => void dismissNotifPrePrompt(true)}
+          onSkip={() => void dismissNotifPrePrompt(false)}
+        />
+      )}
       <SkipToContentLink />
       {showShellHeader && (
         <AppShellHeader

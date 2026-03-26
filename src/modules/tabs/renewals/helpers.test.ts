@@ -18,6 +18,8 @@ describe("renewals helpers", () => {
         interval: 2,
         intervalUnit: "months",
         source: "Checking",
+        chargedToType: "bank",
+        chargedToId: "bank_1",
       }
     );
 
@@ -26,6 +28,8 @@ describe("renewals helpers", () => {
     expect(result.interval).toBe(2);
     expect(result.cadence).toBe("every 2 months");
     expect(result.source).toBe("Checking");
+    expect(result.chargedToType).toBe("bank");
+    expect(result.chargedToId).toBe("bank_1");
   });
 
   it("buildNewRenewal omits empty optional fields", () => {
@@ -37,6 +41,7 @@ describe("renewals helpers", () => {
         intervalUnit: "months",
         source: "",
         chargedToId: "",
+        chargedToType: "",
         category: "",
         nextDue: "",
       },

@@ -15,6 +15,7 @@ const EXACT_SECURITY_KEYS = new Set([
   "market-data-ts",    // Transient cache
   "ota_rotating_categories", // Transient cache
   "last-backup-ts",    // Transient cache
+  "full-profile-qa-seed-active", // Internal QA-only flag
   "household-id",      // Sync credentials
   "household-passcode",// Sync credentials
   "household-id-protected",

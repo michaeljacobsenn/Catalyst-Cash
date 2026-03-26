@@ -31,12 +31,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-		<key>NSAllowsArbitraryLoadsInWebContent</key>
-		<true/>
-	</dict>
+	<dict/>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Catalyst Cash requires Face ID to securely authenticate your financial data.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

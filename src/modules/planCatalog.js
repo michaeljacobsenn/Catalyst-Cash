@@ -20,7 +20,7 @@ export const INSTITUTION_LIMITS = {
 
 export const TIER_MODEL_IDS = {
   free: ["gemini-2.5-flash"],
-  pro: ["gpt-4.1", "gemini-2.5-flash"],
+  pro: ["gpt-4.1", "gemini-2.5-flash", "o3"],
 };
 
 export const IAP_PRODUCTS = {

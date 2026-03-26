@@ -2,11 +2,16 @@
   "appId": "com.jacobsen.portfoliopro",
   "appName": "Catalyst Cash",
   "webDir": "dist",
+  "server": {
+    "allowNavigation": ["catalystcash.app"]
+  },
   "ios": {
     "contentInset": "never",
     "preferredContentMode": "mobile",
     "allowsLinkPreview": false,
-    "allowsBackForwardNavigationGestures": false
+    "allowsBackForwardNavigationGestures": false,
+    "scheme": "catalystcash",
+    "limitsNavigationsToAppBoundDomains": true
   },
   "plugins": {
     "SplashScreen": {

@@ -1,6 +1,5 @@
   import React,{ memo,Suspense,useCallback,useEffect,useMemo,useState,type ChangeEvent,type CSSProperties,type ReactNode } from "react";
   import { createPortal } from "react-dom";
-  import { getShortCardLabel } from "../cards.js";
   import { EmptyState as UIEmptyState,Mono as UIMono } from "../components.js";
   import { T } from "../constants.js";
   import { formatInterval } from "../constants.js";
@@ -19,6 +18,13 @@ const LazyProPaywall = React.lazy(() => import("./ProPaywall.js"));
   import { usePortfolio } from "../contexts/PortfolioContext.js";
   import { Bot,Zap } from "../icons";
   import { getNegotiableMerchant } from "../negotiation.js";
+  import {
+    getBankAccountLabel,
+    getRenewalPaymentOptionValue,
+    parseRenewalPaymentOptionValue,
+    resolveRenewalPaymentState,
+    RENEWAL_PAYMENT_TYPES,
+  } from "../renewalPaymentSources.js";
   import { useSubscriptions } from "../useSubscriptions.js";
   import {
     DAY_OPTIONS,
@@ -60,6 +66,7 @@ interface EditRenewalState {
   source: string;
   chargedTo: string;
   chargedToId: string;
+  chargedToType: string;
   nextDue: string;
   category: string;
 }
@@ -81,6 +88,8 @@ interface SubscriptionSuggestion {
   category?: string;
   source?: string;
   chargedTo?: string;
+  chargedToId?: string;
+  chargedToType?: string;
   nextDue?: string;
   txDate: string;
   confidence: number;
@@ -208,6 +217,7 @@ export default memo(function RenewalsTab({ proEnabled = false, privacyMode: _pri
   const renewals = isDemo ? demoRenewals : portfolioContext.renewals;
   const setRenewals = isDemo ? setDemoRenewals : portfolioContext.setRenewals;
   const cards = isDemo ? current.demoPortfolio?.cards || [] : portfolioContext.cards;
+  const bankAccounts = isDemo ? current.demoPortfolio?.bankAccounts || [] : portfolioContext.bankAccounts;
   const { cardAnnualFees } = portfolioContext;
   const [editing, setEditing] = useState<number | null>(null); // index within user renewals
   const [editVal, setEditVal] = useState<EditRenewalState>({
@@ -218,6 +228,7 @@ export default memo(function RenewalsTab({ proEnabled = false, privacyMode: _pri
     source: "",
     chargedTo: "",
     chargedToId: "",
+    chargedToType: "",
     nextDue: "",
     category: "subs",
   });
@@ -233,6 +244,7 @@ export default memo(function RenewalsTab({ proEnabled = false, privacyMode: _pri
     source: "",
     chargedTo: "",
     chargedToId: "",
+    chargedToType: "",
     category: "subs",
     nextDue: "",
   });
@@ -391,53 +403,34 @@ export default memo(function RenewalsTab({ proEnabled = false, privacyMode: _pri
       if (renewalIndex == null || renewalIndex < 0) return;
       setEditing(renewalIndex);
       setEditStep(0);
-      // If chargedTo is missing but source contains a card reference, try to pre-populate
-      let chargedTo = item.chargedTo || "";
-      let chargedToId = item.chargedToId || "";
-      if (!chargedTo && item.source) {
-        // Try to match source against known card names (e.g. "Ally→Delta Business Gold" → look for "Delta Business Gold")
-        const allCardNames = (cards || []).map(c => c.name);
-        const srcParts = (item.source || "").split("→");
-        const potentialCard = (srcParts[srcParts.length - 1] ?? "").trim();
-        // Check if any card name ends with the potential card reference
-        const matched = allCardNames.find(
-          (cn) => cn.endsWith(potentialCard) || potentialCard.endsWith(cn.split(" ").slice(1).join(" "))
-        );
-        if (matched) {
-          chargedTo = matched;
-          const matchCard = (cards || []).find(c => c.name === matched);
-          if (matchCard) chargedToId = matchCard.id;
-        }
-      }
+      const paymentState = resolveRenewalPaymentState(item, cards || [], bankAccounts || []);
       setEditVal({
         name: item.name,
         amount: String(item.amount),
         interval: item.interval || 1,
         intervalUnit: item.intervalUnit || "months",
         source: item.source || "",
-        chargedTo,
-        chargedToId,
+        chargedTo: paymentState.chargedTo,
+        chargedToId: paymentState.chargedToId,
+        chargedToType: paymentState.chargedToType,
         nextDue: item.nextDue || "",
         category: item.category || "subs",
       });
     },
-    [cards]
+    [bankAccounts, cards]
   );
   const saveEdit = useCallback(
     (renewalIndex: number | null | undefined, fallbackName: string | undefined) => {
       if (renewalIndex == null || renewalIndex < 0) return;
-      // If standard user flow, ensure label is consistent short name
-      const label = editVal.chargedToId
-        ? getShortCardLabel(cards || [], cards.find(c => c.id === editVal.chargedToId)) || editVal.chargedTo
-        : editVal.chargedTo;
+      const paymentState = resolveRenewalPaymentState(editVal, cards || [], bankAccounts || []);
       setRenewals((prev) =>
         (prev || []).map((r, idx) =>
-          idx === renewalIndex ? buildRenewalDraft(r, { ...editVal, chargedTo: label }, fallbackName) : r
+          idx === renewalIndex ? buildRenewalDraft(r, { ...editVal, ...paymentState }, fallbackName) : r
         )
       );
       setEditing(null);
     },
-    [editVal, cards, setRenewals]
+    [bankAccounts, cards, editVal, setRenewals]
   );
   const removeItem = useCallback(
     (renewalIndex: number | null | undefined, itemName: string | undefined) => {
@@ -451,11 +444,9 @@ export default memo(function RenewalsTab({ proEnabled = false, privacyMode: _pri
 
   const addItem = (): void => {
     if (!addForm.name.trim() || !addForm.amount) return;
-    // Resolve actual name if card was selected by ID
-    const label = addForm.chargedToId
-      ? getShortCardLabel(cards || [], cards.find(c => c.id === addForm.chargedToId)) || addForm.chargedTo
-      : addForm.chargedTo;
-    const newItem = buildNewRenewal(addForm, label);
+    const paymentState = resolveRenewalPaymentState(addForm, cards || [], bankAccounts || []);
+    const label = paymentState.chargedTo;
+    const newItem = buildNewRenewal({ ...addForm, ...paymentState }, label);
     setRenewals([...(renewals || []), newItem]);
     setAddForm({
       name: "",
@@ -465,6 +456,7 @@ export default memo(function RenewalsTab({ proEnabled = false, privacyMode: _pri
       source: "",
       chargedTo: "",
       chargedToId: "",
+      chargedToType: "",
       category: "subs",
       nextDue: "",
     });
@@ -530,23 +522,38 @@ export default memo(function RenewalsTab({ proEnabled = false, privacyMode: _pri
   );
 
   const CardSelector = ({ value, onChange }: CardSelectorProps) => {
-    const grouped: Record<string, PortfolioCard[]> = {};
-    (cards || []).forEach((c) => {
-      (grouped[c.institution] = grouped[c.institution] || []).push(c);
+    const cardGroups: Record<string, PortfolioCard[]> = {};
+    (cards || []).forEach((card) => {
+      const group = `Cards · ${card.institution || "Linked"}`;
+      (cardGroups[group] = cardGroups[group] || []).push(card);
     });
+
+    const bankGroups: Record<string, typeof bankAccounts> = {};
+    (bankAccounts || []).forEach((account) => {
+      const group = `Banks · ${account.bank || "Linked"}`;
+      (bankGroups[group] = bankGroups[group] || []).push(account);
+    });
+
     const opts: SearchableOption[] = [
-      { value: "Checking", label: "Checking Account" },
-      { value: "Savings", label: "Savings Account" },
-      { value: "Cash", label: "Cash" },
-      ...Object.entries(grouped).flatMap(([inst, instCards]) =>
-        instCards.map((c) => ({
-          value: c.id || "",
-          label: getShortCardLabel(cards || [], c),
-          group: inst,
+      { value: `type:${RENEWAL_PAYMENT_TYPES.checking}`, label: "Checking Account", group: "General" },
+      { value: `type:${RENEWAL_PAYMENT_TYPES.savings}`, label: "Savings Account", group: "General" },
+      { value: `type:${RENEWAL_PAYMENT_TYPES.cash}`, label: "Cash", group: "General" },
+      ...Object.entries(bankGroups).flatMap(([group, accounts]) =>
+        accounts.map((account) => ({
+          value: `bank:${account.id || ""}`,
+          label: getBankAccountLabel(bankAccounts || [], account),
+          group,
+        }))
+      ),
+      ...Object.entries(cardGroups).flatMap(([group, groupedCards]) =>
+        groupedCards.map((card) => ({
+          value: `card:${card.id || ""}`,
+          label: resolveRenewalPaymentState({ chargedToType: "card", chargedToId: card.id }, cards || [], []).chargedTo,
+          group,
         }))
       ),
     ];
-    const displayValue = opts.find((option) => option.value === (value || ""))?.label || value || "";
+    const displayValue = opts.find((option) => option.value === (value || ""))?.label || "";
     return (
       <SearchableSelect
         value={value || ""}
@@ -569,7 +576,7 @@ export default memo(function RenewalsTab({ proEnabled = false, privacyMode: _pri
     { id: "onetime", label: "One-Time Expenses" },
   ];
 
-  const { detected, dismissSuggestion } = useSubscriptions(renewals, proEnabled) as {
+  const { detected, dismissSuggestion } = useSubscriptions(renewals, cards, bankAccounts, proEnabled) as {
     detected: SubscriptionSuggestion[];
     dismissSuggestion: (suggestionId: string) => void;
   };
@@ -958,7 +965,8 @@ export default memo(function RenewalsTab({ proEnabled = false, privacyMode: _pri
                             category: sub.category || "subs",
                             source: sub.source || "",
                             chargedTo: sub.chargedTo || "",
-                            chargedToId: "",
+                            chargedToId: sub.chargedToId || "",
+                            chargedToType: sub.chargedToType || "",
                             nextDue: sub.nextDue || "",
                           }, sub.chargedTo || "")]);
                           dismissSuggestion(sub.id);
@@ -1063,13 +1071,11 @@ export default memo(function RenewalsTab({ proEnabled = false, privacyMode: _pri
               <FormRow label="Payment Method">
                 <div style={{ width: "100%", maxWidth: 160 }}>
                   <CardSelector
-                    value={addForm.chargedToId || addForm.chargedTo}
+                    value={getRenewalPaymentOptionValue(addForm)}
                     onChange={v => {
-                      const card = (cards || []).find(c => c.id === v);
                       setAddForm(p => ({
                         ...p,
-                        chargedToId: card ? card.id : "",
-                        chargedTo: card ? getShortCardLabel(cards || [], card) : v,
+                        ...parseRenewalPaymentOptionValue(v, cards || [], bankAccounts || []),
                       }));
                     }}
                   />
@@ -1317,13 +1323,11 @@ export default memo(function RenewalsTab({ proEnabled = false, privacyMode: _pri
                               <FormRow label="Method">
                                 <div style={{ width: "100%", maxWidth: 160 }}>
                                   <CardSelector
-                                    value={editVal.chargedToId || editVal.chargedTo}
+                                    value={getRenewalPaymentOptionValue(editVal)}
                                     onChange={v => {
-                                      const card = (cards || []).find(c => c.id === v);
                                       setEditVal(p => ({
                                         ...p,
-                                        chargedToId: card ? card.id : "",
-                                        chargedTo: card ? getShortCardLabel(cards || [], card) : v,
+                                        ...parseRenewalPaymentOptionValue(v, cards || [], bankAccounts || []),
                                       }));
                                     }}
                                   />

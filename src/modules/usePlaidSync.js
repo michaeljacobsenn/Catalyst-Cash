@@ -8,7 +8,9 @@
   import { haptic } from "./haptics.js";
   import { log } from "./logger.js";
   import {
+    PLAID_MANUAL_SYNC_COOLDOWNS,
     applyBalanceSync,
+    ensureConnectionAccountsPresent,
     fetchAllBalancesAndLiabilities,
     fetchAllTransactions,
     forceBackendSync,
@@ -17,11 +19,6 @@
     saveConnectionLinks,
   } from "./plaid.js";
   import { getCurrentTier,getRawTier,isGatingEnforced } from "./subscription.js";
-
-const SYNC_COOLDOWNS = {
-  free: 72 * 60 * 60 * 1000,
-  pro: 24 * 60 * 60 * 1000,
-};
 
 // ── Module-level sync state ──────────────────────────────────
 // This ensures the sync spinner persists even when the user
@@ -154,6 +151,7 @@ export function summarizeSyncOutcome({
  * @param {Function} opts.setCards
  * @param {Function} opts.setBankAccounts
  * @param {Function} opts.setFinancialConfig
+ * @param {unknown}  [opts.cardCatalog]
  * @param {string}   [opts.successMessage] — custom toast on success
  * @param {boolean}  [opts.autoFetchTransactions] — also pull transactions (Accounts tab)
  */
@@ -164,6 +162,7 @@ export function usePlaidSync({
   setCards,
   setBankAccounts,
   setFinancialConfig,
+  cardCatalog = null,
   successMessage = "Balances synced successfully",
   autoFetchTransactions = false,
 }) {
@@ -233,7 +232,7 @@ export function usePlaidSync({
       return;
     }
 
-    const cooldown = SYNC_COOLDOWNS[tier.id] || SYNC_COOLDOWNS.free;
+    const cooldown = PLAID_MANUAL_SYNC_COOLDOWNS[tier.id] || PLAID_MANUAL_SYNC_COOLDOWNS.free;
     const cooldownEnforced = shouldEnforcePlaidSyncCooldown({ gatingEnforced });
     const lastSyncAt = getMostRecentPlaidSyncTime(cards, bankAccounts, syncConnectionIds);
     if (cooldownEnforced && lastSyncAt && Date.now() - lastSyncAt < cooldown) {
@@ -276,13 +275,30 @@ export function usePlaidSync({
       let allBanks = [...bankAccounts];
       let allInvests = [...(financialConfig?.plaidInvestments || [])];
       let investmentsChanged = false;
+      let restoredCount = 0;
       let successCount = 0;
       let pendingCount = 0;
       const requestedCount = syncConnectionIds.length;
 
       for (const res of results) {
         if (!res._error && !res._pendingSync) {
-          const syncData = applyBalanceSync(res, allCards, allBanks, allInvests);
+          const hydratedState = ensureConnectionAccountsPresent(
+            res,
+            allCards,
+            allBanks,
+            cardCatalog,
+            allInvests
+          );
+          restoredCount +=
+            hydratedState.importedCards +
+            hydratedState.importedBankAccounts +
+            hydratedState.importedPlaidInvestments;
+          const syncData = applyBalanceSync(
+            res,
+            hydratedState.updatedCards,
+            hydratedState.updatedBankAccounts,
+            hydratedState.updatedPlaidInvestments
+          );
           allCards = syncData.updatedCards;
           allBanks = syncData.updatedBankAccounts;
           if (syncData.updatedPlaidInvestments) {
@@ -314,6 +330,11 @@ export function usePlaidSync({
         if (syncOutcome.kind === "success") {
           haptic.success();
           if (window.toast) window.toast.success(syncOutcome.message);
+          if (restoredCount > 0 && window.toast) {
+            window.toast.info(
+              `Restored ${restoredCount} ${restoredCount === 1 ? "linked account" : "linked accounts"} while syncing.`
+            );
+          }
           if (shouldFetchTransactionsForSync({
             autoFetchTransactions,
             effectiveTierId: tier.id,
@@ -323,6 +344,11 @@ export function usePlaidSync({
           }
         } else if (window.toast) {
           window.toast.info(syncOutcome.message);
+          if (restoredCount > 0) {
+            window.toast.info(
+              `Restored ${restoredCount} ${restoredCount === 1 ? "linked account" : "linked accounts"} while syncing.`
+            );
+          }
         }
       } else {
         const firstErr = results.find(r => r._error)?._error || "No connections available";

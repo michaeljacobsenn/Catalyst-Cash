@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import UserNotifications
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate, UIWindowSceneDelegate {
@@ -9,6 +10,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIWindowSceneDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Set dark background on the native window so no white bars show during load
         window?.backgroundColor = UIColor(red: 0.024, green: 0.035, blue: 0.055, alpha: 1.0)
+        
+        // Allow local notifications to display as banners even when app is in foreground
+        UNUserNotificationCenter.current().delegate = self
         
         // RevenueCat is initialized from the JS side via revenuecat.js → Purchases.configure()
         // Do NOT double-init here — iOS 18+ crashes on duplicate Purchases.configure() calls.
@@ -52,4 +56,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIWindowSceneDelegate {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
+}
+
+// MARK: - UNUserNotificationCenterDelegate
+// Allows local notifications to display as banners even when the app is in the foreground.
+// Without this, iOS silently delivers them to the notification center only.
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        completionHandler()
+    }
 }

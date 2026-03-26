@@ -112,8 +112,9 @@ interface PlaidConnection {
   _needsReconnect?: boolean;
 }
 
+type IconComponent = React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 // ── Module-scoped icon map (created once, shared across renders) ──
-const CATEGORY_ICON_MAP = {
+const CATEGORY_ICON_MAP: Record<string, IconComponent> = {
   AlertCircle,
   ArrowDownLeft,
   ArrowUpRight,
@@ -175,7 +176,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
         ]);
         const stored = normalizeTransactionResult(storedTransactions as LegacyTransactionResult | null);
         if (stored?.data?.length) {
-          setTransactions(stored.data);
+          setTransactions(stored.data as TransactionRecord[]);
           setFetchedAt(stored.fetchedAt);
         }
         setPlaidConnections((connections || []) as PlaidConnection[]);
@@ -201,7 +202,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
         )) as LegacyTransactionResult
       );
       const connections = (await getConnections()) as PlaidConnection[];
-      setTransactions(result.data);
+      setTransactions(result.data as TransactionRecord[]);
       setFetchedAt(result.fetchedAt);
       setPlaidConnections(connections || []);
       appWindow.toast?.success?.(
@@ -802,7 +803,6 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                 }}
               >
                 {categoryBreakdown.map(({ category, amount, pct, meta }) => {
-                  const Icon = meta.icon;
                   return (
                     <div key={category} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <div
@@ -817,7 +817,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                           flexShrink: 0,
                         }}
                       >
-                        <Icon size={14} color={meta.color} strokeWidth={2} />
+                        {meta.icon && <meta.icon size={14} color={meta.color} strokeWidth={2} />}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div
@@ -1213,7 +1213,6 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                 {/* Transaction Rows */}
                 {group.txns.map((txn, ti) => {
                   const meta = getCategoryMeta(txn.category, categoryIconMap);
-                  const Icon = meta.icon;
                   return (
                     <div
                       key={txn.id || `${group.date}-${ti}`}
@@ -1240,7 +1239,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                           flexShrink: 0,
                         }}
                       >
-                        <Icon size={18} color={meta.color} strokeWidth={2} />
+                        {meta.icon && <meta.icon size={18} color={meta.color} strokeWidth={2} />}
                       </div>
 
                       {/* Details */}

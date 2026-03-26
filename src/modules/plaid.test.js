@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  PLAID_MANUAL_SYNC_COOLDOWNS,
   autoMatchAccounts,
   applyBalanceSync,
+  ensureConnectionAccountsPresent,
   filterTransactionsForConnection,
+  getPreferredFreeConnectionSwitchCooldownRemaining,
   materializeManualFallbackForConnections,
+  shouldEnforcePreferredFreeConnectionSwitchCooldown,
 } from "./plaid.js";
 
 beforeEach(() => {
@@ -75,7 +79,79 @@ describe("Plaid matching", () => {
   });
 });
 
+describe("Plaid free live-connection access", () => {
+  it("enforces active-bank switch cooldown only for over-limit free users in live gating", () => {
+    expect(
+      shouldEnforcePreferredFreeConnectionSwitchCooldown({
+        gatingEnforced: true,
+        tier: "free",
+        connectionCount: 2,
+        limit: 1,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldEnforcePreferredFreeConnectionSwitchCooldown({
+        gatingEnforced: true,
+        tier: "pro",
+        connectionCount: 4,
+        limit: 5,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldEnforcePreferredFreeConnectionSwitchCooldown({
+        gatingEnforced: false,
+        tier: "free",
+        connectionCount: 3,
+        limit: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it("computes remaining free active-bank switch cooldown from the last manual change", () => {
+    const now = new Date("2026-03-26T16:00:00.000Z").getTime();
+    const changedAt = "2026-03-25T16:00:00.000Z";
+    expect(PLAID_MANUAL_SYNC_COOLDOWNS.free).toBe(7 * 24 * 60 * 60 * 1000);
+    expect(getPreferredFreeConnectionSwitchCooldownRemaining(changedAt, now)).toBe(6 * 24 * 60 * 60 * 1000);
+    expect(getPreferredFreeConnectionSwitchCooldownRemaining("2026-03-19T16:00:00.000Z", now)).toBe(0);
+    expect(getPreferredFreeConnectionSwitchCooldownRemaining(null, now)).toBe(0);
+  });
+});
+
 describe("Plaid sync fallback", () => {
+  it("materializes missing linked accounts from a refreshed connection before applying balances", () => {
+    const connection = {
+      id: "item_amex",
+      institutionName: "American Express",
+      lastSync: "2026-03-26T14:30:00.000Z",
+      accounts: [
+        {
+          plaidAccountId: "acct_delta",
+          name: "Delta Gold Business Card",
+          officialName: "Delta Gold Business Card",
+          type: "credit",
+          subtype: "credit card",
+          mask: "4242",
+          linkedCardId: null,
+          linkedBankAccountId: null,
+          balance: { current: 27.29, available: 2972.71, limit: 3000 },
+          liability: {},
+        },
+      ],
+    };
+
+    const hydrated = ensureConnectionAccountsPresent(connection, [], [], null, []);
+    expect(hydrated.importedCards).toBe(1);
+    expect(hydrated.updatedCards[0].id).toBe("plaid_acct_delta");
+
+    const { updatedCards } = applyBalanceSync(connection, hydrated.updatedCards, [], []);
+    expect(updatedCards).toHaveLength(1);
+    expect(updatedCards[0]._plaidBalance).toBe(27.29);
+    expect(updatedCards[0]._plaidConnectionId).toBe("item_amex");
+    expect(connection.accounts[0].linkedCardId).toBe("plaid_acct_delta");
+  });
+
   it("updates balances when linked ids are missing but plaid account ids exist", () => {
     const connection = {
       id: "item_1",

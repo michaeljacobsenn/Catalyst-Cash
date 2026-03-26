@@ -1,6 +1,7 @@
   import type { ChangeEvent } from "react";
   import { lazy,Suspense,useCallback,useEffect,useRef,useState } from "react";
   import { normalizeAppError } from "../appErrors.js";
+  import { performCloudBackup } from "../backup.js";
   import { APP_VERSION,T } from "../constants.js";
   import { CURRENCIES } from "../currency.js";
   import {
@@ -10,7 +11,6 @@
   import { log } from "../logger.js";
   import InteractiveStackPane from "../navigation/InteractiveStackPane.js";
   import { AI_PROVIDERS,getProvider } from "../providers.js";
-  import { isSecuritySensitiveKey,sanitizePlaidForBackup } from "../securityKeys.js";
   import { Card } from "../ui.js";
   import { db,FaceId } from "../utils.js";
 
@@ -50,7 +50,7 @@ const loadAppleSignIn = () => import("@capacitor-community/apple-sign-in");
 const loadCloudSync = () => import("../cloudSync.js");
 const loadRevenueCat = () => import("../revenuecat.js");
 
-  import { useAudit } from "../contexts/AuditContext.js";
+
   import { useNavigation } from "../contexts/NavigationContext.js";
   import { usePortfolio } from "../contexts/PortfolioContext.js";
   import { useSecurity } from "../contexts/SecurityContext.js";
@@ -83,6 +83,17 @@ interface SettingsTabProps {
 
 export { scheduleHouseholdSyncRefresh, scheduleRestoreRefresh } from "../settings/settingsRefresh.js";
 
+async function persistAppPasscodeOrThrow(passcode: string) {
+  if (!/^[0-9]{4}$/.test(String(passcode || ""))) {
+    throw new Error("Set a 4-digit App Passcode first");
+  }
+
+  const saved = await setSecureItem("app-passcode", passcode);
+  if (!saved) {
+    throw new Error("Secure storage could not save your App Passcode.");
+  }
+}
+
 export default function SettingsTab({
   onClear,
   onFactoryReset,
@@ -94,7 +105,7 @@ export default function SettingsTab({
   onShowGuide,
   proEnabled = false,
 }: SettingsTabProps) {
-  const { useStreaming, setUseStreaming } = useAudit();
+
   const {
     apiKey,
     setApiKey,
@@ -165,45 +176,22 @@ export default function SettingsTab({
   useEffect(() => {
     if (!appleLinkedId || autoBackupInterval === "off") return;
 
-    const intervalMs = {
-      daily: 24 * 60 * 60 * 1000,
-      weekly: 7 * 24 * 60 * 60 * 1000,
-      monthly: 30 * 24 * 60 * 60 * 1000,
-    }[autoBackupInterval];
-
-    if (!intervalMs) return;
-
     const checkAndBackup = async () => {
       try {
         const { uploadToICloud } = await loadCloudSync();
-        const ts = await db.get("last-backup-ts");
-        const elapsed = Date.now() - (ts || 0);
-        if (elapsed >= intervalMs) {
-          // Build a backup payload (mirrors forceICloudSync logic)
-          const backup = { app: "Catalyst Cash", version: APP_VERSION, exportedAt: new Date().toISOString(), data: {} };
-          const keys = await db.keys();
-          for (const key of keys) {
-            if (isSecuritySensitiveKey(key)) continue;
-            const val = await db.get(key);
-            if (val !== null) backup.data[key] = val;
-          }
-          if (!("personal-rules" in backup.data)) {
-            backup.data["personal-rules"] = personalRules ?? "";
-          }
-          // Include sanitized Plaid metadata for reconnect deduplication
-          const plaidConns = await db.get("plaid-connections");
-          if (Array.isArray(plaidConns) && plaidConns.length > 0) {
-            backup.data["plaid-connections-sanitized"] = sanitizePlaidForBackup(plaidConns);
-          }
-          const success = await uploadToICloud(backup, appPasscode || null);
-          if (success) {
-            const now = Date.now();
-            await db.set("last-backup-ts", now);
-            setLastBackupTS(now);
-            log.info("Auto-backup to iCloud completed successfully.");
-          } else {
-            log.warn("icloud", "Auto-backup returned false");
-          }
+        const result = await performCloudBackup({
+          upload: uploadToICloud,
+          passphrase: appPasscode,
+          personalRules,
+          interval: autoBackupInterval,
+        });
+        if (result.success && result.timestamp) {
+          setLastBackupTS(result.timestamp);
+          log.info("Auto-backup to iCloud completed successfully.");
+        } else if (!result.success && !result.skipped) {
+          log.warn("icloud", "Auto-backup returned false");
+        } else if (result.reason && result.reason !== "not-due" && appPasscode) {
+          log.warn("icloud", "Auto-backup skipped", { reason: result.reason });
         }
       } catch (e) {
         const failure = normalizeAppError(e, { context: "restore" });
@@ -294,27 +282,22 @@ export default function SettingsTab({
         return;
       }
       const { uploadToICloud } = await loadCloudSync();
-      const backup = { app: "Catalyst Cash", version: APP_VERSION, exportedAt: new Date().toISOString(), data: {} };
-      const keys = await db.keys();
-      for (const key of keys) {
-        if (isSecuritySensitiveKey(key)) continue;
-        const val = await db.get(key);
-        if (val !== null) backup.data[key] = val;
+      if (!appPasscode) {
+        window.toast?.error?.("Please set an App Passcode in Security to enable encrypted iCloud backups.");
+        setIsForceSyncing(false);
+        return;
       }
-      if (!("personal-rules" in backup.data)) {
-        backup.data["personal-rules"] = personalRules ?? "";
-      }
-      // Include sanitized Plaid metadata for reconnect deduplication
-      const plaidConns2 = await db.get("plaid-connections");
-      if (Array.isArray(plaidConns2) && plaidConns2.length > 0) {
-        backup.data["plaid-connections-sanitized"] = sanitizePlaidForBackup(plaidConns2);
-      }
-      const success = await uploadToICloud(backup, appPasscode || null);
-      if (success) {
-        const now = Date.now();
-        await db.set("last-backup-ts", now);
-        setLastBackupTS(now);
+      const result = await performCloudBackup({
+        upload: uploadToICloud,
+        passphrase: appPasscode,
+        personalRules,
+        force: true,
+      });
+      if (result.success && result.timestamp) {
+        setLastBackupTS(result.timestamp);
         window.toast?.success?.("Backup saved to iCloud Drive");
+      } else if (result.reason && result.reason !== "upload-failed") {
+        window.toast?.error?.(result.reason);
       } else {
         window.toast?.error?.("Backup could not be verified in iCloud Drive");
       }
@@ -445,14 +428,18 @@ export default function SettingsTab({
     }
   };
 
-  const handleRequireAuthToggle = (enable: boolean) => {
+  const handleRequireAuthToggle = async (enable: boolean) => {
     if (secretStorageStatus.mode === "native-unavailable") {
       window.toast?.error?.("App Lock requires native secure storage, which is currently unavailable.");
       return;
     }
-    if (enable && appPasscode?.length !== 4) {
-      window.toast?.error?.("Set a 4-digit App Passcode first");
-      return;
+    if (enable) {
+      try {
+        await persistAppPasscodeOrThrow(appPasscode);
+      } catch (error) {
+        window.toast?.error?.(error instanceof Error ? error.message : "Set a 4-digit App Passcode first");
+        return;
+      }
     }
     setRequireAuth(enable);
     db.set("require-auth", enable);
@@ -485,6 +472,7 @@ export default function SettingsTab({
     }
 
     try {
+      await persistAppPasscodeOrThrow(appPasscode);
       const availability = await FaceId.isAvailable();
       if (!availability?.isAvailable) {
         window.toast?.error?.("No biometrics set up on this device.");
@@ -840,8 +828,6 @@ export default function SettingsTab({
          aiModel={aiModel}
          setAiModel={setAiModel}
          setAiProvider={setAiProvider}
-         useStreaming={useStreaming}
-         setUseStreaming={setUseStreaming}
          currentProvider={currentProvider}
          selectedModel={selectedModel}
          showUpgradeCta={gatingVisible && !hasPremiumModelAccess}

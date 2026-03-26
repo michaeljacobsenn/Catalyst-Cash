@@ -535,6 +535,7 @@ export interface Renewal {
   source?: string;
   chargedTo?: string;
   chargedToId?: string;
+  chargedToType?: string;
   nextDue?: string;
   category?: string;
   isCardAF?: boolean;

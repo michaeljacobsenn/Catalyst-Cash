@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { FULL_PROFILE_QA_BANKS, FULL_PROFILE_QA_CARDS, FULL_PROFILE_QA_RENEWALS } from "./qaSeed.js";
 
 const {
   dbStore,
@@ -31,7 +32,16 @@ vi.mock("./crypto.js", () => ({
   isEncrypted,
 }));
 
-import { exportBackup, importBackup, isSupportedBackupFile, mergeUniqueById } from "./backup.js";
+import {
+  buildBackupPayload,
+  exportBackup,
+  getCloudBackupBlockReason,
+  importBackup,
+  isSupportedBackupFile,
+  mergeUniqueById,
+  sanitizeBackupPortfolioData,
+  shouldRunAutoBackup,
+} from "./backup.js";
 
 class MockFileReader {
   onload = null;
@@ -151,6 +161,95 @@ describe("backup utilities", () => {
         },
       ]);
     });
+
+    it("strips demo portfolio records and relinks imported renewals before backup export", async () => {
+      dbStore.set("card-portfolio", [
+        { id: "demo-card-1", institution: "Chase", name: "Chase Sapphire Preferred" },
+        {
+          id: "plaid_live_delta",
+          institution: "American Express",
+          name: "Delta SkyMiles Gold Business American Express Card",
+          _plaidAccountId: "live_delta",
+        },
+      ]);
+      dbStore.set("bank-accounts", [
+        { id: "demo-chk-1", bank: "Chase", name: "Chase Total Checking", accountType: "checking" },
+        { id: "bank_live_1", bank: "Ally", name: "Primary Checking", accountType: "checking" },
+      ]);
+      dbStore.set("renewals", [
+        { id: "demo-ren-1", name: "Netflix", chargedTo: "Checking", chargedToId: "" },
+        {
+          id: "ren_1",
+          name: "Google AI Pro",
+          chargedTo: "Amex Delta SkyMiles Biz Gold",
+          chargedToId: "stale-local-id",
+          source: "Ally→Delta Biz Gold",
+        },
+        {
+          id: "ren_bank_1",
+          name: "Rent",
+          chargedTo: "Checking",
+          chargedToType: "checking",
+        },
+      ]);
+
+      const backup = await buildBackupPayload({ personalRules: "keep live cards only" });
+
+      expect(backup.data["card-portfolio"]).toEqual([
+        expect.objectContaining({ id: "plaid_live_delta" }),
+      ]);
+      expect(backup.data["bank-accounts"]).toEqual([
+        expect.objectContaining({ id: "bank_live_1" }),
+      ]);
+      expect(backup.data.renewals).toEqual([
+        expect.objectContaining({
+          id: "ren_1",
+          chargedToType: "card",
+          chargedToId: "plaid_live_delta",
+          chargedTo: "Delta SkyMiles Gold Business",
+        }),
+        expect.objectContaining({
+          id: "ren_bank_1",
+          chargedToType: "bank",
+          chargedToId: "bank_live_1",
+          chargedTo: "Ally · Primary Checking",
+        }),
+      ]);
+    });
+  });
+
+  describe("buildBackupPayload", () => {
+    it("reuses the shared backup payload builder and excludes transient QA flags", async () => {
+      dbStore.set("financial-config", { income: 1000 });
+      dbStore.set("full-profile-qa-seed-active", true);
+      dbStore.set("personal-rules", "stay conservative");
+
+      const backup = await buildBackupPayload({ personalRules: "unused fallback" });
+
+      expect(backup.data["financial-config"]).toEqual({ income: 1000 });
+      expect(backup.data["personal-rules"]).toBe("stay conservative");
+      expect(backup.data["full-profile-qa-seed-active"]).toBeUndefined();
+    });
+  });
+
+  describe("auto-backup policy", () => {
+    it("limits daily backups to once per local calendar day", () => {
+      const march26Morning = new Date(2026, 2, 26, 8, 0, 0).getTime();
+      const march26Evening = new Date(2026, 2, 26, 20, 0, 0).getTime();
+      const march27Morning = new Date(2026, 2, 27, 8, 0, 0).getTime();
+
+      expect(shouldRunAutoBackup("daily", march26Morning, march26Evening)).toBe(false);
+      expect(shouldRunAutoBackup("daily", march26Morning, march27Morning)).toBe(true);
+    });
+
+    it("blocks cloud backup when QA seed records coexist with linked banks", async () => {
+      dbStore.set("card-portfolio", FULL_PROFILE_QA_CARDS);
+      dbStore.set("bank-accounts", FULL_PROFILE_QA_BANKS);
+      dbStore.set("renewals", FULL_PROFILE_QA_RENEWALS);
+      dbStore.set("plaid-connections", [{ id: "conn_1", institutionName: "Chase", accounts: [] }]);
+
+      await expect(getCloudBackupBlockReason()).resolves.toMatch(/seeded QA data/i);
+    });
   });
 
   describe("importBackup", () => {
@@ -199,6 +298,73 @@ describe("backup utilities", () => {
       ]);
     });
 
+    it("sanitizes legacy demo portfolio payloads during restore", async () => {
+      const backup = {
+        app: "Catalyst Cash",
+        exportedAt: "2026-03-26T15:00:00.000Z",
+        data: {
+          "card-portfolio": [
+            { id: "demo-card-1", institution: "Chase", name: "Chase Sapphire Preferred" },
+            {
+              id: "plaid_live_delta",
+              institution: "American Express",
+              name: "Delta SkyMiles Gold Business American Express Card",
+              _plaidAccountId: "live_delta",
+            },
+          ],
+          "bank-accounts": [
+            { id: "demo-chk-1", bank: "Chase", name: "Chase Total Checking", accountType: "checking" },
+            { id: "bank_live_1", bank: "Ally", name: "Primary Checking", accountType: "checking" },
+          ],
+          "renewals": [
+            {
+              id: "ren_1",
+              name: "Google AI Pro",
+              chargedTo: "Amex Delta SkyMiles Biz Gold",
+              chargedToId: "stale-local-id",
+              source: "Ally→Delta Biz Gold",
+            },
+            {
+              id: "ren_bank_1",
+              name: "Rent",
+              chargedTo: "Checking",
+              chargedToType: "checking",
+            },
+          ],
+        },
+      };
+
+      await importBackup(
+        {
+          name: "CatalystCash_CloudSync.json",
+          type: "application/json",
+          __text: JSON.stringify(backup),
+        },
+        vi.fn()
+      );
+
+      expect(dbStore.get("card-portfolio")).toEqual([
+        expect.objectContaining({ id: "plaid_live_delta" }),
+      ]);
+      expect(dbStore.get("bank-accounts")).toEqual([
+        expect.objectContaining({ id: "bank_live_1" }),
+      ]);
+      expect(dbStore.get("renewals")).toEqual([
+        expect.objectContaining({
+          id: "ren_1",
+          chargedToType: "card",
+          chargedToId: "plaid_live_delta",
+          chargedTo: "Delta SkyMiles Gold Business",
+        }),
+        expect.objectContaining({
+          id: "ren_bank_1",
+          chargedToType: "bank",
+          chargedToId: "bank_live_1",
+          chargedTo: "Ally · Primary Checking",
+        }),
+      ]);
+    });
+
     it("decrypts encrypted backups before importing", async () => {
       decrypt.mockResolvedValueOnce(
         JSON.stringify({
@@ -222,6 +388,20 @@ describe("backup utilities", () => {
       expect(result.count).toBe(1);
       expect(decrypt).toHaveBeenCalledTimes(1);
       expect(dbStore.get("financial-config")).toEqual({ restored: true });
+    });
+  });
+
+  describe("sanitizeBackupPortfolioData", () => {
+    it("removes demo records even before persistence", () => {
+      const result = sanitizeBackupPortfolioData({
+        cards: [{ id: "demo-card-1" }, { id: "live-card-1" }],
+        bankAccounts: [{ id: "demo-chk-1" }, { id: "bank-1" }],
+        renewals: [{ id: "demo-ren-1", chargedTo: "Checking" }, { id: "ren-1", chargedTo: "Checking" }],
+      });
+
+      expect(result.cards).toEqual([{ id: "live-card-1" }]);
+      expect(result.bankAccounts).toEqual([{ id: "bank-1" }]);
+      expect(result.renewals).toEqual([{ id: "ren-1", chargedTo: "Checking", chargedToType: "checking" }]);
     });
   });
 });

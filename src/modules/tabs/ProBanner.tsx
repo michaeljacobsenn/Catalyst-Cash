@@ -29,6 +29,8 @@ export default function ProBanner({ onUpgrade, label, sublabel, compact = false 
     haptic.medium();
     onUpgrade?.();
   };
+  const outerRadius = T.radius.xl;
+  const innerRadius = Math.max(T.radius.xl - 2, T.radius.lg);
 
   /* ── Compact pill mode (used in Settings list) ── */
   if (compact) {
@@ -76,19 +78,12 @@ export default function ProBanner({ onUpgrade, label, sublabel, compact = false 
     <>
       <style>{SHIMMER_CSS}</style>
 
-      {/* Animated gradient border wrapper */}
       <div
         style={{
-          padding: 1.5,
-          borderRadius: T.radius.xl,
-          background: `linear-gradient(135deg, #7b5ea7, #5b8dee, #7b5ea7, #a855f7)`,
-          backgroundSize: "300% 300%",
-          animation: "pro-border-spin 5s ease infinite",
           marginBottom: 4,
           position: "relative",
         }}
       >
-        {/* Ambient glow behind the card */}
         <div style={{
           position: "absolute",
           inset: -8,
@@ -97,32 +92,46 @@ export default function ProBanner({ onUpgrade, label, sublabel, compact = false 
           animation: "pro-glow-pulse 3s ease-in-out infinite",
           zIndex: 0,
           pointerEvents: "none",
-          borderRadius: "inherit",
+          borderRadius: outerRadius + 8,
         }} />
 
-        <button
-          role="banner"
-          aria-label="Upgrade to Catalyst Cash Pro"
-          data-no-swipe="true"
-          onClick={handleClick}
+        <div
           style={{
-            width: "100%",
-            padding: "20px 20px 18px",
-            borderRadius: "calc(" + T.radius.xl + " - 1px)",
-            border: "none",
-            background: `linear-gradient(160deg, #120f22, #1a1535, #120f22)`,
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            cursor: "pointer",
-            display: "flex",
-            flexDirection: "column",
-            gap: 14,
+            padding: 1.5,
+            borderRadius: outerRadius,
+            background: `linear-gradient(135deg, #7b5ea7, #5b8dee, #7b5ea7, #a855f7)`,
+            backgroundSize: "300% 300%",
+            animation: "pro-border-spin 5s ease infinite",
             position: "relative",
-            overflow: "hidden",
-            textAlign: "left",
             zIndex: 1,
+            overflow: "hidden",
+            boxShadow: `0 0 0 1px rgba(255,255,255,0.03) inset`,
           }}
         >
+          <button
+            role="banner"
+            aria-label="Upgrade to Catalyst Cash Pro"
+            data-no-swipe="true"
+            onClick={handleClick}
+            style={{
+              width: "100%",
+              padding: "20px 20px 18px",
+              borderRadius: innerRadius,
+              border: "none",
+              background: `linear-gradient(160deg, #120f22, #1a1535, #120f22)`,
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              cursor: "pointer",
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
+              position: "relative",
+              overflow: "hidden",
+              textAlign: "left",
+              zIndex: 1,
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
+            }}
+          >
           {/* Shimmer sweep */}
           <div style={{
             position: "absolute", inset: 0,
@@ -219,7 +228,8 @@ export default function ProBanner({ onUpgrade, label, sublabel, compact = false 
           <div style={{ textAlign: "center", fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: -6 }}>
             Trusted by thousands for smarter financial decisions
           </div>
-        </button>
+          </button>
+        </div>
       </div>
     </>
   );

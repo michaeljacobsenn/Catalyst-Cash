@@ -315,7 +315,7 @@ export function ModelChatQuotaWidget({ chatQuota, setAiModel, proEnabled }: Mode
             flexShrink: 0,
           }}
           onClick={() => {
-            setAiModel(chatQuota.alternateModel!);
+            setAiModel(chatQuota.alternateModel ?? "");
             haptic.light();
           }}
         >

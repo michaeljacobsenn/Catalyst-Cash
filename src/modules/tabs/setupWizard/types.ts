@@ -28,13 +28,3 @@ export interface ConnectionWithId {
   institutionName?: string;
   [key: string]: unknown;
 }
-
-export interface SpreadsheetModule {
-  read: (data: ArrayBuffer, options: { type: "array" }) => {
-    SheetNames: string[];
-    Sheets: Record<string, unknown>;
-  };
-  utils: {
-    sheet_to_json: (sheet: unknown, options: { header: 1; defval: string }) => Array<Array<string | number>>;
-  };
-}

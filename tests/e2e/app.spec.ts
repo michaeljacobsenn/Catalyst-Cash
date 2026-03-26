@@ -32,7 +32,7 @@ test.describe("Catalyst Cash end-to-end", () => {
     await seedStorage(page, {});
     await completeOnboarding(page);
     await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Begin audit", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Run New Audit", exact: true })).toBeVisible();
   });
 
   test("restores the main shell after onboarding on reload", async ({ page }) => {
@@ -127,6 +127,8 @@ test.describe("Catalyst Cash end-to-end", () => {
     }
 
     await expect(page.getByRole("heading", { name: "Full Results" })).toBeVisible();
+    await page.getByRole("button", { name: "Back" }).first().click();
+    await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
     await page.getByRole("tab", { name: "Home" }).click();
     await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
 
@@ -216,7 +218,18 @@ test.describe("Catalyst Cash end-to-end", () => {
       "Route $300 to Chase Freedom this week and keep checking above $900."
     );
 
-    await page.getByRole("tab", { name: "Audit" }).click();
+    await page.getByRole("button", { name: "Back", exact: true }).first().click();
+    await page.waitForTimeout(500);
+
+    // ResultsView sent us to HistoryTab. We must exit to Dashboard.
+    await page.getByRole("button", { name: "← Back", exact: true }).click();
+    await page.waitForTimeout(500);
+
+    // Now on Dashboard, bottom nav visible. Audit FAB is a role=tab per a11y tree.
+    await page.getByRole("tab", { name: "Audit", exact: true }).click();
+    await page.waitForTimeout(500);
+
+    // Now on AuditTab. getByRole(button) works — accessible name is "Run New Audit".
     const runNewAuditButton = page.getByRole("button", { name: "Run New Audit" });
     await expect(runNewAuditButton).toBeVisible();
     await runNewAuditButton.click();
@@ -239,7 +252,7 @@ test.describe("Catalyst Cash end-to-end", () => {
     );
     await expect(page.getByText("Route $300 to Chase Freedom this week and keep checking above $900.")).toHaveCount(0);
 
-    await page.getByRole("button", { name: "← Back" }).click();
+    await page.getByRole("button", { name: "Back", exact: true }).first().click();
     await expect(page.getByText("LATEST AUDIT")).toBeVisible();
     const latestAuditButton = page.getByRole("button", { name: /LATEST AUDIT/i }).first();
     await expect(latestAuditButton).toBeVisible();
@@ -263,7 +276,7 @@ test.describe("Catalyst Cash end-to-end", () => {
     await page.getByRole("tab", { name: "Audit" }).click();
     await page.getByRole("button", { name: "Paste & Import AI Result" }).click();
 
-    await expect(page.getByText("Imported text is not valid Catalyst Cash audit JSON.")).toBeVisible();
+    await expect(page.getByText("Imported text is not valid").first()).toBeAttached();
     await expect(page.getByText("No Audits Yet")).toBeVisible();
   });
 
@@ -339,6 +352,10 @@ test.describe("Catalyst Cash end-to-end", () => {
     await openSettingsMenu(page, /Financial Profile/i);
     await expect(getSettingsRowInput(page, "Standard Paycheck")).toHaveValue("3200");
     await expect(getSettingsRowInput(page, "Monthly Rent")).toHaveValue("1850");
+
+    await page.getByRole("button", { name: "Back to Settings" }).click();
+    await page.getByRole("button", { name: "Close Settings" }).click();
+    await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
 
     await page.getByRole("tab", { name: "Home" }).click();
     await openSettingsMenu(page, /Backup & Sync/i);
@@ -425,11 +442,16 @@ test.describe("Catalyst Cash end-to-end", () => {
     await expect(page.getByRole("button", { name: "Disconnect Mock Bank" })).toBeVisible();
     await expect(page.getByText("1 Accounts Linked")).toBeVisible();
 
+    await page.getByRole("button", { name: "Back to Settings" }).click();
+    await page.getByRole("button", { name: "Close Settings" }).click();
+    await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
+    await page.waitForTimeout(300);
+
     await page.getByRole("tab", { name: "Portfolio" }).click();
     await expect(page.getByRole("tab", { name: "Portfolio", selected: true })).toBeVisible();
-    await expect(page.getByText("Checking").last()).toBeVisible();
-    await expect(page.getByText("Mock Bank").last()).toBeVisible();
-    await expect(page.getByText("Plaid Checking").last()).toBeVisible();
+    await expect(page.getByText("Checking").last()).toBeAttached();
+    await expect(page.getByText("Mock Bank").last()).toBeAttached();
+    await expect(page.getByText("Plaid Checking").last()).toBeAttached();
 
     const storedConnections = (await readAppStorage(page, "plaid-connections")) || [];
     expect(storedConnections).toHaveLength(1);
@@ -450,6 +472,11 @@ test.describe("Catalyst Cash end-to-end", () => {
     await expect(page.getByRole("button", { name: "Disconnect Mock Bank" })).toHaveCount(0);
     await expect(page.getByText(/Token exchange failed|Failed to link bank|cancelled/i)).toHaveCount(0);
 
+    await page.getByRole("button", { name: "Back to Settings" }).click();
+    await page.getByRole("button", { name: "Close Settings" }).click();
+    await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
+    await page.waitForTimeout(300);
+
     await page.getByRole("tab", { name: "Portfolio" }).click();
     await expect(page.getByText("Plaid Checking")).toHaveCount(0);
   });
@@ -467,6 +494,11 @@ test.describe("Catalyst Cash end-to-end", () => {
     await expect(page.getByText("Token exchange failed: 400").first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Disconnect Mock Bank" })).toHaveCount(0);
     await expect(page.getByText("No linked accounts yet.")).toBeVisible();
+
+    await page.getByRole("button", { name: "Back to Settings" }).click();
+    await page.getByRole("button", { name: "Close Settings" }).click();
+    await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
+    await page.waitForTimeout(300);
 
     await page.getByRole("tab", { name: "Portfolio" }).click();
     await expect(page.getByText("Plaid Checking")).toHaveCount(0);

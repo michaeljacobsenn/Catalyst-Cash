@@ -9,12 +9,12 @@
     Activity,
     CheckCircle,
     Download,
-    Edit3,
     Filter,
     Plus,
     Trash2,
     TrendingUp,
-    Zap
+    Zap,
+    Edit3
   } from "../icons";
   import { buildPromoLine } from "../planCatalog.js";
   import { shouldShowGating } from "../subscription.js";
@@ -80,56 +80,145 @@ const colorFor = c =>
 
 // ── Trend Sparkline ──
 const TrendSparkline = ({ history }) => {
-  const scores = (history || [])
-    .slice(0, 12)
-    .map(a => a.parsed?.healthScore?.score)
-    .filter(s => s != null)
-    .reverse();
-  if (scores.length < 2) return null;
+  const scoredAudits = (history || [])
+    .filter(a => a?.parsed?.healthScore?.score != null)
+    .slice(0, 8);
+  if (scoredAudits.length === 0) return null;
 
-  const W = 280, H = 48, PX = 8, PY = 6;
+  const scores = scoredAudits.map(a => a.parsed.healthScore.score).reverse();
+  const latestScore = scoredAudits[0]?.parsed?.healthScore?.score ?? null;
+  const previousScore = scoredAudits[1]?.parsed?.healthScore?.score ?? null;
+  const latestGrade = latestScore != null ? getGradeLetter(latestScore) : null;
+  const avgScore = Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length);
+  const delta = latestScore != null && previousScore != null ? latestScore - previousScore : null;
+  const trendColor = delta == null ? T.accent.primary : delta >= 0 ? T.status.green : T.status.red;
+
+  const W = 280, H = 60, PX = 8, PY = 8;
   const min = Math.min(...scores) - 5;
   const max = Math.max(...scores) + 5;
   const range = max - min || 1;
   const pts = scores.map((s, i) => ({
-    x: PX + (i / (scores.length - 1)) * (W - PX * 2),
+    x: scores.length === 1 ? W / 2 : PX + (i / (scores.length - 1)) * (W - PX * 2),
     y: PY + (1 - (s - min) / range) * (H - PY * 2),
   }));
   const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
-  const latest = scores[scores.length - 1];
-  const prev = scores[scores.length - 2];
-  const delta = latest - prev;
-  const trendColor = delta >= 0 ? T.status.green : T.status.red;
+  const firstPoint = pts[0] ?? null;
+  const lastPoint = pts[pts.length - 1] ?? null;
+  const latestAudit = scoredAudits[0];
 
   return (
-    <Card style={{ padding: "12px 16px", overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <TrendingUp size={13} color={T.text.secondary} strokeWidth={2.5} />
-          <span style={{ fontSize: 11, fontWeight: 800, color: T.text.secondary, fontFamily: T.font.mono, letterSpacing: "0.04em" }}>
-            HEALTH TREND
-          </span>
+    <Card
+      style={{
+        padding: "16px",
+        overflow: "hidden",
+        position: "relative",
+        background: `linear-gradient(180deg, ${T.bg.card}, ${trendColor}08)`,
+        borderColor: `${trendColor}28`,
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: `radial-gradient(circle at top right, ${trendColor}14 0%, transparent 42%)`,
+          pointerEvents: "none",
+        }}
+      />
+      <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+              <TrendingUp size={13} color={trendColor} strokeWidth={2.5} />
+              <span style={{ fontSize: 11, fontWeight: 800, color: T.text.secondary, fontFamily: T.font.mono, letterSpacing: "0.04em" }}>
+                HEALTH TREND
+              </span>
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.03em" }}>
+              {latestScore != null ? `${latestGrade} · ${latestScore}` : "No score yet"}
+            </div>
+            <div style={{ marginTop: 4, fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>
+              {delta == null
+                ? "Run one more scored audit to unlock movement."
+                : `${delta >= 0 ? "Up" : "Down"} ${Math.abs(delta)} point${Math.abs(delta) === 1 ? "" : "s"} from the prior audit.`}
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 4, flexShrink: 0 }}>
+            <span style={{ fontSize: 16, fontWeight: 900, color: trendColor, fontFamily: T.font.mono }}>
+              {delta == null ? "NEW" : `${delta >= 0 ? "+" : ""}${delta}`}
+            </span>
+            <span style={{ fontSize: 10, color: T.text.dim }}>vs last</span>
+          </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <span style={{ fontSize: 12, fontWeight: 800, color: trendColor, fontFamily: T.font.mono }}>
-            {delta >= 0 ? "+" : ""}{delta}
-          </span>
-          <span style={{ fontSize: 10, color: T.text.dim }}>last audit</span>
+
+        <div style={{ display: "grid", gap: 10 }}>
+          <div
+            style={{
+              padding: "10px 10px 8px",
+              borderRadius: T.radius.lg,
+              background: `${T.bg.elevated}B8`,
+              border: `1px solid ${T.border.subtle}`,
+              minHeight: 92,
+            }}
+          >
+            {scores.length > 1 && firstPoint && lastPoint ? (
+              <>
+                <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
+                  <defs>
+                    <linearGradient id="auditTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={trendColor} stopOpacity="0.2" />
+                      <stop offset="100%" stopColor={trendColor} stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <path d={`${d} L${lastPoint.x},${H} L${firstPoint.x},${H} Z`} fill="url(#auditTrendGrad)" />
+                  <path d={d} fill="none" stroke={trendColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  {pts.map((p, i) => (
+                    <circle key={i} cx={p.x} cy={p.y} r={i === pts.length - 1 ? 3.5 : 0} fill={trendColor} />
+                  ))}
+                </svg>
+                <div style={{ marginTop: 6, fontSize: 10, color: T.text.dim, fontFamily: T.font.mono }}>
+                  Last {scores.length} scored audits
+                </div>
+              </>
+            ) : (
+              <div style={{ display: "flex", height: "100%", minHeight: 74, alignItems: "center", justifyContent: "center", textAlign: "center", color: T.text.secondary, fontSize: 11, lineHeight: 1.45 }}>
+                One more scored audit will draw the chart.
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+            {[
+            { label: "Latest", value: latestScore != null ? `${latestScore}` : "—", note: latestAudit ? relativeTime(latestAudit.date || latestAudit.ts) : "No audit" },
+            { label: "Average", value: `${avgScore}`, note: `${scores.length} scored audits` },
+            { label: "Archive", value: `${history.length}`, note: "total audits" },
+            ].map(stat => (
+              <div
+                key={stat.label}
+                style={{
+                  padding: "10px 10px 9px",
+                  borderRadius: T.radius.lg,
+                  background: `${T.bg.elevated}A8`,
+                  border: `1px solid ${T.border.subtle}`,
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  minHeight: 82,
+                }}
+              >
+                <span style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, fontFamily: T.font.mono, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                  {stat.label}
+                </span>
+                <span style={{ fontSize: 21, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.03em" }}>
+                  {stat.value}
+                </span>
+                <span style={{ fontSize: 10, color: T.text.secondary, lineHeight: 1.3 }}>
+                  {stat.note}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
-        <defs>
-          <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={trendColor} stopOpacity="0.15" />
-            <stop offset="100%" stopColor={trendColor} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={`${d} L${pts[pts.length - 1].x},${H} L${pts[0].x},${H} Z`} fill="url(#sparkGrad)" />
-        <path d={d} fill="none" stroke={trendColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        {pts.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={i === pts.length - 1 ? 3.5 : 0} fill={trendColor} />
-        ))}
-      </svg>
     </Card>
   );
 };
@@ -139,7 +228,7 @@ const TrendSparkline = ({ history }) => {
 // ═══════════════════════════════════════════════════════════════
 export default memo(function AuditTab({ proEnabled = false, privacyMode: _privacyModeTick = false, toast, onDemoAudit }: AuditTabProps) {
   void _privacyModeTick;
-  const { current, history: audits, deleteHistoryItem: onDelete, handleManualImport, quota } = useAudit();
+  const { current, history: audits, deleteHistoryItem: onDelete, quota, handleManualImport } = useAudit();
   const { navTo, setResultsBackTarget } = useNavigation();
   const [showPaywall, setShowPaywall] = useState(false);
 
@@ -147,8 +236,10 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [selMode, setSelMode] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
-  const [showManualPaste, setShowManualPaste] = useState(false);
-  const [manualPasteText, setManualPasteText] = useState("");
+
+  const [showManualPaste, setShowManualPaste] = useState<boolean>(false);
+  const [manualPasteText, setManualPasteText] = useState<string>("");
+
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [exportAuditRecord, setExportAuditRecord] = useState<AuditRecord | null>(null);
 
@@ -234,6 +325,10 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
             </div>
           </Card>
         )}
+
+        <div style={{ marginBottom: 14 }}>
+          <TrendSparkline history={audits} />
+        </div>
 
         {/* ═══ LATEST AUDIT CARD ═══ */}
         {p ? (
@@ -366,8 +461,129 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
           <Plus size={18} strokeWidth={2.5} />
           Run New Audit
         </button>
+
+        <div style={{ display: "flex", gap: 10, width: "100%", marginTop: 12 }}>
+          <button
+            onClick={async () => {
+              try {
+                const txt = await navigator.clipboard.readText();
+                if (!txt || txt.trim() === "") throw new Error("Empty clipboard");
+                void handleManualImport(txt);
+              } catch {
+                toast?.error?.("Could not auto-read clipboard. Please paste manually.");
+                setShowManualPaste(true);
+              }
+            }}
+            style={{
+              flex: 1,
+              padding: "14px",
+              borderRadius: T.radius.lg,
+              border: `1px dashed ${T.accent.emerald}60`,
+              background: `${T.accent.emerald}08`,
+              color: T.accent.emerald,
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              transition: "all .2s ease",
+            }}
+          >
+            <Plus size={16} strokeWidth={2.5} /> Paste & Import AI Result
+          </button>
+          <button
+            onClick={() => setShowManualPaste(!showManualPaste)}
+            style={{
+              width: 54,
+              borderRadius: T.radius.lg,
+              border: `1px solid ${T.border.default}`,
+              background: showManualPaste ? T.bg.card : T.bg.elevated,
+              color: showManualPaste ? T.accent.primary : T.text.dim,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              transition: "all .2s ease",
+            }}
+          >
+            <Edit3 size={18} />
+          </button>
+        </div>
+
+        {showManualPaste && (
+          <div style={{ width: "100%", marginTop: 12 }}>
+            <textarea
+              value={manualPasteText}
+              onChange={(event) => setManualPasteText(event.target.value)}
+              placeholder="Paste the AI response here (entire response)"
+              style={{
+                width: "100%",
+                height: 140,
+                padding: "12px",
+                borderRadius: T.radius.md,
+                border: `1px solid ${T.border.default}`,
+                background: T.bg.elevated,
+                color: T.text.primary,
+                fontSize: 13,
+                fontFamily: T.font.mono,
+                marginBottom: 8,
+                resize: "none",
+                lineHeight: 1.4,
+              }}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => {
+                  if (manualPasteText.trim()) {
+                    void handleManualImport(manualPasteText);
+                    setShowManualPaste(false);
+                    setManualPasteText("");
+                  } else {
+                    toast?.error?.("Text is empty");
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: T.radius.md,
+                  background: T.accent.emerald,
+                  color: "white",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: "pointer",
+                  border: "none",
+                }}
+              >
+                Import Text
+              </button>
+              <button
+                onClick={() => {
+                  setShowManualPaste(false);
+                  setManualPasteText("");
+                }}
+                className="btn-secondary"
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: T.radius.md,
+                  border: `1px solid ${T.border.subtle}`,
+                  background: "transparent",
+                  color: T.text.secondary,
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {remaining != null && limit != null && (
-          <div style={{ textAlign: "center", marginTop: 6, fontSize: 10, fontWeight: 600, color: T.text.dim, fontFamily: T.font.mono }}>
+          <div style={{ textAlign: "center", marginTop: 12, fontSize: 10, fontWeight: 600, color: T.text.dim, fontFamily: T.font.mono }}>
             {remaining} of {limit} weekly audits remaining
           </div>
         )}
@@ -398,27 +614,27 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
           </div>
         )}
 
-        {/* ═══ TREND SPARKLINE ═══ */}
-        <div style={{ marginTop: 16 }}>
-          <TrendSparkline history={audits} />
-        </div>
-
         {/* ═══ HISTORY SECTION ═══ */}
         <div style={{ marginTop: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Activity size={14} color={T.text.secondary} strokeWidth={2.5} />
-              <span style={{ fontSize: 14, fontWeight: 800, color: T.text.primary }}>History</span>
-              <Mono size={10} color={T.text.dim}>{audits.length} audits</Mono>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "grid", gap: 3 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Activity size={14} color={T.text.secondary} strokeWidth={2.5} />
+                <span style={{ fontSize: 14, fontWeight: 800, color: T.text.primary }}>History</span>
+                <Mono size={10} color={T.text.dim}>{audits.length} audits</Mono>
+              </div>
+              <span style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.4 }}>
+                Keep the useful audits, filter the noise, and export only what you need.
+              </span>
             </div>
             {audits.length > 0 && (
-              <div style={{ display: "flex", gap: 5 }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                 {selMode && sel.size > 0 && (
                   <button
                     onClick={doExportSel}
                     style={{
-                      display: "flex", alignItems: "center", gap: 3, padding: "5px 10px",
-                      borderRadius: T.radius.md, border: `1px solid ${T.accent.primary}40`,
+                      display: "flex", alignItems: "center", gap: 4, padding: "0 12px", height: 32,
+                      borderRadius: 12, border: `1px solid ${T.accent.primary}40`,
                       background: T.accent.primaryDim, color: T.accent.primary,
                       fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono,
                     }}
@@ -429,7 +645,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                 <button
                   onClick={() => { setSelMode(!selMode); setSel(new Set()); }}
                   style={{
-                    padding: "5px 10px", borderRadius: T.radius.md,
+                    padding: "0 12px", height: 32, borderRadius: 12,
                     border: `1px solid ${T.border.default}`, background: T.bg.elevated,
                     color: selMode ? T.accent.primary : T.text.dim,
                     fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono,
@@ -441,10 +657,10 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                   onClick={() => exportAuditCSV(audits)}
                   title="Export CSV"
                   style={{
-                    width: 28, height: 28, borderRadius: T.radius.sm,
+                    padding: "0 12px", height: 32, borderRadius: 12,
                     border: `1px solid ${T.border.default}`, background: T.bg.elevated,
                     color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center",
-                    justifyContent: "center", fontSize: 8, fontWeight: 700, fontFamily: T.font.mono,
+                    justifyContent: "center", fontSize: 10, fontWeight: 700, fontFamily: T.font.mono,
                   }}
                 >
                   CSV
@@ -453,7 +669,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                   onClick={() => exportAllAudits(audits)}
                   title="Export All JSON"
                   style={{
-                    padding: "5px 10px", borderRadius: T.radius.md,
+                    padding: "0 12px", height: 32, borderRadius: 12,
                     border: `1px solid ${T.border.default}`, background: T.bg.elevated,
                     color: T.text.dim, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono,
                   }}
@@ -464,73 +680,6 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
             )}
           </div>
 
-          {/* Import strip */}
-          <div style={{ display: "flex", gap: 8, marginBottom: showManualPaste ? 8 : 12 }}>
-            <button
-              onClick={async () => {
-                try {
-                  const txt = await navigator.clipboard.readText();
-                  if (!txt || txt.trim() === "") throw new Error("Empty clipboard");
-                  handleManualImport(txt);
-                } catch {
-                  toast?.error?.("Could not auto-read clipboard. Please paste manually.");
-                  setShowManualPaste(true);
-                }
-              }}
-              style={{
-                flex: 1, padding: "12px", borderRadius: T.radius.lg,
-                border: `1px dashed ${T.accent.emerald}60`, background: `${T.accent.emerald}08`,
-                color: T.accent.emerald, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              }}
-            >
-              <Plus size={14} strokeWidth={2.5} /> Paste & Import AI Result
-            </button>
-            <button
-              onClick={() => setShowManualPaste(!showManualPaste)}
-              style={{
-                width: 48, borderRadius: T.radius.lg, border: `1px solid ${T.border.default}`,
-                background: showManualPaste ? T.bg.card : T.bg.elevated,
-                color: showManualPaste ? T.accent.primary : T.text.dim,
-                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-              }}
-            >
-              <Edit3 size={16} />
-            </button>
-          </div>
-
-          {showManualPaste && (
-            <div style={{ marginBottom: 14 }}>
-              <textarea
-                value={manualPasteText}
-                onChange={e => setManualPasteText(e.target.value)}
-                placeholder="Paste the AI response here (entire response)"
-                style={{
-                  width: "100%", height: 120, padding: "10px", borderRadius: T.radius.md,
-                  border: `1px solid ${T.border.default}`, background: T.bg.elevated,
-                  color: T.text.primary, fontSize: 12, fontFamily: T.font.mono,
-                  marginBottom: 8, resize: "none", lineHeight: 1.4, boxSizing: "border-box",
-                }}
-              />
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={() => {
-                    if (manualPasteText.trim()) { handleManualImport(manualPasteText); setShowManualPaste(false); setManualPasteText(""); }
-                    else toast?.error?.("Text is empty");
-                  }}
-                  style={{
-                    flex: 1, padding: "10px", borderRadius: T.radius.md,
-                    background: T.accent.emerald, color: "white", fontWeight: 700, fontSize: 12, cursor: "pointer", border: "none",
-                  }}
-                >
-                  Import Text
-                </button>
-                <button onClick={() => { setShowManualPaste(false); setManualPasteText(""); }} className="btn-secondary">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* Select All */}
           {selMode && audits.length > 0 && (
@@ -567,7 +716,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                     key={label}
                     onClick={() => { setStatusFilter(f); setSel(new Set()); }}
                     style={{
-                      padding: "5px 12px", borderRadius: 99, fontSize: 10, fontWeight: 700,
+                      padding: "0 12px", height: 30, borderRadius: 999, fontSize: 10, fontWeight: 700,
                       border: `1px solid ${active ? c : T.border.default}`,
                       background: active ? `${c}18` : T.bg.elevated,
                       color: active ? c : T.text.dim, cursor: "pointer", fontFamily: T.font.mono,

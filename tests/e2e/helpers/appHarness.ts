@@ -1,7 +1,7 @@
 import { expect, type Page, type Route } from "@playwright/test";
 import { encrypt } from "../../../src/modules/crypto.js";
 
-const BACKEND_HOST_PATTERN = "(?:api\\.catalystcash\\.app|catalyst-cash-api\\.portfoliopro-app\\.workers\\.dev)";
+const BACKEND_HOST_PATTERN = "(?:api\\.catalystcash\\.app|catalystcash-api\\.portfoliopro-app\\.workers\\.dev)";
 const CONFIG_ROUTE = new RegExp(`https://${BACKEND_HOST_PATTERN}/config$`);
 const MARKET_ROUTE = new RegExp(`https://${BACKEND_HOST_PATTERN}/market(?:\\?.*)?$`);
 const AUTH_CHALLENGE_ROUTE = new RegExp(`https://${BACKEND_HOST_PATTERN}/auth/challenge$`);
@@ -615,7 +615,7 @@ export async function readAppStorage(page: Page, key: string) {
 }
 
 export async function openAuditComposer(page: Page) {
-  await page.getByRole("button", { name: "Begin audit", exact: true }).click();
+  await page.getByRole("button", { name: "Run New Audit", exact: true }).click();
   await expect(page.getByRole("spinbutton", { name: "Checking balance" })).toBeVisible();
 }
 

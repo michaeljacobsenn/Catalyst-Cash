@@ -243,7 +243,7 @@ export const db = {
     try {
       const { value } = await withPrefsTimeout(Preferences.get({ key: k }));
       return value ? JSON.parse(value) : null;
-    } catch (e) {
+    } catch {
       try {
         const r = localStorage.getItem(k);
         return r ? JSON.parse(r) : null;
@@ -498,9 +498,13 @@ function normalizeDashboardCard(value) {
       status: typeof row?.status === "string" ? row.status : "",
     });
   }
+  const uniqueNonCanonical = [...new Set(nonCanonicalCategories)];
+  if (uniqueNonCanonical.length > 0) {
+    console.warn("[audit] Non-canonical dashboard categories detected:", uniqueNonCanonical.join(", "));
+  }
   return {
     rows: DASHBOARD_ROW_ORDER.map(category => byCategory.get(category) || { category, amount: "$0.00", status: "" }),
-    nonCanonicalCategories: [...new Set(nonCanonicalCategories)],
+    nonCanonicalCategories: uniqueNonCanonical,
   };
 }
 

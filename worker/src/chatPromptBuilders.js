@@ -179,7 +179,7 @@ The latest user message triggered prompt-injection or guardrail-bypass heuristic
  * Build a concise financial context snapshot for chat.
  * Intentionally lean — we want the AI to reason, not regurgitate.
  */
-function buildFinancialContext(current, financialConfig, cards, renewals, history, computedStrategy, trendContext) {
+function buildFinancialContext(current, financialConfig, cards, renewals, history, computedStrategy, trendContext, budgetContext = null) {
   const parts = [];
   const p = current?.parsed;
   const form = current?.form;
@@ -313,11 +313,20 @@ function buildFinancialContext(current, financialConfig, cards, renewals, histor
       });
     }
 
-    // Budget categories
+    // Budget categories (legacy monthly)
     if (fc.budgetCategories?.length > 0) {
       parts.push("\nMonthly Budget:");
       fc.budgetCategories.forEach(c => {
         parts.push(`  - ${c.name}: ${fmt(c.monthlyTarget || 0)}/mo`);
+      });
+    }
+
+    // Paycheck-cycle budget (new CFO Budget tab)
+    if (budgetContext?.lines?.length > 0) {
+      parts.push("\nPaycheck-Cycle Budget (use this for per-paycheck coaching):");
+      parts.push(`  Paycheck: ${fmt(budgetContext.cycleIncome || 0)} (${budgetContext.payFrequency || "bi-weekly"})`);
+      budgetContext.lines.forEach(l => {
+        parts.push(`  - [${(l.bucket || "flex").toUpperCase()}] ${l.name}: ${fmt(l.perCycleTarget || 0)}/cycle`);
       });
     }
 
@@ -559,7 +568,8 @@ export function getChatSystemPrompt(
   providerId = null,
   memoryBlock = "",
   decisionRecommendations = [],
-  chatInputRisk = null
+  chatInputRisk = null,
+  budgetContext = null
 ) {
   const context = buildFinancialContext(
     current,
@@ -568,7 +578,8 @@ export function getChatSystemPrompt(
     renewals,
     history,
     computedStrategy,
-    trendContext
+    trendContext,
+    budgetContext
   );
   const sanitizedPersonalRules = sanitizePersonalRules(personalRules);
 

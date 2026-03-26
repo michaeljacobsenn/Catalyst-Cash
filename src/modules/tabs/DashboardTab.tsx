@@ -16,13 +16,14 @@
   } from "../icons";
 
   import { Md } from "../components.js";
+  import { performCloudBackup } from "../backup.js";
   import { useSecurity } from "../contexts/SecurityContext.js";
   import { haptic } from "../haptics.js";
   import { isGatingEnforced,shouldShowGating } from "../subscription.js";
   import { buildPromoLine } from "../planCatalog.js";
   import { Card as UICard } from "../ui.js";
   import { usePlaidSync } from "../usePlaidSync.js";
-  import { db,fmt,stripPaycheckParens } from "../utils.js";
+  import { fmt,stripPaycheckParens } from "../utils.js";
   import "./DashboardTab.css";
   import ProBanner from "./ProBanner.js";
   import EmptyDashboard from "../dashboard/EmptyDashboard.js";
@@ -34,7 +35,6 @@
   import { useNavigation } from "../contexts/NavigationContext.js";
   import { usePortfolio } from "../contexts/PortfolioContext.js";
   import { useSettings } from "../contexts/SettingsContext.js";
-  import { isSecuritySensitiveKey,sanitizePlaidForBackup } from "../securityKeys.js";
 
 // ── Extracted dashboard components ──
   import AlertStrip from "../dashboard/AlertStrip.js";
@@ -104,8 +104,8 @@ export default memo(function DashboardTab({
   onRestore,
 }: DashboardTabProps) {
   const { current } = useAudit();
-  const { financialConfig, setFinancialConfig, autoBackupInterval } = useSettings();
-  const { cards, setCards, bankAccounts, setBankAccounts, renewals } = usePortfolio();
+  const { financialConfig, setFinancialConfig, autoBackupInterval, personalRules } = useSettings();
+  const { cards, setCards, bankAccounts, setBankAccounts, renewals, cardCatalog } = usePortfolio();
   const { navTo, setSetupReturnTab } = useNavigation();
   const { appPasscode, privacyMode } = useSecurity();
   const [showPaywall, setShowPaywall] = useState(false);
@@ -120,6 +120,7 @@ export default memo(function DashboardTab({
     setCards,
     setBankAccounts,
     setFinancialConfig,
+    cardCatalog,
     successMessage: "Balances synced — run a new audit to reflect updated numbers",
   });
 
@@ -152,24 +153,18 @@ export default memo(function DashboardTab({
   } = useDashboardData();
   const handleNativeBackup = useCallback(
     async (passcode: string | null) => {
-      const backup = { app: "Catalyst Cash", version: "2.0", exportedAt: new Date().toISOString(), data: {} as Record<string, unknown> };
-      const keys = (await db.keys()) as string[];
-      for (const key of keys) {
-        if (isSecuritySensitiveKey(key)) continue;
-        const val = await db.get(key);
-        if (val !== null) backup.data[key] = val;
-      }
-      const plaidConns = await db.get("plaid-connections");
-      if (Array.isArray(plaidConns) && plaidConns.length > 0) {
-        backup.data["plaid-connections-sanitized"] = sanitizePlaidForBackup(plaidConns);
-      }
       const { uploadToICloud } = await import("../cloudSync.js");
-      const success = await uploadToICloud(backup, passcode);
-      if (!success) {
-        throw new Error("Automatic iCloud backup is available in the native iPhone app only.");
+      const result = await performCloudBackup({
+        upload: uploadToICloud,
+        passphrase: passcode,
+        personalRules,
+        force: true,
+      });
+      if (!result.success) {
+        throw new Error(result.reason || "Automatic iCloud backup is available in the native iPhone app only.");
       }
     },
-    []
+    [personalRules]
   );
   const {
     greeting,

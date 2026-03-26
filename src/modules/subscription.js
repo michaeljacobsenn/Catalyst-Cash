@@ -54,7 +54,7 @@
 // returns gatingMode:"live" and ALL app versions enforce it —
 // even old builds that have "off" hardcoded here.
 // ────────────────────────────────────────────────────────────
-const GATING_MODE_DEFAULT = "off";
+const GATING_MODE_DEFAULT = "live";
 let _effectiveGatingMode = GATING_MODE_DEFAULT;
 
 /**
@@ -167,6 +167,7 @@ export async function syncRemoteGatingMode() {
 //
 //   Free AskAI: 10/day — enough to experience the value proposition.
 //   Pro AskAI: 30/day total (per-model: 15 GPT-4.1, 15 Gemini 2.5 Flash).
+//   o3 remains available for Pro but chat requests are normalized to GPT-4.1.
 //   These limits match the Cloudflare Worker enforcement exactly.
 //
 // ── BILLING CYCLE ANCHORING ─────────────────────────────────────
@@ -686,25 +687,33 @@ export async function checkChatQuota(modelId) {
 
   // ── Pro per-model quota ────────────────────────────────────────
   if (state.tier === "pro" && modelId && PRO_MODEL_CAPS[modelId] !== undefined) {
+    const globalRemaining = Math.max(0, PRO_DAILY_CHAT_CAP - (state.chatMessagesToday || 0));
     const modelCap = PRO_MODEL_CAPS[modelId];
     const modelUsed = (state.chatMessagesByModel?.[modelId] || 0);
-    const modelRemaining = Math.max(0, modelCap - modelUsed);
+    const rawModelRemaining = Math.max(0, modelCap - modelUsed);
+    const modelRemaining = Math.min(globalRemaining, rawModelRemaining);
 
     // Also check alternate model
     const altModelId = getAlternateProModel(modelId);
     const altCap = altModelId ? (PRO_MODEL_CAPS[altModelId] || 0) : 0;
     const altUsed = altModelId ? (state.chatMessagesByModel?.[altModelId] || 0) : 0;
-    const altRemaining = Math.max(0, altCap - altUsed);
+    const rawAltRemaining = Math.max(0, altCap - altUsed);
+    const altRemaining = Math.min(globalRemaining, rawAltRemaining);
 
     const result = {
       allowed: modelRemaining > 0,
       remaining: modelRemaining,
-      limit: modelCap,
+      limit: Math.min(PRO_DAILY_CHAT_CAP, modelCap),
       used: modelUsed,
       modelId,
       alternateModel: altModelId || undefined,
       alternateRemaining: altModelId ? altRemaining : undefined,
     };
+
+    if (globalRemaining <= 0) {
+      result.allowed = false;
+      result.dailyCapReached = true;
+    }
 
     if (getGatingMode() === "soft") {
       result.allowed = true;

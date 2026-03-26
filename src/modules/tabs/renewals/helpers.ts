@@ -9,7 +9,7 @@ export const DAY_OPTIONS = Array.from({ length: 90 }, (_, i) => i + 1);
 
 export function setRenewalOptional(
   renewal: Renewal,
-  key: "source" | "chargedTo" | "chargedToId" | "nextDue" | "category",
+  key: "source" | "chargedTo" | "chargedToId" | "chargedToType" | "nextDue" | "category",
   value: string | undefined | null
 ): Renewal {
   if (value == null || value === "") return renewal;
@@ -28,6 +28,7 @@ export function buildRenewalDraft(base: Renewal, patch, fallbackName?: string): 
   next = setRenewalOptional(next, "source", patch.source);
   next = setRenewalOptional(next, "chargedTo", patch.chargedTo);
   next = setRenewalOptional(next, "chargedToId", patch.chargedToId);
+  next = setRenewalOptional(next, "chargedToType", patch.chargedToType);
   next = setRenewalOptional(next, "nextDue", patch.nextDue);
   next = setRenewalOptional(next, "category", patch.category || base.category);
   return next;
@@ -44,6 +45,7 @@ export function buildNewRenewal(form, chargedToLabel: string): Renewal {
   next = setRenewalOptional(next, "source", form.source);
   next = setRenewalOptional(next, "chargedTo", chargedToLabel);
   next = setRenewalOptional(next, "chargedToId", form.chargedToId);
+  next = setRenewalOptional(next, "chargedToType", form.chargedToType);
   next = setRenewalOptional(next, "category", form.category);
   next = setRenewalOptional(next, "nextDue", form.nextDue);
   return next;

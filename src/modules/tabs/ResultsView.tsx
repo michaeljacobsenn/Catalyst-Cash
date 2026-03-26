@@ -1,4 +1,4 @@
-  import React,{ memo,useState,type KeyboardEvent,type ReactNode } from "react";
+  import React,{ memo,useState,type ReactNode } from "react";
   import { Md as UIMd,Mono as UIMono,MoveRow as UIMoveRow } from "../components.js";
   import { T } from "../constants.js";
   import {
@@ -7,10 +7,7 @@
     ArrowLeft,
     CheckCircle,
     CheckSquare,
-    ChevronDown,
-    ChevronUp,
     Clock,
-    RefreshCw,
     Share2,
     Target,
     TrendingUp,
@@ -130,7 +127,6 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
   const { history } = useAudit();
   const { navTo } = useNavigation() as NavigationApi;
 
-  const [showRaw, setShowRaw] = useState<boolean>(false);
   const [showExportSheet, setShowExportSheet] = useState<boolean>(false);
   const isSmallPhone = typeof window !== "undefined" ? window.innerWidth <= 390 : false;
   if (!audit)
@@ -168,6 +164,11 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
   const sections = parsed.sections;
   const degradedInfo = parsed.degraded;
   const isDegraded = degradedInfo?.isDegraded;
+  const analysisNotes = isDegraded
+    ? [sections.qualityScore, sections.autoUpdates, degradedInfo?.reason].filter(
+        (entry): entry is string => Boolean(entry && entry.trim())
+      ).join("\n\n")
+    : "";
 
   const handleExitResults = (): void => {
     if (onBack) return onBack();
@@ -734,71 +735,18 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
         </div>
       </Card>
 
-      {sections.qualityScore && (
+      {isDegraded && analysisNotes && (
         <Card style={{ marginTop: 14, background: T.bg.elevated }}>
           <ReportSection
-            title="Quality Score"
+            title="Audit Notes"
             icon={CheckCircle}
-            content={sections.qualityScore}
+            content={analysisNotes}
             accentColor={T.status.green}
-            isLast={!sections.autoUpdates}
+            isLast={true}
+            badge={<Badge variant="amber">Fallback</Badge>}
           />
-          {sections.autoUpdates && (
-            <ReportSection title="Auto-Updates" icon={RefreshCw} content={sections.autoUpdates} accentColor={T.text.dim} isLast={true} />
-          )}
         </Card>
       )}
-      {!sections.qualityScore && sections.autoUpdates && (
-        <Card style={{ marginTop: 16 }}>
-          <ReportSection title="Auto-Updates" icon={RefreshCw} content={sections.autoUpdates} accentColor={T.text.dim} isLast={true} />
-        </Card>
-      )}
-      <Card style={{ background: T.bg.elevated, padding: isSmallPhone ? "12px 14px" : undefined }}>
-        <div
-          onClick={() => setShowRaw(!showRaw)}
-          onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              setShowRaw(!showRaw);
-            }
-          }}
-          role="button"
-          tabIndex={0}
-          aria-expanded={showRaw}
-          aria-label="Toggle raw output"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            cursor: "pointer",
-            minHeight: 42,
-          }}
-        >
-          <span style={{ fontSize: 11, color: T.text.dim, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>Raw Output</span>
-          {showRaw ? <ChevronUp size={13} color={T.text.dim} /> : <ChevronDown size={13} color={T.text.dim} />}
-        </div>
-        {showRaw && (
-          <pre
-            style={{
-              fontSize: 10,
-              lineHeight: 1.6,
-              color: T.text.secondary,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-              overflowWrap: "anywhere",
-              marginTop: 10,
-              maxHeight: 500,
-              overflow: "auto",
-              fontFamily: T.font.mono,
-              padding: isSmallPhone ? 10 : 12,
-              background: T.bg.card,
-              borderRadius: T.radius.md,
-            }}
-          >
-            {parsed.raw}
-          </pre>
-        )}
-      </Card>
 
       <div
         style={{

@@ -54,14 +54,12 @@
     "exceljs": "^4.4.0",
     "framer-motion": "^12.35.2",
     "html2canvas": "^1.4.1",
-    "jimp": "^0.16.13",
-    "jspdf": "^4.2.0",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.460.0",
     "react": "^18.3.1",
     "react-confetti": "^6.4.0",
     "react-dom": "^18.3.1",
-    "recharts": "^2.13.3",
-    "xlsx": "^0.18.5"
+    "recharts": "^2.13.3"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.5.0",
@@ -82,5 +80,9 @@
     "typescript": "^5.9.3",
     "vite": "^6.0.5",
     "vitest": "^4.0.18"
+  },
+  "overrides": {
+    "flatted": "^3.4.2",
+    "picomatch": "^4.0.4"
   }
 }

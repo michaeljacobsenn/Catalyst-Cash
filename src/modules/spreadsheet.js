@@ -1,7 +1,6 @@
-  import { encrypt } from "./crypto.js";
-  import { db,nativeExport } from "./utils.js";
-
-const loadXlsx = () => import("xlsx");
+import { encrypt } from "./crypto.js";
+import { createWorkbookBuffer } from "./excelWorkbook.js";
+import { db, nativeExport } from "./utils.js";
 
 function arrayBufferToBase64(buffer) {
   let binary = "";
@@ -13,14 +12,6 @@ function arrayBufferToBase64(buffer) {
   return window.btoa(binary);
 }
 
-function appendSheet(XLSX, workbook, name, rows, widths = []) {
-  const sheet = XLSX.utils.aoa_to_sheet(rows);
-  if (widths.length) {
-    sheet["!cols"] = widths.map(wch => ({ wch }));
-  }
-  XLSX.utils.book_append_sheet(workbook, sheet, name);
-}
-
 function asBoolString(value) {
   return value ? "true" : "false";
 }
@@ -30,22 +21,12 @@ function withHeader(header, items) {
 }
 
 export async function generateBackupSpreadsheet(passphrase = null) {
-  const XLSX = await loadXlsx();
-  const workbook = XLSX.utils.book_new();
-  workbook.Props = {
-    Title: "Catalyst Cash Spreadsheet Backup",
-    Author: "Catalyst Cash",
-    Company: "Catalyst Cash",
-    CreatedDate: new Date(),
-  };
-
   const financialConfig = (await db.get("financial-config")) || {};
+  const sheets = [];
 
-  appendSheet(
-    XLSX,
-    workbook,
-    "README Guide",
-    [
+  sheets.push({
+    name: "README Guide",
+    rows: [
       ["CATALYST TERMINAL // DATA MATRIX PROTOCOL"],
       [""],
       ["WELCOME TO YOUR ENCRYPTED FINANCIAL LEDGER."],
@@ -65,14 +46,12 @@ export async function generateBackupSpreadsheet(passphrase = null) {
       [""],
       ["When finished, save as .xlsx and use Restore from Spreadsheet in Catalyst Cash."],
     ],
-    [110]
-  );
+    widths: [110],
+  });
 
-  appendSheet(
-    XLSX,
-    workbook,
-    "Setup Data",
-    withHeader(
+  sheets.push({
+    name: "Setup Data",
+    rows: withHeader(
       ["Config Key (DO NOT EDIT)", "Description", "Your Value"],
       [
         ["payFrequency", "weekly, bi-weekly, semi-monthly, monthly", financialConfig.payFrequency || "weekly"],
@@ -115,14 +94,12 @@ export async function generateBackupSpreadsheet(passphrase = null) {
         ["creditScore", "Credit Score (300-850)", financialConfig.creditScore || ""],
       ]
     ),
-    [34, 48, 24]
-  );
+    widths: [34, 48, 24],
+  });
 
-  appendSheet(
-    XLSX,
-    workbook,
-    "Income Sources",
-    withHeader(
+  sheets.push({
+    name: "Income Sources",
+    rows: withHeader(
       ["ID (Leave blank for new)", "Source Name", "Amount ($)", "Frequency", "Type", "Next Date (YYYY-MM-DD)"],
       (financialConfig.incomeSources || []).map(item => [
         item.id || "",
@@ -133,14 +110,12 @@ export async function generateBackupSpreadsheet(passphrase = null) {
         item.nextDate || "",
       ])
     ),
-    [30, 28, 18, 18, 18, 22]
-  );
+    widths: [30, 28, 18, 18, 18, 22],
+  });
 
-  appendSheet(
-    XLSX,
-    workbook,
-    "Budget Categories",
-    withHeader(
+  sheets.push({
+    name: "Budget Categories",
+    rows: withHeader(
       ["ID (Leave blank for new)", "Category Name", "Amount Allocated ($)", "Group Name"],
       (financialConfig.budgetCategories || []).map(item => [
         item.id || "",
@@ -149,14 +124,12 @@ export async function generateBackupSpreadsheet(passphrase = null) {
         item.group || "",
       ])
     ),
-    [30, 28, 20, 20]
-  );
+    widths: [30, 28, 20, 20],
+  });
 
-  appendSheet(
-    XLSX,
-    workbook,
-    "Savings Goals",
-    withHeader(
+  sheets.push({
+    name: "Savings Goals",
+    rows: withHeader(
       ["ID (Leave blank for new)", "Goal Name", "Target Amount ($)", "Currently Saved ($)"],
       (financialConfig.savingsGoals || []).map(item => [
         item.id || "",
@@ -165,14 +138,12 @@ export async function generateBackupSpreadsheet(passphrase = null) {
         item.saved || "",
       ])
     ),
-    [30, 28, 20, 20]
-  );
+    widths: [30, 28, 20, 20],
+  });
 
-  appendSheet(
-    XLSX,
-    workbook,
-    "Non-Card Debts",
-    withHeader(
+  sheets.push({
+    name: "Non-Card Debts",
+    rows: withHeader(
       ["ID (Leave blank for new)", "Debt Name", "Balance ($)", "Minimum Payment ($)", "APR (%)"],
       (financialConfig.nonCardDebts || []).map(item => [
         item.id || "",
@@ -182,21 +153,22 @@ export async function generateBackupSpreadsheet(passphrase = null) {
         item.apr || "",
       ])
     ),
-    [30, 28, 18, 20, 14]
-  );
+    widths: [30, 28, 18, 20, 14],
+  });
 
-  appendSheet(
-    XLSX,
-    workbook,
-    "Other Assets",
-    withHeader(
+  sheets.push({
+    name: "Other Assets",
+    rows: withHeader(
       ["ID (Leave blank for new)", "Asset Name", "Value ($)"],
       (financialConfig.otherAssets || []).map(item => [item.id || "", item.name || "", item.value || ""])
     ),
-    [30, 28, 18]
-  );
+    widths: [30, 28, 18],
+  });
 
-  const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "array", compression: true });
+  const buffer = await createWorkbookBuffer({
+    title: "Catalyst Cash Spreadsheet Backup",
+    sheets,
+  });
   const dateStr = new Date().toISOString().split("T")[0];
   const base64data = arrayBufferToBase64(buffer);
 

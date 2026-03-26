@@ -454,10 +454,11 @@ export default function BackupSection({ activeMenu, ...props }) {
                 <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 12, paddingBottom: 4 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
                     <p style={{ fontSize: 10, color: T.text.dim, lineHeight: 1.5, flex: 1, paddingRight: 16 }}>
-                      Backups are securely saved to your private iCloud Drive.
+                      Backups are securely saved to your private iCloud Drive. The app keeps the latest backup plus
+                      the last 4 historical snapshots.
                       <br />
                       <span style={{ color: T.text.muted, fontWeight: 600 }}>
-                        Files App &rarr; iCloud Drive &rarr; Catalyst Cash &rarr; CatalystCash_CloudSync.json
+                        Files App &rarr; iCloud Drive &rarr; Catalyst Cash &rarr; CatalystCash_CloudSync*.json
                       </span>
                     </p>
                     <button

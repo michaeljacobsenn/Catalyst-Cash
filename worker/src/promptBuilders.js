@@ -26,7 +26,7 @@ import { getJsonWrapper, getProviderTweaks } from "./prompts/auditOutputContract
 
 export { estimatePromptTokens, sanitizePersonalRules } from "./prompts/auditSections.js";
 
-export const getSystemPromptCore = (config, cards = [], renewals = [], personalRules = "", computedStrategy = null) => {
+export const getSystemPromptCore = (config, cards = [], renewals = [], personalRules = "", computedStrategy = null, context = {}) => {
   const weeklySpendAllowance = Number.isFinite(config?.weeklySpendAllowance) ? config.weeklySpendAllowance : 0;
   const emergencyFloor = Number.isFinite(config?.emergencyFloor) ? config.emergencyFloor : 0;
   const cSym = getCurrencySymbol(config);
@@ -36,6 +36,16 @@ export const getSystemPromptCore = (config, cards = [], renewals = [], personalR
   const budgetData =
     config?.budgetCategories?.length > 0
       ? config.budgetCategories.map(c => `  - ${c.name}: ${cSym}${(c.monthlyTarget || 0).toFixed(2)}/month`).join("\n")
+      : null;
+
+  // Paycheck-cycle budget (from the new CFO Budget tab)
+  const bc = context?.budgetContext;
+  const cyclebudgetData =
+    bc?.lines?.length > 0
+      ? [
+          `  Paycheck: ${cSym}${(bc.cycleIncome || 0).toFixed(2)} (${bc.payFrequency || "bi-weekly"})`,
+          ...bc.lines.map(l => `  - [${(l.bucket || "flex").toUpperCase()}] ${l.name}: ${cSym}${(l.perCycleTarget || 0).toFixed(2)}/cycle`),
+        ].join("\n")
       : null;
 
   const debtData =
@@ -209,6 +219,9 @@ HARD RULES:
     `CARD PORTFOLIO:\n${cardData}`,
     `ACTIVE RENEWALS & BILLS:\n${renewalData}`,
     budgetData ? `MONTHLY BUDGET CATEGORIES:\n${budgetData}` : "",
+    cyclebudgetData
+      ? `PAYCHECK-CYCLE BUDGET (HARD — use this for per-paycheck coaching):\n${cyclebudgetData}\n  NOTE: Audit category totals in parsed.categories are MONTHLY. Divide by paychecksPerMonth (${bc?.paychecksPerMonth ?? "2.17"}) to get per-cycle actual. For each budget line, state: over/under/on-track + exact variance in dollars.`
+      : "",
     debtData ? `NON-CARD DEBTS (Loans / Installments):\n${debtData}` : "",
     goalsData ? `SAVINGS GOALS:\n${goalsData}` : "",
     `INCOME CONFIGURATION & SOURCES:\n${incomeDetails.join("\n")}${incomeData ? `\n${incomeData}` : ""}`,
@@ -329,10 +342,11 @@ export function getSystemPrompt(
   persona = null,
   computedStrategy = null,
   chatContext = null,
-  memoryBlock = ""
+  memoryBlock = "",
+  context = {}
 ) {
   const cSym = getCurrencySymbol(config);
-  const core = getSystemPromptCore(config, cards, renewals, personalRules, computedStrategy);
+  const core = getSystemPromptCore(config, cards, renewals, personalRules, computedStrategy, context);
   const trendBlock = buildTrendBlock(trendContext, cSym);
   const chatBlock = buildChatContextBlock(chatContext);
   const personaBlock = buildPersonaBlock(persona, cSym);

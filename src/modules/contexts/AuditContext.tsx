@@ -30,8 +30,11 @@ import { buildScrubber } from "../scrubber.js";
 import { getHistoryLimit, getOrCreateDeviceId, recordAuditUsage } from "../subscription.js";
 import { useToast } from "../Toast.js";
 import { buildDegradedParsedAudit, cyrb53, db, detectAuditDrift, parseAudit, validateParsedAuditConsistency } from "../utils.js";
+import { maybeRequestReview } from "../ratePrompt.js";
+import { scheduleOverrunNotification } from "../notifications.js";
 import { useNavigation } from "./NavigationContext.js";
 import { usePortfolio } from "./PortfolioContext.js";
+import { useBudget } from "./BudgetContext.js";
 import { useSettings } from "./SettingsContext.js";
 import {
   buildContributionAutoUpdates,
@@ -134,6 +137,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
   } = useSettings();
 
   const { cards, renewals, cardAnnualFees, setBadges } = usePortfolio();
+  const { lines: budgetLines, cycleIncome } = useBudget();
   const { navTo, onboardingComplete, setResultsBackTarget } = useNavigation();
 
   const [current, setCurrent] = useState<AuditRecord | null>(null);
@@ -405,6 +409,25 @@ export function AuditProvider({ children }: AuditProviderProps) {
               chatContext,
               memoryBlock: memBlock,
               aiConsent,
+              // ── Paycheck CFO Budget ──────────────────────────────
+              // Budget lines from the user's paycheck-cycle budget.
+              // Each line: { name, amount (per cycle $), bucket, icon }.
+              // cycleIncome is take-home per paycheck.
+              // Audit category totals in parsed.categories are MONTHLY.
+              budgetContext: budgetLines.length > 0 ? (() => {
+                const freq = financialConfig.payFrequency || "bi-weekly";
+                const paychecksPerMonth = freq === "weekly" ? 4.33 : freq === "bi-weekly" ? 2.17 : freq === "semi-monthly" ? 2 : 1;
+                return {
+                  cycleIncome,
+                  payFrequency: freq,
+                  paychecksPerMonth: Math.round(paychecksPerMonth * 100) / 100,
+                  lines: budgetLines.map(l => ({
+                    name: l.name,
+                    bucket: l.bucket,
+                    perCycleTarget: l.amount,
+                  })),
+                };
+              })() : null,
             },
             activeScrubber.scrub
           );
@@ -591,6 +614,29 @@ export function AuditProvider({ children }: AuditProviderProps) {
           }
 
           await Promise.all([db.set("current-audit", audit), db.set("move-states", {}), db.set("audit-history", nextHistory)]);
+
+          // Fire App Store rating prompt after 3rd real audit (ratePrompt handles cooldown)
+          if (!manualResultText) {
+            const realAuditCount = nextHistory.filter((a) => !a.isTest).length;
+            maybeRequestReview(realAuditCount).catch(() => {});
+
+            // Budget overrun notification — fires ~2s after audit saves
+            // Only triggers if user has budget lines and OS permission is granted
+            if (budgetLines.length > 0 && parsed.categories) {
+              const { getActualSpendForLine } = await import("../budgetEngine.js");
+              const freq = financialConfig.payFrequency || "bi-weekly";
+              const cats = parsed.categories as Record<string, { total?: number }>;
+              const overruns = budgetLines
+                .map(l => {
+                  const cycleActual = getActualSpendForLine(cats, l.name, freq) as number;
+                  return { name: l.name, icon: l.icon, amount: l.amount, actual: cycleActual };
+                })
+                .filter(r => r.actual > r.amount && r.amount > 0);
+              if (overruns.length > 0) {
+                scheduleOverrunNotification(overruns).catch(() => {});
+              }
+            }
+          }
 
           if (formData.debts?.length) {
             const debtSnapshot: CurrentDebtSnapshot = {

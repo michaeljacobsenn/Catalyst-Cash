@@ -1,6 +1,7 @@
-  import type { BackupData,BankAccount,Card,CatalystCashConfig,Renewal } from "../types/index.js";
+import type { BackupData,BankAccount,Card,CatalystCashConfig,Renewal } from "../types/index.js";
 
 export const FULL_PROFILE_QA_LABEL = "Full-Profile QA Seed";
+export const FULL_PROFILE_QA_ACTIVE_KEY = "full-profile-qa-seed-active";
 
 export const FULL_PROFILE_QA_CONFIG: Partial<CatalystCashConfig> = {
   incomeType: "salary",
@@ -150,4 +151,73 @@ export async function applyFullProfileQaSeed(db: { set: (key: string, value: unk
   for (const [key, value] of Object.entries(FULL_PROFILE_QA_STORAGE)) {
     await db.set(key, value);
   }
+  await db.set(FULL_PROFILE_QA_ACTIVE_KEY, true);
+}
+
+const FULL_PROFILE_QA_CARD_IDS = new Set(FULL_PROFILE_QA_CARDS.map((card) => String(card.id || "").trim()).filter(Boolean));
+const FULL_PROFILE_QA_BANK_IDS = new Set(FULL_PROFILE_QA_BANKS.map((account) => String(account.id || "").trim()).filter(Boolean));
+const FULL_PROFILE_QA_RENEWAL_IDS = new Set(FULL_PROFILE_QA_RENEWALS.map((renewal) => String(renewal.id || "").trim()).filter(Boolean));
+
+export function isFullProfileQaCard(card?: Partial<Card> | null) {
+  return FULL_PROFILE_QA_CARD_IDS.has(String(card?.id || "").trim());
+}
+
+export function isFullProfileQaBankAccount(account?: Partial<BankAccount> | null) {
+  return FULL_PROFILE_QA_BANK_IDS.has(String(account?.id || "").trim());
+}
+
+export function isFullProfileQaRenewal(renewal?: Partial<Renewal> | null) {
+  const renewalId = String(renewal?.id || "").trim();
+  return FULL_PROFILE_QA_RENEWAL_IDS.has(renewalId) || String(renewal?.source || "").trim() === "QA Seed";
+}
+
+export function stripFullProfileQaRecords({
+  cards = [],
+  bankAccounts = [],
+  renewals = [],
+}: {
+  cards?: Card[];
+  bankAccounts?: BankAccount[];
+  renewals?: Renewal[];
+}) {
+  const filteredCards = cards.filter((card) => !isFullProfileQaCard(card));
+  const filteredBankAccounts = bankAccounts.filter((account) => !isFullProfileQaBankAccount(account));
+  const filteredRenewals = renewals.filter((renewal) => !isFullProfileQaRenewal(renewal));
+
+  return {
+    cards: filteredCards,
+    bankAccounts: filteredBankAccounts,
+    renewals: filteredRenewals,
+    removedCardCount: cards.length - filteredCards.length,
+    removedBankAccountCount: bankAccounts.length - filteredBankAccounts.length,
+    removedRenewalCount: renewals.length - filteredRenewals.length,
+  };
+}
+
+export function shouldRecoverFromFullProfileQaSeed({
+  qaSeedActive = false,
+  cards = [],
+  bankAccounts = [],
+  renewals = [],
+  plaidConnections = [],
+}: {
+  qaSeedActive?: boolean;
+  cards?: Card[];
+  bankAccounts?: BankAccount[];
+  renewals?: Renewal[];
+  plaidConnections?: Array<{ id?: string | null }>;
+}) {
+  const hasPlaidConnections = plaidConnections.some((connection) => String(connection?.id || "").trim());
+  if (!hasPlaidConnections) return false;
+
+  const hasLocalPlaidLinks =
+    cards.some((card) => card?._plaidAccountId || card?._plaidConnectionId) ||
+    bankAccounts.some((account) => account?._plaidAccountId || account?._plaidConnectionId);
+  if (hasLocalPlaidLinks) return false;
+
+  const stripped = stripFullProfileQaRecords({ cards, bankAccounts, renewals });
+  const removedFixtureCount =
+    stripped.removedCardCount + stripped.removedBankAccountCount + stripped.removedRenewalCount;
+
+  return qaSeedActive || removedFixtureCount > 0;
 }

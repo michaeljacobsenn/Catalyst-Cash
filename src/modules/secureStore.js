@@ -19,8 +19,12 @@ let cachedSecretStatusAt = 0;
 let secretStatusPromise = null;
 let nativeStatusTimeoutWarned = false;
 const SECRET_STATUS_TTL_MS = 30_000;
+const NATIVE_KEYS_TTL_MS = 30_000;
 const missingKeyCache = new Map();
 const pendingNativeReadCache = new Map();
+let nativeKeysCache = null;
+let nativeKeysCacheAt = 0;
+let nativeKeysPromise = null;
 
 function getPersistedMissingKeyExpiry(key) {
   if (!key || typeof localStorage === "undefined") return 0;
@@ -220,18 +224,19 @@ async function probeNativePlugin(plugin) {
   if (!plugin) return false;
   if (nativeProbePromise) return nativeProbePromise;
 
-  const probeKey = `__cc_secure_probe__:${Date.now()}:${Math.random().toString(36).slice(2)}`;
   nativeProbePromise = (async () => {
     let lastError = null;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        await callNativePlugin(plugin, "get", { key: probeKey });
+        if (typeof plugin.keys === "function") {
+          await getNativeKeys(plugin, { force: true });
+        } else {
+          const probeKey = `__cc_secure_probe__:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+          await callNativePlugin(plugin, "set", { key: probeKey, value: serialize("probe") });
+          await callNativePlugin(plugin, "remove", { key: probeKey });
+        }
         return true;
       } catch (error) {
-        const msg = error?.message || error?.errorMessage || String(error);
-        if (isMissingKeyError(error)) {
-          return true; // The bridge is working perfectly, it just correctly reported the key is missing
-        }
         lastError = error;
         if (attempt < 1) {
           await sleep(NATIVE_PROBE_RETRY_DELAY_MS);
@@ -330,6 +335,41 @@ async function removeFallback(key) {
   }
 }
 
+function setNativeKeysCache(keys) {
+  nativeKeysCache = keys instanceof Set ? keys : new Set(Array.isArray(keys) ? keys : []);
+  nativeKeysCacheAt = Date.now();
+}
+
+function patchNativeKeysCache(key, present) {
+  if (!(nativeKeysCache instanceof Set) || !key) return;
+  if (present) nativeKeysCache.add(key);
+  else nativeKeysCache.delete(key);
+  nativeKeysCacheAt = Date.now();
+}
+
+async function getNativeKeys(plugin, { force = false } = {}) {
+  if (!plugin || typeof plugin.keys !== "function") return null;
+  if (!force && nativeKeysCache instanceof Set && Date.now() - nativeKeysCacheAt < NATIVE_KEYS_TTL_MS) {
+    return nativeKeysCache;
+  }
+  if (!force && nativeKeysPromise) {
+    return nativeKeysPromise;
+  }
+
+  nativeKeysPromise = (async () => {
+    try {
+      const result = await callNativePlugin(plugin, "keys", {});
+      const keys = Array.isArray(result?.value) ? result.value.map(value => String(value)) : [];
+      setNativeKeysCache(keys);
+      return nativeKeysCache;
+    } finally {
+      nativeKeysPromise = null;
+    }
+  })();
+
+  return nativeKeysPromise;
+}
+
 async function readNativeSecureItemOnce(key) {
   if (!key) return null;
   const existing = pendingNativeReadCache.get(key);
@@ -340,12 +380,36 @@ async function readNativeSecureItemOnce(key) {
     const plugin = wrapper?.instance;
     if (!plugin) return null;
     try {
-      const result = await callNativePlugin(plugin, "get", { key });
-      clearMissingKey(key);
-      return deserialize(result?.value);
-    } catch (error) {
-      if (isMissingKeyError(error)) {
+      const knownKeys = await getNativeKeys(plugin);
+      if (knownKeys instanceof Set && !knownKeys.has(key)) {
         rememberMissingKey(key);
+        return null;
+      }
+
+      let lastError = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const result = await callNativePlugin(plugin, "get", { key });
+          clearMissingKey(key);
+          patchNativeKeysCache(key, true);
+          return deserialize(result?.value);
+        } catch (error) {
+          lastError = error;
+          if (isMissingKeyError(error)) {
+            rememberMissingKey(key);
+            patchNativeKeysCache(key, false);
+            return null;
+          }
+          if (!isBridgeTimeoutError(error) || attempt >= 1) {
+            return null;
+          }
+          await sleep(NATIVE_PROBE_RETRY_DELAY_MS);
+        }
+      }
+
+      if (isMissingKeyError(lastError)) {
+        rememberMissingKey(key);
+        patchNativeKeysCache(key, false);
       }
       return null;
     } finally {
@@ -388,6 +452,7 @@ export async function setSecureItem(key, value) {
   if (plugin) {
     try {
       await callNativePlugin(plugin, "set", { key, value: serialized });
+      patchNativeKeysCache(key, true);
       return true;
     } catch {
       // Native secret persistence fails closed on native platforms.
@@ -405,6 +470,7 @@ export async function setNativeSecureItem(key, value) {
   clearMissingKey(key);
   try {
     await callNativePlugin(plugin, "set", { key, value: serialize(value) });
+    patchNativeKeysCache(key, true);
     return true;
   } catch {
     return false;
@@ -424,6 +490,7 @@ export async function deleteSecureItem(key) {
   if (plugin) {
     try {
       await callNativePlugin(plugin, "remove", { key });
+      patchNativeKeysCache(key, false);
     } catch {
       await removeFallback(key);
       return false;
@@ -441,6 +508,7 @@ export async function deleteNativeSecureItem(key) {
   clearMissingKey(key);
   try {
     await callNativePlugin(plugin, "remove", { key });
+    patchNativeKeysCache(key, false);
     return true;
   } catch {
     return false;

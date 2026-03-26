@@ -38,6 +38,15 @@ interface SecurityContextValue {
 
 type SecretStorageStatus = SecurityContextValue["secretStorageStatus"];
 
+interface NormalizedSecurityBootstrapState {
+  requireAuth: boolean;
+  useFaceId: boolean;
+  isLocked: boolean;
+  lockTimeout: number;
+  appPasscode: string;
+  shouldResetPersistedAuth: boolean;
+}
+
 const SecurityContext = createContext<SecurityContextValue | null>(null);
 const SECURITY_BOOT_TIMEOUT_MS = 1500;
 const SECURITY_STORAGE_BOOT_TIMEOUT_MS = 4200;
@@ -63,6 +72,46 @@ function getFallbackStorageStatus(): SecretStorageStatus {
     isHardwareBacked: false,
     message:
       "Browser storage is not treated as secure storage. App Lock, linked identity, cloud sync credentials, and other secrets are available only in the native iPhone app.",
+  };
+}
+
+export function hasStoredAppPasscode(value: string | null | undefined): value is string {
+  return typeof value === "string" && /^[0-9]{4}$/.test(value);
+}
+
+export function normalizeSecurityBootstrapState({
+  storageStatus,
+  requireAuth,
+  useFaceId,
+  lockTimeout,
+  appPasscode,
+}: {
+  storageStatus: SecretStorageStatus;
+  requireAuth: boolean;
+  useFaceId: boolean;
+  lockTimeout: number;
+  appPasscode: string | null | undefined;
+}): NormalizedSecurityBootstrapState {
+  const hasSecureStorage = storageStatus.mode === "native-secure";
+  const hasPasscode = hasStoredAppPasscode(appPasscode);
+  const normalizedRequireAuth = hasSecureStorage && requireAuth && hasPasscode;
+  const normalizedUseFaceId = normalizedRequireAuth && useFaceId;
+  const normalizedLockTimeout = normalizedRequireAuth
+    ? (Number.isFinite(Number(lockTimeout)) ? Number(lockTimeout) : 0)
+    : 0;
+  const shouldResetPersistedAuth =
+    !hasSecureStorage ||
+    normalizedRequireAuth !== requireAuth ||
+    normalizedUseFaceId !== useFaceId ||
+    normalizedLockTimeout !== (Number.isFinite(Number(lockTimeout)) ? Number(lockTimeout) : 0);
+
+  return {
+    requireAuth: normalizedRequireAuth,
+    useFaceId: normalizedUseFaceId,
+    isLocked: normalizedRequireAuth,
+    lockTimeout: normalizedLockTimeout,
+    appPasscode: hasPasscode ? appPasscode : "",
+    shouldResetPersistedAuth,
   };
 }
 
@@ -187,23 +236,27 @@ export function SecurityProvider({ children }: SecurityProviderProps) {
             : 0;
       const resolvedPasscode = typeof testOverride?.appPasscode === "string" ? testOverride.appPasscode : pin;
       const resolvedAppleLinkedId = appLinked;
+      const normalizedBootstrap = normalizeSecurityBootstrapState({
+        storageStatus,
+        requireAuth: resolvedRequireAuth,
+        useFaceId: resolvedUseFaceId,
+        lockTimeout: resolvedLockTimeout,
+        appPasscode: resolvedPasscode,
+      });
 
-      if (storageStatus.mode !== "native-secure") {
+      if (normalizedBootstrap.shouldResetPersistedAuth) {
         await Promise.all([
-          db.set("require-auth", false),
-          db.set("use-face-id", false),
+          db.set("require-auth", normalizedBootstrap.requireAuth),
+          db.set("use-face-id", normalizedBootstrap.useFaceId),
+          db.set("lock-timeout", normalizedBootstrap.lockTimeout),
         ]);
-        setRequireAuth(false);
-        setUseFaceId(false);
-        setIsLocked(false);
-      } else if (resolvedRequireAuth) {
-        setRequireAuth(true);
-        setIsLocked(true);
       }
 
-      if (resolvedPasscode) setAppPasscode(resolvedPasscode);
-      if (resolvedUseFaceId) setUseFaceId(true);
-      setLockTimeout(resolvedLockTimeout);
+      setRequireAuth(normalizedBootstrap.requireAuth);
+      setUseFaceId(normalizedBootstrap.useFaceId);
+      setIsLocked(normalizedBootstrap.isLocked);
+      setAppPasscode(normalizedBootstrap.appPasscode);
+      setLockTimeout(normalizedBootstrap.lockTimeout);
       if (resolvedAppleLinkedId) setAppleLinkedId(resolvedAppleLinkedId);
       if (pm) {
         setPrivacyModeState(true);
@@ -228,6 +281,12 @@ export function SecurityProvider({ children }: SecurityProviderProps) {
 
   useEffect(() => {
     const handleVisibilityChange = async () => {
+      const biometricActive = Boolean((window as Window & { __biometricActive?: boolean }).__biometricActive);
+      if (biometricActive) {
+        lastBackgrounded.current = null;
+        return;
+      }
+
       if (document.hidden) {
         lastBackgrounded.current = Date.now();
       } else {

@@ -52,7 +52,45 @@ export async function getNotificationPermission() {
   }
 }
 
-export async function triggerStoreArrivalNotification(store, body) {
+// ─── Geo-fence anti-spam cooldowns ───────────────────────────────────────────
+// Prevents notification spam when a user lingers near or re-enters a store.
+// Per-store cooldown: 30 minutes before we re-alert for the same location.
+// Global cooldown: 5 minutes between any geo-fence alert (different stores).
+const GEO_PER_STORE_COOLDOWN_MS = 30 * 60 * 1000; // 30 min
+const GEO_GLOBAL_COOLDOWN_MS = 5 * 60 * 1000;     // 5 min
+const _geoPerStoreCooldowns = new Map();            // store name → last fired ts
+let _geoLastFiredTs = 0;                            // timestamp of last any-store alert
+
+/**
+ * Returns true if the store has been notified recently (within cooldown windows).
+ * Pass forceReset=true in QA/simulation context to bypass and reset cooldowns.
+ */
+function isGeoOnCooldown(store, forceReset = false) {
+  if (forceReset) {
+    _geoPerStoreCooldowns.delete(store);
+    _geoLastFiredTs = 0;
+    return false;
+  }
+  const now = Date.now();
+  if (now - _geoLastFiredTs < GEO_GLOBAL_COOLDOWN_MS) return true;
+  const lastStore = _geoPerStoreCooldowns.get(store) || 0;
+  if (now - lastStore < GEO_PER_STORE_COOLDOWN_MS) return true;
+  return false;
+}
+
+function recordGeoFired(store) {
+  const now = Date.now();
+  _geoLastFiredTs = now;
+  _geoPerStoreCooldowns.set(store, now);
+}
+
+export async function triggerStoreArrivalNotification(store, body, { forceReset = false } = {}) {
+  // Anti-spam: skip if within cooldown windows (QA preview bypasses this)
+  if (isGeoOnCooldown(store, forceReset)) {
+    void log.info("notifications", "Geo-fence notification suppressed by cooldown", { store });
+    return false;
+  }
+
   if (!supportsLocalNotifications()) return false;
   try {
     let { display } = await LocalNotifications.checkPermissions();
@@ -76,6 +114,7 @@ export async function triggerStoreArrivalNotification(store, body) {
         },
       ],
     });
+    recordGeoFired(store);
     return true;
   } catch (err) {
     void log.warn("notifications", "triggerStoreArrivalNotification failed", { error: err });
@@ -86,43 +125,42 @@ export async function triggerStoreArrivalNotification(store, body) {
 /**
  * Compute the Date object for the next payday reminder.
  *
- * Rules:
- *  - Notify 12 hours before paycheckTime on payday itself.
- *    e.g. Wednesday 18:00 → Wednesday 06:00
- *    e.g. Friday 06:00 → Thursday 18:00 (wraps to day before)
- *  - If paycheckTime is missing/falsy, notify at 09:00 on payday.
- *  - Always targets strictly the NEXT occurrence (never today if it already passed).
+ * Fires AT paycheckTime on payday (money just landed — run your audit).
+ * Defaults to 09:00 on payday if paycheckTime is missing.
+ * Always targets strictly the NEXT occurrence (never today if it already passed).
  */
 export function computeNextReminderDate(payday, paycheckTime) {
   const targetDay = DAY_MAP[payday];
   if (targetDay === undefined) return null;
 
-  // Parse paycheckTime -> notification hour/minute (12h before)
-  let notifyHour = 9;
-  let notifyMin = 0;
-  let dayOffset = 0; // 0 = same day as payday, -1 = day before
-  if (paycheckTime && /^\d{1,2}:\d{2}$/.test(paycheckTime)) {
-    const [h, m] = paycheckTime.split(":").map(Number);
-    const totalMins = h * 60 + m - 12 * 60;
-    if (totalMins >= 0) {
-      notifyHour = Math.floor(totalMins / 60);
-      notifyMin = totalMins % 60;
-      dayOffset = 0; // same day
-    } else {
-      // Wrapped to previous day (e.g. paycheck at 06:00 → remind at 18:00 day before)
-      notifyHour = Math.floor((totalMins + 24 * 60) / 60);
-      notifyMin = ((totalMins % 60) + 60) % 60;
-      dayOffset = -1;
-    }
-  }
+  const hasTime = paycheckTime && /^\d{1,2}:\d{2}$/.test(paycheckTime);
 
-  const notifyDay = (targetDay + dayOffset + 7) % 7;
+  let notifyDay = targetDay;
+  let notifyHour, notifyMin;
+
+  if (hasTime) {
+    // Fire 12 hours before the paycheck arrives, with day rollover
+    const [h, m] = paycheckTime.split(":").map(Number);
+    let totalNotifyMin = h * 60 + m - 12 * 60;
+    if (totalNotifyMin < 0) {
+      totalNotifyMin += 24 * 60;
+      notifyDay = (targetDay - 1 + 7) % 7;
+    }
+    notifyHour = Math.floor(totalNotifyMin / 60);
+    notifyMin = totalNotifyMin % 60;
+  } else {
+    // No time known — fire at 09:00 on payday
+    notifyHour = 9;
+    notifyMin = 0;
+  }
 
   const now = new Date();
   const diff = (notifyDay - now.getDay() + 7) % 7;
 
-  // Build candidate date
-  const candidate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff, notifyHour, notifyMin, 0, 0);
+  const candidate = new Date(
+    now.getFullYear(), now.getMonth(), now.getDate() + diff,
+    notifyHour, notifyMin, 0, 0
+  );
 
   // If that moment is already in the past (or within 5 min), push to next week
   if (candidate.getTime() - now.getTime() < 5 * 60 * 1000) {
@@ -186,6 +224,52 @@ export async function cancelPaydayReminder() {
     // silently ignore
   }
   return true;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BUDGET OVERRUN ALERT — fires immediately after audit completes
+// when one or more budget lines exceeded their per-cycle target.
+// ═══════════════════════════════════════════════════════════════
+const BUDGET_OVERRUN_ID = 4001;
+
+/**
+ * Fire a budget overrun notification after a real audit.
+ * @param {Array<{name: string, icon: string, amount: number, actual: number}>} overruns
+ */
+export async function scheduleOverrunNotification(overruns) {
+  if (!supportsLocalNotifications() || !overruns?.length) return false;
+  try {
+    const { display } = await LocalNotifications.checkPermissions();
+    if (display !== "granted") return false;
+
+    await LocalNotifications.cancel({ notifications: [{ id: BUDGET_OVERRUN_ID }] });
+
+    // Build message: highlight the worst offender
+    const worst = overruns.reduce((a, b) => (b.actual - b.amount > a.actual - a.amount ? b : a));
+    const overCount = overruns.length;
+    const title = overCount === 1
+      ? `${worst.icon} Budget overrun: ${worst.name}`
+      : `⚠️ ${overCount} budget lines over this cycle`;
+    const body = overCount === 1
+      ? `You spent $${worst.actual.toFixed(0)} vs your $${worst.amount.toFixed(0)} target — $${(worst.actual - worst.amount).toFixed(0)} over.`
+      : `${worst.icon} ${worst.name} is the biggest overrun (+$${(worst.actual - worst.amount).toFixed(0)}). Check your Budget tab.`;
+
+    await LocalNotifications.schedule({
+      notifications: [{
+        id: BUDGET_OVERRUN_ID,
+        title,
+        body,
+        schedule: { at: new Date(Date.now() + 2000) }, // fire ~2s after audit saves
+        sound: undefined,
+        smallIcon: "ic_stat_notify",
+        iconColor: "#FF6B6B",
+      }],
+    });
+    return true;
+  } catch (e) {
+    log("scheduleOverrunNotification error", e);
+    return false;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
