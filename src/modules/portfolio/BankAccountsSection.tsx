@@ -22,9 +22,18 @@ interface EditBankForm {
 interface BankAccountsSectionProps {
     collapsedSections?: PortfolioCollapsedSections;
     setCollapsedSections?: Dispatch<SetStateAction<PortfolioCollapsedSections>>;
+    plannedBankBalances?: Record<string, {
+        projectedBalance?: number | null;
+        remainingAmount?: number | null;
+        moveCount?: number;
+    }>;
 }
 
-export default function BankAccountsSection({ collapsedSections: propCollapsed, setCollapsedSections: propSetCollapsed }: BankAccountsSectionProps) {
+export default function BankAccountsSection({
+    collapsedSections: propCollapsed,
+    setCollapsedSections: propSetCollapsed,
+    plannedBankBalances = {},
+}: BankAccountsSectionProps) {
     const { bankAccounts, setBankAccounts } = usePortfolio();
 
     const [internalCollapsed, internalSetCollapsed] = useState<PortfolioCollapsedSections>({});
@@ -123,6 +132,7 @@ export default function BankAccountsSection({ collapsedSections: propCollapsed, 
         const needsReconnect = !!(acct._plaidConnectionId && reconnectConnectionIds.has(acct._plaidConnectionId));
         const usesManualFallback = !!acct._plaidManualFallback || needsReconnect;
         const liveBalance = !usesManualFallback && acct._plaidBalance != null ? acct._plaidBalance : Number(acct.balance || 0);
+        const plannedState = plannedBankBalances[acct.id];
         return (
             <div
                 key={acct.id}
@@ -198,7 +208,23 @@ export default function BankAccountsSection({ collapsedSections: propCollapsed, 
                             )}
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                            <Mono size={13} weight={800} color={!usesManualFallback && acct._plaidBalance != null ? sectionColor : T.text.muted}>{fmt(liveBalance)}</Mono>
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+                                <Mono size={13} weight={800} color={!usesManualFallback && acct._plaidBalance != null ? sectionColor : T.text.muted}>{fmt(liveBalance)}</Mono>
+                                {plannedState?.remainingAmount ? (
+                                    <div
+                                        style={{
+                                            padding: "3px 7px",
+                                            borderRadius: 999,
+                                            background: `${T.accent.emerald}12`,
+                                            border: `1px solid ${T.accent.emerald}1f`,
+                                            maxWidth: 128,
+                                            textAlign: "right",
+                                        }}
+                                    >
+                                        <Mono size={9} weight={800} color={T.accent.emerald}>Planned {fmt(plannedState.projectedBalance || 0)}</Mono>
+                                    </div>
+                                ) : null}
+                            </div>
                             <button onClick={() => startEditBank(acct)} style={{ width: 28, height: 28, borderRadius: T.radius.md, border: "none", background: "transparent", color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} className="hover-btn"><Edit3 size={11} /></button>
                         </div>
                     </div>

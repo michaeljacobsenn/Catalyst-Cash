@@ -1,11 +1,12 @@
-  import { useMemo } from "react";
-  import { T } from "../constants.js";
-  import { useAudit } from "../contexts/AuditContext.js";
-  import { usePortfolio } from "../contexts/PortfolioContext.js";
-  import { useSettings } from "../contexts/SettingsContext.js";
-  import { computeFireProjection } from "../fire.js";
-  import { extractDashboardMetrics,fmt } from "../utils.js";
-  import { buildDashboardSafetyModel } from "./safetyModel.js";
+import { useMemo } from "react";
+import { buildAuditMovePlan } from "../auditMovePlan.js";
+import { T } from "../constants.js";
+import { useAudit } from "../contexts/AuditContext.js";
+import { usePortfolio } from "../contexts/PortfolioContext.js";
+import { useSettings } from "../contexts/SettingsContext.js";
+import { computeFireProjection } from "../fire.js";
+import { extractDashboardMetrics, fmt } from "../utils.js";
+import { buildDashboardSafetyModel } from "./safetyModel.js";
 
 function summarizeTrend(data, key, formatter) {
   if (!Array.isArray(data) || data.length < 2) {
@@ -33,6 +34,10 @@ export default function useDashboardData() {
   const { current, history } = useAudit();
   const { financialConfig } = useSettings();
   const { cards, bankAccounts, renewals, marketPrices } = usePortfolio();
+  const movePlan = useMemo(
+    () => buildAuditMovePlan({ audit: current, cards, bankAccounts }),
+    [current, cards, bankAccounts]
+  );
 
   const p = current?.parsed;
   const dashboardMetrics = extractDashboardMetrics(p);
@@ -657,6 +662,7 @@ export default function useDashboardData() {
     freedomStats,
     alerts,
     safetySnapshot,
+    movePlan,
     portfolioMetrics, // Unified top-level live metrics
   };
 }

@@ -3,7 +3,8 @@
   import { T } from "../constants.js";
   import { haptic } from "../haptics.js";
   import { log } from "../logger.js";
-  import {
+import {
+    CheckCircle,
     Link2,
     Loader2,
     Plus,
@@ -74,7 +75,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
   const { financialConfig = {} as CatalystCashConfig, setFinancialConfig } = useSettings();
 
   // Bring in unified master metrics globally calculated
-  const { portfolioMetrics } = useDashboardData();
+  const { portfolioMetrics, movePlan } = useDashboardData();
 
   const demoOverrideContext = useMemo(() => {
     if (!isTest) return portfolioContext;
@@ -434,15 +435,90 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
           {Object.values(collapsedSections).every(Boolean) ? "Expand All" : "Collapse All"}
         </button>
       </div>
+
+      {movePlan.activeCount > 0 && (
+        <div
+          style={{
+            marginTop: 4,
+            padding: "12px 14px",
+            borderRadius: T.radius.lg,
+            border: `1px solid ${T.accent.emerald}24`,
+            background: `linear-gradient(180deg, ${T.accent.emerald}08, ${T.bg.elevated})`,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 8,
+                background: `${T.accent.emerald}18`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <CheckCircle size={13} color={T.accent.emerald} strokeWidth={2.5} />
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: T.text.primary }}>
+              Completed audit moves are previewed until balances catch up
+            </div>
+            {movePlan.reconciledCount > 0 && (
+              <div style={{ fontSize: 10, fontWeight: 700, color: T.text.dim }}>
+                {movePlan.reconciledCount} already reflected
+              </div>
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5 }}>
+            Actual balances stay authoritative. Planned changes show the remaining effect of checked moves so Portfolio still helps between sync windows.
+          </div>
+          {movePlan.highlights.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {movePlan.highlights.map((highlight) => (
+                <div
+                  key={`${highlight.label}-${highlight.delta}`}
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    background: `${highlight.delta < 0 ? T.status.red : T.accent.emerald}10`,
+                    border: `1px solid ${highlight.delta < 0 ? T.status.red : T.accent.emerald}18`,
+                    color: highlight.delta < 0 ? T.status.red : T.accent.emerald,
+                    fontSize: 10,
+                    fontWeight: 800,
+                    fontFamily: T.font.mono,
+                  }}
+                >
+                  {highlight.label} {highlight.delta < 0 ? "" : "+"}{fmt(highlight.delta)}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </>
   );
 
-  const creditCardsSection = <CreditCardsSection collapsedSections={collapsedSections} setCollapsedSections={setCollapsedSections} />;
+  const creditCardsSection = (
+    <CreditCardsSection
+      collapsedSections={collapsedSections}
+      setCollapsedSections={setCollapsedSections}
+      plannedCardBalances={movePlan.cardTargets}
+    />
+  );
 
   // Split bank accounts by type for separate sections
 
   // ─── Bank Accounts Section (Render) ──────────────────────────────────
-  const bankAccountsSectionContent = <BankAccountsSection collapsedSections={collapsedSections} setCollapsedSections={setCollapsedSections} />;
+  const bankAccountsSectionContent = (
+    <BankAccountsSection
+      collapsedSections={collapsedSections}
+      setCollapsedSections={setCollapsedSections}
+      plannedBankBalances={movePlan.bankTargets}
+    />
+  );
 
   // ─── Investment Accounts Section (JSX) ─────────────────────────────────
 

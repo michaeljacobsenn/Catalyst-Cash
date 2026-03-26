@@ -35,9 +35,18 @@ interface EditCardForm {
 interface CreditCardsSectionProps {
     collapsedSections?: PortfolioCollapsedSections;
     setCollapsedSections?: Dispatch<SetStateAction<PortfolioCollapsedSections>>;
+    plannedCardBalances?: Record<string, {
+        projectedBalance?: number | null;
+        remainingAmount?: number | null;
+        moveCount?: number;
+    }>;
 }
 
-export default function CreditCardsSection({ collapsedSections: propCollapsed, setCollapsedSections: propSetCollapsed }: CreditCardsSectionProps) {
+export default function CreditCardsSection({
+    collapsedSections: propCollapsed,
+    setCollapsedSections: propSetCollapsed,
+    plannedCardBalances = {},
+}: CreditCardsSectionProps) {
     const { cards, setCards, cardCatalog } = usePortfolio();
 
     const [internalCollapsed, internalSetCollapsed] = useState({ creditCards: false });
@@ -247,6 +256,7 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
                             const visibleBalance = !usesManualFallback && card._plaidBalance != null
                                 ? card._plaidBalance
                                 : Number(card.balance || 0);
+                            const plannedState = plannedCardBalances[card.id];
                             const balanceColor = !usesManualFallback && card._plaidBalance != null ? T.status.red : colors.text;
                             const annualFee = typeof card.annualFee === "number" ? card.annualFee : Number(card.annualFee || 0);
                             const apr = card.apr ?? 0;
@@ -421,6 +431,23 @@ export default function CreditCardsSection({ collapsedSections: propCollapsed, s
                                             <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                                                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
                                                     <Mono size={14} weight={900} color={balanceColor}>{fmt(visibleBalance)}</Mono>
+                                                    {plannedState?.remainingAmount ? (
+                                                        <div
+                                                            style={{
+                                                                marginTop: 4,
+                                                                padding: "3px 7px",
+                                                                borderRadius: 999,
+                                                                background: `${T.accent.emerald}12`,
+                                                                border: `1px solid ${T.accent.emerald}1f`,
+                                                                maxWidth: 128,
+                                                                textAlign: "right",
+                                                            }}
+                                                        >
+                                                            <Mono size={9} weight={800} color={T.accent.emerald}>
+                                                                Planned {fmt(plannedState.projectedBalance || 0)}
+                                                            </Mono>
+                                                        </div>
+                                                    ) : null}
                                                     <Mono size={10} weight={700} color={T.text.dim}>
                                                         {`Limit ${fmt(limit)}`}
                                                     </Mono>

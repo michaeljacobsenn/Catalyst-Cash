@@ -7,7 +7,7 @@ describe("renderGuideHtml", () => {
     const html = renderGuideHtml("free");
 
     expect(html).toContain("2 audits / week");
-    expect(html).toContain("10 AskAI / day");
+    expect(html).toContain("5 AskAI / day");
     expect(html).toContain("1 Plaid institution");
     expect(html).toContain("See what Pro unlocks");
     expect(html).toContain("Catalyst AI");

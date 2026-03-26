@@ -165,7 +165,7 @@ export async function syncRemoteGatingMode() {
 //   Audits: Heavy (~12K-15K prompt tokens in, ~2.2K out, structured JSON). Weekly cap.
 //   AskAI:  Light-to-mid (~2.2K-3.4K prompt tokens in, ~500 out, natural language). Daily cap.
 //
-//   Free AskAI: 10/day — enough to experience the value proposition.
+//   Free AskAI: 5/day — enough to experience the value proposition.
 //   Pro AskAI: 30/day total (per-model: 15 GPT-4.1, 15 Gemini 2.5 Flash).
 //   o3 remains available for Pro but chat requests are normalized to GPT-4.1.
 //   These limits match the Cloudflare Worker enforcement exactly.

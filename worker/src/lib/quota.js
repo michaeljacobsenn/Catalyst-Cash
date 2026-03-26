@@ -1,6 +1,6 @@
 export const FREE_AUDITS_PER_WEEK = 2;
 export const PRO_AUDITS_PER_MONTH = 20;
-export const FREE_CHATS_PER_DAY = 10;
+export const FREE_CHATS_PER_DAY = 5;
 export const PRO_CHATS_PER_DAY = 30;
 
 // Per-model daily caps for Pro chat (must sum to PRO_CHATS_PER_DAY)

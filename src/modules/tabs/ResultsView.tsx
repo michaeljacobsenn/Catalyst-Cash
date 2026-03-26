@@ -1,4 +1,5 @@
-  import React,{ memo,useState,type ReactNode } from "react";
+import React, { memo, useMemo, useState, type ReactNode } from "react";
+import { buildAuditMovePlan } from "../auditMovePlan.js";
   import { Md as UIMd,Mono as UIMono,MoveRow as UIMoveRow } from "../components.js";
   import { T } from "../constants.js";
   import {
@@ -21,6 +22,7 @@
   import type { AuditRecord,MoveCheckState,ParsedMoveItem } from "../../types/index.js";
   import { useAudit } from "../contexts/AuditContext.js";
   import { useNavigation } from "../contexts/NavigationContext.js";
+import { usePortfolio } from "../contexts/PortfolioContext.js";
 
 interface ResultsViewProps {
   audit: AuditRecord | null;
@@ -124,7 +126,8 @@ const ReportSection = ({ title, icon: Icon, content, accentColor, badge, isLast 
 
 export default memo(function ResultsView({ audit, moveChecks, onToggleMove, streak = 0, onBack = null }: ResultsViewProps) {
   void streak;
-  const { history } = useAudit();
+  const { history, current } = useAudit();
+  const { cards, bankAccounts } = usePortfolio();
   const { navTo } = useNavigation() as NavigationApi;
 
   const [showExportSheet, setShowExportSheet] = useState<boolean>(false);
@@ -164,6 +167,11 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
   const sections = parsed.sections;
   const degradedInfo = parsed.degraded;
   const isDegraded = degradedInfo?.isDegraded;
+  const isLiveCurrentAudit = Boolean(current?.ts && current.ts === audit.ts && !audit.isTest);
+  const movePlan = useMemo(
+    () => (isLiveCurrentAudit ? buildAuditMovePlan({ audit: current, cards, bankAccounts }) : { activeCount: 0, highlights: [], reconciledCount: 0 }),
+    [isLiveCurrentAudit, current, cards, bankAccounts]
+  );
   const analysisNotes = isDegraded
     ? [sections.qualityScore, sections.autoUpdates, degradedInfo?.reason].filter(
         (entry): entry is string => Boolean(entry && entry.trim())
@@ -437,6 +445,51 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
             </div>
           );
         })()}
+
+      {isLiveCurrentAudit && movePlan.activeCount > 0 && (
+        <Card
+          style={{
+            padding: isSmallPhone ? "12px 14px" : "14px 16px",
+            marginTop: 8,
+            marginBottom: 8,
+            background: `linear-gradient(180deg, ${T.accent.emerald}08, ${T.bg.card})`,
+            border: `1px solid ${T.accent.emerald}20`,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: T.text.primary }}>
+              Checked moves are previewing in Portfolio until balances confirm them
+            </div>
+            {movePlan.reconciledCount > 0 && (
+              <Badge variant="teal">{movePlan.reconciledCount} reflected</Badge>
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5, marginBottom: movePlan.highlights.length ? 10 : 0 }}>
+            Actual balances remain the source of truth. The preview layer only fills the gap between your completed moves and the next real sync or manual edit.
+          </div>
+          {movePlan.highlights.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {movePlan.highlights.map((highlight) => (
+                <div
+                  key={`${highlight.label}-${highlight.delta}`}
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    background: `${highlight.delta < 0 ? T.status.red : T.accent.emerald}10`,
+                    border: `1px solid ${highlight.delta < 0 ? T.status.red : T.accent.emerald}18`,
+                    color: highlight.delta < 0 ? T.status.red : T.accent.emerald,
+                    fontSize: 10,
+                    fontWeight: 800,
+                    fontFamily: T.font.mono,
+                  }}
+                >
+                  {highlight.label} {highlight.delta < 0 ? "" : "+"}{Number(highlight.delta || 0).toLocaleString(undefined, { style: "currency", currency: "USD" })}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card
         className="slide-up"

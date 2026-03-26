@@ -1,5 +1,5 @@
 export const FREE_AUDIT_LIMIT = 2;
-export const FREE_CHAT_LIMIT = 10;
+export const FREE_CHAT_LIMIT = 5;
 export const FREE_HISTORY_LIMIT = 12;
 export const FREE_MARKET_REFRESH_MS = 60 * 60 * 1000;
 
