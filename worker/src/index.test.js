@@ -2203,7 +2203,7 @@ describe("Plaid transaction sync migration", () => {
       },
     ];
 
-    const fetchMock = vi.fn(async (input, init) => {
+    const fetchMock = vi.fn(async (input, _init) => {
       const url = String(input);
       if (url.includes("api.revenuecat.com")) {
         return new Response(
@@ -2748,7 +2748,7 @@ describe("Plaid transaction sync migration", () => {
       },
     ];
 
-    const fetchMock = vi.fn(async (input, init) => {
+    const fetchMock = vi.fn(async (input, _init) => {
       const url = String(input);
       if (url.includes("api.revenuecat.com")) {
         return new Response(

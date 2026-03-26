@@ -554,6 +554,14 @@ function normalizeSpendingAnalysis(value) {
   };
 }
 
+function normalizeAuditStatus(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (normalized.includes("GREEN")) return "GREEN";
+  if (normalized.includes("YELLOW")) return "YELLOW";
+  if (normalized.includes("RED")) return "RED";
+  return "UNKNOWN";
+}
+
 export function parseJSON(raw) {
   let j;
   try {
@@ -625,9 +633,10 @@ export function parseJSON(raw) {
       },
     });
   }
+  const normalizedStatus = normalizeAuditStatus(j.headerCard?.status || j.status || j.headerCard?.headline);
   return {
     raw,
-    status: j.headerCard?.status || j.status || j.headerCard?.headline || "UNKNOWN",
+    status: normalizedStatus,
     mode: "FULL", // Implicit in the new architecture unless overridden
     liquidNetWorth: parseCurrency(j.liquidNetWorth),
     netWorth:
@@ -641,7 +650,7 @@ export function parseJSON(raw) {
     spendingAnalysis,
     structured: j,
     sections: {
-      header: `**${new Date().toISOString().split("T")[0]}** · FULL · ${j.headerCard?.status || "UNKNOWN"}`,
+      header: `**${new Date().toISOString().split("T")[0]}** · FULL · ${normalizedStatus}`,
       alerts: alertsCard
         .map(
           a =>
@@ -1155,6 +1164,7 @@ function htmlEscape(str) {
 export async function exportAudit(audit) {
   const p = audit.parsed;
   const dateStr = audit.date || new Date().toISOString().split("T")[0];
+  const safeDateStr = htmlEscape(dateStr);
 
   // Create an off-screen container for the tear-sheet
   const container = document.createElement("div");
@@ -1176,7 +1186,7 @@ export async function exportAudit(audit) {
       </div>
       <div style="text-align: right;">
         <div style="font-size: 14px; color: #374151; font-weight: 600;">DATE EXECUTED</div>
-        <div style="font-size: 14px; color: #6B7280;">${dateStr}</div>
+        <div style="font-size: 14px; color: #6B7280;">${safeDateStr}</div>
       </div>
     </div>
   `;
@@ -1193,11 +1203,11 @@ export async function exportAudit(audit) {
       </div>
       <div style="flex: 1; padding: 20px; background-color: ${bgStatus}; border: 1px solid ${statusColor}30; border-radius: 8px;">
         <div style="font-size: 12px; font-weight: 700; color: ${statusColor}; text-transform: uppercase; margin-bottom: 8px;">Audit Status</div>
-        <div style="font-size: 24px; font-weight: 800; color: ${statusColor};">${p.status}</div>
+        <div style="font-size: 24px; font-weight: 800; color: ${statusColor};">${htmlEscape(p.status)}</div>
       </div>
       <div style="flex: 1; padding: 20px; background-color: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px;">
         <div style="font-size: 12px; font-weight: 700; color: #6B7280; text-transform: uppercase; margin-bottom: 8px;">Audit Engine</div>
-        <div style="font-size: 20px; font-weight: 800; color: #111827;">${p.mode || "Standard"} Mode</div>
+        <div style="font-size: 20px; font-weight: 800; color: #111827;">${htmlEscape(p.mode || "Standard")} Mode</div>
       </div>
     </div>
   `;

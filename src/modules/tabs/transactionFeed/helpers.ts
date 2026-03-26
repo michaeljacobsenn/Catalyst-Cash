@@ -107,9 +107,16 @@ export function normalizeTransactionResult(result: { data?: unknown[]; transacti
 }
 
 export function formatRewardRate(yieldValue: number | null | undefined) {
-  if (typeof yieldValue !== "number" || Number.isNaN(yieldValue)) return "0x";
+  if (typeof yieldValue !== "number" || Number.isNaN(yieldValue)) return "0.0%";
   const rounded = Math.round(yieldValue * 10) / 10;
-  return Number.isInteger(rounded) ? `${rounded.toFixed(1)}x` : `${rounded}x`;
+  return Number.isInteger(rounded) ? `${rounded.toFixed(1)}%` : `${rounded}%`;
+}
+
+export function formatTransactionTime(dateValue: string | null | undefined) {
+  if (!dateValue || /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return null;
+  const parsed = new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
 function findUsedCard(txn: TransactionRewardInput, cards: PortfolioCard[]) {

@@ -175,6 +175,21 @@ interface CardWizardTabProps {
 
 type UsedCaps = Record<string, number | "">;
 
+function formatRewardNumber(value: number) {
+  const normalized = Number.isFinite(value) ? Number.parseFloat(value.toFixed(2)) : 0;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toString();
+}
+
+function formatRewardRate(multiplier: number, currency: string) {
+  return currency === "CASH"
+    ? `${formatRewardNumber(multiplier)}% cash back`
+    : `${formatRewardNumber(multiplier)}x points`;
+}
+
+function formatRewardRateShort(multiplier: number, currency: string) {
+  return currency === "CASH" ? `${formatRewardNumber(multiplier)}%` : `${formatRewardNumber(multiplier)}x`;
+}
+
 export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps) {
   const { cards } = usePortfolio();
   const { financialConfig, setFinancialConfig } = useSettings();
@@ -401,16 +416,16 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
           if (spendAtHighRate === 0) {
             isCappedOut = true;
             finalYield = parseFloat((rewardInfo.base * rewardInfo.cpp).toFixed(2));
-            blendedMsg = `Cap exhausted. Now earning base ${rewardInfo.base}x.`;
+            blendedMsg = `Cap exhausted. Now earning base ${formatRewardRate(rewardInfo.base, rewardInfo.currency)}.`;
           } else {
             const blendedReturn = (spendAtHighRate * rewardInfo.multiplier * rewardInfo.cpp / 100) + (spendAtBaseRate * rewardInfo.base * rewardInfo.cpp / 100);
             finalYield = parseFloat(((blendedReturn / spend) * 100).toFixed(2));
-            blendedMsg = `Blended yield: $${spendAtHighRate} at ${rewardInfo.multiplier}x + $${spendAtBaseRate} at ${rewardInfo.base}x.`;
+            blendedMsg = `Blended rate: $${spendAtHighRate} at ${formatRewardRate(rewardInfo.multiplier, rewardInfo.currency)} + $${spendAtBaseRate} at ${formatRewardRate(rewardInfo.base, rewardInfo.currency)}.`;
           }
         } else if (used >= rewardInfo.cap) {
           isCappedOut = true;
           finalYield = parseFloat((rewardInfo.base * rewardInfo.cpp).toFixed(2));
-          blendedMsg = `Cap exhausted. Now earning base ${rewardInfo.base}x.`;
+          blendedMsg = `Cap exhausted. Now earning base ${formatRewardRate(rewardInfo.base, rewardInfo.currency)}.`;
         }
       }
 
@@ -850,7 +865,7 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
                   </h2>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600, color: T.text.secondary }}>
                     <Sparkles size={14} color={T.accent.emerald} />
-                    <span>{winner.multiplier}x {winner.currency === "CASH" ? "Cash Back" : "Points"}</span>
+                    <span>{formatRewardRate(winner.multiplier, winner.currency)}</span>
                   </div>
                 </div>
 
@@ -884,7 +899,8 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
                         {winner.id === subTargetId ? "SUB TARGET" : `${winner.effectiveYield}%`}
                       </div>
                       <p style={{ fontSize: 13, fontWeight: 600, marginTop: 8, color: T.text.secondary }}>
-                        {winner.currentMultiplier}x {(winner.effectiveCategory || resolvedCategory).replace(/_/g, " ")}{winner.cpp !== 1.0 ? ` × ${winner.cpp}cpp` : ""}
+                        {formatRewardRate(winner.currentMultiplier, winner.currency)} on {(winner.effectiveCategory || resolvedCategory).replace(/_/g, " ")}
+                        {winner.cpp !== 1.0 ? ` (${formatRewardNumber(winner.currentMultiplier * winner.cpp)}% effective yield)` : ""}
                         {winner.issuerCategory && winner.issuerCategory !== resolvedCategory && (
                           <span style={{ fontSize: 10, color: T.text.dim, fontWeight: 500 }}> (coded as {winner.issuerCategory.replace(/_/g, " ")} at {winner.institution})</span>
                         )}
@@ -911,7 +927,7 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
                 {winner.cpp !== 1.0 && (
                   <p className="fade-in" style={{ fontSize: 12, fontWeight: 500, color: T.text.secondary, display: "flex", alignItems: "center", gap: 6, margin: "16px 0 12px 12px", animationDelay: "0.3s" }}>
                      <Info size={14} color={T.text.dim} />
-                     Yield applies <span style={{ color: T.text.primary, fontWeight: 700 }}>{winner.cpp}¢</span> point valuation ({winner.currentMultiplier}x base).
+                     Yield applies <span style={{ color: T.text.primary, fontWeight: 700 }}>{winner.cpp}¢</span> point valuation ({formatRewardRate(winner.currentMultiplier, winner.currency)} current rate).
                   </p>
                 )}
                 <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -946,7 +962,7 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
                     <div className="fade-in" style={{ padding: 12, borderRadius: 12, background: T.status.amberDim, border: `1px solid rgba(224, 168, 77, 0.2)`, display: "flex", alignItems: "flex-start", gap: 10, animationDelay: "0.5s" }}>
                       <AlertCircle size={16} color={T.status.amber} style={{ marginTop: 2, flexShrink: 0 }} />
                       <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: T.status.amber }}>
-                        Conditional Max: Could earn up to {winner.potentialMax || winner.currentMultiplier}x
+                        Conditional Max: Could earn up to {formatRewardRate(winner.potentialMax || winner.currentMultiplier, winner.currency)}
                         ({parseFloat(((winner.potentialMax || winner.currentMultiplier) * winner.cpp).toFixed(2))}% yield)
                         if {resolvedCategory.replace(/_/g, " ")} is your top spend category.
                         Otherwise {parseFloat((winner.baseMultiplier * winner.cpp).toFixed(2))}%.
@@ -957,7 +973,7 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
                     <div className="fade-in" style={{ padding: 12, borderRadius: 12, background: T.status.purpleDim, border: `1px solid rgba(155, 111, 212, 0.2)`, display: "flex", alignItems: "flex-start", gap: 10, animationDelay: "0.5s" }}>
                       <RotateCw size={16} color={T.status.purple} style={{ marginTop: 2, flexShrink: 0 }} />
                       <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: T.status.purple }}>
-                        Rotating Category: This card offers {winner.rotating}% on quarterly rotating categories. Check if {resolvedCategory.replace(/_/g, " ")} qualifies this quarter.
+                        Rotating Category: This card offers {formatRewardRate(winner.rotating, winner.currency)} on quarterly rotating categories. Check if {resolvedCategory.replace(/_/g, " ")} qualifies this quarter.
                       </p>
                     </div>
                   )}
@@ -965,7 +981,7 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
                     <div className="fade-in" style={{ padding: 12, borderRadius: 12, background: T.status.blueDim, border: `1px solid rgba(107, 163, 232, 0.2)`, display: "flex", alignItems: "flex-start", gap: 10, animationDelay: "0.5s" }}>
                       <Smartphone size={16} color={T.status.blue} style={{ marginTop: 2, flexShrink: 0 }} />
                       <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: T.status.blue }}>
-                        Mobile Wallet Bonus: Earns {winner.mobileWallet}x on all purchases made via Apple Pay, Google Pay, or Samsung Pay.
+                        Mobile Wallet Bonus: Earns {formatRewardRate(winner.mobileWallet, winner.currency)} on wallet purchases made via Apple Pay, Google Pay, or Samsung Pay.
                       </p>
                     </div>
                   )}
@@ -983,7 +999,7 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
                   const catLabels = { dining: "Dining", groceries: "Groceries", gas: "Gas", travel: "Travel", transit: "Transit", online_shopping: "Online", streaming: "Streaming", wholesale_clubs: "Wholesale", drugstores: "Pharmacy", "catch-all": "Everything Else" };
                   const profile = allCats.map(cat => {
                     const info = getCardMultiplier(winner.name, cat, customValuations);
-                    return { cat, label: catLabels[cat] || cat, multiplier: info.multiplier, yield: info.effectiveYield, active: cat === (winner.effectiveCategory || resolvedCategory) };
+                    return { cat, label: catLabels[cat] || cat, multiplier: info.multiplier, currency: info.currency, yield: info.effectiveYield, active: cat === (winner.effectiveCategory || resolvedCategory) };
                   });
                   return (
                     <div className="fade-in" style={{ marginTop: 16, animationDelay: "0.5s" }}>
@@ -995,7 +1011,7 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
                             background: p.active ? `${T.accent.primary}20` : T.bg.surface,
                             border: `1px solid ${p.active ? T.accent.primary : T.border.subtle}`,
                           }}>
-                            <div style={{ fontSize: 14, fontWeight: 800, color: p.active ? T.accent.primary : T.text.primary }}>{p.multiplier}x</div>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: p.active ? T.accent.primary : T.text.primary }}>{formatRewardRateShort(p.multiplier, p.currency)}</div>
                             <div style={{ fontSize: 8, fontWeight: 700, color: p.active ? T.accent.primary : T.text.dim, textTransform: "uppercase", letterSpacing: "0.02em", marginTop: 2 }}>{p.label}</div>
                           </div>
                         ))}
@@ -1059,15 +1075,17 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
                            <p style={{ fontSize: 14, fontWeight: 700, color: T.text.primary, margin: "0 0 2px 0", lineHeight: 1 }}>{card.name}</p>
                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                              {card.id === subTargetId && <Badge variant="purple" style={{ fontSize: 9, padding: "2px 6px" }}>Sign-Up Bonus</Badge>}
-                             <Badge variant="gray" style={{ fontSize: 9, padding: "2px 6px" }}>{card.cpp}¢ / pt</Badge>
-                             <span style={{ fontSize: 11, fontWeight: 500, color: T.text.muted }}>{card.currentMultiplier}x {(card.effectiveCategory || resolvedCategory).replace(/_/g, " ")}</span>
+                             {card.currency !== "CASH" && card.cpp !== 1.0 && (
+                               <Badge variant="gray" style={{ fontSize: 9, padding: "2px 6px" }}>{card.cpp}¢ / pt</Badge>
+                             )}
+                             <span style={{ fontSize: 11, fontWeight: 500, color: T.text.muted }}>{formatRewardRate(card.currentMultiplier, card.currency)} on {(card.effectiveCategory || resolvedCategory).replace(/_/g, " ")}</span>
                              {card.issuerCategory && card.issuerCategory !== resolvedCategory && (
                                <Badge variant="amber" style={{ fontSize: 9, padding: "2px 6px" }}>Coded as {card.issuerCategory.replace(/_/g, " ")}</Badge>
                              )}
                              {card.blendedMsg && <Badge variant="amber" style={{ fontSize: 9, padding: "2px 6px" }}>Blended Yield</Badge>}
                              {card.isFlexible && <Badge variant="amber" style={{ fontSize: 9, padding: "2px 6px" }}>Conditional</Badge>}
                              {card.rotating && <Badge variant="purple" style={{ fontSize: 9, padding: "2px 6px" }}>Rotating</Badge>}
-                             {card.mobileWallet && <Badge variant="blue" style={{ fontSize: 9, padding: "2px 6px" }}>{card.mobileWallet}x Wallet</Badge>}
+                             {card.mobileWallet && <Badge variant="blue" style={{ fontSize: 9, padding: "2px 6px" }}>{formatRewardRateShort(card.mobileWallet, card.currency)} Wallet</Badge>}
                            </div>
                            {card.cap && (
                               <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6, background: T.bg.surface, padding: "4px 8px", borderRadius: 6, border: `1px solid ${T.border.subtle}`, width: "fit-content" }}>

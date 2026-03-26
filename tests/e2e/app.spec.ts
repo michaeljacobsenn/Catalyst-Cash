@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import {
   AUDIT_FIXTURE,
   CORE_JOURNEY_SEED,
@@ -22,6 +22,24 @@ import {
   seedStorage,
   writeAppStorage,
 } from "./helpers/appHarness";
+
+async function importAuditFromHistory(page: Page, payload: string) {
+  const auditTab = page.getByRole("tab", { name: "Audit", exact: true });
+  const auditTabBox = await auditTab.boundingBox();
+  expect(auditTabBox).not.toBeNull();
+  await page.mouse.move((auditTabBox?.x || 0) + (auditTabBox?.width || 0) / 2, (auditTabBox?.y || 0) + (auditTabBox?.height || 0) / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(450);
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Audit History" }).click();
+  await page.getByRole("button", { name: "Paste & Import AI Result" }).click();
+  const manualPasteField = page.getByPlaceholder("Paste the AI response here (entire response)");
+  await page.waitForTimeout(300);
+  if (await manualPasteField.isVisible().catch(() => false)) {
+    await manualPasteField.fill(payload);
+    await page.getByRole("button", { name: "Import Text" }).click();
+  }
+}
 
 test.describe("Catalyst Cash end-to-end", () => {
   test.beforeEach(async ({ page }) => {
@@ -182,7 +200,16 @@ test.describe("Catalyst Cash end-to-end", () => {
     await expect(page.getByLabel("Notes for this week")).toBeVisible();
   });
 
-  test("imports a pasted audit result from the audit tab", async ({ page, context }) => {
+  test("does not offer pasted audit import on the audit tab", async ({ page }) => {
+    await seedStorage(page, {});
+    await completeOnboarding(page);
+
+    await page.getByRole("tab", { name: "Audit" }).click();
+    await expect(page.getByRole("button", { name: "Paste & Import AI Result" })).toHaveCount(0);
+    await expect(page.getByPlaceholder("Paste the AI response here (entire response)")).toHaveCount(0);
+  });
+
+  test("imports a pasted audit result from history", async ({ page, context }) => {
     await seedStorage(page, {});
     await completeOnboarding(page);
 
@@ -191,8 +218,7 @@ test.describe("Catalyst Cash end-to-end", () => {
       await navigator.clipboard.writeText(payload);
     }, JSON.stringify(AUDIT_FIXTURE));
 
-    await page.getByRole("tab", { name: "Audit" }).click();
-    await page.getByRole("button", { name: "Paste & Import AI Result" }).click();
+    await importAuditFromHistory(page, JSON.stringify(AUDIT_FIXTURE));
 
     await expect(page.getByRole("heading", { name: "Full Results" })).toBeVisible();
     await expect(page.getByText("Audit imported successfully")).toBeVisible();
@@ -208,8 +234,7 @@ test.describe("Catalyst Cash end-to-end", () => {
       await navigator.clipboard.writeText(payload);
     }, JSON.stringify(AUDIT_FIXTURE));
 
-    await page.getByRole("tab", { name: "Audit" }).click();
-    await page.getByRole("button", { name: "Paste & Import AI Result" }).click();
+    await importAuditFromHistory(page, JSON.stringify(AUDIT_FIXTURE));
 
     await expect(page.getByRole("heading", { name: "Full Results" })).toBeVisible();
     const importedNextActionHeading = page.getByRole("heading", { name: "Immediate Next Action" });
@@ -273,8 +298,7 @@ test.describe("Catalyst Cash end-to-end", () => {
       await navigator.clipboard.writeText("not valid catalyst audit json");
     });
 
-    await page.getByRole("tab", { name: "Audit" }).click();
-    await page.getByRole("button", { name: "Paste & Import AI Result" }).click();
+    await importAuditFromHistory(page, "not valid catalyst audit json");
 
     await expect(page.getByText("Imported text is not valid").first()).toBeAttached();
     await expect(page.getByText("No Audits Yet")).toBeVisible();
@@ -292,6 +316,43 @@ test.describe("Catalyst Cash end-to-end", () => {
 
     await expect(page.getByText("You are safe this week.")).toBeVisible();
     await expect(page.getByText("route any extra cash to your highest-interest debt first.")).toBeVisible();
+  });
+
+  test("keeps the audit notes field above the sticky footer on iPhone viewport", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seedStorage(page, {});
+    await completeOnboarding(page);
+
+    await openAuditComposer(page);
+    const notesField = page.getByLabel("Notes for this week");
+    const runAuditButton = page.getByRole("button", { name: "Run Catalyst Audit" });
+
+    await notesField.scrollIntoViewIfNeeded();
+    const notesBox = await notesField.boundingBox();
+    const runAuditBox = await runAuditButton.boundingBox();
+
+    expect(notesBox).not.toBeNull();
+    expect(runAuditBox).not.toBeNull();
+    expect((notesBox?.y || 0) + (notesBox?.height || 0)).toBeLessThan((runAuditBox?.y || 0) - 8);
+  });
+
+  test("captures ask ai response quality feedback on iPhone viewport", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seedStorage(page, {});
+    await mockAuditApi(page);
+    await completeOnboarding(page);
+
+    await page.getByRole("tab", { name: "Ask AI" }).click();
+    await page.getByPlaceholder("Ask about your finances...").fill("Am I safe until my next paycheck?");
+    await page.getByPlaceholder("Ask about your finances...").press("Enter");
+
+    await expect(page.getByText("You are safe this week.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Needs work" }).first()).toBeVisible();
+
+    await page.getByRole("button", { name: "Needs work" }).first().click();
+    await expect(page.getByText("What missed?").first()).toBeVisible();
+    await page.getByRole("button", { name: "Wrong math" }).first().click();
+    await expect(page.getByText("Feedback saved on this device.").first()).toBeVisible();
   });
 
   test("persists a settings change across reload", async ({ page }) => {

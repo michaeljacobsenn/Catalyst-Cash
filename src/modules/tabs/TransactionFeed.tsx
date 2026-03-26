@@ -56,7 +56,7 @@
   import { Card } from "../ui.js";
   import { nativeExport } from "../utils.js";
   import "./TransactionFeed.css";
-  import { buildCSV, buildRewardComparison, formatDateHeader, formatMoney, formatRewardRate, getCategoryMeta, isTransactionInSameMonth, normalizeTransactionResult } from "./transactionFeed/helpers";
+  import { buildCSV, buildRewardComparison, formatDateHeader, formatMoney, formatRewardRate, formatTransactionTime, getCategoryMeta, isTransactionInSameMonth, normalizeTransactionResult } from "./transactionFeed/helpers";
   import { useTransactionFeedGestures } from "./transactionFeed/useTransactionFeedGestures";
 
 interface ToastApi {
@@ -1380,9 +1380,9 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                         >
                           {formatMoney(txn.amount, !!txn.isCredit)}
                         </span>
-                        {txn.date && (
+                        {formatTransactionTime(txn.date) && (
                           <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono }}>
-                            {new Date(txn.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                            {formatTransactionTime(txn.date)}
                           </span>
                         )}
                       </div>
@@ -1426,8 +1426,8 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                       Unlock Full Ledger
                     </h4>
                     <p style={{ fontSize: 13, color: T.text.secondary, margin: 0, lineHeight: 1.5 }}>
-                      Free includes a live 5-transaction preview for one linked institution. Upgrade to Pro to unlock search,
-                      filters, export, and your full multi-account ledger.
+                      Free includes a live 5-transaction preview for one linked institution. Upgrade to Pro for full
+                      multi-account search, deeper filtering, export, and the complete ledger.
                     </p>
                   </div>
                 </Card>

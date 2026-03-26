@@ -27,8 +27,8 @@ describe("cloudSync module", () => {
 
   it("encryption requires passphrase — guards against null passphrase encrypt", async () => {
     const source = await import("fs").then(fs => fs.readFileSync(new URL("./cloudSync.js", import.meta.url), "utf-8"));
-    // The upload function should only encrypt when passphrase is truthy
-    expect(source).toMatch(/if\s*\(\s*passphrase\s*\)/);
+    // The upload function must reject missing passphrases before encrypting
+    expect(source).toContain('if (!passphrase)');
   });
 
   it("verifies the exact data written instead of treating any readable backup as success", async () => {

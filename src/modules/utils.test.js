@@ -34,6 +34,9 @@ vi.mock("./contexts/AuditContext.js", () => ({
 vi.mock("./contexts/NavigationContext.js", () => ({
   useNavigation: () => ({ navTo: vi.fn() }),
 }));
+vi.mock("./contexts/PortfolioContext.js", () => ({
+  usePortfolio: () => ({ cards: [], bankAccounts: [] }),
+}));
 
 import {
   parseCurrency,
@@ -148,6 +151,26 @@ describe("parseAudit", () => {
     expect(parsed.healthScore.score).toBe(60);
     expect(parsed.weeklyMoves).toEqual(["Fix budget"]);
     expect(parsed.structured.nextAction).toBe("Cut spending.");
+  });
+
+  it("normalizes hostile imported statuses instead of preserving raw markup", () => {
+    const raw = JSON.stringify({
+      headerCard: { status: '<img src=x onerror="alert(1)">' },
+      weeklyMoves: ["Move 1"],
+      nextAction: "Act now.",
+      alertsCard: [],
+      dashboardCard: [],
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: {},
+    });
+
+    const parsed = parseAudit(raw);
+    expect(parsed).not.toBeNull();
+    expect(parsed.status).toBe("UNKNOWN");
+    expect(parsed.sections.header).toContain("UNKNOWN");
+    expect(parsed.sections.header).not.toContain("<img");
   });
 
   it("normalizes health score grade and trend from AI output", () => {

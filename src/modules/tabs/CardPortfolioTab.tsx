@@ -22,10 +22,10 @@ import {
   import BankAccountsSection from "../portfolio/BankAccountsSection.js";
   import CreditCardsSection from "../portfolio/CreditCardsSection.js";
   import CreditUtilizationWidget from "../portfolio/CreditUtilizationWidget.js";
-  import OtherAssetsSection from "../portfolio/OtherAssetsSection.js";
   import { usePlaidSync } from "../usePlaidSync.js";
   import { fmt } from "../utils.js";
 const InvestmentsSection = lazy(() => import("../portfolio/InvestmentsSection.js"));
+const OtherAssetsSection = lazy(() => import("../portfolio/OtherAssetsSection.js"));
 const TransactionsSection = lazy(() => import("../portfolio/TransactionsSection.js"));
 const AddAccountSheet = lazy(() => import("./AddAccountSheet.js"));
 
@@ -545,11 +545,13 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
   );
 
   const combinedOtherAssetsSection = (
-    <OtherAssetsSection
-      collapsedSections={collapsedSections}
-      setCollapsedSections={setCollapsedSections}
-      openSheet={openSheet}
-    />
+    <Suspense fallback={null}>
+      <OtherAssetsSection
+        collapsedSections={collapsedSections}
+        setCollapsedSections={setCollapsedSections}
+        openSheet={openSheet}
+      />
+    </Suspense>
   );
 
   return (

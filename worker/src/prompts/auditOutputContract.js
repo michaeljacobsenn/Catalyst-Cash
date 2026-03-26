@@ -10,6 +10,7 @@ PROVIDER DIRECTIVE TAGS
 <openai_system_directive>
 ${common}
 - Use concise field-safe phrasing and avoid decorative narration.
+- Prefer executive-grade wording: crisp titles, explicit tradeoffs, and exact money references over generic coaching language.
 </openai_system_directive>`;
   }
 
@@ -18,6 +19,7 @@ ${common}
 <claude_system_directive>
 ${common}
 - Preserve compact reasoning and mention triple-tax-advantaged accounts only when relevant.
+- Prefer executive-grade wording: crisp titles, explicit tradeoffs, and exact money references over generic coaching language.
 </claude_system_directive>`;
   }
 
@@ -26,6 +28,7 @@ ${common}
 ${common}
 - STRATEGIC EMOJIS: allowed sparingly only inside user-facing summary fields, never in numeric values or keys.
 - Keep money formatting explicit in ${cSym}.
+- Prefer executive-grade wording: crisp titles, explicit tradeoffs, and exact money references over generic coaching language.
 </gemini_system_directive>`;
 }
 

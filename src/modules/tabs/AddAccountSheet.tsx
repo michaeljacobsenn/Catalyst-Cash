@@ -21,7 +21,7 @@
     X
   } from "../icons";
   import { getIssuerCards,getPinnedForIssuer } from "../issuerCards.js";
-  import { getTickerOptions } from "../marketData.js";
+  import { getTickerOptions } from "../tickerCatalog.js";
   import { FormGroup,FormRow } from "../ui.js";
 
 const INSTITUTIONS = [

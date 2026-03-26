@@ -22,7 +22,7 @@ import { T } from "../constants.js";
 import { evaluateChatDecisionRules } from "../decisionRules.js";
 import { generateStrategy, mergeSnapshotDebts } from "../engine.js";
 import { haptic } from "../haptics.js";
-import { AlertTriangle, ArrowDown, ArrowUpRight, Sparkles, Trash2 } from "../icons";
+import { AlertTriangle, ArrowDown, ArrowUpRight, CheckCircle2, MessageCircle, Sparkles, Trash2 } from "../icons";
 import { log } from "../logger.js";
 import { extractMemoryTags } from "../memory.js";
 import { isLikelyNetworkError, toUserFacingRequestError } from "../networkErrors.js";
@@ -108,6 +108,25 @@ interface ChatInputRisk {
   rationale?: string;
 }
 
+type ChatFeedbackVerdict = "helpful" | "needs-work";
+type ChatFeedbackReason = "too_generic" | "wrong_math" | "too_long" | "missed_context";
+
+interface ChatMessageFeedback {
+  verdict: ChatFeedbackVerdict;
+  reasons: ChatFeedbackReason[];
+  updatedAt: number;
+}
+
+type ChatFeedbackStore = Record<string, ChatMessageFeedback>;
+
+const CHAT_FEEDBACK_KEY = "ai-chat-feedback";
+const CHAT_FEEDBACK_REASON_OPTIONS: Array<{ value: ChatFeedbackReason; label: string }> = [
+  { value: "too_generic", label: "Too generic" },
+  { value: "wrong_math", label: "Wrong math" },
+  { value: "too_long", label: "Too long" },
+  { value: "missed_context", label: "Missed context" },
+];
+
 const ProBannerTyped = ProBanner as unknown as (props: ProBannerProps) => ReactNode;
 const LazyProPaywallTyped = LazyProPaywall as unknown as (props: ProPaywallProps) => ReactNode;
 const Skeleton = UISkeleton as unknown as (props: SkeletonProps) => ReactNode;
@@ -162,6 +181,7 @@ export default memo(function AIChatTab({
   const [chatQuota, setChatQuota] = useState<ChatQuotaState>({ allowed: true, remaining: Infinity, limit: Infinity, used: 0 });
   const [inputFocused, setInputFocused] = useState<boolean>(false);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
+  const [messageFeedback, setMessageFeedback] = useState<ChatFeedbackStore>({});
 
   const suggestionsScrollRef = useRef<HTMLDivElement | null>(null);
   const [, setCanScrollRight] = useState<boolean>(true);
@@ -186,6 +206,20 @@ export default memo(function AIChatTab({
   useEffect(() => {
     checkChatQuota(effectiveChatModel).then(setChatQuota);
   }, [effectiveChatModel]);
+
+  useEffect(() => {
+    let active = true;
+    db.get(CHAT_FEEDBACK_KEY)
+      .then((stored) => {
+        if (active && stored && typeof stored === "object") {
+          setMessageFeedback(stored as ChatFeedbackStore);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -512,6 +546,48 @@ export default memo(function AIChatTab({
     haptic.medium();
   }, []);
 
+  const recordMessageFeedback = useCallback(
+    (messageId: string, verdict: ChatFeedbackVerdict, reasons: ChatFeedbackReason[] = []): void => {
+      setMessageFeedback((prev) => {
+        const next: ChatFeedbackStore = {
+          ...prev,
+          [messageId]: {
+            verdict,
+            reasons,
+            updatedAt: Date.now(),
+          },
+        };
+        void db.set(CHAT_FEEDBACK_KEY, next);
+        log.info("chat", "Chat response feedback recorded", { verdict, reasons, messageId });
+        return next;
+      });
+      haptic.selection();
+    },
+    []
+  );
+
+  const toggleMessageFeedbackReason = useCallback((messageId: string, reason: ChatFeedbackReason): void => {
+    setMessageFeedback((prev) => {
+      const existing = prev[messageId];
+      if (!existing || existing.verdict !== "needs-work") return prev;
+      const reasons = existing.reasons.includes(reason)
+        ? existing.reasons.filter((item) => item !== reason)
+        : [...existing.reasons, reason];
+      const next: ChatFeedbackStore = {
+        ...prev,
+        [messageId]: {
+          ...existing,
+          reasons,
+          updatedAt: Date.now(),
+        },
+      };
+      void db.set(CHAT_FEEDBACK_KEY, next);
+      log.info("chat", "Chat response feedback updated", { verdict: "needs-work", reasons, messageId });
+      return next;
+    });
+    haptic.selection();
+  }, []);
+
   // ── Handle submit ──
   const handleSubmit = (event?: FormEvent<HTMLFormElement> | KeyboardEvent<HTMLTextAreaElement>): void => {
     event?.preventDefault();
@@ -743,7 +819,7 @@ export default memo(function AIChatTab({
                   textTransform: "uppercase",
                 }}
               >
-                🔒 End-to-end private
+                Privacy-first
               </span>
             </div>
 
@@ -810,6 +886,8 @@ export default memo(function AIChatTab({
             {messages.map((msg, i) => {
               const isUser = msg.role === "user";
               const isLatestAssistant = !isUser && i === messages.length - 1 && isStreaming;
+              const feedbackMessageId = !isUser && typeof msg.ts === "number" ? String(msg.ts) : null;
+              const feedback = feedbackMessageId ? messageFeedback[feedbackMessageId] : null;
               // Detect if previous or next message is from the same sender to adjust corner radiuses beautifully
               const prevIsSame = messages[i - 1]?.role === msg.role;
               const nextIsSame = messages[i + 1]?.role === msg.role;
@@ -830,7 +908,8 @@ export default memo(function AIChatTab({
                   className="chat-bubble-in"
                   style={{
                     display: "flex",
-                    justifyContent: isUser ? "flex-end" : "flex-start",
+                    flexDirection: "column",
+                    alignItems: isUser ? "flex-end" : "flex-start",
                     animationDelay: `${Math.min(i * 0.03, 0.3)}s`,
                     marginBottom: nextIsSame ? 2 : 12,
                   }}
@@ -867,6 +946,122 @@ export default memo(function AIChatTab({
                       </div>
                     )}
                   </div>
+                  {!isUser && !isLatestAssistant && feedbackMessageId && (
+                    <div
+                      style={{
+                        marginTop: 8,
+                        marginLeft: 6,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-start",
+                        gap: 8,
+                        maxWidth: "88%",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => recordMessageFeedback(feedbackMessageId, "helpful")}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "6px 10px",
+                            borderRadius: 999,
+                            border:
+                              feedback?.verdict === "helpful"
+                                ? `1px solid ${T.status.green}40`
+                                : `1px solid ${T.border.subtle}`,
+                            background:
+                              feedback?.verdict === "helpful" ? `${T.status.green}14` : T.bg.surface,
+                            color: feedback?.verdict === "helpful" ? T.status.green : T.text.secondary,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <CheckCircle2 size={12} />
+                          Helpful
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            recordMessageFeedback(
+                              feedbackMessageId,
+                              "needs-work",
+                              feedback?.verdict === "needs-work" ? feedback.reasons : []
+                            )
+                          }
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "6px 10px",
+                            borderRadius: 999,
+                            border:
+                              feedback?.verdict === "needs-work"
+                                ? `1px solid ${T.status.amber}40`
+                                : `1px solid ${T.border.subtle}`,
+                            background:
+                              feedback?.verdict === "needs-work" ? `${T.status.amber}14` : T.bg.surface,
+                            color: feedback?.verdict === "needs-work" ? T.status.amber : T.text.secondary,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <MessageCircle size={12} />
+                          Needs work
+                        </button>
+                      </div>
+                      {feedback?.verdict === "needs-work" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              color: T.text.dim,
+                              textTransform: "uppercase",
+                              letterSpacing: "0.08em",
+                            }}
+                          >
+                            What missed?
+                          </span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                            {CHAT_FEEDBACK_REASON_OPTIONS.map((option) => {
+                              const selected = feedback.reasons.includes(option.value);
+                              return (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  onClick={() => toggleMessageFeedbackReason(feedbackMessageId, option.value)}
+                                  style={{
+                                    padding: "5px 9px",
+                                    borderRadius: 999,
+                                    border: selected
+                                      ? `1px solid ${T.status.amber}50`
+                                      : `1px solid ${T.border.subtle}`,
+                                    background: selected ? `${T.status.amber}14` : T.bg.surface,
+                                    color: selected ? T.status.amber : T.text.secondary,
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  {option.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {feedback && (
+                        <span style={{ fontSize: 10, color: T.text.dim, fontWeight: 600 }}>
+                          Feedback saved on this device.
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1142,7 +1337,7 @@ export default memo(function AIChatTab({
               </div>
             </div>
           ) : (
-            <span style={{ opacity: 0.8 }}>Conversations auto-expire · We never store your chats</span>
+            <span style={{ opacity: 0.8 }}>Encrypted local chat history auto-expires after 24 hours</span>
           )}
         </div>
 

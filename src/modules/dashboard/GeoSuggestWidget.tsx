@@ -172,6 +172,9 @@ export default function GeoSuggestWidget() {
 
   // Success — beautiful expandable result card
   if (status === "success" && bestCard) {
+    const rewardLabel =
+      bestCard.currency === "CASH" ? `${bestCard.multiplier}% cash back` : `${bestCard.multiplier}x points`;
+
     return (
       <div style={{ width: "100%", marginTop: 8 }}>
         <div
@@ -202,7 +205,7 @@ export default function GeoSuggestWidget() {
               </div>
               <div style={{ fontSize: 11, color: T.text.secondary, display: "flex", alignItems: "center", gap: 4 }}>
                 <Sparkles size={10} color={T.accent.emerald} />
-                {bestCard.multiplier}x {bestCard.currency === "CASH" ? "Cash Back" : "Points"} · <span style={{ fontWeight: 800, color: T.accent.emerald }}>{bestCard.effectiveYield}%</span> yield
+                {rewardLabel} · <span style={{ fontWeight: 800, color: T.accent.emerald }}>{bestCard.effectiveYield}%</span> effective yield
               </div>
             </div>
             <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>

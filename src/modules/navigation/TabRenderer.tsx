@@ -4,15 +4,13 @@
   import type { AppTab,NavViewState } from "../contexts/NavigationContext.js";
   import type { ToastApi } from "../Toast.js";
   import { ErrorBoundary } from "../ui.js";
-  import DashboardTab from "../tabs/DashboardTab.js";
-
+const loadDashboardTab = () => import("../tabs/DashboardTab.js");
 const loadAIChatTab = () => import("../tabs/AIChatTab.js");
 const loadCashflowTab = () => import("../tabs/CashflowTab.js");
 const loadPortfolioTab = () => import("../tabs/PortfolioTab.js");
 const loadAuditTab = () => import("../tabs/AuditTab.js");
-const loadCardPortfolioTab = () => import("../tabs/CardPortfolioTab.js");
-const loadCardWizardTab = () => import("../tabs/CardWizardTab.js");
 
+const DashboardTab = lazy(loadDashboardTab);
 const AIChatTab = lazy(loadAIChatTab);
 const CashflowTab = lazy(loadCashflowTab);
 const PortfolioTab = lazy(loadPortfolioTab);
@@ -67,11 +65,7 @@ export default function TabRenderer({
     const warmup = () => {
       void Promise.allSettled([
         loadAIChatTab(),
-        loadCashflowTab(),
-        loadPortfolioTab(),
         loadAuditTab(),
-        loadCardPortfolioTab(),
-        loadCardWizardTab(),
       ]);
     };
 

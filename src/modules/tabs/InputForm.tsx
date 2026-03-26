@@ -411,7 +411,7 @@ export default function InputForm({
         alignItems: "center",
         width: "100%",
         paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
-        ["--page-bottom-clearance" as string]: "calc(env(safe-area-inset-bottom, 0px) + 120px)",
+        ["--page-bottom-clearance" as string]: "calc(env(safe-area-inset-bottom, 0px) + 168px)",
       }}
     >
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column", gap: 12 }}>

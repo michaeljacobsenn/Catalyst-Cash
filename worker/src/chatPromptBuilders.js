@@ -175,6 +175,65 @@ The latest user message triggered prompt-injection or guardrail-bypass heuristic
 - Triggered heuristics: ${matches}`;
 }
 
+function getMonthlyPayPeriods(payFrequency) {
+  const normalized = String(payFrequency || "bi-weekly").trim().toLowerCase();
+  if (normalized === "weekly") return 52 / 12;
+  if (
+    normalized === "bi-weekly" ||
+    normalized === "biweekly" ||
+    normalized === "every-2-weeks" ||
+    normalized === "every 2 weeks"
+  ) {
+    return 26 / 12;
+  }
+  if (
+    normalized === "semi-monthly" ||
+    normalized === "semimonthly" ||
+    normalized === "twice-monthly" ||
+    normalized === "twice monthly"
+  ) {
+    return 2;
+  }
+  if (normalized === "monthly") return 1;
+  return 26 / 12;
+}
+
+function estimateMonthlySalaryIncome(financialConfig = {}) {
+  const standardPaycheck = Number(financialConfig.paycheckStandard) || 0;
+  const firstOfMonthPaycheck = Number(financialConfig.paycheckFirstOfMonth) || 0;
+  const hasSplitPaycheck = firstOfMonthPaycheck > 0;
+  const normalized = String(financialConfig.payFrequency || "bi-weekly").trim().toLowerCase();
+
+  if (!hasSplitPaycheck) {
+    return standardPaycheck * getMonthlyPayPeriods(normalized);
+  }
+
+  if (normalized === "weekly") {
+    return ((firstOfMonthPaycheck * 12) + (standardPaycheck * 40)) / 12;
+  }
+  if (
+    normalized === "bi-weekly" ||
+    normalized === "biweekly" ||
+    normalized === "every-2-weeks" ||
+    normalized === "every 2 weeks"
+  ) {
+    return ((firstOfMonthPaycheck * 12) + (standardPaycheck * 14)) / 12;
+  }
+  if (
+    normalized === "semi-monthly" ||
+    normalized === "semimonthly" ||
+    normalized === "twice-monthly" ||
+    normalized === "twice monthly"
+  ) {
+    return firstOfMonthPaycheck + standardPaycheck;
+  }
+  if (normalized === "monthly") {
+    return firstOfMonthPaycheck;
+  }
+
+  return ((firstOfMonthPaycheck * 12) + (standardPaycheck * 14)) / 12;
+}
+
 /**
  * Build a concise financial context snapshot for chat.
  * Intentionally lean — we want the AI to reason, not regurgitate.
@@ -259,17 +318,13 @@ function buildFinancialContext(current, financialConfig, cards, renewals, histor
 
     // Calculate Estimated Monthly Net Income & Minimums for structural ratios
     let estMonthlyIncome = 0;
+    const monthlyPayPeriods = getMonthlyPayPeriods(fc.payFrequency);
     if (fc.incomeType === "hourly") {
-      estMonthlyIncome = (fc.hourlyRateNet || 0) * (fc.typicalHours || 0) * 4.33;
+      estMonthlyIncome = (fc.hourlyRateNet || 0) * (fc.typicalHours || 0) * monthlyPayPeriods;
     } else if (fc.incomeType === "variable") {
-      estMonthlyIncome = (fc.averagePaycheck || 0) * 4.33;
+      estMonthlyIncome = (fc.averagePaycheck || 0) * monthlyPayPeriods;
     } else {
-      const freq = fc.payFrequency || "bi-weekly";
-      const pay = fc.paycheckStandard || 0;
-      if (freq === "weekly") estMonthlyIncome = pay * 4.33;
-      else if (freq === "bi-weekly") estMonthlyIncome = pay * 2.16;
-      else if (freq === "semi-monthly") estMonthlyIncome = pay * 2;
-      else if (freq === "monthly") estMonthlyIncome = pay;
+      estMonthlyIncome = estimateMonthlySalaryIncome(fc);
     }
 
     let totalMonthlyMins = 0;
@@ -656,6 +711,7 @@ This user has **${fc.incomeType === "hourly" ? "hourly" : "variable/freelance"}*
 
 ## Your Identity & Mindset
 You are not a generic chatbot. You are a disciplined financial planning assistant that helps the user understand tradeoffs, spot risks, and choose sensible next steps using their live app data. You are not a substitute for a licensed advisor, CPA, attorney, or therapist.
+Operate like a conservative CFO, forensic financial analyst, and cash-flow auditor. Your answer should feel like an intelligent operator reviewed the numbers, ranked the risks, and chose the highest-value next move.
 
 **Your operating principles:**
 - **PROACTIVE DIRECTIVE:** If the user asks broad questions like "how am I doing?" or "what should I do?", summarize the situation and give the clearest next step using their live data.
@@ -675,6 +731,16 @@ ${retirementPhaseBlock}
 ${variableIncomeBlock}
 ${buildDecisionRulesBlock(decisionRecommendations)}
 ${buildInputRiskBlock(chatInputRisk)}
+
+## Visible Response Standard (MANDATORY)
+- Start with a one-sentence verdict that answers the question directly.
+- Then give the analysis in this order when relevant: Why this is the right call → Best next move → Watchouts / alternative path.
+- Use short paragraphs. Use bullets only for concrete actions, ranked in the order the user should do them.
+- Cite exact dollars, dates, APRs, utilization percentages, card names, and deadlines from the user's live data whenever possible.
+- Separate observed facts from assumptions. If you infer something, label it clearly.
+- If decisive data is missing, give the best provisional answer first, then ask at most 2 tightly targeted follow-up questions.
+- When comparing options, make a recommendation, name the runner-up, and explain the tradeoff in plain English.
+- Do not default to generic financial education, motivational filler, or long option lists. Make the call.
 
 ## Credit Building Strategy(Always Active)
 You are ALWAYS aware of credit optimization — it costs nothing and runs parallel to every financial phase:

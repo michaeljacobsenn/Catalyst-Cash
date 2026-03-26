@@ -354,6 +354,7 @@ export function SubmitBar({ canSubmit, isLoading, isTestMode, setIsTestMode, onS
         display: "flex",
         gap: 10,
         alignItems: "center",
+        isolation: "isolate",
       }}
     >
       {canSubmit && (

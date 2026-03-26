@@ -1,5 +1,5 @@
+  import { Suspense,lazy } from "react";
   import { createRoot } from "react-dom/client";
-  import App from "./App.js";
   import ErrorBoundary from "./modules/ErrorBoundary.js";
   import { AuditProvider } from "./modules/contexts/AuditContext.js";
   import { BudgetProvider } from "./modules/contexts/BudgetContext.js";
@@ -17,6 +17,28 @@ injectCachedOTA();
 // Capacitor core — boots native plugins when running on iOS.
 // On web (vite dev server) this is a no-op.
 
+const App = lazy(() => import("./App.js"));
+
+const BootFallback = () => (
+  <div
+    style={{
+      minHeight: "100vh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "#0b1220",
+      color: "#f8fafc",
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      fontSize: 14,
+      fontWeight: 700,
+      letterSpacing: "0.04em",
+      textTransform: "uppercase",
+    }}
+  >
+    Loading PortfolioPro...
+  </div>
+);
+
 const rootElement = document.getElementById("root");
 if (!rootElement) {
   throw new Error("Root element #root was not found");
@@ -32,7 +54,9 @@ root.render(
             <BudgetProvider>
               <NavigationProvider>
                 <AuditProvider>
-                  <App />
+                  <Suspense fallback={<BootFallback />}>
+                    <App />
+                  </Suspense>
                 </AuditProvider>
               </NavigationProvider>
             </BudgetProvider>

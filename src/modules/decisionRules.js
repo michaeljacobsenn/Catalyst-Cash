@@ -39,6 +39,42 @@ function getMonthlyPayPeriods(payFrequency) {
   return 26 / 12;
 }
 
+function estimateMonthlySalaryIncome(financialConfig = {}) {
+  const standardPaycheck = toNumber(financialConfig.paycheckStandard);
+  const firstOfMonthPaycheck = toNumber(financialConfig.paycheckFirstOfMonth);
+  const hasSplitPaycheck = firstOfMonthPaycheck > 0;
+  const normalized = String(financialConfig.payFrequency || "bi-weekly").trim().toLowerCase();
+
+  if (!hasSplitPaycheck) {
+    return standardPaycheck * getMonthlyPayPeriods(normalized);
+  }
+
+  if (normalized === "weekly") {
+    return ((firstOfMonthPaycheck * 12) + (standardPaycheck * 40)) / 12;
+  }
+  if (
+    normalized === "bi-weekly" ||
+    normalized === "biweekly" ||
+    normalized === "every-2-weeks" ||
+    normalized === "every 2 weeks"
+  ) {
+    return ((firstOfMonthPaycheck * 12) + (standardPaycheck * 14)) / 12;
+  }
+  if (
+    normalized === "semi-monthly" ||
+    normalized === "semimonthly" ||
+    normalized === "twice-monthly" ||
+    normalized === "twice monthly"
+  ) {
+    return firstOfMonthPaycheck + standardPaycheck;
+  }
+  if (normalized === "monthly") {
+    return firstOfMonthPaycheck;
+  }
+
+  return ((firstOfMonthPaycheck * 12) + (standardPaycheck * 14)) / 12;
+}
+
 function estimateMonthlyNetIncome(financialConfig = {}) {
   if (!financialConfig || typeof financialConfig !== "object") return 0;
   const monthlyPayPeriods = getMonthlyPayPeriods(financialConfig.payFrequency);
@@ -50,8 +86,7 @@ function estimateMonthlyNetIncome(financialConfig = {}) {
     return toNumber(financialConfig.averagePaycheck) * monthlyPayPeriods;
   }
 
-  const paycheck = toNumber(financialConfig.paycheckStandard);
-  return paycheck * monthlyPayPeriods;
+  return estimateMonthlySalaryIncome(financialConfig);
 }
 
 function estimateMonthlyRenewalLoad(renewals = []) {

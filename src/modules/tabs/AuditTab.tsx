@@ -13,8 +13,7 @@
     Plus,
     Trash2,
     TrendingUp,
-    Zap,
-    Edit3
+    Zap
   } from "../icons";
   import { buildPromoLine } from "../planCatalog.js";
   import { shouldShowGating } from "../subscription.js";
@@ -228,7 +227,7 @@ const TrendSparkline = ({ history }) => {
 // ═══════════════════════════════════════════════════════════════
 export default memo(function AuditTab({ proEnabled = false, privacyMode: _privacyModeTick = false, toast, onDemoAudit }: AuditTabProps) {
   void _privacyModeTick;
-  const { current, history: audits, deleteHistoryItem: onDelete, quota, handleManualImport } = useAudit();
+  const { current, history: audits, deleteHistoryItem: onDelete, quota } = useAudit();
   const { navTo, setResultsBackTarget } = useNavigation();
   const [showPaywall, setShowPaywall] = useState(false);
 
@@ -236,9 +235,6 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [selMode, setSelMode] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
-
-  const [showManualPaste, setShowManualPaste] = useState<boolean>(false);
-  const [manualPasteText, setManualPasteText] = useState<string>("");
 
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [exportAuditRecord, setExportAuditRecord] = useState<AuditRecord | null>(null);
@@ -461,126 +457,6 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
           <Plus size={18} strokeWidth={2.5} />
           Run New Audit
         </button>
-
-        <div style={{ display: "flex", gap: 10, width: "100%", marginTop: 12 }}>
-          <button
-            onClick={async () => {
-              try {
-                const txt = await navigator.clipboard.readText();
-                if (!txt || txt.trim() === "") throw new Error("Empty clipboard");
-                void handleManualImport(txt);
-              } catch {
-                toast?.error?.("Could not auto-read clipboard. Please paste manually.");
-                setShowManualPaste(true);
-              }
-            }}
-            style={{
-              flex: 1,
-              padding: "14px",
-              borderRadius: T.radius.lg,
-              border: `1px dashed ${T.accent.emerald}60`,
-              background: `${T.accent.emerald}08`,
-              color: T.accent.emerald,
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              transition: "all .2s ease",
-            }}
-          >
-            <Plus size={16} strokeWidth={2.5} /> Paste & Import AI Result
-          </button>
-          <button
-            onClick={() => setShowManualPaste(!showManualPaste)}
-            style={{
-              width: 54,
-              borderRadius: T.radius.lg,
-              border: `1px solid ${T.border.default}`,
-              background: showManualPaste ? T.bg.card : T.bg.elevated,
-              color: showManualPaste ? T.accent.primary : T.text.dim,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              transition: "all .2s ease",
-            }}
-          >
-            <Edit3 size={18} />
-          </button>
-        </div>
-
-        {showManualPaste && (
-          <div style={{ width: "100%", marginTop: 12 }}>
-            <textarea
-              value={manualPasteText}
-              onChange={(event) => setManualPasteText(event.target.value)}
-              placeholder="Paste the AI response here (entire response)"
-              style={{
-                width: "100%",
-                height: 140,
-                padding: "12px",
-                borderRadius: T.radius.md,
-                border: `1px solid ${T.border.default}`,
-                background: T.bg.elevated,
-                color: T.text.primary,
-                fontSize: 13,
-                fontFamily: T.font.mono,
-                marginBottom: 8,
-                resize: "none",
-                lineHeight: 1.4,
-              }}
-            />
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={() => {
-                  if (manualPasteText.trim()) {
-                    void handleManualImport(manualPasteText);
-                    setShowManualPaste(false);
-                    setManualPasteText("");
-                  } else {
-                    toast?.error?.("Text is empty");
-                  }
-                }}
-                style={{
-                  flex: 1,
-                  padding: "12px",
-                  borderRadius: T.radius.md,
-                  background: T.accent.emerald,
-                  color: "white",
-                  fontWeight: 700,
-                  fontSize: 13,
-                  cursor: "pointer",
-                  border: "none",
-                }}
-              >
-                Import Text
-              </button>
-              <button
-                onClick={() => {
-                  setShowManualPaste(false);
-                  setManualPasteText("");
-                }}
-                className="btn-secondary"
-                style={{
-                  flex: 1,
-                  padding: "12px",
-                  borderRadius: T.radius.md,
-                  border: `1px solid ${T.border.subtle}`,
-                  background: "transparent",
-                  color: T.text.secondary,
-                  fontWeight: 600,
-                  fontSize: 13,
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
 
         {remaining != null && limit != null && (
           <div style={{ textAlign: "center", marginTop: 12, fontSize: 10, fontWeight: 600, color: T.text.dim, fontFamily: T.font.mono }}>

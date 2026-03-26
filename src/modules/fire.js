@@ -57,7 +57,15 @@ function annualIncomeFromConfigCents(config = {}) {
 
   const frequency = String(config?.payFrequency || "bi-weekly").toLowerCase();
   const standardPaycheckCents = Math.max(0, toCents(config?.paycheckStandard || config?.averagePaycheck || 0));
+  const firstOfMonthPaycheckCents = Math.max(0, toCents(config?.paycheckFirstOfMonth || 0));
   if (standardPaycheckCents <= 0) return 0;
+
+  if (firstOfMonthPaycheckCents > 0) {
+    if (frequency === "weekly") return (firstOfMonthPaycheckCents * 12) + (standardPaycheckCents * 40);
+    if (frequency === "bi-weekly" || frequency === "biweekly") return (firstOfMonthPaycheckCents * 12) + (standardPaycheckCents * 14);
+    if (frequency === "semi-monthly" || frequency === "semimonthly") return (firstOfMonthPaycheckCents * 12) + (standardPaycheckCents * 12);
+    if (frequency === "monthly") return firstOfMonthPaycheckCents * 12;
+  }
 
   if (frequency === "weekly") return standardPaycheckCents * 52;
   if (frequency === "bi-weekly" || frequency === "biweekly") return standardPaycheckCents * 26;

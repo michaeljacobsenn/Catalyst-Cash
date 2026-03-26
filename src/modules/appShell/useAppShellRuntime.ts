@@ -3,18 +3,10 @@ import { Capacitor } from "@capacitor/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AuditRecord, Card as CardType, Renewal } from "../../types/index.js";
 import { normalizeAppError } from "../appErrors.js";
-import { performCloudBackup } from "../backup.js";
 import { haptic } from "../haptics.js";
 import { log } from "../logger.js";
-import { extractCategoryByKeywords } from "../merchantDatabase.js";
-import { triggerStoreArrivalNotification } from "../notifications.js";
-import { syncOTAData } from "../ota.js";
-import { initRevenueCat } from "../revenuecat.js";
-import { getOptimalCard } from "../rewardsCatalog.js";
 import { getGatingMode, isPro, syncRemoteGatingMode } from "../subscription.js";
 import type { ToastApi } from "../Toast.js";
-import { uploadToICloud } from "../cloudSync.js";
-
 type AppTab = "dashboard" | "cashflow" | "audit" | "portfolio" | "chat" | "settings" | "history" | "results" | "input";
 
 interface SimulatedNotification {
@@ -22,8 +14,6 @@ interface SimulatedNotification {
   body: string;
   store: string;
 }
-
-const uploadToICloudTyped = uploadToICloud as (payload: unknown, passphrase?: string | null) => Promise<boolean>;
 
 function getHouseholdSyncDelayMs() {
   const override =
@@ -37,7 +27,9 @@ function getHouseholdSyncDelayMs() {
 
 export function useBootServices(setProEnabled: (value: boolean) => void) {
   useEffect(() => {
-    syncOTAData();
+    void import("../ota.js")
+      .then(({ syncOTAData }) => syncOTAData())
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -45,6 +37,7 @@ export function useBootServices(setProEnabled: (value: boolean) => void) {
 
     const boot = async () => {
       await syncRemoteGatingMode();
+      const { initRevenueCat } = await import("../revenuecat.js");
       await initRevenueCat();
 
       const mode = getGatingMode();
@@ -82,15 +75,21 @@ export function useSimulatedGeofenceNotification(
     const handleSimulate = (event: Event) => {
       const detail = (event as CustomEvent<{ store?: string }>).detail;
       const store = detail?.store || "Store";
-      const categoryStr = extractCategoryByKeywords(store) || "other";
-      const optimal = getOptimalCard(cards || [], categoryStr, valuations || {});
-
-      let recommendation = "Open Catalyst to see your best card.";
-      if (optimal && optimal.yield) {
-        recommendation = `Use your ${optimal.cardName} here for ${parseFloat((optimal.yield * 100).toFixed(1))}% back!`;
-      }
-
       void (async () => {
+        const [{ extractCategoryByKeywords }, { getOptimalCard }, { triggerStoreArrivalNotification }] =
+          await Promise.all([
+            import("../merchantDatabase.js"),
+            import("../rewardsCatalog.js"),
+            import("../notifications.js"),
+          ]);
+        const categoryStr = extractCategoryByKeywords(store) || "other";
+        const optimal = getOptimalCard(cards || [], categoryStr, valuations || {});
+
+        let recommendation = "Open Catalyst to see your best card.";
+        if (optimal && optimal.yield) {
+          recommendation = `Use your ${optimal.cardName} here for ${parseFloat((optimal.yield * 100).toFixed(1))}% back!`;
+        }
+
         // QA simulation bypasses cooldown with forceReset so previews always fire
         const shownNatively = await triggerStoreArrivalNotification(store, recommendation, { forceReset: true });
         if (shownNatively) {
@@ -155,8 +154,12 @@ export function useAutoICloudBackup({
 
     iCloudSyncTimer.current = setTimeout(async () => {
       try {
+        const [{ performCloudBackup }, { uploadToICloud }] = await Promise.all([
+          import("../backup.js"),
+          import("../cloudSync.js"),
+        ]);
         await performCloudBackup({
-          upload: uploadToICloudTyped,
+          upload: uploadToICloud,
           passphrase: appPasscode || null,
           personalRules,
           interval: autoBackupInterval,

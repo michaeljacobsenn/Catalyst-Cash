@@ -558,3 +558,47 @@ describe("prompt size profiling", () => {
     expect(prompt).toContain("MLM / PYRAMID SCHEMES");
   });
 });
+
+describe("launch prompt eval pack", () => {
+  const launchChatConfig = {
+    ...minConfig,
+    currencyCode: "USD",
+    paycheckStandard: 3200,
+    paycheckFirstOfMonth: 2800,
+    monthlyRent: 2100,
+    emergencyReserveTarget: 18000,
+    incomeType: "salary",
+  };
+
+  it("locks the Ask AI response contract to an operator-grade verdict and recommendation format", () => {
+    const prompt = getChatSystemPrompt(null, launchChatConfig, [], [], [], null, "", null, null, "openai", "");
+
+    expect(prompt).toContain("Operate like a conservative CFO, forensic financial analyst, and cash-flow auditor.");
+    expect(prompt).toContain("Start with a one-sentence verdict that answers the question directly.");
+    expect(prompt).toContain("Why this is the right call");
+    expect(prompt).toContain("Best next move");
+    expect(prompt).toContain("Watchouts / alternative path");
+    expect(prompt).toContain("Separate observed facts from assumptions.");
+    expect(prompt).toContain("make a recommendation, name the runner-up");
+    expect(prompt).toContain("ask at most 2 tightly targeted follow-up questions");
+  });
+
+  it("preserves split-paycheck context so salary users with uneven pay cycles are modeled correctly", () => {
+    const prompt = getChatSystemPrompt(null, launchChatConfig, [], [], [], null, "", null, null, "openai", "");
+
+    expect(prompt).toContain("Standard Paycheck: $3,200.00 (bi-weekly)");
+    expect(prompt).toContain("1st-of-Month Paycheck: $2,800.00");
+    expect(prompt).toContain("Housing: Renter — $2,100.00/mo");
+  });
+
+  it("keeps the audit prompt anchored to ranked actions, concrete reasons, and contradiction handling", () => {
+    const prompt = getSystemPrompt("openai", launchChatConfig);
+
+    expect(prompt).toContain("Write like a CFO / operator reviewing weekly cash position");
+    expect(prompt).toContain("Prioritize the highest-impact recommendation first.");
+    expect(prompt).toContain("Every recommended move must be tied to a concrete reason");
+    expect(prompt).toContain("Distinguish facts, assumptions, and contradictions explicitly.");
+    expect(prompt).toContain("If the correct action is to hold steady, say that directly");
+    expect(prompt).toContain("Floor > Fixed Mandates > Time-Critical");
+  });
+});

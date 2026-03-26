@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCSV, buildRewardComparison, formatRewardRate, isTransactionInSameMonth, normalizeTransactionResult } from "./helpers";
+import { buildCSV, buildRewardComparison, formatRewardRate, formatTransactionTime, isTransactionInSameMonth, normalizeTransactionResult } from "./helpers";
 
 describe("transaction feed helpers", () => {
   it("normalizes legacy transaction payloads", () => {
@@ -99,8 +99,13 @@ describe("transaction feed helpers", () => {
   });
 
   it("formats reward rates consistently for the ledger badges", () => {
-    expect(formatRewardRate(2)).toBe("2.0x");
-    expect(formatRewardRate(2.75)).toBe("2.8x");
-    expect(formatRewardRate(null)).toBe("0x");
+    expect(formatRewardRate(2)).toBe("2.0%");
+    expect(formatRewardRate(2.75)).toBe("2.8%");
+    expect(formatRewardRate(null)).toBe("0.0%");
+  });
+
+  it("suppresses fake times for date-only ledger rows", () => {
+    expect(formatTransactionTime("2026-03-26")).toBeNull();
+    expect(formatTransactionTime("2026-03-26T13:45:00Z")).toBeTruthy();
   });
 });

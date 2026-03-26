@@ -327,7 +327,7 @@ export const GlobalStyles = () => (
     /* Safe-area aware padding for scroll bodies */
     :root{--top-bar-h:48px;--page-bottom-padding:clamp(16px,2vh,24px)}
     .safe-scroll-body{
-      padding-bottom:max(var(--page-bottom-padding), env(safe-area-inset-bottom, 0px));
+      padding-bottom:max(var(--page-bottom-clearance, var(--page-bottom-padding)), env(safe-area-inset-bottom, 0px));
     }
     .safe-pane{
       padding-top:calc(var(--top-bar-h,0px) + env(safe-area-inset-top,0px));
@@ -357,7 +357,7 @@ export const GlobalStyles = () => (
 
     /* Safe area helpers */
     @supports(padding:max(0px)){
-      .safe-bottom{padding-bottom:max(var(--page-bottom-padding),env(safe-area-inset-bottom))}
+      .safe-bottom{padding-bottom:max(var(--page-bottom-clearance, var(--page-bottom-padding)),env(safe-area-inset-bottom))}
     }
     @media screen and (max-width:480px){input,textarea,select{font-size:16px!important}}
     @media (prefers-reduced-motion: reduce){
