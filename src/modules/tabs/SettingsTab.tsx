@@ -120,6 +120,8 @@ export default function SettingsTab({
     setPersonalRules,
     autoBackupInterval,
     setAutoBackupInterval,
+    themeMode,
+    setThemeMode,
   } = useSettings();
   const {
     requireAuth,
@@ -561,44 +563,6 @@ export default function SettingsTab({
     if ((apiKey || "").trim()) setShowApiSetup(true);
   }, [apiKey]);
 
-  const Toggle = ({ value, onChange }) => (
-    <button
-      onClick={() => onChange(!value)}
-      style={{
-        width: 48,
-        height: 28,
-        minWidth: 48,
-        minHeight: 28,
-        borderRadius: 14,
-        border: "none",
-        padding: 0,
-        margin: 0,
-        WebkitAppearance: "none",
-        appearance: "none",
-        background: value ? T.accent.primary : T.text.muted,
-        cursor: "pointer",
-        position: "relative",
-        flexShrink: 0,
-        transition: "background .25s ease",
-        boxShadow: value ? `0 0 10px ${T.accent.primaryDim}` : "none",
-      }}
-    >
-      <div
-        style={{
-          width: 22,
-          height: 22,
-          borderRadius: 11,
-          background: "white",
-          position: "absolute",
-          top: 3,
-          left: value ? 23 : 3,
-          transition: "left .25s cubic-bezier(.16,1,.3,1)",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-        }}
-      />
-    </button>
-  );
-
   const handleExport = async () => {
     setRestoreStatus(null);
     setStatusMsg("");
@@ -824,7 +788,7 @@ export default function SettingsTab({
         setShowPaywall={setShowPaywall}
       />
 
-      <AppearanceSection activeMenu={activeMenu} Toggle={Toggle} />
+      <AppearanceSection activeMenu={activeMenu} themeMode={themeMode} setThemeMode={setThemeMode} />
 
       <AISection 
          activeMenu={activeMenu}

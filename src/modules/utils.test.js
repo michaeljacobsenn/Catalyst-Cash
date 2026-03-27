@@ -34,6 +34,9 @@ vi.mock("./contexts/NavigationContext.js", () => ({
 vi.mock("./contexts/PortfolioContext.js", () => ({
   usePortfolio: () => ({ cards: [], bankAccounts: [] }),
 }));
+vi.mock("./contexts/SettingsContext.js", () => ({
+  useSettings: () => ({ financialConfig: {} }),
+}));
 
 import {
   parseCurrency,
@@ -218,6 +221,88 @@ describe("parseAudit", () => {
       { tag: null, text: "Save $50", done: false },
     ]);
     expect(parsed.sections.alerts).toContain("Watch cash flow");
+  });
+
+  it("preserves structured move item metadata when the audit returns explicit move objects", () => {
+    const raw = JSON.stringify({
+      headerCard: { status: "GREEN" },
+      healthScore: { score: 80, grade: "B-", trend: "up", summary: "Solid." },
+      weeklyMoves: ["Transfer $250 from savings to checking."],
+      moveItems: [
+        {
+          text: "Transfer $250 from savings to checking.",
+          semanticKind: "bank-checking-increase",
+          amount: 250,
+          targetLabel: "Checking",
+          sourceLabel: "Savings",
+          transactional: true,
+        },
+      ],
+      alertsCard: [],
+      nextAction: "Act now.",
+      dashboardCard: [],
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: {},
+    });
+
+    const parsed = parseAudit(raw);
+    expect(parsed).not.toBeNull();
+    expect(parsed.moveItems).toEqual([
+      {
+        tag: null,
+        text: "Transfer $250 from savings to checking.",
+        done: false,
+        semanticKind: "bank-checking-increase",
+        amount: 250,
+        targetLabel: "Checking",
+        sourceLabel: "Savings",
+        transactional: true,
+      },
+    ]);
+  });
+
+  it("derives structured move items from object-based weeklyMoves output", () => {
+    const raw = JSON.stringify({
+      headerCard: { status: "GREEN" },
+      healthScore: { score: 82, grade: "B", trend: "up", summary: "Solid." },
+      weeklyMoves: [
+        {
+          title: "Protect checking floor",
+          detail: "Transfer $250 from savings to checking to protect your floor.",
+          amount: "$250.00",
+          priority: "required",
+          semanticKind: "bank-checking-increase",
+          targetLabel: "Checking",
+          sourceLabel: "Savings",
+          transactional: true,
+        },
+      ],
+      alertsCard: [],
+      nextAction: "Act now.",
+      dashboardCard: [],
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: {},
+    });
+
+    const parsed = parseAudit(raw);
+    expect(parsed).not.toBeNull();
+    expect(parsed.weeklyMoves).toEqual(["Transfer $250 from savings to checking to protect your floor."]);
+    expect(parsed.moveItems).toEqual([
+      {
+        tag: "REQUIRED",
+        text: "Transfer $250 from savings to checking to protect your floor.",
+        done: false,
+        amount: 250,
+        semanticKind: "bank-checking-increase",
+        targetLabel: "Checking",
+        sourceLabel: "Savings",
+        transactional: true,
+      },
+    ]);
   });
 
   it("normalizes dashboardCard to the stable 5-row order", () => {

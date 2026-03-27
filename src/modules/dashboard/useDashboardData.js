@@ -35,8 +35,8 @@ export default function useDashboardData() {
   const { financialConfig } = useSettings();
   const { cards, bankAccounts, renewals, marketPrices } = usePortfolio();
   const movePlan = useMemo(
-    () => buildAuditMovePlan({ audit: current, cards, bankAccounts }),
-    [current, cards, bankAccounts]
+    () => buildAuditMovePlan({ audit: current, cards, bankAccounts, financialConfig }),
+    [current, cards, bankAccounts, financialConfig]
   );
 
   const p = current?.parsed;

@@ -272,6 +272,7 @@ export default function SetupWizard() {
     pin: "",
     lockTimeout: 0,
     useFaceId: false,
+    autoBackupInterval: "off",
   });
   const hasPremiumAiAccess = userHasUnlockedProAccess || !shouldShowGating();
 
@@ -346,12 +347,13 @@ export default function SetupWizard() {
       setBankAccounts(nextBankAccounts);
       setCards(nextCards);
       setRenewals(nextRenewals);
-      if (typeof storedBackupInterval === "string") {
-        setSecurity((prev) => ({
-          ...prev,
-          autoBackupInterval: storedBackupInterval as NonNullable<SetupWizardSecurityState["autoBackupInterval"]>,
-        }));
-      }
+      setSecurity((prev) => ({
+        ...prev,
+        autoBackupInterval:
+          typeof storedBackupInterval === "string"
+            ? (storedBackupInterval as NonNullable<SetupWizardSecurityState["autoBackupInterval"]>)
+            : "off",
+      }));
 
       if (options.syncContexts) {
         setContextBankAccounts(nextBankAccounts);
@@ -504,9 +506,7 @@ export default function SetupWizard() {
       }
       await db.set("lock-timeout", security.lockTimeout);
       setLockTimeout?.(security.lockTimeout);
-      if (security.autoBackupInterval) {
-        await db.set("auto-backup-interval", security.autoBackupInterval);
-      }
+      await db.set("auto-backup-interval", security.autoBackupInterval || "off");
       await db.set("onboarding-complete", true);
       setOnboardingComplete(true);
       setIsLocked?.(false);
@@ -526,6 +526,7 @@ export default function SetupWizard() {
     setSaving(true);
     try {
       await db.set("lock-timeout", security.lockTimeout);
+      await db.set("auto-backup-interval", security.autoBackupInterval || "off");
       setLockTimeout?.(security.lockTimeout);
       await db.set("onboarding-complete", true);
       setOnboardingComplete(true);

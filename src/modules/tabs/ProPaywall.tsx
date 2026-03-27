@@ -205,7 +205,7 @@ export default function ProPaywall({ onClose }: ProPaywallProps) {
           <div style={{ fontSize: 36, marginBottom: 8 }}>⚡</div>
           <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 6px", color: T.text.primary }}>Upgrade to Pro</h2>
           <p style={{ fontSize: 13, color: T.text.dim, margin: "0 0 10px", lineHeight: 1.4 }}>
-            20 audits per month, 30 AskAI messages per day, up to 6 Plaid institutions with quiet balance and ledger upkeep, and the full Catalyst power stack.
+            20 audits per month, 30 AskAI messages per day, up to 8 Plaid institutions with quiet balance and ledger upkeep, and the full Catalyst power stack.
           </p>
           {/* Social proof / positioning */}
           <div

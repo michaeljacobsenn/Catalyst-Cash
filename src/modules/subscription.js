@@ -55,10 +55,9 @@
 // even old builds that have "off" hardcoded here.
 // ────────────────────────────────────────────────────────────
 const GATING_MODE_DEFAULT = "live";
-// Local preview override for this build so Pro features stay unlocked on-device
-// while we validate the product experience. Set to null before shipping a fully
-// enforced App Store build.
-const BUILD_GATING_OVERRIDE = "off";
+// Optional local preview override. Keep null in normal builds so remote config
+// and the persisted subscription state remain authoritative.
+const BUILD_GATING_OVERRIDE = null;
 let _effectiveGatingMode = BUILD_GATING_OVERRIDE || GATING_MODE_DEFAULT;
 let _testGatingModeOverride = null;
 

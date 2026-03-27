@@ -9,6 +9,8 @@ import { db } from "./utils.js";
 const WORKER_URL = () => `${getBackendUrl()}/api/household/sync`;
 const HOUSEHOLD_SYNC_VERSION_KEY = "household-sync-version";
 const HOUSEHOLD_LAST_SYNC_TS_KEY = "household-last-sync-ts";
+const HOUSEHOLD_LAST_MERGE_REPORT_KEY = "household-last-merge-report";
+const HOUSEHOLD_LAST_CONFLICT_KEY = "household-last-conflict";
 const HOUSEHOLD_SYNC_EXCLUDED_KEYS = new Set([
   "household-id",
   "household-passcode",
@@ -245,7 +247,9 @@ export async function pullHouseholdSync(householdId, passcode) {
 }
 
 export async function mergeHouseholdState(remotePayload, remoteVersion = 0) {
-  if (!remotePayload || !remotePayload.data) return false;
+  if (!remotePayload || !remotePayload.data) {
+    return { merged: false, conflict: false, overwrittenKeys: [] };
+  }
 
   const remoteData = remotePayload.data;
   const remoteTs = remotePayload.timestamp || 0;
@@ -257,10 +261,22 @@ export async function mergeHouseholdState(remotePayload, remoteVersion = 0) {
   const localTs = localTsStr ? Number(localTsStr) : 0;
   const localVersion = localVersionStr ? Number(localVersionStr) : 0;
 
-  if (remoteVersion && localVersion && remoteVersion < localVersion) return false;
-  if (remoteTs <= localTs && (!remoteVersion || remoteVersion <= localVersion)) {
-    return false;
+  if (remoteVersion && localVersion && remoteVersion < localVersion) {
+    return { merged: false, conflict: false, overwrittenKeys: [] };
   }
+  if (remoteTs <= localTs && (!remoteVersion || remoteVersion <= localVersion)) {
+    return { merged: false, conflict: false, overwrittenKeys: [] };
+  }
+
+  const overwrittenKeys = [];
+  for (const [key, remoteVal] of Object.entries(remoteData)) {
+    const localVal = await db.get(key);
+    if (JSON.stringify(localVal) !== JSON.stringify(remoteVal)) {
+      overwrittenKeys.push(key);
+    }
+  }
+
+  const conflict = overwrittenKeys.length > 0 && remoteTs > localTs && remoteVersion > localVersion;
 
   for (const [key, remoteVal] of Object.entries(remoteData)) {
     await db.set(key, remoteVal);
@@ -269,6 +285,25 @@ export async function mergeHouseholdState(remotePayload, remoteVersion = 0) {
   await Promise.all([
     db.set(HOUSEHOLD_LAST_SYNC_TS_KEY, remoteTs),
     db.set(HOUSEHOLD_SYNC_VERSION_KEY, remoteVersion || localVersion),
+    db.set(HOUSEHOLD_LAST_MERGE_REPORT_KEY, {
+      remoteTs,
+      localTs,
+      remoteVersion,
+      localVersion,
+      overwrittenKeys,
+      conflict,
+      mergedAt: Date.now(),
+    }),
+    ...(conflict
+      ? [db.set(HOUSEHOLD_LAST_CONFLICT_KEY, {
+          remoteTs,
+          localTs,
+          remoteVersion,
+          localVersion,
+          overwrittenKeys,
+          recordedAt: Date.now(),
+        })]
+      : [db.del(HOUSEHOLD_LAST_CONFLICT_KEY)]),
   ]);
-  return true;
+  return { merged: true, conflict, overwrittenKeys };
 }

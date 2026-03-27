@@ -41,10 +41,12 @@ JSON OUTPUT SHAPE (MINIFIED CONTRACT)
   "dashboardCard": [{ "label": "string", "value": "${cSym}0.00", "tone": "good|neutral|warn|bad", "note": "string|null" }],
   "healthScore": { "score": 0, "grade": "A-F", "trend": "up|flat|down", "summary": "string" },
   "weeklyMoves": [{ "title": "string", "detail": "string", "amount": "${cSym}0.00|null", "priority": "required|deadline|promo|optional" }],
+  "moveItems": [{ "text": "string", "amount": 0, "tag": "string|null", "semanticKind": "string|null", "targetLabel": "string|null", "sourceLabel": "string|null", "targetKey": "string|null", "contributionKey": "string|null", "transactional": true }],
   "radar": { "next90Days": [], "longRange": [] },
   "nextAction": { "title": "string", "detail": "string", "amount": "${cSym}0.00|null" },
   "spendingAnalysis": null
 }
 - Required top-level anchors: headerCard, healthScore, weeklyMoves.
+- Add moveItems only for clear money actions.
 - Use null for optional sections when data is missing; do not invent placeholders.`;
 }

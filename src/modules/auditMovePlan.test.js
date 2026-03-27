@@ -122,4 +122,139 @@ describe("audit move planning", () => {
       ]),
     );
   });
+
+  it("uses saved move assignments to preview the chosen funding source instead of a generic checking deduction", () => {
+    const audit = {
+      isTest: false,
+      form: {
+        debts: [{ cardId: "visa-1", name: "Chase Freedom", balance: 900 }],
+      },
+      moveChecks: { 0: true },
+      moveAssignments: { 0: { sourceAccountId: "checking-2" } },
+      parsed: {
+        moveItems: [{ text: "Pay $150 to Chase Freedom." }],
+      },
+    };
+
+    const plan = buildAuditMovePlan({
+      audit,
+      cards: [
+        {
+          id: "visa-1",
+          institution: "Chase",
+          name: "Freedom",
+          _plaidBalance: 900,
+        },
+      ],
+      bankAccounts: [
+        { id: "checking-1", bank: "Ally", accountType: "checking", name: "Household Checking", _plaidBalance: 1200 },
+        { id: "checking-2", bank: "Chase", accountType: "checking", name: "Business Checking", _plaidBalance: 500 },
+      ],
+    });
+
+    expect(plan.genericSummaries).toEqual([]);
+    expect(plan.bankTargets["checking-2"].projectedBalance).toBe(350);
+  });
+
+  it("shows a transfer from savings to checking as checking up and savings down", () => {
+    const audit = {
+      isTest: false,
+      form: {
+        checking: 800,
+        ally: 2000,
+      },
+      moveChecks: { 0: true },
+      parsed: {
+        moveItems: [{ text: "Transfer $250 from savings to checking to protect your floor." }],
+      },
+    };
+
+    const plan = buildAuditMovePlan({
+      audit,
+      cards: [],
+      bankAccounts: [
+        { id: "checking-1", bank: "Ally", accountType: "checking", name: "Checking", _plaidBalance: 800 },
+        { id: "savings-1", bank: "Ally", accountType: "savings", name: "Savings", _plaidBalance: 2000 },
+      ],
+    });
+
+    expect(plan.bankTargets["checking-1"].projectedBalance).toBe(1050);
+    expect(plan.bankTargets["savings-1"].projectedBalance).toBe(1750);
+  });
+
+  it("ignores preserve-floor reminder phrasing as non-transactional", () => {
+    const audit = {
+      isTest: false,
+      form: {
+        checking: 1200,
+      },
+      moveChecks: { 0: true },
+      parsed: {
+        moveItems: [{ text: "Keep checking above $900 until next payday." }],
+      },
+    };
+
+    const plan = buildAuditMovePlan({
+      audit,
+      cards: [],
+      bankAccounts: [
+        { id: "checking-1", bank: "Ally", accountType: "checking", name: "Checking", _plaidBalance: 1200 },
+      ],
+    });
+
+    expect(plan.activeCount).toBe(1);
+    expect(plan.matchedCount).toBe(0);
+    expect(plan.unresolvedMoves).toEqual(["Keep checking above $900 until next payday."]);
+  });
+
+  it("tracks manual non-card debt payoff progress from current financial config", () => {
+    const audit = {
+      isTest: false,
+      form: {
+        debts: [{ name: "Student Loan", balance: 5000 }],
+      },
+      moveChecks: { 0: true },
+      parsed: {
+        moveItems: [{ text: "Pay $200 toward Student Loan this week." }],
+      },
+    };
+
+    const plan = buildAuditMovePlan({
+      audit,
+      cards: [],
+      bankAccounts: [],
+      financialConfig: {
+        nonCardDebts: [{ id: "debt-1", name: "Student Loan", balance: 4900 }],
+      },
+    });
+
+    expect(plan.debtTargets["0"].projectedBalance).toBe(4800);
+    expect(plan.unresolvedMoves).toEqual([]);
+  });
+
+  it("tracks manual investment contribution progress from current financial config", () => {
+    const audit = {
+      isTest: false,
+      form: {
+        investmentRoth: 5000,
+      },
+      moveChecks: { 0: true },
+      parsed: {
+        moveItems: [{ text: "Contribute $300 to Roth this week." }],
+      },
+    };
+
+    const plan = buildAuditMovePlan({
+      audit,
+      cards: [],
+      bankAccounts: [],
+      financialConfig: {
+        investmentRoth: 5200,
+        rothContributedYTD: 1400,
+      },
+    });
+
+    expect(plan.investmentTargets.investmentRoth.projectedBalance).toBe(5300);
+    expect(plan.unresolvedMoves).toEqual([]);
+  });
 });

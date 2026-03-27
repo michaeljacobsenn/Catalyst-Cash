@@ -24,6 +24,8 @@
   } from "./modules/appShell/useAppShellRuntime.js";
   import NotificationPrePrompt from "./modules/tabs/NotificationPrePrompt.js";
   import { refreshAppState as refreshAppStateModel,resetAppState } from "./modules/appRefreshModel.js";
+  import { applyManualMoveCompletion } from "./modules/manualMoveCompletion.js";
+  import { getMoveAssignmentOptions } from "./modules/moveSemantics.js";
   import { T } from "./modules/constants.js";
   import { useAudit } from "./modules/contexts/AuditContext.js";
   import type { AppTab } from "./modules/contexts/NavigationContext.js";
@@ -341,7 +343,6 @@ function CatalystCashShell() {
   const { handleRestoreComplete, handleHouseholdSyncConfigured } = useHouseholdSync({
     ready,
     online,
-    autoBackupInterval,
     history,
     renewals,
     cards,
@@ -370,11 +371,58 @@ function CatalystCashShell() {
       setHistory(nh);
       await db.set("audit-history", nh);
     } else {
-      const n = { ...moveChecks, [i]: !moveChecks[i] };
+      const moveKey = String(i);
+      const isCurrentlyChecked = Boolean(moveChecks[i] || moveChecks[moveKey]);
+      const alreadyApplied = Boolean(current?.appliedMoveEffects?.[moveKey]);
+      const currentAssignment = current?.moveAssignments?.[moveKey] || null;
+      if (isCurrentlyChecked && alreadyApplied) {
+        window.toast?.info?.("This move already updated your manual balances. Edit Portfolio or Settings if you need to change it.");
+        return;
+      }
+
+      let nextAppliedMoveEffects = current?.appliedMoveEffects || {};
+      const nextChecked = !isCurrentlyChecked;
+      if (current && nextChecked && !current.isTest) {
+        const move = current.parsed?.moveItems?.[i] || null;
+        const moveText = move?.text || "";
+        const assignmentOptions = getMoveAssignmentOptions({
+          move,
+          cards,
+          bankAccounts,
+          financialConfig,
+          manualOnly: true,
+          assignment: currentAssignment,
+        });
+        if (assignmentOptions.targetOptions.length > 1 && !currentAssignment?.targetAccountId) {
+          window.toast?.info?.("Choose where this move should land before checking it off.");
+          return;
+        }
+        if (assignmentOptions.sourceOptions.length > 1 && !currentAssignment?.sourceAccountId) {
+          window.toast?.info?.("Choose the funding source before checking this move off.");
+          return;
+        }
+        const effect = applyManualMoveCompletion({
+          moveText,
+          move,
+          assignment: currentAssignment,
+          cards,
+          bankAccounts,
+          financialConfig,
+        });
+        if (effect.applied) {
+          if (effect.updatedCards !== cards) setCards(effect.updatedCards);
+          if (effect.updatedBankAccounts !== bankAccounts) setBankAccounts(effect.updatedBankAccounts);
+          if (effect.updatedFinancialConfig !== financialConfig) setFinancialConfig(effect.updatedFinancialConfig);
+          nextAppliedMoveEffects = { ...nextAppliedMoveEffects, [moveKey]: true };
+          window.toast?.success?.(effect.summary || "Updated manual balances.");
+        }
+      }
+
+      const n = { ...moveChecks, [i]: nextChecked };
       setMoveChecks(n);
       db.set("move-states", n);
       if (current) {
-        const updatedCurrent = { ...current, moveChecks: n };
+        const updatedCurrent = { ...current, moveChecks: n, appliedMoveEffects: nextAppliedMoveEffects };
         setCurrent(updatedCurrent);
         db.set("current-audit", updatedCurrent);
         const nh = history.map(a => (a.ts === current.ts ? updatedCurrent : a));
@@ -382,6 +430,27 @@ function CatalystCashShell() {
         db.set("audit-history", nh);
       }
     }
+  };
+
+  const updateMoveAssignment = async (index, patch) => {
+    if (!current || current.isTest) return;
+    const moveKey = String(index);
+    const nextAssignments = { ...(current.moveAssignments || {}) };
+    const nextValue = {
+      ...(nextAssignments[moveKey] || {}),
+      ...patch,
+    };
+    if (!nextValue.sourceAccountId) delete nextValue.sourceAccountId;
+    if (!nextValue.targetAccountId) delete nextValue.targetAccountId;
+    if (Object.keys(nextValue).length === 0) delete nextAssignments[moveKey];
+    else nextAssignments[moveKey] = nextValue;
+
+    const updatedCurrent = { ...current, moveAssignments: nextAssignments };
+    setCurrent(updatedCurrent);
+    await db.set("current-audit", updatedCurrent);
+    const nextHistory = history.map(a => (a.ts === current.ts ? updatedCurrent : a));
+    setHistory(nextHistory);
+    await db.set("audit-history", nextHistory);
   };
 
   // ═══════════════════════════════════════════════════════════════
@@ -706,6 +775,7 @@ function CatalystCashShell() {
           dismissRecoverableAuditDraft={dismissRecoverableAuditDraft}
           navTo={navTo}
           toggleMove={toggleMove}
+          updateMoveAssignment={updateMoveAssignment}
           toast={toast}
           clearAll={clearAll}
           factoryReset={factoryReset}

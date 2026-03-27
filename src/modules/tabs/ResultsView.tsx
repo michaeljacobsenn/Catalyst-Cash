@@ -1,5 +1,6 @@
 import React, { memo, useMemo, useState, type ReactNode } from "react";
 import { buildAuditMovePlan } from "../auditMovePlan.js";
+import { getMoveAssignmentOptions } from "../moveSemantics.js";
   import { Md as UIMd,Mono as UIMono,MoveRow as UIMoveRow } from "../components.js";
   import { T } from "../constants.js";
   import {
@@ -23,11 +24,13 @@ import { buildAuditMovePlan } from "../auditMovePlan.js";
   import { useAudit } from "../contexts/AuditContext.js";
   import { useNavigation } from "../contexts/NavigationContext.js";
 import { usePortfolio } from "../contexts/PortfolioContext.js";
+import { useSettings } from "../contexts/SettingsContext.js";
 
 interface ResultsViewProps {
   audit: AuditRecord | null;
   moveChecks: MoveCheckState;
   onToggleMove: (index: number) => void;
+  onUpdateMoveAssignment?: ((index: number, patch: { sourceAccountId?: string | null; targetAccountId?: string | null }) => void) | null;
   streak?: number;
   onBack?: (() => void) | null;
 }
@@ -61,6 +64,7 @@ interface MoveRowProps {
   index: number;
   checked: boolean;
   onToggle: () => void;
+  detail?: ReactNode;
 }
 
 interface MdProps {
@@ -124,10 +128,18 @@ const ReportSection = ({ title, icon: Icon, content, accentColor, badge, isLast 
   );
 };
 
-export default memo(function ResultsView({ audit, moveChecks, onToggleMove, streak = 0, onBack = null }: ResultsViewProps) {
+export default memo(function ResultsView({
+  audit,
+  moveChecks,
+  onToggleMove,
+  onUpdateMoveAssignment = null,
+  streak = 0,
+  onBack = null,
+}: ResultsViewProps) {
   void streak;
   const { history, current } = useAudit();
   const { cards, bankAccounts } = usePortfolio();
+  const { financialConfig } = useSettings();
   const { navTo } = useNavigation() as NavigationApi;
 
   const [showExportSheet, setShowExportSheet] = useState<boolean>(false);
@@ -169,8 +181,23 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
   const isDegraded = degradedInfo?.isDegraded;
   const isLiveCurrentAudit = Boolean(current?.ts && current.ts === audit.ts && !audit.isTest);
   const movePlan = useMemo(
-    () => (isLiveCurrentAudit ? buildAuditMovePlan({ audit: current, cards, bankAccounts }) : { activeCount: 0, highlights: [], reconciledCount: 0 }),
-    [isLiveCurrentAudit, current, cards, bankAccounts]
+    () => (isLiveCurrentAudit ? buildAuditMovePlan({ audit: current, cards, bankAccounts, financialConfig }) : { activeCount: 0, highlights: [], reconciledCount: 0 }),
+    [isLiveCurrentAudit, current, cards, bankAccounts, financialConfig]
+  );
+  const liveMoveAssignments = (isLiveCurrentAudit ? current?.moveAssignments : audit.moveAssignments) || {};
+  const moveAssignmentUi = useMemo(
+    () =>
+      parsed.moveItems.map((item, index) =>
+        getMoveAssignmentOptions({
+          move: item,
+          cards,
+          bankAccounts,
+          financialConfig,
+          manualOnly: true,
+          assignment: liveMoveAssignments[String(index)] || null,
+        })
+      ),
+    [parsed.moveItems, cards, bankAccounts, financialConfig, liveMoveAssignments]
   );
   const analysisNotes = isDegraded
     ? [sections.qualityScore, sections.autoUpdates, degradedInfo?.reason].filter(
@@ -595,7 +622,94 @@ export default memo(function ResultsView({ audit, moveChecks, onToggleMove, stre
             </div>
             <div style={{ background: `${T.bg.elevated}50`, borderRadius: T.radius.lg, padding: isSmallPhone ? "6px 12px" : "8px 16px" }}>
               {parsed.moveItems.map((moveItem: ParsedMoveItem, index: number) => (
-                <MoveRow key={index} item={moveItem} index={index} checked={moveChecks[index] || false} onToggle={() => onToggleMove(index)} />
+                <MoveRow
+                  key={index}
+                  item={moveItem}
+                  index={index}
+                  checked={moveChecks[index] || false}
+                  onToggle={() => onToggleMove(index)}
+                  detail={
+                    (() => {
+                      const assignmentUi = moveAssignmentUi[index] || { classification: null, targetOptions: [], sourceOptions: [] };
+                      const moveKey = String(index);
+                      const assignment = liveMoveAssignments[moveKey] || {};
+                      const alreadyApplied = Boolean(isLiveCurrentAudit && current?.appliedMoveEffects?.[moveKey]);
+                      const hasTargetChoice = assignmentUi.targetOptions.length > 1;
+                      const hasSourceChoice = assignmentUi.sourceOptions.length > 1;
+                      if (!isLiveCurrentAudit || !onUpdateMoveAssignment || (!hasTargetChoice && !hasSourceChoice && !alreadyApplied)) {
+                        return alreadyApplied ? (
+                          <div style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono }}>
+                            Manual balances already applied using the saved account routing.
+                          </div>
+                        ) : null;
+                      }
+                      const selectStyle: React.CSSProperties = {
+                        minWidth: 0,
+                        flex: 1,
+                        padding: "8px 10px",
+                        borderRadius: 10,
+                        border: `1px solid ${T.border.default}`,
+                        background: T.bg.card,
+                        color: T.text.primary,
+                        fontSize: 11,
+                        fontWeight: 700,
+                      };
+                      return (
+                        <div
+                          onClick={(event) => event.stopPropagation()}
+                          onKeyDown={(event) => event.stopPropagation()}
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 8,
+                          }}
+                        >
+                          {hasSourceChoice ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              <span style={{ fontSize: 10, color: T.text.dim, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                                Funds From
+                              </span>
+                              <select
+                                disabled={alreadyApplied}
+                                value={assignment.sourceAccountId || ""}
+                                onChange={(event) => onUpdateMoveAssignment(index, { sourceAccountId: event.target.value || null })}
+                                style={selectStyle}
+                              >
+                                <option value="">Choose account</option>
+                                {assignmentUi.sourceOptions.map((option) => (
+                                  <option key={option.id} value={option.id}>{option.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          ) : null}
+                          {hasTargetChoice ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              <span style={{ fontSize: 10, color: T.text.dim, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                                Apply To
+                              </span>
+                              <select
+                                disabled={alreadyApplied}
+                                value={assignment.targetAccountId || ""}
+                                onChange={(event) => onUpdateMoveAssignment(index, { targetAccountId: event.target.value || null })}
+                                style={selectStyle}
+                              >
+                                <option value="">Choose account</option>
+                                {assignmentUi.targetOptions.map((option) => (
+                                  <option key={option.id} value={option.id}>{option.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          ) : null}
+                          {alreadyApplied ? (
+                            <div style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono }}>
+                              Already posted to manual balances.
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })()
+                  }
+                />
               ))}
             </div>
           </section>

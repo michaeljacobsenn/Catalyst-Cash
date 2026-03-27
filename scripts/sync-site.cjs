@@ -24,6 +24,7 @@ const freeAudits = getConstant(PLAN_CATALOG_PATH, /FREE_AUDIT_LIMIT\s*=\s*(\d+);
 const proChats = getConstant(PLAN_CATALOG_PATH, /PRO_DAILY_CHAT_CAP\s*=\s*(\d+);/, "30");
 const freeChats = getConstant(PLAN_CATALOG_PATH, /FREE_CHAT_LIMIT\s*=\s*(\d+);/, "10");
 const freePlaid = getConstant(PLAN_CATALOG_PATH, /INSTITUTION_LIMITS\s*=\s*\{\s*free:\s*(\d+),/, "1");
+const proPlaid = getConstant(PLAN_CATALOG_PATH, /INSTITUTION_LIMITS\s*=\s*\{\s*free:\s*\d+,\s*pro:\s*(\d+),/, "8");
 
 console.log("=== Found Limits ===");
 console.log(`Pro Audits: ${proAudits}/mo`);
@@ -31,6 +32,7 @@ console.log(`Free Audits: ${freeAudits}/wk`);
 console.log(`Pro Chats: ${proChats}/day`);
 console.log(`Free Chats: ${freeChats}/day`);
 console.log(`Free Plaid: ${freePlaid} banks`);
+console.log(`Pro Plaid: ${proPlaid} banks`);
 
 function updateSiteHtml(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -47,6 +49,11 @@ function updateSiteHtml(filePath) {
   
   content = content.replace(/<li>\d+ audits\/month \(1\/day\) &amp; \d+ AskAI chats\/day<\/li>/g, `<li>${proAudits} audits/month &amp; ${proChats} AskAI chats/day</li>`);
   content = content.replace(/<li>\d+ audits\/month & \d+ AskAI chats\/day<\/li>/g, `<li>${proAudits} audits/month & ${proChats} AskAI chats/day</li>`);
+  content = content.replace(/up to \d+ Plaid institutions/g, `up to ${proPlaid} Plaid institutions`);
+  content = content.replace(/Up to \d+ Plaid institutions/g, `Up to ${proPlaid} Plaid institutions`);
+  content = content.replace(/keep all \d+ usable/g, `keep all ${proPlaid} usable`);
+  content = content.replace(/>\d+ Plaid institutions</g, `>${proPlaid} Plaid institutions<`);
+  content = content.replace(/>\d+ institutions</g, `>${proPlaid} institutions<`);
 
   // Compare.html specific replaces
   content = content.replace(/All features\. \d+ AI Chats\/day\./g, `All features. ${proChats} AI Chats/day.`);

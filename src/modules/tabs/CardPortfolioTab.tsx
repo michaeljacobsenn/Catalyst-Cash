@@ -55,10 +55,11 @@ type PlaidConnectResult = "success" | "error" | null;
 interface CardPortfolioTabProps {
   onViewTransactions?: (() => void) | null;
   proEnabled?: boolean;
+  embedded?: boolean;
   privacyMode?: boolean;
 }
 
-export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled = false, privacyMode: _privacyModeTick = false }: CardPortfolioTabProps) {
+export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled = false, embedded = false, privacyMode: _privacyModeTick = false }: CardPortfolioTabProps) {
   void _privacyModeTick;
   const { current } = useAudit();
   const portfolioContext = usePortfolio();
@@ -285,7 +286,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
   const investTotalValue = portfolioMetrics?.totalInvestments || 0;
   const totalOtherAssets = portfolioMetrics?.totalOtherAssets || 0;
   const breakdownValueStyle = {
-    fontSize: 16,
+    fontSize: embedded ? 15 : 16,
     fontWeight: 800,
     fontFamily: T.font.mono,
     fontVariantNumeric: "tabular-nums",
@@ -301,12 +302,11 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
     <>
       {/* ─── Premium Wealth Dashboard Hero ─── */}
       <div style={{
-        paddingTop: 20, paddingBottom: 24,
-        display: "flex", flexDirection: "column", gap: 16,
+        display: "flex", flexDirection: "column", gap: embedded ? 12 : 16,
         background: `linear-gradient(180deg, ${T.bg.card} 0%, transparent 100%)`,
         border: `1px solid ${T.border.subtle}`,
         borderRadius: T.radius.lg,
-        padding: "20px 16px 24px",
+        padding: embedded ? "14px 14px 16px" : "20px 16px 24px",
         boxShadow: `0 16px 48px rgba(16,185,129,0.06), 0 8px 24px rgba(138,99,210,0.1), inset 0 1px 0 rgba(255,255,255,0.05)`,
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -314,7 +314,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
             <h1 style={{ fontSize: 13, fontWeight: 700, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
               Total Net Worth
             </h1>
-            <div style={{ fontSize: 36, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.02em", textShadow: `0 0 15px ${T.text.primary}80, 0 2px 10px ${T.text.primary}20` }}>
+            <div style={{ fontSize: embedded ? 32 : 36, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.02em", textShadow: `0 0 15px ${T.text.primary}80, 0 2px 10px ${T.text.primary}20` }}>
               {fmt(netWorth)}
             </div>
           </div>
@@ -369,16 +369,16 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
         </div>
 
         {/* Wealth Breakdown */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-          <div style={{ background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: "12px 10px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: embedded ? 6 : 8 }}>
+          <div style={{ background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: embedded ? "10px 8px" : "12px 10px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4 }}>Liquid Cash</div>
             <span style={{ ...breakdownValueStyle, color: T.accent.emerald }}>{fmt(totalCash)}</span>
           </div>
-          <div style={{ background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: "12px 10px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
+          <div style={{ background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: embedded ? "10px 8px" : "12px 10px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4 }}>Investments</div>
             <span style={{ ...breakdownValueStyle, color: T.status.blue }}>{fmt(investTotalValue + totalOtherAssets)}</span>
           </div>
-          <div style={{ background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: "12px 10px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
+          <div style={{ background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: embedded ? "10px 8px" : "12px 10px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4 }}>Liabilities</div>
             <span style={{ ...breakdownValueStyle, color: T.status.red }}>{fmt(Math.abs(totalDebtBalance))}</span>
           </div>
@@ -393,7 +393,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginTop: 16,
+          marginTop: embedded ? 12 : 16,
           marginBottom: 8,
           padding: "0 4px",
         }}

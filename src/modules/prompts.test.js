@@ -595,8 +595,8 @@ describe("launch prompt eval pack", () => {
     const prompt = getSystemPrompt("openai", launchChatConfig);
 
     expect(prompt).toContain("Write like a CFO / operator reviewing weekly cash position");
-    expect(prompt).toContain("Prioritize the highest-impact recommendation first.");
-    expect(prompt).toContain("Every recommended move must be tied to a concrete reason");
+    expect(prompt).toContain("Lead with the highest-impact move");
+    expect(prompt).toContain("tie every recommendation to a concrete reason");
     expect(prompt).toContain("Distinguish facts, assumptions, and contradictions explicitly.");
     expect(prompt).toContain("If the correct action is to hold steady, say that directly");
     expect(prompt).toContain("Floor > Fixed Mandates > Time-Critical");

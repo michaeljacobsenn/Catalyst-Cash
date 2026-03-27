@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+    useRef,
     useReducer,
     useState,
     type Dispatch,
@@ -107,6 +108,10 @@ export interface SettingsContextValue {
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 const SETTINGS_BOOT_TIMEOUT_MS = 1500;
 const SETTINGS_STORAGE_BOOT_TIMEOUT_MS = 4200;
+
+export function resolveStoredThemeMode(savedTheme: ThemeMode | null | undefined, pendingOverride: ThemeMode | null | undefined): ThemeMode {
+  return pendingOverride || savedTheme || "system";
+}
 
 function getFallbackStorageStatus() {
   if (Capacitor.isNativePlatform()) {
@@ -260,13 +265,14 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
   const [aiModel, setAiModel] = useState<string>(DEFAULT_MODEL_ID);
   const [persona, setPersona] = useState<PersonaMode>(null);
   const [personalRules, setPersonalRules] = useState<string>("");
-  const [autoBackupInterval, setAutoBackupInterval] = useState<BackupInterval>("weekly");
+  const [autoBackupInterval, setAutoBackupInterval] = useState<BackupInterval>("off");
   const [notifPermission, setNotifPermission] = useState<NotificationPermissionState>("prompt");
   const [aiConsent, setAiConsent] = useState<boolean>(false);
   const [showAiConsent, setShowAiConsent] = useState<boolean>(false);
   const [showNotifPrePrompt, setShowNotifPrePrompt] = useState<boolean>(false);
-  const [themeMode, setThemeModeRaw] = useState<ThemeMode>("dark");
+  const [themeMode, setThemeModeRaw] = useState<ThemeMode>("system");
   const [themeTick, forceRender] = useState<number>(0);
+  const pendingThemeOverrideRef = useRef<ThemeMode | null>(null);
   const [financialConfig, dispatchFinConfig] = useReducer(financialConfigReducer, DEFAULT_FINANCIAL_CONFIG);
 
   const setFinancialConfig = useCallback<SetFinancialConfig>((valueOrFn) => {
@@ -288,11 +294,11 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       setAiModel(DEFAULT_MODEL_ID);
       setPersona(null);
       setPersonalRules("");
-      setAutoBackupInterval("weekly");
+      setAutoBackupInterval("off");
       setNotifPermission("prompt");
       setAiConsent(false);
       setShowAiConsent(false);
-      setThemeModeRaw("dark");
+      setThemeModeRaw("system");
       dispatchFinConfig({ type: "REPLACE", payload: DEFAULT_FINANCIAL_CONFIG });
       setActiveCurrencyCode(DEFAULT_FINANCIAL_CONFIG.currencyCode || "USD");
 
@@ -352,7 +358,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       const effectiveTier = await withSettingsBootFallback(
         "subscription-tier",
         () => getCurrentTier(),
-        { id: "pro" }
+        { id: "free" }
       );
       const validProvider = getProvider(provId || DEFAULT_PROVIDER_ID) as ProviderConfig;
       const validModelId = normalizeModelForTier(
@@ -384,9 +390,9 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       if (personalRulesValue) setPersonalRules(personalRulesValue);
       if (consent) setAiConsent(true);
       if (savedPersona) setPersona(savedPersona);
-      if (backupInterval) setAutoBackupInterval(backupInterval);
+      setAutoBackupInterval(backupInterval || "off");
 
-      const resolvedTheme: ThemeMode = savedTheme || "dark";
+      const resolvedTheme = resolveStoredThemeMode(savedTheme, pendingThemeOverrideRef.current);
       setThemeModeRaw(resolvedTheme);
 
       if (finConf) {
@@ -461,10 +467,16 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
   }, [themeMode, isSettingsReady]);
 
   const setThemeMode = useCallback((mode: ThemeMode): void => {
+    pendingThemeOverrideRef.current = mode;
     setThemeModeRaw(mode);
     forceRender((count: number) => count + 1);
     db.set("theme-mode", mode);
   }, []);
+
+  useEffect(() => {
+    if (!isSettingsReady) return;
+    pendingThemeOverrideRef.current = null;
+  }, [isSettingsReady, themeMode]);
 
   useEffect(() => {
     if (themeMode !== "system") return;

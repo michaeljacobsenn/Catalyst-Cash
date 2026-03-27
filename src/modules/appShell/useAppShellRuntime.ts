@@ -186,7 +186,6 @@ export function useAutoICloudBackup({
 interface HouseholdSyncParams {
   ready: boolean;
   online: boolean;
-  autoBackupInterval: string;
   history: AuditRecord[];
   renewals: Renewal[];
   cards: CardType[];
@@ -199,7 +198,6 @@ interface HouseholdSyncParams {
 export function useHouseholdSync({
   ready,
   online,
-  autoBackupInterval,
   history,
   renewals,
   cards,
@@ -220,15 +218,20 @@ export function useHouseholdSync({
     const result = await pullHouseholdSync(householdId, passcode);
     if (!result.ok || !result.hasData || !result.payload) return false;
 
-    const merged = await mergeHouseholdState(result.payload, result.version);
-    if (!merged) return false;
+    const mergeResult = await mergeHouseholdState(result.payload, result.version);
+    if (!mergeResult.merged) return false;
 
     await refreshAppState("dashboard");
+    if (mergeResult.conflict && toast?.info) {
+      toast.info(
+        `Household sync pulled newer changes from another device and refreshed ${mergeResult.overwrittenKeys.length} section${mergeResult.overwrittenKeys.length === 1 ? "" : "s"}.`
+      );
+    }
     return true;
-  }, [refreshAppState]);
+  }, [refreshAppState, toast]);
 
   useEffect(() => {
-    if (!ready || autoBackupInterval === "off") return;
+    if (!ready || !online) return;
 
     if (householdSyncTimer.current) clearTimeout(householdSyncTimer.current);
     householdSyncTimer.current = setTimeout(async () => {
@@ -249,7 +252,7 @@ export function useHouseholdSync({
     return () => {
       if (householdSyncTimer.current) clearTimeout(householdSyncTimer.current);
     };
-  }, [ready, history, renewals, cards, financialConfig, personalRules, autoBackupInterval]);
+  }, [ready, online, history, renewals, cards, financialConfig, personalRules]);
 
   useEffect(() => {
     const doPull = async () => {

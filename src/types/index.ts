@@ -238,6 +238,13 @@ export interface ParsedMoveItem {
   tag: string | null;
   text: string;
   done: boolean;
+  amount?: number;
+  semanticKind?: string | null;
+  targetLabel?: string | null;
+  sourceLabel?: string | null;
+  targetKey?: string | null;
+  contributionKey?: string | null;
+  transactional?: boolean;
 }
 
 export interface ParsedAuditDashboardData {
@@ -331,6 +338,8 @@ export interface AuditRecord {
   isTest: boolean;
   isDemoHistory?: boolean;
   moveChecks: MoveCheckState;
+  moveAssignments?: Record<string, { sourceAccountId?: string; targetAccountId?: string }>;
+  appliedMoveEffects?: Record<string, boolean>;
   demoPortfolio?: DemoPortfolio;
 }
 

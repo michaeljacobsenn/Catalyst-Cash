@@ -9,6 +9,6 @@ describe("promptBuilders", () => {
     expect(prompt).toContain("A+) EXECUTIVE QUALITY STANDARD (HARD)");
     expect(prompt).toContain("Write like a CFO / operator reviewing weekly cash position");
     expect(prompt).toContain("Distinguish facts, assumptions, and contradictions explicitly.");
-    expect(prompt).toContain("Do not pad the answer with generic education");
+    expect(prompt).toContain("Avoid generic education, filler, or broad checklists");
   });
 });

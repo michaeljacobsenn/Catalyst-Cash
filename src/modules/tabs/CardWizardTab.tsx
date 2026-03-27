@@ -175,6 +175,8 @@ let cachedMerchant: MerchantOption | null = null;
 
 interface CardWizardTabProps {
   proEnabled?: boolean;
+  embedded?: boolean;
+  privacyMode?: boolean;
 }
 
 type UsedCaps = Record<string, number | "">;
@@ -195,7 +197,7 @@ function formatRewardRateShort(multiplier: number, currency: string) {
   return currency === "CASH" ? `${formatRewardNumber(multiplier)}%` : `${formatRewardNumber(multiplier)}x`;
 }
 
-export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps) {
+export default function CardWizardTab({ proEnabled = false, embedded = false }: CardWizardTabProps) {
   const { cards } = usePortfolio();
   const { financialConfig, setFinancialConfig } = useSettings();
 
@@ -213,6 +215,22 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
   const [spendAmount, setSpendAmount] = useState("");
   const [showAllRunners, setShowAllRunners] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [viewport, setViewport] = useState(() => ({
+    width: typeof window === "undefined" ? 390 : window.innerWidth,
+    height: typeof window === "undefined" ? 844 : window.innerHeight,
+  }));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const syncViewport = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    window.addEventListener("orientationchange", syncViewport);
+    return () => {
+      window.removeEventListener("resize", syncViewport);
+      window.removeEventListener("orientationchange", syncViewport);
+    };
+  }, []);
 
   // 150/100 Feature: Sign-Up Bonus Target — persisted via db (consistent with app data layer)
   const [subTargetId, setSubTargetId] = useState<string | null>(null);
@@ -255,6 +273,21 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
   const activeCreditCards = useMemo<PortfolioCard[]>(() => {
     return cards.filter(c => c.type === "credit" || !c.type);
   }, [cards]);
+
+  const compactEmbedded = embedded && viewport.height <= 820;
+  const denseEmbedded = embedded && viewport.height <= 760;
+  const pageGap = denseEmbedded ? 12 : compactEmbedded ? 16 : embedded ? 18 : 24;
+  const headerIconSize = denseEmbedded ? 22 : compactEmbedded ? 24 : 28;
+  const headerIconPadding = denseEmbedded ? 9 : compactEmbedded ? 10 : 12;
+  const headerTitleSize = denseEmbedded ? 21 : compactEmbedded ? 22 : 24;
+  const headerCopySize = denseEmbedded ? 12 : 14;
+  const searchHeight = denseEmbedded ? 48 : compactEmbedded ? 50 : 52;
+  const searchButtonLabel = denseEmbedded ? "Find" : compactEmbedded ? "Find Card" : "Find Best Card";
+  const valuationButtonLabel = denseEmbedded ? "Valuations" : "Edit Point Valuations";
+  const gridGap = denseEmbedded ? 8 : compactEmbedded ? 10 : 12;
+  const categoryTileHeight = denseEmbedded ? 76 : compactEmbedded ? 84 : 96;
+  const categoryIconPadding = denseEmbedded ? 8 : compactEmbedded ? 9 : 10;
+  const categoryLabelSize = denseEmbedded ? 10 : 11;
 
   useEffect(() => {
     (async () => {
@@ -528,7 +561,7 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
 
   return (
     <div ref={scrollRef} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", flex: 1 }}>
-      <div className="page-body" style={{ maxWidth: 768, margin: "0 auto", width: "100%", display: "flex", flexDirection: "column", gap: 24 }}>
+      <div className="page-body" style={{ maxWidth: 768, margin: "0 auto", width: "100%", display: "flex", flexDirection: "column", gap: pageGap }}>
 
         {/* Pro Banner Removed - Teaser is now in the results section */}
         {showPaywall && (
@@ -538,12 +571,12 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
         )}
 
         {/* Header */}
-        <div className="fade-in" style={{ textAlign: "center", marginTop: 8 }}>
-          <div style={{ display: "inline-flex", padding: 12, borderRadius: 16, background: T.bg.elevated, border: `1px solid ${T.border.default}`, boxShadow: T.shadow.sm, marginBottom: 12 }}>
-            <Sparkles color={T.accent.primary} size={28} />
+        <div className="fade-in" style={{ textAlign: "center", marginTop: embedded ? 0 : 8 }}>
+          <div style={{ display: "inline-flex", padding: headerIconPadding, borderRadius: 16, background: T.bg.elevated, border: `1px solid ${T.border.default}`, boxShadow: T.shadow.sm, marginBottom: denseEmbedded ? 8 : 12 }}>
+            <Sparkles color={T.accent.primary} size={headerIconSize} />
           </div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: T.text.primary, marginBottom: 6 }}>Card Wizard</h1>
-          <p style={{ fontSize: 14, color: T.text.secondary, maxWidth: 320, margin: "0 auto" }}>Enter a merchant to find your best card for maximum rewards.</p>
+          <h1 style={{ fontSize: headerTitleSize, fontWeight: 800, color: T.text.primary, marginBottom: denseEmbedded ? 4 : 6 }}>Card Wizard</h1>
+          <p style={{ fontSize: headerCopySize, color: T.text.secondary, maxWidth: denseEmbedded ? 280 : 320, lineHeight: 1.45, margin: "0 auto" }}>Enter a merchant to find your best card for maximum rewards.</p>
         </div>
 
         {/* Search Bar */}
@@ -567,15 +600,15 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
             placeholder="e.g. Amazon, Uber, Starbucks..."
             style={{
               width: "100%",
-              padding: "14px 140px 14px 44px",
+              padding: denseEmbedded ? "12px 92px 12px 42px" : compactEmbedded ? "13px 110px 13px 44px" : "14px 140px 14px 44px",
               background: T.bg.elevated,
               border: `1.5px solid ${T.border.default}`,
               borderRadius: 16,
               color: T.text.primary,
-              fontSize: 16,
+              fontSize: compactEmbedded ? 15 : 16,
               fontWeight: 500,
               boxShadow: T.shadow.card,
-              minHeight: 52
+              minHeight: searchHeight
             }}
           />
           {resolvedCategory && !isTyping ? (
@@ -614,18 +647,18 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
                 top: "50%",
                 transform: "translateY(-50%)",
                 right: 8,
-                height: 36,
-                padding: "0 14px",
+                height: denseEmbedded ? 34 : 36,
+                padding: denseEmbedded ? "0 12px" : "0 14px",
                 background: T.accent.primary,
                 color: "#fff",
                 fontWeight: 700,
                 borderRadius: 10,
                 border: "none",
-                fontSize: 13,
+                fontSize: 12,
                 opacity: (!query.trim() || categorizing) ? 0.5 : 1,
               }}
             >
-              {categorizing ? <div className="spin"><div style={{ width: 16, height: 16, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%" }} /></div> : "Find Best Card"}
+              {categorizing ? <div className="spin"><div style={{ width: 16, height: 16, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%" }} /></div> : searchButtonLabel}
             </button>
           )}
 
@@ -681,10 +714,10 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
               <button
                 className="hover-btn"
                 onClick={() => { haptic.selection(); setShowValuations(!showValuations); }}
-                style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 20, background: T.bg.surface, border: `1px solid ${T.border.subtle}`, color: T.text.secondary, fontSize: 12, fontWeight: 700 }}
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: denseEmbedded ? "7px 10px" : "8px 12px", borderRadius: 20, background: T.bg.surface, border: `1px solid ${T.border.subtle}`, color: T.text.secondary, fontSize: 12, fontWeight: 700 }}
               >
                 <Settings2 size={14} />
-                {showValuations ? "Hide Point Valuations" : "Edit Point Valuations"}
+                {showValuations ? "Hide Values" : valuationButtonLabel}
                 <ChevronDown size={14} style={{ transform: showValuations ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }} />
               </button>
             </div>
@@ -754,8 +787,8 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
 
         {/* Quick Select Bento Grid */}
         {!resolvedCategory && !isTyping && !showValuations && !error && (
-          <div style={{ maxWidth: 500, margin: "0 auto", width: "100%" }}>
-            <div className="stagger-container" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+          <div style={{ maxWidth: denseEmbedded ? 460 : 500, margin: "0 auto", width: "100%" }}>
+            <div className="stagger-container" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: gridGap }}>
               {QUICK_CATEGORIES.map((cat, idx) => {
               const Icon = cat.icon;
               return (
@@ -764,15 +797,15 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
                   onClick={() => handleQuickSelect(cat.id)}
                   className="card-press"
                   style={{
-                    height: 96, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                    padding: 8, borderRadius: 16, background: "transparent", border: `1px solid ${T.border.subtle}`,
+                    height: categoryTileHeight, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    padding: denseEmbedded ? 6 : 8, borderRadius: 16, background: "transparent", border: `1px solid ${T.border.subtle}`,
                     animationDelay: `${idx * 0.05}s`
                   }}
                 >
-                  <div style={{ padding: 10, borderRadius: 12, background: cat.bg, marginBottom: 8, pointerEvents: "none" }}>
-                    <Icon size={20} color={cat.color} />
+                  <div style={{ padding: categoryIconPadding, borderRadius: 12, background: cat.bg, marginBottom: denseEmbedded ? 6 : 8, pointerEvents: "none" }}>
+                    <Icon size={denseEmbedded ? 18 : 20} color={cat.color} />
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary }}>{cat.label}</span>
+                  <span style={{ fontSize: categoryLabelSize, fontWeight: 700, color: T.text.secondary }}>{cat.label}</span>
                 </button>
               );
             })}
@@ -797,12 +830,12 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
                     className="card-press"
                     style={{
                       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                      padding: 10, borderRadius: 12, background: T.bg.elevated, border: `1px solid ${T.border.default}`,
+                      padding: denseEmbedded ? 8 : 10, borderRadius: 12, background: T.bg.elevated, border: `1px solid ${T.border.default}`,
                       boxShadow: T.shadow.sm, gap: 4
                     }}
                   >
-                    <Icon size={16} color={cat.color} />
-                    <span style={{ fontSize: 10, fontWeight: 700, color: T.text.secondary }}>{cat.label}</span>
+                    <Icon size={denseEmbedded ? 15 : 16} color={cat.color} />
+                    <span style={{ fontSize: denseEmbedded ? 9.5 : 10, fontWeight: 700, color: T.text.secondary }}>{cat.label}</span>
                   </button>
                 );
               })}

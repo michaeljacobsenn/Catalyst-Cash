@@ -15,6 +15,12 @@ describe("security key guards", () => {
     expect(isSecuritySensitiveKey("plaid-transactions")).toBe(true);
   });
 
+  it("treats household sync bookkeeping as internal-only metadata", () => {
+    expect(isSecuritySensitiveKey("household-last-sync-ts")).toBe(true);
+    expect(isSecuritySensitiveKey("household-last-merge-report")).toBe(true);
+    expect(isSecuritySensitiveKey("household-last-conflict")).toBe(true);
+  });
+
   it("only allows safe non-sensitive import keys", () => {
     expect(isSafeImportKey("financial-config")).toBe(true);
     expect(isSafeImportKey("secure:app-passcode")).toBe(false);

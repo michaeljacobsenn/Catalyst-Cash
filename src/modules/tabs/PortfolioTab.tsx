@@ -24,6 +24,7 @@ interface ViewToggleProps {
   options: Array<{ id: PortfolioView; label: string }>;
   active: PortfolioView;
   onChange: Dispatch<SetStateAction<PortfolioView>> | ((value: PortfolioView) => void);
+  variant?: "pill" | "underline";
 }
 
 interface CardPortfolioTabProps {
@@ -96,10 +97,10 @@ export default function PortfolioTab({ onViewTransactions, proEnabled = false, p
     <div style={{ display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
       <div
         style={{
-          padding: "16px 16px 4px 16px",
-          background: T.bg.base,
+          padding: "4px 16px 0 16px",
+          background: "transparent",
           display: "flex",
-          justifyContent: "center",
+          justifyContent: "flex-start",
           flexShrink: 0,
         }}
       >
@@ -110,6 +111,7 @@ export default function PortfolioTab({ onViewTransactions, proEnabled = false, p
           ]}
           active={activeView}
           onChange={setActiveView}
+          variant="underline"
         />
       </div>
 

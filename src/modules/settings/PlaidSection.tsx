@@ -67,6 +67,7 @@ export default function PlaidSection({
   const [connectionStatus, setConnectionStatus] = useState<{ tone: "error" | "info"; message: string } | null>(null);
   const [activeFreeConnectionId, setActiveFreeConnectionId] = useState<string | null>(null);
   const [hasFreeTierPausedConnections, setHasFreeTierPausedConnections] = useState(false);
+  const reconnectQueue = plaidConnections.filter((connection) => connection?._needsReconnect);
 
   const reloadConnections = async () => {
     const accessState = await reconcilePlaidConnectionAccess(cards, bankAccounts);
@@ -331,6 +332,83 @@ export default function PlaidSection({
           }}
         >
           {connectionStatus.message}
+        </div>
+      )}
+
+      {reconnectQueue.length > 0 && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "14px 14px 12px",
+            borderRadius: T.radius.md,
+            border: `1px solid ${T.status.amber}35`,
+            background: `${T.status.amber}10`,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: T.status.amber, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                Reconnect Queue
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginTop: 4 }}>
+                {reconnectQueue.length} linked institution{reconnectQueue.length === 1 ? "" : "s"} need attention
+              </div>
+            </div>
+            <span style={{ fontSize: 11, color: T.text.secondary, fontFamily: T.font.mono }}>
+              Restore-safe placeholders active
+            </span>
+          </div>
+          <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.55, margin: "0 0 10px" }}>
+            Your cards and accounts stay visible while these banks are offline. Reconnect each institution below to resume live balances and transactions.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {reconnectQueue.map((conn) => (
+              <div
+                key={`queue-${conn.id}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  padding: "10px 12px",
+                  borderRadius: 12,
+                  background: T.bg.card,
+                  border: `1px solid ${T.border.subtle}`,
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>
+                    {conn.institutionName || "Linked bank"}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.text.dim, marginTop: 2 }}>
+                    {(conn.accounts?.length || 0)} reconnect-ready account{(conn.accounts?.length || 0) === 1 ? "" : "s"}
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleReconnect(conn)}
+                  disabled={reconnectingId === conn.id}
+                  style={{
+                    padding: "0 12px",
+                    height: 34,
+                    borderRadius: T.radius.sm,
+                    border: `1px solid ${T.accent.primary}35`,
+                    background: `${T.accent.primary}14`,
+                    color: T.accent.primary,
+                    cursor: reconnectingId === conn.id ? "not-allowed" : "pointer",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    opacity: reconnectingId === conn.id ? 0.7 : 1,
+                  }}
+                >
+                  {reconnectingId === conn.id ? <RefreshCw size={14} style={spinningIconStyle} /> : <RefreshCw size={14} />}
+                  {reconnectingId === conn.id ? "Reconnecting..." : "Reconnect"}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

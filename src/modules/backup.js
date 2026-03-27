@@ -484,8 +484,15 @@ export async function importBackup(file, getPassphrase) {
         let count = 0;
         for (const [key, val] of Object.entries(backup.data)) {
           if (!isSafeImportKey(key)) continue;
+          if (key === "auto-backup-interval" || key === "last-backup-ts") continue;
           await db.set(key, val);
           count++;
+        }
+        await db.set("auto-backup-interval", "off");
+        if (typeof db.del === "function") {
+          await db.del("last-backup-ts");
+        } else {
+          await db.set("last-backup-ts", null);
         }
 
         // Restore sanitized Plaid connections (metadata only, no access tokens)

@@ -25,7 +25,7 @@ const PAGE_CONFIG = {
     eyebrow: "Pro Guide",
     accent: "gold",
     lead:
-      "This is the full version: up to 6 Plaid institutions, quiet balance and ledger upkeep, deeper AI, and the archive to run the system seriously.",
+      "This is the full version: up to 8 Plaid institutions, quiet balance and ledger upkeep, deeper AI, and the archive to run the system seriously.",
     secondaryCta: false,
   },
 };

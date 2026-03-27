@@ -94,9 +94,12 @@ export default function PageImport({
     let count = 0;
     for (const [key, value] of Object.entries(backup.data)) {
       if (isSecuritySensitiveKey(key)) continue;
+      if (key === "auto-backup-interval" || key === "last-backup-ts") continue;
       await db.set(key, value);
       count++;
     }
+    await db.set("auto-backup-interval", "off");
+    await db.del("last-backup-ts");
 
     const sanitizedPlaid = backup.data["plaid-connections-sanitized"];
     if (Array.isArray(sanitizedPlaid) && sanitizedPlaid.length > 0) {
@@ -591,7 +594,7 @@ export default function PageImport({
             }
           >
             <select
-              value={security?.autoBackupInterval || "weekly"}
+              value={security?.autoBackupInterval || "off"}
               onChange={(event) => updateSecurity("autoBackupInterval", event.target.value as SetupWizardSecurityState["autoBackupInterval"])}
               aria-label="iCloud backup interval"
               className="wiz-input"
@@ -609,10 +612,10 @@ export default function PageImport({
                 boxSizing: "border-box",
               }}
             >
+              <option value="off">Off</option>
               <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
               <option value="monthly">Monthly</option>
-              <option value="off">Off</option>
             </select>
           </WizField>
         </div>

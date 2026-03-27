@@ -168,7 +168,6 @@ export default memo(function AIChatTab({
 }: AIChatTabProps) {
   void _privacyModeTick;
   void onBack;
-  void embedded;
   const { current, history, trendContext } = useAudit();
   const { apiKey, aiProvider, aiModel, financialConfig, persona, personalRules, setAiModel } = useSettings();
   const { cards, renewals } = usePortfolio();
@@ -184,11 +183,27 @@ export default memo(function AIChatTab({
   const [inputFocused, setInputFocused] = useState<boolean>(false);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
   const [messageFeedback, setMessageFeedback] = useState<ChatFeedbackStore>({});
+  const [viewport, setViewport] = useState(() => ({
+    width: typeof window === "undefined" ? 390 : window.innerWidth,
+    height: typeof window === "undefined" ? 844 : window.innerHeight,
+  }));
 
   const suggestionsScrollRef = useRef<HTMLDivElement | null>(null);
   const [, setCanScrollRight] = useState<boolean>(true);
   const [, setCanScrollLeft] = useState<boolean>(false);
 
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const syncViewport = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    window.addEventListener("orientationchange", syncViewport);
+    return () => {
+      window.removeEventListener("resize", syncViewport);
+      window.removeEventListener("orientationchange", syncViewport);
+    };
+  }, []);
 
   useEffect(() => {
     if (suggestionsScrollRef.current) {
@@ -652,6 +667,17 @@ export default memo(function AIChatTab({
 
   const [suggestions] = useState(() => getRandomSuggestions());
   const hasData = !!current?.parsed;
+  const compactEmbedded = embedded && viewport.height <= 820;
+  const denseEmbedded = embedded && viewport.height <= 760;
+  const suggestionCardMinHeight = denseEmbedded ? 84 : compactEmbedded ? 90 : 100;
+  const suggestionGridGap = denseEmbedded ? 6 : 8;
+  const emptyTopPadding = denseEmbedded ? 48 : compactEmbedded ? 60 : 84;
+  const orbSize = denseEmbedded ? 56 : compactEmbedded ? 60 : 64;
+  const orbIconSize = denseEmbedded ? 24 : 26;
+  const titleSize = denseEmbedded ? 22 : compactEmbedded ? 23 : 24;
+  const emptyCopySize = denseEmbedded ? 12 : 13;
+  const chipMarginBottom = denseEmbedded ? 8 : 12;
+  const promptClamp = denseEmbedded ? 2 : 3;
 
   return (
     <div
@@ -722,7 +748,7 @@ export default memo(function AIChatTab({
         className="scroll-area"
         style={{
           flex: 1,
-          overflowY: "auto",
+          overflowY: messages.length === 0 ? "hidden" : "auto",
           padding: "16px 14px",
           display: "flex",
           flexDirection: "column",
@@ -741,7 +767,7 @@ export default memo(function AIChatTab({
               alignItems: "center",
               justifyContent: "flex-start",
               minHeight: "100%",
-              padding: "84px 10px 20px",
+              padding: `${emptyTopPadding}px 10px 14px`,
               textAlign: "center",
               animation: "fadeIn .5s ease",
             }}
@@ -749,15 +775,15 @@ export default memo(function AIChatTab({
             <div
               style={{
                 position: "relative",
-                width: 64,
-                height: 64,
+                width: orbSize,
+                height: orbSize,
                 borderRadius: "50%",
                 background: `linear-gradient(135deg, ${T.accent.primaryDim}, ${T.bg.card})`,
                 border: `1px solid ${T.accent.primarySoft}`,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                marginBottom: 16,
+                marginBottom: denseEmbedded ? 12 : 16,
                 flexShrink: 0,
                 boxShadow: `0 8px 32px ${T.accent.primary}25`,
               }}
@@ -776,7 +802,7 @@ export default memo(function AIChatTab({
                 }}
               />
               <Sparkles
-                size={26}
+                size={orbIconSize}
                 color={T.accent.primary}
                 strokeWidth={1.5}
                 style={{ filter: `drop-shadow(0 2px 10px ${T.accent.primaryGlow})`, position: "relative" }}
@@ -784,12 +810,12 @@ export default memo(function AIChatTab({
             </div>
             <h3
               style={{
-                fontSize: 24,
+                fontSize: titleSize,
                 fontWeight: 900,
                 background: `linear-gradient(135deg, ${T.text.primary}, ${T.accent.primaryHover})`,
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
-                marginBottom: 6,
+                marginBottom: denseEmbedded ? 4 : 6,
                 letterSpacing: "-0.02em",
               }}
             >
@@ -797,12 +823,12 @@ export default memo(function AIChatTab({
             </h3>
             <p
               style={{
-                fontSize: 13,
+                fontSize: emptyCopySize,
                 color: T.text.secondary,
                 lineHeight: 1.5,
                 fontWeight: 500,
                 maxWidth: 240,
-                marginBottom: 12,
+                marginBottom: chipMarginBottom,
               }}
             >
               {hasData
@@ -814,7 +840,7 @@ export default memo(function AIChatTab({
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                marginBottom: 12,
+                marginBottom: chipMarginBottom,
                 padding: "6px 14px",
                 borderRadius: 99,
                 background: `${T.status.green}10`,
@@ -843,9 +869,9 @@ export default memo(function AIChatTab({
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1fr 1fr",
-                  gap: 8,
+                  gap: suggestionGridGap,
                   width: "100%",
-                  paddingBottom: 20,
+                  paddingBottom: denseEmbedded ? 8 : 12,
                 }}
               >
                 {suggestions.map((s, i) => (
@@ -859,30 +885,30 @@ export default memo(function AIChatTab({
                     flexDirection: "column",
                     alignItems: "flex-start",
                     justifyContent: "center",
-                    gap: 8,
-                    padding: "16px",
+                    gap: denseEmbedded ? 6 : 8,
+                    padding: denseEmbedded ? "12px" : compactEmbedded ? "14px" : "16px",
                     borderRadius: 16,
                     border: `1px solid ${T.border.subtle}`,
                     background: T.bg.glass,
                     backdropFilter: "blur(12px)",
                     WebkitBackdropFilter: "blur(12px)",
                     color: T.text.primary,
-                    fontSize: 13,
+                    fontSize: denseEmbedded ? 12 : 13,
                     fontWeight: 600,
                     cursor: "pointer",
                     textAlign: "left",
                     lineHeight: 1.3,
                     width: "100%",
-                    minHeight: 100,
+                    minHeight: suggestionCardMinHeight,
                     boxShadow: T.shadow.subtle,
                     transition: "all .3s cubic-bezier(.16,1,.3,1)",
                     animation: `chatBubbleIn .5s cubic-bezier(.16,1,.3,1) ${i * 0.08}s both`,
                   }}
                 >
-                  <span style={{ fontSize: 18, flexShrink: 0, filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.5))" }}>
+                  <span style={{ fontSize: denseEmbedded ? 16 : 18, flexShrink: 0, filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.5))" }}>
                     {s.emoji}
                   </span>
-                  <span style={{ display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                  <span style={{ display: "-webkit-box", WebkitLineClamp: promptClamp, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                     {s.text}
                   </span>
                 </button>

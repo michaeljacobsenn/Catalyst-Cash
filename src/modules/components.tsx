@@ -66,6 +66,7 @@ interface MoveRowProps {
   checked?: boolean;
   onToggle: () => void;
   index: number;
+  detail?: ReactNode;
 }
 
 interface DollarInputProps {
@@ -518,7 +519,7 @@ export const Section = ({ title, icon: Icon, content, accentColor, defaultOpen =
   );
 };
 
-export const MoveRow = ({ item, checked, onToggle, index }: MoveRowProps) => {
+export const MoveRow = ({ item, checked, onToggle, index, detail = null }: MoveRowProps) => {
   const tm = { REQUIRED: "red", DEADLINE: "amber", PROMO: "blue", OPTIONAL: "gray" };
   const handleToggle = () => {
     if (!checked) haptic.light();
@@ -585,6 +586,7 @@ export const MoveRow = ({ item, checked, onToggle, index }: MoveRowProps) => {
         >
           {item.text}
         </p>
+        {detail ? <div style={{ marginTop: 8 }}>{detail}</div> : null}
       </div>
     </div>
   );

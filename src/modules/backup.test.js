@@ -22,6 +22,9 @@ vi.mock("./utils.js", () => ({
     set: vi.fn(async (key, value) => {
       dbStore.set(key, value);
     }),
+    del: vi.fn(async (key) => {
+      dbStore.delete(key);
+    }),
   },
 }));
 
@@ -169,6 +172,9 @@ describe("backup utilities", () => {
       dbStore.set("personal-rules", "be strict");
       dbStore.set("api-key-openai", "secret");
       dbStore.set("household-id-protected", "protected");
+      dbStore.set("household-last-sync-ts", 1234567890);
+      dbStore.set("household-last-merge-report", { conflict: true });
+      dbStore.set("household-last-conflict", { overwrittenKeys: ["financial-config"] });
       dbStore.set("plaid-connections", [
         {
           id: "conn_1",
@@ -199,6 +205,9 @@ describe("backup utilities", () => {
       expect(backup.data["personal-rules"]).toBe("be strict");
       expect(backup.data["api-key-openai"]).toBeUndefined();
       expect(backup.data["household-id-protected"]).toBeUndefined();
+      expect(backup.data["household-last-sync-ts"]).toBeUndefined();
+      expect(backup.data["household-last-merge-report"]).toBeUndefined();
+      expect(backup.data["household-last-conflict"]).toBeUndefined();
       expect(backup.data["plaid-connections"]).toBeUndefined();
       expect(backup.data["plaid-connections-sanitized"]).toEqual([
         {
@@ -359,6 +368,33 @@ describe("backup utilities", () => {
         { id: "existing", institutionName: "Existing Bank", accounts: [] },
         { id: "restored", institutionName: "Ally", accounts: [], _needsReconnect: true },
       ]);
+    });
+
+    it("forces auto backup back to off during import even if the backup had it enabled", async () => {
+      dbStore.set("auto-backup-interval", "monthly");
+      dbStore.set("last-backup-ts", 123456789);
+      const backup = {
+        app: "Catalyst Cash",
+        exportedAt: "2026-03-15T15:00:00.000Z",
+        data: {
+          "financial-config": { budget: 500 },
+          "auto-backup-interval": "daily",
+          "last-backup-ts": 999999999,
+        },
+      };
+
+      await importBackup(
+        {
+          name: "CatalystCash_Backup_2026-03-15.json",
+          type: "application/json",
+          __text: JSON.stringify(backup),
+        },
+        vi.fn()
+      );
+
+      expect(dbStore.get("financial-config")).toEqual({ budget: 500 });
+      expect(dbStore.get("auto-backup-interval")).toBe("off");
+      expect(dbStore.get("last-backup-ts")).toBeUndefined();
     });
 
     it("creates reconnect-ready placeholder accounts from sanitized plaid metadata", async () => {

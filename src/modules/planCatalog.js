@@ -15,7 +15,7 @@ export const PRO_MARKET_REFRESH_MS = 5 * 60 * 1000;
 
 export const INSTITUTION_LIMITS = {
   free: 1,
-  pro: 6,
+  pro: 8,
 };
 
 export const TIER_MODEL_IDS = {

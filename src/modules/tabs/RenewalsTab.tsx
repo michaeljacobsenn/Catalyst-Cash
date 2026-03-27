@@ -197,7 +197,7 @@ function formatRenewalDueDate(dateValue?: string) {
 }
 const SearchableSelect = SearchableSelectBase as unknown as (props: SearchableSelectProps) => ReactNode;
 
-export default memo(function RenewalsTab({ proEnabled = false, privacyMode: _privacyModeTick = false }: RenewalsTabProps) {
+export default memo(function RenewalsTab({ proEnabled = false, embedded = false, privacyMode: _privacyModeTick = false }: RenewalsTabProps) {
   void _privacyModeTick;
   const { current } = useAudit();
   const portfolioContext = usePortfolio();
@@ -747,8 +747,8 @@ export default memo(function RenewalsTab({ proEnabled = false, privacyMode: _pri
         {/* existing header & monthly total */}
         <div
           style={{
-            paddingTop: 16,
-            paddingBottom: 16,
+            paddingTop: embedded ? 10 : 16,
+            paddingBottom: embedded ? 12 : 16,
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",

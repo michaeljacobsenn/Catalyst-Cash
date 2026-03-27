@@ -1,4 +1,4 @@
-import { Building2, ChevronRight, Cpu, Database, Info, Lock, Target } from "../icons";
+import { Building2, ChevronRight, Cpu, Database, Info, Lock, Monitor, Target } from "../icons";
 import { buildPromoLine } from "../planCatalog.js";
 import { T } from "../constants.js";
 import ProBanner from "../tabs/ProBanner.js";
@@ -55,6 +55,7 @@ export function RootSettingsSection({
       heading: "Preferences",
       items: [
         { id: "finance", label: "Financial Profile", icon: Target, color: T.accent.emerald, desc: "Income, region, housing, demographics" },
+        { id: "profile", label: "Appearance", icon: Monitor, color: T.accent.primary, desc: "Theme mode, light, dark, or auto" },
         { id: "ai", label: "Assistant Persona", icon: Cpu, color: T.status.blue, desc: "Model routing & behavior" },
       ],
     },

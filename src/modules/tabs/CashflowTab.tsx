@@ -1,6 +1,5 @@
   import React,{ useState,type Dispatch,type SetStateAction } from "react";
   import type { BankAccount,Card,CatalystCashConfig,Renewal } from "../../types/index.js";
-  import { T } from "../constants.js";
   import { ViewToggle } from "../ui.js";
   import BudgetTab from "./BudgetTab.js";
   import RenewalsTab from "./RenewalsTab.js";
@@ -29,6 +28,7 @@ interface ViewToggleProps {
   options: Array<{ id: CashflowView; label: string }>;
   active: CashflowView;
   onChange: Dispatch<SetStateAction<CashflowView>> | ((value: CashflowView) => void);
+  variant?: "pill" | "underline";
 }
 
 interface BudgetTabProps {
@@ -75,10 +75,10 @@ export default function CashflowTab({ onRunAudit, toast, proEnabled = false, pri
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, position: "relative" }}>
       <div
         style={{
-          padding: "16px 16px 4px 16px",
-          background: T.bg.base,
+          padding: "4px 16px 0 16px",
+          background: "transparent",
           display: "flex",
-          justifyContent: "center",
+          justifyContent: "flex-start",
           flexShrink: 0,
         }}
       >
@@ -89,6 +89,7 @@ export default function CashflowTab({ onRunAudit, toast, proEnabled = false, pri
           ]}
           active={activeView}
           onChange={setActiveView}
+          variant="underline"
         />
       </div>
 

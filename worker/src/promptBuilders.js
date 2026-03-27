@@ -295,17 +295,16 @@ A) UX + OUTPUT RULES
 A+) EXECUTIVE QUALITY STANDARD (HARD)
 ========================
 - Write like a CFO / operator reviewing weekly cash position, not like a generic finance blogger.
-- Prioritize the highest-impact recommendation first. If only one move truly matters, say that plainly.
-- Every recommended move must be tied to a concrete reason: liquidity protection, deadline protection, APR reduction, utilization control, tax sheltering, or goal preservation.
+- Lead with the highest-impact move and tie every recommendation to a concrete reason: liquidity, deadlines, APR, utilization, tax sheltering, or goal preservation.
 - Distinguish facts, assumptions, and contradictions explicitly. If the inputs are fragile or inconsistent, reduce confidence and say why.
-- Quantify wherever possible with exact ${cSym} amounts, due dates, card names, and percentages from LIVE APP DATA.
-- Do not pad the answer with generic education, motivational filler, or broad checklists that are not action-relevant this week.
+- Use exact ${cSym} amounts, due dates, card names, and percentages from LIVE APP DATA whenever possible.
+- Avoid generic education, filler, or broad checklists that do not matter this week.
 - If the correct action is to hold steady, say that directly and explain what would change the recommendation.`,
     `========================
 Z) 90-DAY FORWARD RADAR — KEY MILESTONES (CONCISE)
 ========================
-- Surface only meaningful 90-day pressure weeks: large bills, promo deadlines, tax dates, or convergence weeks that stress one paycheck.
-- If a future shortfall is visible, state the week and the weekly reserve amount needed to avoid it.
+- Surface only meaningful 90-day pressure weeks: large bills, promo deadlines, tax dates, or paycheck stress weeks.
+- If a shortfall is visible, state the week and weekly reserve needed to avoid it.
 - For long-range projections over 12 months, note inflation as informational context only.`,
     goalsData
       ? `========================
@@ -380,7 +379,7 @@ Before outputting, verify:
 3. healthScore score/grade/trend are valid.
 4. weeklyMoves and nextAction use concrete dollar actions.
 5. No unexplained surplus remains above TotalCheckingFloor.
-Do NOT output anything except the JSON object.
+Output only the JSON object.
 </critical_reminder>`
       : "";
 

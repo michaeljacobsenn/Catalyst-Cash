@@ -1,3 +1,4 @@
+  import { useEffect,useState } from "react";
   import { Capacitor } from "@capacitor/core";
   import { T } from "../constants.js";
   import { clearErrorLog,getErrorLog } from "../errorReporter.js";
@@ -34,10 +35,40 @@ export default function BackupSection({ activeMenu, ...props }) {
     confirmFactoryReset,
     setConfirmFactoryReset,
   } = props;
+  const [householdMergeReport, setHouseholdMergeReport] = useState<{ overwrittenKeys?: string[] } | null>(null);
+  const [householdConflict, setHouseholdConflict] = useState<{ overwrittenKeys?: string[] } | null>(null);
 
   const isWeb = Capacitor.getPlatform() === "web";
   const householdSupported = Boolean(secretStorageStatus?.canPersistSecrets);
   const cloudBackupSupported = !isWeb;
+  const prettifyKeys = (keys: string[] = []) =>
+    keys
+      .map((key) => ({
+        "financial-config": "Financial Profile",
+        "card-portfolio": "Cards",
+        "bank-accounts": "Bank Accounts",
+        renewals: "Bills & Renewals",
+        "personal-rules": "Personal Rules",
+        "audit-history": "Audit History",
+        "current-audit": "Current Audit",
+      }[String(key)] || String(key).replace(/-/g, " ")))
+      .slice(0, 4);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (activeMenu !== "backup") return () => { cancelled = true; };
+    void Promise.all([
+      db.get("household-last-merge-report"),
+      db.get("household-last-conflict"),
+    ]).then(([mergeReport, conflict]) => {
+      if (cancelled) return;
+      setHouseholdMergeReport(mergeReport || null);
+      setHouseholdConflict(conflict || null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeMenu, householdId]);
 
   return (
     <>
@@ -142,6 +173,70 @@ export default function BackupSection({ activeMenu, ...props }) {
             <p style={{ margin: "10px 0 0 0", fontSize: 11, color: T.text.secondary, lineHeight: 1.5 }}>
               Shared household sync stores sync credentials in secure device storage, so it is intentionally limited to the native iPhone app.
             </p>
+          )}
+          {householdId && (householdConflict || (householdMergeReport?.overwrittenKeys?.length || 0) > 0) && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: "12px 12px 10px",
+                borderRadius: T.radius.md,
+                border: `1px solid ${householdConflict ? T.status.amber : T.border.default}`,
+                background: householdConflict ? `${T.status.amber}10` : T.bg.card,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: householdConflict ? T.status.amber : T.text.primary, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                    {householdConflict ? "Sync Review Needed" : "Last Household Merge"}
+                  </div>
+                  <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.55, marginTop: 4 }}>
+                    {householdConflict
+                      ? `A newer device changed ${householdConflict.overwrittenKeys?.length || 0} section${(householdConflict.overwrittenKeys?.length || 0) === 1 ? "" : "s"} in your local profile.`
+                      : `Last sync merged ${householdMergeReport?.overwrittenKeys?.length || 0} section${(householdMergeReport?.overwrittenKeys?.length || 0) === 1 ? "" : "s"} from another device.`}
+                  </div>
+                </div>
+                {householdConflict && (
+                  <button
+                    onClick={async () => {
+                      await db.del("household-last-conflict");
+                      setHouseholdConflict(null);
+                    }}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: 8,
+                      border: `1px solid ${T.border.default}`,
+                      background: "transparent",
+                      color: T.text.dim,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Dismiss
+                  </button>
+                )}
+              </div>
+              {((householdConflict?.overwrittenKeys?.length || 0) > 0 || (householdMergeReport?.overwrittenKeys?.length || 0) > 0) && (
+                <div style={{ marginTop: 10, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {prettifyKeys(householdConflict?.overwrittenKeys || householdMergeReport?.overwrittenKeys || []).map((label) => (
+                    <span
+                      key={label}
+                      style={{
+                        padding: "5px 8px",
+                        borderRadius: 999,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        background: T.bg.glass,
+                        color: T.text.secondary,
+                        border: `1px solid ${T.border.subtle}`,
+                      }}
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
 

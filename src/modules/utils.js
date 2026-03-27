@@ -7,6 +7,7 @@
   import { buildDashboardSafetyModel } from "./dashboard/safetyModel.js";
   import { log } from "./logger.js";
   import { clamp, getGradeLetter } from "./mathHelpers.js";
+  import { normalizeMoveItems } from "./moveSemantics.js";
 
 const NativeFaceId = registerPlugin("FaceId");
 
@@ -275,6 +276,41 @@ function normalizeStringArray(value) {
     .filter(Boolean);
 }
 
+function normalizeWeeklyMoveEntries(value) {
+  if (!Array.isArray(value)) return { weeklyMoves: [], moveItems: [] };
+
+  const moveItems = value
+    .map((item) => {
+      if (typeof item === "string") {
+        const text = item.trim();
+        return text ? { text } : null;
+      }
+      if (!item || typeof item !== "object") return null;
+      const title = typeof item.title === "string" ? item.title.trim() : "";
+      const detail = typeof item.detail === "string" ? item.detail.trim() : "";
+      const text = detail || title;
+      if (!text) return null;
+      const normalized = {
+        text,
+        tag: typeof item.priority === "string" ? item.priority.trim().toUpperCase() : typeof item.tag === "string" ? item.tag.trim().toUpperCase() : null,
+        amount: parseCurrency(item.amount),
+        semanticKind: typeof item.semanticKind === "string" ? item.semanticKind.trim() : null,
+        targetLabel: typeof item.targetLabel === "string" ? item.targetLabel.trim() : null,
+        sourceLabel: typeof item.sourceLabel === "string" ? item.sourceLabel.trim() : null,
+        targetKey: typeof item.targetKey === "string" ? item.targetKey.trim() : null,
+        contributionKey: typeof item.contributionKey === "string" ? item.contributionKey.trim() : null,
+        transactional: typeof item.transactional === "boolean" ? item.transactional : undefined,
+      };
+      return normalized;
+    })
+    .filter(Boolean);
+
+  return {
+    weeklyMoves: moveItems.map((item) => item.text),
+    moveItems,
+  };
+}
+
 const DASHBOARD_ROW_ORDER = ["Checking", "Vault", "Pending", "Debts", "Available"];
 
 function normalizeDashboardCard(value) {
@@ -412,7 +448,8 @@ export function parseJSON(raw) {
   }
 
   // Map to the internal structure expected by ResultsView/Dashboard
-  const weeklyMoves = normalizeStringArray(j.weeklyMoves);
+  const normalizedWeeklyMoves = normalizeWeeklyMoveEntries(j.weeklyMoves);
+  const weeklyMoves = normalizedWeeklyMoves.weeklyMoves;
   const alertsCard = normalizeStringArray(j.alertsCard);
   const { rows: dashboardCard, nonCanonicalCategories } = normalizeDashboardCard(j.dashboardCard);
   const investments = normalizeInvestmentsSummary(j.investments);
@@ -470,7 +507,10 @@ export function parseJSON(raw) {
       qualityScore: "Strict JSON Mode Active",
     },
     // Map moves to actionable checkboxes
-    moveItems: weeklyMoves.map(m => ({ tag: null, text: m, done: false })),
+    moveItems: normalizeMoveItems(
+      Array.isArray(j.moveItems) && j.moveItems.length > 0 ? j.moveItems : normalizedWeeklyMoves.moveItems,
+      weeklyMoves
+    ),
     paceData: Array.isArray(j.paceData) ? j.paceData : [], // Extracted from JSON if present, kept for backwards compat
     negotiationTargets,
     dashboardData: {
@@ -783,21 +823,53 @@ export function buildDegradedParsedAudit({
   const weeklyMoves = [];
   if ((computedStrategy?.requiredTransfer || 0) > 0) {
     weeklyMoves.push(
-      `Transfer $${Number(computedStrategy.requiredTransfer).toFixed(2)} from savings to checking to protect your floor.`
+      {
+        title: "Protect checking floor",
+        detail: `Transfer $${Number(computedStrategy.requiredTransfer).toFixed(2)} from savings to checking to protect your floor.`,
+        amount: Number(computedStrategy.requiredTransfer).toFixed(2),
+        priority: "required",
+        semanticKind: "bank-checking-increase",
+        targetLabel: "Checking",
+        sourceLabel: "Savings",
+        transactional: true,
+      }
     );
   }
   if (computedStrategy?.debtStrategy?.target && (computedStrategy?.debtStrategy?.amount || 0) > 0) {
     weeklyMoves.push(
-      `Route $${Number(computedStrategy.debtStrategy.amount).toFixed(2)} to ${computedStrategy.debtStrategy.target} this week.`
+      {
+        title: "Pay priority debt",
+        detail: `Route $${Number(computedStrategy.debtStrategy.amount).toFixed(2)} to ${computedStrategy.debtStrategy.target} this week.`,
+        amount: Number(computedStrategy.debtStrategy.amount).toFixed(2),
+        priority: "required",
+        semanticKind: "debt-payment",
+        targetLabel: computedStrategy.debtStrategy.target,
+        transactional: true,
+      }
     );
   }
   if (weeklyMoves.length === 0) {
     if (riskFlags.length > 0) {
-      weeklyMoves.push(`Prioritize ${formatRiskFlag(riskFlags[0]).toLowerCase()} before optional spending this week.`);
+      weeklyMoves.push({
+        title: "Protect against the top risk",
+        detail: `Prioritize ${formatRiskFlag(riskFlags[0]).toLowerCase()} before optional spending this week.`,
+        priority: "required",
+        semanticKind: "spending-hold",
+        transactional: false,
+      });
     } else {
-      weeklyMoves.push("Hold spending to preserve your cash buffer this week.");
+      weeklyMoves.push({
+        title: "Preserve cash buffer",
+        detail: "Hold spending to preserve your cash buffer this week.",
+        priority: "optional",
+        semanticKind: "spending-hold",
+        transactional: false,
+      });
     }
   }
+
+  const normalizedFallbackMoves = normalizeWeeklyMoveEntries(weeklyMoves);
+  const fallbackMoveTexts = normalizedFallbackMoves.weeklyMoves;
 
   const alertsCard = [
     "Full AI narrative unavailable — showing deterministic engine output only.",
@@ -812,7 +884,7 @@ export function buildDegradedParsedAudit({
     { category: "Available", amount: fmt(operationalSurplus), status: operationalSurplus > 0 ? "Deploy" : "Protected" },
   ];
 
-  const nextAction = weeklyMoves[0] || safetySnapshot.summary;
+  const nextAction = fallbackMoveTexts[0] || safetySnapshot.summary;
   const dateLabel = formData?.date || new Date().toISOString().split("T")[0];
   const riskSummary = riskFlags.length > 0 ? riskFlags.slice(0, 3).map(formatRiskFlag).join(", ") : "No acute risk flags";
 
@@ -832,7 +904,7 @@ export function buildDegradedParsedAudit({
     },
     alertsCard,
     dashboardCard,
-    weeklyMoves,
+    weeklyMoves: fallbackMoveTexts,
     spendingAnalysis: null,
     structured: {
       headerCard: {
@@ -849,6 +921,7 @@ export function buildDegradedParsedAudit({
       },
       dashboardCard,
       weeklyMoves,
+      moveItems: normalizedFallbackMoves.moveItems,
       alertsCard,
       longRangeRadar: [],
       milestones: [],
@@ -860,7 +933,7 @@ export function buildDegradedParsedAudit({
       header: `**${dateLabel}** · DEGRADED · ${status}`,
       alerts: alertsCard.map(item => `⚠️ ${item}`).join("\n"),
       dashboard: dashboardCard.map(row => `**${row.category}:** ${row.amount} (${row.status})`).join("\n"),
-      moves: weeklyMoves.join("\n"),
+      moves: fallbackMoveTexts.join("\n"),
       radar: "",
       longRange: "",
       forwardRadar: riskSummary,
@@ -869,7 +942,7 @@ export function buildDegradedParsedAudit({
       autoUpdates: "Deterministic fallback active",
       qualityScore: "Full AI narrative unavailable",
     },
-    moveItems: weeklyMoves.map(text => ({ tag: null, text, done: false })),
+    moveItems: normalizeMoveItems(normalizedFallbackMoves.moveItems, fallbackMoveTexts),
     paceData: [],
     negotiationTargets: [],
     dashboardData: {
@@ -885,7 +958,7 @@ export function buildDegradedParsedAudit({
       },
     ],
     consistency: {
-      weeklyMoveDollarTotal: extractDollarAmountTotal(weeklyMoves),
+      weeklyMoveDollarTotal: extractDollarAmountTotal(fallbackMoveTexts),
       expectedOperationalSurplus: operationalSurplus,
       nonCanonicalDashboardCategories: [],
     },

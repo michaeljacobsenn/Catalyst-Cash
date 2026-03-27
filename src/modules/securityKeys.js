@@ -21,6 +21,9 @@ const EXACT_SECURITY_KEYS = new Set([
   "household-id-protected",
   "household-passcode-protected",
   "household-sync-version",
+  "household-last-sync-ts",
+  "household-last-merge-report",
+  "household-last-conflict",
 ]);
 
 const SAFE_IMPORT_KEY_RE = /^[a-z0-9-]+$/;

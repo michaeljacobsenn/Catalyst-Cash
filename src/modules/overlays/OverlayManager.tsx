@@ -45,6 +45,7 @@ interface OverlayManagerProps {
   dismissRecoverableAuditDraft: () => Promise<void>;
   navTo: (newTab: AppTab, viewState?: NavViewState | null) => void;
   toggleMove: (index: string) => Promise<void>;
+  updateMoveAssignment: (index: number, patch: { sourceAccountId?: string | null; targetAccountId?: string | null }) => Promise<void>;
   toast: ToastApi;
   clearAll: () => Promise<void>;
   factoryReset: () => Promise<void>;
@@ -69,6 +70,7 @@ export default function OverlayManager({
   dismissRecoverableAuditDraft,
   navTo,
   toggleMove,
+  updateMoveAssignment,
   toast,
   clearAll,
   factoryReset,
@@ -301,6 +303,9 @@ export default function OverlayManager({
                   moveChecks={displayMoveChecks}
                   onToggleMove={(index: number) => {
                     void toggleMove(String(index));
+                  }}
+                  onUpdateMoveAssignment={(index, patch) => {
+                    void updateMoveAssignment(index, patch);
                   }}
                   streak={trendContextLength}
                   onBack={() => {

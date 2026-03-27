@@ -1,4 +1,4 @@
-import type { AuditRecord, BankAccount, Card } from "../types/index.js";
+import type { AuditRecord, BankAccount, Card, CatalystCashConfig } from "../types/index.js";
 
 export interface AuditMovePlanTarget {
   id: string;
@@ -26,6 +26,8 @@ export interface AuditMovePlan {
   unresolvedMoves: string[];
   cardTargets: Record<string, AuditMovePlanTarget>;
   bankTargets: Record<string, AuditMovePlanTarget>;
+  debtTargets: Record<string, AuditMovePlanTarget>;
+  investmentTargets: Record<string, AuditMovePlanTarget>;
   genericSummaries: AuditMovePlanSummary[];
   highlights: Array<AuditMovePlanTarget | AuditMovePlanSummary>;
   impliedCheckingDelta: number;
@@ -37,4 +39,5 @@ export function buildAuditMovePlan(input?: {
   audit?: AuditRecord | null;
   cards?: Card[];
   bankAccounts?: BankAccount[];
+  financialConfig?: CatalystCashConfig;
 }): AuditMovePlan;
