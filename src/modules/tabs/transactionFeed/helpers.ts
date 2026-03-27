@@ -2,14 +2,27 @@ import type React from "react";
 import type { Card as PortfolioCard, CustomValuations } from "../../../types/index.js";
 
 import { T } from "../../constants.js";
-import { getOptimalCard } from "../../rewardsCatalog.js";
+import { inferMerchantIdentity } from "../../merchantIdentity.js";
+import { getCardMultiplier, getOptimalCard } from "../../rewardsCatalog.js";
 
 interface TransactionRewardInput {
+  date?: string;
   amount: number;
   isCredit?: boolean;
   category?: string | null;
+  subcategory?: string | null;
+  accountId?: string | null;
   accountName?: string;
+  linkedCardId?: string | null;
+  linkedBankAccountId?: string | null;
   institution?: string;
+  description?: string;
+  merchantName?: string | null;
+  merchantId?: string | null;
+  merchantMcc?: number | string | null;
+  merchantKey?: string | null;
+  merchantBrand?: string | null;
+  name?: string;
 }
 
 interface CsvTransaction {
@@ -18,10 +31,30 @@ interface CsvTransaction {
   amount: number;
   isCredit?: boolean;
   category?: string;
+  subcategory?: string;
+  accountId?: string | null;
   accountName?: string;
+  linkedCardId?: string | null;
+  linkedBankAccountId?: string | null;
   institution?: string;
+  merchantName?: string | null;
+  merchantId?: string | null;
+  merchantMcc?: number | string | null;
+  merchantKey?: string | null;
+  merchantBrand?: string | null;
   pending?: boolean;
 }
+
+type MatchConfidence = "high" | "medium" | "low" | "none";
+
+type UsedCardMatch = {
+  card: PortfolioCard | null;
+  confidence: MatchConfidence;
+  source: "linked_card_id" | "plaid_account_id" | "last4" | "account_name" | "merchant_descriptor" | "institution" | "none";
+};
+
+export type RewardCapSpendMap = Record<string, Record<string, number>>;
+export type StatementCycleSpendMap = RewardCapSpendMap;
 
 export const CATEGORY_MAP = {
   "food and drink": { icon: "Utensils", color: "#F59E0B", bg: "rgba(245,158,11,0.10)" },
@@ -119,36 +152,114 @@ export function formatTransactionTime(dateValue: string | null | undefined) {
   return parsed.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
-function findUsedCard(txn: TransactionRewardInput, cards: PortfolioCard[]) {
-  const accountName = txn.accountName?.toLowerCase();
-  const institution = txn.institution?.toLowerCase();
-  if (!accountName && !institution) return null;
-  return cards.find(card => {
-    const cardName = card.name?.toLowerCase?.() || "";
-    return (
-      (accountName && cardName.includes(accountName)) ||
-      (institution && cardName.includes(institution))
+function findUsedCard(txn: TransactionRewardInput, cards: PortfolioCard[]): UsedCardMatch {
+  const normalize = (value: string | null | undefined) =>
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  const extractLast4 = (...values: Array<string | null | undefined>) => {
+    const joined = values.join(" ");
+    const matches = joined.match(/\b\d{4}\b/g);
+    return matches?.[matches.length - 1] || "";
+  };
+
+  const accountName = normalize(txn.accountName);
+  const accountId = String(txn.accountId || "").trim();
+  const institution = normalize(txn.institution);
+  const descriptor = normalize(txn.merchantName || txn.description || txn.name);
+  const observedLast4 = extractLast4(txn.accountName, txn.description, txn.name);
+  const linkedCardId = String(txn.linkedCardId || "").trim();
+
+  const cardAliases = (card: PortfolioCard) =>
+    [card.nickname, card.name]
+      .map(alias => normalize(alias))
+      .filter(alias => alias.length >= 4);
+
+  if (linkedCardId) {
+    const linkedCard = cards.find(card => String(card.id || "").trim() === linkedCardId);
+    if (linkedCard) return { card: linkedCard, confidence: "high", source: "linked_card_id" };
+  }
+
+  if (accountId) {
+    const plaidMatches = cards.filter(card => String(card._plaidAccountId || "").trim() === accountId);
+    if (plaidMatches.length === 1) return { card: plaidMatches[0] || null, confidence: "high", source: "plaid_account_id" };
+  }
+
+  if (observedLast4) {
+    const last4Matches = cards.filter(card => {
+      const digits = String(card.last4 || card.mask || "").replace(/\D/g, "");
+      return digits.length >= 4 && digits.endsWith(observedLast4);
+    });
+    if (last4Matches.length === 1) return { card: last4Matches[0] || null, confidence: "medium", source: "last4" };
+  }
+
+  if (accountName) {
+    const accountMatches = cards.filter(card =>
+      cardAliases(card).some(alias =>
+        alias === accountName || alias.includes(accountName) || accountName.includes(alias)
+      )
     );
-  }) || null;
+    if (accountMatches.length === 1) return { card: accountMatches[0] || null, confidence: "medium", source: "account_name" };
+  }
+
+  if (descriptor) {
+    const descriptorMatches = cards.filter(card =>
+      cardAliases(card).some(alias => descriptor.includes(alias))
+    );
+    if (descriptorMatches.length === 1) return { card: descriptorMatches[0] || null, confidence: "low", source: "merchant_descriptor" };
+  }
+
+  if (institution) {
+    const institutionMatches = cards.filter(card => {
+      const cardInstitution = normalize(card.institution);
+      return cardInstitution && (cardInstitution === institution || institution.includes(cardInstitution) || cardInstitution.includes(institution));
+    });
+    if (institutionMatches.length === 1) return { card: institutionMatches[0] || null, confidence: "low", source: "institution" };
+  }
+
+  return { card: null, confidence: "none", source: "none" };
 }
 
 export function buildRewardComparison(
   txn: TransactionRewardInput,
   cards: PortfolioCard[],
-  customValuations: CustomValuations | undefined
+  customValuations: CustomValuations | undefined,
+  options: { usedCaps?: Record<string, Record<string, number> | number | string> } = {}
 ) {
   if (!txn || txn.isCredit || !txn.category || txn.amount <= 0 || !Array.isArray(cards) || cards.length === 0) {
     return null;
   }
 
-  const bestCard = getOptimalCard(cards, txn.category || "catch-all", customValuations);
+  const merchantIdentity = inferMerchantIdentity({
+    merchantId: txn.merchantId,
+    merchantName: txn.merchantName || txn.description || txn.name || txn.accountName || "",
+    description: txn.description || txn.name || txn.accountName || "",
+    category: txn.category || "catch-all",
+    subcategory: txn.subcategory || "",
+    mcc: txn.merchantMcc,
+  });
+  const bestCard = getOptimalCard(cards, merchantIdentity.rewardCategory || txn.category || "catch-all", customValuations, {
+    merchantIdentity,
+    merchantId: txn.merchantId,
+    spendAmount: txn.amount,
+    capMode: "conservative",
+    usedCaps: options.usedCaps || {},
+  });
   if (!bestCard) return null;
 
-  const usedCard = findUsedCard(txn, cards);
-  let actualYield = 1.0;
+  const usedCardMatch = findUsedCard(txn, cards);
+  const usedCard = usedCardMatch.card;
+  let actualYield = txn.linkedBankAccountId && !txn.linkedCardId ? 0.0 : 1.0;
 
   if (usedCard) {
-    const usedCardData = getOptimalCard([usedCard], txn.category || "catch-all", customValuations);
+    const usedCardData = getOptimalCard([usedCard], merchantIdentity.rewardCategory || txn.category || "catch-all", customValuations, {
+      merchantIdentity,
+      merchantId: txn.merchantId,
+      spendAmount: txn.amount,
+      capMode: "conservative",
+      usedCaps: options.usedCaps || {},
+    });
     if (usedCardData?.effectiveYield) {
       actualYield = usedCardData.effectiveYield;
     }
@@ -165,6 +276,7 @@ export function buildRewardComparison(
     bestCard,
     usedCard,
     usedDisplayName,
+    bestCardNotes: bestCard.rewardNotes || null,
     actualYield,
     optimalYield,
     actualRewardValue,
@@ -172,7 +284,87 @@ export function buildRewardComparison(
     incrementalRewardValue,
     usedOptimal: optimalYield <= actualYield,
     usedCardMatched: Boolean(usedCard),
+    usedCardMatchConfidence: usedCardMatch.confidence,
+    usedCardMatchSource: usedCardMatch.source,
+    merchantIdentity,
   };
+}
+
+function padDay(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function getStatementCycleStart(card: PortfolioCard, referenceDate = new Date()) {
+  const closeDay = Number(card?.statementCloseDay);
+  if (!Number.isFinite(closeDay) || closeDay <= 0) return null;
+
+  const year = referenceDate.getFullYear();
+  const month = referenceDate.getMonth();
+  const currentClose = new Date(year, month, Math.min(closeDay, 28), 12, 0, 0);
+  const effectiveClose = referenceDate.getDate() > closeDay ? currentClose : new Date(year, month - 1, Math.min(closeDay, 28), 12, 0, 0);
+  effectiveClose.setDate(effectiveClose.getDate() + 1);
+  return `${effectiveClose.getFullYear()}-${padDay(effectiveClose.getMonth() + 1)}-${padDay(effectiveClose.getDate())}`;
+}
+
+function getPeriodStart(period: string | null | undefined, card: PortfolioCard, referenceDate = new Date()) {
+  if (period === "year") {
+    return `${referenceDate.getFullYear()}-01-01`;
+  }
+  if (period === "quarter") {
+    const quarterMonth = Math.floor(referenceDate.getMonth() / 3) * 3;
+    return `${referenceDate.getFullYear()}-${padDay(quarterMonth + 1)}-01`;
+  }
+  if (period === "month") {
+    return `${referenceDate.getFullYear()}-${padDay(referenceDate.getMonth() + 1)}-01`;
+  }
+  return getStatementCycleStart(card, referenceDate);
+}
+
+export function estimateRewardCapUsage(cards: PortfolioCard[], transactions: TransactionRewardInput[], referenceDate = new Date()): RewardCapSpendMap {
+  const cardMap = new Map<string, PortfolioCard>();
+  cards.forEach((card) => {
+    const cardId = String(card?.id || "").trim();
+    if (cardId) cardMap.set(cardId, card);
+  });
+
+  const cycleStarts = new Map<string, string>();
+
+  return transactions.reduce<RewardCapSpendMap>((acc, txn) => {
+    if (!txn || txn.isCredit || (Number(txn.amount) || 0) <= 0) return acc;
+    const linkedCardId = String(txn.linkedCardId || "").trim();
+    if (!linkedCardId || !txn.date) return acc;
+    const card = cardMap.get(linkedCardId);
+    if (!card) return acc;
+
+    const merchantIdentity = inferMerchantIdentity({
+      merchantId: txn.merchantId,
+      merchantName: txn.merchantName || txn.description || txn.name || txn.accountName || "",
+      description: txn.description || txn.name || txn.accountName || "",
+      category: txn.category || "catch-all",
+      subcategory: txn.subcategory || "",
+      mcc: txn.merchantMcc,
+    });
+    const rewardCategory = merchantIdentity.rewardCategory || txn.category || "catch-all";
+    const rewardInfo = getCardMultiplier(card.name, rewardCategory, {}, { merchantIdentity });
+    if (!rewardInfo.cap) return acc;
+    const periodKey = `${linkedCardId}:${rewardCategory}`;
+    if (!cycleStarts.has(periodKey)) {
+      const periodStart = getPeriodStart(rewardInfo.capPeriod, card, referenceDate);
+      if (!periodStart) return acc;
+      cycleStarts.set(periodKey, periodStart);
+    }
+    const periodStart = cycleStarts.get(periodKey);
+    if (!periodStart || txn.date < periodStart) return acc;
+
+    const nextCard = acc[linkedCardId] || {};
+    nextCard[rewardCategory] = Math.round(((nextCard[rewardCategory] || 0) + txn.amount) * 100) / 100;
+    acc[linkedCardId] = nextCard;
+    return acc;
+  }, {});
+}
+
+export function estimateStatementCycleSpend(cards: PortfolioCard[], transactions: TransactionRewardInput[], referenceDate = new Date()): StatementCycleSpendMap {
+  return estimateRewardCapUsage(cards, transactions, referenceDate);
 }
 
 type IconComponent = React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;

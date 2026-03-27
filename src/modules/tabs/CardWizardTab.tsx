@@ -3,6 +3,7 @@
   import { classifyMerchant } from "../api.js";
   import { T } from "../constants.js";
   import { log } from "../logger.js";
+  import { inferMerchantIdentity } from "../merchantIdentity.js";
   import { usePortfolio } from "../contexts/PortfolioContext.js";
   import { useSettings } from "../contexts/SettingsContext.js";
   import GeoSuggestWidget from "../dashboard/GeoSuggestWidget.js";
@@ -36,8 +37,10 @@
   } from "../icons";
   import { extractCategoryByKeywords,MERCHANT_DATABASE } from "../merchantDatabase.js";
   import { getCardMultiplier,VALUATIONS } from "../rewardsCatalog.js";
+  import { getHydratedStoredTransactions } from "../storedTransactions.js";
   import { Badge,Card,FormGroup,FormRow,InlineTooltip,Skeleton } from "../ui.js";
   import { db } from "../utils.js";
+  import { estimateRewardCapUsage } from "./transactionFeed/helpers";
 
 const LazyProPaywall = lazy(() => import("./ProPaywall.js"));
 
@@ -122,6 +125,7 @@ interface RewardInfo {
   base: number;
   currency: string;
   cap: number | null;
+  capPeriod?: string | null;
   cpp: number;
   notes: string | null;
   rotating: number | null;
@@ -174,6 +178,7 @@ interface CardWizardTabProps {
 }
 
 type UsedCaps = Record<string, number | "">;
+type StatementCycleSpendMap = Record<string, Record<string, number>>;
 
 function formatRewardNumber(value: number) {
   const normalized = Number.isFinite(value) ? Number.parseFloat(value.toFixed(2)) : 0;
@@ -217,6 +222,7 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
 
   // 150/100 Feature: Quarterly Cap Tracker — persisted via db (consistent with app data layer)
   const [usedCaps, setUsedCaps] = useState<UsedCaps>({});
+  const [statementCycleSpend, setStatementCycleSpend] = useState<StatementCycleSpendMap>({});
   useEffect(() => {
     db.get("cw-used-caps").then(val => { if (val && typeof val === "object") setUsedCaps(val as UsedCaps); });
   }, []);
@@ -249,6 +255,19 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
   const activeCreditCards = useMemo<PortfolioCard[]>(() => {
     return cards.filter(c => c.type === "credit" || !c.type);
   }, [cards]);
+
+  useEffect(() => {
+    (async () => {
+      const stored = await getHydratedStoredTransactions();
+      const spendMap = estimateRewardCapUsage(
+        activeCreditCards,
+        stored.data as unknown as Parameters<typeof estimateRewardCapUsage>[1]
+      );
+      setStatementCycleSpend(spendMap);
+    })().catch(() => {
+      setStatementCycleSpend({});
+    });
+  }, [activeCreditCards]);
 
   const customValuations = (financialConfig?.customValuations || {}) as CatalystCashConfig["customValuations"];
 
@@ -389,12 +408,21 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
     if (!resolvedCategory || activeCreditCards.length === 0) return [];
 
     const merchantName = resolvedMerchant?.name;
+    const merchantIdentity = inferMerchantIdentity({
+      merchantName: merchantName || "",
+      category: resolvedCategory,
+    });
 
     const scored = activeCreditCards.map(card => {
       // Per-card issuer category: some merchants code differently depending on which bank issues the card
       const issuerCategory = getIssuerCategoryOverride(merchantName, card.institution);
       const effectiveCategory = issuerCategory || resolvedCategory;
-      const rewardInfo = getCardMultiplier(card.name, effectiveCategory, customValuations) as RewardInfo;
+      const rewardInfo = getCardMultiplier(card.name, effectiveCategory, customValuations, {
+        merchantIdentity: {
+          ...merchantIdentity,
+          rewardCategory: merchantIdentity.rewardCategory || effectiveCategory,
+        },
+      }) as RewardInfo;
       // Business cards don't report utilization to personal bureaus; treat as 0% for tie-breakers to protect personal scores
       const balance = Number(card.balance) || 0;
       const limit = Number(card.limit) || 0;
@@ -404,9 +432,13 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
       let blendedMsg: string | null = null;
       let isCappedOut = false;
       const spend = parseFloat(spendAmount) || 0;
+      const autoTrackedCap = statementCycleSpend[String(card.id)]?.[effectiveCategory] || 0;
+      const usedCapValue = usedCaps[card.id] === "" || usedCaps[card.id] == null
+        ? autoTrackedCap
+        : parseFloat(String(usedCaps[card.id] ?? 0)) || 0;
 
       if (rewardInfo.cap) {
-        const used = parseFloat(String(usedCaps[card.id] ?? 0)) || 0;
+        const used = usedCapValue;
         const availableCap = Math.max(0, rewardInfo.cap - used);
         
         if (spend > 0 && spend > availableCap) {
@@ -439,7 +471,7 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
         baseMultiplier: rewardInfo.base,
         currency: rewardInfo.currency,
         cap: rewardInfo.cap,
-        usedCap: parseFloat(String(usedCaps[card.id] ?? 0)) || 0,
+        usedCap: usedCapValue,
         blendedMsg,
         isCappedOut,
         cpp: rewardInfo.cpp,
@@ -465,7 +497,7 @@ export default function CardWizardTab({ proEnabled = false }: CardWizardTabProps
     });
 
     return scored;
-  }, [resolvedCategory, resolvedMerchant, activeCreditCards, customValuations, subTargetId, spendAmount, usedCaps]);
+  }, [resolvedCategory, resolvedMerchant, activeCreditCards, customValuations, subTargetId, spendAmount, statementCycleSpend, usedCaps]);
 
   const dollarReturn = (yield_: number) => {
     const amt = parseFloat(spendAmount);

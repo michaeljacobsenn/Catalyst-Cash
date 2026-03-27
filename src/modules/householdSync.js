@@ -1,5 +1,5 @@
 import { normalizeAppError } from "./appErrors.js";
-import { getBackendUrl } from "./api.js";
+import { getBackendUrl } from "./backendUrl.js";
 import { decrypt, encrypt } from "./crypto.js";
 import { buildIdentityHeaders } from "./identitySession.js";
 import { log } from "./logger.js";

@@ -1,7 +1,8 @@
 import { buildSnapshotMessage } from "../../buildSnapshotMessage.js";
 import { DEFAULT_FINANCIAL_CONFIG } from "../../contexts/SettingsContext.js";
 import { calcPortfolioValue, fetchMarketPrices } from "../../marketData.js";
-import { getPlaidAutoFill, getStoredTransactions } from "../../plaid.js";
+import { getPlaidAutoFill } from "../../plaid.js";
+import { getHydratedStoredTransactions } from "../../storedTransactions.js";
 import { checkAuditQuota } from "../../subscription.js";
 import { toMoneyInput } from "./utils.js";
 
@@ -105,7 +106,7 @@ export function mergeLastAuditIntoForm({ previousForm, lastAudit, cards, bankAcc
 
 export async function loadRecentPlaidTransactions(setPlaidTransactions, setTxnFetchedAt) {
   try {
-    const typedStored = getStoredTransactions();
+    const typedStored = await getHydratedStoredTransactions();
     if (typedStored?.data?.length) {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - 7);

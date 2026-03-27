@@ -51,6 +51,7 @@ npm run verify
 - Use `npm run test:e2e -- tests/e2e/<file>.spec.ts` when iterating on a specific browser path.
 - Use `npm run lint:fix` only for mechanical cleanup, then rerun `npm run lint`.
 - Do not ship with a failing `verify` run.
+- Treat `npm run verify` as the web/runtime gate only. Use the manual device checklist in [docs/IOS_LAUNCH_CHECKLIST.md](/Users/michaeljacobsen/Desktop/PortfolioPro%20Public/docs/IOS_LAUNCH_CHECKLIST.md) before shipping an iPhone build.
 
 ## CI
 

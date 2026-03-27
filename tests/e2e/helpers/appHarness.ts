@@ -615,7 +615,10 @@ export async function readAppStorage(page: Page, key: string) {
 }
 
 export async function openAuditComposer(page: Page) {
-  await page.getByRole("button", { name: "Run New Audit", exact: true }).click();
+  await page.getByRole("tab", { name: "Audit", exact: true }).click();
+  const runNewAuditButton = page.getByRole("button", { name: "Run New Audit", exact: true });
+  await expect(runNewAuditButton).toBeVisible();
+  await runNewAuditButton.click();
   await expect(page.getByRole("spinbutton", { name: "Checking balance" })).toBeVisible();
 }
 

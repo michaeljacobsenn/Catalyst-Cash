@@ -88,8 +88,9 @@ describe("IAP Constants", () => {
 // GATING MODE
 // ═══════════════════════════════════════════════════════════════
 describe("Gating Mode", () => {
-  it('default gating mode is "soft"', () => {
-    expect(getGatingMode()).toBe("soft");
+  it('default gating mode is "off" for this local preview build', () => {
+    __setGatingModeForTests(null);
+    expect(getGatingMode()).toBe("off");
   });
 
   it("isGatingEnforced returns false when soft", () => {

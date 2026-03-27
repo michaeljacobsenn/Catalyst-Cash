@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CORE_JOURNEY_SEED, mockBaseApi, seedStorage } from "./helpers/appHarness";
+import { CORE_JOURNEY_SEED, mockBaseApi, openAuditComposer, seedStorage } from "./helpers/appHarness";
 
 test("bypasses onboarding, loads dashboard, and opens the new audit form", async ({ page }) => {
   await mockBaseApi(page);
@@ -11,8 +11,6 @@ test("bypasses onboarding, loads dashboard, and opens the new audit form", async
   await expect(page.getByRole("tab", { name: "Home", selected: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
 
-  await page.getByRole("button", { name: "Run New Audit", exact: true }).click();
-
-  await expect(page.getByRole("spinbutton", { name: "Checking balance" })).toBeVisible();
+  await openAuditComposer(page);
   await expect(page.getByLabel("Notes for this week")).toBeVisible();
 });

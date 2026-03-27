@@ -21,9 +21,6 @@ vi.mock("@capacitor/core", () => ({
   Capacitor: { isNativePlatform: () => false },
   registerPlugin: () => ({}),
 }));
-vi.mock("@aparajita/capacitor-biometric-auth", () => ({
-  BiometricAuth: { checkBiometry: vi.fn(), authenticate: vi.fn() },
-}));
 vi.mock("./constants.js", async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, APP_VERSION: "2.0.0-test" };

@@ -1,5 +1,6 @@
-import { getBackendUrl } from "./api.js";
+import { getBackendUrl } from "./backendUrl.js";
 import { log, redactForLog } from "./logger.js";
+import { getOrCreateDeviceId } from "./subscription.js";
 
 /**
  * errorReporter.js — Global error telemetry with IndexedDB persistence.
@@ -19,7 +20,6 @@ let _cachedDeviceId = null;
 async function ensureDeviceId() {
   if (_cachedDeviceId) return;
   try {
-    const { getOrCreateDeviceId } = await import("./subscription.js");
     _cachedDeviceId = await getOrCreateDeviceId();
   } catch {
     _cachedDeviceId = "unknown";

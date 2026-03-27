@@ -7,6 +7,8 @@
  * Categories: dining, groceries, gas, travel, transit, online_shopping, wholesale_clubs, streaming, drugstores, catch-all
  */
 
+import { inferMerchantIdentity } from "./merchantIdentity.js";
+
 // Point Valuations (Cents Per Point/Mile)
 // Used to normalize 3x points vs 3% cash back.
 export let VALUATIONS = {
@@ -36,6 +38,102 @@ export let VALUATIONS = {
   BOFA_POINTS: 1.0,
 };
 
+function matchesBonusRule(rule, category, merchantProfile) {
+  if (!rule) return false;
+  if (Array.isArray(rule.categories) && rule.categories.length > 0 && !rule.categories.includes(category)) {
+    return false;
+  }
+  if (
+    Array.isArray(rule.merchantBrands) &&
+    rule.merchantBrands.length > 0 &&
+    !rule.merchantBrands.includes(merchantProfile.merchantBrand)
+  ) {
+    return false;
+  }
+  if (
+    Array.isArray(rule.merchantTypes) &&
+    rule.merchantTypes.length > 0 &&
+    !rule.merchantTypes.includes(merchantProfile.merchantType)
+  ) {
+    return false;
+  }
+  if (
+    Array.isArray(rule.rewardCategories) &&
+    rule.rewardCategories.length > 0 &&
+    !rule.rewardCategories.includes(merchantProfile.rewardCategory)
+  ) {
+    return false;
+  }
+  if (
+    Array.isArray(rule.mccs) &&
+    rule.mccs.length > 0 &&
+    !rule.mccs.includes(merchantProfile.merchantMcc)
+  ) {
+    return false;
+  }
+  if (rule.portalOnly && !merchantProfile.isTravelPortal) {
+    return false;
+  }
+  if (
+    Array.isArray(rule.portalPrograms) &&
+    rule.portalPrograms.length > 0 &&
+    !rule.portalPrograms.includes(merchantProfile.travelPortalBrand)
+  ) {
+    return false;
+  }
+  if (rule.directOnly && !merchantProfile.isDirectTravelMerchant) {
+    return false;
+  }
+  return true;
+}
+
+function resolveCapDetails(cardRules, capKey) {
+  const rawCap = cardRules?.caps?.[capKey];
+  if (rawCap == null) {
+    return { cap: null, capPeriod: null };
+  }
+
+  if (typeof rawCap === "object") {
+    const amount = Number(rawCap.amount);
+    return {
+      cap: Number.isFinite(amount) ? amount : null,
+      capPeriod: rawCap.period || cardRules?.capPeriods?.[capKey] || null,
+    };
+  }
+
+  const amount = Number(rawCap);
+  return {
+    cap: Number.isFinite(amount) ? amount : null,
+    capPeriod: cardRules?.capPeriods?.[capKey] || null,
+  };
+}
+
+function readTrackedCapAmount(usedCaps, cardId, keys) {
+  const tryValue = (value) => {
+    if (value == null || value === "") return null;
+    const parsed = parseFloat(String(value));
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const directCardValue = tryValue(usedCaps?.[cardId]);
+  if (directCardValue != null) return { used: directCardValue, hasTrackedCap: true };
+
+  const nested = usedCaps?.[cardId];
+  if (nested && typeof nested === "object") {
+    for (const key of keys) {
+      const nestedValue = tryValue(nested[key]);
+      if (nestedValue != null) return { used: nestedValue, hasTrackedCap: true };
+    }
+  }
+
+  for (const key of keys) {
+    const topLevelValue = tryValue(usedCaps?.[key]);
+    if (topLevelValue != null) return { used: topLevelValue, hasTrackedCap: true };
+  }
+
+  return { used: 0, hasTrackedCap: false };
+}
+
 export let REWARDS_CATALOG = {
 
   // ════════════════════════════════════════════════════════════
@@ -43,22 +141,39 @@ export let REWARDS_CATALOG = {
   // ════════════════════════════════════════════════════════════
   "Chase Sapphire Reserve": {
     currency: "CHASE_UR",
-    dining: 3, travel: 3, "catch-all": 1
+    dining: 3, travel: 3, "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantTypes: ["hotel", "rental_car"], portalOnly: true, portalPrograms: ["chase_travel"], multiplier: 10 },
+      { categories: ["travel"], merchantTypes: ["airline"], portalOnly: true, portalPrograms: ["chase_travel"], multiplier: 5 },
+    ],
+    notes: "3x broad travel and dining. Higher Chase Travel portal rates apply only when booked through Chase Travel."
   },
   "Chase Sapphire Preferred": {
     currency: "CHASE_UR",
-    dining: 3, travel: 2, online_shopping: 3, streaming: 3, "catch-all": 1
+    dining: 3, travel: 2, online_shopping: 3, streaming: 3, "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], portalOnly: true, portalPrograms: ["chase_travel"], multiplier: 5 },
+    ],
+    notes: "5x on travel booked through Chase Travel. 2x on other travel."
   },
   "Chase Freedom Unlimited": {
     currency: "CHASE_UR",
-    dining: 3, drugstores: 3, travel: 5, "catch-all": 1.5
+    dining: 3, drugstores: 3, "catch-all": 1.5,
+    bonusRules: [
+      { categories: ["travel"], portalOnly: true, portalPrograms: ["chase_travel"], multiplier: 5 },
+    ],
+    notes: "5x on travel booked through Chase Travel. 1.5x elsewhere."
   },
   "Chase Freedom Flex": {
     currency: "CHASE_UR",
-    dining: 3, drugstores: 3, travel: 5, "catch-all": 1,
+    dining: 3, drugstores: 3, "catch-all": 1,
     rotating: 5,
     caps: { rotating: 1500 },
-    notes: "5% rotating quarterly categories (up to $1,500/quarter, activation required). 3x dining/drugstores, 5x travel via Chase portal."
+    capPeriods: { rotating: "quarter" },
+    bonusRules: [
+      { categories: ["travel"], portalOnly: true, portalPrograms: ["chase_travel"], multiplier: 5 },
+    ],
+    notes: "5% rotating quarterly categories (up to $1,500/quarter, activation required). 3x dining/drugstores. Chase Travel portal bookings earn 5x."
   },
   "Chase Freedom Rise": {
     currency: "CHASE_UR",
@@ -80,51 +195,91 @@ export let REWARDS_CATALOG = {
   },
   "DoorDash Rewards Mastercard": {
     currency: "CASH",
-    dining: 4, groceries: 2, "catch-all": 1,
+    dining: 3, groceries: 2, "catch-all": 1,
+    bonusRules: [
+      { categories: ["dining"], merchantBrands: ["doordash"], multiplier: 4 },
+    ],
     notes: "4% on DoorDash and Caviar orders. 3% on non-DoorDash dining. 2% groceries."
   },
   "Instacart Mastercard": {
     currency: "CASH",
-    groceries: 5, "catch-all": 2,
+    groceries: 2, "catch-all": 2,
+    bonusRules: [
+      { categories: ["groceries"], merchantBrands: ["instacart"], multiplier: 5 },
+    ],
     notes: "5% on Instacart purchases. 2% everywhere else."
   },
   // Southwest
   "Southwest Rapid Rewards Plus": {
-    currency: "SOUTHWEST_RR", travel: 2, "catch-all": 1,
+    currency: "SOUTHWEST_RR", "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["southwest"], merchantTypes: ["airline"], multiplier: 2 },
+    ],
     notes: "2x on Southwest and Rapid Rewards hotel/car partners."
   },
   "Southwest Rapid Rewards Priority": {
-    currency: "SOUTHWEST_RR", travel: 2, "catch-all": 1
+    currency: "SOUTHWEST_RR", "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["southwest"], merchantTypes: ["airline"], multiplier: 2 },
+    ]
   },
   "Southwest Rapid Rewards Premier": {
-    currency: "SOUTHWEST_RR", travel: 2, "catch-all": 1
+    currency: "SOUTHWEST_RR", "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["southwest"], merchantTypes: ["airline"], multiplier: 2 },
+    ]
   },
   // United
   "United Explorer": {
-    currency: "UNITED_MILES", travel: 2, dining: 2, "catch-all": 1,
+    currency: "UNITED_MILES", dining: 2, "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["united"], merchantTypes: ["airline"], multiplier: 2 },
+      { categories: ["travel"], merchantTypes: ["hotel"], directOnly: true, multiplier: 2 },
+    ],
     notes: "2x on United, dining, and hotel stays booked directly."
   },
   "United Quest": {
-    currency: "UNITED_MILES", travel: 3, dining: 3, "catch-all": 1
+    currency: "UNITED_MILES", dining: 3, "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["united"], merchantTypes: ["airline"], multiplier: 3 },
+      { categories: ["travel"], merchantTypes: ["hotel"], directOnly: true, multiplier: 2 },
+    ]
   },
   "United Gateway": {
-    currency: "UNITED_MILES", travel: 2, dining: 2, "catch-all": 1
+    currency: "UNITED_MILES", dining: 2, "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["united"], merchantTypes: ["airline"], multiplier: 2 },
+      { categories: ["travel"], merchantTypes: ["hotel"], directOnly: true, multiplier: 2 },
+    ]
   },
   "United Club Infinite": {
-    currency: "UNITED_MILES", travel: 4, dining: 2, "catch-all": 1
+    currency: "UNITED_MILES", dining: 2, "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["united"], merchantTypes: ["airline"], multiplier: 4 },
+      { categories: ["travel"], merchantTypes: ["hotel"], directOnly: true, multiplier: 2 },
+    ]
   },
   // Marriott (Chase)
   "Marriott Bonvoy Boundless": {
     currency: "MARRIOTT_BONVOY",
-    travel: 6, groceries: 3, gas: 3, dining: 3, "catch-all": 2,
+    groceries: 3, gas: 3, dining: 3, "catch-all": 2,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["marriott"], merchantTypes: ["hotel"], directOnly: true, multiplier: 6 },
+    ],
     notes: "6x at Marriott properties. 3x groceries/gas/dining. 2x all else."
   },
   "Marriott Bonvoy Bountiful": {
     currency: "MARRIOTT_BONVOY",
-    travel: 6, dining: 3, gas: 3, groceries: 3, "catch-all": 2
+    dining: 3, gas: 3, groceries: 3, "catch-all": 2,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["marriott"], merchantTypes: ["hotel"], directOnly: true, multiplier: 6 },
+    ]
   },
   "Marriott Bonvoy Bold": {
-    currency: "MARRIOTT_BONVOY", travel: 3, "catch-all": 1
+    currency: "MARRIOTT_BONVOY", "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["marriott"], merchantTypes: ["hotel"], directOnly: true, multiplier: 3 },
+    ]
   },
   // IHG
   "IHG One Rewards Premier": {
@@ -138,7 +293,10 @@ export let REWARDS_CATALOG = {
   // Hyatt
   "World of Hyatt": {
     currency: "HYATT_POINTS",
-    travel: 4, dining: 2, transit: 2, "catch-all": 1,
+    dining: 2, transit: 2, "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["hyatt"], merchantTypes: ["hotel"], directOnly: true, multiplier: 4 },
+    ],
     notes: "4x at Hyatt. 2x dining/transit/gym. 1x all else."
   },
   // Other Chase co-brands
@@ -186,16 +344,30 @@ export let REWARDS_CATALOG = {
     notes: "2.5% on purchases $5k+. 2% on all other purchases."
   },
   "Southwest Rapid Rewards Performance Business": {
-    currency: "SOUTHWEST_RR", travel: 3, "catch-all": 1
+    currency: "SOUTHWEST_RR", "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["southwest"], merchantTypes: ["airline"], multiplier: 3 },
+    ]
   },
   "Southwest Rapid Rewards Premier Business": {
-    currency: "SOUTHWEST_RR", travel: 2, "catch-all": 1
+    currency: "SOUTHWEST_RR", "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["southwest"], merchantTypes: ["airline"], multiplier: 2 },
+    ]
   },
   "United Business": {
-    currency: "UNITED_MILES", travel: 2, dining: 2, gas: 2, transit: 2, "catch-all": 1
+    currency: "UNITED_MILES", dining: 2, gas: 2, transit: 2, "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["united"], merchantTypes: ["airline"], multiplier: 2 },
+      { categories: ["travel"], merchantTypes: ["hotel"], directOnly: true, multiplier: 2 },
+    ]
   },
   "United Club Business": {
-    currency: "UNITED_MILES", travel: 2, "catch-all": 1
+    currency: "UNITED_MILES", "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["united"], merchantTypes: ["airline"], multiplier: 2 },
+      { categories: ["travel"], merchantTypes: ["hotel"], directOnly: true, multiplier: 2 },
+    ]
   },
   "IHG One Rewards Premier Business": {
     currency: "IHG_POINTS", travel: 5, dining: 3, gas: 3, "catch-all": 1
@@ -209,12 +381,23 @@ export let REWARDS_CATALOG = {
   // ════════════════════════════════════════════════════════════
   "American Express Gold Credit Card": {
     currency: "AMEX_MR",
-    dining: 4, groceries: 4, travel: 3, "catch-all": 1,
-    caps: { groceries: 25000 }
+    dining: 4, groceries: 4, "catch-all": 1,
+    caps: { groceries: 25000 },
+    capPeriods: { groceries: "year" },
+    bonusRules: [
+      { categories: ["travel"], merchantTypes: ["airline"], multiplier: 3 },
+      { categories: ["travel"], merchantTypes: ["airline"], portalOnly: true, portalPrograms: ["amex_travel"], multiplier: 3 },
+    ],
+    notes: "4x dining and groceries. 3x flights booked directly with airlines or via Amex Travel."
   },
   "The Platinum Card from American Express": {
     currency: "AMEX_MR",
-    travel: 5, "catch-all": 1
+    "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantTypes: ["airline"], multiplier: 5 },
+      { categories: ["travel"], merchantTypes: ["hotel"], portalOnly: true, portalPrograms: ["amex_travel"], multiplier: 5 },
+    ],
+    notes: "5x on flights booked directly with airlines or via Amex Travel, plus prepaid hotels booked through Amex Travel."
   },
   "American Express Green Card": {
     currency: "AMEX_MR",
@@ -223,63 +406,101 @@ export let REWARDS_CATALOG = {
   "American Express Blue Cash Preferred Card": {
     currency: "CASH",
     groceries: 6, streaming: 6, transit: 3, gas: 3, "catch-all": 1,
-    caps: { groceries: 6000 }
+    caps: { groceries: 6000 },
+    capPeriods: { groceries: "year" }
   },
   "American Express Blue Cash Everyday Card": {
     currency: "CASH",
     groceries: 3, online_shopping: 3, gas: 3, "catch-all": 1,
-    caps: { groceries: 6000, online_shopping: 6000, gas: 6000 }
+    caps: { groceries: 6000, online_shopping: 6000, gas: 6000 },
+    capPeriods: { groceries: "year", online_shopping: "year", gas: "year" }
   },
   "Cash Magnet Card": {
     currency: "CASH", "catch-all": 1.5
   },
   // Delta SkyMiles
   "Delta SkyMiles Reserve American Express Card": {
-    currency: "DELTA_SKYMILES", travel: 3, "catch-all": 1,
+    currency: "DELTA_SKYMILES", "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["delta"], merchantTypes: ["airline"], multiplier: 3 },
+    ],
     notes: "3x on Delta purchases. 1x all else."
   },
   "Delta SkyMiles Platinum American Express Card": {
-    currency: "DELTA_SKYMILES", travel: 3, dining: 2, "catch-all": 1
+    currency: "DELTA_SKYMILES", dining: 2, "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["delta"], merchantTypes: ["airline"], multiplier: 3 },
+    ]
   },
   "Delta SkyMiles Gold American Express Card": {
-    currency: "DELTA_SKYMILES", travel: 2, dining: 2, groceries: 2, "catch-all": 1
+    currency: "DELTA_SKYMILES", dining: 2, groceries: 2, "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["delta"], merchantTypes: ["airline"], multiplier: 2 },
+    ]
   },
   "Delta SkyMiles Blue American Express Card": {
-    currency: "DELTA_SKYMILES", travel: 2, dining: 2, "catch-all": 1
+    currency: "DELTA_SKYMILES", dining: 2, "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["delta"], merchantTypes: ["airline"], multiplier: 2 },
+    ]
   },
   // Hilton
   "Hilton Honors American Express Card": {
     currency: "HILTON_HONORS",
-    travel: 5, dining: 5, groceries: 5, gas: 5, "catch-all": 3,
+    dining: 5, groceries: 5, gas: 5, "catch-all": 3,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["hilton"], merchantTypes: ["hotel"], directOnly: true, multiplier: 7 },
+    ],
     notes: "7x at Hilton. 5x dining/groceries/gas. 3x all else."
   },
   "Hilton Honors American Express Surpass Card": {
     currency: "HILTON_HONORS",
-    travel: 6, dining: 6, groceries: 6, gas: 6, "catch-all": 3,
+    dining: 6, groceries: 6, gas: 6, transit: 6, "catch-all": 3,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["hilton"], merchantTypes: ["hotel"], directOnly: true, multiplier: 12 },
+    ],
     notes: "12x at Hilton. 6x dining/groceries/gas/transit. 3x all else."
   },
   "Hilton Honors American Express Aspire Card": {
     currency: "HILTON_HONORS",
-    travel: 7, dining: 7, "catch-all": 3,
+    dining: 7, "catch-all": 3,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["hilton"], merchantTypes: ["hotel"], directOnly: true, multiplier: 14 },
+      { categories: ["travel"], merchantTypes: ["airline"], directOnly: true, multiplier: 7 },
+    ],
     notes: "14x at Hilton. 7x flights/dining. 3x all else."
   },
   // Marriott (Amex)
   "Marriott Bonvoy Brilliant American Express Card": {
     currency: "MARRIOTT_BONVOY",
-    travel: 6, dining: 3, groceries: 3, "catch-all": 2,
+    dining: 3, groceries: 3, "catch-all": 2,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["marriott"], merchantTypes: ["hotel"], directOnly: true, multiplier: 6 },
+      { categories: ["travel"], merchantTypes: ["airline"], directOnly: true, multiplier: 3 },
+    ],
     notes: "6x at Marriott. 3x flights/dining/groceries. 2x all else."
   },
   "Marriott Bonvoy Bevy American Express Card": {
     currency: "MARRIOTT_BONVOY",
-    travel: 6, dining: 4, "catch-all": 2
+    dining: 4, "catch-all": 2,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["marriott"], merchantTypes: ["hotel"], directOnly: true, multiplier: 6 },
+    ]
   },
   "Marriott Bonvoy American Express Card": {
-    currency: "MARRIOTT_BONVOY", travel: 4, dining: 2, "catch-all": 1
+    currency: "MARRIOTT_BONVOY", dining: 2, "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["marriott"], merchantTypes: ["hotel"], directOnly: true, multiplier: 4 },
+    ]
   },
   // Amex Business
   "The Business Platinum Card from American Express": {
-    currency: "AMEX_MR", travel: 5, "catch-all": 1,
-    notes: "5x on flights booked directly or via Amex Travel. 1.5x on purchases $5k+."
+    currency: "AMEX_MR", "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantTypes: ["airline"], multiplier: 5 },
+      { categories: ["travel"], merchantTypes: ["hotel"], portalOnly: true, portalPrograms: ["amex_travel"], multiplier: 5 },
+    ],
+    notes: "5x on flights booked directly or via Amex Travel, plus select prepaid hotels via Amex Travel. 1.5x on purchases $5k+."
   },
   "American Express Business Gold Card": {
     currency: "AMEX_MR",
@@ -297,11 +518,13 @@ export let REWARDS_CATALOG = {
   "American Express Blue Business Plus Card": {
     currency: "AMEX_MR", "catch-all": 2,
     caps: { "catch-all": 50000 },
+    capPeriods: { "catch-all": "year" },
     notes: "2x on first $50k/yr in purchases, then 1x."
   },
   "American Express Blue Business Cash Card": {
     currency: "CASH", "catch-all": 2,
     caps: { "catch-all": 50000 },
+    capPeriods: { "catch-all": "year" },
     notes: "2% on first $50k/yr in purchases, then 1%."
   },
   "Amazon Business Prime Card": {
@@ -312,20 +535,35 @@ export let REWARDS_CATALOG = {
     currency: "CASH", online_shopping: 3, "catch-all": 1
   },
   "Delta SkyMiles Reserve Business American Express Card": {
-    currency: "DELTA_SKYMILES", travel: 3, "catch-all": 1
+    currency: "DELTA_SKYMILES", "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["delta"], merchantTypes: ["airline"], multiplier: 3 },
+    ]
   },
   "Delta SkyMiles Platinum Business American Express Card": {
-    currency: "DELTA_SKYMILES", travel: 3, dining: 2, "catch-all": 1
+    currency: "DELTA_SKYMILES", dining: 2, "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["delta"], merchantTypes: ["airline"], multiplier: 3 },
+    ]
   },
   "Delta SkyMiles Gold Business American Express Card": {
-    currency: "DELTA_SKYMILES", travel: 2, dining: 2, "catch-all": 1
+    currency: "DELTA_SKYMILES", dining: 2, "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["delta"], merchantTypes: ["airline"], multiplier: 2 },
+    ]
   },
   "Hilton Honors American Express Business Card": {
     currency: "HILTON_HONORS",
-    travel: 6, dining: 6, gas: 6, "catch-all": 3
+    dining: 6, gas: 6, "catch-all": 3,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["hilton"], merchantTypes: ["hotel"], directOnly: true, multiplier: 12 },
+    ]
   },
   "Marriott Bonvoy Business American Express Card": {
-    currency: "MARRIOTT_BONVOY", travel: 6, dining: 4, gas: 4, "catch-all": 2
+    currency: "MARRIOTT_BONVOY", dining: 4, gas: 4, "catch-all": 2,
+    bonusRules: [
+      { categories: ["travel"], merchantBrands: ["marriott"], merchantTypes: ["hotel"], directOnly: true, multiplier: 6 },
+    ]
   },
   "Lowe's Business Rewards Card": {
     currency: "CASH", "catch-all": 2,
@@ -347,11 +585,33 @@ export let REWARDS_CATALOG = {
     currency: "CASH",
     dining: 3, groceries: 3, streaming: 3, "catch-all": 1
   },
-  "Venture Rewards": { currency: "CAPITAL_ONE", "catch-all": 2 },
-  "Venture X Rewards": { currency: "CAPITAL_ONE", travel: 5, "catch-all": 2 },
+  "Venture Rewards": {
+    currency: "CAPITAL_ONE",
+    "catch-all": 2,
+    bonusRules: [
+      { categories: ["travel"], merchantTypes: ["hotel", "rental_car"], portalOnly: true, portalPrograms: ["capital_one_travel"], multiplier: 5 },
+    ],
+    notes: "2x on everyday purchases. Higher travel bonuses require Capital One Travel portal bookings."
+  },
+  "Venture X Rewards": {
+    currency: "CAPITAL_ONE",
+    "catch-all": 2,
+    bonusRules: [
+      { categories: ["travel"], merchantTypes: ["hotel", "rental_car"], portalOnly: true, portalPrograms: ["capital_one_travel"], multiplier: 10 },
+      { categories: ["travel"], merchantTypes: ["airline"], portalOnly: true, portalPrograms: ["capital_one_travel"], multiplier: 5 },
+    ],
+    notes: "10x hotels and rental cars plus 5x flights through Capital One Travel. 2x elsewhere."
+  },
   "Quicksilver Cash Rewards": { currency: "CASH", "catch-all": 1.5 },
   "QuicksilverOne Cash Rewards": { currency: "CASH", "catch-all": 1.5 },
-  "VentureOne Rewards": { currency: "CAPITAL_ONE", "catch-all": 1.25 },
+  "VentureOne Rewards": {
+    currency: "CAPITAL_ONE",
+    "catch-all": 1.25,
+    bonusRules: [
+      { categories: ["travel"], merchantTypes: ["hotel", "rental_car"], portalOnly: true, portalPrograms: ["capital_one_travel"], multiplier: 5 },
+    ],
+    notes: "1.25x on everyday purchases. Higher hotel and rental-car bonuses require Capital One Travel."
+  },
   "Platinum Mastercard": {
     currency: "CASH", "catch-all": 1,
     notes: "Secured/basic card. No rewards program."
@@ -371,7 +631,8 @@ export let REWARDS_CATALOG = {
     currency: "CITI_TYP",
     "catch-all": 1,
     "highest-spend": 5,
-    caps: { "highest-spend": 500 }
+    caps: { "highest-spend": 500 },
+    capPeriods: { "highest-spend": "statement" }
   },
   "Citi Strata Premier Card": {
     currency: "CITI_TYP",
@@ -387,12 +648,14 @@ export let REWARDS_CATALOG = {
     currency: "CASH",
     gas: 4, dining: 3, travel: 3, wholesale_clubs: 2, "catch-all": 1,
     caps: { gas: 7000 },
+    capPeriods: { gas: "year" },
     notes: "4% gas (first $7k/yr). 3% dining/travel. 2% Costco/wholesale. 1% all else."
   },
   "Costco Anywhere Visa Business Card by Citi": {
     currency: "CASH",
     gas: 4, dining: 3, travel: 3, wholesale_clubs: 2, "catch-all": 1,
-    caps: { gas: 7000 }
+    caps: { gas: 7000 },
+    capPeriods: { gas: "year" }
   },
   "Citi / AAdvantage Platinum Select World Elite Mastercard": {
     currency: "AA_AADVANTAGE", travel: 2, dining: 2, gas: 2, "catch-all": 1
@@ -447,12 +710,14 @@ export let REWARDS_CATALOG = {
     currency: "CASH", "catch-all": 1,
     rotating: 5,
     caps: { rotating: 1500 },
+    capPeriods: { rotating: "quarter" },
     notes: "5% rotating quarterly categories (up to $1,500/quarter, activation required). 1% all else. First-year cashback match doubles all rewards."
   },
   "Discover it Student Cash Back": {
     currency: "CASH", "catch-all": 1,
     rotating: 5,
     caps: { rotating: 1500 },
+    capPeriods: { rotating: "quarter" },
     notes: "Same as Discover it Cash Back. 5% rotating quarterly categories."
   },
   "Discover it Student Chrome": {
@@ -472,7 +737,8 @@ export let REWARDS_CATALOG = {
   "Discover NHL Credit Card": {
     currency: "CASH", "catch-all": 1,
     rotating: 5,
-    caps: { rotating: 1500 }
+    caps: { rotating: 1500 },
+    capPeriods: { rotating: "quarter" }
   },
 
   // ════════════════════════════════════════════════════════════
@@ -483,6 +749,7 @@ export let REWARDS_CATALOG = {
     groceries: 2, wholesale_clubs: 2, "catch-all": 1,
     "highest-spend": 3,
     caps: { "highest-spend": 2500 },
+    capPeriods: { "highest-spend": "quarter" },
     notes: "3% on one chosen category (gas, online, dining, travel, drug stores, home improvement). 2% groceries/wholesale. 1% all else. $2,500/quarter combined cap on 3%+2%."
   },
   "Bank of America Unlimited Cash Rewards credit card": {
@@ -510,6 +777,7 @@ export let REWARDS_CATALOG = {
   "Business Advantage Customized Cash Rewards Mastercard": {
     currency: "CASH", "highest-spend": 3, "catch-all": 1,
     caps: { "highest-spend": 50000 },
+    capPeriods: { "highest-spend": "year" },
     notes: "3% on chosen category. 2% dining. 1% all else."
   },
   "Business Advantage Unlimited Cash Rewards Mastercard": {
@@ -583,8 +851,12 @@ export let REWARDS_CATALOG = {
   },
   "Wells Fargo Autograph Journey Card": {
     currency: "CASH",
-    travel: 5, dining: 3, gas: 3, transit: 3, streaming: 3, "catch-all": 1,
-    notes: "5x on airlines and hotels booked through Wells Fargo Travel. 3x dining/gas/transit/streaming."
+    travel: 3, dining: 3, gas: 3, transit: 3, streaming: 3, "catch-all": 1,
+    bonusRules: [
+      { categories: ["travel"], merchantTypes: ["hotel"], multiplier: 5 },
+      { categories: ["travel"], merchantTypes: ["airline"], multiplier: 4 },
+    ],
+    notes: "5x hotels, 4x airlines and air carriers, and 3x other travel plus dining/gas/transit/streaming."
   },
   "Wells Fargo Reflect Card": {
     currency: "CASH", "catch-all": 1,
@@ -621,6 +893,7 @@ export let REWARDS_CATALOG = {
     "catch-all": 1,
     "highest-spend": 5,
     caps: { "highest-spend": 2000 },
+    capPeriods: { "highest-spend": "quarter" },
     notes: "5% on two chosen categories (up to $2k/quarter combined). 2% on one chosen category. 1% all else."
   },
   "U.S. Bank Shopper Cash Rewards Visa Signature Card": {
@@ -658,11 +931,13 @@ export let REWARDS_CATALOG = {
   "Sam's Club Mastercard": {
     currency: "CASH", gas: 5, dining: 3, wholesale_clubs: 1, "catch-all": 1,
     caps: { gas: 6000 },
+    capPeriods: { gas: "year" },
     notes: "5% gas (first $6k/yr). 3% dining. 1% Sam's Club and all else."
   },
   "Sam's Club Business Mastercard": {
     currency: "CASH", gas: 5, dining: 3, wholesale_clubs: 1, "catch-all": 1,
-    caps: { gas: 6000 }
+    caps: { gas: 6000 },
+    capPeriods: { gas: "year" }
   },
   "PayPal Cashback Mastercard": {
     currency: "CASH", "catch-all": 2,
@@ -762,7 +1037,7 @@ export let REWARDS_CATALOG = {
   "Citizens Clear Value Mastercard": { currency: "CASH", "catch-all": 1, notes: "Low APR card." },
   "Citizens Bank Platinum Card": { currency: "CASH", "catch-all": 1 },
   "Citizens Everyday Business Credit Card": { currency: "CASH", "catch-all": 1.5 },
-  "Max Cash Preferred Card": { currency: "CASH", "highest-spend": 5, "catch-all": 1, caps: { "highest-spend": 2000 }, notes: "5% on two chosen categories (up to $2k/quarter). 1% all else." },
+  "Max Cash Preferred Card": { currency: "CASH", "highest-spend": 5, "catch-all": 1, caps: { "highest-spend": 2000 }, capPeriods: { "highest-spend": "quarter" }, notes: "5% on two chosen categories (up to $2k/quarter). 1% all else." },
   "Everyday Rewards+ Card": { currency: "CASH", "catch-all": 2 },
   "Travel Rewards+ Card": { currency: "CASH", travel: 3, "catch-all": 1 },
   "1.67% Cash/Back Visa": { currency: "CASH", "catch-all": 1.67 },
@@ -811,8 +1086,17 @@ export let REWARDS_CATALOG = {
  * @param {string} category The predicted purchase category.
  * @param {object} customValuations Optional user overrides for cents-per-point.
  */
-export function getCardMultiplier(cardName, category, customValuations = {}) {
+export function getCardMultiplier(cardName, category, customValuations = {}, options = {}) {
   const name = String(cardName || "").trim();
+  const merchantProfile = options?.merchantIdentity || inferMerchantIdentity({
+    merchantId: options?.merchantId,
+    merchantName: options?.merchantName,
+    description: options?.description,
+    category: options?.merchantCategory || category,
+    subcategory: options?.merchantSubcategory || "",
+    mcc: options?.merchantMcc,
+    website: options?.merchantWebsite,
+  });
 
   const resolveMultiplier = (cardRules, cat, catalogKey) => {
     let isFlexible = false;
@@ -820,7 +1104,8 @@ export function getCardMultiplier(cardName, category, customValuations = {}) {
     let base = cardRules["catch-all"] || 1;
     let multiplier = cardRules[cat];
     let currency = cardRules.currency || "CASH";
-    let cap = null;
+    let capDetails = { cap: null, capPeriod: null };
+    let capKey = null;
 
     // Check OTA Config for active rotating categories
     if (cardRules.rotating && catalogKey) {
@@ -831,9 +1116,8 @@ export function getCardMultiplier(cardName, category, customValuations = {}) {
           const activeCategories = parsedOta[catalogKey];
           if (Array.isArray(activeCategories) && activeCategories.includes(cat)) {
             multiplier = cardRules.rotating;
-            if (cardRules.caps && cardRules.caps.rotating) {
-              cap = cardRules.caps.rotating;
-            }
+            capDetails = resolveCapDetails(cardRules, "rotating");
+            capKey = "rotating";
           }
         }
       } catch {
@@ -847,13 +1131,29 @@ export function getCardMultiplier(cardName, category, customValuations = {}) {
       // FIX: Use catch-all base for sorting — the max is conditional on being
       // the user's SINGLE highest spend category, which we cannot verify client-side.
       if (!multiplier) multiplier = base;
-      if (cardRules.caps && cardRules.caps["highest-spend"]) {
-        cap = cardRules.caps["highest-spend"];
-      }
+      capDetails = resolveCapDetails(cardRules, "highest-spend");
+      capKey = "highest-spend";
     } else {
       if (!multiplier) multiplier = base;
-      if (cardRules.caps && cardRules.caps[cat]) {
-        cap = cardRules.caps[cat];
+      if (capDetails.cap == null) {
+        capDetails = resolveCapDetails(cardRules, cat);
+        capKey = cat;
+      }
+    }
+
+    if (Array.isArray(cardRules.bonusRules) && cardRules.bonusRules.length > 0) {
+      for (const rule of cardRules.bonusRules) {
+        if (!matchesBonusRule(rule, cat, merchantProfile)) continue;
+        if (typeof rule.multiplier === "number" && rule.multiplier > multiplier) {
+          multiplier = rule.multiplier;
+        }
+        if (rule.capKey) {
+          const nextCapDetails = resolveCapDetails(cardRules, rule.capKey);
+          if (nextCapDetails.cap != null) {
+            capDetails = nextCapDetails;
+            capKey = rule.capKey;
+          }
+        }
       }
     }
 
@@ -868,11 +1168,16 @@ export function getCardMultiplier(cardName, category, customValuations = {}) {
       potentialMax,
       base,
       currency,
-      cap,
+      cap: capDetails.cap,
+      capPeriod: capDetails.capPeriod,
+      capKey: isFlexible ? "highest-spend" : (capKey || cat),
       cpp: activeCPP,
       notes: cardRules.notes || null,
       rotating: cardRules.rotating || null,
       mobileWallet: cardRules.mobileWallet || null,
+      merchantBrand: merchantProfile.merchantBrand,
+      merchantType: merchantProfile.merchantType,
+      travelPortalBrand: merchantProfile.travelPortalBrand,
     };
   };
 
@@ -892,14 +1197,14 @@ export function getCardMultiplier(cardName, category, customValuations = {}) {
 
   // Flat-rate fallback heuristics — flat cards earn their rate on ALL categories
   if (lowerName.includes("double") || lowerName.includes("active cash") || lowerName.includes("fidelity") || lowerName.includes("apple")) {
-    return { multiplier: 2, effectiveYield: 2.0, isFlexible: false, potentialMax: null, base: 2, currency: "CASH", cap: null, cpp: 1.0, notes: null, rotating: null, mobileWallet: null };
+    return { multiplier: 2, effectiveYield: 2.0, isFlexible: false, potentialMax: null, base: 2, currency: "CASH", cap: null, capPeriod: null, capKey: category, cpp: 1.0, notes: null, rotating: null, mobileWallet: null };
   }
   if (lowerName.includes("quicksilver") || lowerName.includes("unlimited") || lowerName.includes("freedom") || lowerName.includes("everyday")) {
-    return { multiplier: 1.5, effectiveYield: 1.5, isFlexible: false, potentialMax: null, base: 1.5, currency: "CASH", cap: null, cpp: 1.0, notes: null, rotating: null, mobileWallet: null };
+    return { multiplier: 1.5, effectiveYield: 1.5, isFlexible: false, potentialMax: null, base: 1.5, currency: "CASH", cap: null, capPeriod: null, capKey: category, cpp: 1.0, notes: null, rotating: null, mobileWallet: null };
   }
 
   // Global floor is 1%
-  return { multiplier: 1, effectiveYield: 1.0, isFlexible: false, potentialMax: null, base: 1, currency: "CASH", cap: null, cpp: 1.0, notes: null, rotating: null, mobileWallet: null };
+  return { multiplier: 1, effectiveYield: 1.0, isFlexible: false, potentialMax: null, base: 1, currency: "CASH", cap: null, capPeriod: null, capKey: category, cpp: 1.0, notes: null, rotating: null, mobileWallet: null };
 }
 
 /**
@@ -911,21 +1216,27 @@ export function getCardMultiplier(cardName, category, customValuations = {}) {
  * @param {object} usedCaps Optional object mapping cardId to used cap amounts.
  * @param {number} spendAmount Optional spend amount to account for caps.
  */
-export function getOptimalCard(cards, category, customValuations = {}, usedCaps = {}, spendAmount = 0) {
+export function getOptimalCard(cards, category, customValuations = {}, options = {}) {
   if (!cards || cards.length === 0 || !category) return null;
+  const usedCaps = options?.usedCaps || {};
+  const spendAmount = Number(options?.spendAmount) || 0;
+  const capMode = options?.capMode || "optimistic";
 
   const scored = cards.map(card => {
-    const rewardInfo = getCardMultiplier(card.name, category, customValuations);
+    const rewardInfo = getCardMultiplier(card.name, category, customValuations, options);
     let finalYield = rewardInfo.effectiveYield;
 
     if (rewardInfo.cap) {
-      const used = parseFloat(usedCaps[card.id]) || 0;
+      const capKeys = [rewardInfo.capKey, category, options?.merchantIdentity?.rewardCategory].filter(Boolean);
+      const { used, hasTrackedCap } = readTrackedCapAmount(usedCaps, card.id, capKeys);
       const availableCap = Math.max(0, rewardInfo.cap - used);
-      
-      if (spendAmount > 0 && spendAmount > availableCap) {
+
+      if (capMode === "conservative" && !hasTrackedCap) {
+        finalYield = parseFloat((rewardInfo.base * rewardInfo.cpp).toFixed(2));
+      } else if (spendAmount > 0 && spendAmount > availableCap) {
         const spendAtHighRate = availableCap;
         const spendAtBaseRate = spendAmount - availableCap;
-        
+
         if (spendAtHighRate === 0) {
           finalYield = parseFloat((rewardInfo.base * rewardInfo.cpp).toFixed(2));
         } else {
@@ -940,8 +1251,17 @@ export function getOptimalCard(cards, category, customValuations = {}, usedCaps 
     return {
       ...card,
       effectiveYield: finalYield,
+      yield: finalYield,
       cpp: rewardInfo.cpp,
-      multiplier: rewardInfo.multiplier
+      multiplier: rewardInfo.multiplier,
+      currency: rewardInfo.currency,
+      cardName: card.name,
+      rewardNotes: rewardInfo.notes,
+      rewardCap: rewardInfo.cap,
+      capPeriod: rewardInfo.capPeriod,
+      capKey: rewardInfo.capKey,
+      merchantBrand: rewardInfo.merchantBrand,
+      merchantType: rewardInfo.merchantType,
     };
   });
 

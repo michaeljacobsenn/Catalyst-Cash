@@ -23,6 +23,7 @@
   import {
     applyBalanceSync,
     autoMatchAccounts,
+    ensureConnectionAccountsPresent,
     fetchBalancesAndLiabilities,
     getConnections,
     materializeManualFallbackForConnections,
@@ -278,6 +279,35 @@ export function PortfolioProvider({ children }: PortfolioProviderProps) {
         .filter(connection => connection?._needsReconnect)
         .map(connection => String(connection.id || "").trim())
         .filter(Boolean);
+      if (reconnectIds.length > 0) {
+        const reconnectConnections = plaidConnections.filter(
+          (connection) => connection?._needsReconnect && Array.isArray(connection.accounts) && connection.accounts.length > 0
+        );
+        if (reconnectConnections.length > 0) {
+          const preReconnectCardCount = activeCards.length;
+          const preReconnectBankCount = activeBankAccounts.length;
+          let plaidInvestments = Array.isArray(financialConfig?.plaidInvestments) ? financialConfig.plaidInvestments : [];
+
+          for (const connection of reconnectConnections) {
+            const hydrated = ensureConnectionAccountsPresent(
+              connection,
+              activeCards,
+              activeBankAccounts,
+              null,
+              plaidInvestments
+            );
+            activeCards = hydrated.updatedCards;
+            activeBankAccounts = hydrated.updatedBankAccounts;
+            plaidInvestments = hydrated.updatedPlaidInvestments;
+          }
+
+          if (activeCards.length !== preReconnectCardCount) cardsChanged = true;
+          if (activeBankAccounts.length !== preReconnectBankCount) banksChanged = true;
+          if (reconnectConnections.length > 0) {
+            await db.set("financial-config", { ...(financialConfig || {}), plaidInvestments });
+          }
+        }
+      }
       if (reconnectIds.length > 0) {
         const fallbackState = materializeManualFallbackForConnections(activeCards, activeBankAccounts, reconnectIds, {
           keepLinkMetadata: true,

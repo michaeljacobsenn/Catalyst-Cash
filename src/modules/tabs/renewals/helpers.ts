@@ -10,9 +10,16 @@ export const DAY_OPTIONS = Array.from({ length: 90 }, (_, i) => i + 1);
 export function setRenewalOptional(
   renewal: Renewal,
   key: "source" | "chargedTo" | "chargedToId" | "chargedToType" | "nextDue" | "category",
-  value: string | undefined | null
+  value: string | undefined | null,
+  options?: { allowClear?: boolean }
 ): Renewal {
-  if (value == null || value === "") return renewal;
+  if (value === undefined) return renewal;
+  if (value == null || value === "") {
+    if (!options?.allowClear) return renewal;
+    const next = { ...renewal };
+    delete next[key];
+    return next;
+  }
   return { ...renewal, [key]: value };
 }
 
@@ -25,12 +32,12 @@ export function buildRenewalDraft(base: Renewal, patch, fallbackName?: string): 
     intervalUnit: patch.intervalUnit,
     cadence: formatInterval(patch.interval, patch.intervalUnit),
   };
-  next = setRenewalOptional(next, "source", patch.source);
-  next = setRenewalOptional(next, "chargedTo", patch.chargedTo);
-  next = setRenewalOptional(next, "chargedToId", patch.chargedToId);
-  next = setRenewalOptional(next, "chargedToType", patch.chargedToType);
-  next = setRenewalOptional(next, "nextDue", patch.nextDue);
-  next = setRenewalOptional(next, "category", patch.category || base.category);
+  next = setRenewalOptional(next, "source", patch.source, { allowClear: true });
+  next = setRenewalOptional(next, "chargedTo", patch.chargedTo, { allowClear: true });
+  next = setRenewalOptional(next, "chargedToId", patch.chargedToId, { allowClear: true });
+  next = setRenewalOptional(next, "chargedToType", patch.chargedToType, { allowClear: true });
+  next = setRenewalOptional(next, "nextDue", patch.nextDue, { allowClear: true });
+  next = setRenewalOptional(next, "category", patch.category, { allowClear: true });
   return next;
 }
 

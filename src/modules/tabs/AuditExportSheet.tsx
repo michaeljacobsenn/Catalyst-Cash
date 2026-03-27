@@ -2,7 +2,6 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { T } from "../constants.js";
 import { Download, FileSpreadsheet, FileText, Loader2, Share2 } from "../icons";
-import { exportAudit, exportAuditCsv, exportAuditJson } from "../utils.js";
 
 import type { AuditRecord } from "../../types/index.js";
 
@@ -25,7 +24,7 @@ const ACTIONS = [
     subtitle: "Designed tear sheet for sharing or printing",
     Icon: Share2,
     accent: T.accent.primary,
-    run: exportAudit,
+    exporter: "exportAudit",
   },
   {
     id: "csv",
@@ -33,7 +32,7 @@ const ACTIONS = [
     subtitle: "Spreadsheet-friendly breakdown of this audit",
     Icon: FileSpreadsheet,
     accent: T.status.green,
-    run: exportAuditCsv,
+    exporter: "exportAuditCsv",
   },
   {
     id: "json",
@@ -41,7 +40,7 @@ const ACTIONS = [
     subtitle: "Full structured record with metadata",
     Icon: FileText,
     accent: T.status.blue,
-    run: exportAuditJson,
+    exporter: "exportAuditJson",
   },
 ];
 
@@ -50,9 +49,12 @@ export default function AuditExportSheet({ audit, onClose, toast }: AuditExportS
 
   if (typeof document === "undefined") return null;
 
-  const handleExport = async (id: string, run: (audit: AuditRecord) => Promise<{ completed?: boolean } | void>, label: string) => {
+  const handleExport = async (id: string, exporter: string, label: string) => {
     setActiveExportId(id);
     try {
+      const exporters = await import("../auditExports.js");
+      const run = exporters[exporter as keyof typeof exporters] as ((audit: AuditRecord) => Promise<{ completed?: boolean } | void>) | undefined;
+      if (typeof run !== "function") throw new Error("Export action unavailable");
       const result = await run(audit);
       if (result?.completed === false) {
         toast?.info?.("Export canceled");
@@ -139,7 +141,7 @@ export default function AuditExportSheet({ audit, onClose, toast }: AuditExportS
           {ACTIONS.map(action => (
             <button
               key={action.id}
-              onClick={() => void handleExport(action.id, action.run, action.title)}
+              onClick={() => void handleExport(action.id, action.exporter, action.title)}
               disabled={Boolean(activeExportId)}
               style={{
                 width: "100%",

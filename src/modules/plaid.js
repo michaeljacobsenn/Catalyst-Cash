@@ -20,12 +20,13 @@
 //          account masks, linkage state, and last-sync timestamps.
 // ═══════════════════════════════════════════════════════════════
 
-  import { getBackendUrl } from "./api.js";
+  import { getBackendUrl } from "./backendUrl.js";
   import { batchCategorizeTransactions } from "./api.js";
   import { fetchWithRetry } from "./fetchWithRetry.js";
   import { buildIdentityHeaders,clearIdentitySession } from "./identitySession.js";
   import { getIssuerCards } from "./issuerCards.js";
   import { log } from "./logger.js";
+  import { inferMerchantIdentity } from "./merchantIdentity.js";
   import { categorizeBatch,learn } from "./merchantMap.js";
   import { getSubscriptionState,INSTITUTION_LIMITS,isGatingEnforced } from "./subscription.js";
   import { db } from "./utils.js";
@@ -1049,7 +1050,7 @@ const PLAID_AI_CATEGORIZATION_MAX_BATCH = 40;
  * @param {number} [_days=30] - Reserved for future per-call transaction windows
  * @returns {Array} Normalized transaction array
  */
-function mapTransactionsFromSyncStatus(connection, data) {
+export function mapTransactionsFromSyncStatus(connection, data) {
   const conn = connection;
   if (!conn) return [];
   if (!data.hasData) return [];
@@ -1058,21 +1059,45 @@ function mapTransactionsFromSyncStatus(connection, data) {
 
   // Normalize Plaid transaction format → app format
   return raw.map(t => {
+    const linkedAccount = conn.accounts.find(a => a.plaidAccountId === t.account_id) || {};
     // Plaid v2 returns FOOD_AND_DRINK (upper snake_case) → "food and drink"
     const rawCat = t.personal_finance_category?.primary || t.category?.[0] || "";
     const rawSub = t.personal_finance_category?.detailed || t.category?.[1] || "";
+    const merchantName = t.merchant_name || null;
+    const merchantMcc = t.merchant_category_code || t.mcc || null;
+    const merchantId = t.merchant_entity_id || t.counterparties?.[0]?.entity_id || null;
+    const merchantWebsite = t.website || t.counterparties?.[0]?.website || null;
+    const merchantIdentity = inferMerchantIdentity({
+      merchantId,
+      merchantName,
+      description: t.name || merchantName || "Unknown",
+      category: rawCat.replace(/_/g, " ").toLowerCase().trim(),
+      subcategory: rawSub.replace(/_/g, " ").toLowerCase().trim(),
+      mcc: merchantMcc,
+      website: merchantWebsite,
+    });
     return {
       id: t.transaction_id,
       date: t.date,
       amount: Math.abs(t.amount), // Plaid: positive = debit, negative = credit
       isCredit: t.amount < 0, // Refunds, deposits
-      description: t.merchant_name || t.name || "Unknown",
+      description: merchantName || t.name || "Unknown",
+      name: t.name || merchantName || "Unknown",
+      merchantName,
+      merchantId,
+      merchantMcc: merchantIdentity.merchantMcc,
+      merchantKey: merchantIdentity.merchantKey,
+      merchantBrand: merchantIdentity.merchantBrand,
+      merchantConfidence: merchantIdentity.confidence,
+      merchantWebsite,
       category: rawCat.replace(/_/g, " ").toLowerCase().trim(),
       subcategory: rawSub.replace(/_/g, " ").toLowerCase().trim(),
       institution: conn.institutionName,
       accountId: t.account_id,
-      accountName: (conn.accounts.find(a => a.plaidAccountId === t.account_id) || {}).name || "",
-      accountType: (conn.accounts.find(a => a.plaidAccountId === t.account_id) || {}).subtype || "",
+      accountName: linkedAccount.name || "",
+      accountType: linkedAccount.subtype || "",
+      linkedCardId: linkedAccount.linkedCardId || null,
+      linkedBankAccountId: linkedAccount.linkedBankAccountId || null,
       pending: t.pending || false,
     };
   });

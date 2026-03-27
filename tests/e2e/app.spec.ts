@@ -50,7 +50,7 @@ test.describe("Catalyst Cash end-to-end", () => {
     await seedStorage(page, {});
     await completeOnboarding(page);
     await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Run New Audit", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Begin first audit", exact: true })).toBeVisible();
   });
 
   test("restores the main shell after onboarding on reload", async ({ page }) => {
@@ -146,7 +146,8 @@ test.describe("Catalyst Cash end-to-end", () => {
 
     await expect(page.getByRole("heading", { name: "Full Results" })).toBeVisible();
     await page.getByRole("button", { name: "Back" }).first().click();
-    await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Audit", selected: true })).toBeVisible();
+    await expect(page.getByText("LATEST AUDIT")).toBeVisible();
     await page.getByRole("tab", { name: "Home" }).click();
     await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
 
@@ -661,7 +662,9 @@ test.describe("Catalyst Cash end-to-end", () => {
       (button as HTMLButtonElement).click();
     });
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-    await page.getByRole("button", { name: /Backup & Sync/i }).click();
+    await page.getByRole("button", { name: /Backup & Sync/i }).evaluate((button) => {
+      (button as HTMLButtonElement).click();
+    });
     await expect.poll(() => householdApi.pushes.length, { timeout: 10000 }).toBeGreaterThan(0);
     expect(householdApi.remoteRecord).toBeTruthy();
   });

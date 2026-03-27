@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import type { Dispatch,ReactNode,SetStateAction } from "react";
 import { createContext,useContext,useEffect,useRef,useState } from "react";
+import { isBiometricInteractionActive } from "../biometricSession.js";
 import { log } from "../logger.js";
 import { deleteSecureItem,getSecretStorageStatus,migrateToSecureItem,setSecureItem } from "../secureStore.js";
 import { db } from "../utils.js";
@@ -113,6 +114,25 @@ export function normalizeSecurityBootstrapState({
     appPasscode: hasPasscode ? appPasscode : "",
     shouldResetPersistedAuth,
   };
+}
+
+export function shouldRelockOnForeground({
+  requireAuth,
+  lockTimeout,
+  lastBackgroundedAt,
+  biometricInteractionActive,
+  now = Date.now(),
+}: {
+  requireAuth: boolean;
+  lockTimeout: number;
+  lastBackgroundedAt: number | null;
+  biometricInteractionActive: boolean;
+  now?: number;
+}): boolean {
+  if (biometricInteractionActive || !requireAuth || !lastBackgroundedAt) return false;
+  const timeout = Number.isFinite(Number(lockTimeout)) ? Number(lockTimeout) : 0;
+  const elapsed = (now - lastBackgroundedAt) / 1000;
+  return timeout >= 0 && elapsed >= timeout;
 }
 
 async function withSecurityBootFallback<T>(step: string, task: () => Promise<T>, fallback: T, timeoutMs = SECURITY_BOOT_TIMEOUT_MS): Promise<T> {
@@ -281,7 +301,7 @@ export function SecurityProvider({ children }: SecurityProviderProps) {
 
   useEffect(() => {
     const handleVisibilityChange = async () => {
-      const biometricActive = Boolean((window as Window & { __biometricActive?: boolean }).__biometricActive);
+      const biometricActive = isBiometricInteractionActive();
       if (biometricActive) {
         lastBackgrounded.current = null;
         return;
@@ -290,14 +310,15 @@ export function SecurityProvider({ children }: SecurityProviderProps) {
       if (document.hidden) {
         lastBackgrounded.current = Date.now();
       } else {
-        if (requireAuth && lastBackgrounded.current) {
-          const timeout = Number.isFinite(Number(lockTimeout)) ? Number(lockTimeout) : 0;
-          const elapsed = (Date.now() - lastBackgrounded.current) / 1000;
-
-          // -1 means "never relock"
-          if (timeout >= 0 && elapsed >= timeout) {
-            setIsLocked(true);
-          }
+        if (
+          shouldRelockOnForeground({
+            requireAuth,
+            lockTimeout,
+            lastBackgroundedAt: lastBackgrounded.current,
+            biometricInteractionActive: biometricActive,
+          })
+        ) {
+          setIsLocked(true);
         }
         lastBackgrounded.current = null;
       }

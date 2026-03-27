@@ -1,13 +1,19 @@
 import { encrypt } from "./crypto.js";
-import { createWorkbookBuffer } from "./excelWorkbook.js";
-import { db, nativeExport } from "./utils.js";
+import { db } from "./utils.js";
+
+async function loadWorkbookClientModule() {
+  return import("./excelWorkbookClient.js");
+}
+
+async function loadNativeExportModule() {
+  return import("./nativeExport.js");
+}
 
 function arrayBufferToBase64(buffer) {
-  let binary = "";
   const bytes = new Uint8Array(buffer);
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
   }
   return window.btoa(binary);
 }
@@ -165,14 +171,16 @@ export async function generateBackupSpreadsheet(passphrase = null) {
     widths: [30, 28, 18],
   });
 
+  const { createWorkbookBuffer } = await loadWorkbookClientModule();
   const buffer = await createWorkbookBuffer({
     title: "Catalyst Cash Spreadsheet Backup",
     sheets,
   });
   const dateStr = new Date().toISOString().split("T")[0];
-  const base64data = arrayBufferToBase64(buffer);
+  const { nativeExport } = await loadNativeExportModule();
 
   if (passphrase) {
+    const base64data = arrayBufferToBase64(buffer);
     const payload = JSON.stringify({ app: "Catalyst Cash", type: "spreadsheet-backup", base64: base64data });
     const envelope = await encrypt(payload, passphrase);
     await nativeExport(
@@ -186,8 +194,7 @@ export async function generateBackupSpreadsheet(passphrase = null) {
 
   await nativeExport(
     `CatalystCash_Sheet_${dateStr}.xlsx`,
-    base64data,
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    true
+    buffer,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   );
 }

@@ -19,6 +19,7 @@ import type {
 } from "../../types/index.js";
 import { callAudit, consumeLastAuditLogId, reportAuditLogOutcome, streamAudit } from "../api.js";
 import { BADGE_DEFINITIONS, evaluateBadges } from "../badges.js";
+import { getActualSpendForLine } from "../budgetEngine.js";
 import { computeStreak, getISOWeekNum } from "../dateHelpers.js";
 import { generateStrategy, mergeSnapshotDebts } from "../engine.js";
 import { haptic } from "../haptics.js";
@@ -623,7 +624,6 @@ export function AuditProvider({ children }: AuditProviderProps) {
             // Budget overrun notification — fires ~2s after audit saves
             // Only triggers if user has budget lines and OS permission is granted
             if (budgetLines.length > 0 && parsed.categories) {
-              const { getActualSpendForLine } = await import("../budgetEngine.js");
               const freq = financialConfig.payFrequency || "bi-weekly";
               const cats = parsed.categories as Record<string, { total?: number }>;
               const overruns = budgetLines

@@ -1,5 +1,6 @@
   import { Capacitor } from "@capacitor/core";
   import { useEffect,useRef,useState } from "react";
+  import { beginBiometricInteraction,endBiometricInteraction } from "./biometricSession.js";
   import { T } from "./constants.js";
   import { useSecurity } from "./contexts/SecurityContext.js";
   import { haptic } from "./haptics.js";
@@ -80,6 +81,7 @@ export default function LockScreen() {
       return;
     }
     setStatus("authenticating");
+    beginBiometricInteraction();
     try {
       const availability = await FaceId.isAvailable();
       if (!availability?.isAvailable) {
@@ -94,7 +96,6 @@ export default function LockScreen() {
         }, 2000);
         return;
       }
-      window.__biometricActive = true;
       await FaceId.authenticate({ reason: "Unlock Catalyst Cash" });
       setStatus("unlocked");
       haptic.success();
@@ -106,9 +107,7 @@ export default function LockScreen() {
       setShowPinPad(true);
       setStatus("locked");
     } finally {
-      setTimeout(() => {
-        window.__biometricActive = false;
-      }, 1000);
+      endBiometricInteraction();
     }
   };
 

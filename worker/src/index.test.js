@@ -231,6 +231,11 @@ class FakeD1 {
       return row ? [row] : [];
     }
 
+    if (sql.includes("SELECT user_id FROM audit_log WHERE id = ?")) {
+      const row = this.auditLog.find(entry => entry.id === params[0]);
+      return row ? [{ user_id: row.user_id }] : [];
+    }
+
     if (sql.includes("FROM audit_log") && sql.includes("ORDER BY created_at DESC")) {
       return [...this.auditLog].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, 50);
     }
@@ -544,6 +549,19 @@ class FakeD1 {
         row.drift_warning = driftWarning;
         row.drift_details = driftDetails;
       }
+      return;
+    }
+
+    if (sql.includes("DELETE FROM audit_log WHERE created_at < datetime('now', ?)")) {
+      const [relativeWindow] = params;
+      const dayMatch = String(relativeWindow).match(/-(\d+)\s+days/);
+      const retentionDays = dayMatch ? parseInt(dayMatch[1], 10) : 30;
+      const now = new Date("2026-03-26T12:00:00Z").getTime();
+      const cutoff = now - (retentionDays * 24 * 60 * 60 * 1000);
+      this.auditLog = this.auditLog.filter((row) => {
+        const createdAt = new Date(String(row.created_at).replace(" ", "T") + "Z").getTime();
+        return Number.isNaN(createdAt) || createdAt >= cutoff;
+      });
       return;
     }
 
@@ -1308,7 +1326,7 @@ describe("AI provider routing and gating", () => {
     const updateResponse = await worker.fetch(
       new Request("https://api.catalystcash.app/api/audit-log/outcome", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Device-ID": "device-123" },
         body: JSON.stringify({
           auditLogId,
           parseSucceeded: true,
@@ -1352,6 +1370,72 @@ describe("AI provider routing and gating", () => {
       ],
     });
     expect(payload.rows[0].drift_details).toBe(JSON.stringify(["health-score-drift:9"]));
+  });
+
+  it("rejects audit log outcome updates from a different caller", async () => {
+    const env = makeEnv({
+      ADMIN_TOKEN: "admin-secret",
+      DB: new FakeD1({
+        auditLog: [
+          {
+            id: "audit-log-forbidden",
+            created_at: "2026-03-13 12:00:00",
+            provider: "gemini",
+            model: "gemini-2.5-flash",
+            user_id: "device-owner",
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            parse_succeeded: 0,
+            hit_degraded_fallback: 0,
+            response_preview: "",
+            confidence: "medium",
+            drift_warning: 0,
+            drift_details: "[]",
+          },
+        ],
+      }),
+    });
+
+    const updateResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/audit-log/outcome", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Device-ID": "device-intruder" },
+        body: JSON.stringify({
+          auditLogId: "audit-log-forbidden",
+          parseSucceeded: true,
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(updateResponse.status).toBe(403);
+  });
+
+  it("purges expired audit log previews on the scheduled retention job", async () => {
+    const env = makeEnv({
+      DB: new FakeD1({
+        auditLog: [
+          {
+            id: "expired-log",
+            created_at: "2026-02-01 10:00:00",
+            user_id: "device-1",
+          },
+          {
+            id: "fresh-log",
+            created_at: "2026-03-20 10:00:00",
+            user_id: "device-1",
+          },
+        ],
+      }),
+      AUDIT_LOG_RETENTION_DAYS: "30",
+    });
+
+    const ctx = makeCtx();
+    await worker.scheduled({ cron: "0 4 * * *", scheduledTime: Date.now() }, env, ctx);
+    await ctx.flush();
+
+    expect(env.DB.auditLog.map((row) => row.id)).toEqual(["fresh-log"]);
   });
 
   it("tracks plaid usage and exposes a 30-day ROI summary through the admin endpoint", async () => {
@@ -1659,9 +1743,40 @@ describe("AI provider routing and gating", () => {
         );
       }
       expect(url).toBe("https://api.openai.com/v1/chat/completions");
-      expect(JSON.parse(init.body)).toMatchObject({
+      const parsedBody = JSON.parse(init.body);
+      expect(parsedBody).toMatchObject({
         model: "gpt-4.1",
       });
+      if (parsedBody.tool_choice) {
+        expect(parsedBody.tool_choice).toMatchObject({
+          type: "function",
+          function: { name: "select_finance_action" },
+        });
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  tool_calls: [
+                    {
+                      function: {
+                        name: "select_finance_action",
+                        arguments: JSON.stringify({
+                          primaryLane: "debt_paydown",
+                          secondaryLanes: [],
+                          urgency: "medium",
+                          rationale: "Router picked debt focus.",
+                        }),
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
       return new Response(
         JSON.stringify({
           choices: [{ message: { content: "precision ok" } }],
@@ -1682,7 +1797,20 @@ describe("AI provider routing and gating", () => {
         },
         body: JSON.stringify({
           snapshot: "Need help with this month",
-          systemPrompt: "system prompt",
+          context: {
+            financialBrief: {
+              profile: { birthYear: 1990, age: 36, payFrequency: "bi-weekly", incomeType: "salary" },
+              income: { estimatedMonthly: 5400, cycleNet: 2500, sources: [] },
+              snapshot: { status: "YELLOW", mode: "STANDARD", healthScore: 68, netWorth: 42000 },
+              cash: { checking: 1800, vault: 5000, pending: 900, available: 200, emergencyFloor: 1500, weeklySpendAllowance: 350 },
+              credit: { totalCardDebt: 4200, totalCardLimit: 10000, overallUtilization: 42, creditScore: 702 },
+              debt: { totalNonCardDebt: 0, totalDebt: 4200, nonCardDebts: [] },
+              cards: [{ name: "Freedom Flex", balance: 2200, limit: 5000, utilization: 44, apr: 26.99 }],
+              renewals: { monthlyEstimate: 140, items: [] },
+              trends: [],
+              auditHistory: [],
+            },
+          },
           history: [],
           type: "chat",
           model: "o3",
@@ -1700,7 +1828,7 @@ describe("AI provider routing and gating", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ result: "precision ok" });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
 

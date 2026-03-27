@@ -12,6 +12,7 @@ interface Window {
   toast?: AppToastApi;
   __privacyMode?: boolean;
   __biometricActive?: boolean;
+  __biometricActiveUntil?: number;
   __E2E_HOUSEHOLD_SYNC_DELAY__?: number;
   __E2E_SECURITY_STATE__?: {
     storageStatus?: {

@@ -4,7 +4,7 @@
 // Used for auto-tracking Roth IRA, 401k, Brokerage, and Crypto holdings.
 // ═══════════════════════════════════════════════════════════════
 
-import { getBackendUrl } from "./api.js";
+import { getBackendUrl } from "./backendUrl.js";
 import { log } from "./logger.js";
 import { getMarketRefreshTTL } from "./subscription.js";
 import { db } from "./utils.js";

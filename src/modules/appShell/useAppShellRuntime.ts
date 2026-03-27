@@ -3,8 +3,10 @@ import { Capacitor } from "@capacitor/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AuditRecord, Card as CardType, Renewal } from "../../types/index.js";
 import { normalizeAppError } from "../appErrors.js";
+import { isBiometricInteractionActive } from "../biometricSession.js";
 import { haptic } from "../haptics.js";
 import { log } from "../logger.js";
+import { triggerStoreArrivalNotification } from "../notifications.js";
 import { getGatingMode, isPro, syncRemoteGatingMode } from "../subscription.js";
 import type { ToastApi } from "../Toast.js";
 type AppTab = "dashboard" | "cashflow" | "audit" | "portfolio" | "chat" | "settings" | "history" | "results" | "input";
@@ -76,18 +78,23 @@ export function useSimulatedGeofenceNotification(
       const detail = (event as CustomEvent<{ store?: string }>).detail;
       const store = detail?.store || "Store";
       void (async () => {
-        const [{ extractCategoryByKeywords }, { getOptimalCard }, { triggerStoreArrivalNotification }] =
+        const [{ extractCategoryByKeywords }, { getOptimalCard }] =
           await Promise.all([
             import("../merchantDatabase.js"),
             import("../rewardsCatalog.js"),
-            import("../notifications.js"),
           ]);
-        const categoryStr = extractCategoryByKeywords(store) || "other";
-        const optimal = getOptimalCard(cards || [], categoryStr, valuations || {});
+        const categoryStr = extractCategoryByKeywords(store) || "catch-all";
+        const optimal = getOptimalCard(cards || [], categoryStr, valuations || {}, {
+          merchantName: store,
+          capMode: "conservative",
+        });
 
         let recommendation = "Open Catalyst to see your best card.";
-        if (optimal && optimal.yield) {
-          recommendation = `Use your ${optimal.cardName} here for ${parseFloat((optimal.yield * 100).toFixed(1))}% back!`;
+        if (optimal?.effectiveYield) {
+          recommendation = `Use your ${optimal.name} here for ${parseFloat(optimal.effectiveYield.toFixed(1))}% back!`;
+          if (optimal?.rewardNotes) {
+            recommendation += " Check Catalyst for issuer-specific conditions.";
+          }
         }
 
         // QA simulation bypasses cooldown with forceReset so previews always fire
@@ -479,6 +486,14 @@ export function useLoadReadyHaptic(ready: boolean) {
  * Waits 1.5s after resume to avoid firing during momentary interruptions
  * (e.g. biometric prompt, system dialogs).
  */
+export function shouldRefreshOnResume({
+  biometricInteractionActive,
+}: {
+  biometricInteractionActive: boolean;
+}): boolean {
+  return !biometricInteractionActive;
+}
+
 export function useAppForegroundRefresh(
   ready: boolean,
   refreshAppState: () => Promise<void>
@@ -494,8 +509,22 @@ export function useAppForegroundRefresh(
 
     const register = async () => {
       resumeHandle = await CapApp.addListener("resume", () => {
+        if (
+          !shouldRefreshOnResume({
+            biometricInteractionActive: isBiometricInteractionActive(),
+          })
+        ) {
+          return;
+        }
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
+          if (
+            !shouldRefreshOnResume({
+              biometricInteractionActive: isBiometricInteractionActive(),
+            })
+          ) {
+            return;
+          }
           refreshRef.current().catch(() => {});
         }, 1500);
       });

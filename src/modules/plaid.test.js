@@ -6,6 +6,7 @@ import {
   ensureConnectionAccountsPresent,
   filterTransactionsForConnection,
   getPreferredFreeConnectionSwitchCooldownRemaining,
+  mapTransactionsFromSyncStatus,
   materializeManualFallbackForConnections,
   shouldEnforcePreferredFreeConnectionSwitchCooldown,
 } from "./plaid.js";
@@ -207,6 +208,61 @@ describe("Plaid transaction filtering", () => {
     expect(filterTransactionsForConnection(transactions, connection)).toEqual([
       { transaction_id: "txn_1", account_id: "acct_amex_1", amount: 10 },
       { transaction_id: "txn_2", account_id: "acct_amex_2", amount: 20 },
+    ]);
+  });
+
+  it("maps merchant identity and linked account ids into normalized transactions", () => {
+    const connection = {
+      id: "item_1",
+      institutionName: "American Express",
+      accounts: [
+        {
+          plaidAccountId: "acct_amex_1",
+          name: "Gold Card",
+          subtype: "credit card",
+          linkedCardId: "card_gold",
+          linkedBankAccountId: null,
+        },
+      ],
+    };
+
+    const mapped = mapTransactionsFromSyncStatus(connection, {
+      hasData: true,
+      transactions: {
+        transactions: [
+          {
+            transaction_id: "txn_1",
+            account_id: "acct_amex_1",
+            amount: 24.15,
+            date: "2026-03-26",
+            merchant_name: "DoorDash",
+            name: "DOORDASH *1234",
+            personal_finance_category: {
+              primary: "FOOD_AND_DRINK",
+              detailed: "RESTAURANT",
+            },
+            pending: false,
+          },
+        ],
+      },
+    });
+
+    expect(mapped).toEqual([
+      expect.objectContaining({
+        id: "txn_1",
+        merchantName: "DoorDash",
+        merchantBrand: "doordash",
+        merchantKey: "brand:doordash",
+        description: "DoorDash",
+        name: "DOORDASH *1234",
+        linkedCardId: "card_gold",
+        linkedBankAccountId: null,
+        accountId: "acct_amex_1",
+        accountName: "Gold Card",
+        accountType: "credit card",
+        category: "food and drink",
+        subcategory: "restaurant",
+      }),
     ]);
   });
 });

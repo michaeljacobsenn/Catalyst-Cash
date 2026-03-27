@@ -90,9 +90,11 @@ export default function TabRenderer({
           key={t}
           className="snap-page"
           data-tabid={t}
+          aria-hidden={activeTab !== t}
           style={{
             overflowY: t === "chat" ? "hidden" : "auto",
             background: t === "chat" ? T.bg.base : undefined,
+            pointerEvents: activeTab === t ? "auto" : "none",
           }}
           onScroll={(event) => onPageScroll(event, t)}
         >

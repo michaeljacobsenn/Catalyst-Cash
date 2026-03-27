@@ -3,7 +3,14 @@ import Capacitor
 import LocalAuthentication
 
 @objc(FaceIdPlugin)
-public class FaceIdPlugin: CAPPlugin {
+public class FaceIdPlugin: CAPPlugin, CAPBridgedPlugin {
+
+    public let identifier = "FaceIdPlugin"
+    public let jsName = "FaceId"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "isAvailable", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "authenticate", returnType: CAPPluginReturnPromise)
+    ]
 
     private let defaultAuthReason = "Authenticate to access Catalyst Cash"
     private let maxReasonLength = 120
@@ -15,6 +22,11 @@ public class FaceIdPlugin: CAPPlugin {
         let canAuthenticate = context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &deviceAuthError)
         let canUseBiometrics = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
         let biometryType = canUseBiometrics ? mappedBiometryType(from: context.biometryType) : "none"
+        NSLog("[FaceIdPlugin] isAvailable canAuthenticate=%@ canUseBiometrics=%@ biometryType=%@ error=%@",
+              canAuthenticate.description,
+              canUseBiometrics.description,
+              biometryType,
+              deviceAuthError?.localizedDescription ?? "")
 
         let response: [String: Any] = [
             "isAvailable": canAuthenticate,
@@ -30,11 +42,13 @@ public class FaceIdPlugin: CAPPlugin {
         let reason = sanitizedReason(from: call.getString("reason"))
         let context = LAContext()
         context.localizedFallbackTitle = ""
+        NSLog("[FaceIdPlugin] authenticate requested reason=%@", reason)
 
         var availabilityError: NSError?
         guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &availabilityError) else {
             let code = availabilityError?.code ?? LAError.biometryNotAvailable.rawValue
             let message = availabilityError?.localizedDescription ?? "Biometrics are not available"
+            NSLog("[FaceIdPlugin] authenticate unavailable code=%d message=%@", code, message)
             rejectOnMain(call, message: message, code: code, error: availabilityError)
             return
         }
@@ -103,6 +117,7 @@ public class FaceIdPlugin: CAPPlugin {
     private func handleAuthenticationResult(success: Bool, authenticationError: Error?, call: CAPPluginCall) {
         DispatchQueue.main.async {
             if success {
+                NSLog("[FaceIdPlugin] authenticate success")
                 call.resolve(["success": true])
                 return
             }
@@ -110,12 +125,14 @@ public class FaceIdPlugin: CAPPlugin {
             let nsError = authenticationError as NSError?
             let code = nsError?.code ?? LAError.authenticationFailed.rawValue
             let message = nsError?.localizedDescription ?? "Authentication failed"
+            NSLog("[FaceIdPlugin] authenticate failure code=%d message=%@", code, message)
             call.reject(message, String(code), nsError)
         }
     }
 
     private func rejectOnMain(_ call: CAPPluginCall, message: String, code: Int, error: NSError?) {
         DispatchQueue.main.async {
+            NSLog("[FaceIdPlugin] reject code=%d message=%@", code, message)
             call.reject(message, String(code), error)
         }
     }

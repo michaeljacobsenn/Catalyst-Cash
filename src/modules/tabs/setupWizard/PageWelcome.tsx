@@ -9,30 +9,30 @@ export function PageWelcome({ onNext }: { onNext: () => void }) {
       <div
         style={{
           position: "relative",
-          width: 88,
-          height: 88,
-          margin: "0 auto 18px",
-          borderRadius: 22,
+          width: 72,
+          height: 72,
+          margin: "0 auto 14px",
+          borderRadius: 18,
           overflow: "visible",
         }}
       >
         <div
           style={{
             position: "absolute",
-            inset: -6,
-            borderRadius: 28,
+            inset: -4,
+            borderRadius: 22,
             background: `conic-gradient(from 180deg, ${T.accent.primary}40, ${T.accent.emerald}40, ${T.accent.primary}40)`,
-            filter: "blur(16px)",
-            opacity: 0.7,
+            filter: "blur(14px)",
+            opacity: 0.65,
           }}
         />
         <img
           src="./icon-512.png"
           alt="Catalyst Cash"
           style={{
-            width: 88,
-            height: 88,
-            borderRadius: 22,
+            width: 72,
+            height: 72,
+            borderRadius: 18,
             position: "relative",
             boxShadow: `0 8px 32px ${T.accent.primary}30`,
           }}
@@ -53,7 +53,7 @@ export function PageWelcome({ onNext }: { onNext: () => void }) {
           fontWeight: 800,
           letterSpacing: "0.06em",
           textTransform: "uppercase",
-          marginBottom: 14,
+          marginBottom: 12,
         }}
       >
         Built for weekly money clarity
@@ -61,10 +61,10 @@ export function PageWelcome({ onNext }: { onNext: () => void }) {
 
       <h2
         style={{
-          fontSize: 28,
+          fontSize: 26,
           fontWeight: 900,
           color: T.text.primary,
-          margin: "0 0 10px",
+          margin: "0 0 8px",
           letterSpacing: "-0.03em",
           lineHeight: 1.05,
         }}
@@ -76,16 +76,14 @@ export function PageWelcome({ onNext }: { onNext: () => void }) {
 
       <p
         style={{
-          fontSize: 14,
+          fontSize: 13,
           color: T.text.secondary,
-          lineHeight: 1.65,
-          marginBottom: 22,
-          maxWidth: 312,
-          margin: "0 auto 22px",
+          lineHeight: 1.55,
+          maxWidth: 300,
+          margin: "0 auto 16px",
         }}
       >
-        We’ll ask for just enough to model your paycheck timing, spending runway, and safety targets. You can skip
-        the optional parts and fill them in later.
+        We’ll get your first audit ready in a few short steps. Optional setup can wait until later.
       </p>
 
       <div
@@ -93,7 +91,7 @@ export function PageWelcome({ onNext }: { onNext: () => void }) {
           display: "grid",
           gridTemplateColumns: "1fr",
           gap: 10,
-          marginBottom: 22,
+          marginBottom: 16,
           textAlign: "left",
         }}
       >
@@ -109,24 +107,24 @@ export function PageWelcome({ onNext }: { onNext: () => void }) {
               alignItems: "center",
               gap: 12,
               background: `linear-gradient(135deg, ${T.bg.elevated}, ${T.bg.base})`,
-              borderRadius: T.radius.lg,
-              padding: "12px 14px",
+              borderRadius: T.radius.md,
+              padding: "10px 12px",
               border: `1px solid ${T.border.subtle}`,
               boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04)`,
             }}
           >
             <div
               style={{
-                width: 32,
-                height: 32,
-                borderRadius: 16,
+                width: 28,
+                height: 28,
+                borderRadius: 14,
                 flexShrink: 0,
                 background: `${T.accent.primary}14`,
                 border: `1px solid ${T.accent.primary}24`,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: 900,
                 fontFamily: T.font.mono,
               }}
@@ -135,7 +133,7 @@ export function PageWelcome({ onNext }: { onNext: () => void }) {
             </div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, lineHeight: 1.2 }}>{title}</div>
-              <div style={{ fontSize: 11, color: T.text.dim, marginTop: 1, lineHeight: 1.3 }}>{sub}</div>
+              <div style={{ fontSize: 10, color: T.text.dim, marginTop: 1, lineHeight: 1.3 }}>{sub}</div>
             </div>
           </div>
         ))}
@@ -143,42 +141,41 @@ export function PageWelcome({ onNext }: { onNext: () => void }) {
 
       <div
         style={{
-          marginBottom: 20,
+          marginBottom: 16,
           textAlign: "left",
-          padding: "16px",
-          background: `linear-gradient(160deg, ${T.accent.primary}06, ${T.accent.emerald}06)`,
-          borderRadius: T.radius.lg,
+          padding: "13px 14px",
+          background: `linear-gradient(160deg, ${T.accent.primary}05, ${T.accent.emerald}05)`,
+          borderRadius: T.radius.md,
           border: `1px solid ${T.accent.primary}15`,
         }}
       >
         <div
           style={{
-            fontSize: 11,
+            fontSize: 10,
             fontWeight: 800,
             color: T.text.secondary,
             textTransform: "uppercase",
             letterSpacing: "0.1em",
-            marginBottom: 12,
+            marginBottom: 8,
           }}
         >
           What stays private
         </div>
-        <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>Stored on your device by default</div>
-          <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.55 }}>
-            Core financial data stays local. AI requests go through the Catalyst proxy only when needed, and optional
-            backups use your personal cloud account.
+        <div style={{ display: "grid", gap: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>On-device by default</div>
+          <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5 }}>
+            Core financial data stays local. Bank sync and backups stay optional.
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 2 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 1 }}>
             {["On-device by default", "Optional bank sync", "Optional backup"].map(item => (
               <div
                 key={item}
                 style={{
-                  padding: "7px 10px",
+                  padding: "6px 9px",
                   borderRadius: 999,
                   background: T.bg.elevated,
                   border: `1px solid ${T.border.subtle}`,
-                  fontSize: 11,
+                  fontSize: 10,
                   color: T.text.secondary,
                   fontWeight: 700,
                 }}
@@ -194,9 +191,9 @@ export function PageWelcome({ onNext }: { onNext: () => void }) {
         style={{
           background: T.bg.elevated,
           border: `1px solid ${T.border.default}`,
-          borderRadius: T.radius.lg,
-          padding: "14px 16px",
-          marginBottom: 20,
+          borderRadius: T.radius.md,
+          padding: "12px 14px",
+          marginBottom: 16,
           textAlign: "left",
         }}
       >
@@ -207,8 +204,8 @@ export function PageWelcome({ onNext }: { onNext: () => void }) {
             aria-checked={accepted}
             aria-label="Accept legal disclaimer"
             style={{
-              width: 22,
-              height: 22,
+              width: 20,
+              height: 20,
               borderRadius: 6,
               flexShrink: 0,
               marginTop: 1,
@@ -223,7 +220,7 @@ export function PageWelcome({ onNext }: { onNext: () => void }) {
           >
             {accepted && <span style={{ color: "#fff", fontSize: 13, fontWeight: 800, lineHeight: 1 }}>✓</span>}
           </div>
-          <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.6, margin: 0 }}>
+          <p style={{ fontSize: 10, color: T.text.secondary, lineHeight: 1.55, margin: 0 }}>
             I understand that this app provides{" "}
             <strong style={{ color: T.text.primary }}>AI-generated educational content only</strong> and is{" "}
             <strong style={{ color: T.status.amber }}>
@@ -234,7 +231,7 @@ export function PageWelcome({ onNext }: { onNext: () => void }) {
         </div>
       </div>
 
-      <div style={{ fontSize: 11, color: T.text.dim, marginBottom: 12 }}>You can change any of this later in Settings.</div>
+      <div style={{ fontSize: 10, color: T.text.dim, marginBottom: 10 }}>You can change any of this later in Settings.</div>
 
       <WizBtn onClick={onNext} disabled={!accepted} style={{ width: "100%", fontSize: 15 }}>
         Start Setup →

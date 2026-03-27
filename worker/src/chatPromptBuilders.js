@@ -607,6 +607,737 @@ function buildFinancialContext(current, financialConfig, cards, renewals, histor
   return parts.join("\n");
 }
 
+const CHAT_INTENT_CONFIG = {
+  spending: {
+    agentLabel: "[Spending Agent]",
+    focus: ["profile", "snapshot", "income", "cash", "credit", "debt", "cards", "renewals", "trends"],
+  },
+  invest: {
+    agentLabel: "[Invest Agent]",
+    focus: ["profile", "snapshot", "income", "cash", "credit", "debt", "trends", "auditHistory"],
+  },
+  planning: {
+    agentLabel: "[Planning Agent]",
+    focus: ["profile", "snapshot", "income", "cash", "credit", "debt", "cards", "renewals", "trends", "auditHistory"],
+  },
+};
+
+const INVEST_SIGNALS = [
+  "invest",
+  "investing",
+  "brokerage",
+  "portfolio",
+  "stock",
+  "stocks",
+  "etf",
+  "roth",
+  "401k",
+  "hsa",
+  "allocation",
+  "compound",
+  "retirement",
+  "ira",
+];
+
+const SPENDING_SIGNALS = [
+  "budget",
+  "spend",
+  "spending",
+  "expense",
+  "expenses",
+  "card",
+  "credit card",
+  "reward",
+  "cashflow",
+  "cash flow",
+  "subscription",
+  "renewal",
+  "debt",
+  "payoff",
+  "apr",
+  "utilization",
+  "statement balance",
+  "annual fee",
+];
+
+const PLANNING_SIGNALS = [
+  "plan",
+  "planning",
+  "afford",
+  "affordability",
+  "what if",
+  "should i",
+  "can i",
+  "how am i doing",
+  "next move",
+  "priority",
+];
+
+function getMatchedSignals(normalizedMessage, signals = []) {
+  return signals.filter((signal) => normalizedMessage.includes(signal));
+}
+
+export function classifyChatIntent(userMessage = "", variant = "default") {
+  const normalized = String(userMessage || "").toLowerCase();
+  if (variant === "negotiation-script") {
+    return {
+      id: "planning",
+      agentLabel: CHAT_INTENT_CONFIG.planning.agentLabel,
+      rationale: "negotiation flow",
+      matchedSignals: ["negotiation-script"],
+      secondaryIds: [],
+      responseMode: "single-lane",
+    };
+  }
+
+  const investMatches = getMatchedSignals(normalized, INVEST_SIGNALS);
+  const spendingMatches = getMatchedSignals(normalized, SPENDING_SIGNALS);
+  const planningMatches = getMatchedSignals(normalized, PLANNING_SIGNALS);
+
+  const investScore = investMatches.length;
+  const spendingScore = spendingMatches.length;
+  const planningScore = planningMatches.length;
+  const secondaryIds = [];
+
+  let id = "planning";
+  let rationale = "broad planning or mixed question";
+
+  if (investScore > 0 && spendingScore === 0) {
+    id = "invest";
+    rationale = "investment and retirement keywords";
+  } else if (spendingScore > 0 && investScore === 0) {
+    id = "spending";
+    rationale = "cash-flow, debt, rewards, or budget keywords";
+  } else if (investScore > 0 && spendingScore > 0) {
+    if (investScore >= spendingScore + 2) {
+      id = "invest";
+      rationale = "investment-heavy mixed question";
+      secondaryIds.push("spending");
+    } else if (spendingScore >= investScore + 2) {
+      id = "spending";
+      rationale = "spending-heavy mixed question";
+      secondaryIds.push("invest");
+    } else {
+      id = "planning";
+      rationale = "mixed question spanning spending and investing";
+      secondaryIds.push("spending", "invest");
+    }
+  } else if (planningScore > 0) {
+    id = "planning";
+    rationale = "broad planning keywords";
+  }
+
+  return {
+    id,
+    agentLabel: CHAT_INTENT_CONFIG[id].agentLabel,
+    rationale,
+    matchedSignals: [...investMatches, ...spendingMatches, ...planningMatches],
+    secondaryIds,
+    responseMode: secondaryIds.length > 0 ? "mixed" : "single-lane",
+  };
+}
+
+function shouldIncludeBriefSection(chatIntent, section) {
+  const intentId = chatIntent?.id || "planning";
+  const config = CHAT_INTENT_CONFIG[intentId] || CHAT_INTENT_CONFIG.planning;
+  return config.focus.includes(section);
+}
+
+function buildFinancialBriefContext(financialBrief = null, chatIntent = null) {
+  if (!financialBrief || typeof financialBrief !== "object") return "";
+
+  const parts = [];
+  const snapshot = financialBrief.snapshot || {};
+  const profile = financialBrief.profile || {};
+  const income = financialBrief.income || {};
+  const cash = financialBrief.cash || {};
+  const credit = financialBrief.credit || {};
+  const debt = financialBrief.debt || {};
+  const cards = Array.isArray(financialBrief.cards) ? financialBrief.cards : [];
+  const renewals = financialBrief.renewals || {};
+  const trends = Array.isArray(financialBrief.trends) ? financialBrief.trends : [];
+  const auditHistory = Array.isArray(financialBrief.auditHistory) ? financialBrief.auditHistory : [];
+
+  parts.push("## Current Financial Position");
+
+  if (shouldIncludeBriefSection(chatIntent, "profile") && profile.birthYear) {
+    const currentYear = new Date().getFullYear();
+    const age = profile.age ?? currentYear - profile.birthYear;
+    const yearsToRetirement = Math.max(0, Math.round(profile.birthYear + 59.5 - currentYear));
+    parts.push(
+      `User Age Details: Born ${profile.birthYear} (Age ${age}). Years until age 59½ (retirement access): ${yearsToRetirement}`
+    );
+  }
+
+  const topLine = [
+    snapshot.netWorth != null ? `Net Worth: ${fmt(snapshot.netWorth)}` : null,
+    cash.available != null ? `Available: ${fmt(cash.available)}` : null,
+    cash.checking != null ? `Checking: ${fmt(cash.checking)}` : null,
+    cash.vault != null ? `Vault: ${fmt(cash.vault)}` : null,
+  ].filter(Boolean);
+  if (topLine.length > 0) parts.push(topLine.join(" | "));
+
+  const statusLine = [
+    snapshot.status ? `Status: ${snapshot.status}` : null,
+    snapshot.mode ? `Mode: ${snapshot.mode}` : null,
+    snapshot.healthScore != null ? `Health Score: ${snapshot.healthScore}` : null,
+  ].filter(Boolean);
+  if (statusLine.length > 0) parts.push(statusLine.join(" | "));
+
+  const incomeLine = shouldIncludeBriefSection(chatIntent, "income")
+    ? [
+    income.estimatedMonthly != null ? `Estimated Monthly Net Income: ${fmt(income.estimatedMonthly)}` : null,
+    income.cycleNet != null ? `Per-${profile.payFrequency || "paycheck"} Take-Home: ${fmt(income.cycleNet)}` : null,
+    profile.incomeType ? `Income Type: ${profile.incomeType}` : null,
+      ].filter(Boolean)
+    : [];
+  if (incomeLine.length > 0) parts.push(incomeLine.join(" | "));
+
+  if (shouldIncludeBriefSection(chatIntent, "income") && Array.isArray(income.sources) && income.sources.length > 0) {
+    parts.push("Income Sources:");
+    income.sources.forEach((source) => {
+      const detail = [
+        source?.amount != null ? fmt(source.amount) : null,
+        source?.frequency || null,
+        source?.type || null,
+        source?.nextDate ? `next ${source.nextDate}` : null,
+      ].filter(Boolean).join(", ");
+      parts.push(`  - ${source?.name || "Income"}${detail ? `: ${detail}` : ""}`);
+    });
+  }
+
+  const floorLine = shouldIncludeBriefSection(chatIntent, "cash")
+    ? [
+    cash.pending != null ? `7-Day Obligations: ${fmt(cash.pending)}` : null,
+    cash.emergencyFloor != null ? `Emergency Floor: ${fmt(cash.emergencyFloor)}` : null,
+    cash.checkingBuffer != null ? `Checking Buffer: ${fmt(cash.checkingBuffer)}` : null,
+    cash.weeklySpendAllowance != null ? `Weekly Spend Allowance: ${fmt(cash.weeklySpendAllowance)}` : null,
+      ].filter(Boolean)
+    : [];
+  if (floorLine.length > 0) parts.push(floorLine.join(" | "));
+
+  const creditLine = shouldIncludeBriefSection(chatIntent, "credit")
+    ? [
+    credit.creditScore != null ? `Credit Score: ${credit.creditScore}` : null,
+    credit.creditUtilization != null ? `Manual Utilization Input: ${credit.creditUtilization}%` : null,
+    credit.totalCardDebt != null ? `Total CC Debt: ${fmt(credit.totalCardDebt)}` : null,
+    credit.totalCardLimit != null ? `Total Limits: ${fmt(credit.totalCardLimit)}` : null,
+    credit.overallUtilization != null ? `Overall Utilization: ${credit.overallUtilization}%` : null,
+      ].filter(Boolean)
+    : [];
+  if (creditLine.length > 0) parts.push(creditLine.join(" | "));
+
+  if (shouldIncludeBriefSection(chatIntent, "debt") && Array.isArray(debt.nonCardDebts) && debt.nonCardDebts.length > 0) {
+    parts.push("\nNon-Card Debts:");
+    debt.nonCardDebts.forEach((item) => {
+      const details = [
+        item?.balance != null ? fmt(item.balance) : null,
+        item?.apr != null ? `${item.apr}% APR` : null,
+        item?.minPayment != null ? `min ${fmt(item.minPayment)}` : null,
+      ].filter(Boolean).join(", ");
+      parts.push(`  - ${item?.name || "Debt"}${details ? `: ${details}` : ""}`);
+    });
+  }
+
+  if (shouldIncludeBriefSection(chatIntent, "cards") && cards.length > 0) {
+    parts.push("\n## Credit Card Portfolio");
+    cards.forEach((card) => {
+      const line = [
+        card?.balance != null ? fmt(card.balance) : null,
+        card?.limit != null ? fmt(card.limit) : null,
+        card?.utilization != null ? `${card.utilization}% util` : null,
+        card?.apr != null ? `${card.apr}% APR` : null,
+        card?.minPayment != null ? `min ${fmt(card.minPayment)}` : null,
+        card?.paymentDueDay != null ? `due day ${card.paymentDueDay}` : null,
+        card?.statementCloseDay != null ? `statement close ${card.statementCloseDay}` : null,
+        card?.annualFee != null && card.annualFee > 0 ? `annual fee ${fmt(card.annualFee)}` : null,
+      ].filter(Boolean).join(", ");
+      parts.push(`  - ${card?.name || "Card"}${line ? `: ${line}` : ""}`);
+    });
+  }
+
+  if (shouldIncludeBriefSection(chatIntent, "renewals") && Array.isArray(renewals.items) && renewals.items.length > 0) {
+    parts.push("\n## Recurring Bills & Subscriptions");
+    renewals.items.forEach((renewal) => {
+      const cadence = renewal?.intervalUnit === "one-time"
+        ? "(one-time)"
+        : `every ${renewal?.interval || 1} ${renewal?.intervalUnit || "months"}`;
+      const detail = [
+        renewal?.amount != null ? fmt(renewal.amount) : null,
+        cadence,
+        renewal?.monthlyAmount != null ? `~${fmt(renewal.monthlyAmount)}/mo` : null,
+        renewal?.nextDue ? `next ${renewal.nextDue}` : null,
+        renewal?.chargedTo ? `charged to ${renewal.chargedTo}` : null,
+      ].filter(Boolean).join(" | ");
+      parts.push(`  - ${renewal?.name || "Recurring charge"}: ${detail}`);
+    });
+    if (renewals.monthlyEstimate != null) {
+      parts.push(`Estimated Monthly Recurring: ${fmt(renewals.monthlyEstimate)}`);
+    }
+  }
+
+  if (shouldIncludeBriefSection(chatIntent, "trends") && trends.length > 0) {
+    parts.push("\n## Recent Trend");
+    trends.forEach((entry) => {
+      const detail = [
+        entry?.score != null ? `score ${entry.score}` : null,
+        entry?.status || null,
+        entry?.checking != null ? `checking ${fmt(entry.checking)}` : null,
+        entry?.vault != null ? `vault ${fmt(entry.vault)}` : null,
+        entry?.totalDebt != null ? `debt ${fmt(entry.totalDebt)}` : null,
+      ].filter(Boolean).join(" | ");
+      parts.push(`  - ${entry?.date || "Recent"}: ${detail}`);
+    });
+  }
+
+  if (shouldIncludeBriefSection(chatIntent, "auditHistory") && auditHistory.length > 0) {
+    parts.push("\n## Audit History Snapshot");
+    auditHistory.forEach((audit) => {
+      const detail = [
+        audit?.parsed?.netWorth != null ? `NW ${fmt(audit.parsed.netWorth)}` : null,
+        audit?.parsed?.healthScore?.score != null ? `score ${audit.parsed.healthScore.score}` : null,
+        audit?.parsed?.healthScore?.grade ? `grade ${audit.parsed.healthScore.grade}` : null,
+      ].filter(Boolean).join(" | ");
+      parts.push(`  - ${audit?.date || audit?.ts || "Audit"}: ${detail}`);
+    });
+  }
+
+  return parts.join("\n");
+}
+
+function fmtCount(value, noun) {
+  const count = Number(value) || 0;
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+function fmtPercent(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? `${Math.round(numeric * 10) / 10}%` : null;
+}
+
+function fmtMonths(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? `${Math.round(numeric * 10) / 10} months` : null;
+}
+
+function buildToolSection(name, lines = []) {
+  const normalized = lines.filter(Boolean);
+  if (normalized.length === 0) return "";
+  return `### ${name}\n${normalized.map((line) => `- ${line}`).join("\n")}`;
+}
+
+function buildCashPositionTool(financialBrief) {
+  const cash = financialBrief?.cash || {};
+  const available = Number(cash.available);
+  const pending = Number(cash.pending);
+  const floor = Number(cash.emergencyFloor);
+  const weeklyAllowance = Number(cash.weeklySpendAllowance);
+  const status = !Number.isFinite(available)
+    ? "partial"
+    : available < 0
+      ? "floor breach risk"
+      : available < Math.max(250, weeklyAllowance || 0)
+        ? "tight"
+        : "stable";
+
+  return buildToolSection("cash_position", [
+    Number.isFinite(available) ? `Available after floor and 7-day obligations: ${fmt(available)}` : null,
+    Number.isFinite(cash.checking) ? `Checking: ${fmt(cash.checking)}` : null,
+    Number.isFinite(cash.vault) ? `Vault: ${fmt(cash.vault)}` : null,
+    Number.isFinite(pending) ? `Tracked 7-day obligations: ${fmt(pending)}` : null,
+    Number.isFinite(floor) ? `Emergency floor: ${fmt(floor)}` : null,
+    Number.isFinite(weeklyAllowance) ? `Weekly spend allowance: ${fmt(weeklyAllowance)}` : null,
+    `Liquidity status: ${status}`,
+  ]);
+}
+
+function buildDebtSnapshotTool(financialBrief) {
+  const credit = financialBrief?.credit || {};
+  const debt = financialBrief?.debt || {};
+  const cards = Array.isArray(financialBrief?.cards) ? financialBrief.cards : [];
+  const highestAprCard = [...cards]
+    .filter((card) => Number.isFinite(Number(card?.apr)))
+    .sort((left, right) => (Number(right?.apr) || 0) - (Number(left?.apr) || 0))[0];
+  const highestBalanceCard = [...cards]
+    .filter(Boolean)
+    .sort((left, right) => (Number(right?.balance) || 0) - (Number(left?.balance) || 0))[0];
+
+  return buildToolSection("debt_snapshot", [
+    Number.isFinite(credit.totalCardDebt) ? `Credit-card debt: ${fmt(credit.totalCardDebt)}` : null,
+    Number.isFinite(debt.totalNonCardDebt) ? `Non-card debt: ${fmt(debt.totalNonCardDebt)}` : null,
+    Number.isFinite(debt.totalDebt) ? `Total debt: ${fmt(debt.totalDebt)}` : null,
+    Number.isFinite(credit.totalCardLimit) ? `Total credit limits: ${fmt(credit.totalCardLimit)}` : null,
+    credit.overallUtilization != null ? `Overall utilization: ${fmtPercent(credit.overallUtilization)}` : null,
+    highestAprCard?.name && highestAprCard?.apr != null
+      ? `Highest APR card: ${highestAprCard.name} at ${fmtPercent(highestAprCard.apr)}`
+      : null,
+    highestBalanceCard?.name && highestBalanceCard?.balance != null
+      ? `Highest balance card: ${highestBalanceCard.name} with ${fmt(highestBalanceCard.balance)}`
+      : null,
+  ]);
+}
+
+function buildRecurringLoadTool(financialBrief) {
+  const renewals = financialBrief?.renewals || {};
+  const items = Array.isArray(renewals.items) ? renewals.items : [];
+
+  return buildToolSection("recurring_load", [
+    renewals.monthlyEstimate != null ? `Tracked recurring monthly load: ${fmt(renewals.monthlyEstimate)}` : null,
+    items.length > 0
+      ? `Tracked recurring items: ${fmtCount(items.length, "item")}`
+      : "Tracked recurring items: none",
+    ...items.slice(0, 3).map((item) => {
+      const detail = [
+        item?.amount != null ? fmt(item.amount) : null,
+        item?.nextDue ? `next ${item.nextDue}` : null,
+        item?.chargedTo ? `charged to ${item.chargedTo}` : null,
+      ].filter(Boolean).join(" | ");
+      return `${item?.name || "Recurring charge"}${detail ? `: ${detail}` : ""}`;
+    }),
+  ]);
+}
+
+function buildBudgetGuardrailsTool(financialBrief) {
+  const income = financialBrief?.income || {};
+  const renewals = financialBrief?.renewals || {};
+  const cash = financialBrief?.cash || {};
+  const monthlyIncome = Number(income.estimatedMonthly);
+  const recurring = Number(renewals.monthlyEstimate);
+  const available = Number(cash.available);
+  const recurringSlack = Number.isFinite(monthlyIncome) && Number.isFinite(recurring)
+    ? monthlyIncome - recurring
+    : null;
+  const recurringCoverageMonths =
+    Number.isFinite(available) && Number.isFinite(recurring) && recurring > 0
+      ? available / recurring
+      : null;
+
+  return buildToolSection("budget_guardrails", [
+    Number.isFinite(monthlyIncome) ? `Estimated monthly take-home: ${fmt(monthlyIncome)}` : null,
+    Number.isFinite(recurring) ? `Tracked recurring load: ${fmt(recurring)}` : null,
+    recurringSlack != null ? `Monthly slack after tracked recurring only: ${fmt(recurringSlack)}` : null,
+    recurringCoverageMonths != null
+      ? `Available cash covers ${fmtMonths(recurringCoverageMonths)} of tracked recurring`
+      : null,
+    "Tracked recurring only is not a full budget; do not invent untracked essentials.",
+  ]);
+}
+
+function buildInvestmentPostureTool(financialBrief) {
+  const profile = financialBrief?.profile || {};
+  const snapshot = financialBrief?.snapshot || {};
+  const debt = financialBrief?.debt || {};
+  const cash = financialBrief?.cash || {};
+  const available = Number(cash.available);
+  const totalDebt = Number(debt.totalDebt);
+  const yearsToRetirement =
+    Number.isFinite(Number(profile.age)) ? Math.max(0, 59.5 - Number(profile.age)) : null;
+
+  return buildToolSection("investment_posture", [
+    snapshot.netWorth != null ? `Net worth: ${fmt(snapshot.netWorth)}` : null,
+    snapshot.healthScore != null ? `Health score: ${snapshot.healthScore}` : null,
+    Number.isFinite(totalDebt)
+      ? totalDebt > 0
+        ? `Debt posture: debt still active at ${fmt(totalDebt)}`
+        : "Debt posture: no revolving debt in the brief"
+      : null,
+    Number.isFinite(available) ? `Deployable cash after floor: ${fmt(available)}` : null,
+    Number.isFinite(yearsToRetirement) ? `Years until age 59½: ${Math.round(yearsToRetirement * 10) / 10}` : null,
+  ]);
+}
+
+function buildCardPortfolioTool(financialBrief) {
+  const cards = Array.isArray(financialBrief?.cards) ? financialBrief.cards : [];
+  const annualFeeExposure = cards.reduce((sum, card) => sum + (Number(card?.annualFee) || 0), 0);
+  const plaidLinkedCards = cards.filter((card) => card?.plaidLinked).length;
+
+  return buildToolSection("card_portfolio", [
+    `Tracked cards: ${fmtCount(cards.length, "card")}`,
+    plaidLinkedCards > 0 ? `Plaid-linked cards: ${fmtCount(plaidLinkedCards, "card")}` : null,
+    annualFeeExposure > 0 ? `Known annual fees: ${fmt(annualFeeExposure)}` : "Known annual fees: none",
+    ...cards.slice(0, 4).map((card) => {
+      const detail = [
+        card?.balance != null ? `bal ${fmt(card.balance)}` : null,
+        card?.limit != null ? `limit ${fmt(card.limit)}` : null,
+        card?.utilization != null ? `util ${fmtPercent(card.utilization)}` : null,
+        card?.annualFee != null && Number(card.annualFee) > 0 ? `fee ${fmt(card.annualFee)}` : null,
+      ].filter(Boolean).join(" | ");
+      return `${card?.name || "Card"}${detail ? `: ${detail}` : ""}`;
+    }),
+  ]);
+}
+
+function buildProjectionGuardrailsTool(financialBrief) {
+  const cash = financialBrief?.cash || {};
+  const income = financialBrief?.income || {};
+  const renewals = financialBrief?.renewals || {};
+  const available = Number(cash.available);
+  const monthlyIncome = Number(income.estimatedMonthly);
+  const recurring = Number(renewals.monthlyEstimate);
+  const nextMonthBuffer =
+    Number.isFinite(available) && Number.isFinite(monthlyIncome) && Number.isFinite(recurring)
+      ? available + monthlyIncome - recurring
+      : null;
+
+  return buildToolSection("projection_guardrails", [
+    nextMonthBuffer != null ? `Available + one month income - tracked recurring: ${fmt(nextMonthBuffer)}` : null,
+    "Projection is conservative and excludes untracked variable spending, taxes, and one-off bills.",
+  ]);
+}
+
+function buildFinanceActionPacket(chatIntent = null, latestUserMessage = "", financialBrief = null) {
+  const normalized = String(latestUserMessage || "").toLowerCase();
+  const asksAboutCards =
+    normalized.includes("card") ||
+    normalized.includes("reward") ||
+    normalized.includes("points") ||
+    normalized.includes("travel") ||
+    normalized.includes("annual fee");
+  const asksAboutDebt =
+    normalized.includes("debt") ||
+    normalized.includes("apr") ||
+    normalized.includes("payoff") ||
+    normalized.includes("utilization") ||
+    normalized.includes("balance transfer");
+  const asksAboutRecurring =
+    normalized.includes("subscription") ||
+    normalized.includes("renewal") ||
+    normalized.includes("monthly bill");
+  const asksAboutInvesting =
+    normalized.includes("invest") ||
+    normalized.includes("roth") ||
+    normalized.includes("401k") ||
+    normalized.includes("hsa") ||
+    normalized.includes("brokerage") ||
+    normalized.includes("retirement");
+  const asksAboutCash =
+    normalized.includes("cash") ||
+    normalized.includes("available") ||
+    normalized.includes("afford") ||
+    normalized.includes("emergency fund") ||
+    normalized.includes("savings");
+
+  const cash = financialBrief?.cash || {};
+  const credit = financialBrief?.credit || {};
+  const snapshot = financialBrief?.snapshot || {};
+  const available = Number(cash.available);
+  const weeklyAllowance = Number(cash.weeklySpendAllowance);
+  const utilization = Number(credit.overallUtilization);
+  const healthScore = Number(snapshot.healthScore);
+  const hasTightLiquidity = Number.isFinite(available) && available < Math.max(250, weeklyAllowance || 0);
+  const hasHighUtilization = Number.isFinite(utilization) && utilization >= 30;
+
+  let primaryLane = "planning_gap";
+  if (asksAboutDebt && (chatIntent?.id === "spending" || hasTightLiquidity || hasHighUtilization || healthScore < 70)) {
+    primaryLane = "debt_paydown";
+  } else if (chatIntent?.id === "invest" && !asksAboutCards) {
+    primaryLane = "investment_contribution";
+  } else if (asksAboutCards) {
+    primaryLane = "card_selection";
+  } else if (asksAboutRecurring) {
+    primaryLane = "recurring_review";
+  } else if (chatIntent?.id === "spending" || asksAboutDebt) {
+    primaryLane = "debt_paydown";
+  } else if (chatIntent?.id === "invest") {
+    primaryLane = "investment_contribution";
+  } else if (asksAboutCash) {
+    primaryLane = "cash_deployment";
+  }
+
+  const secondaryLanes = [];
+  if (asksAboutCards && primaryLane !== "card_selection") secondaryLanes.push("card_selection");
+  if (asksAboutDebt && primaryLane !== "debt_paydown") secondaryLanes.push("debt_paydown");
+  if (asksAboutRecurring && primaryLane !== "recurring_review") secondaryLanes.push("recurring_review");
+  if (asksAboutInvesting && primaryLane !== "investment_contribution") secondaryLanes.push("investment_contribution");
+  if (asksAboutCash && primaryLane !== "cash_deployment") secondaryLanes.push("cash_deployment");
+
+  let urgency = "normal";
+  if ((Number.isFinite(available) && available < 0) || (Number.isFinite(healthScore) && healthScore < 50)) {
+    urgency = "high";
+  } else if (
+    (Number.isFinite(available) && available < Math.max(250, weeklyAllowance || 0)) ||
+    (Number.isFinite(utilization) && utilization >= 30)
+  ) {
+    urgency = "medium";
+  }
+
+  const requiredToolsByLane = {
+    cash_deployment: ["cash_position", "budget_guardrails", "projection_guardrails"],
+    debt_paydown: ["debt_snapshot", "cash_position", "budget_guardrails"],
+    card_selection: ["card_portfolio", "cash_position", "debt_snapshot"],
+    recurring_review: ["recurring_load", "budget_guardrails", "cash_position"],
+    investment_contribution: ["investment_posture", "cash_position", "debt_snapshot", "projection_guardrails"],
+    planning_gap: ["cash_position", "debt_snapshot", "budget_guardrails", "investment_posture"],
+  };
+
+  return {
+    primaryLane,
+    secondaryLanes,
+    urgency,
+    responseMode: secondaryLanes.length > 0 ? "mixed" : "single-lane",
+    requiredTools: requiredToolsByLane[primaryLane] || requiredToolsByLane.planning_gap,
+    routingFocus: chatIntent?.id || "planning",
+    matchedSignals: chatIntent?.matchedSignals || [],
+  };
+}
+
+function buildFinanceActionTool(actionPacket = null) {
+  if (!actionPacket) return "";
+
+  return buildToolSection("finance_action_packet", [
+    `Primary lane: ${actionPacket.primaryLane}`,
+    `Urgency: ${actionPacket.urgency}`,
+    `Response mode: ${actionPacket.responseMode}`,
+    actionPacket.source ? `Source: ${actionPacket.source}` : null,
+    actionPacket.secondaryLanes?.length
+      ? `Secondary lanes: ${actionPacket.secondaryLanes.join(", ")}`
+      : "Secondary lanes: none",
+    actionPacket.requiredTools?.length
+      ? `Required evidence tools: ${actionPacket.requiredTools.join(", ")}`
+      : null,
+    actionPacket.matchedSignals?.length
+      ? `Matched message signals: ${actionPacket.matchedSignals.slice(0, 6).join(", ")}`
+      : "Matched message signals: none",
+  ]);
+}
+
+function getStructuredToolOrder(chatIntent, latestUserMessage = "", actionPacket = null) {
+  const normalized = String(latestUserMessage || "").toLowerCase();
+  const wantsCards =
+    normalized.includes("card") ||
+    normalized.includes("reward") ||
+    normalized.includes("travel") ||
+    normalized.includes("points");
+
+  const primaryLane = actionPacket?.primaryLane || "planning_gap";
+
+  if (primaryLane === "card_selection") {
+    return [
+      "finance_action_packet",
+      "card_portfolio",
+      "cash_position",
+      "debt_snapshot",
+      ...(actionPacket?.secondaryLanes?.includes("investment_contribution") ? ["investment_posture", "projection_guardrails"] : []),
+      "budget_guardrails",
+    ];
+  }
+  if (primaryLane === "debt_paydown") {
+    return wantsCards
+      ? ["finance_action_packet", "debt_snapshot", "cash_position", "card_portfolio", "budget_guardrails", "projection_guardrails"]
+      : ["finance_action_packet", "debt_snapshot", "cash_position", "budget_guardrails", "projection_guardrails", "recurring_load"];
+  }
+  if (primaryLane === "recurring_review") {
+    return ["finance_action_packet", "recurring_load", "budget_guardrails", "cash_position", "projection_guardrails"];
+  }
+  if (primaryLane === "investment_contribution") {
+    return wantsCards
+      ? ["finance_action_packet", "investment_posture", "cash_position", "debt_snapshot", "card_portfolio", "projection_guardrails"]
+      : ["finance_action_packet", "investment_posture", "cash_position", "debt_snapshot", "projection_guardrails"];
+  }
+  if (primaryLane === "cash_deployment") {
+    return ["finance_action_packet", "cash_position", "budget_guardrails", "projection_guardrails", "debt_snapshot", "investment_posture"];
+  }
+
+  if (chatIntent?.id === "invest") {
+    return wantsCards
+      ? ["finance_action_packet", "cash_position", "debt_snapshot", "card_portfolio", "investment_posture", "projection_guardrails"]
+      : ["finance_action_packet", "cash_position", "debt_snapshot", "investment_posture", "projection_guardrails"];
+  }
+  if (chatIntent?.id === "spending") {
+    return wantsCards
+      ? ["finance_action_packet", "cash_position", "debt_snapshot", "card_portfolio", "budget_guardrails", "recurring_load"]
+      : ["finance_action_packet", "cash_position", "debt_snapshot", "budget_guardrails", "recurring_load", "projection_guardrails"];
+  }
+  return wantsCards
+    ? ["finance_action_packet", "cash_position", "debt_snapshot", "card_portfolio", "budget_guardrails", "investment_posture"]
+    : ["finance_action_packet", "cash_position", "debt_snapshot", "budget_guardrails", "recurring_load", "investment_posture"];
+}
+
+function buildStructuredToolContext(financialBrief = null, chatIntent = null, latestUserMessage = "", actionPacket = null) {
+  if (!financialBrief || typeof financialBrief !== "object") return "";
+
+  const toolBuilders = {
+    finance_action_packet: () => buildFinanceActionTool(actionPacket),
+    cash_position: buildCashPositionTool,
+    debt_snapshot: buildDebtSnapshotTool,
+    recurring_load: buildRecurringLoadTool,
+    budget_guardrails: buildBudgetGuardrailsTool,
+    investment_posture: buildInvestmentPostureTool,
+    card_portfolio: buildCardPortfolioTool,
+    projection_guardrails: buildProjectionGuardrailsTool,
+  };
+
+  const sections = getStructuredToolOrder(chatIntent, latestUserMessage, actionPacket)
+    .map((toolId) => toolBuilders[toolId]?.(financialBrief))
+    .filter(Boolean);
+
+  if (sections.length === 0) return "";
+
+  return `## Structured Finance Tools
+These server-side tool outputs were assembled from the app state before prompt construction.
+- Treat them as the primary source of truth.
+- If a tool says the data is partial or scoped, preserve that limitation in the answer.
+- Use the narrative context below only to add supporting detail, not to override these tool outputs.
+
+${sections.join("\n\n")}`;
+}
+
+function buildFinanceActionContract(actionPacket = null) {
+  const primaryLane = actionPacket?.primaryLane || "planning_gap";
+  const secondaryLaneText = actionPacket?.secondaryLanes?.length
+    ? actionPacket.secondaryLanes.join(", ")
+    : "none";
+  const urgencyLine = actionPacket?.urgency ? `- Current urgency: ${actionPacket.urgency}.` : "";
+  const evidenceLine = actionPacket?.requiredTools?.length
+    ? `- Required evidence tools for this answer: ${actionPacket.requiredTools.join(", ")}.`
+    : "";
+  const sourceLine = actionPacket?.source ? `- Action packet source: ${actionPacket.source}.` : "";
+
+  return `## Finance Action Contract
+Before writing, commit to one primary action lane and make the answer cohere around it.
+- Allowed primary lanes: cash_deployment, debt_paydown, card_selection, recurring_review, investment_contribution, planning_gap.
+- Pick the single best lane for the user's actual question, not every lane that could apply.
+- If the question is mixed, choose a primary lane, answer it fully, and keep any secondary lane to one short paragraph or one bullet.
+- If decisive data is missing, still give the best provisional recommendation first and name the smallest missing datapoint that would change the call.
+- Never present caveat-dependent card, budget, or investment advice as unconditional.
+- Current expected primary lane: ${primaryLane}.
+- Allowed secondary lanes for this response: ${secondaryLaneText}.
+${urgencyLine}
+${evidenceLine}
+${sourceLine}`;
+}
+
+function normalizeNativeActionPacket(nativeActionPacket = null, fallbackPacket = null) {
+  if (!nativeActionPacket || typeof nativeActionPacket !== "object") return fallbackPacket;
+
+  const allowed = new Set([
+    "cash_deployment",
+    "debt_paydown",
+    "card_selection",
+    "recurring_review",
+    "investment_contribution",
+    "planning_gap",
+  ]);
+  const primaryLane = allowed.has(nativeActionPacket.primaryLane) ? nativeActionPacket.primaryLane : fallbackPacket?.primaryLane;
+  if (!primaryLane) return fallbackPacket;
+
+  const secondaryLanes = Array.isArray(nativeActionPacket.secondaryLanes)
+    ? nativeActionPacket.secondaryLanes.filter((lane) => allowed.has(lane) && lane !== primaryLane)
+    : (fallbackPacket?.secondaryLanes || []);
+  const urgency = ["normal", "medium", "high"].includes(nativeActionPacket.urgency)
+    ? nativeActionPacket.urgency
+    : (fallbackPacket?.urgency || "normal");
+
+  return {
+    ...(fallbackPacket || {}),
+    ...nativeActionPacket,
+    primaryLane,
+    secondaryLanes,
+    urgency,
+    source: "provider-native-router",
+  };
+}
+
 /**
  * Build the complete chat system prompt.
  */
@@ -624,31 +1355,59 @@ export function getChatSystemPrompt(
   memoryBlock = "",
   decisionRecommendations = [],
   chatInputRisk = null,
-  budgetContext = null
+  budgetContext = null,
+  financialBrief = null,
+  latestUserMessage = "",
+  routingVariant = "default",
+  nativeActionPacket = null
 ) {
-  const context = buildFinancialContext(
-    current,
-    financialConfig,
-    cards,
-    renewals,
-    history,
-    computedStrategy,
-    trendContext,
-    budgetContext
-  );
+  const chatIntent = classifyChatIntent(latestUserMessage, routingVariant);
+  const fallbackActionPacket = buildFinanceActionPacket(chatIntent, latestUserMessage, financialBrief);
+  const actionPacket = normalizeNativeActionPacket(nativeActionPacket, fallbackActionPacket) || fallbackActionPacket;
+  const toolContext = financialBrief
+    ? buildStructuredToolContext(financialBrief, chatIntent, latestUserMessage, actionPacket)
+    : "";
+  const context = financialBrief
+    ? buildFinancialBriefContext(financialBrief, chatIntent)
+    : buildFinancialContext(
+        current,
+        financialConfig,
+        cards,
+        renewals,
+        history,
+        computedStrategy,
+        trendContext,
+        budgetContext
+      );
   const sanitizedPersonalRules = sanitizePersonalRules(personalRules);
+  const serverRoutingBlock = `
+## Server Intent Routing
+The backend already routed this query to ${chatIntent.agentLabel} based on the user's latest message.
+- Use that lens first.
+- Prioritize only the relevant financial context below.
+- Do not spend tokens re-classifying the question unless the message is clearly mixed or ambiguous.`;
 
   const personaName = persona?.name || "Catalyst AI";
   const personaStyle = persona?.style ? `\n\nAdopt this advisor personality: ${persona.name} — ${persona.style}` : "";
 
   // Determine user's financial phase for context-aware advice
-  const fc = financialConfig || {};
-  const totalCardDebt = (cards || []).reduce((s, c) => s + (parseFloat(c.balance) || 0), 0);
-  const totalNonCardDebt = (fc.nonCardDebts || []).reduce((s, d) => s + (d.balance || 0), 0);
+  const briefProfile = financialBrief?.profile || {};
+  const briefSnapshot = financialBrief?.snapshot || {};
+  const briefCredit = financialBrief?.credit || {};
+  const briefDebt = financialBrief?.debt || {};
+  const fc = {
+    ...(financialConfig || {}),
+    birthYear: financialConfig?.birthYear ?? briefProfile.birthYear ?? null,
+    incomeType: financialConfig?.incomeType ?? briefProfile.incomeType ?? null,
+  };
+  const totalCardDebt = (cards || []).length > 0
+    ? (cards || []).reduce((s, c) => s + (parseFloat(c.balance) || 0), 0)
+    : Number(briefCredit.totalCardDebt) || 0;
+  const totalNonCardDebt = (fc.nonCardDebts || []).reduce((s, d) => s + (d.balance || 0), 0) || (Number(briefDebt.totalNonCardDebt) || 0);
   const totalDebt = totalCardDebt + totalNonCardDebt;
   const hasDebt = totalDebt > 0;
   const p = current?.parsed;
-  const healthScore = p?.healthScore?.score;
+  const healthScore = p?.healthScore?.score ?? briefSnapshot.healthScore ?? null;
   const isCrisis = healthScore != null && healthScore < 50;
   const isVariableIncome = fc.incomeType === "hourly" || fc.incomeType === "variable";
 
@@ -731,6 +1490,9 @@ ${retirementPhaseBlock}
 ${variableIncomeBlock}
 ${buildDecisionRulesBlock(decisionRecommendations)}
 ${buildInputRiskBlock(chatInputRisk)}
+${serverRoutingBlock}
+${buildFinanceActionContract(actionPacket)}
+${toolContext ? `\n\n${toolContext}` : ""}
 
 ## Visible Response Standard (MANDATORY)
 - Start with a one-sentence verdict that answers the question directly.
@@ -751,14 +1513,9 @@ You are ALWAYS aware of credit optimization — it costs nothing and runs parall
 - **Product Changes**: If a card has an annual fee the user can't justify, recommend a product change to a no-AF card from the same issuer before canceling — this preserves the credit age.
 - **Authorized User Strategy**: If the user has thin credit history, being added as an authorized user on a responsible person's old, high-limit card can instantly boost their score.
 
-## "Ensemble of Experts" Routing (MANDATORY)
-To provide the highest quality advice, you act as a Central Orchestrator managing three specialized 'agents' (Spending, Invest, Planning).
-For EVERY response, first prepare a \`<thought_process>\` block before your final answer.
-Inside \`<thought_process>\`:
-1. Classify the user's query and route it to ONE of the three agents: \`[Spending Agent]\`, \`[Invest Agent]\`, or \`[Planning Agent]\`.
-2. Perform a Chain of Thought from the perspective of that specific agent. Check the math. 
-3. Verify that your reasoning does not break any safety guardrails or checking floors.
-After closing \`</thought_process>\`, output your final, conversational response to the user. Do NOT mention the thought process or the agents in the clean output.
+## Internal Reasoning Protocol
+Before answering, use a hidden \`<thought_process>\` block to check the math, follow the routed specialist lens, and confirm you are not violating any safety guardrails.
+After closing \`</thought_process>\`, output only the clean user-facing answer.
 
 ## Wealth Building at Every Stage
 Investing is NOT just for people with $0 debt.Apply the right strategy for their phase:

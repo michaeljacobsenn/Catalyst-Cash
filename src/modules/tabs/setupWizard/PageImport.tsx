@@ -8,19 +8,20 @@ import { normalizeAppError } from "../../appErrors.js";
 import { downloadFromICloud } from "../../cloudSync.js";
 import { T } from "../../constants.js";
 import { decrypt, isEncrypted } from "../../crypto.js";
-import { loadWorkbookRows } from "../../excelWorkbook.js";
 import { log } from "../../logger.js";
+import { restoreSanitizedPlaidConnections } from "../../backup.js";
 import { isSecuritySensitiveKey } from "../../securityKeys.js";
-import { db, nativeExport } from "../../utils.js";
+import { db } from "../../utils.js";
 import { NavRow, WizBtn, WizField, WizInput } from "./primitives.js";
 import type {
   AppleSignInResult,
   BackupPayload,
-  ConnectionWithId,
   ToastApi,
 } from "./types.js";
 
 const loadAppleSignIn = () => import("@capacitor-community/apple-sign-in");
+const loadWorkbookClientModule = () => import("../../excelWorkbookClient.js");
+const loadNativeExportModule = () => import("../../nativeExport.js");
 
 interface PageImportProps {
   onNext: () => void;
@@ -59,6 +60,7 @@ export default function PageImport({
       for (let i = 0; i < len; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
+      const { loadWorkbookRows } = await loadWorkbookClientModule();
       const workbook = await loadWorkbookRows(bytes.buffer);
       const sheetName = workbook.sheetNames.find((name) => name.includes("Setup Data")) || workbook.sheetNames[0];
       if (!sheetName) return false;
@@ -98,32 +100,18 @@ export default function PageImport({
 
     const sanitizedPlaid = backup.data["plaid-connections-sanitized"];
     if (Array.isArray(sanitizedPlaid) && sanitizedPlaid.length > 0) {
-      const existing = ((await db.get("plaid-connections")) || []) as ConnectionWithId[];
-      const existingIds = new Set(existing.map((connection) => connection.id));
-      const merged = [...existing];
-      for (const connection of sanitizedPlaid) {
-        if (
-          typeof connection === "object" &&
-          connection !== null &&
-          "id" in connection &&
-          typeof connection.id === "string" &&
-          !existingIds.has(connection.id)
-        ) {
-          merged.push({ ...connection, _needsReconnect: true });
-        }
-      }
-      await db.set("plaid-connections", merged);
-      const reconnectCount = sanitizedPlaid.filter(
-        (connection) =>
-          typeof connection === "object" &&
-          connection !== null &&
-          "id" in connection &&
-          typeof connection.id === "string" &&
-          !existingIds.has(connection.id)
-      ).length;
+      const restoredPlaid = await restoreSanitizedPlaidConnections(sanitizedPlaid);
+      const reconnectCount = restoredPlaid.reconnectCount;
       if (reconnectCount > 0) {
         toast?.info?.(
           `🏦 ${reconnectCount} bank connection${reconnectCount > 1 ? "s" : ""} need re-linking — go to Settings → Plaid after setup`,
+          { duration: 6000 }
+        );
+      }
+      const placeholderCount = restoredPlaid.placeholderCardCount + restoredPlaid.placeholderBankAccountCount;
+      if (placeholderCount > 0) {
+        toast?.info?.(
+          `Recovered ${placeholderCount} reconnect-ready account${placeholderCount > 1 ? "s" : ""} so your portfolio stays intact while you relink.`,
           { duration: 6000 }
         );
       }
@@ -193,6 +181,7 @@ export default function PageImport({
       reader.onerror = () => reject(new Error("Could not read spreadsheet from iOS filesystem."));
       reader.readAsArrayBuffer(file);
     });
+    const { loadWorkbookRows } = await loadWorkbookClientModule();
     const workbook = await loadWorkbookRows(buf);
 
     const config: Record<string, unknown> = {};
@@ -311,6 +300,7 @@ export default function PageImport({
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
+      const { nativeExport } = await loadNativeExportModule();
       await nativeExport(filename, base64data, mimeType, true);
     } catch (error: unknown) {
       const failure = normalizeAppError(error, { context: "restore" });
@@ -523,6 +513,7 @@ export default function PageImport({
                           _needsReconnect: true,
                         }));
                         await db.set("plaid-connections", staleConnections);
+                        await restoreSanitizedPlaidConnections(staleConnections);
 
                         setTimeout(() => {
                           toast?.warn?.("Your bank accounts need to be re-linked in Settings → Plaid.", {

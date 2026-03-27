@@ -54,6 +54,43 @@ describe("renewals helpers", () => {
     expect(result).not.toHaveProperty("chargedTo");
   });
 
+  it("buildRenewalDraft clears optional linkage fields when the edit form removes them", () => {
+    const result = buildRenewalDraft(
+      {
+        name: "Spotify",
+        amount: 11.99,
+        interval: 1,
+        intervalUnit: "months",
+        cadence: "monthly",
+        source: "Checking",
+        chargedTo: "Amex Gold",
+        chargedToId: "card_1",
+        chargedToType: "card",
+        category: "streaming",
+        nextDue: "2026-04-01",
+      },
+      {
+        name: "Spotify",
+        amount: "11.99",
+        interval: 1,
+        intervalUnit: "months",
+        source: "",
+        chargedTo: "",
+        chargedToId: "",
+        chargedToType: "",
+        category: "",
+        nextDue: "",
+      }
+    );
+
+    expect(result).not.toHaveProperty("source");
+    expect(result).not.toHaveProperty("chargedTo");
+    expect(result).not.toHaveProperty("chargedToId");
+    expect(result).not.toHaveProperty("chargedToType");
+    expect(result).not.toHaveProperty("category");
+    expect(result).not.toHaveProperty("nextDue");
+  });
+
   it("getCancelUrl resolves exact and fuzzy merchant matches", () => {
     expect(getCancelUrl("Netflix")).toContain("netflix");
     expect(getCancelUrl("Netflx")).toContain("netflix");

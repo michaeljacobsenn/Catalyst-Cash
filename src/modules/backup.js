@@ -4,11 +4,19 @@
 // ═══════════════════════════════════════════════════════════════
 import { APP_VERSION } from "./constants.js";
 import { decrypt, encrypt, isEncrypted } from "./crypto.js";
-import { loadWorkbookRows } from "./excelWorkbook.js";
+import { ensureConnectionAccountsPresent, materializeManualFallbackForConnections } from "./plaid.js";
 import { FULL_PROFILE_QA_ACTIVE_KEY, shouldRecoverFromFullProfileQaSeed } from "./qaSeed.js";
 import { relinkRenewalPaymentMethods } from "./renewalPaymentLinking.js";
 import { isSafeImportKey, isSecuritySensitiveKey, sanitizePlaidForBackup } from "./securityKeys.js";
-import { db, nativeExport } from "./utils.js";
+import { db } from "./utils.js";
+
+async function loadWorkbookClientModule() {
+  return import("./excelWorkbookClient.js");
+}
+
+async function loadNativeExportModule() {
+  return import("./nativeExport.js");
+}
 
 const SUPPORTED_BACKUP_EXTENSIONS = [".enc", ".json"];
 const SUPPORTED_BACKUP_MIME_TYPES = new Set([
@@ -93,6 +101,105 @@ export function sanitizeBackupPortfolioData({
     cards: sanitizedCards,
     bankAccounts: sanitizedBankAccounts,
     renewals: relinkedRenewals,
+  };
+}
+
+export async function restoreSanitizedPlaidConnections(sanitizedPlaid = []) {
+  if (!Array.isArray(sanitizedPlaid) || sanitizedPlaid.length === 0) {
+    return {
+      reconnectCount: 0,
+      placeholderCardCount: 0,
+      placeholderBankAccountCount: 0,
+      placeholderInvestmentCount: 0,
+      relinkedRenewalCount: 0,
+    };
+  }
+
+  const existingConnections = (await db.get("plaid-connections")) || [];
+  const existingIds = new Set(existingConnections.map((connection) => String(connection?.id || "").trim()).filter(Boolean));
+  const mergedConnections = [...existingConnections];
+  let reconnectCount = 0;
+
+  for (const connection of sanitizedPlaid) {
+    if (
+      typeof connection === "object" &&
+      connection !== null &&
+      "id" in connection &&
+      typeof connection.id === "string" &&
+      !existingIds.has(connection.id)
+    ) {
+      mergedConnections.push({ ...connection, _needsReconnect: true });
+      reconnectCount++;
+    }
+  }
+
+  await db.set("plaid-connections", mergedConnections);
+
+  const reconnectConnections = mergedConnections.filter(
+    (connection) => connection?._needsReconnect && Array.isArray(connection.accounts) && connection.accounts.length > 0
+  );
+  if (reconnectConnections.length === 0) {
+    return {
+      reconnectCount,
+      placeholderCardCount: 0,
+      placeholderBankAccountCount: 0,
+      placeholderInvestmentCount: 0,
+      relinkedRenewalCount: 0,
+    };
+  }
+
+  let cards = (await db.get("card-portfolio")) || [];
+  let bankAccounts = (await db.get("bank-accounts")) || [];
+  const financialConfig = ((await db.get("financial-config")) || {});
+  let plaidInvestments = Array.isArray(financialConfig.plaidInvestments) ? financialConfig.plaidInvestments : [];
+  let placeholderCardCount = 0;
+  let placeholderBankAccountCount = 0;
+  let placeholderInvestmentCount = 0;
+
+  for (const connection of reconnectConnections) {
+    const hydrated = ensureConnectionAccountsPresent(connection, cards, bankAccounts, null, plaidInvestments);
+    cards = hydrated.updatedCards;
+    bankAccounts = hydrated.updatedBankAccounts;
+    plaidInvestments = hydrated.updatedPlaidInvestments;
+    placeholderCardCount += hydrated.importedCards;
+    placeholderBankAccountCount += hydrated.importedBankAccounts;
+    placeholderInvestmentCount += hydrated.importedPlaidInvestments;
+  }
+
+  const reconnectIds = reconnectConnections
+    .map((connection) => String(connection?.id || "").trim())
+    .filter(Boolean);
+
+  const fallbackState = materializeManualFallbackForConnections(cards, bankAccounts, reconnectIds, {
+    keepLinkMetadata: true,
+  });
+  if (fallbackState.changed) {
+    cards = fallbackState.updatedCards;
+    bankAccounts = fallbackState.updatedBankAccounts;
+  }
+
+  await db.set("card-portfolio", cards);
+  await db.set("bank-accounts", bankAccounts);
+  if (placeholderInvestmentCount > 0 || Array.isArray(financialConfig.plaidInvestments)) {
+    await db.set("financial-config", { ...financialConfig, plaidInvestments });
+  }
+
+  const renewals = (await db.get("renewals")) || [];
+  const relinked = relinkRenewalPaymentMethods(renewals, cards, bankAccounts);
+  if (relinked.changed) {
+    await db.set("renewals", relinked.renewals);
+  }
+
+  const relinkedRenewalCount = relinked.changed
+    ? relinked.renewals.filter((renewal, index) => JSON.stringify(renewal) !== JSON.stringify(renewals[index])).length
+    : 0;
+
+  return {
+    reconnectCount,
+    placeholderCardCount,
+    placeholderBankAccountCount,
+    placeholderInvestmentCount,
+    relinkedRenewalCount,
   };
 }
 
@@ -220,6 +327,7 @@ export async function exportBackup(passphrase) {
   const envelope = await encrypt(JSON.stringify(backup), passphrase);
   const dateStr = exportedAt.split("T")[0];
   const filename = `CatalystCash_Backup_${dateStr}.enc`;
+  const { nativeExport } = await loadNativeExportModule();
   await nativeExport(filename, JSON.stringify(envelope), "application/octet-stream");
   return { count: Object.keys(backup.data).length, exportedAt, filename, plaidConnectionCount };
 }
@@ -266,6 +374,7 @@ export async function importBackup(file, getPassphrase) {
         }
 
         if (backup && backup.type === "spreadsheet-backup") {
+          const { loadWorkbookRows } = await loadWorkbookClientModule();
           const binary_string = window.atob(backup.base64);
           const len = binary_string.length;
           const bytes = new Uint8Array(len);
@@ -384,17 +493,8 @@ export async function importBackup(file, getPassphrase) {
         const sanitizedPlaid = backup.data["plaid-connections-sanitized"];
         let plaidReconnectCount = 0;
         if (Array.isArray(sanitizedPlaid) && sanitizedPlaid.length > 0) {
-          // Merge with any existing connections (don't overwrite live tokens)
-          const existing = (await db.get("plaid-connections")) || [];
-          const existingIds = new Set(existing.map(c => c.id));
-          const merged = [...existing];
-          for (const conn of sanitizedPlaid) {
-            if (!existingIds.has(conn.id)) {
-              merged.push({ ...conn, _needsReconnect: true });
-              plaidReconnectCount++;
-            }
-          }
-          await db.set("plaid-connections", merged);
+          const restoredPlaid = await restoreSanitizedPlaidConnections(sanitizedPlaid);
+          plaidReconnectCount = restoredPlaid.reconnectCount;
           count++;
         }
 

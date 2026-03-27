@@ -105,6 +105,26 @@ export function PagePass2({ data, onChange, onNext, onBack, onSkip }: PagePassSh
         onChange={v => onChange("isContractor", v)}
       />
 
+      <div style={{ margin: "28px 0 14px", borderTop: `1px solid ${T.border.subtle}`, paddingTop: 18 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, color: T.text.primary, margin: "0 0 6px 0" }}>
+          Debt Defaults
+        </h3>
+        <p style={{ fontSize: 12, color: T.text.muted, margin: "0 0 14px 0", lineHeight: 1.5 }}>
+          Used only when a card or debt is missing its own APR.
+        </p>
+      </div>
+
+      <WizField label="Default APR (%)" hint="Safe fallback for new unpaid balances without a known APR">
+        <WizInput
+          type="number"
+          inputMode="decimal"
+          pattern="[0-9]*"
+          value={data.defaultAPR}
+          onChange={v => onChange("defaultAPR", v)}
+          placeholder="e.g. 24.99"
+        />
+      </WizField>
+
       <NavRow onBack={onBack} onNext={onNext} onSkip={onSkip} />
     </div>
   );

@@ -1,21 +1,20 @@
 // ═══════════════════════════════════════════════════════════════
 // WIDGET BRIDGE — Catalyst Cash
 //
-// Writes the latest health score + key metrics to a shared
-// App Group UserDefaults key. This is the data layer that a
-// native WidgetKit extension reads to display on the iOS
-// Home Screen.
+// Persists the latest health score + key metrics in app storage.
+// If a native widget bridge plugin is added later, this module
+// can also notify it to refresh its timeline.
 //
 // Usage: call updateWidgetData() after every successful audit.
 // ═══════════════════════════════════════════════════════════════
 
-  import { Capacitor } from "@capacitor/core";
-  import { Preferences } from "@capacitor/preferences";
+import { Capacitor } from "@capacitor/core";
+import { Preferences } from "@capacitor/preferences";
 
 const WIDGET_KEY = "catalyst-widget-data";
 
 /**
- * Write the latest snapshot data for the iOS widget.
+ * Write the latest snapshot data for widget surfaces.
  * Falls back gracefully on web — no errors thrown.
  */
 export async function updateWidgetData({
@@ -58,9 +57,7 @@ export async function updateWidgetData({
       value: JSON.stringify(widgetPayload),
     });
 
-    // On iOS, also write to the shared App Group UserDefaults
-    // so the WidgetKit extension can access it.
-    // This requires a native plugin (future: CatalystWidgetPlugin).
+    // If a native widget bridge plugin exists, ask it to refresh.
     if (Capacitor.getPlatform() === "ios") {
       try {
         // @ts-expect-error — future native plugin

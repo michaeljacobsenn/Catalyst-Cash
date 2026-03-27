@@ -51,12 +51,13 @@
     X,
     Zap
   } from "../icons";
-  import { fetchAllTransactions,getConnections,getStoredTransactions } from "../plaid.js";
+  import { fetchAllTransactions,getConnections } from "../plaid.js";
   import { log } from "../logger.js";
+  import { saveTransactionLinkOverride } from "../transactionLinkOverrides.js";
   import { Card } from "../ui.js";
-  import { nativeExport } from "../utils.js";
+  import { applyStoredTransactionOverrides, getHydratedStoredTransactions, normalizeStoredTransactions } from "../storedTransactions.js";
   import "./TransactionFeed.css";
-  import { buildCSV, buildRewardComparison, formatDateHeader, formatMoney, formatRewardRate, formatTransactionTime, getCategoryMeta, isTransactionInSameMonth, normalizeTransactionResult } from "./transactionFeed/helpers";
+  import { buildCSV, buildRewardComparison, estimateRewardCapUsage, formatDateHeader, formatMoney, formatRewardRate, formatTransactionTime, getCategoryMeta, isTransactionInSameMonth } from "./transactionFeed/helpers";
   import { useTransactionFeedGestures } from "./transactionFeed/useTransactionFeedGestures";
 
 interface ToastApi {
@@ -73,12 +74,15 @@ interface TransactionFeedProps {
 
 interface TransactionRewardComparison {
   usedDisplayName: string;
+  bestCardNotes?: string | null;
   actualYield: number;
   optimalYield: number;
   actualRewardValue: number;
   optimalRewardValue: number;
   incrementalRewardValue: number;
   usedCardMatched: boolean;
+  usedCardMatchConfidence?: "high" | "medium" | "low" | "none";
+  usedCardMatchSource?: string;
 }
 
 interface TransactionRecord {
@@ -88,11 +92,20 @@ interface TransactionRecord {
   description?: string;
   name?: string;
   category?: string;
+  subcategory?: string;
   pending?: boolean;
   institution?: string;
   accountName?: string;
+  accountId?: string | null;
+  linkedCardId?: string | null;
+  linkedBankAccountId?: string | null;
+  merchantId?: string | null;
+  merchantMcc?: number | string | null;
+  merchantKey?: string | null;
+  merchantBrand?: string | null;
+  merchantConfidence?: string | null;
   isCredit?: boolean;
-  optimalCard?: { name?: string; effectiveYield?: number } | null;
+  optimalCard?: { name?: string; effectiveYield?: number; rewardNotes?: string | null } | null;
   usedOptimal?: boolean;
   rewardComparison?: TransactionRewardComparison | null;
 }
@@ -102,6 +115,8 @@ interface LegacyTransactionResult {
   data?: TransactionRecord[];
   fetchedAt: string;
 }
+
+type TransactionLinkOverrideMap = Record<string, { linkedCardId?: string | null; linkedBankAccountId?: string | null; updatedAt?: string }>;
 
 interface PlaidConnection {
   id: string;
@@ -113,6 +128,7 @@ interface PlaidConnection {
 }
 
 type IconComponent = React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+
 // ── Module-scoped icon map (created once, shared across renders) ──
 const CATEGORY_ICON_MAP: Record<string, IconComponent> = {
   AlertCircle,
@@ -163,22 +179,25 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [visibleCount, setVisibleCount] = useState(50);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [reviewingTransactionId, setReviewingTransactionId] = useState<string | null>(null);
+  const [transactionLinkOverrides, setTransactionLinkOverrides] = useState<TransactionLinkOverrideMap>({});
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const activeCreditCards = useMemo(() => cards.filter(card => card.type === "credit" || !card.type), [cards]);
 
   // ── Load stored transactions on mount ──
   useEffect(() => {
     (async () => {
       try {
-        const [storedTransactions, connections] = await Promise.all([
-          getStoredTransactions(),
+        const [stored, connections] = await Promise.all([
+          getHydratedStoredTransactions(),
           getConnections(),
         ]);
-        const stored = normalizeTransactionResult(storedTransactions as LegacyTransactionResult | null);
         if (stored?.data?.length) {
           setTransactions(stored.data as TransactionRecord[]);
           setFetchedAt(stored.fetchedAt);
         }
+        setTransactionLinkOverrides((stored?.overrides || {}) as TransactionLinkOverrideMap);
         setPlaidConnections((connections || []) as PlaidConnection[]);
       } catch (e) {
         log.warn("transactions", "Failed to load transaction feed cache", {
@@ -195,14 +214,14 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
     setRefreshing(true);
     haptic.light();
     try {
-      const result = normalizeTransactionResult(
+      const result = normalizeStoredTransactions(
         (await fetchAllTransactions(
           proEnabled ? 30 : 14,
           proEnabled ? undefined : { maxTransactions: 5, categorizeWithAi: false }
         )) as LegacyTransactionResult
       );
       const connections = (await getConnections()) as PlaidConnection[];
-      setTransactions(result.data as TransactionRecord[]);
+      setTransactions(applyStoredTransactionOverrides(result.data as TransactionRecord[], transactionLinkOverrides));
       setFetchedAt(result.fetchedAt);
       setPlaidConnections(connections || []);
       appWindow.toast?.success?.(
@@ -218,7 +237,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
     } finally {
       setRefreshing(false);
     }
-  }, [appWindow, proEnabled]);
+  }, [appWindow, proEnabled, transactionLinkOverrides]);
 
   const {
     slideOffset,
@@ -345,25 +364,30 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
     const analyzableTxns = filtered.filter(
       t => !t.isCredit && t.category && t.amount > 0 && isTransactionInSameMonth(t.date)
     );
+    const rewardCapUsage = estimateRewardCapUsage(cards as PortfolioCard[], analyzableTxns);
     
     for (const txn of analyzableTxns) {
       const copy = txnMap.get(txn) || { ...txn };
       const comparison = buildRewardComparison(
         copy,
         cards as PortfolioCard[],
-        financialConfig?.customValuations as CustomValuations | undefined
+        financialConfig?.customValuations as CustomValuations | undefined,
+        { usedCaps: rewardCapUsage }
       );
       if (!comparison) continue;
 
       copy.optimalCard = comparison.bestCard;
       copy.rewardComparison = {
         usedDisplayName: comparison.usedDisplayName,
+        bestCardNotes: comparison.bestCardNotes,
         actualYield: comparison.actualYield,
         optimalYield: comparison.optimalYield,
         actualRewardValue: comparison.actualRewardValue,
         optimalRewardValue: comparison.optimalRewardValue,
         incrementalRewardValue: comparison.incrementalRewardValue,
         usedCardMatched: comparison.usedCardMatched,
+        usedCardMatchConfidence: comparison.usedCardMatchConfidence,
+        usedCardMatchSource: comparison.usedCardMatchSource,
       };
 
       if (!comparison.usedOptimal) {
@@ -383,6 +407,15 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
     };
   }, [filtered, cards, financialConfig]);
 
+  const handleOverrideTransactionLink = useCallback(async (txn: TransactionRecord, override: { linkedCardId?: string | null; linkedBankAccountId?: string | null }) => {
+    if (!txn.id) return;
+    const nextOverrides = await saveTransactionLinkOverride(txn.id, override);
+    setTransactionLinkOverrides(nextOverrides as TransactionLinkOverrideMap);
+    setTransactions(prev => applyStoredTransactionOverrides(prev, nextOverrides as TransactionLinkOverrideMap));
+    setReviewingTransactionId(null);
+    appWindow.toast?.success?.("Transaction payment method updated");
+  }, [appWindow]);
+
   // ── Infinite scroll ──
   const handleScroll = useCallback(() => {
     if (!proEnabled) return;
@@ -400,6 +433,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
     try {
       const csv = buildCSV(filtered);
       const dateStr = new Date().toISOString().split("T")[0];
+      const { nativeExport } = await import("../nativeExport.js");
       await nativeExport(`CatalystCash_Transactions_${dateStr}.csv`, csv, "text/csv");
     } catch {
       appWindow.toast?.error?.("Export failed");
@@ -412,6 +446,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
     try {
       const payload = { app: "Catalyst Cash", exportedAt: new Date().toISOString(), transactions: filtered };
       const dateStr = new Date().toISOString().split("T")[0];
+      const { nativeExport } = await import("../nativeExport.js");
       await nativeExport(
         `CatalystCash_Transactions_${dateStr}.json`,
         JSON.stringify(payload, null, 2),
@@ -1364,6 +1399,136 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                               )}
                               {txn.usedOptimal && <> • {formatRewardRate(txn.rewardComparison.actualYield)}</>}
                             </span>
+                            {txn.rewardComparison.bestCardNotes && (
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  color: T.text.dim,
+                                  lineHeight: 1.35,
+                                  display: "block",
+                                  maxWidth: "100%",
+                                }}
+                              >
+                                Card caveat: {txn.rewardComparison.bestCardNotes}
+                              </span>
+                            )}
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                              <span
+                                style={{
+                                  fontSize: 9,
+                                  fontWeight: 700,
+                                  color:
+                                    txn.rewardComparison.usedCardMatchConfidence === "high"
+                                      ? T.status.green
+                                      : txn.rewardComparison.usedCardMatchConfidence === "medium"
+                                        ? T.status.amber
+                                        : T.status.red,
+                                  background:
+                                    txn.rewardComparison.usedCardMatchConfidence === "high"
+                                      ? T.status.greenDim
+                                      : txn.rewardComparison.usedCardMatchConfidence === "medium"
+                                        ? T.status.amberDim
+                                        : T.status.redDim,
+                                  border: `1px solid ${
+                                    txn.rewardComparison.usedCardMatchConfidence === "high"
+                                      ? T.status.green
+                                      : txn.rewardComparison.usedCardMatchConfidence === "medium"
+                                        ? T.status.amber
+                                        : T.status.red
+                                  }30`,
+                                  padding: "2px 6px",
+                                  borderRadius: 999,
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.03em",
+                                }}
+                              >
+                                Match {txn.rewardComparison.usedCardMatchConfidence || "none"}
+                              </span>
+                              <button
+                                onClick={() => setReviewingTransactionId(reviewingTransactionId === txn.id ? null : txn.id || null)}
+                                style={{
+                                  padding: "4px 8px",
+                                  borderRadius: 8,
+                                  border: `1px solid ${T.border.default}`,
+                                  background: T.bg.surface,
+                                  color: T.text.secondary,
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Review link
+                              </button>
+                            </div>
+                            {reviewingTransactionId === txn.id && (
+                              <div
+                                style={{
+                                  marginTop: 2,
+                                  width: "100%",
+                                  padding: 10,
+                                  borderRadius: T.radius.md,
+                                  border: `1px solid ${T.border.default}`,
+                                  background: T.bg.surface,
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: 8,
+                                }}
+                              >
+                                <span style={{ fontSize: 10, color: T.text.dim, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                                  Reconcile payment method
+                                </span>
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                                  <button
+                                    onClick={() => void handleOverrideTransactionLink(txn, { linkedCardId: null, linkedBankAccountId: "manual-bank" })}
+                                    style={{
+                                      padding: "6px 9px",
+                                      borderRadius: 8,
+                                      border: `1px solid ${T.border.default}`,
+                                      background: T.bg.card,
+                                      color: T.text.secondary,
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    Mark as debit/bank
+                                  </button>
+                                  <button
+                                    onClick={() => void handleOverrideTransactionLink(txn, { linkedCardId: null, linkedBankAccountId: null })}
+                                    style={{
+                                      padding: "6px 9px",
+                                      borderRadius: 8,
+                                      border: `1px solid ${T.border.default}`,
+                                      background: T.bg.card,
+                                      color: T.text.secondary,
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    Use auto match
+                                  </button>
+                                  {activeCreditCards.map((cardOption) => (
+                                    <button
+                                      key={cardOption.id}
+                                      onClick={() => void handleOverrideTransactionLink(txn, { linkedCardId: String(cardOption.id), linkedBankAccountId: null })}
+                                      style={{
+                                        padding: "6px 9px",
+                                        borderRadius: 8,
+                                        border: `1px solid ${T.border.default}`,
+                                        background: txn.linkedCardId === cardOption.id ? T.accent.primaryDim : T.bg.card,
+                                        color: txn.linkedCardId === cardOption.id ? T.accent.primary : T.text.secondary,
+                                        fontSize: 10,
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      {cardOption.nickname || cardOption.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

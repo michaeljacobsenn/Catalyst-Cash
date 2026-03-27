@@ -13,10 +13,10 @@ import {
   import type { CatalystCashConfig } from "../../types/index.js";
   import { setActiveCurrencyCode } from "../currency.js";
   import { log } from "../logger.js";
-  import { cancelPaydayReminder,getNotificationPermission,schedulePaydayReminder } from "../notifications.js";
+  import { cancelPaydayReminder,getNotificationPermission,requestNotificationPermission,schedulePaydayReminder } from "../notifications.js";
   import { DEFAULT_MODEL_ID,DEFAULT_PROVIDER_ID,getProvider } from "../providers.js";
   import { getSecretStorageStatus,migrateToSecureItem } from "../secureStore.js";
-  import { getPreferredModelForTier,getRawTier,normalizeModelForTier } from "../subscription.js";
+  import { getCurrentTier,getPreferredModelForTier,normalizeModelForTier } from "../subscription.js";
   import { db } from "../utils.js";
 
 interface ProviderConfig {
@@ -349,15 +349,15 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         setShowNotifPrePrompt(true);
       }
 
-      const rawTier = await withSettingsBootFallback(
+      const effectiveTier = await withSettingsBootFallback(
         "subscription-tier",
-        () => getRawTier(),
-        { id: "free" }
+        () => getCurrentTier(),
+        { id: "pro" }
       );
       const validProvider = getProvider(provId || DEFAULT_PROVIDER_ID) as ProviderConfig;
       const validModelId = normalizeModelForTier(
-        rawTier.id,
-        modId || getPreferredModelForTier(rawTier.id) || DEFAULT_MODEL_ID,
+        effectiveTier.id,
+        modId || getPreferredModelForTier(effectiveTier.id) || DEFAULT_MODEL_ID,
         validProvider.id
       );
       setAiProvider(validProvider.id);
@@ -520,7 +520,6 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     dismissNotifPrePrompt: async (allowed: boolean) => {
       setShowNotifPrePrompt(false);
       if (allowed) {
-        const { requestNotificationPermission } = await import("../notifications.js");
         const granted = await requestNotificationPermission();
         setNotifPermission(granted ? "granted" : "denied");
         if (granted) {

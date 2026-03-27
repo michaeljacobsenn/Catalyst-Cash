@@ -17,7 +17,7 @@
   import { setActiveCurrencyCode } from "../currency.js";
   import { AI_PROVIDERS } from "../providers.js";
   import { getSecretStorageStatus,setSecureItem } from "../secureStore.js";
-  import { getPreferredModelForTier,getRawTier,normalizeModelForTier,shouldShowGating } from "../subscription.js";
+  import { getCurrentTier,getPreferredModelForTier,normalizeModelForTier,shouldShowGating } from "../subscription.js";
   import { useToast } from "../Toast.js";
   import { db } from "../utils.js";
   import { PageWelcome } from "./setupWizard/PageWelcome.js";
@@ -208,7 +208,7 @@ export default function SetupWizard() {
     useSecurity() as SecurityContextValue;
   const { setOnboardingComplete, navTo } = useNavigation() as NavigationContextValue;
   const { themeMode, setThemeMode, setFinancialConfig } = useSettings();
-  const [userIsPro, setUserIsPro] = useState<boolean>(false);
+  const [userHasUnlockedProAccess, setUserHasUnlockedProAccess] = useState<boolean>(false);
   const toast = useToast() as ToastApi;
 
   const {
@@ -264,7 +264,7 @@ export default function SetupWizard() {
   });
   const [ai, setAi] = useState<SetupWizardAiState>({
     aiProvider: "backend",
-    aiModel: getPreferredModelForTier("free"),
+    aiModel: getPreferredModelForTier(shouldShowGating() ? "free" : "pro"),
     apiKey: "",
   });
   const [security, setSecurity] = useState<SetupWizardSecurityState>({
@@ -273,7 +273,7 @@ export default function SetupWizard() {
     lockTimeout: 0,
     useFaceId: false,
   });
-  const hasPremiumAiAccess = userIsPro || !shouldShowGating();
+  const hasPremiumAiAccess = userHasUnlockedProAccess || !shouldShowGating();
 
   const hydrateWizardFromStorage = useCallback(
     async (options: { syncContexts?: boolean } = {}): Promise<void> => {
@@ -359,14 +359,14 @@ export default function SetupWizard() {
         setContextRenewals(nextRenewals);
       }
 
-      const tierId = userIsPro ? "pro" : "free";
+      const tierId = userHasUnlockedProAccess ? "pro" : "free";
       setAi((prev) => ({
         ...prev,
         aiProvider: (prov as string | null) ?? prev.aiProvider,
         aiModel: normalizeModelForTier(tierId, (mod as string | null) ?? prev.aiModel, (prov as string | null) ?? prev.aiProvider),
       }));
     },
-    [setContextBankAccounts, setContextCards, setContextRenewals, setFinancialConfig, userIsPro]
+    [setContextBankAccounts, setContextCards, setContextRenewals, setFinancialConfig, userHasUnlockedProAccess]
   );
 
   useEffect(() => {
@@ -374,9 +374,9 @@ export default function SetupWizard() {
   }, [step]);
 
   useEffect(() => {
-    void getRawTier()
-      .then(tier => setUserIsPro(tier.id === "pro"))
-      .catch(() => setUserIsPro(false));
+    void getCurrentTier()
+      .then(tier => setUserHasUnlockedProAccess(tier.id === "pro"))
+      .catch(() => setUserHasUnlockedProAccess(false));
   }, []);
 
   useEffect(() => {
@@ -392,7 +392,7 @@ export default function SetupWizard() {
     setAi((prev) => {
       const next = { ...prev, [key]: value };
       if (key === "aiProvider") {
-        next.aiModel = normalizeModelForTier(userIsPro ? "pro" : "free", null, String(value || "backend"));
+        next.aiModel = normalizeModelForTier(userHasUnlockedProAccess ? "pro" : "free", null, String(value || "backend"));
       }
       return next;
     });

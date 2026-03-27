@@ -2,6 +2,7 @@
   import { lazy,Suspense,useCallback,useEffect,useRef,useState } from "react";
   import { normalizeAppError } from "../appErrors.js";
   import { performCloudBackup } from "../backup.js";
+  import { beginBiometricInteraction,endBiometricInteraction } from "../biometricSession.js";
   import { APP_VERSION,T } from "../constants.js";
   import { CURRENCIES } from "../currency.js";
   import {
@@ -153,6 +154,7 @@ export default function SettingsTab({
   const [showHouseholdModal, setShowHouseholdModal] = useState(false);
   const [hsInputId, setHsInputId] = useState("");
   const [hsInputPasscode, setHsInputPasscode] = useState("");
+  const [isUpdatingBiometricPreference, setIsUpdatingBiometricPreference] = useState(false);
 
   useEffect(() => {
     // Initialization now handled at root level in App.jsx
@@ -456,6 +458,7 @@ export default function SettingsTab({
   };
 
   const handleUseFaceIdToggle = async (enable: boolean) => {
+    if (isUpdatingBiometricPreference) return;
     if (secretStorageStatus.mode === "native-unavailable") {
       window.toast?.error?.("Biometric unlock requires native secure storage, which is currently unavailable.");
       return;
@@ -471,6 +474,8 @@ export default function SettingsTab({
       return;
     }
 
+    setIsUpdatingBiometricPreference(true);
+    beginBiometricInteraction();
     try {
       await persistAppPasscodeOrThrow(appPasscode);
       const availability = await FaceId.isAvailable();
@@ -479,7 +484,6 @@ export default function SettingsTab({
         return;
       }
 
-      window.__biometricActive = true;
       await FaceId.authenticate({ reason: "Verify to enable Face ID / Touch ID for app lock" });
 
       haptic.success();
@@ -492,9 +496,8 @@ export default function SettingsTab({
       haptic.error();
       window.toast?.error?.("Catalyst couldn't verify biometrics on this device.");
     } finally {
-      setTimeout(() => {
-        window.__biometricActive = false;
-      }, 1000);
+      endBiometricInteraction();
+      setIsUpdatingBiometricPreference(false);
     }
   };
   const [statusMsg, setStatusMsg] = useState("");
@@ -894,12 +897,13 @@ export default function SettingsTab({
          appPasscode={appPasscode}
          handlePasscodeChange={handlePasscodeChange}
          requireAuth={requireAuth}
-         handleRequireAuthToggle={handleRequireAuthToggle}
-         useFaceId={useFaceId}
-         handleUseFaceIdToggle={handleUseFaceIdToggle}
-         secretStorageStatus={secretStorageStatus}
-         lockTimeout={lockTimeout}
-         setLockTimeout={setLockTimeout}
+        handleRequireAuthToggle={handleRequireAuthToggle}
+        useFaceId={useFaceId}
+        handleUseFaceIdToggle={handleUseFaceIdToggle}
+        biometricToggleBusy={isUpdatingBiometricPreference}
+        secretStorageStatus={secretStorageStatus}
+        lockTimeout={lockTimeout}
+        setLockTimeout={setLockTimeout}
          confirmDataDeletion={confirmDataDeletion}
          setConfirmDataDeletion={setConfirmDataDeletion}
          deletionInProgress={deletionInProgress}

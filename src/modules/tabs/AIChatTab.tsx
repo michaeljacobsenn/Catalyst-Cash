@@ -26,12 +26,14 @@ import { AlertTriangle, ArrowDown, ArrowUpRight, CheckCircle2, MessageCircle, Sp
 import { log } from "../logger.js";
 import { extractMemoryTags } from "../memory.js";
 import { isLikelyNetworkError, toUserFacingRequestError } from "../networkErrors.js";
+import { buildScrubber } from "../scrubber.js";
 import { checkChatQuota, isGatingEnforced, recordChatUsage, shouldShowGating } from "../subscription.js";
 import { useToast } from "../Toast.js";
 import { Skeleton as UISkeleton } from "../ui.js";
 import { db } from "../utils.js";
 import ProBanner from "./ProBanner.js";
 import { CHAT_STORAGE_KEY, ChatMarkdown, createChatMessage, getRandomSuggestions, stripThoughtProcess } from "./aiChat/helpers";
+import { buildCompactFinancialBrief, prepareScrubbedChatTransport } from "./aiChat/transport";
 import { useAIChatPersistence } from "./aiChat/useAIChatPersistence";
 const LazyProPaywall = React.lazy(() => import("./ProPaywall.js"));
 
@@ -351,17 +353,20 @@ export default memo(function AIChatTab({
       haptic.light();
 
       const memBlock = getMemoryBlock();
-      const promptContext = {
-        variant: extraPromptContext?.variant || "default",
+      const scrubber = buildScrubber(cards, renewals, financialConfig, current?.form || {});
+      const financialBrief = buildCompactFinancialBrief({
         current,
         financialConfig,
         cards,
         renewals,
         history,
+        trendContext,
+      });
+      const promptContext = {
+        variant: extraPromptContext?.variant || "default",
+        financialBrief,
         persona,
         personalRules: personalRules || "",
-        computedStrategy: chatStrategy,
-        trendContext,
         providerId: aiProvider,
         memoryBlock: memBlock,
         decisionRecommendations,
@@ -372,6 +377,12 @@ export default memo(function AIChatTab({
 
       // Build conversation history for the API
       const apiHistory = buildAPIMessages(newMsgs.slice(0, -1)); // Exclude the latest user message (sent as snapshot)
+      const transport = prepareScrubbedChatTransport({
+        latestUserMessage: trimmedText,
+        promptContext,
+        apiHistory,
+        scrub: scrubber.scrub,
+      });
 
       const abort = new AbortController();
       abortRef.current = abort;
@@ -385,11 +396,11 @@ export default memo(function AIChatTab({
         // effectiveChatModel is computed at the top of the component
         const stream = streamAuditTyped(
           apiKey,
-          trimmedText,
+          transport.snapshot,
           aiProvider,
           effectiveChatModel,
-          promptContext,
-          apiHistory,
+          transport.promptContext,
+          transport.apiHistory,
           undefined, // deviceId — handled by backend
           abort.signal,
           true // isChat — tells the backend to return natural language, not JSON
@@ -398,7 +409,7 @@ export default memo(function AIChatTab({
         for await (const chunk of stream) {
           if (abort.signal.aborted) break;
           accumulated += chunk;
-          assistantMsg.content = stripThoughtProcess(accumulated);
+          assistantMsg.content = stripThoughtProcess(scrubber.unscrub(accumulated));
           assistantMsg.ts = Date.now();
           setMessages([...newMsgs, { ...assistantMsg }]);
         }
@@ -406,8 +417,9 @@ export default memo(function AIChatTab({
         // Finalize
         if (accumulated.trim()) {
           // Extract REMEMBER tags and strip thought_process blocks before persisting/displaying
-          const { cleanText, newFacts } = extractMemoryTags(accumulated);
-          const displayText = stripThoughtProcess(cleanText || accumulated);
+          const restored = scrubber.unscrub(accumulated);
+          const { cleanText, newFacts } = extractMemoryTags(restored);
+          const displayText = stripThoughtProcess(cleanText || restored);
           const normalizedResponse = normalizeChatAssistantOutputTyped(displayText);
           const finalText = normalizedResponse.valid
             ? normalizedResponse.text
@@ -448,7 +460,8 @@ export default memo(function AIChatTab({
         if (err instanceof Error && err.name === "AbortError") {
           // User cancelled — keep partial response
           if (accumulated.trim()) {
-            const finalMsgs = [...newMsgs, { ...assistantMsg, content: accumulated + "\n\n*[Response cancelled]*" }];
+            const restored = scrubber.unscrub(accumulated);
+            const finalMsgs = [...newMsgs, { ...assistantMsg, content: restored + "\n\n*[Response cancelled]*" }];
             setMessages(finalMsgs);
             void persistMessages(finalMsgs);
           }

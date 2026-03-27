@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasStoredAppPasscode, normalizeSecurityBootstrapState } from "./SecurityContext";
+import { hasStoredAppPasscode, normalizeSecurityBootstrapState, shouldRelockOnForeground } from "./SecurityContext";
 
 const nativeSecureStatus = {
   platform: "native" as const,
@@ -50,5 +50,29 @@ describe("SecurityContext bootstrap normalization", () => {
       appPasscode: "2468",
       shouldResetPersistedAuth: false,
     });
+  });
+
+  it("suppresses relock when a biometric interaction is still active", () => {
+    expect(
+      shouldRelockOnForeground({
+        requireAuth: true,
+        lockTimeout: 0,
+        lastBackgroundedAt: Date.now() - 5000,
+        biometricInteractionActive: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("relocks once the timeout has elapsed on a normal foreground return", () => {
+    const now = Date.now();
+    expect(
+      shouldRelockOnForeground({
+        requireAuth: true,
+        lockTimeout: 300,
+        lastBackgroundedAt: now - 301000,
+        biometricInteractionActive: false,
+        now,
+      }),
+    ).toBe(true);
   });
 });

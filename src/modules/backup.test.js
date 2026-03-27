@@ -23,6 +23,9 @@ vi.mock("./utils.js", () => ({
       dbStore.set(key, value);
     }),
   },
+}));
+
+vi.mock("./nativeExport.js", () => ({
   nativeExport,
 }));
 
@@ -30,6 +33,66 @@ vi.mock("./crypto.js", () => ({
   encrypt,
   decrypt,
   isEncrypted,
+}));
+
+vi.mock("./plaid.js", () => ({
+  ensureConnectionAccountsPresent: vi.fn((connection, cards = [], bankAccounts = [], _cardCatalog = null, plaidInvestments = []) => {
+    const nextCards = [...cards];
+    const nextBankAccounts = [...bankAccounts];
+    let importedCards = 0;
+    let importedBankAccounts = 0;
+
+    for (const account of connection?.accounts || []) {
+      if (account?.type === "credit" && !nextCards.some((card) => card._plaidAccountId === account.plaidAccountId)) {
+        nextCards.push({
+          id: `plaid_${account.plaidAccountId}`,
+          institution: connection.institutionName,
+          name: account.officialName || account.name,
+          _plaidAccountId: account.plaidAccountId,
+          _plaidConnectionId: connection.id,
+          _plaidBalance: null,
+        });
+        importedCards++;
+      }
+      if (account?.type === "depository" && !nextBankAccounts.some((bank) => bank._plaidAccountId === account.plaidAccountId)) {
+        nextBankAccounts.push({
+          id: `plaid_${account.plaidAccountId}`,
+          bank: connection.institutionName,
+          name: account.officialName || account.name,
+          accountType: account.subtype === "savings" ? "savings" : "checking",
+          _plaidAccountId: account.plaidAccountId,
+          _plaidConnectionId: connection.id,
+          _plaidBalance: null,
+        });
+        importedBankAccounts++;
+      }
+    }
+
+    return {
+      updatedCards: nextCards,
+      updatedBankAccounts: nextBankAccounts,
+      updatedPlaidInvestments: plaidInvestments,
+      importedCards,
+      importedBankAccounts,
+      importedPlaidInvestments: 0,
+    };
+  }),
+  materializeManualFallbackForConnections: vi.fn((cards = [], bankAccounts = [], connectionIds = []) => {
+    const reconnectIds = new Set(connectionIds.map((id) => String(id)));
+    return {
+      updatedCards: cards.map((card) =>
+        reconnectIds.has(String(card?._plaidConnectionId || ""))
+          ? { ...card, _plaidManualFallback: true }
+          : card
+      ),
+      updatedBankAccounts: bankAccounts.map((account) =>
+        reconnectIds.has(String(account?._plaidConnectionId || ""))
+          ? { ...account, _plaidManualFallback: true }
+          : account
+      ),
+      changed: true,
+    };
+  }),
 }));
 
 import {
@@ -295,6 +358,66 @@ describe("backup utilities", () => {
       expect(dbStore.get("plaid-connections")).toEqual([
         { id: "existing", institutionName: "Existing Bank", accounts: [] },
         { id: "restored", institutionName: "Ally", accounts: [], _needsReconnect: true },
+      ]);
+    });
+
+    it("creates reconnect-ready placeholder accounts from sanitized plaid metadata", async () => {
+      const backup = {
+        app: "Catalyst Cash",
+        exportedAt: "2026-03-26T15:00:00.000Z",
+        data: {
+          renewals: [
+            {
+              id: "ren_bank_1",
+              name: "Acura Payment",
+              chargedTo: "Savings",
+              chargedToType: "savings",
+              source: "Ally Savings",
+            },
+          ],
+          "plaid-connections-sanitized": [
+            {
+              id: "restored_ally",
+              institutionName: "Ally",
+              accounts: [
+                {
+                  plaidAccountId: "ally_savings",
+                  name: "Online Savings",
+                  officialName: "Ally Online Savings",
+                  type: "depository",
+                  subtype: "savings",
+                },
+              ],
+            },
+          ],
+        },
+      };
+
+      await importBackup(
+        {
+          name: "CatalystCash_CloudSync.json",
+          type: "application/json",
+          __text: JSON.stringify(backup),
+        },
+        vi.fn()
+      );
+
+      expect(dbStore.get("bank-accounts")).toEqual([
+        expect.objectContaining({
+          id: "plaid_ally_savings",
+          bank: "Ally",
+          name: "Ally Online Savings",
+          accountType: "savings",
+          _plaidConnectionId: "restored_ally",
+          _plaidManualFallback: true,
+        }),
+      ]);
+      expect(dbStore.get("renewals")).toEqual([
+        expect.objectContaining({
+          chargedToType: "bank",
+          chargedToId: "plaid_ally_savings",
+          chargedTo: "Ally · Ally Online Savings",
+        }),
       ]);
     });
 

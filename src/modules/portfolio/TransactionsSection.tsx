@@ -3,7 +3,7 @@
   import { Mono } from "../components.js";
   import { T } from "../constants.js";
   import { ChevronDown,DollarSign } from "../icons";
-  import { getStoredTransactions } from "../plaid.js";
+  import { getHydratedStoredTransactions } from "../storedTransactions.js";
   import { Badge,Card } from "../ui.js";
   import type { PortfolioCollapsedSections } from "./types.js";
 
@@ -33,7 +33,7 @@ export default function TransactionsSection({ collapsedSections, setCollapsedSec
     useEffect(() => {
         const loadStoredTransactions = async () => {
             try {
-                const stored = (await getStoredTransactions()) as StoredTransactionsPayload | null;
+                const stored = (await getHydratedStoredTransactions()) as StoredTransactionsPayload | null;
                 if (stored?.data) setPlaidTxns(stored.data.slice(0, proEnabled ? 15 : 5));
             } catch {
                 // Ignore local cache read failures.

@@ -55,14 +55,23 @@
 // even old builds that have "off" hardcoded here.
 // ────────────────────────────────────────────────────────────
 const GATING_MODE_DEFAULT = "live";
-let _effectiveGatingMode = GATING_MODE_DEFAULT;
+// Local preview override for this build so Pro features stay unlocked on-device
+// while we validate the product experience. Set to null before shipping a fully
+// enforced App Store build.
+const BUILD_GATING_OVERRIDE = "off";
+let _effectiveGatingMode = BUILD_GATING_OVERRIDE || GATING_MODE_DEFAULT;
+let _testGatingModeOverride = null;
+
+function getResolvedGatingMode() {
+  return _testGatingModeOverride || BUILD_GATING_OVERRIDE || _effectiveGatingMode;
+}
 
 /**
  * Get the current gating mode (may be overridden by remote config).
  * Consumers can check this to decide whether to show/enforce limits.
  */
 export function getGatingMode() {
-  return _effectiveGatingMode;
+  return getResolvedGatingMode();
 }
 
 /**
@@ -70,18 +79,20 @@ export function getGatingMode() {
  * "off" = no enforcement, "soft" = show but don't block, "live" = enforce.
  */
 export function isGatingEnforced() {
-  return _effectiveGatingMode === "live";
+  return getResolvedGatingMode() === "live";
 }
 
 /**
  * Returns true if gating UI should be shown (soft or live mode).
  */
 export function shouldShowGating() {
-  return _effectiveGatingMode === "soft" || _effectiveGatingMode === "live";
+  const mode = getResolvedGatingMode();
+  return mode === "soft" || mode === "live";
 }
 
 export function __setGatingModeForTests(mode) {
-  _effectiveGatingMode = mode || GATING_MODE_DEFAULT;
+  _testGatingModeOverride = mode || null;
+  _effectiveGatingMode = mode || BUILD_GATING_OVERRIDE || GATING_MODE_DEFAULT;
 }
 
 /**
@@ -114,6 +125,9 @@ export function getServerRateLimit() {
  * hardcoded will still get overridden to "live" when we flip the switch.
  */
 export async function syncRemoteGatingMode() {
+  if (BUILD_GATING_OVERRIDE && !_testGatingModeOverride) {
+    return;
+  }
   try {
     const { fetchGatingConfig, onRateLimitUpdate } = await import("./api.js");
 
@@ -574,7 +588,7 @@ export async function getSubscriptionState() {
  * Returns the effective tier after applying the current gating mode.
  */
 export async function getCurrentTier() {
-  if (_effectiveGatingMode !== "live") return TIERS.pro;
+  if (getResolvedGatingMode() !== "live") return TIERS.pro;
   const state = await getSubscriptionState();
   return TIERS[state.tier] || TIERS.free;
 }

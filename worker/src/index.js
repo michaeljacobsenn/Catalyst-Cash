@@ -29,6 +29,7 @@ import {
   DEFAULTS,
   VALID_PROVIDERS,
   getProviderHandler,
+  routeOpenAIChatAction,
 } from "./lib/providerClients.js";
 import {
   resolveEffectiveTier,
@@ -111,6 +112,7 @@ const MODEL_ALLOWLIST = {
     "o3",
   ]),
 };
+const DEFAULT_AUDIT_LOG_RETENTION_DAYS = 30;
 
 function buildPersonaProfile(persona) {
   if (persona === "coach") {
@@ -422,7 +424,7 @@ Provide 3 escalation responses:
 RULES: Be practical, confident, and accurate. Give usable words to say, but do not fabricate phone trees, market pricing, or company policies. Do NOT discuss budgeting, tracking, or financial planning — ONLY the negotiation script. Format with clear headers and bold key phrases.`;
 }
 
-function buildSystemPrompt(type, context = {}, resolvedProvider = "gemini") {
+function buildSystemPrompt(type, context = {}, resolvedProvider = "gemini", latestUserMessage = "") {
   const variant = context?.variant || "default";
 
   if (variant === "location-categorization") {
@@ -452,7 +454,11 @@ function buildSystemPrompt(type, context = {}, resolvedProvider = "gemini") {
       context.memoryBlock || "",
       context.decisionRecommendations || [],
       context.chatInputRisk || null,
-      context.budgetContext || null
+      context.budgetContext || null,
+      context.financialBrief || null,
+      latestUserMessage,
+      variant,
+      context.nativeActionPacket || null
     );
   }
   return getSystemPrompt(
@@ -785,6 +791,16 @@ async function captureStreamAuditLog(db, logId, provider, response) {
     completionTokens: usage.completionTokens,
     responsePreview: preview,
   });
+}
+
+function resolveAuditLogRetentionDays(env) {
+  const configured = parseInt(String(env?.AUDIT_LOG_RETENTION_DAYS || DEFAULT_AUDIT_LOG_RETENTION_DAYS), 10);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_AUDIT_LOG_RETENTION_DAYS;
+}
+
+async function purgeExpiredAuditLogs(db, retentionDays) {
+  if (!db) return;
+  await db.prepare("DELETE FROM audit_log WHERE created_at < datetime('now', ?)").bind(`-${retentionDays} days`).run();
 }
 
 // ─── Main Handler ────────────────────────────────────────────
@@ -1866,8 +1882,6 @@ export default {
       );
     }
     const { handler, keyName } = getProviderHandler(selectedProvider);
-    const resolvedSystemPrompt = systemPrompt || buildSystemPrompt(resolvedType, context || {}, selectedProvider);
-    logPromptProfile(env, resolvedType, selectedProvider, resolvedSystemPrompt);
 
     const apiKey = env[keyName];
     if (!apiKey) {
@@ -1881,6 +1895,36 @@ export default {
         }
       );
     }
+
+    let effectiveContext = context || {};
+    if (
+      !systemPrompt &&
+      resolvedType === "chat" &&
+      selectedProvider === "openai" &&
+      effectiveContext?.financialBrief &&
+      typeof snapshot === "string"
+    ) {
+      try {
+        const nativeActionPacket = await routeOpenAIChatAction(apiKey, {
+          snapshot,
+          history,
+          model: resolvedModel,
+        });
+        if (nativeActionPacket) {
+          effectiveContext = {
+            ...effectiveContext,
+            nativeActionPacket,
+          };
+        }
+      } catch (error) {
+        workerLog(env, "warn", "openai-chat-router", "Provider-native chat action routing failed; using deterministic fallback.", {
+          error: redactForWorkerLogs(error),
+        });
+      }
+    }
+
+    const resolvedSystemPrompt = systemPrompt || buildSystemPrompt(resolvedType, effectiveContext, selectedProvider, snapshot);
+    logPromptProfile(env, resolvedType, selectedProvider, resolvedSystemPrompt);
 
     // ─── Execute Provider Call ─────────────────────────────
     try {
@@ -1987,5 +2031,9 @@ export default {
         headers: buildHeaders(cors, { "Content-Type": "application/json", ...tierHeaders }),
       });
     }
+  },
+  async scheduled(_controller, env, ctx) {
+    const retentionDays = resolveAuditLogRetentionDays(env);
+    ctx.waitUntil(purgeExpiredAuditLogs(env.DB, retentionDays));
   },
 };

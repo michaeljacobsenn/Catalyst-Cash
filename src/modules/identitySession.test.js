@@ -39,7 +39,7 @@ async function loadIdentitySession({
     },
   }));
 
-  vi.doMock("./api.js", () => ({
+  vi.doMock("./backendUrl.js", () => ({
     getBackendUrl: () => "https://api.catalystcash.app",
   }));
 

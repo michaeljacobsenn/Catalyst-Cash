@@ -1,10 +1,10 @@
-  import { Capacitor } from "@capacitor/core";
   import { APP_VERSION } from "./constants.js";
+  import { getBackendUrl } from "./backendUrl.js";
   import { fetchWithRetry } from "./fetchWithRetry.js";
   import { log } from "./logger.js";
   import { getBackendProvider } from "./providers.js";
   import { getRevenueCatAppUserId } from "./revenuecat.js";
-  import { isPro } from "./subscription.js";
+  import { getOrCreateDeviceId,isPro } from "./subscription.js";
   import { db } from "./utils.js";
 
 // ═══════════════════════════════════════════════════════════════
@@ -12,31 +12,7 @@
 // Routes all AI requests through the Cloudflare Worker proxy.
 // ═══════════════════════════════════════════════════════════════
 
-const PROD_BACKEND_URL = "https://api.catalystcash.app";
-const WORKERS_BACKEND_URL = "https://catalystcash-api.portfoliopro-app.workers.dev";
-const CONFIGURED_BACKEND_URL = String(import.meta.env.VITE_PROXY_URL || "").trim();
-
-function isLoopbackHost(hostname) {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
-}
-
-export function getBackendUrl() {
-  const hostname = typeof window !== "undefined" ? String(window.location?.hostname || "") : "";
-  const isLoopback = isLoopbackHost(hostname);
-  const preferWorkersHostname = Capacitor.isNativePlatform() || isLoopback;
-  if (CONFIGURED_BACKEND_URL) {
-    try {
-      const configuredHostname = new URL(CONFIGURED_BACKEND_URL).hostname;
-      if (preferWorkersHostname && configuredHostname === "api.catalystcash.app") {
-        return WORKERS_BACKEND_URL;
-      }
-    } catch {
-      // Ignore malformed overrides and fall back below.
-    }
-    return CONFIGURED_BACKEND_URL;
-  }
-  return preferWorkersHostname ? WORKERS_BACKEND_URL : PROD_BACKEND_URL;
-}
+export { getBackendUrl } from "./backendUrl.js";
 
 // ── Rate-limit sync callback ──────────────────────────────────
 // The worker returns X-RateLimit-Remaining and X-RateLimit-Limit
@@ -237,12 +213,11 @@ async function callBackend(snapshot, model, context, history, deviceId, backendP
 
 export async function reportAuditLogOutcome(auditLogId, parseSucceeded, hitDegradedFallback, metadata = {}) {
   if (!auditLogId) return;
+  const deviceId = await getOrCreateDeviceId().catch(() => "unknown");
 
   await fetchWithRetry(`${getBackendUrl()}/api/audit-log/outcome`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: await buildBackendHeaders(deviceId),
     body: JSON.stringify({
       auditLogId,
       parseSucceeded: Boolean(parseSucceeded),
@@ -316,8 +291,6 @@ export async function callAudit(
  */
 export async function classifyMerchant(merchantName) {
   try {
-    const { getOrCreateDeviceId } = await import("./subscription.js");
-    
     const deviceId = await getOrCreateDeviceId();
     
     // We intentionally force Gemini Flash to keep costs near-zero for rapid classification.
@@ -367,8 +340,6 @@ export async function classifyMerchant(merchantName) {
 export async function batchCategorizeTransactions(merchantNames) {
   if (!merchantNames || merchantNames.length === 0) return {};
   try {
-    const { getOrCreateDeviceId } = await import("./subscription.js");
-    
     const deviceId = await getOrCreateDeviceId();
     
     // We intentionally force Gemini Flash to keep costs near-zero for rapid classification.

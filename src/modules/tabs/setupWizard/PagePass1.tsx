@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { IncomeType, Payday, PayFrequency, PaycheckDepositAccount } from "../../../types/index.js";
 import { T } from "../../constants.js";
 import type { SetupWizardCombinedData, SetupWizardUpdate } from "../SetupWizard.js";
@@ -12,15 +13,21 @@ interface PagePassSharedProps {
 }
 
 export function PagePass1({ data, onChange, onNext, onBack, onSkip }: PagePassSharedProps) {
+  const [showUnevenPaycheck, setShowUnevenPaycheck] = useState(Boolean(data.paycheckFirstOfMonth));
+
+  useEffect(() => {
+    if (data.paycheckFirstOfMonth) setShowUnevenPaycheck(true);
+  }, [data.paycheckFirstOfMonth]);
+
   return (
     <div>
       <div
         style={{
-          marginBottom: 18,
-          padding: "12px 14px",
+          marginBottom: 14,
+          padding: "11px 13px",
           background: `${T.accent.emerald}10`,
           border: `1px solid ${T.accent.emerald}22`,
-          borderRadius: T.radius.lg,
+          borderRadius: T.radius.md,
         }}
       >
         <div style={{ fontSize: 12, fontWeight: 800, color: T.accent.emerald, marginBottom: 4 }}>Most important step</div>
@@ -29,13 +36,13 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }: PagePassSh
         </div>
       </div>
 
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 18 }}>
         <h3 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, margin: "0 0 6px 0", letterSpacing: "-0.01em" }}>
           Your Income Story
         </h3>
         <p style={{ fontSize: 13, color: T.text.secondary, margin: 0, lineHeight: 1.5 }}>
-          Start with the minimum needed for a reliable first audit: how often you get paid, roughly how much arrives,
-          and what you usually spend each week.
+          Start with the minimum needed for a reliable first audit: when money lands, how much usually arrives, and
+          what you tend to spend each week.
         </p>
       </div>
 
@@ -96,16 +103,43 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }: PagePassSh
               placeholder="e.g. 2400"
             />
           </WizField>
-          <WizField label="First-of-Month Paycheck ($)" hint="If your first check is lower due to benefits/insurance (Leave blank if same)">
-            <WizInput
-              type="number"
-              inputMode="decimal"
-              pattern="[0-9]*"
-              value={data.paycheckFirstOfMonth}
-              onChange={v => onChange("paycheckFirstOfMonth", v)}
-              placeholder="Leave blank if same as above"
-            />
-          </WizField>
+          <button
+            type="button"
+            onClick={() => setShowUnevenPaycheck((current) => !current)}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              margin: "-2px 0 14px",
+              padding: "10px 12px",
+              borderRadius: T.radius.md,
+              border: `1px solid ${T.border.subtle}`,
+              background: T.bg.elevated,
+              color: T.text.secondary,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            <span>Uneven first paycheck?</span>
+            <span style={{ color: T.text.dim, fontSize: 11 }}>
+              {showUnevenPaycheck ? "Hide" : "Add optional adjustment"}
+            </span>
+          </button>
+          {showUnevenPaycheck && (
+            <WizField label="First-of-Month Paycheck ($)" hint="Only if one paycheck is lower because of benefits or insurance">
+              <WizInput
+                type="number"
+                inputMode="decimal"
+                pattern="[0-9]*"
+                value={data.paycheckFirstOfMonth}
+                onChange={v => onChange("paycheckFirstOfMonth", v)}
+                placeholder="Leave blank if same as above"
+              />
+            </WizField>
+          )}
         </>
       )}
 
@@ -147,7 +181,7 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }: PagePassSh
         </WizField>
       )}
 
-      <div style={{ margin: "32px 0 16px", borderTop: `1px solid ${T.border.subtle}`, paddingTop: 24 }}>
+      <div style={{ margin: "24px 0 14px", borderTop: `1px solid ${T.border.subtle}`, paddingTop: 18 }}>
         <h3 style={{ fontSize: 14, fontWeight: 700, color: T.text.primary, margin: "0 0 6px 0" }}>
           Fun Money & Spending
         </h3>
@@ -170,17 +204,6 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }: PagePassSh
       <p style={{ fontSize: 11, color: T.text.muted, fontStyle: "italic", marginTop: -6, marginBottom: 16 }}>
         Use your real number, not your aspirational one. The app can only protect cash flow with honest inputs.
       </p>
-
-      <WizField label="Default APR (%)" hint="Used to estimate interest penalties on any newly added, unpaid card balances.">
-        <WizInput
-          type="number"
-          inputMode="decimal"
-          pattern="[0-9]*"
-          value={data.defaultAPR}
-          onChange={v => onChange("defaultAPR", v)}
-          placeholder="e.g. 24.99"
-        />
-      </WizField>
 
       <NavRow onBack={onBack} onNext={onNext} onSkip={onSkip} />
     </div>

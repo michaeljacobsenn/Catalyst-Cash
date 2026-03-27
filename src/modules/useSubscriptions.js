@@ -1,8 +1,8 @@
   import { useEffect,useState } from "react";
   import { log } from "./logger.js";
   import { getShortCardLabel } from "./cards.js";
-  import { getStoredTransactions } from "./plaid.js";
   import { getBankAccountLabel,RENEWAL_PAYMENT_TYPES } from "./renewalPaymentSources.js";
+  import { getHydratedStoredTransactions } from "./storedTransactions.js";
   import { db } from "./utils.js";
 
 // Common subscription names and keywords to match against transaction descriptions.
@@ -37,7 +37,7 @@ export function useSubscriptions(existingRenewals = [], cards = [], bankAccounts
         async function scan() {
             try {
                 const [stored, dismissedIds] = await Promise.all([
-                    getStoredTransactions(),
+                    getHydratedStoredTransactions(),
                     db.get("dismissed-suggestions").then(res => new Set(res || []))
                 ]);
 
@@ -107,9 +107,15 @@ export function useSubscriptions(existingRenewals = [], cards = [], bankAccounts
                             txDate.setMonth(txDate.getMonth() + 1);
                             const nextDue = txDate.toISOString().split("T")[0];
 
-                            const matchingCard = cards.find(card => card?._plaidAccountId === t.accountId);
+                            const matchingCard = cards.find(card =>
+                                (t.linkedCardId && card?.id === t.linkedCardId) ||
+                                card?._plaidAccountId === t.accountId
+                            );
                             const matchingBankAccount = !matchingCard
-                                ? bankAccounts.find(account => account?._plaidAccountId === t.accountId)
+                                ? bankAccounts.find(account =>
+                                    (t.linkedBankAccountId && account?.id === t.linkedBankAccountId) ||
+                                    account?._plaidAccountId === t.accountId
+                                )
                                 : null;
 
                             candidates.set(key, {

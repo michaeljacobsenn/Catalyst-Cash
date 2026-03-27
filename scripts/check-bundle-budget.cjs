@@ -14,6 +14,9 @@ const budgets = {
   setupWizard: 70000,
   marketData: 45000,
   spreadsheet: 7000,
+  workbookWorker: 75000,
+  auditExports: 15000,
+  auditHtmlFallback: 6000,
   shellBootJs: 610000,
 };
 
@@ -58,6 +61,9 @@ function main() {
     setupWizard: findByPrefix(assets, "SetupWizard-"),
     marketData: findByPrefix(assets, "market-data-"),
     spreadsheet: findByPrefix(assets, "spreadsheet-"),
+    workbookWorker: findByPrefix(assets, "excelWorkbook.worker-"),
+    auditExports: findByPrefix(assets, "audit-exports-"),
+    auditHtmlFallback: findByPrefix(assets, "auditHtmlDocument-"),
   };
 
   const shellBootJs = selected.mainEntry.bytes + selected.vendorReact.bytes + selected.vendorCapacitor.bytes;
@@ -71,6 +77,9 @@ function main() {
     { metric: "setupWizard", file: selected.setupWizard.name, size: formatKb(selected.setupWizard.bytes), budget: formatKb(budgets.setupWizard) },
     { metric: "marketData", file: selected.marketData.name, size: formatKb(selected.marketData.bytes), budget: formatKb(budgets.marketData) },
     { metric: "spreadsheet", file: selected.spreadsheet.name, size: formatKb(selected.spreadsheet.bytes), budget: formatKb(budgets.spreadsheet) },
+    { metric: "workbookWorker", file: selected.workbookWorker.name, size: formatKb(selected.workbookWorker.bytes), budget: formatKb(budgets.workbookWorker) },
+    { metric: "auditExports", file: selected.auditExports.name, size: formatKb(selected.auditExports.bytes), budget: formatKb(budgets.auditExports) },
+    { metric: "auditHtmlFallback", file: selected.auditHtmlFallback.name, size: formatKb(selected.auditHtmlFallback.bytes), budget: formatKb(budgets.auditHtmlFallback) },
     { metric: "shellBootJs", file: "mainEntry + vendorReact + vendorCapacitor", size: formatKb(shellBootJs), budget: formatKb(budgets.shellBootJs) },
   ];
 
@@ -88,6 +97,9 @@ function main() {
     setupWizard: selected.setupWizard.bytes,
     marketData: selected.marketData.bytes,
     spreadsheet: selected.spreadsheet.bytes,
+    workbookWorker: selected.workbookWorker.bytes,
+    auditExports: selected.auditExports.bytes,
+    auditHtmlFallback: selected.auditHtmlFallback.bytes,
     shellBootJs,
   };
 

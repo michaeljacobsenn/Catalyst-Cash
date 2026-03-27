@@ -14,7 +14,7 @@
   import { Calendar,CheckCircle,Download,Edit3,Filter,Plus,Trash2,TrendingUp,type LucideIcon } from "../icons";
   import { shouldShowGating } from "../subscription.js";
   import { Badge as UIBadge,Card as UICard } from "../ui.js";
-  import { exportAllAudits,exportAuditCSV,exportSelectedAudits,fmt,fmtDate } from "../utils.js";
+  import { fmt,fmtDate } from "../utils.js";
   import AuditExportSheet from "./AuditExportSheet.js";
   import ProBannerBase from "./ProBanner.js";
 
@@ -328,9 +328,30 @@ export default memo(function HistoryTab({ toast, proEnabled = false }: HistoryTa
     setSel(new Set<number>());
   };
 
-  const doExportSel = (): void => {
-    exportSelectedAudits(filteredAudits.filter((_, index) => sel.has(index)));
-    exitSel();
+  const doExportSel = async (): Promise<void> => {
+    try {
+      const { exportSelectedAudits } = await import("../auditExports.js");
+      await exportSelectedAudits(filteredAudits.filter((_, index) => sel.has(index)));
+      exitSel();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Export failed");
+    }
+  };
+  const handleExportCsv = async (): Promise<void> => {
+    try {
+      const { exportAuditCSV } = await import("../auditExports.js");
+      await exportAuditCSV(audits);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Export failed");
+    }
+  };
+  const handleExportJson = async (): Promise<void> => {
+    try {
+      const { exportAllAudits } = await import("../auditExports.js");
+      await exportAllAudits(audits);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Export failed");
+    }
   };
 
   return (
@@ -397,7 +418,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false }: HistoryTa
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                 {selMode && sel.size > 0 && (
                   <button
-                    onClick={doExportSel}
+                    onClick={() => void doExportSel()}
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -439,7 +460,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false }: HistoryTa
                   {selMode ? "CANCEL" : "SELECT"}
                 </button>
                 <button
-                  onClick={() => exportAuditCSV(audits)}
+                  onClick={() => void handleExportCsv()}
                   title="Export CSV"
                   style={{
                     width: 32,
@@ -461,7 +482,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false }: HistoryTa
                   CSV
                 </button>
                 <button
-                  onClick={() => exportAllAudits(audits)}
+                  onClick={() => void handleExportJson()}
                   title="Export All JSON"
                   style={{
                     padding: "7px 12px",

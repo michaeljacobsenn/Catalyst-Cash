@@ -18,6 +18,9 @@ export default defineConfig({
   plugins: [react(), stripCrossorigin()],
   // Capacitor requires assets served from root, not a sub-path
   base: "/",
+  worker: {
+    format: "es",
+  },
   build: {
     outDir: "dist",
     rollupOptions: {
@@ -42,6 +45,13 @@ export default defineConfig({
           // Market data worker + ticker universe
           if (id.includes("/modules/marketData.js")) {
             return "market-data";
+          }
+          // Export pipeline stays cold until a user actually exports
+          if (id.includes("/modules/auditExports.js")) {
+            return "audit-exports";
+          }
+          if (id.includes("/modules/nativeExport.js")) {
+            return "native-export";
           }
           // Charting library (recharts + d3 deps)
           if (id.includes("node_modules/recharts") || id.includes("node_modules/d3-")) {

@@ -259,6 +259,32 @@ export async function handleSystemRoute({
       });
     }
 
+    const callerIds = [
+      (request.headers.get("X-RC-App-User-ID") || "").trim(),
+      (request.headers.get("X-Device-ID") || "").trim(),
+    ].filter(Boolean);
+    if (callerIds.length === 0) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+      });
+    }
+
+    const existingResult = await env.DB.prepare("SELECT user_id FROM audit_log WHERE id = ?").bind(auditLogId).all();
+    const existing = Array.isArray(existingResult?.results) ? existingResult.results[0] : null;
+    if (!existing?.user_id) {
+      return new Response(JSON.stringify({ error: "Audit log not found" }), {
+        status: 404,
+        headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+      });
+    }
+    if (!callerIds.includes(String(existing.user_id))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
+        headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+      });
+    }
+
     await updateAuditLogRow(env.DB, auditLogId, {
       parseSucceeded: Boolean(parseSucceeded),
       hitDegradedFallback: Boolean(hitDegradedFallback),

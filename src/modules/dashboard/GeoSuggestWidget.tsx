@@ -6,7 +6,8 @@
   import { useSettings } from "../contexts/SettingsContext.js";
   import { haptic } from "../haptics.js";
   import { AlertCircle,MapPin,Navigation,RefreshCw,Sparkles,X } from "../icons";
-  import { getCardMultiplier } from "../rewardsCatalog.js";
+  import { inferMerchantIdentity } from "../merchantIdentity.js";
+  import { getOptimalCard } from "../rewardsCatalog.js";
   import { Badge } from "../ui.js";
 
 type GeoSuggestStatus = "idle" | "locating" | "fetching" | "categorizing" | "success" | "error";
@@ -15,6 +16,7 @@ interface RewardSuggestion {
   multiplier: number;
   currency: string;
   effectiveYield: number;
+  rewardNotes?: string | null;
 }
 
 type SuggestedCard = Card & RewardSuggestion;
@@ -64,15 +66,14 @@ export default function GeoSuggestWidget() {
           const resolvedCategory = await classifyMerchant(placeName);
           setCategory(resolvedCategory);
 
-          let best: SuggestedCard | null = null;
-          let bestYield = -1;
-          for (const card of activeCreditCards) {
-            const rewardInfo = getCardMultiplier(card.name, resolvedCategory, customValuations);
-            if (rewardInfo.effectiveYield > bestYield) {
-              bestYield = rewardInfo.effectiveYield;
-              best = { ...card, ...rewardInfo } as SuggestedCard;
-            }
-          }
+          const merchantIdentity = inferMerchantIdentity({
+            merchantName: placeName,
+            category: resolvedCategory,
+          });
+          const best = getOptimalCard(activeCreditCards, merchantIdentity.rewardCategory || resolvedCategory, customValuations, {
+            merchantIdentity,
+            capMode: "conservative",
+          }) as SuggestedCard | null;
 
           setBestCard(best);
           setStatus("success");
@@ -207,6 +208,11 @@ export default function GeoSuggestWidget() {
                 <Sparkles size={10} color={T.accent.emerald} />
                 {rewardLabel} · <span style={{ fontWeight: 800, color: T.accent.emerald }}>{bestCard.effectiveYield}%</span> effective yield
               </div>
+              {bestCard.rewardNotes && (
+                <div style={{ fontSize: 10, color: T.text.dim, lineHeight: 1.35, marginTop: 4 }}>
+                  Card caveat: {bestCard.rewardNotes}
+                </div>
+              )}
             </div>
             <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
               <button onClick={handleLocate} className="hover-btn" style={{ background: "transparent", border: "none", color: T.text.dim, padding: 4, cursor: "pointer" }}><RefreshCw size={13} /></button>

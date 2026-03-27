@@ -2,7 +2,7 @@ import { Capacitor } from "@capacitor/core";
 import { APP_VERSION } from "./constants.js";
 import { fetchWithRetry } from "./fetchWithRetry.js";
 import { log } from "./logger.js";
-import { getBackendUrl } from "./api.js";
+import { getBackendUrl } from "./backendUrl.js";
 import { getRevenueCatAppUserId } from "./revenuecat.js";
 import {
   deleteSecureItem,

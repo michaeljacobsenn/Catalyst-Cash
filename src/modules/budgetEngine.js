@@ -15,9 +15,32 @@ export function paychecksPerMonth(freq) {
 
 /**
  * Returns per-cycle take-home from financialConfig.
- * Uses paycheckStandard (already per-paycheck).
+ * Prefer explicit income sources when present; otherwise fall back to paycheckStandard.
  */
 export function computeCycleIncome(financialConfig) {
+  const incomeSources = Array.isArray(financialConfig?.incomeSources) ? financialConfig.incomeSources : [];
+  if (incomeSources.length > 0) {
+    const annualIncome = incomeSources.reduce((sum, source) => {
+      const amount = Math.max(0, Number(source?.amount) || 0);
+      const frequency = String(source?.frequency || "monthly").toLowerCase();
+      if (amount <= 0) return sum;
+
+      if (frequency === "weekly") return sum + (amount * 52);
+      if (frequency === "bi-weekly" || frequency === "biweekly") return sum + (amount * 26);
+      if (frequency === "semi-monthly" || frequency === "semimonthly") return sum + (amount * 24);
+      if (frequency === "quarterly") return sum + (amount * 4);
+      if (frequency === "annual" || frequency === "yearly") return sum + amount;
+      return sum + (amount * 12);
+    }, 0);
+
+    if (annualIncome > 0) {
+      const cyclesPerYear = paychecksPerMonth(financialConfig?.payFrequency) * 12;
+      if (cyclesPerYear > 0) {
+        return Math.round((annualIncome / cyclesPerYear) * 100) / 100;
+      }
+    }
+  }
+
   return Number(financialConfig?.paycheckStandard) || 0;
 }
 

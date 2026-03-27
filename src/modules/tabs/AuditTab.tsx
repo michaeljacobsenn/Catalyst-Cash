@@ -18,7 +18,7 @@
   import { buildPromoLine } from "../planCatalog.js";
   import { shouldShowGating } from "../subscription.js";
   import { Badge,Card } from "../ui.js";
-  import { exportAllAudits,exportAuditCSV,exportSelectedAudits,fmt,fmtDate } from "../utils.js";
+  import { fmt,fmtDate } from "../utils.js";
   import "./DashboardTab.css";
   import AuditExportSheet from "./AuditExportSheet.js";
   import ProBanner from "./ProBanner.js";
@@ -244,7 +244,31 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
   const toggle = i => { const s = new Set(sel); s.has(i) ? s.delete(i) : s.add(i); setSel(s); };
   const toggleAll = () => setSel(allSel ? new Set() : new Set(filteredAudits.map((_, i) => i)));
   const exitSel = () => { setSelMode(false); setSel(new Set()); };
-  const doExportSel = () => { exportSelectedAudits(filteredAudits.filter((_, i) => sel.has(i))); exitSel(); };
+  const doExportSel = async () => {
+    try {
+      const { exportSelectedAudits } = await import("../auditExports.js");
+      await exportSelectedAudits(filteredAudits.filter((_, i) => sel.has(i)));
+      exitSel();
+    } catch (error) {
+      toast?.error?.(error instanceof Error ? error.message : "Export failed");
+    }
+  };
+  const handleExportCsv = async () => {
+    try {
+      const { exportAuditCSV } = await import("../auditExports.js");
+      await exportAuditCSV(audits);
+    } catch (error) {
+      toast?.error?.(error instanceof Error ? error.message : "Export failed");
+    }
+  };
+  const handleExportJson = async () => {
+    try {
+      const { exportAllAudits } = await import("../auditExports.js");
+      await exportAllAudits(audits);
+    } catch (error) {
+      toast?.error?.(error instanceof Error ? error.message : "Export failed");
+    }
+  };
 
   const onRunAudit = () => { haptic.medium(); navTo("input"); };
   const onViewResult = (a: AuditRecord | null | undefined) => {
@@ -507,7 +531,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                 {selMode && sel.size > 0 && (
                   <button
-                    onClick={doExportSel}
+                    onClick={() => void doExportSel()}
                     style={{
                       display: "flex", alignItems: "center", gap: 4, padding: "0 12px", height: 32,
                       borderRadius: 12, border: `1px solid ${T.accent.primary}40`,
@@ -530,7 +554,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                   {selMode ? "CANCEL" : "SELECT"}
                 </button>
                 <button
-                  onClick={() => exportAuditCSV(audits)}
+                  onClick={() => void handleExportCsv()}
                   title="Export CSV"
                   style={{
                     padding: "0 12px", height: 32, borderRadius: 12,
@@ -542,7 +566,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                   CSV
                 </button>
                 <button
-                  onClick={() => exportAllAudits(audits)}
+                  onClick={() => void handleExportJson()}
                   title="Export All JSON"
                   style={{
                     padding: "0 12px", height: 32, borderRadius: 12,

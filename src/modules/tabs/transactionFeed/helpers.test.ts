@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCSV, buildRewardComparison, formatRewardRate, formatTransactionTime, isTransactionInSameMonth, normalizeTransactionResult } from "./helpers";
+import { buildCSV, buildRewardComparison, estimateRewardCapUsage, estimateStatementCycleSpend, formatRewardRate, formatTransactionTime, isTransactionInSameMonth, normalizeTransactionResult } from "./helpers";
 
 describe("transaction feed helpers", () => {
   it("normalizes legacy transaction payloads", () => {
@@ -80,6 +80,21 @@ describe("transaction feed helpers", () => {
     expect(comparison?.usedOptimal).toBe(false);
   });
 
+  it("preserves best-card caveats in reward comparisons", () => {
+    const comparison = buildRewardComparison(
+      {
+        amount: 140,
+        category: "travel",
+        merchantName: "Hilton Garden Inn",
+      },
+      [{ id: "cfu", name: "Chase Freedom Unlimited" }] as never[],
+      undefined
+    );
+
+    expect(comparison?.bestCardNotes).toContain("Chase Travel");
+    expect(comparison?.optimalYield).toBe(2.25);
+  });
+
   it("falls back to a baseline estimate when the used card cannot be matched", () => {
     const comparison = buildRewardComparison(
       {
@@ -98,6 +113,82 @@ describe("transaction feed helpers", () => {
     expect(comparison?.incrementalRewardValue).toBeCloseTo(0.8);
   });
 
+  it("does not guess the used card from institution alone when multiple cards share the issuer", () => {
+    const comparison = buildRewardComparison(
+      {
+        amount: 75,
+        category: "travel",
+        institution: "Chase",
+      },
+      [
+        { id: "csp", name: "Chase Sapphire Preferred", institution: "Chase" },
+        { id: "cfu", name: "Chase Freedom Unlimited", institution: "Chase" },
+      ] as never[],
+      undefined
+    );
+
+    expect(comparison?.usedCardMatched).toBe(false);
+    expect(comparison?.usedDisplayName).toBe("Chase");
+  });
+
+  it("prefers a stable linkedCardId over issuer-level heuristics", () => {
+    const comparison = buildRewardComparison(
+      {
+        amount: 60,
+        category: "shopping",
+        institution: "Chase",
+        linkedCardId: "linked-card",
+      },
+      [
+        { id: "other-card", name: "Chase Freedom Unlimited", institution: "Chase" },
+        { id: "linked-card", name: "Prime Visa", institution: "Chase" },
+        { id: "best", name: "Apple Card" },
+      ] as never[],
+      undefined
+    );
+
+    expect(comparison?.usedCardMatched).toBe(true);
+    expect(comparison?.usedDisplayName).toBe("Prime Visa");
+  });
+
+  it("matches the used card by Plaid account id when the linked card id is not present", () => {
+    const comparison = buildRewardComparison(
+      {
+        amount: 100,
+        category: "online_shopping",
+        accountId: "acct_prime",
+      },
+      [
+        { id: "prime", name: "Prime Visa", _plaidAccountId: "acct_prime" },
+        { id: "best", name: "Apple Card" },
+      ] as never[],
+      undefined
+    );
+
+    expect(comparison?.usedCardMatched).toBe(true);
+    expect(comparison?.usedDisplayName).toBe("Prime Visa");
+    expect(comparison?.actualYield).toBe(5);
+    expect(comparison?.usedCardMatchConfidence).toBe("high");
+  });
+
+  it("uses zero baseline rewards when the transaction is linked to a bank account instead of a card", () => {
+    const comparison = buildRewardComparison(
+      {
+        amount: 80,
+        category: "shopping",
+        accountName: "Checking",
+        linkedBankAccountId: "bank_1",
+      },
+      [{ id: "best", name: "Apple Card" }] as never[],
+      undefined
+    );
+
+    expect(comparison?.usedCardMatched).toBe(false);
+    expect(comparison?.actualYield).toBe(0);
+    expect(comparison?.actualRewardValue).toBe(0);
+    expect(comparison?.incrementalRewardValue).toBeCloseTo(1.6);
+  });
+
   it("formats reward rates consistently for the ledger badges", () => {
     expect(formatRewardRate(2)).toBe("2.0%");
     expect(formatRewardRate(2.75)).toBe("2.8%");
@@ -107,5 +198,83 @@ describe("transaction feed helpers", () => {
   it("suppresses fake times for date-only ledger rows", () => {
     expect(formatTransactionTime("2026-03-26")).toBeNull();
     expect(formatTransactionTime("2026-03-26T13:45:00Z")).toBeTruthy();
+  });
+
+  it("estimates statement-cycle spend by card and reward category", () => {
+    const spendMap = estimateStatementCycleSpend(
+      [{ id: "custom", name: "Citi Custom Cash Card", statementCloseDay: 20 }] as never[],
+      [
+        {
+          date: "2026-03-25",
+          amount: 72,
+          category: "dining",
+          merchantName: "Chipotle",
+          linkedCardId: "custom",
+        },
+        {
+          date: "2026-03-10",
+          amount: 18,
+          category: "dining",
+          merchantName: "Chipotle",
+          linkedCardId: "custom",
+        },
+      ],
+      new Date("2026-03-26T12:00:00")
+    );
+
+    expect(spendMap).toEqual({
+      custom: {
+        dining: 72,
+      },
+    });
+  });
+
+  it("uses the correct cap period for annual and statement-cycle cards", () => {
+    const spendMap = estimateRewardCapUsage(
+      [
+        { id: "bcp", name: "American Express Blue Cash Preferred Card" },
+        { id: "custom", name: "Citi Custom Cash Card", statementCloseDay: 20 },
+      ] as never[],
+      [
+        {
+          date: "2026-01-05",
+          amount: 120,
+          category: "groceries",
+          merchantName: "Whole Foods",
+          linkedCardId: "bcp",
+        },
+        {
+          date: "2025-12-28",
+          amount: 80,
+          category: "groceries",
+          merchantName: "Whole Foods",
+          linkedCardId: "bcp",
+        },
+        {
+          date: "2026-03-22",
+          amount: 40,
+          category: "dining",
+          merchantName: "Chipotle",
+          linkedCardId: "custom",
+        },
+        {
+          date: "2026-03-10",
+          amount: 15,
+          category: "dining",
+          merchantName: "Chipotle",
+          linkedCardId: "custom",
+        },
+      ],
+      new Date("2026-03-26T12:00:00")
+    );
+
+    expect(spendMap).toEqual({
+      bcp: {
+        groceries: 120,
+      },
+      custom: {
+        dining: 40,
+      },
+    });
   });
 });

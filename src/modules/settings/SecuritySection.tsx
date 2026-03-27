@@ -7,10 +7,13 @@
   import { Card,Label } from "../ui.js";
   import { db } from "../utils.js";
 
-const Toggle = ({ value, onChange, ariaLabel }) => (
+const Toggle = ({ value, onChange, ariaLabel, disabled = false }) => (
   <button
+    type="button"
     onClick={() => onChange(!value)}
     aria-label={ariaLabel}
+    aria-disabled={disabled}
+    disabled={disabled}
     style={{
       width: 48,
       height: 28,
@@ -23,11 +26,12 @@ const Toggle = ({ value, onChange, ariaLabel }) => (
       WebkitAppearance: "none",
       appearance: "none",
       background: value ? T.accent.primary : T.text.muted,
-      cursor: "pointer",
+      cursor: disabled ? "not-allowed" : "pointer",
       position: "relative",
       flexShrink: 0,
       transition: "background .25s ease",
       boxShadow: value ? `0 0 10px ${T.accent.primaryDim}` : "none",
+      opacity: disabled ? 0.6 : 1,
     }}
   >
     <div
@@ -54,6 +58,7 @@ export default function SecuritySection({
   handleRequireAuthToggle,
   useFaceId,
   handleUseFaceIdToggle,
+  biometricToggleBusy,
   secretStorageStatus,
   lockTimeout,
   setLockTimeout,
@@ -179,11 +184,25 @@ export default function SecuritySection({
                 Enable Face ID / Touch ID
               </span>
               <p style={{ fontSize: 10, color: T.text.muted, marginTop: 2 }}>
-                Use biometrics for faster unlocking
+                {biometricToggleBusy ? "Verifying biometrics..." : "Use biometrics for faster unlocking"}
               </p>
             </div>
-            <div style={{ pointerEvents: secureControlsDisabled ? "none" : "auto", opacity: secureControlsDisabled ? 0.45 : 1 }}>
-              <Toggle value={useFaceId} onChange={handleUseFaceIdToggle} ariaLabel="Enable Face ID / Touch ID" />
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                pointerEvents: secureControlsDisabled || biometricToggleBusy ? "none" : "auto",
+                opacity: secureControlsDisabled ? 0.45 : 1,
+              }}
+            >
+              {biometricToggleBusy ? <Loader2 size={14} style={{ color: T.text.muted, animation: "spin 1s linear infinite" }} /> : null}
+              <Toggle
+                value={useFaceId}
+                onChange={handleUseFaceIdToggle}
+                ariaLabel="Enable Face ID / Touch ID"
+                disabled={secureControlsDisabled || biometricToggleBusy}
+              />
             </div>
           </div>
           <div

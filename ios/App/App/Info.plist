@@ -2,10 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>com.jacobsen.portfoliopro.sync</string>
-	</array>
 	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
@@ -35,11 +31,7 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>Catalyst Cash requires Face ID to securely authenticate your financial data.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Catalyst Cash  uses your location to identify nearby merchants and suggest the best credit card for maximum rewards from your wallet.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Catalyst Cash needs access to save exported run reports to your device.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Catalyst Cash needs access to share exported run reports from your device.</string>
+	<string>Catalyst Cash uses your location to identify nearby merchants and suggest the best credit card for maximum rewards from your wallet.</string>
 	<key>NSUbiquitousContainers</key>
 	<dict>
 		<key>iCloud.com.jacobsen.portfoliopro</key>
@@ -71,18 +63,13 @@
 			</array>
 		</dict>
 	</dict>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>fetch</string>
-		<string>processing</string>
-	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
-		<string>armv7</string>
+		<string>arm64</string>
 	</array>
 	<key>UIStatusBarStyle</key>
 	<string>UIStatusBarStyleLightContent</string>
@@ -90,14 +77,7 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>UIViewControllerBasedStatusBarAppearance</key>
-	<true/>
+		<key>UIViewControllerBasedStatusBarAppearance</key>
+		<true/>
 </dict>
 </plist>
