@@ -377,14 +377,15 @@ export function useClipboardAuditImport({ history, handleManualImport, toast }: 
 }
 
 interface RecoverableAuditLifecycleParams {
-  recoverableAuditDraft: { sessionTs?: string | null; raw?: string | null } | null | undefined;
+  recoverableAuditDraft: { sessionTs?: string | null; raw?: string | null; promptSurfacedAt?: string | null } | null | undefined;
   navTo: (tab: AppTab) => void;
   openRecoverableAuditDraft: () => void;
   setResultsBackTarget: (tab: AppTab) => void;
   toast: ToastApi;
   abortActiveAudit: (reason?: string) => void;
   abortActiveChatStream: () => void;
-  checkRecoverableAuditDraft: () => Promise<{ sessionTs?: string | null; raw?: string | null } | null | undefined>;
+  checkRecoverableAuditDraft: () => Promise<{ sessionTs?: string | null; raw?: string | null; promptSurfacedAt?: string | null } | null | undefined>;
+  markRecoverableAuditDraftPrompted: (sessionTs?: string | null) => Promise<void>;
 }
 
 export function useRecoverableAuditLifecycle({
@@ -396,18 +397,21 @@ export function useRecoverableAuditLifecycle({
   abortActiveAudit,
   abortActiveChatStream,
   checkRecoverableAuditDraft,
+  markRecoverableAuditDraftPrompted,
 }: RecoverableAuditLifecycleParams) {
   const lastPromptedAuditDraftRef = useRef<string | null>(null);
   const abortActiveAuditRef = useRef(abortActiveAudit);
   const abortActiveChatStreamRef = useRef(abortActiveChatStream);
   const checkRecoverableAuditDraftRef = useRef(checkRecoverableAuditDraft);
+  const markRecoverableAuditDraftPromptedRef = useRef(markRecoverableAuditDraftPrompted);
   const surfaceRecoverableAuditPromptRef =
     useRef<(draft?: typeof recoverableAuditDraft) => void>(() => {});
 
   const surfaceRecoverableAuditPrompt = useCallback(
     (draft = recoverableAuditDraft) => {
-      if (!draft?.sessionTs || !draft?.raw?.trim()) return;
+      if (!draft?.sessionTs || !draft?.raw?.trim() || draft.promptSurfacedAt) return;
       lastPromptedAuditDraftRef.current = draft.sessionTs;
+      void markRecoverableAuditDraftPromptedRef.current(draft.sessionTs);
       toast.warning("Previous audit was interrupted. Recover the partial draft or rerun the audit.", {
         duration: 9000,
         action: {
@@ -425,6 +429,7 @@ export function useRecoverableAuditLifecycle({
 
   useEffect(() => {
     if (!recoverableAuditDraft?.sessionTs) return;
+    if (recoverableAuditDraft.promptSurfacedAt) return;
     if (lastPromptedAuditDraftRef.current === recoverableAuditDraft.sessionTs) return;
     surfaceRecoverableAuditPrompt(recoverableAuditDraft);
   }, [recoverableAuditDraft, surfaceRecoverableAuditPrompt]);
@@ -440,6 +445,10 @@ export function useRecoverableAuditLifecycle({
   useEffect(() => {
     checkRecoverableAuditDraftRef.current = checkRecoverableAuditDraft;
   }, [checkRecoverableAuditDraft]);
+
+  useEffect(() => {
+    markRecoverableAuditDraftPromptedRef.current = markRecoverableAuditDraftPrompted;
+  }, [markRecoverableAuditDraftPrompted]);
 
   useEffect(() => {
     surfaceRecoverableAuditPromptRef.current = surfaceRecoverableAuditPrompt;
@@ -459,7 +468,7 @@ export function useRecoverableAuditLifecycle({
 
       resumeHandle = await CapApp.addListener("resume", async () => {
         const draft = await checkRecoverableAuditDraftRef.current();
-        if (draft?.sessionTs) {
+        if (draft?.sessionTs && !draft.promptSurfacedAt) {
           surfaceRecoverableAuditPromptRef.current(draft);
         }
       });

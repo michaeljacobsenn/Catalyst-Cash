@@ -68,7 +68,7 @@ describe("getSystemPrompt", () => {
 
   it("relies on native normalization instead of requiring exact dashboard row order", () => {
     const prompt = getSystemPrompt("gemini", minConfig);
-    expect(prompt).toContain("The app normalizes dashboard rows");
+    expect(prompt).toContain("DASHBOARD must reconcile to native cash, debt, pending, and available anchors.");
     expect(prompt).not.toContain("dashboardCard has exactly 5 rows");
   });
 
@@ -580,7 +580,7 @@ describe("launch prompt eval pack", () => {
     expect(prompt).toContain("Watchouts / alternative path");
     expect(prompt).toContain("Separate observed facts from assumptions.");
     expect(prompt).toContain("make a recommendation, name the runner-up");
-    expect(prompt).toContain("ask at most 2 tightly targeted follow-up questions");
+    expect(prompt).toContain("ask at most 2 targeted follow-up questions");
   });
 
   it("preserves split-paycheck context so salary users with uneven pay cycles are modeled correctly", () => {

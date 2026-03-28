@@ -3,6 +3,7 @@ import { extractDashboardMetrics } from "../../utils.js";
 
 import type {
   AuditRecord,
+  BankAccount,
   Card,
   CatalystCashConfig,
   ChatHistoryMessage,
@@ -95,6 +96,32 @@ export interface CompactFinancialBrief {
       nextDue: string | null;
       chargedTo: string | null;
       category: string | null;
+    }>;
+  };
+  bankAccounts: Array<{
+    id: string;
+    name: string;
+    bank: string;
+    accountType: string;
+    balance: number | null;
+    apy: number | null;
+    plaidLinked: boolean;
+    reconnectRequired: boolean;
+  }>;
+  nearTerm: {
+    totalDue14Days: number;
+    byFundingSource: Array<{
+      label: string;
+      total: number;
+      itemCount: number;
+      nextDue: string | null;
+    }>;
+    items: Array<{
+      name: string;
+      amount: number;
+      nextDue: string | null;
+      chargedTo: string | null;
+      chargedToType: string | null;
     }>;
   };
   trends: Array<{
@@ -257,6 +284,64 @@ function summarizeRenewals(renewals: Renewal[] | null | undefined) {
   };
 }
 
+function summarizeBankAccounts(bankAccounts: BankAccount[] | null | undefined) {
+  if (!Array.isArray(bankAccounts) || bankAccounts.length === 0) return [];
+  return [...bankAccounts]
+    .filter(Boolean)
+    .sort((left, right) => (Number(right?._plaidBalance ?? right?.balance) || 0) - (Number(left?._plaidBalance ?? left?.balance) || 0))
+    .slice(0, 8)
+    .map((account) => ({
+      id: String(account?.id || ""),
+      name: String(account?.name || "Bank account"),
+      bank: String(account?.bank || ""),
+      accountType: String(account?.accountType || ""),
+      balance: toNumber(account?._plaidBalance ?? account?.balance),
+      apy: toNumber(account?.apy),
+      plaidLinked: Boolean(account?._plaidAccountId || account?._plaidConnectionId),
+      reconnectRequired: Boolean(account?._plaidManualFallback),
+    }));
+}
+
+function summarizeNearTermFunding(renewals: Renewal[] | null | undefined) {
+  const items = (Array.isArray(renewals) ? renewals : [])
+    .filter((renewal) => renewal && renewal.isCancelled !== true && renewal.archivedAt == null && renewal.nextDue)
+    .map((renewal) => ({
+      name: String(renewal?.name || "Recurring charge"),
+      amount: roundMoney(renewal?.amount),
+      nextDue: renewal?.nextDue ? String(renewal.nextDue) : null,
+      chargedTo: renewal?.chargedTo ? String(renewal.chargedTo) : null,
+      chargedToType: renewal?.chargedToType ? String(renewal.chargedToType) : null,
+    }))
+    .filter((renewal) => {
+      if (!renewal.nextDue) return false;
+      const due = new Date(`${renewal.nextDue}T12:00:00Z`);
+      if (!Number.isFinite(due.getTime())) return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const days = Math.ceil((due.getTime() - today.getTime()) / 86400000);
+      return days >= 0 && days <= 14;
+    })
+    .sort((left, right) => String(left.nextDue || "").localeCompare(String(right.nextDue || "")));
+
+  const sourceMap = new Map<string, { total: number; itemCount: number; nextDue: string | null }>();
+  for (const item of items) {
+    const key = item.chargedTo || "Unassigned";
+    const current = sourceMap.get(key) || { total: 0, itemCount: 0, nextDue: null };
+    current.total += item.amount;
+    current.itemCount += 1;
+    if (!current.nextDue || (item.nextDue && item.nextDue < current.nextDue)) current.nextDue = item.nextDue;
+    sourceMap.set(key, current);
+  }
+
+  return {
+    totalDue14Days: roundMoney(items.reduce((sum, item) => sum + item.amount, 0)),
+    byFundingSource: [...sourceMap.entries()]
+      .map(([label, payload]) => ({ label, ...payload }))
+      .sort((left, right) => right.total - left.total),
+    items: items.slice(0, 12),
+  };
+}
+
 function summarizeTrends(trendContext: TrendContextEntry[] | null | undefined) {
   if (!Array.isArray(trendContext) || trendContext.length === 0) return [];
   return trendContext.slice(-6).map((entry) => ({
@@ -294,6 +379,7 @@ export function buildCompactFinancialBrief({
   current,
   financialConfig,
   cards,
+  bankAccounts,
   renewals,
   history,
   trendContext,
@@ -301,6 +387,7 @@ export function buildCompactFinancialBrief({
   current: AuditRecord | null | undefined;
   financialConfig: CatalystCashConfig | null | undefined;
   cards: Card[] | null | undefined;
+  bankAccounts: BankAccount[] | null | undefined;
   renewals: Renewal[] | null | undefined;
   history: AuditRecord[] | null | undefined;
   trendContext: TrendContextEntry[] | null | undefined;
@@ -308,7 +395,9 @@ export function buildCompactFinancialBrief({
   const parsed = current?.parsed || null;
   const metrics = extractDashboardMetrics(parsed);
   const summarizedCards = summarizeCards(cards);
+  const summarizedBankAccounts = summarizeBankAccounts(bankAccounts);
   const summarizedRenewals = summarizeRenewals(renewals);
+  const nearTermFunding = summarizeNearTermFunding(renewals);
   const summarizedNonCardDebts = summarizeNonCardDebts(financialConfig);
   const totalCardDebt = roundMoney(
     (Array.isArray(cards) ? cards : []).reduce((sum, card) => sum + (Number(card?.balance) || 0), 0)
@@ -376,7 +465,9 @@ export function buildCompactFinancialBrief({
       nonCardDebts: summarizedNonCardDebts,
     },
     cards: summarizedCards,
+    bankAccounts: summarizedBankAccounts,
     renewals: summarizedRenewals,
+    nearTerm: nearTermFunding,
     trends: summarizeTrends(trendContext),
     auditHistory: compactChatAuditHistory(history),
   };

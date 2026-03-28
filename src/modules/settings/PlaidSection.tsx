@@ -17,7 +17,7 @@ import { useEffect,useState } from "react";
     saveConnectionLinks,
     setPreferredFreeConnectionId,
   } from "../plaid.js";
-  import { Card,Label } from "../ui.js";
+  import { Card,Label,ListRow,ListSection,NoticeBanner } from "../ui.js";
 
 interface PlaidConnectionAccount {
   id?: string;
@@ -318,21 +318,13 @@ export default function PlaidSection({
       </p>
 
       {connectionStatus && (
-        <div
-          style={{
-            marginBottom: 14,
-            padding: "10px 12px",
-            borderRadius: T.radius.md,
-            border: `1px solid ${T.status.red}25`,
-            background: T.status.redDim,
-            color: T.status.red,
-            fontSize: 11,
-            fontWeight: 700,
-            lineHeight: 1.5,
-          }}
-        >
-          {connectionStatus.message}
-        </div>
+        <NoticeBanner
+          tone={connectionStatus.tone === "error" ? "error" : "info"}
+          compact
+          style={{ marginBottom: 14 }}
+          title={connectionStatus.tone === "error" ? "Connection Issue" : "Connection Update"}
+          message={connectionStatus.message}
+        />
       )}
 
       {reconnectQueue.length > 0 && (
@@ -414,46 +406,31 @@ export default function PlaidSection({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
         {plaidConnections.length === 0 ? (
-          <div
-            style={{
-              padding: 16,
-              borderRadius: T.radius.md,
-              border: `1px dashed ${T.border.default}`,
-              textAlign: "center",
-              color: T.text.muted,
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
-            No linked accounts yet.
-          </div>
+          <NoticeBanner
+            tone="info"
+            title="No Linked Institutions"
+            message="Link a bank once and Catalyst will keep your balances, cards, and transactions in sync without cluttering the rest of the app."
+          />
         ) : (
-          [...plaidConnections]
-            .sort((a, b) => (a.institutionName || "").localeCompare(b.institutionName || ""))
-            .map(conn => (
-              <div
+          <ListSection>
+            {[...plaidConnections]
+              .sort((a, b) => (a.institutionName || "").localeCompare(b.institutionName || ""))
+              .map((conn, index, arr) => (
+              <ListRow
                 key={conn.id}
-                style={{
-                  padding: "14px 16px",
-                  borderRadius: T.radius.md,
-                  background: T.bg.elevated,
-                  border: `1px solid ${T.border.default}`,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                isLast={index === arr.length - 1}
+                icon={
                   <div
                     style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: "50%",
+                      width: 36,
+                      height: 36,
+                      borderRadius: 12,
                       background: "#fff",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       overflow: "hidden",
+                      boxShadow: "0 8px 14px rgba(0,0,0,0.08)",
                     }}
                   >
                     {conn.institutionLogo ? (
@@ -466,22 +443,19 @@ export default function PlaidSection({
                       <Building2 size={16} color="#000" />
                     )}
                   </div>
-                  <div>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: T.text.primary, display: "block" }}>
-                      {conn.institutionName || "Unknown Bank"}
-                    </span>
-                    <span style={{ fontSize: 11, color: T.text.muted, marginTop: 2, display: "block" }}>
-                      {conn._freeTierPaused
-                        ? "Paused on Free plan"
-                        : hasFreeTierPausedConnections && activeFreeConnectionId === conn.id
-                          ? "Active live sync on Free plan"
-                        : conn._needsReconnect
-                          ? "Reconnect required"
-                          : `${conn.accounts?.length || 0} Accounts Linked`}
-                    </span>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
+                }
+                title={conn.institutionName || "Unknown Bank"}
+                description={
+                  conn._freeTierPaused
+                    ? "Paused on Free plan"
+                    : hasFreeTierPausedConnections && activeFreeConnectionId === conn.id
+                      ? "Active live sync on Free plan"
+                      : conn._needsReconnect
+                        ? "Reconnect required"
+                        : `${conn.accounts?.length || 0} linked account${(conn.accounts?.length || 0) === 1 ? "" : "s"}`
+                }
+                action={
+                  <div style={{ display: "flex", gap: 8 }}>
                   {conn._freeTierPaused && confirmingDisconnect !== conn.id && (
                     <button
                       onClick={() => handleKeepLive(conn)}
@@ -592,8 +566,11 @@ export default function PlaidSection({
                     </button>
                   )}
                 </div>
-              </div>
+                }
+              />
             ))
+            }
+          </ListSection>
         )}
       </div>
 

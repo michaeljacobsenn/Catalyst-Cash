@@ -18,6 +18,18 @@ function buildUsage(promptTokens = 0, completionTokens = 0) {
   };
 }
 
+function extractHistoryText(entry) {
+  if (!entry) return "";
+  if (typeof entry.content === "string") return entry.content;
+  if (Array.isArray(entry.parts)) {
+    return entry.parts
+      .map((part) => (typeof part?.text === "string" ? part.text : ""))
+      .filter(Boolean)
+      .join("\n");
+  }
+  return "";
+}
+
 export async function callGemini(apiKey, { snapshot, systemPrompt, history, model, stream, responseFormat, timeoutMs = 240_000 }) {
   const m = model || DEFAULTS.gemini;
   const endpoint = stream
@@ -36,8 +48,8 @@ export async function callGemini(apiKey, { snapshot, systemPrompt, history, mode
   const body = {
     contents: [
       ...(history || []).map(h => ({
-        role: h.role === "assistant" ? "model" : "user",
-        parts: [{ text: h.content }],
+        role: h.role === "assistant" || h.role === "model" ? "model" : "user",
+        parts: [{ text: extractHistoryText(h) }],
       })),
       { parts: [{ text: snapshot }], role: "user" },
     ],
@@ -278,13 +290,13 @@ export async function callClaude(apiKey, { snapshot, systemPrompt, history, mode
 export function getProviderHandler(provider) {
   switch (provider) {
     case "gemini":
-      return { handler: callGemini, keyName: "GOOGLE_API_KEY" };
+      return { handler: callGemini, keyName: "GOOGLE_API_KEY", keyNames: ["GOOGLE_API_KEY", "GEMINI_API_KEY"] };
     case "openai":
-      return { handler: callOpenAI, keyName: "OPENAI_API_KEY" };
+      return { handler: callOpenAI, keyName: "OPENAI_API_KEY", keyNames: ["OPENAI_API_KEY"] };
     case "claude":
     case "anthropic":
-      return { handler: callClaude, keyName: "ANTHROPIC_API_KEY" };
+      return { handler: callClaude, keyName: "ANTHROPIC_API_KEY", keyNames: ["ANTHROPIC_API_KEY"] };
     default:
-      return { handler: callGemini, keyName: "GOOGLE_API_KEY" };
+      return { handler: callGemini, keyName: "GOOGLE_API_KEY", keyNames: ["GOOGLE_API_KEY", "GEMINI_API_KEY"] };
   }
 }

@@ -317,8 +317,18 @@ function normalizeDashboardCard(value) {
   const rows = Array.isArray(value) ? value : [];
   const byCategory = new Map();
   const nonCanonicalCategories = [];
+  const toneToStatus = {
+    good: "Healthy",
+    neutral: "Tracked",
+    warn: "Watch",
+    bad: "Urgent",
+  };
   for (const row of rows) {
-    const rawCategory = typeof row?.category === "string" ? row.category.trim() : "";
+    const rawCategory = typeof row?.category === "string"
+      ? row.category.trim()
+      : typeof row?.label === "string"
+        ? row.label.trim()
+        : "";
     if (!rawCategory) continue;
     const category = CANONICAL_DASHBOARD_CATEGORIES.get(rawCategory.toLowerCase());
     if (!category) {
@@ -326,10 +336,24 @@ function normalizeDashboardCard(value) {
       continue;
     }
     if (byCategory.has(category)) continue;
+    const amount =
+      typeof row?.amount === "string"
+        ? row.amount
+        : typeof row?.value === "string"
+          ? row.value
+          : "$0.00";
+    const status =
+      typeof row?.status === "string"
+        ? row.status
+        : typeof row?.note === "string"
+          ? row.note
+          : typeof row?.tone === "string"
+            ? toneToStatus[String(row.tone).trim().toLowerCase()] || String(row.tone)
+            : "";
     byCategory.set(category, {
       category,
-      amount: typeof row?.amount === "string" ? row.amount : "$0.00",
-      status: typeof row?.status === "string" ? row.status : "",
+      amount,
+      status,
     });
   }
   const uniqueNonCanonical = [...new Set(nonCanonicalCategories)];
@@ -340,6 +364,64 @@ function normalizeDashboardCard(value) {
     rows: DASHBOARD_ROW_ORDER.map(category => byCategory.get(category) || { category, amount: "$0.00", status: "" }),
     nonCanonicalCategories: uniqueNonCanonical,
   };
+}
+
+function defaultDashboardStatus(category, amount) {
+  const safeAmount = Number(amount) || 0;
+  if (category === "Checking") return safeAmount > 0 ? "Tracked" : "At risk";
+  if (category === "Vault") return safeAmount > 0 ? "Tracked" : "Empty";
+  if (category === "Pending") return safeAmount > 0 ? "Watch" : "Clear";
+  if (category === "Debts") return safeAmount > 0 ? "Tracked" : "Clear";
+  if (category === "Available") return safeAmount > 0 ? "Deploy" : "Protected";
+  return "";
+}
+
+function buildDashboardRowsFromAnchors(anchors = {}, existingRows = []) {
+  const statusByCategory = new Map(
+    (Array.isArray(existingRows) ? existingRows : [])
+      .filter((row) => row?.category)
+      .map((row) => [row.category, typeof row.status === "string" ? row.status : ""])
+  );
+
+  return DASHBOARD_ROW_ORDER.map((category) => {
+    const key = category.toLowerCase();
+    const amount = Number.isFinite(Number(anchors?.[key])) ? Number(anchors[key]) : 0;
+    return {
+      category,
+      amount: fmt(amount),
+      status: statusByCategory.get(category) || defaultDashboardStatus(category, amount),
+    };
+  });
+}
+
+function shouldRepairDashboardRows(rows = [], anchors = {}) {
+  const meaningfulAnchors = Object.entries(anchors).filter(([, value]) => Number.isFinite(Number(value)));
+  if (meaningfulAnchors.length === 0) return false;
+
+  let mismatches = 0;
+  let positiveAnchors = 0;
+  let zeroLikeRows = 0;
+
+  for (const [key, rawExpected] of meaningfulAnchors) {
+    const expected = Number(rawExpected);
+    if (expected > 0) positiveAnchors += 1;
+    const category = CANONICAL_DASHBOARD_CATEGORIES.get(String(key).toLowerCase()) || key.charAt(0).toUpperCase() + key.slice(1);
+    const row = (rows || []).find((entry) => entry?.category === category);
+    const actual = parseCurrency(row?.amount);
+    if (actual == null || Math.abs(actual - expected) > 1) mismatches += 1;
+    if ((actual == null || Math.abs(actual) < 0.01) && expected > 0) zeroLikeRows += 1;
+  }
+
+  return mismatches >= 2 || (positiveAnchors > 0 && zeroLikeRows === positiveAnchors);
+}
+
+function normalizeInvestmentAnchors(anchors = {}) {
+  const balance = Number.isFinite(Number(anchors?.balance)) ? fmt(Number(anchors.balance)) : null;
+  const netWorth = Number.isFinite(Number(anchors?.netWorth)) ? fmt(Number(anchors.netWorth)) : undefined;
+  const asOf = typeof anchors?.asOf === "string" && anchors.asOf.trim() ? anchors.asOf.trim() : "N/A";
+  const gateStatus = typeof anchors?.gateStatus === "string" && anchors.gateStatus.trim() ? anchors.gateStatus.trim() : "Tracked";
+  if (!balance) return null;
+  return { balance, asOf, gateStatus, netWorth };
 }
 
 function normalizeInvestmentsSummary(value) {
@@ -632,6 +714,8 @@ function inferAuditStatusFromSignals(score, riskFlags = []) {
  *   operationalSurplus?: number | null;
  *   nativeScore?: number | null;
  *   nativeRiskFlags?: string[] | null;
+ *   dashboardAnchors?: Record<string, number | null | undefined>;
+ *   investmentAnchors?: { balance?: number | null; asOf?: string | null; gateStatus?: string | null; netWorth?: number | null } | null;
  * }} [options]
  * @returns {import("../types/index.js").ParsedAudit | null}
  */
@@ -642,6 +726,8 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
     operationalSurplus = null,
     nativeScore = null,
     nativeRiskFlags = null,
+    dashboardAnchors = null,
+    investmentAnchors = null,
   } = options;
 
   const auditFlags = Array.isArray(parsed.auditFlags) ? [...parsed.auditFlags] : [];
@@ -659,6 +745,58 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
       "audit", "Non-canonical dashboard categories detected",
       { categories: consistency.nonCanonicalDashboardCategories.join(", ") }
     );
+  }
+
+  if (dashboardAnchors && shouldRepairDashboardRows(parsed.dashboardCard, dashboardAnchors)) {
+    parsed.dashboardCard = buildDashboardRowsFromAnchors(dashboardAnchors, parsed.dashboardCard);
+    if (parsed.structured && typeof parsed.structured === "object") {
+      parsed.structured.dashboardCard = parsed.dashboardCard.map((row) => ({
+        category: row.category,
+        amount: row.amount,
+        status: row.status,
+      }));
+    }
+    if (parsed.sections && typeof parsed.sections.dashboard === "string") {
+      parsed.sections = {
+        ...parsed.sections,
+        dashboard: parsed.dashboardCard
+          .map((row) => `**${row.category}:** ${row.amount} ${row.status ? `(${row.status})` : ""}`)
+          .join("\n"),
+      };
+    }
+    consistency.dashboardRepaired = true;
+    auditFlags.push({
+      code: "dashboard-repaired-to-native-anchors",
+      severity: "medium",
+      message: "Dashboard summary was rebuilt from native cash and debt anchors because the model output was materially inconsistent.",
+    });
+  }
+
+  const normalizedInvestmentAnchors = normalizeInvestmentAnchors(investmentAnchors || {});
+  const existingInvestmentMissing =
+    !parsed.investments ||
+    (!parsed.investments.balance || parsed.investments.balance === "N/A");
+  if (normalizedInvestmentAnchors && existingInvestmentMissing) {
+    parsed.investments = {
+      ...parsed.investments,
+      ...normalizedInvestmentAnchors,
+      cryptoValue: parsed.investments?.cryptoValue ?? null,
+    };
+    if (parsed.structured && typeof parsed.structured === "object") {
+      parsed.structured.investments = parsed.investments;
+    }
+    if (parsed.sections && typeof parsed.sections.investments === "string") {
+      parsed.sections = {
+        ...parsed.sections,
+        investments: `**Balance:** ${parsed.investments.balance}\n**As Of:** ${parsed.investments.asOf}\n**Gate:** ${parsed.investments.gateStatus}`,
+      };
+    }
+    consistency.investmentSummaryRepaired = true;
+    auditFlags.push({
+      code: "investments-summary-repaired",
+      severity: "low",
+      message: "Investments summary was backfilled from tracked balances because the model omitted it.",
+    });
   }
 
   if (parsed.healthScore) {

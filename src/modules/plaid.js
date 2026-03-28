@@ -993,6 +993,7 @@ export async function fetchAllBalancesAndLiabilities(options = {}) {
   const allowedConnectionIds = new Set(
     Array.from(options.connectionIds || []).map(id => String(id || "").trim()).filter(Boolean)
   );
+  const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
   let conns = await getConnections();
   if (allowedConnectionIds.size > 0) {
     conns = conns.filter(conn => allowedConnectionIds.has(String(conn?.id || "").trim()));
@@ -1022,13 +1023,36 @@ export async function fetchAllBalancesAndLiabilities(options = {}) {
   const results = [];
   for (let i = 0; i < conns.length; i++) {
     const conn = conns[i];
-    if (window.toast)
-      window.toast.info(`Syncing ${i + 1}/${conns.length}: ${conn.institutionName || "Bank"}…`, { duration: 2000 });
+    onProgress?.({
+      phase: "syncing",
+      current: i + 1,
+      completed: i,
+      total: conns.length,
+      institutionName: conn.institutionName || "Bank",
+    });
     try {
-      results.push(await fetchBalancesAndLiabilities(conn.id));
+      const result = await fetchBalancesAndLiabilities(conn.id);
+      results.push(result);
+      onProgress?.({
+        phase: "syncing",
+        current: i + 1,
+        completed: i + 1,
+        total: conns.length,
+        institutionName: conn.institutionName || "Bank",
+        result,
+      });
     } catch (e) {
       void log.warn("plaid", `sync failed for ${conn.institutionName}: ${e.message}`);
-      results.push({ ...conn, _error: e.message });
+      const result = { ...conn, _error: e.message };
+      results.push(result);
+      onProgress?.({
+        phase: "syncing",
+        current: i + 1,
+        completed: i + 1,
+        total: conns.length,
+        institutionName: conn.institutionName || "Bank",
+        result,
+      });
     }
   }
   return results;

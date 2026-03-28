@@ -41,6 +41,7 @@ interface RenewalsTabProps {
   proEnabled?: boolean;
   embedded?: boolean;
   privacyMode?: boolean;
+  themeTick?: number;
 }
 
 interface NegotiationSheetState {
@@ -197,8 +198,9 @@ function formatRenewalDueDate(dateValue?: string) {
 }
 const SearchableSelect = SearchableSelectBase as unknown as (props: SearchableSelectProps) => ReactNode;
 
-export default memo(function RenewalsTab({ proEnabled = false, embedded = false, privacyMode: _privacyModeTick = false }: RenewalsTabProps) {
+export default memo(function RenewalsTab({ proEnabled = false, embedded = false, privacyMode: _privacyModeTick = false, themeTick: _themeTick = 0 }: RenewalsTabProps) {
   void _privacyModeTick;
+  void _themeTick;
   const { current } = useAudit();
   const portfolioContext = usePortfolio();
   const { navTo } = useNavigation();

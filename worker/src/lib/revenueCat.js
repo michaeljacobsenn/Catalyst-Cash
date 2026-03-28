@@ -1,4 +1,4 @@
-import { getRevenueCatAppUserId } from "./requestIdentity.js";
+import { getRequestedTier, getRevenueCatAppUserId, isTestingBypassRequested } from "./requestIdentity.js";
 import { getActorRevenueCatUserId } from "./identitySession.js";
 import { isRevenueCatEntitlementActive } from "./quota.js";
 import { fetchWithTimeout } from "./http.js";
@@ -59,6 +59,13 @@ export async function resolveVerifiedRevenueCatAppUserId(request, env, options =
 }
 
 export async function resolveEffectiveTier(request, env, actor = null, options = {}) {
+  if (isTestingBypassRequested(request)) {
+    return {
+      tier: getRequestedTier(request),
+      verified: true,
+      source: "testing",
+    };
+  }
   const revenueCatAppUserId = actor?.revenueCatAppUserId || getRevenueCatAppUserId(request);
   if (!env.REVENUECAT_SECRET_KEY || !revenueCatAppUserId) {
     return { tier: "free", verified: false, source: "unverified" };

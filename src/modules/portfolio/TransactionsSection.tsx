@@ -54,15 +54,15 @@ export default function TransactionsSection({ collapsedSections, setCollapsedSec
                     gap: 12,
                     marginTop: 8,
                     marginBottom: collapsedSections.transactions ? 8 : 16,
-                    padding: "16px 20px",
-                    borderRadius: 24,
+                    padding: "14px 18px",
+                    borderRadius: 22,
                     cursor: "pointer",
                     userSelect: "none",
-                    background: T.bg.glass,
+                    background: `linear-gradient(180deg, ${T.bg.glass}, ${T.bg.card})`,
                     backdropFilter: "blur(20px)",
                     WebkitBackdropFilter: "blur(20px)",
                     border: `1px solid ${T.border.subtle}`,
-                    boxShadow: `0 4px 16px rgba(0,0,0,0.15), inset 0 1px 1px rgba(255,255,255,0.05)`,
+                    boxShadow: `0 10px 24px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.05)`,
                     transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
                 }}
             >
@@ -86,7 +86,7 @@ export default function TransactionsSection({ collapsedSections, setCollapsedSec
                 <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
                     <Badge
                         variant="outline"
-                        style={{ fontSize: 10, color: T.text.secondary, borderColor: T.border.default, padding: "1px 6px" }}
+                        style={{ fontSize: 10, color: T.text.secondary, borderColor: T.border.default, padding: "2px 7px", background: T.bg.elevated }}
                     >
                         {plaidTxns.length}
                     </Badge>
@@ -100,43 +100,64 @@ export default function TransactionsSection({ collapsedSections, setCollapsedSec
             </div>
 
             {!collapsedSections.transactions && (
-                <Card animate variant="glass" style={{ padding: 0, overflow: "hidden" }}>
+                <Card animate variant="glass" style={{ padding: 0, overflow: "hidden", background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})` }}>
                     {plaidTxns.map((txn, i) => {
                         const isPositive = txn.amount < 0;
+                        const merchant = txn.description || txn.name || "Unknown";
+                        const amountColor = isPositive ? T.status.green : T.status.red;
                         return (
                             <div
                                 key={i}
                                 style={{
                                     display: "flex",
-                                    alignItems: "center",
+                                    alignItems: "flex-start",
                                     justifyContent: "space-between",
-                                    padding: "8px 14px",
+                                    gap: 12,
+                                    padding: "12px 14px",
                                     borderBottom: i < plaidTxns.length - 1 ? `1px solid ${T.border.subtle}` : "none",
+                                    background: i % 2 === 0 ? "transparent" : `${T.bg.surface}55`,
                                 }}
                             >
+                                <div
+                                    style={{
+                                        width: 32,
+                                        height: 32,
+                                        borderRadius: 11,
+                                        background: `${amountColor}12`,
+                                        border: `1px solid ${amountColor}20`,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        flexShrink: 0,
+                                        marginTop: 1,
+                                    }}
+                                >
+                                    <DollarSign size={14} color={amountColor} />
+                                </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div
                                         style={{
-                                            fontSize: 11,
-                                            fontWeight: 700,
+                                            fontSize: 13,
+                                            fontWeight: 750,
                                             color: T.text.primary,
                                             overflow: "hidden",
                                             textOverflow: "ellipsis",
                                             whiteSpace: "nowrap",
                                         }}
                                     >
-                                        {txn.description || txn.name || "Unknown"}
+                                        {merchant}
                                     </div>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-                                        <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono }}>{txn.date}</span>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                                        <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono }}>{txn.date}</span>
                                         {txn.category && (
                                             <span
                                                 style={{
-                                                    fontSize: 8,
-                                                    color: T.text.dim,
-                                                    padding: "1px 5px",
-                                                    borderRadius: 4,
-                                                    background: `${T.border.default}40`,
+                                                    fontSize: 9,
+                                                    color: T.text.secondary,
+                                                    padding: "2px 7px",
+                                                    borderRadius: 999,
+                                                    background: `${T.bg.surface}`,
+                                                    border: `1px solid ${T.border.subtle}`,
                                                 }}
                                             >
                                                 {txn.category}
@@ -144,7 +165,18 @@ export default function TransactionsSection({ collapsedSections, setCollapsedSec
                                         )}
                                     </div>
                                 </div>
-                                <Mono size={11} weight={800} color={isPositive ? T.status.green : T.text.primary}>
+                                <Mono
+                                    size={12}
+                                    weight={800}
+                                    color={amountColor}
+                                    style={{
+                                        padding: "5px 8px",
+                                        borderRadius: 999,
+                                        background: `${amountColor}10`,
+                                        border: `1px solid ${amountColor}20`,
+                                        marginTop: 1,
+                                    }}
+                                >
                                     {isPositive ? "+" : "-"}${Math.abs(txn.amount).toFixed(2)}
                                 </Mono>
                             </div>

@@ -110,6 +110,7 @@ function CatalystCashShell() {
     dismissNotifPrePrompt,
     financialConfig,
     setFinancialConfig,
+    themeTick,
     isSettingsReady,
     rehydrateSettings,
   } = useSettings();
@@ -151,6 +152,7 @@ function CatalystCashShell() {
     recoverableAuditDraft,
     activeAuditDraftView,
     checkRecoverableAuditDraft,
+    markRecoverableAuditDraftPrompted,
     openRecoverableAuditDraft,
     dismissRecoverableAuditDraft,
     rehydrateAudit,
@@ -180,11 +182,13 @@ function CatalystCashShell() {
   const lastScrollY = useRef(0);
   const [transactionFeedTab, setTransactionFeedTab] = useState<AppTab | null>(null);
   const [chatInitialPrompt, setChatInitialPrompt] = useState<string | null>(null);
-  const renderedBaseTab = useMemo(() => {
-    if (SWIPE_TAB_ORDER.includes(tab)) return tab;
-    if (overlayBaseTab && SWIPE_TAB_ORDER.includes(overlayBaseTab)) return overlayBaseTab;
-    return SWIPE_TAB_ORDER.includes(lastCenterTab.current) ? lastCenterTab.current : "dashboard";
-  }, [SWIPE_TAB_ORDER, lastCenterTab, overlayBaseTab, tab]);
+  const renderedBaseTab: AppTab = SWIPE_TAB_ORDER.includes(tab)
+    ? tab
+    : overlayBaseTab && SWIPE_TAB_ORDER.includes(overlayBaseTab)
+      ? overlayBaseTab
+      : SWIPE_TAB_ORDER.includes(lastCenterTab.current)
+        ? lastCenterTab.current
+        : "dashboard";
   const showShellHeader = SWIPE_TAB_ORDER.includes(renderedBaseTab);
 
   const clearShellRefreshState = useCallback(() => {
@@ -641,6 +645,7 @@ function CatalystCashShell() {
     abortActiveAudit,
     abortActiveChatStream,
     checkRecoverableAuditDraft,
+    markRecoverableAuditDraftPrompted,
   });
   useLoadReadyHaptic(ready);
 
@@ -713,6 +718,7 @@ function CatalystCashShell() {
         ready={ready}
         onboardingComplete={onboardingComplete}
         tab={renderedBaseTab}
+        refreshTick={themeTick}
         syncTab={syncTab}
         SWIPE_TAB_ORDER={SWIPE_TAB_ORDER}
         hidden={tab === "settings" || tab === "results" || tab === "history" || tab === "guide" || tab === "input"}
@@ -720,6 +726,7 @@ function CatalystCashShell() {
       <TabRenderer
           SWIPE_TAB_ORDER={SWIPE_TAB_ORDER}
           activeTab={renderedBaseTab}
+          themeTick={themeTick}
           proEnabled={proEnabled}
           privacyMode={privacyMode}
           toast={toast}
@@ -786,6 +793,7 @@ function CatalystCashShell() {
           handleManualImport={handleManualImport}
           setFinancialConfig={setFinancialConfig}
           inputFormDb={inputFormDb}
+          themeTick={themeTick}
         />
       </OverlayProvider>
 

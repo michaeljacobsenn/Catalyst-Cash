@@ -1,4 +1,4 @@
-  import { Suspense,lazy,useEffect } from "react";
+  import { Suspense,lazy,useEffect,useState } from "react";
   import { useReducedMotion } from "framer-motion";
   import { T } from "../constants.js";
   import type { AppTab,NavViewState } from "../contexts/NavigationContext.js";
@@ -31,6 +31,7 @@ const TabFallback = () => (
 interface TabRendererProps {
   SWIPE_TAB_ORDER: readonly AppTab[];
   activeTab: AppTab;
+  themeTick?: number;
   proEnabled: boolean;
   privacyMode: boolean;
   toast: ToastApi;
@@ -46,6 +47,7 @@ interface TabRendererProps {
 export default function TabRenderer({
   SWIPE_TAB_ORDER,
   activeTab,
+  themeTick = 0,
   proEnabled,
   privacyMode,
   toast,
@@ -58,6 +60,21 @@ export default function TabRenderer({
   onPageScroll,
 }: TabRendererProps) {
   const prefersReducedMotion = useReducedMotion();
+  const [mountedTabs, setMountedTabs] = useState<Set<AppTab>>(() => new Set(["dashboard", activeTab]));
+
+  useEffect(() => {
+    setMountedTabs((prev) => {
+      if (prev.has(activeTab)) return prev;
+      const next = new Set(prev);
+      next.add(activeTab);
+      return next;
+    });
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (themeTick <= 0) return;
+    setMountedTabs(new Set(SWIPE_TAB_ORDER));
+  }, [SWIPE_TAB_ORDER, themeTick]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -85,7 +102,9 @@ export default function TabRenderer({
 
   return (
     <>
-      {SWIPE_TAB_ORDER.map((t) => (
+      {SWIPE_TAB_ORDER.map((t) => {
+        const shouldMount = mountedTabs.has(t);
+        return (
         <div
           key={t}
           className="snap-page"
@@ -109,8 +128,9 @@ export default function TabRenderer({
           >
             <ErrorBoundary name="Dashboard">
               <Suspense fallback={<TabFallback />}>
-                {t === "dashboard" && (
+                {t === "dashboard" && shouldMount && (
                   <DashboardTab
+                    themeTick={themeTick}
                     proEnabled={proEnabled}
                     onRefreshDashboard={handleRefreshDashboard}
                     onDemoAudit={handleDemoAudit}
@@ -126,8 +146,9 @@ export default function TabRenderer({
 
             <ErrorBoundary name="AI Chat">
               <Suspense fallback={<TabFallback />}>
-                {t === "chat" && (
+                {t === "chat" && shouldMount && (
                   <AIChatTab
+                    themeTick={themeTick}
                     proEnabled={proEnabled}
                     privacyMode={privacyMode}
                     initialPrompt={chatInitialPrompt}
@@ -143,30 +164,30 @@ export default function TabRenderer({
 
             <ErrorBoundary name="Cashflow">
               <Suspense fallback={<TabFallback />}>
-                {t === "cashflow" && (
-                  <CashflowTab onRunAudit={handleDemoAudit} toast={toast} proEnabled={proEnabled} privacyMode={privacyMode} />
+                {t === "cashflow" && shouldMount && (
+                  <CashflowTab themeTick={themeTick} onRunAudit={handleDemoAudit} toast={toast} proEnabled={proEnabled} privacyMode={privacyMode} />
                 )}
               </Suspense>
             </ErrorBoundary>
 
             <ErrorBoundary name="Portfolio">
               <Suspense fallback={<TabFallback />}>
-                {t === "portfolio" && (
-                  <PortfolioTab onViewTransactions={() => setTransactionFeedTab(t)} proEnabled={proEnabled} privacyMode={privacyMode} />
+                {t === "portfolio" && shouldMount && (
+                  <PortfolioTab themeTick={themeTick} onViewTransactions={() => setTransactionFeedTab(t)} proEnabled={proEnabled} privacyMode={privacyMode} />
                 )}
               </Suspense>
             </ErrorBoundary>
 
             <ErrorBoundary name="Audit">
               <Suspense fallback={<TabFallback />}>
-                {t === "audit" && (
-                  <AuditTab proEnabled={proEnabled} privacyMode={privacyMode} toast={toast} onDemoAudit={handleDemoAudit} />
+                {t === "audit" && shouldMount && (
+                  <AuditTab themeTick={themeTick} proEnabled={proEnabled} privacyMode={privacyMode} toast={toast} onDemoAudit={handleDemoAudit} />
                 )}
               </Suspense>
             </ErrorBoundary>
           </div>
         </div>
-      ))}
+      )})}
     </>
   );
 }

@@ -4,6 +4,7 @@
   import { haptic } from "../haptics.js";
   import { log } from "../logger.js";
 import {
+    AlertTriangle,
     CheckCircle,
     Link2,
     Loader2,
@@ -57,10 +58,12 @@ interface CardPortfolioTabProps {
   proEnabled?: boolean;
   embedded?: boolean;
   privacyMode?: boolean;
+  themeTick?: number;
 }
 
-export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled = false, embedded = false, privacyMode: _privacyModeTick = false }: CardPortfolioTabProps) {
+export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled = false, embedded = false, privacyMode: _privacyModeTick = false, themeTick: _themeTick = 0 }: CardPortfolioTabProps) {
   void _privacyModeTick;
+  void _themeTick;
   const { current } = useAudit();
   const portfolioContext = usePortfolio();
   const isTest = current?.isTest;
@@ -208,7 +211,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
   };
 
   // Plaid balance sync via shared hook
-  const { syncing: plaidRefreshing, sync: handleRefreshPlaid } = usePlaidSync({
+  const { syncing: plaidRefreshing, sync: handleRefreshPlaid, syncState } = usePlaidSync({
     cards,
     bankAccounts,
     financialConfig,
@@ -436,6 +439,68 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
           {Object.values(collapsedSections).every(Boolean) ? "Expand All" : "Collapse All"}
         </button>
       </div>
+
+      {(syncState.phase === "syncing" || syncState.phase === "warning") && (
+        <div
+          style={{
+            marginTop: 6,
+            marginBottom: 10,
+            padding: "12px 14px",
+            borderRadius: T.radius.md,
+            border: `1px solid ${syncState.phase === "warning" ? `${T.status.amber}35` : `${T.status.blue}28`}`,
+            background:
+              syncState.phase === "warning"
+                ? `linear-gradient(180deg, ${T.status.amber}12, ${T.bg.card})`
+                : `linear-gradient(180deg, ${T.status.blue}10, ${T.bg.card})`,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            {syncState.phase === "warning" ? (
+              <AlertTriangle size={14} color={T.status.amber} />
+            ) : (
+              <RefreshCw size={14} color={T.status.blue} style={{ animation: "spin .9s linear infinite", transformOrigin: "center" }} />
+            )}
+            <div style={{ fontSize: 12, fontWeight: 800, color: T.text.primary }}>
+              {syncState.phase === "warning" ? "Bank sync needs attention" : syncState.message}
+            </div>
+            {syncState.phase === "syncing" && (
+              <div style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, color: T.text.secondary, fontFamily: T.font.mono }}>
+                {syncState.completedCount}/{Math.max(syncState.requestedCount, 1)}
+              </div>
+            )}
+          </div>
+          {syncState.phase === "syncing" ? (
+            <>
+              <div
+                style={{
+                  height: 6,
+                  borderRadius: 999,
+                  background: T.bg.elevated,
+                  overflow: "hidden",
+                  border: `1px solid ${T.border.subtle}`,
+                  marginBottom: 8,
+                }}
+              >
+                <div
+                  style={{
+                    width: `${Math.round((syncState.completedCount / Math.max(syncState.requestedCount, 1)) * 100)}%`,
+                    height: "100%",
+                    background: `linear-gradient(90deg, ${T.status.blue}, ${T.accent.primary})`,
+                    transition: "width .25s ease",
+                  }}
+                />
+              </div>
+              <div style={{ fontSize: 11, color: T.text.secondary }}>
+                {syncState.activeInstitution ? `Refreshing ${syncState.activeInstitution}...` : "Refreshing linked accounts..."}
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5 }}>
+              {syncState.warning}
+            </div>
+          )}
+        </div>
+      )}
 
       {movePlan.activeCount > 0 && (
         <div

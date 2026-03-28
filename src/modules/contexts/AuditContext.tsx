@@ -115,6 +115,7 @@ interface AuditContextValue {
   recoverableAuditDraft: AuditDraftRecord | null;
   activeAuditDraftView: AuditDraftRecord | null;
   checkRecoverableAuditDraft: () => Promise<AuditDraftRecord | null>;
+  markRecoverableAuditDraftPrompted: (sessionTs?: string | null) => Promise<void>;
   openRecoverableAuditDraft: () => void;
   dismissRecoverableAuditDraft: () => Promise<void>;
   rehydrateAudit: () => Promise<void>;
@@ -137,7 +138,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
     setAiModel,
   } = useSettings();
 
-  const { cards, renewals, cardAnnualFees, setBadges } = usePortfolio();
+  const { cards, renewals, cardAnnualFees, bankAccounts, setBadges } = usePortfolio();
   const { lines: budgetLines, cycleIncome } = useBudget();
   const { navTo, onboardingComplete, setResultsBackTarget } = useNavigation();
 
@@ -301,6 +302,24 @@ export function AuditProvider({ children }: AuditProviderProps) {
     return storedDraft;
   }, [current, history]);
 
+  const markRecoverableAuditDraftPrompted = useCallback(async (sessionTs?: string | null): Promise<void> => {
+    if (!sessionTs) return;
+    const storedDraft = (await db.get("audit-draft")) as AuditDraftRecord | null;
+    if (!storedDraft?.sessionTs || storedDraft.sessionTs !== sessionTs || storedDraft.promptSurfacedAt) return;
+
+    const nextDraft: AuditDraftRecord = {
+      ...storedDraft,
+      promptSurfacedAt: new Date().toISOString(),
+    };
+    await db.set("audit-draft", nextDraft);
+    setRecoverableAuditDraft((currentDraft) =>
+      currentDraft?.sessionTs === sessionTs ? nextDraft : currentDraft
+    );
+    setActiveAuditDraftView((currentDraft) =>
+      currentDraft?.sessionTs === sessionTs ? nextDraft : currentDraft
+    );
+  }, []);
+
   const openRecoverableAuditDraft = useCallback((): void => {
     if (!recoverableAuditDraft) return;
     setActiveAuditDraftView(recoverableAuditDraft);
@@ -361,7 +380,11 @@ export function AuditProvider({ children }: AuditProviderProps) {
           auditRawRef.current = raw;
           setStreamText(raw);
         } else {
-          const useStream = useStreaming && !!provider.supportsStreaming;
+          // Structured audits are parsed as strict JSON after the call completes.
+          // Streaming improves chat UX, but it increases the risk of partial or
+          // malformed audit payloads if a provider emits incomplete SSE chunks.
+          // Keep audits on the reliable non-streaming path.
+          const useStream = false;
           promptRenewals = [...renewals, ...cardAnnualFees];
 
           strategyCards = mergeSnapshotDebts(cards || [], (formData?.debts || []) as never[], financialConfig?.defaultAPR || 0) as typeof cards;
@@ -402,6 +425,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
               providerId: aiProvider || "gemini",
               financialConfig,
               cards,
+              bankAccounts,
               renewals: promptRenewals,
               personalRules: personalRules || "",
               trendContext,
@@ -542,10 +566,45 @@ export function AuditProvider({ children }: AuditProviderProps) {
           });
           throw new Error("Model output was not valid audit JSON. Please retry.");
         }
+        const pendingChargesTotal = Array.isArray(formData?.pendingCharges)
+          ? formData.pendingCharges.reduce((sum, charge) => sum + (parseFloat(String(charge?.amount || 0)) || 0), 0)
+          : 0;
+        const dashboardAnchors = {
+          checking: parseFloat(String(formData?.checking || 0)) || 0,
+          vault: (parseFloat(String(formData?.savings || 0)) || 0) + (parseFloat(String(formData?.ally || 0)) || 0),
+          pending: pendingChargesTotal,
+          debts:
+            computedStrategy?.auditSignals?.debt?.total ??
+            ((Array.isArray(formData?.debts) ? formData.debts : []).reduce(
+              (sum, debt) => sum + (parseFloat(String(debt?.balance || debt?.amount || 0)) || 0),
+              0
+            )),
+          available: computedStrategy?.operationalSurplus ?? null,
+        };
+        const investmentAnchorBalance =
+          [
+            Number(financialConfig?.investmentBrokerage || 0),
+            Number(financialConfig?.investmentRoth || 0),
+            Number(financialConfig?.k401Balance || 0),
+            Number(financialConfig?.hsaBalance || 0),
+            ...(Array.isArray(formData?.investments)
+              ? formData.investments.map((investment) => parseFloat(String(investment?.amount || 0)) || 0)
+              : []),
+          ].reduce((sum, value) => sum + value, 0);
+
         parsed = validateParsedAuditConsistency(parsed, {
           operationalSurplus: computedStrategy?.operationalSurplus ?? null,
           nativeScore: computedStrategy?.auditSignals?.nativeScore?.score ?? null,
           nativeRiskFlags: computedStrategy?.auditSignals?.riskFlags ?? [],
+          dashboardAnchors,
+          investmentAnchors: investmentAnchorBalance > 0
+            ? {
+                balance: investmentAnchorBalance,
+                asOf: financialConfig?.investmentsAsOfDate || formData?.date || null,
+                gateStatus: "Tracked",
+                netWorth: parsed?.netWorth ?? null,
+              }
+            : null,
         }) as ParsedAudit;
         const previousComparableAudit = history.find((audit) => {
           if (!audit?.ts || audit.isTest) return false;
@@ -579,7 +638,9 @@ export function AuditProvider({ children }: AuditProviderProps) {
           setViewing(audit);
           nextHistory = [audit, ...history].slice(0, 52);
           setHistory(nextHistory);
-          await db.set("audit-history", nextHistory);
+          await db.set("audit-history", nextHistory).catch((error) => {
+            log.warn("audit", "Failed to persist test audit history", { error });
+          });
         } else {
           if (parsed.mode !== "DEGRADED") {
             const contributionUpdates = buildContributionAutoUpdates(parsed, raw, financialConfig);
@@ -605,16 +666,26 @@ export function AuditProvider({ children }: AuditProviderProps) {
           };
           setTrendContext((prev) => {
             const next = [...prev, trendEntry].slice(-12);
-            db.set("trend-context", next);
+            db.set("trend-context", next).catch((error) => {
+              log.warn("audit", "Failed to persist trend context", { error });
+            });
             return next;
           });
 
-          const newMilestones = extractAuditMilestones(parsed, history) as string[];
-          if (newMilestones.length > 0) {
-            addMilestones(newMilestones).catch(() => {});
+          try {
+            const newMilestones = extractAuditMilestones(parsed, history) as string[];
+            if (newMilestones.length > 0) {
+              addMilestones(newMilestones).catch(() => {});
+            }
+          } catch (error) {
+            log.warn("audit", "Milestone extraction failed", { error });
           }
 
-          await Promise.all([db.set("current-audit", audit), db.set("move-states", {}), db.set("audit-history", nextHistory)]);
+          await Promise.all([db.set("current-audit", audit), db.set("move-states", {}), db.set("audit-history", nextHistory)]).catch(
+            (error) => {
+              log.warn("audit", "Failed to persist completed audit", { error });
+            }
+          );
 
           // Fire App Store rating prompt after 3rd real audit (ratePrompt handles cooldown)
           if (!manualResultText) {
@@ -651,7 +722,9 @@ export function AuditProvider({ children }: AuditProviderProps) {
                   limit: parseFloat(String(debt.limit)) || 0,
                 })),
             };
-            db.set("current-debts", debtSnapshot);
+            db.set("current-debts", debtSnapshot).catch((error) => {
+              log.warn("audit", "Failed to persist current debts snapshot", { error });
+            });
           }
         }
         haptic.success();
@@ -721,7 +794,6 @@ export function AuditProvider({ children }: AuditProviderProps) {
           if (nextModel) {
             (setAiModel as (m: string) => void)(nextModel);
             setError(`Monthly ${modelNames[auditModelCap] || auditModelCap} audit limit reached. Switched to ${modelNames[nextModel] || nextModel} — run your audit again.`);
-            toast.error(`Switched to ${modelNames[nextModel] || nextModel} for audits`);
             haptic.error();
             // Stay on input — user just needs to tap Run Audit again
             setLoading(false);
@@ -747,13 +819,10 @@ export function AuditProvider({ children }: AuditProviderProps) {
           setError(
             "The audit was interrupted because the app went to the background. Please return to the Input tab and try again."
           );
-          toast.error("Audit interrupted — app was backgrounded. Tap to retry.");
         } else if (isAbort) {
           setError("Audit was interrupted before completion. Your inputs are still here.");
-          toast.error("Audit interrupted. Retry when you're ready.");
         } else {
           setError(failure.userMessage);
-          toast.error(failure.userMessage || "Audit failed");
         }
         navTo("input");
         haptic.error();
@@ -843,7 +912,8 @@ export function AuditProvider({ children }: AuditProviderProps) {
       return next;
     });
     setViewing(null);
-    navTo("history");
+    const remainingHistory = history.filter((item) => !isMatch(item, auditToDelete));
+    navTo(remainingHistory.length > 0 ? "history" : "audit");
   }, [current, navTo]);
 
   const handleManualImport = useCallback(async (resultText: string): Promise<void> => {
@@ -931,6 +1001,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
     recoverableAuditDraft,
     activeAuditDraftView,
     checkRecoverableAuditDraft,
+    markRecoverableAuditDraftPrompted,
     openRecoverableAuditDraft,
     dismissRecoverableAuditDraft,
     rehydrateAudit,

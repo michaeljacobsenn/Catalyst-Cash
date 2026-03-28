@@ -6,6 +6,7 @@ interface ScrollSnapContainerProps {
   ready: boolean;
   onboardingComplete: boolean;
   tab: AppTab;
+  refreshTick?: number;
   syncTab: (newTab: AppTab) => void;
   SWIPE_TAB_ORDER: readonly AppTab[];
   hidden: boolean;
@@ -17,6 +18,7 @@ export default function ScrollSnapContainer({
   ready,
   onboardingComplete,
   tab,
+  refreshTick = 0,
   syncTab,
   SWIPE_TAB_ORDER,
   hidden,
@@ -91,11 +93,18 @@ export default function ScrollSnapContainer({
       const targetTab = (event as CustomEvent<AppTab>).detail;
       if (!SWIPE_TAB_ORDER.includes(targetTab)) return;
       transitionModeRef.current = "immediate";
+      currentTabRef.current = targetTab;
+      snapToTab(targetTab, "immediate");
       syncTab(targetTab);
     };
     window.addEventListener("app-scroll-to-tab", onScrollToTab);
     return () => window.removeEventListener("app-scroll-to-tab", onScrollToTab);
-  }, [SWIPE_TAB_ORDER, syncTab]);
+  }, [SWIPE_TAB_ORDER, syncTab, paneWidth, prefersReducedMotion]);
+
+  useEffect(() => {
+    if (!ready) return;
+    snapToTab(tab, "immediate");
+  }, [refreshTick, ready, tab]);
 
   useEffect(() => () => stopAnimation(), []);
   return (

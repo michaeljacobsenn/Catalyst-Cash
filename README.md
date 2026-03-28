@@ -561,7 +561,7 @@ Detailed expectations live in [docs/VERIFICATION.md](/Users/michaeljacobsen/Desk
 Server-side (Cloudflare Worker secrets — set via Wrangler):
 - `PLAID_CLIENT_ID`
 - `PLAID_SECRET`
-- `GEMINI_API_KEY` (for backend proxy mode)
+- `GOOGLE_API_KEY` or `GEMINI_API_KEY` (for backend Gemini proxy mode)
 - `OPENAI_API_KEY` (optional backend fallback)
 
 ---

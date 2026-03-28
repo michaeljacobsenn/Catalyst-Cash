@@ -175,6 +175,37 @@ export default function CreditCardsSection({
             accent: T.text.dim,
         };
 
+    const getCardDisplayName = (card: CardRecord) => {
+        const nickname = (card.nickname || "").trim();
+        if (nickname) return nickname;
+
+        const stripped = (card.name || "")
+            .replace(new RegExp(`^${card.institution}\\s*`, "i"), "")
+            .replace(/ from American Express$/i, "")
+            .replace(/ American Express Card$/i, "")
+            .trim();
+
+        const isGeneric = !stripped || /^(credit card|card)$/i.test(stripped);
+        if (!isGeneric) {
+            return stripped
+                .replace(/\bBusiness\b/g, "Biz")
+                .replace(/\bPreferred\b/g, "Pref")
+                .replace(/\bRewards\b/g, "Rew.")
+                .replace(/\bEveryday\b/g, "Everyday")
+                .replace(/\bSignature\b/g, "Sig.")
+                .trim();
+        }
+
+        const last4 =
+            String(card.last4 || card.mask || "").trim() ||
+            ((card.notes || "").match(/···(\d{3,4})/)?.[1] || "");
+        if (last4) return `Card •••${last4}`;
+
+        const dupes = sortedCards.filter((c) => c.institution === card.institution && /^(credit card|card)$/i.test((c.name || "").trim()));
+        const index = dupes.findIndex((c) => c.id === card.id);
+        return index >= 0 ? `Card ${index + 1}` : "Card";
+    };
+
     const WaivedCheckbox = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => (
         <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 0" }}>
             <div
@@ -248,7 +279,7 @@ export default function CreditCardsSection({
                         <p style={{ fontSize: 11, color: T.text.muted }}>No credit cards yet — tap Add Account to get started.</p>
                     </div>
                 ) : (
-                    <div style={{ padding: "4px 8px 8px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div className="stagger-container" style={{ padding: "4px 8px 8px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
                         {sortedCards.map((card) => {
                             const colors = ic(card.institution);
                             const needsReconnect = !!(card._plaidConnectionId && reconnectConnectionIds.has(card._plaidConnectionId));
@@ -257,14 +288,31 @@ export default function CreditCardsSection({
                                 ? card._plaidBalance
                                 : Number(card.balance || 0);
                             const plannedState = plannedCardBalances[card.id];
-                            const balanceColor = !usesManualFallback && card._plaidBalance != null ? T.status.red : colors.text;
+                            const balanceTone =
+                                visibleBalance > 0.009
+                                    ? { fg: T.status.red, bg: `${T.status.red}10`, border: `${T.status.red}22` }
+                                    : visibleBalance < -0.009
+                                        ? { fg: T.accent.emerald, bg: `${T.accent.emerald}12`, border: `${T.accent.emerald}22` }
+                                        : { fg: T.text.secondary, bg: `linear-gradient(180deg, ${T.bg.surface}, ${T.bg.card})`, border: T.border.subtle };
                             const annualFee = typeof card.annualFee === "number" ? card.annualFee : Number(card.annualFee || 0);
                             const apr = card.apr ?? 0;
                             const limit = card.limit ?? 0;
-                            const minPayment = card.minPayment ?? 0;
+                            const utilization = limit > 0 ? Math.max(0, (visibleBalance / limit) * 100) : null;
+                            const detailChips = [
+                                needsReconnect ? { label: "Reconnect", tone: "warning" } : null,
+                                usesManualFallback ? { label: "Manual", tone: "muted" } : null,
+                                !usesManualFallback && card._plaidBalance != null ? { label: "Live", tone: "danger" } : null,
+                                utilization != null ? { label: `${Math.round(utilization)}% util`, tone: utilization >= 30 ? "warning" : "good" } : null,
+                            ].filter(Boolean) as Array<{ label: string; tone: "warning" | "muted" | "good" | "danger" }>;
+                            const secondaryMeta = [
+                                card.paymentDueDay ? `Due ${card.paymentDueDay}` : null,
+                                apr > 0 ? `${apr}% APR` : null,
+                                annualFee > 0 ? (card.annualFeeWaived ? "AF waived" : `${fmt(annualFee)} fee`) : null,
+                                !usesManualFallback && card._plaidBalance != null ? `•••${(card.notes || "").match(/···(\d+)/)?.[1] || "Plaid"}` : null,
+                            ].filter(Boolean).join("  ·  ");
                             return (
-                                <div key={card.id} style={{ background: T.bg.glass, borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-                                    <div style={{ padding: "10px 16px" }}>
+                                <div key={card.id} style={{ background: `linear-gradient(180deg, ${T.bg.surface}, ${T.bg.card})`, borderRadius: 14, boxShadow: "0 6px 18px rgba(0,0,0,0.05)", border: `1px solid ${T.border.subtle}` }}>
+                                    <div style={{ padding: "12px 16px" }}>
                                     {editingCard === card.id ? (
                                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                                             {(() => {
@@ -408,29 +456,112 @@ export default function CreditCardsSection({
                                             </div>
                                         </div>
                                     ) : (
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, lineHeight: 1.3, display: "flex", alignItems: "center", gap: 0, overflow: "hidden", whiteSpace: "nowrap" }}>
-                                                    <span style={{ color: colors.text, fontWeight: 800, flexShrink: 0 }}>{card.institution}</span>
-                                                    <span style={{ color: T.text.dim, margin: "0 6px", flexShrink: 0 }}>·</span>
-                                                    <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{card.nickname || (card.name || "").replace(new RegExp(`^${card.institution}\\s*`, "i"), "")}</span>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                                            <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", gap: 12 }}>
+                                                <div
+                                                    style={{
+                                                        width: 32,
+                                                        height: 32,
+                                                        borderRadius: 10,
+                                                        background: T.bg.surface,
+                                                        border: `1px solid ${T.border.subtle}`,
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
+                                                        flexShrink: 0,
+                                                    }}
+                                                >
+                                                    <CreditCard size={15} color={colors.text} />
                                                 </div>
-                                                <Mono size={10} color={T.text.dim} style={{ display: "block", marginTop: 3, lineHeight: 1.4 }}>
-                                                    {[
-                                                        card.nickname && card.name,
-                                                        needsReconnect && "Reconnect required",
-                                                        usesManualFallback && "Manual balance",
-                                                        annualFee > 0 && (card.annualFeeWaived ? "AF waived" : `AF ${fmt(annualFee)}${card.annualFeeDue ? ` · ${card.annualFeeDue}` : ""}`),
-                                                        apr > 0 && `${apr}% APR`,
-                                                        card.hasPromoApr && `Promo ${card.promoAprAmount}%${card.promoAprExp ? ` till ${card.promoAprExp}` : ""}`,
-                                                        card.paymentDueDay && `Due day ${card.paymentDueDay}${minPayment ? ` · min ${fmt(minPayment)}` : ""}`,
-                                                        card._plaidAccountId && !usesManualFallback && `⚡ ···${(card.notes || "").match(/···(\d+)/)?.[1] || "Plaid"}`,
-                                                    ].filter(Boolean).join("  ·  ")}
-                                                </Mono>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+                                                        <span
+                                                            style={{
+                                                                color: colors.text,
+                                                                fontWeight: 750,
+                                                                fontSize: 9,
+                                                                fontFamily: T.font.mono,
+                                                                letterSpacing: "0.12em",
+                                                                textTransform: "uppercase",
+                                                                opacity: 0.72,
+                                                            }}
+                                                        >
+                                                            {card.institution}
+                                                        </span>
+                                                        <span
+                                                            style={{
+                                                                fontSize: 15,
+                                                                fontWeight: 780,
+                                                                color: T.text.primary,
+                                                                minWidth: 0,
+                                                                overflow: "hidden",
+                                                                letterSpacing: "-0.01em",
+                                                                lineHeight: 1.18,
+                                                                display: "-webkit-box",
+                                                                WebkitLineClamp: 2,
+                                                                WebkitBoxOrient: "vertical",
+                                                                maxWidth: "100%",
+                                                            }}
+                                                        >
+                                                            {getCardDisplayName(card)}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                                                        {detailChips.map((chip) => (
+                                                            <span
+                                                                key={`${card.id}-${chip.label}`}
+                                                                style={{
+                                                                    padding: "2px 7px",
+                                                                    borderRadius: 999,
+                                                                    fontSize: 9,
+                                                                    fontWeight: 800,
+                                                                    fontFamily: T.font.mono,
+                                                                    letterSpacing: "0.02em",
+                                                                    border:
+                                                                        chip.tone === "warning" ? `1px solid ${T.status.amber}28`
+                                                                        : chip.tone === "good" ? `1px solid ${T.accent.emerald}22`
+                                                                        : chip.tone === "danger" ? `1px solid ${T.status.red}24`
+                                                                        : `1px solid ${T.border.subtle}`,
+                                                                    background:
+                                                                        chip.tone === "warning" ? `${T.status.amber}12`
+                                                                        : chip.tone === "good" ? `${T.accent.emerald}12`
+                                                                        : chip.tone === "danger" ? `${T.status.red}10`
+                                                                        : T.bg.surface,
+                                                                    color:
+                                                                        chip.tone === "warning" ? T.status.amber
+                                                                        : chip.tone === "good" ? T.accent.emerald
+                                                                        : chip.tone === "danger" ? T.status.red
+                                                                        : T.text.dim,
+                                                                }}
+                                                            >
+                                                                {chip.label}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                    {secondaryMeta ? (
+                                                        <div style={{ marginTop: 6, maxWidth: "100%" }}>
+                                                            <Mono size={10} color={T.text.dim} style={{ lineHeight: 1.35, opacity: 0.88 }}>
+                                                                {secondaryMeta}
+                                                            </Mono>
+                                                        </div>
+                                                    ) : null}
+                                                </div>
                                             </div>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                                            <div style={{ display: "flex", alignItems: "flex-start", gap: 6, flexShrink: 0 }}>
                                                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                                                    <Mono size={14} weight={900} color={balanceColor}>{fmt(visibleBalance)}</Mono>
+                                                    <div
+                                                        style={{
+                                                            padding: "8px 11px",
+                                                            borderRadius: 13,
+                                                            border: `1px solid ${balanceTone.border}`,
+                                                            background: balanceTone.bg,
+                                                            minWidth: 96,
+                                                            textAlign: "right",
+                                                        }}
+                                                    >
+                                                        <Mono size={14} weight={900} color={balanceTone.fg}>{fmt(visibleBalance)}</Mono>
+                                                    </div>
                                                     {plannedState?.remainingAmount ? (
                                                         <div
                                                             style={{
@@ -448,11 +579,9 @@ export default function CreditCardsSection({
                                                             </Mono>
                                                         </div>
                                                     ) : null}
-                                                    <Mono size={10} weight={700} color={T.text.dim}>
-                                                        {`Limit ${fmt(limit)}`}
-                                                    </Mono>
+                                                    {limit > 0 ? <Mono size={10} weight={700} color={T.text.dim} style={{ marginTop: 4 }}>{`Limit ${fmt(limit)}`}</Mono> : null}
                                                 </div>
-                                                <button onClick={() => startEdit(card)} style={{ width: 32, height: 32, borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={11} /></button>
+                                                <button onClick={() => startEdit(card)} style={{ width: 28, height: 28, borderRadius: 10, border: `1px solid ${T.border.subtle}`, background: T.bg.surface, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`, marginTop: 1 }}><Edit3 size={10.5} /></button>
                                             </div>
                                         </div>
                                     )}

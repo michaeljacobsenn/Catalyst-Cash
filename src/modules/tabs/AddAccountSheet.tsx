@@ -282,7 +282,9 @@ export default function AddAccountSheet({
         style={{
           position: "fixed",
           inset: 0,
-          background: "rgba(0,0,0,0.55)",
+          background: "linear-gradient(180deg, rgba(0,0,0,0.32), rgba(0,0,0,0.62))",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
           zIndex: 500,
           animation: "sheetFadeIn .2s ease both",
         }}
@@ -294,21 +296,22 @@ export default function AddAccountSheet({
           bottom: 0,
           left: 0,
           right: 0,
-          background: T.bg.elevated,
+          background: `linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card})`,
           borderRadius: "24px 24px 0 0",
+          borderTop: `1px solid ${T.border.subtle}`,
           zIndex: 501,
           animation: "sheetSlideUp .32s cubic-bezier(0.34,1.56,0.64,1) both",
           maxHeight: "88vh",
           overflowY: "auto",
           paddingBottom: "max(20px, env(safe-area-inset-bottom))",
-          boxShadow: "0 -12px 48px rgba(0,0,0,0.3)",
+          boxShadow: "0 -22px 56px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.05)",
         }}
       >
         {/* Drag handle */}
-        <div style={{ width: 40, height: 4, borderRadius: 2, background: T.border.default, margin: "12px auto 0" }} />
+        <div style={{ width: 42, height: 5, borderRadius: 999, background: T.border.default, margin: "12px auto 2px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)" }} />
 
         {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", padding: "16px 20px 12px", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", padding: "14px 20px 12px", gap: 8, background: "linear-gradient(180deg, rgba(255,255,255,0.02), transparent)" }}>
           {step && (
             <button
               onClick={() => onSetStep(null)}

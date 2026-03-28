@@ -42,6 +42,7 @@ export default function BottomNavBar({
     ],
     []
   );
+  const activeIndex = Math.max(0, navItems.findIndex((item) => item.id === tab));
 
   return (
     <nav
@@ -156,16 +157,34 @@ export default function BottomNavBar({
           display: "flex",
           justifyContent: "space-evenly",
           alignItems: "center",
-          padding: "8px 4px",
+          padding: "8px 6px",
           background: T.bg.navGlass,
-          backdropFilter: "blur(32px) saturate(200%)",
-          WebkitBackdropFilter: "blur(32px) saturate(200%)",
+          backdropFilter: "blur(30px) saturate(160%)",
+          WebkitBackdropFilter: "blur(30px) saturate(160%)",
           border: `1px solid ${T.border.default}`,
           borderRadius: 36,
-          boxShadow: `0 16px 32px -12px rgba(0,0,0,0.6), 0 0 0 1px ${T.border.subtle}`,
+          boxShadow: `0 18px 36px -14px rgba(0,0,0,0.52), 0 0 0 1px ${T.border.subtle}`,
           overflow: "hidden",
         }}
       >
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: 6,
+            top: 8,
+            bottom: 8,
+            width: `calc((100% - 12px) / ${navItems.length})`,
+            borderRadius: 28,
+            background: `radial-gradient(circle at top, ${T.accent.primary}12, transparent 70%), linear-gradient(180deg, ${T.bg.surface}, rgba(255,255,255,0.01))`,
+            border: `1px solid ${T.border.subtle}`,
+            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 18px rgba(0,0,0,0.12)`,
+            transform: `translateX(${activeIndex * 100}%)`,
+            transition: "transform .42s cubic-bezier(0.16, 1, 0.3, 1), width .3s ease, opacity .25s ease",
+            opacity: tab === "audit" ? 0 : 1,
+            pointerEvents: "none",
+          }}
+        />
         {navItems.map((n) => {
           const Icon = n.icon;
           const isCenter = n.isCenter;
@@ -229,7 +248,7 @@ export default function BottomNavBar({
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: 2,
+                gap: 3,
                 background: "none",
                 border: "none",
                 cursor: "pointer",
@@ -238,6 +257,7 @@ export default function BottomNavBar({
                 height: 56,
                 transition: "color .2s ease, gap .3s cubic-bezier(0.16, 1, 0.3, 1)",
                 position: "relative",
+                zIndex: 1,
                 userSelect: "none",
                 WebkitUserSelect: "none",
                 WebkitTouchCallout: "none",
@@ -266,12 +286,18 @@ export default function BottomNavBar({
               ) : (
                 <div
                   style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 12,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    transform: active ? "translateY(-2px)" : "translateY(2px)",
-                    opacity: active ? 1 : 0.7,
-                    transition: "transform .3s cubic-bezier(0.16, 1, 0.3, 1), opacity .25s ease",
+                    background: active ? `${T.accent.primary}12` : "transparent",
+                    border: active ? `1px solid ${T.accent.primary}26` : "1px solid transparent",
+                    transform: active ? "translateY(-1px)" : "translateY(1px)",
+                    opacity: active ? 1 : 0.76,
+                    transition: "transform .3s cubic-bezier(0.16, 1, 0.3, 1), opacity .25s ease, background .25s ease, border-color .25s ease, box-shadow .25s ease",
+                    boxShadow: active ? `0 8px 14px rgba(0,0,0,0.08)` : "none",
                   }}
                 >
                   <Icon size={20} strokeWidth={active ? 2.4 : 2} />
@@ -293,7 +319,7 @@ export default function BottomNavBar({
                   <span
                     style={{
                       fontSize: 10,
-                      fontWeight: 700,
+                      fontWeight: 800,
                       letterSpacing: "0.02em",
                       opacity: active ? 1 : 0,
                       transform: active ? "translateY(0)" : "translateY(4px)",

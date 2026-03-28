@@ -664,7 +664,10 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
 
           {/* Auto-Suggest Dropdown */}
           {showSuggestions && query.trim() && filteredMerchants.length > 0 && (
-            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 8, background: T.bg.elevated, borderRadius: 16, border: `1px solid ${T.border.subtle}`, boxShadow: T.shadow.elevated, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 8, background: `linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card})`, borderRadius: 18, border: `1px solid ${T.border.subtle}`, boxShadow: "0 20px 44px rgba(0,0,0,0.28)", overflow: "hidden", display: "flex", flexDirection: "column", animation: "slideUp .2s cubic-bezier(0.34,1.56,0.64,1) both" }}>
+              <div style={{ padding: "8px 14px 4px", fontSize: 9, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.font.mono }}>
+                Best matches
+              </div>
               {filteredMerchants.map((m, idx) => (
                 <button
                   key={m.id}
@@ -676,8 +679,11 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                     borderBottom: idx < filteredMerchants.length - 1 ? `1px solid ${T.border.subtle}` : "none", cursor: "pointer", textAlign: "left"
                   }}
                 >
-                  <div style={{ width: 12, height: 12, borderRadius: "50%", background: m.color || T.border.subtle, marginRight: 12, flexShrink: 0 }} />
-                  <span style={{ fontSize: 14, fontWeight: 600, color: T.text.primary }}>{m.name}</span>
+                  <div style={{ width: 12, height: 12, borderRadius: "50%", background: m.color || T.border.subtle, marginRight: 12, flexShrink: 0, boxShadow: `0 0 0 3px ${(m.color || T.border.subtle)}20` }} />
+                  <div style={{ minWidth: 0 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: T.text.primary, display: "block" }}>{m.name}</span>
+                    <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, textTransform: "uppercase", letterSpacing: "0.04em" }}>{m.category.replace(/_/g, " ")}</span>
+                  </div>
                 </button>
               ))}
             </div>
@@ -685,8 +691,8 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
 
           {/* Search History Dropdown */}
           {showSuggestions && !query.trim() && searchHistory.length > 0 && (
-            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 8, background: T.bg.elevated, borderRadius: 16, border: `1px solid ${T.border.subtle}`, boxShadow: T.shadow.elevated, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-              <p style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, padding: "8px 16px 4px", textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 }}>Recent</p>
+            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 8, background: `linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card})`, borderRadius: 18, border: `1px solid ${T.border.subtle}`, boxShadow: "0 20px 44px rgba(0,0,0,0.28)", overflow: "hidden", display: "flex", flexDirection: "column", animation: "slideUp .2s cubic-bezier(0.34,1.56,0.64,1) both" }}>
+              <p style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, padding: "10px 16px 4px", textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 }}>Recent</p>
               {searchHistory.map((m, idx) => (
                 <button
                   key={m.name + idx}
@@ -699,7 +705,10 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                   }}
                 >
                   <Clock size={14} color={T.text.dim} style={{ marginRight: 12, flexShrink: 0 }} />
-                  <span style={{ fontSize: 14, fontWeight: 600, color: T.text.primary }}>{m.name}</span>
+                  <div style={{ minWidth: 0 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: T.text.primary, display: "block" }}>{m.name}</span>
+                    <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, textTransform: "uppercase", letterSpacing: "0.04em" }}>{m.category.replace(/_/g, " ")}</span>
+                  </div>
                 </button>
               ))}
             </div>
@@ -714,7 +723,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
               <button
                 className="hover-btn"
                 onClick={() => { haptic.selection(); setShowValuations(!showValuations); }}
-                style={{ display: "flex", alignItems: "center", gap: 8, padding: denseEmbedded ? "7px 10px" : "8px 12px", borderRadius: 20, background: T.bg.surface, border: `1px solid ${T.border.subtle}`, color: T.text.secondary, fontSize: 12, fontWeight: 700 }}
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: denseEmbedded ? "7px 10px" : "8px 12px", borderRadius: 20, background: `linear-gradient(180deg, ${T.bg.surface}, ${T.bg.card})`, border: `1px solid ${T.border.subtle}`, color: T.text.secondary, fontSize: 12, fontWeight: 700, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)" }}
               >
                 <Settings2 size={14} />
                 {showValuations ? "Hide Values" : valuationButtonLabel}

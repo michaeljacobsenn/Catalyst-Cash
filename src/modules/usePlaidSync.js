@@ -30,13 +30,41 @@
 let _isSyncing = false;
 let _lastBackgroundSyncAt = 0;
 const _subscribers = new Set();
+const _syncStateSubscribers = new Set();
 const BACKGROUND_PLAID_MAINTENANCE_MIN_INTERVAL_MS = 15 * 60 * 1000;
+const DEFAULT_SYNC_STATE = {
+  phase: "idle",
+  requestedCount: 0,
+  completedCount: 0,
+  activeInstitution: "",
+  message: "",
+  warning: null,
+  issues: [],
+  background: false,
+  updatedAt: 0,
+};
+let _syncState = { ...DEFAULT_SYNC_STATE };
 function _notifySubs() {
   _subscribers.forEach(fn => fn(_isSyncing));
 }
 function _setSyncing(v) {
   _isSyncing = v;
   _notifySubs();
+}
+function _notifySyncStateSubs() {
+  _syncStateSubscribers.forEach(fn => fn(_syncState));
+}
+function _setSyncState(next) {
+  _syncState = {
+    ..._syncState,
+    ...next,
+    updatedAt: Date.now(),
+  };
+  _notifySyncStateSubs();
+}
+function _resetSyncState() {
+  _syncState = { ...DEFAULT_SYNC_STATE, updatedAt: Date.now() };
+  _notifySyncStateSubs();
 }
 
 export function shouldRunBackgroundPlaidMaintenance(
@@ -183,6 +211,7 @@ export function usePlaidSync({
   autoMaintain = false,
 }) {
   const [syncing, setSyncing] = useState(_isSyncing);
+  const [syncState, setSyncState] = useState(_syncState);
 
   // Subscribe to module-level sync state changes
   useEffect(() => {
@@ -191,6 +220,13 @@ export function usePlaidSync({
     // Re-sync on mount in case state changed while unmounted
     setSyncing(_isSyncing);
     return () => _subscribers.delete(handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = next => setSyncState(next);
+    _syncStateSubscribers.add(handler);
+    setSyncState(_syncState);
+    return () => _syncStateSubscribers.delete(handler);
   }, []);
 
   const sync = useCallback(async (options = {}) => {
@@ -276,6 +312,16 @@ export function usePlaidSync({
     }
 
     _setSyncing(true);
+    _setSyncState({
+      phase: "syncing",
+      requestedCount: syncConnectionIds.length,
+      completedCount: 0,
+      activeInstitution: syncConnectionIds.length === 1 ? "your linked account" : "your linked accounts",
+      message: background ? "Refreshing linked accounts…" : "Syncing linked accounts…",
+      warning: null,
+      issues: [],
+      background,
+    });
     if (background) {
       _lastBackgroundSyncAt = Date.now();
     }
@@ -299,7 +345,26 @@ export function usePlaidSync({
 
     // 4. Fetch and apply balances from D1 Worker cache
     try {
-      const results = await fetchAllBalancesAndLiabilities({ connectionIds: syncConnectionIds });
+      let progressCompleted = 0;
+      const results = await fetchAllBalancesAndLiabilities({
+        connectionIds: syncConnectionIds,
+        onProgress: ({ completed = 0, total = syncConnectionIds.length, institutionName = "" }) => {
+          progressCompleted = completed;
+          _setSyncState({
+            phase: "syncing",
+            requestedCount: total,
+            completedCount: completed,
+            activeInstitution: institutionName,
+            message:
+              completed >= total
+                ? "Finalizing synced balances…"
+                : `Syncing ${Math.min(completed + 1, total)} of ${total}: ${institutionName}`,
+            warning: null,
+            issues: [],
+            background,
+          });
+        },
+      });
       let allCards = [...cards];
       let allBanks = [...bankAccounts];
       let allInvests = [...(financialConfig?.plaidInvestments || [])];
@@ -346,6 +411,14 @@ export function usePlaidSync({
       if (investmentsChanged) setFinancialConfig({ ...financialConfig, plaidInvestments: allInvests });
 
       const hadCachedSnapshot = hasCachedPlaidSnapshot(cards, bankAccounts, syncConnectionIds);
+      const issueResults = results.filter(result => result?._error || result?._pendingSync);
+      const issues = issueResults.map(result => ({
+        institutionName: result?.institutionName || "Linked institution",
+        pending: Boolean(result?._pendingSync),
+        message: result?._pendingSync
+          ? "Fresh balances are still processing."
+          : String(result?._error || "Sync did not complete."),
+      }));
       const syncOutcome = summarizeSyncOutcome({
         requestedCount,
         successCount,
@@ -364,6 +437,24 @@ export function usePlaidSync({
               categorizeWithAi: false,
             }).catch(() => {});
           }
+          if (issues.length > 0) {
+            const issueNames = issues.slice(0, 2).map(issue => issue.institutionName).join(", ");
+            _setSyncState({
+              phase: "warning",
+              requestedCount,
+              completedCount: progressCompleted || requestedCount,
+              activeInstitution: "",
+              message: `Sync finished with ${issues.length} issue${issues.length === 1 ? "" : "s"}.`,
+              warning:
+                issues.length === 1
+                  ? `${issueNames} needs attention. Catalyst kept your last saved data where available.`
+                  : `${issueNames}${issues.length > 2 ? " and others" : ""} need attention. Catalyst kept your last saved data where available.`,
+              issues,
+              background: true,
+            });
+          } else {
+            _resetSyncState();
+          }
         } else if (syncOutcome.kind === "success") {
           haptic.success();
           if (window.toast) window.toast.success(syncOutcome.message);
@@ -379,12 +470,31 @@ export function usePlaidSync({
           })) {
             await fetchAllTransactions(30, { connectionIds: syncConnectionIds }).catch(() => {});
           }
-        } else if (window.toast) {
-          window.toast.info(syncOutcome.message);
+          _resetSyncState();
+        } else {
+          if (window.toast) window.toast.info(syncOutcome.message);
           if (restoredCount > 0) {
-            window.toast.info(
+            window.toast?.info?.(
               `Restored ${restoredCount} ${restoredCount === 1 ? "linked account" : "linked accounts"} while syncing.`
             );
+          }
+          if (issues.length > 0) {
+            const issueNames = issues.slice(0, 2).map(issue => issue.institutionName).join(", ");
+            _setSyncState({
+              phase: "warning",
+              requestedCount,
+              completedCount: progressCompleted || requestedCount,
+              activeInstitution: "",
+              message: `Sync finished with ${issues.length} issue${issues.length === 1 ? "" : "s"}.`,
+              warning:
+                issues.length === 1
+                  ? `${issueNames} needs attention. Catalyst kept your last saved data where available.`
+                  : `${issueNames}${issues.length > 2 ? " and others" : ""} need attention. Catalyst kept your last saved data where available.`,
+              issues,
+              background,
+            });
+          } else {
+            _resetSyncState();
           }
         }
       } else {
@@ -399,11 +509,39 @@ export function usePlaidSync({
         } else if (!background && window.toast) {
           window.toast.error(`Sync failed: ${firstErr}`);
         }
+        if (issues.length > 0) {
+          const issueNames = issues.slice(0, 2).map(issue => issue.institutionName).join(", ");
+          _setSyncState({
+            phase: "warning",
+            requestedCount,
+            completedCount: progressCompleted || requestedCount,
+            activeInstitution: "",
+            message: "Sync did not fully complete.",
+            warning:
+              issues.length === 1
+                ? `${issueNames} could not be refreshed.`
+                : `${issueNames}${issues.length > 2 ? " and others" : ""} could not be refreshed.`,
+            issues,
+            background,
+          });
+        } else {
+          _resetSyncState();
+        }
       }
     } catch (e) {
       const failure = normalizeAppError(e, { context: "sync" });
       log.error("sync", "Balance sync failed", { error: failure.rawMessage, kind: failure.kind });
       if (!background && window.toast) window.toast.error(failure.userMessage);
+      _setSyncState({
+        phase: "warning",
+        requestedCount: syncConnectionIds.length,
+        completedCount: 0,
+        activeInstitution: "",
+        message: "Sync did not complete.",
+        warning: failure.userMessage,
+        issues: [],
+        background,
+      });
     } finally {
       _setSyncing(false);
     }
@@ -452,5 +590,5 @@ export function usePlaidSync({
     };
   }, [autoMaintain, sync]);
 
-  return { syncing, sync };
+  return { syncing, sync, syncState };
 }

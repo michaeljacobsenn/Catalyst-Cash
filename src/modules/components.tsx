@@ -6,6 +6,7 @@
     ReactNode
   } from "react";
   import { useEffect,useRef,useState } from "react";
+  import { createPortal } from "react-dom";
   import { T } from "./constants.js";
   import { haptic } from "./haptics.js";
   import { Check,CheckCircle,ChevronDown,ChevronUp } from "./icons";
@@ -721,7 +722,14 @@ export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel
   const showCancelProminent = elapsed >= 20 && !isReceiving;
 
   return (
-    <div style={{ padding: "32px 16px", animation: "fadeIn .4s ease-out forwards", maxWidth: 400, margin: "0 auto" }}>
+    <div
+      style={{
+        padding: "calc(var(--top-bar-h, 0px) + env(safe-area-inset-top, 0px) + 20px) 16px 32px",
+        animation: "fadeIn .4s ease-out forwards",
+        maxWidth: 400,
+        margin: "0 auto",
+      }}
+    >
       <div style={{ textAlign: "center", marginBottom: isReceiving ? 24 : 36, transition: "margin .4s ease" }}>
         
         {/* ── App Icon ── */}
@@ -1118,18 +1126,53 @@ export const TabSkeleton = ({ rows = 4 }: TabSkeletonProps) => (
 export const CustomSelect = ({ value, onChange, options, placeholder = "Select...", ariaLabel, icon }: CustomSelectProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0, flip: false });
+
+  const calcPosition = () => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const optionCount = options.flatMap(g => ("options" in g ? g.options : [g])).length;
+    const estimatedHeight = Math.min(240, Math.max(160, optionCount * 40));
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const flip = spaceBelow < estimatedHeight + 8 && spaceAbove > spaceBelow;
+    setDropPos({
+      top: flip ? rect.top - 6 : rect.bottom + 6,
+      left: rect.left,
+      width: rect.width,
+      flip,
+    });
+  };
 
   // Close when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target;
-      if (containerRef.current && target instanceof Node && !containerRef.current.contains(target)) {
+      if (
+        containerRef.current &&
+        target instanceof Element &&
+        !containerRef.current.contains(target) &&
+        !target.closest("[data-custom-select-portal]")
+      ) {
         setIsOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    calcPosition();
+    const onScroll = () => calcPosition();
+    const onResize = () => calcPosition();
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [isOpen, options]);
 
   const selectedOption = options.flatMap(g => ("options" in g ? g.options : [g])).find(o => o.value === value);
 
@@ -1152,7 +1195,7 @@ export const CustomSelect = ({ value, onChange, options, placeholder = "Select..
           justifyContent: "space-between",
           gap: 8,
           padding: "10px 12px",
-          background: isOpen ? T.bg.card : T.bg.elevated,
+          background: isOpen ? `linear-gradient(180deg, ${T.bg.surface}, ${T.bg.card})` : `linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card})`,
           color: selectedOption ? T.text.primary : T.text.muted,
           border: `1.5px solid ${isOpen ? T.accent.primary : T.border.default}`,
           borderRadius: T.radius.md,
@@ -1164,7 +1207,7 @@ export const CustomSelect = ({ value, onChange, options, placeholder = "Select..
           overflow: "hidden",
           textOverflow: "ellipsis",
           transition: "all .2s ease",
-          boxShadow: isOpen ? `0 0 0 3px ${T.accent.primaryDim}, 0 4px 12px rgba(0,0,0,0.2)` : "none",
+          boxShadow: isOpen ? `0 0 0 3px ${T.accent.primaryDim}, 0 8px 18px rgba(0,0,0,0.18)` : `inset 0 1px 0 rgba(255,255,255,0.03)`,
           transform: "translateZ(0)",
           backfaceVisibility: "hidden",
           WebkitBackfaceVisibility: "hidden",
@@ -1198,75 +1241,77 @@ export const CustomSelect = ({ value, onChange, options, placeholder = "Select..
       </button>
 
       {/* DROPDOWN MENU */}
-      {isOpen && (
-        <div
-          role="listbox"
-          className="slide-up"
-          style={{
-            position: "absolute",
-            top: "calc(100% + 6px)",
-            left: 0,
-            right: 0,
-            zIndex: 100,
-            background: T.bg.card,
-            border: `1px solid ${T.border.default}`,
-            borderRadius: T.radius.md,
-            boxShadow: `0 12px 32px rgba(0,0,0,0.4), 0 0 0 1px ${T.accent.primary}20`,
-            maxHeight: 240,
-            overflowY: "auto",
-            WebkitOverflowScrolling: "touch",
-            padding: 4,
-          }}
-        >
-          {options.map((groupOrOption, i) => {
-            // It's an optgroup 
-            if ("options" in groupOrOption) {
-              return (
-                <div key={groupOrOption.label || i} style={{ marginBottom: 4 }}>
-                  <div
-                    style={{
-                      padding: "6px 12px 2px",
-                      fontSize: 10,
-                      fontWeight: 800,
-                      color: T.text.dim,
-                      fontFamily: T.font.mono,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                    }}
-                  >
-                    {groupOrOption.label}
-                  </div>
-                  {groupOrOption.options.map(opt => (
-                    <OptionItem
-                      key={opt.value}
-                      option={opt}
-                      isSelected={value === opt.value}
-                      onSelect={() => {
-                        haptic.selection();
-                        onChange(opt.value);
-                        setIsOpen(false);
+      {isOpen &&
+        createPortal(
+          <div
+            role="listbox"
+            data-custom-select-portal
+            className="slide-up"
+            style={{
+              position: "fixed",
+              ...(dropPos.flip
+                ? { bottom: window.innerHeight - dropPos.top, left: dropPos.left }
+                : { top: dropPos.top, left: dropPos.left }),
+              width: dropPos.width,
+              zIndex: 99999,
+              background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
+              border: `1px solid ${T.border.default}`,
+              borderRadius: T.radius.md,
+              boxShadow: `0 18px 40px rgba(0,0,0,0.34), 0 0 0 1px ${T.accent.primary}18`,
+              maxHeight: 240,
+              overflowY: "auto",
+              WebkitOverflowScrolling: "touch",
+              padding: 4,
+            }}
+          >
+            {options.map((groupOrOption, i) => {
+              if ("options" in groupOrOption) {
+                return (
+                  <div key={groupOrOption.label || i} style={{ marginBottom: 4 }}>
+                    <div
+                      style={{
+                        padding: "6px 12px 2px",
+                        fontSize: 10,
+                        fontWeight: 800,
+                        color: T.text.dim,
+                        fontFamily: T.font.mono,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.06em",
                       }}
-                    />
-                  ))}
-                </div>
+                    >
+                      {groupOrOption.label}
+                    </div>
+                    {groupOrOption.options.map(opt => (
+                      <OptionItem
+                        key={opt.value}
+                        option={opt}
+                        isSelected={value === opt.value}
+                        onSelect={() => {
+                          haptic.selection();
+                          onChange(opt.value);
+                          setIsOpen(false);
+                        }}
+                      />
+                    ))}
+                  </div>
+                );
+              }
+              return (
+                <OptionItem
+                  key={groupOrOption.value}
+                  option={groupOrOption}
+                  isSelected={value === groupOrOption.value}
+                  onSelect={() => {
+                    haptic.selection();
+                    onChange(groupOrOption.value);
+                    setIsOpen(false);
+                  }}
+                />
               );
-            }
-            // It's a flat option
-            return (
-              <OptionItem
-                key={groupOrOption.value}
-                option={groupOrOption}
-                isSelected={value === groupOrOption.value}
-                onSelect={() => {
-                  haptic.selection();
-                  onChange(groupOrOption.value);
-                  setIsOpen(false);
-                }}
-              />
-            );
-          })}
-        </div>
-      )}
+            })}
+          </div>,
+          document.body
+        )}
     </div>
   );
 };
@@ -1285,7 +1330,7 @@ const OptionItem: FC<OptionItemProps> = ({ option, isSelected, onSelect }) => (
       fontSize: 12,
       fontWeight: isSelected ? 800 : 500,
       color: isSelected ? T.accent.primary : T.text.primary,
-      background: isSelected ? `${T.accent.primary}15` : "transparent",
+      background: isSelected ? `${T.accent.primary}14` : "transparent",
       border: "none",
       borderRadius: T.radius.sm,
       cursor: "pointer",

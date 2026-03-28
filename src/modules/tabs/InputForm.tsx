@@ -136,10 +136,6 @@ interface PlaidAutoFillData {
 }
 
 interface InputFormConfig extends CatalystCashConfig {
-  monthlySalary?: number;
-  hourlyRate?: number;
-  assumedHours?: number;
-  typicalPaycheck?: number;
   trackPaycheck?: boolean;
 }
 
@@ -226,6 +222,113 @@ interface CustomSelectProps {
   placeholder?: string;
   ariaLabel?: string;
   icon?: ReactNode;
+}
+
+let overrideInputIdCounter = 0;
+
+function InlineOverrideMoneyInput({
+  value,
+  onChange,
+  placeholder = "0.00",
+  label = "Amount",
+  onReset,
+}: DollarInputProps & { onReset: () => void }) {
+  const [id] = useState(() => `override-di-${++overrideInputIdCounter}`);
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <div style={{ position: "relative" }}>
+      <label
+        htmlFor={id}
+        style={{
+          position: "absolute",
+          width: 1,
+          height: 1,
+          overflow: "hidden",
+          clip: "rect(0,0,0,0)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {label}
+      </label>
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          left: 14,
+          top: "50%",
+          transform: "translateY(-50%)",
+          color: T.accent.primary,
+          fontFamily: T.font.mono,
+          fontSize: 14,
+          fontWeight: 700,
+          transition: "color 0.2s ease",
+          zIndex: 1,
+        }}
+      >
+        $
+      </span>
+      <input
+        id={id}
+        type="number"
+        inputMode="decimal"
+        pattern="[0-9]*"
+        step="0.01"
+        value={value}
+        placeholder={placeholder}
+        onChange={onChange}
+        onFocus={e => {
+          setFocused(true);
+          setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
+        }}
+        onBlur={() => setFocused(false)}
+        aria-label={label}
+        className="app-input"
+        style={{
+          width: "100%",
+          padding: "12px 14px",
+          paddingLeft: 28,
+          paddingRight: 52,
+          borderRadius: T.radius.md,
+          background: `${T.accent.primary}10`,
+          border: `1.5px solid ${focused ? T.accent.primary : `${T.accent.primary}70`}`,
+          color: T.text.primary,
+          fontSize: 14,
+          outline: "none",
+          boxSizing: "border-box",
+          transition: "all 0.2s",
+          fontFamily: T.font.mono,
+          fontWeight: 700,
+          boxShadow: focused ? `0 0 0 3px ${T.accent.primary}22` : "none",
+        }}
+      />
+      <button
+        type="button"
+        onMouseDown={event => event.preventDefault()}
+        onClick={onReset}
+        aria-label={`Reset ${label} to live value`}
+        style={{
+          position: "absolute",
+          top: 4,
+          right: 4,
+          width: 38,
+          height: "calc(100% - 8px)",
+          borderRadius: T.radius.sm,
+          border: `1px solid ${T.accent.primary}40`,
+          background: `${T.accent.primary}18`,
+          color: T.accent.primary,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 12,
+          fontWeight: 900,
+        }}
+      >
+        ✕
+      </button>
+    </div>
+  );
 }
 
 
@@ -324,6 +427,46 @@ export default function InputForm({
 
   // Identify if the generated system prompt has drifted from the last downloaded version
   const activeConfig: InputFormConfig = typedFinancialConfig;
+  const plaidInvestmentTotals = useMemo(() => {
+    const plaidInvestments = activeConfig?.plaidInvestments || [];
+    const sumBucket = (bucket: "roth" | "brokerage" | "k401" | "hsa") =>
+      plaidInvestments
+        .filter((account) => account?.bucket === bucket)
+        .reduce((sum, account) => sum + (Number(account?._plaidBalance) || 0), 0);
+    return {
+      roth: sumBucket("roth"),
+      brokerage: sumBucket("brokerage"),
+      k401: sumBucket("k401"),
+      hsa: sumBucket("hsa"),
+    };
+  }, [activeConfig?.plaidInvestments]);
+
+  const investmentAutoValues = useMemo(
+    () => ({
+      roth:
+        activeConfig.enableHoldings && (activeConfig.holdings?.roth || []).length > 0 && holdingValues.roth > 0
+          ? holdingValues.roth
+          : plaidInvestmentTotals.roth,
+      brokerage:
+        activeConfig.enableHoldings && (activeConfig.holdings?.brokerage || []).length > 0 && holdingValues.brokerage > 0
+          ? holdingValues.brokerage
+          : plaidInvestmentTotals.brokerage,
+      k401:
+        activeConfig.enableHoldings && (activeConfig.holdings?.k401 || []).length > 0 && holdingValues.k401 > 0
+          ? holdingValues.k401
+          : plaidInvestmentTotals.k401,
+    }),
+    [
+      activeConfig.enableHoldings,
+      activeConfig.holdings,
+      holdingValues.brokerage,
+      holdingValues.k401,
+      holdingValues.roth,
+      plaidInvestmentTotals.brokerage,
+      plaidInvestmentTotals.k401,
+      plaidInvestmentTotals.roth,
+    ]
+  );
 
 
   // Compute exact strategy using current form inputs
@@ -369,9 +512,9 @@ export default function InputForm({
   const filledFields = [
     activeConfig.trackChecking !== false && form.checking,
     activeConfig.trackSavings !== false && form.savings,
-    activeConfig.trackRoth && form.roth,
-    activeConfig.trackBrokerage && form.brokerage,
-    activeConfig.track401k && (form.k401Balance || activeConfig.k401Balance),
+    (activeConfig.trackRoth || activeConfig.trackRothContributions) && (form.roth || investmentAutoValues.roth),
+    activeConfig.trackBrokerage && (form.brokerage || investmentAutoValues.brokerage),
+    activeConfig.track401k && (form.k401Balance || activeConfig.k401Balance || investmentAutoValues.k401),
     form.debts.some(d => (d.name || d.cardId) && d.balance),
   ].filter(Boolean).length;
   const quotaExhausted = auditQuota && isGatingEnforced() && !auditQuota.allowed;
@@ -387,6 +530,12 @@ export default function InputForm({
     activeConfig.currencyCode || "USD",
     personalRules?.trim() ? "Custom AI rules" : "Default AI rules",
   ].join(" • ");
+  const configuredPaycheckPlaceholder =
+    activeConfig.incomeType === "hourly"
+      ? `Use config ${Number(activeConfig.typicalHours || 0)} hrs`
+      : activeConfig.incomeType === "variable"
+        ? `Use config $${fmt(Number(activeConfig.averagePaycheck || 0))}`
+        : `Use config $${fmt(Number(activeConfig.paycheckStandard || 0))}`;
 
   const buildMsg = () =>
     buildInputSnapshotMessage({
@@ -619,36 +768,16 @@ export default function InputForm({
                       </button>
                     ) : (
                       <div style={{ position: "relative" }}>
-                        <DI
+                        <InlineOverrideMoneyInput
                           label="Checking balance"
                           value={form.checking}
                           onChange={e => s("checking", sanitizeDollar(e.target.value))}
                           placeholder={hasPlaid ? `${fmt(plaidData.checking)}` : "0.00"}
+                          onReset={() => {
+                            setOverridePlaid(p => ({ ...p, checking: false }));
+                            s("checking", plaidData.checking ?? "");
+                          }}
                         />
-                        {hasPlaid && (
-                          <button
-                            onClick={() => setOverridePlaid(p => ({ ...p, checking: false }))}
-                            style={{
-                              position: "absolute",
-                              right: -2,
-                              top: -8,
-                              width: 16,
-                              height: 16,
-                              borderRadius: 8,
-                              border: "none",
-                              background: T.accent.primary,
-                              color: "#fff",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 9,
-                              fontWeight: 900,
-                            }}
-                          >
-                            ✕
-                          </button>
-                        )}
                       </div>
                     )}
                   </Card>
@@ -699,36 +828,16 @@ export default function InputForm({
                       </button>
                     ) : (
                       <div style={{ position: "relative" }}>
-                        <DI
+                        <InlineOverrideMoneyInput
                           label="Savings balance"
                           value={form.savings}
                           onChange={e => s("savings", sanitizeDollar(e.target.value))}
                           placeholder={hasPlaid ? `${fmt(plaidData.vault)}` : "0.00"}
+                          onReset={() => {
+                            setOverridePlaid(p => ({ ...p, vault: false }));
+                            s("savings", plaidData.vault ?? "");
+                          }}
                         />
-                        {hasPlaid && (
-                          <button
-                            onClick={() => setOverridePlaid(p => ({ ...p, vault: false }))}
-                            style={{
-                              position: "absolute",
-                              right: -2,
-                              top: -8,
-                              width: 16,
-                              height: 16,
-                              borderRadius: 8,
-                              border: "none",
-                              background: T.accent.primary,
-                              color: "#fff",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 9,
-                              fontWeight: 900,
-                            }}
-                          >
-                            ✕
-                          </button>
-                        )}
                       </div>
                     )}
                   </Card>
@@ -841,45 +950,29 @@ export default function InputForm({
                           cursor: "pointer",
                         }}
                       >
-                        <Mono size={12} weight={800} color={T.accent.emerald}>
-                          {fmt(plaidDebt.balance)}
-                        </Mono>
-                      </button>
+                          <Mono size={12} weight={800} color={T.accent.emerald}>
+                            {fmt(plaidDebt.balance)}
+                          </Mono>
+                        </button>
                     ) : (
-                      <div style={{ position: "relative" }}>
+                      isOverridden && hasPlaid ? (
+                        <InlineOverrideMoneyInput
+                          label={`Debt balance ${i + 1}`}
+                          value={d.balance}
+                          onChange={e => sD(i, "balance", sanitizeDollar(e.target.value))}
+                          placeholder={`${fmt(plaidDebt.balance)}`}
+                          onReset={() => {
+                            setOverridePlaid(p => ({ ...p, debts: { ...p.debts, [d.cardId]: false } }));
+                            sD(i, "balance", plaidDebt.balance);
+                          }}
+                        />
+                      ) : (
                         <DI
                           value={d.balance}
                           onChange={e => sD(i, "balance", sanitizeDollar(e.target.value))}
                           placeholder={hasPlaid ? `${fmt(plaidDebt.balance)}` : "0.00"}
                         />
-                        {hasPlaid && isOverridden && (
-                          <button
-                            onClick={() => {
-                              setOverridePlaid(p => ({ ...p, debts: { ...p.debts, [d.cardId]: false } }));
-                              sD(i, "balance", plaidDebt.balance);
-                            }}
-                            style={{
-                              position: "absolute",
-                              right: -2,
-                              top: -8,
-                              width: 16,
-                              height: 16,
-                              borderRadius: 8,
-                              border: "none",
-                              background: T.accent.primary,
-                              color: "#fff",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 9,
-                              fontWeight: 900,
-                            }}
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </div>
+                      )
                     )}
                   </div>
                   {form.debts.length > 1 && (
@@ -1372,7 +1465,7 @@ export default function InputForm({
                       }
                       value={form.paycheckAddOverride}
                       onChange={e => s("paycheckAddOverride", e.target.value)}
-                      placeholder={`Use config ${activeConfig.incomeType === "hourly" ? "hrs" : "$"}`}
+                      placeholder={configuredPaycheckPlaceholder}
                       style={{
                         width: "100%",
                         padding: "10px 12px",
@@ -1388,7 +1481,7 @@ export default function InputForm({
               </Card>
             )}
             {/* Investment auto-tracking section */}
-            {(activeConfig.trackRoth || activeConfig.trackBrokerage || activeConfig.track401k) && (
+            {(activeConfig.trackRoth || activeConfig.trackRothContributions || activeConfig.trackBrokerage || activeConfig.track401k) && (
               <Card variant="glass" style={{ marginBottom: 10, position: "relative", overflow: "hidden" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                   <Label style={{ marginBottom: 0, fontWeight: 800 }}>Investment Balances</Label>
@@ -1402,12 +1495,9 @@ export default function InputForm({
                   )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {activeConfig.trackRoth &&
+                  {(activeConfig.trackRoth || activeConfig.trackRothContributions) &&
                     (() => {
-                      const hasAutoValue =
-                        financialConfig?.enableHoldings &&
-                        (financialConfig?.holdings?.roth || []).length > 0 &&
-                        holdingValues.roth > 0;
+                      const hasAutoValue = investmentAutoValues.roth > 0;
                       return (
                         <div
                           style={{
@@ -1432,7 +1522,7 @@ export default function InputForm({
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               {hasAutoValue && !overrideInvest.roth && (
                                 <Mono size={13} weight={800} color={T.accent.emerald}>
-                                  {fmt(holdingValues.roth)}
+                                  {fmt(investmentAutoValues.roth)}
                                 </Mono>
                               )}
                               {hasAutoValue && (
@@ -1459,7 +1549,7 @@ export default function InputForm({
                             <DI
                               value={form.roth}
                               onChange={e => s("roth", sanitizeDollar(e.target.value))}
-                              placeholder={hasAutoValue ? `Auto: ${fmt(holdingValues.roth)}` : "Enter value"}
+                              placeholder={hasAutoValue ? `Auto: ${fmt(investmentAutoValues.roth)}` : "Enter value"}
                             />
                           )}
                         </div>
@@ -1467,10 +1557,7 @@ export default function InputForm({
                     })()}
                   {activeConfig.trackBrokerage &&
                     (() => {
-                      const hasAutoValue =
-                        financialConfig?.enableHoldings &&
-                        (financialConfig?.holdings?.brokerage || []).length > 0 &&
-                        holdingValues.brokerage > 0;
+                      const hasAutoValue = investmentAutoValues.brokerage > 0;
                       return (
                         <div
                           style={{
@@ -1495,7 +1582,7 @@ export default function InputForm({
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               {hasAutoValue && !overrideInvest.brokerage && (
                                 <Mono size={13} weight={800} color={T.accent.emerald}>
-                                  {fmt(holdingValues.brokerage)}
+                                  {fmt(investmentAutoValues.brokerage)}
                                 </Mono>
                               )}
                               {hasAutoValue && (
@@ -1522,7 +1609,7 @@ export default function InputForm({
                             <DI
                               value={form.brokerage}
                               onChange={e => s("brokerage", sanitizeDollar(e.target.value))}
-                              placeholder={hasAutoValue ? `Auto: ${fmt(holdingValues.brokerage)}` : "Enter value"}
+                              placeholder={hasAutoValue ? `Auto: ${fmt(investmentAutoValues.brokerage)}` : "Enter value"}
                             />
                           )}
                         </div>
@@ -1530,10 +1617,7 @@ export default function InputForm({
                     })()}
                   {activeConfig.track401k &&
                     (() => {
-                      const hasAutoValue =
-                        financialConfig?.enableHoldings &&
-                        (financialConfig?.holdings?.k401 || []).length > 0 &&
-                        holdingValues.k401 > 0;
+                      const hasAutoValue = investmentAutoValues.k401 > 0;
                       return (
                         <div
                           style={{
@@ -1558,7 +1642,7 @@ export default function InputForm({
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               {hasAutoValue && !overrideInvest.k401 && (
                                 <Mono size={13} weight={800} color={T.accent.emerald}>
-                                  {fmt(holdingValues.k401)}
+                                  {fmt(investmentAutoValues.k401)}
                                 </Mono>
                               )}
                               {hasAutoValue && (
@@ -1585,7 +1669,7 @@ export default function InputForm({
                             <DI
                               value={form.k401Balance || ""}
                               onChange={e => s("k401Balance", sanitizeDollar(e.target.value))}
-                              placeholder={hasAutoValue ? `Auto: ${fmt(holdingValues.k401)}` : "Enter value"}
+                              placeholder={hasAutoValue ? `Auto: ${fmt(investmentAutoValues.k401)}` : "Enter value"}
                             />
                           )}
                         </div>

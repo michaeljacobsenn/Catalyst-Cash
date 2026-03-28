@@ -50,11 +50,11 @@ export default function CreditUtilizationWidget() {
     return (
         <div style={{ marginTop: 16 }}>
             <div style={{
-                padding: "16px 20px",
-                background: T.bg.card,
+                padding: "16px 18px",
+                background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
                 border: `1px solid ${T.border.subtle}`,
-                borderRadius: T.radius.md,
-                boxShadow: `0 2px 8px rgba(0,0,0,0.12)`,
+                borderRadius: T.radius.lg,
+                boxShadow: `0 10px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.04)`,
             }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div style={{ flex: 1 }}>
@@ -83,6 +83,29 @@ export default function CreditUtilizationWidget() {
                                 </>
                             )}
                         </p>
+                        {totalCreditLimit > 0 && (
+                            <div
+                                style={{
+                                    marginTop: 10,
+                                    height: 7,
+                                    borderRadius: 999,
+                                    background: T.bg.surface,
+                                    overflow: "hidden",
+                                    border: `1px solid ${T.border.subtle}`,
+                                    maxWidth: 220,
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        width: `${Math.max(4, Math.min(creditUtilization, 100))}%`,
+                                        height: "100%",
+                                        background: `linear-gradient(90deg, ${utilColor}, ${T.accent.primary})`,
+                                        borderRadius: 999,
+                                        transition: "width .45s cubic-bezier(0.16, 1, 0.3, 1)",
+                                    }}
+                                />
+                            </div>
+                        )}
                     </div>
                     <div style={{ position: "relative", width: 44, height: 44, marginLeft: 16 }}>
                         <svg height="44" width="44">
@@ -127,7 +150,7 @@ export default function CreditUtilizationWidget() {
                     </div>
                 </div>
                 {totalCreditLimit > 0 && (
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, paddingTop: 16, borderTop: `1px solid ${T.border.subtle}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, paddingTop: 16, borderTop: `1px solid ${T.border.subtle}`, gap: 12 }}>
                         <div>
                             <p style={{ fontSize: 10, color: T.text.dim, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                                 Total Balances

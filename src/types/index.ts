@@ -166,6 +166,8 @@ export interface AuditConsistencyInfo {
   nativeRiskFlags?: string[];
   scoreAnchoredToNative?: boolean;
   statusCorrected?: boolean;
+  dashboardRepaired?: boolean;
+  investmentSummaryRepaired?: boolean;
 }
 
 export interface DegradedSafetyState {

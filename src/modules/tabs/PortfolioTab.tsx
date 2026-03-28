@@ -14,6 +14,7 @@ interface PortfolioTabProps {
   onViewTransactions?: (() => void) | undefined;
   proEnabled?: boolean;
   privacyMode?: boolean;
+  themeTick?: number;
 }
 
 interface SwitchPortfolioViewEvent extends Event {
@@ -32,6 +33,7 @@ interface CardPortfolioTabProps {
   proEnabled?: boolean;
   embedded?: boolean;
   privacyMode?: boolean;
+  themeTick?: number;
 }
 
 interface CardWizardTabProps {
@@ -57,7 +59,7 @@ const PortfolioViewFallback = () => (
   </div>
 );
 
-export default function PortfolioTab({ onViewTransactions, proEnabled = false, privacyMode = false }: PortfolioTabProps) {
+export default function PortfolioTab({ onViewTransactions, proEnabled = false, privacyMode = false, themeTick = 0 }: PortfolioTabProps) {
   const [activeView, setActiveView] = useState<PortfolioView>("vault");
   const _portfolioTypesAnchor: { cards?: Card[]; bankAccounts?: BankAccount[] } = {};
   void _portfolioTypesAnchor;
@@ -118,7 +120,7 @@ export default function PortfolioTab({ onViewTransactions, proEnabled = false, p
       <div style={{ flex: 1, position: "relative", display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{ display: activeView === "vault" ? "flex" : "none", flex: 1, minHeight: 0 }}>
           <Suspense fallback={<PortfolioViewFallback />}>
-            <TypedCardPortfolioTab onViewTransactions={onViewTransactions} proEnabled={proEnabled} embedded privacyMode={privacyMode} />
+            <TypedCardPortfolioTab onViewTransactions={onViewTransactions} proEnabled={proEnabled} embedded privacyMode={privacyMode} themeTick={themeTick} />
           </Suspense>
         </div>
         <div style={{ display: activeView === "rewards" ? "flex" : "none", flex: 1, minHeight: 0, width: "100%" }}>

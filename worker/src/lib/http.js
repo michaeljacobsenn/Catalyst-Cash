@@ -15,7 +15,7 @@ export function corsHeaders(origin, env) {
   return {
     "Access-Control-Allow-Origin": isAllowed ? origin : allowed[0],
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Device-ID, X-App-Version, X-Subscription-Tier, X-RC-App-User-ID",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Device-ID, X-App-Version, X-Subscription-Tier, X-RC-App-User-ID, X-Catalyst-Testing",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
   };

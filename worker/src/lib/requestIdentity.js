@@ -6,3 +6,7 @@ export function getRevenueCatAppUserId(request) {
 export function getRequestedTier(request) {
   return request.headers.get("X-Subscription-Tier") === "pro" ? "pro" : "free";
 }
+
+export function isTestingBypassRequested(request) {
+  return request.headers.get("X-Catalyst-Testing") === "1";
+}

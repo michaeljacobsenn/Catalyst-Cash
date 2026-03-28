@@ -26,12 +26,13 @@ function BackupNudgeCard({
   return (
     <div
       style={{
-        borderLeft: `3px solid ${T.status.amber}`,
-        background: T.status.amberDim,
-        padding: "10px 14px",
+        border: `1px solid ${T.status.amber}35`,
+        background: `linear-gradient(180deg, ${T.status.amberDim}, ${T.bg.card})`,
+        padding: "12px 14px",
         marginBottom: 10,
         animation: "fadeInUp .4s ease-out",
         borderRadius: T.radius.lg,
+        boxShadow: T.shadow.card,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -123,13 +124,13 @@ export function DashboardTopChrome(props: DashboardTopChromeProps) {
           </Suspense>
         </div>
       )}
-      <div style={{ paddingTop: 16, paddingBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+      <div style={{ paddingTop: 18, paddingBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 900, letterSpacing: getTracking(22, "bold"), margin: 0 }}>Dashboard</h1>
-          <p style={{ fontSize: 11, color: T.text.dim, margin: "2px 0 0", fontWeight: 500, letterSpacing: "0.01em" }}>{greeting}</p>
+          <h1 style={{ fontSize: 23, fontWeight: 900, letterSpacing: getTracking(22, "bold"), margin: 0, textShadow: `0 2px 10px ${T.accent.primaryGlow}` }}>Dashboard</h1>
+          <p style={{ fontSize: 11, color: T.text.secondary, margin: "3px 0 0", fontWeight: 600, letterSpacing: "0.01em" }}>{greeting}</p>
         </div>
         {streak > 1 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: `${T.accent.emerald}12`, border: `1px solid ${T.status.green}25`, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 999, background: `${T.accent.emerald}12`, border: `1px solid ${T.status.green}28`, boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04)`, flexShrink: 0 }}>
             <span style={{ fontSize: 12 }}>🔥</span>
             <span style={{ fontSize: 10, fontWeight: 800, color: T.status.green, fontFamily: T.font.mono }}>W{streak}</span>
           </div>

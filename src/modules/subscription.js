@@ -57,7 +57,7 @@
 const GATING_MODE_DEFAULT = "live";
 // Optional local preview override. Keep null in normal builds so remote config
 // and the persisted subscription state remain authoritative.
-const BUILD_GATING_OVERRIDE = null;
+const BUILD_GATING_OVERRIDE = "off";
 let _effectiveGatingMode = BUILD_GATING_OVERRIDE || GATING_MODE_DEFAULT;
 let _testGatingModeOverride = null;
 

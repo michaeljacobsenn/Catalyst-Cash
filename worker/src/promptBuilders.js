@@ -26,6 +26,52 @@ import { getJsonWrapper, getProviderTweaks } from "./prompts/auditOutputContract
 
 export { estimatePromptTokens, sanitizePersonalRules } from "./prompts/auditSections.js";
 
+function buildBankAccountData(bankAccounts = [], cSym = "$") {
+  if (!Array.isArray(bankAccounts) || bankAccounts.length === 0) return null;
+  return bankAccounts
+    .filter(Boolean)
+    .slice(0, 5)
+    .map((account) => {
+      const balance = Number(account?._plaidBalance ?? account?.balance);
+      const details = [
+        Number.isFinite(balance) ? `${cSym}${balance.toFixed(2)}` : null,
+        account?._plaidManualFallback ? "Reconnect required" : null,
+      ].filter(Boolean).join(", ");
+      return `  - ${account?.name || "Bank account"}: ${details}`;
+    })
+    .join("\n");
+}
+
+function buildNearTermFundingMap(renewals = [], cSym = "$") {
+  if (!Array.isArray(renewals) || renewals.length === 0) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const bySource = new Map();
+  for (const renewal of renewals) {
+    if (!renewal || renewal.isCancelled || renewal.archivedAt || !renewal.nextDue) continue;
+    const due = new Date(`${renewal.nextDue}T12:00:00Z`);
+    if (!Number.isFinite(due.getTime())) continue;
+    const days = Math.ceil((due.getTime() - today.getTime()) / 86400000);
+    if (days < 0 || days > 14) continue;
+    const amount = Number(renewal.amount) || 0;
+    if (amount <= 0) continue;
+    const sourceLabel = renewal.chargedTo || "Unassigned funding source";
+    const current = bySource.get(sourceLabel) || { total: 0, nextDue: null };
+    current.total += amount;
+    if (!current.nextDue || renewal.nextDue < current.nextDue) current.nextDue = renewal.nextDue;
+    bySource.set(sourceLabel, current);
+  }
+
+  if (bySource.size === 0) return null;
+
+  return [...bySource.entries()]
+    .sort((left, right) => right[1].total - left[1].total)
+    .slice(0, 5)
+    .map(([sourceLabel, payload]) => `  - ${sourceLabel}: ${cSym}${payload.total.toFixed(2)}${payload.nextDue ? ` (next ${payload.nextDue})` : ""}`)
+    .join("\n");
+}
+
 export const getSystemPromptCore = (config, cards = [], renewals = [], personalRules = "", computedStrategy = null, context = {}) => {
   const weeklySpendAllowance = Number.isFinite(config?.weeklySpendAllowance) ? config.weeklySpendAllowance : 0;
   const emergencyFloor = Number.isFinite(config?.emergencyFloor) ? config.emergencyFloor : 0;
@@ -111,6 +157,8 @@ export const getSystemPromptCore = (config, cards = [], renewals = [], personalR
       : null;
 
   const totalCheckingFloor = weeklySpendAllowance + emergencyFloor;
+  const bankAccountData = buildBankAccountData(context?.bankAccounts, cSym);
+  const nearTermFundingMap = buildNearTermFundingMap(renewals, cSym);
   const contractorLiveDataSection = buildContractorSection(config, cSym, "liveData");
   const contractorRulesSection = buildContractorSection(config, cSym, "rules");
   const insuranceSection = buildInsuranceSection(config, insuranceData);
@@ -217,7 +265,9 @@ HARD RULES:
 
   const liveDataSections = [
     `CARD PORTFOLIO:\n${cardData}`,
+    bankAccountData ? `BANK ACCOUNTS:\n${bankAccountData}` : "",
     `ACTIVE RENEWALS & BILLS:\n${renewalData}`,
+    nearTermFundingMap ? `14-DAY FUNDING MAP (CRITICAL):\n${nearTermFundingMap}` : "",
     budgetData ? `MONTHLY BUDGET CATEGORIES:\n${budgetData}` : "",
     cyclebudgetData
       ? `PAYCHECK-CYCLE BUDGET (HARD — use this for per-paycheck coaching):\n${cyclebudgetData}\n  NOTE: Audit category totals in parsed.categories are MONTHLY. Divide by paychecksPerMonth (${bc?.paychecksPerMonth ?? "2.17"}) to get per-cycle actual. For each budget line, state: over/under/on-track + exact variance in dollars.`
@@ -298,6 +348,8 @@ A+) EXECUTIVE QUALITY STANDARD (HARD)
 - Lead with the highest-impact move and tie every recommendation to a concrete reason: liquidity, deadlines, APR, utilization, tax sheltering, or goal preservation.
 - Distinguish facts, assumptions, and contradictions explicitly. If the inputs are fragile or inconsistent, reduce confidence and say why.
 - Use exact ${cSym} amounts, due dates, card names, and percentages from LIVE APP DATA whenever possible.
+- If renewals or one-time items map to specific funding sources, reason about those sources separately before recommending transfers or debt paydown.
+- Never collapse named liabilities into placeholders like "CREDIT CARD #1" when a real card or account name exists.
 - Avoid generic education, filler, or broad checklists that do not matter this week.
 - If the correct action is to hold steady, say that directly and explain what would change the recommendation.`,
     `========================

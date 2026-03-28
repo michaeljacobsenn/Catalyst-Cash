@@ -6,6 +6,7 @@
 type FontWeight = "regular" | "bold" | number;
 type CardVariant = "default" | "elevated" | "glass" | "accent";
 type BadgeVariant = "green" | "amber" | "red" | "blue" | "purple" | "gray" | "teal" | "gold" | "outline" | "success";
+type NoticeTone = "info" | "success" | "warning" | "error";
 
 interface CardProps {
   children?: ReactNode;
@@ -55,6 +56,31 @@ interface SkeletonProps {
 interface InlineTooltipProps {
   term?: string;
   children?: ReactNode;
+}
+
+interface NoticeBannerProps {
+  tone?: NoticeTone;
+  title?: ReactNode;
+  message?: ReactNode;
+  action?: ReactNode;
+  compact?: boolean;
+  style?: CSSProperties;
+}
+
+interface ListSectionProps {
+  children?: ReactNode;
+  style?: CSSProperties;
+}
+
+interface ListRowProps {
+  icon?: ReactNode;
+  title?: ReactNode;
+  description?: ReactNode;
+  value?: ReactNode;
+  action?: ReactNode;
+  onClick?: () => void;
+  style?: CSSProperties;
+  isLast?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -109,16 +135,17 @@ export const GlobalStyles = () => (
     
     /* iOS 18 Typography & Form elements — minimum 44pt touch targets */
     input,textarea,select{
-      font-family:${T.font.sans};background:${T.bg.elevated};
+      font-family:${T.font.sans};background:linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card});
       border:1.5px solid ${T.border.default};color:${T.text.primary};
       border-radius:${T.radius.md}px;padding:14px 16px;font-size:16px;line-height:1.2;
       min-height:44px; /* HIG 44pt Touch Target */
-      width:100%;outline:none;transition:border-color .25s ease,box-shadow .25s ease,background .25s ease;
+      width:100%;outline:none;transition:border-color .25s ease,box-shadow .25s ease,background .25s ease,transform .25s ease;
       -webkit-appearance:none;-webkit-tap-highlight-color:transparent;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 18px rgba(0,0,0,0.10);
     }
     input:focus,textarea:focus,select:focus{
       border-color:${T.border.focus};
-      box-shadow:0 0 0 3px ${T.accent.primaryDim},0 0 16px ${T.accent.primaryGlow};
+      box-shadow:0 0 0 3px ${T.accent.primaryDim},0 0 18px ${T.accent.primaryGlow}, 0 10px 24px rgba(0,0,0,0.12);
       background:${T.bg.surface};
     }
     input::placeholder,textarea::placeholder{color:${T.text.muted};font-weight:400}
@@ -151,6 +178,7 @@ export const GlobalStyles = () => (
     @keyframes tabSlideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
     @keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
     @keyframes tabFadeIn{from{opacity:0}to{opacity:1}}
+    @keyframes shellBreathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-1px)}}
     @keyframes settingsSlideIn{from{opacity:0;transform:translateX(50px)}to{opacity:1;transform:translateX(0)}}
     @keyframes settingsSlideOut{from{opacity:0;transform:translateX(-50px)}to{opacity:1;transform:translateX(0)}}
     @keyframes slidePaneIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
@@ -239,9 +267,9 @@ export const GlobalStyles = () => (
       will-change: transform, box-shadow;
     }
     .hover-card:hover {
-      transform: translateY(-2px) scale(1.01) translateZ(0) !important;
-      box-shadow: 0 16px 32px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.4), 0 0 0 1px rgba(160,140,220,0.15) !important;
-      border-color: rgba(160,140,220,0.3) !important;
+      transform: translateY(-3px) scale(1.008) translateZ(0) !important;
+      box-shadow: 0 18px 38px rgba(0,0,0,0.34), 0 8px 16px rgba(0,0,0,0.18), 0 0 0 1px rgba(160,140,220,0.16) !important;
+      border-color: rgba(160,140,220,0.26) !important;
       z-index: 10;
     }
     .hover-card:active {
@@ -336,8 +364,8 @@ export const GlobalStyles = () => (
       padding-top:env(safe-area-inset-top,0px);
     }
     .page-body{
-      padding-inline:clamp(16px,4vw,24px);
-      padding-top:clamp(12px,2vh,18px);
+      padding-inline:clamp(14px,3.6vw,24px);
+      padding-top:clamp(10px,1.8vh,16px);
       padding-bottom:var(--page-bottom-clearance, var(--page-bottom-padding));
     }
 
@@ -431,6 +459,9 @@ export const GlobalStyles = () => (
       opacity:1;
       transform:translateX(-50%) scale(1);
     }
+    .shell-breathe{
+      animation:shellBreathe 5s ease-in-out infinite;
+    }
 
     /* ── Landscape mode: constrain to a centered 520px pillar ── */
     @media (orientation:landscape) and (max-height:600px){
@@ -466,24 +497,24 @@ export const GlobalStyles = () => (
 export const Card = ({ children, style, animate, delay = 0, onClick, variant = "default", className = "" }: CardProps) => {
   const variants = {
     default: {
-      background: T.bg.card,
-      border: `1px solid ${T.border.subtle}`,
-      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), ${T.shadow.card}`,
+      background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
+      border: `1px solid ${T.border.default}`,
+      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(255,255,255,0.02), ${T.shadow.card}`,
     },
     elevated: {
-      background: T.bg.elevated,
+      background: `linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card})`,
       border: `1px solid ${T.border.default}`,
-      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.08), ${T.shadow.elevated}`,
+      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(255,255,255,0.02), ${T.shadow.elevated}`,
     },
     glass: {
-      background: T.bg.glass,
+      background: `linear-gradient(180deg, ${T.bg.glass}, ${T.bg.card})`,
       border: `1px solid ${T.border.default}`,
-      backdropFilter: "blur(24px)",
-      WebkitBackdropFilter: "blur(24px)",
-      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), ${T.shadow.card}`,
+      backdropFilter: "blur(26px) saturate(1.25)",
+      WebkitBackdropFilter: "blur(26px) saturate(1.25)",
+      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(255,255,255,0.02), ${T.shadow.card}`,
     },
     accent: {
-      background: `linear-gradient(135deg,${T.accent.primaryDim},${T.bg.card})`,
+      background: `linear-gradient(165deg, ${T.accent.primaryDim}, ${T.bg.card} 58%, ${T.accent.emeraldDim})`,
       border: `1px solid ${T.accent.primarySoft}`,
       boxShadow: `inset 0 1px 0 rgba(255,255,255,0.1), ${T.shadow.card}, 0 0 24px rgba(123,94,167,0.06)`,
     },
@@ -516,8 +547,8 @@ export const Card = ({ children, style, animate, delay = 0, onClick, variant = "
       style={{
         ...v,
         borderRadius: T.radius.lg,
-        padding: "16px",
-        marginBottom: 8,
+        padding: "clamp(15px, 2.6vw, 18px)",
+        marginBottom: 10,
         ...style,
         ...(onClick ? { cursor: "pointer", position: "relative" } : {}),
         ...(animate ? { animationDelay: `${delay}ms` } : {}),
@@ -533,10 +564,10 @@ export const Label = ({ children, style }: LabelProps) => (
     style={{
       display: "block",
       fontSize: 10,
-      fontWeight: 700,
-      color: T.text.dim,
+      fontWeight: 800,
+      color: T.text.secondary,
       textTransform: "uppercase",
-      letterSpacing: "0.12em",
+      letterSpacing: "0.14em",
       marginBottom: 8,
       fontFamily: T.font.mono,
       ...style,
@@ -587,6 +618,118 @@ export const Badge = ({ variant = "gray", children, style, size = "md" }: BadgeP
       {children}
     </span>
   );
+};
+
+export const NoticeBanner = ({ tone = "info", title, message, action, compact = false, style }: NoticeBannerProps) => {
+  const palette = {
+    info: { border: T.accent.primarySoft, bg: T.accent.primaryDim, accent: T.accent.primary },
+    success: { border: `${T.status.green}35`, bg: T.status.greenDim, accent: T.status.green },
+    warning: { border: `${T.status.amber}35`, bg: T.status.amberDim, accent: T.status.amber },
+    error: { border: `${T.status.red}35`, bg: T.status.redDim, accent: T.status.red },
+  }[tone];
+
+  return (
+    <div
+      style={{
+        padding: compact ? "10px 12px" : "12px 14px",
+        borderRadius: T.radius.md,
+        border: `1px solid ${palette.border}`,
+        background: `linear-gradient(180deg, ${palette.bg}, ${T.bg.card})`,
+        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04)`,
+        ...style,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: action ? "flex-start" : "center", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          {title ? (
+            <div
+              style={{
+                fontSize: compact ? 11 : 12,
+                fontWeight: 800,
+                color: palette.accent,
+                letterSpacing: "0.05em",
+                textTransform: "uppercase",
+                marginBottom: message ? 4 : 0,
+                fontFamily: T.font.mono,
+              }}
+            >
+              {title}
+            </div>
+          ) : null}
+          {message ? (
+            <div style={{ fontSize: compact ? 11 : 12, lineHeight: 1.55, color: T.text.secondary }}>
+              {message}
+            </div>
+          ) : null}
+        </div>
+        {action ? <div style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>{action}</div> : null}
+      </div>
+    </div>
+  );
+};
+
+export const ListSection = ({ children, style }: ListSectionProps) => (
+  <div
+    style={{
+      background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
+      borderRadius: T.radius.xl,
+      border: `1px solid ${T.border.subtle}`,
+      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04), ${T.shadow.card}`,
+      overflow: "hidden",
+      ...style,
+    }}
+  >
+    {children}
+  </div>
+);
+
+export const ListRow = ({ icon, title, description, value, action, onClick, style, isLast = false }: ListRowProps) => {
+  const content = (
+    <>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0, flex: 1 }}>
+        {icon ? <div style={{ flexShrink: 0 }}>{icon}</div> : null}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          {title ? <div style={{ fontSize: 14, fontWeight: 750, color: T.text.primary, lineHeight: 1.25 }}>{title}</div> : null}
+          {description ? (
+            <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45, marginTop: title ? 3 : 0 }}>
+              {description}
+            </div>
+          ) : null}
+        </div>
+      </div>
+      {value ? (
+        <div style={{ flexShrink: 0, fontSize: 12, fontWeight: 700, color: T.text.secondary, fontFamily: T.font.mono }}>
+          {value}
+        </div>
+      ) : null}
+      {action ? <div style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>{action}</div> : null}
+    </>
+  );
+
+  const rowStyle: CSSProperties = {
+    width: "100%",
+    minHeight: 68,
+    padding: "14px 16px",
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    justifyContent: "space-between",
+    background: "transparent",
+    border: "none",
+    borderBottom: isLast ? "none" : `1px solid ${T.border.subtle}`,
+    textAlign: "left",
+    cursor: onClick ? "pointer" : "default",
+    ...style,
+  };
+
+  if (onClick) {
+    return (
+      <button className="settings-row hover-btn" onClick={onClick} style={rowStyle}>
+        {content}
+      </button>
+    );
+  }
+  return <div style={rowStyle}>{content}</div>;
 };
 
 export const ProgressBar = ({ progress = 0, color = T.accent.primary, style }) => (

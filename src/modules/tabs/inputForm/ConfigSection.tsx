@@ -6,10 +6,10 @@ import { Card, Label } from "../../ui.js";
 
 interface InputFormConfigSectionState {
   incomeType?: "salary" | "hourly" | "variable";
-  monthlySalary?: number;
-  hourlyRate?: number;
-  assumedHours?: number;
-  typicalPaycheck?: number;
+  paycheckStandard?: number;
+  hourlyRateNet?: number;
+  typicalHours?: number;
+  averagePaycheck?: number;
 }
 
 interface ConfigSectionProps<TConfig extends InputFormConfigSectionState> {
@@ -164,14 +164,14 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
                   inputMode="decimal"
                   pattern="[0-9]*"
                   aria-label="Monthly take-home salary"
-                  value={typedFinancialConfig?.monthlySalary || ""}
+                  value={typedFinancialConfig?.paycheckStandard || ""}
                   onChange={(event) =>
                     setTypedFinancialConfig({
                       ...typedFinancialConfig,
-                      monthlySalary: parseFloat(event.target.value) || 0,
+                      paycheckStandard: parseFloat(event.target.value) || 0,
                     })
                   }
-                  placeholder="Monthly Take-Home Salary"
+                  placeholder="Standard Paycheck"
                   className="app-input"
                   style={{
                     width: "100%",
@@ -209,11 +209,11 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
                     inputMode="decimal"
                     pattern="[0-9]*"
                     aria-label="Hourly rate"
-                    value={typedFinancialConfig?.hourlyRate || ""}
+                    value={typedFinancialConfig?.hourlyRateNet || ""}
                     onChange={(event) =>
                       setTypedFinancialConfig({
                         ...typedFinancialConfig,
-                        hourlyRate: parseFloat(event.target.value) || 0,
+                        hourlyRateNet: parseFloat(event.target.value) || 0,
                       })
                     }
                     placeholder="Hourly Rate"
@@ -237,11 +237,11 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
                     inputMode="decimal"
                     pattern="[0-9]*"
                     aria-label="Hours per week"
-                    value={typedFinancialConfig?.assumedHours || ""}
+                    value={typedFinancialConfig?.typicalHours || ""}
                     onChange={(event) =>
                       setTypedFinancialConfig({
                         ...typedFinancialConfig,
-                        assumedHours: parseFloat(event.target.value) || 0,
+                        typicalHours: parseFloat(event.target.value) || 0,
                       })
                     }
                     placeholder="Hrs/Week"
@@ -282,11 +282,11 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
                   inputMode="decimal"
                   pattern="[0-9]*"
                   aria-label="Typical paycheck amount"
-                  value={typedFinancialConfig?.typicalPaycheck || ""}
+                  value={typedFinancialConfig?.averagePaycheck || ""}
                   onChange={(event) =>
                     setTypedFinancialConfig({
                       ...typedFinancialConfig,
-                      typicalPaycheck: parseFloat(event.target.value) || 0,
+                      averagePaycheck: parseFloat(event.target.value) || 0,
                     })
                   }
                   placeholder="Typical Paycheck"

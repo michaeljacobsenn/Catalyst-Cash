@@ -3,6 +3,7 @@ import worker, {
   buildHouseholdIntegrityTag,
   getIsoWeekKey,
   getQuotaWindow,
+  RateLimiter,
   isRevenueCatEntitlementActive,
   mergePlaidTransactions,
   resolvePlaidActor,
@@ -641,6 +642,45 @@ class FakeD1 {
     } else {
       this.syncData.push(next);
     }
+  }
+}
+
+class FakeRateLimiterSql {
+  constructor() {
+    this.counts = new Map();
+  }
+
+  exec(sql, ...params) {
+    if (sql.includes("CREATE TABLE IF NOT EXISTS counts")) {
+      return [];
+    }
+
+    if (sql.includes("INSERT INTO counts")) {
+      const periodKey = params[0];
+      this.counts.set(periodKey, (this.counts.get(periodKey) || 0) + 1);
+      return [];
+    }
+
+    if (sql.includes("SELECT count FROM counts WHERE period_key = ?")) {
+      const periodKey = params[0];
+      const count = this.counts.get(periodKey);
+      return count == null ? [] : [{ count }];
+    }
+
+    if (sql.includes("SELECT period_key FROM counts ORDER BY period_key DESC")) {
+      return [...this.counts.keys()]
+        .sort()
+        .reverse()
+        .map((period_key) => ({ period_key }));
+    }
+
+    if (sql.includes("DELETE FROM counts WHERE period_key = ?")) {
+      const periodKey = params[0];
+      this.counts.delete(periodKey);
+      return [];
+    }
+
+    throw new Error(`Unhandled FakeRateLimiterSql query: ${sql}`);
   }
 }
 
@@ -1829,6 +1869,69 @@ describe("AI provider routing and gating", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ result: "precision ok" });
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("accepts Gemini-style chat history objects for backend Gemini chat", async () => {
+    const fetchMock = vi.fn(async (_input, init) => {
+      const body = JSON.parse(String(init?.body || "{}"));
+      expect(body.contents[0]).toEqual({
+        role: "user",
+        parts: [{ text: "Prior user question" }],
+      });
+      expect(body.contents[1]).toEqual({
+        role: "model",
+        parts: [{ text: "Prior model answer" }],
+      });
+      return new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: "gemini ok" }] } }],
+          usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 5 },
+        }),
+        { status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Device-ID": "device-gemini-chat" },
+        body: JSON.stringify({
+          snapshot: "Can I spend $50 today?",
+          context: {
+            financialBrief: {
+              profile: { birthYear: 1990, age: 36, payFrequency: "bi-weekly", incomeType: "salary" },
+              income: { estimatedMonthly: 5400, cycleNet: 2500, sources: [] },
+              snapshot: { status: "YELLOW", mode: "STANDARD", healthScore: 68, netWorth: 42000 },
+              cash: { checking: 1800, vault: 5000, pending: 900, available: 200, emergencyFloor: 1500, weeklySpendAllowance: 350 },
+              credit: { totalCardDebt: 4200, totalCardLimit: 10000, overallUtilization: 42, creditScore: 702 },
+              debt: { totalNonCardDebt: 0, totalDebt: 4200, nonCardDebts: [] },
+              cards: [{ name: "Freedom Flex", balance: 2200, limit: 5000, utilization: 44, apr: 26.99 }],
+              renewals: { monthlyEstimate: 140, items: [] },
+              trends: [],
+              auditHistory: [],
+            },
+          },
+          history: [
+            { role: "user", parts: [{ text: "Prior user question" }] },
+            { role: "model", parts: [{ text: "Prior model answer" }] },
+          ],
+          type: "chat",
+          model: "gemini-2.5-flash",
+          provider: "gemini",
+          stream: false,
+          responseFormat: "text",
+        }),
+      }),
+      makeEnv({
+        GOOGLE_API_KEY: "gemini-test-key",
+      }),
+      makeCtx()
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ result: "gemini ok" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -3481,5 +3584,18 @@ describe("trimResponsePreview PII scrubber", () => {
     const scrub = makeScrubber();
     const long = "safe narrative text ".repeat(40); // 800 chars
     expect(scrub(long).length).toBe(600);
+  });
+});
+
+describe("RateLimiter", () => {
+  it("returns zero when the current period row does not exist yet", async () => {
+    const limiter = new RateLimiter({
+      storage: {
+        sql: new FakeRateLimiterSql(),
+      },
+    });
+
+    const response = await limiter.fetch(new Request("http://internal/?periodKey=2026-03-27&commit=false"));
+    await expect(response.json()).resolves.toEqual({ count: 0 });
   });
 });

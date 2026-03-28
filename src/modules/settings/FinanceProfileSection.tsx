@@ -1,6 +1,6 @@
 import type { HousingType, IncomeType, Payday, PayFrequency } from "../../types/index.js";
 import { T } from "../constants.js";
-import { Label, Card } from "../ui.js";
+import { Label, Card, ListSection, NoticeBanner } from "../ui.js";
 import { RefreshCw, Save, Layers } from "../icons";
 import { haptic } from "../haptics.js";
 
@@ -89,12 +89,19 @@ export function FinanceProfileSection({
               </div>
             ))}
           </div>
+          <NoticeBanner
+            tone="info"
+            compact
+            style={{ marginTop: 12 }}
+            title="Lean Inputs Win"
+            message="Keep this page focused on values that materially affect timing, liquidity, and risk. That keeps audits sharper and the UI calmer."
+          />
         </Card>
       </div>
 
       <div>
         <Label style={{ marginLeft: 16, marginBottom: 8, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.03em" }}>Base Currency</Label>
-        <div style={{ margin: "0 16px", background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, overflow: "hidden" }}>
+        <ListSection style={{ margin: "0 16px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px" }}>
             <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Currency</span>
             <select
@@ -111,12 +118,12 @@ export function FinanceProfileSection({
               <option value="INR">INR (₹)</option>
             </select>
           </div>
-        </div>
+        </ListSection>
       </div>
 
       <div>
         <Label style={{ marginLeft: 16, marginBottom: 8, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.03em" }}>Income Profile</Label>
-        <div style={{ margin: "0 16px", background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, overflow: "hidden" }}>
+        <ListSection style={{ margin: "0 16px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${T.border.subtle}` }}>
             <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Pay Frequency</span>
             <select
@@ -208,12 +215,12 @@ export function FinanceProfileSection({
               </div>
             </div>
           )}
-        </div>
+        </ListSection>
       </div>
 
       <div>
         <Label style={{ marginLeft: 16, marginBottom: 8, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.03em" }}>Demographics</Label>
-        <div style={{ margin: "0 16px", background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, overflow: "hidden" }}>
+        <ListSection style={{ margin: "0 16px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${T.border.subtle}` }}>
             <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Birth Year</span>
             <input
@@ -247,7 +254,7 @@ export function FinanceProfileSection({
               <option value="WV">WV</option><option value="WI">WI</option><option value="WY">WY 🟢</option>
             </select>
           </div>
-        </div>
+        </ListSection>
       </div>
 
       <div style={{ marginTop: 8 }}>
@@ -330,7 +337,7 @@ export function FinanceProfileSection({
 
       <div>
         <Label style={{ marginLeft: 16, marginBottom: 8, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.03em" }}>Housing Situation</Label>
-        <div style={{ margin: "0 16px", background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}`, overflow: "hidden" }}>
+        <ListSection style={{ margin: "0 16px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${T.border.subtle}` }}>
             <span style={{ fontSize: 15, color: T.text.primary, fontWeight: 600 }}>Type</span>
             <select
@@ -364,7 +371,7 @@ export function FinanceProfileSection({
               </div>
             </div>
           )}
-        </div>
+        </ListSection>
       </div>
     </div>
   );

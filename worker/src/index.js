@@ -545,13 +545,13 @@ export class RateLimiter {
       );
     }
 
-    const row = this.sql.exec("SELECT count FROM counts WHERE period_key = ?", periodKey).one();
-    const count = row ? row.count : 0;
+    const rows = [...this.sql.exec("SELECT count FROM counts WHERE period_key = ?", periodKey)];
+    const count = rows[0]?.count ?? 0;
 
     // GC stale period keys to prevent unbounded growth
-    const rows = [...this.sql.exec("SELECT period_key FROM counts ORDER BY period_key DESC")];
-    if (rows.length > 2) {
-      for (const r of rows.slice(2)) {
+    const gcRows = [...this.sql.exec("SELECT period_key FROM counts ORDER BY period_key DESC")];
+    if (gcRows.length > 2) {
+      for (const r of gcRows.slice(2)) {
         this.sql.exec("DELETE FROM counts WHERE period_key = ?", r.period_key);
       }
     }
@@ -627,8 +627,12 @@ function generateAuditLogId() {
  * This backs the privacy policy claim that the logged excerpt
  * "never contains account numbers or balances."
  */
+function stripThoughtProcess(text) {
+  return String(text || "").replace(/<thought_process>[\s\S]*?<\/thought_process>/gi, "").trim();
+}
+
 function trimResponsePreview(text) {
-  let s = String(text || "");
+  let s = stripThoughtProcess(text);
   // Account / routing numbers: 8-17 consecutive digits
   s = s.replace(/\b\d{8,17}\b/g, "[redacted]");
   // SSN-shaped: 3-2-4 with dashes or spaces
@@ -779,7 +783,7 @@ async function captureStreamAuditLog(db, logId, provider, response) {
       const parsed = JSON.parse(payload);
       usage = mergeUsage(provider, parsed, usage);
       if (preview.length < 600) {
-        preview += extractSSEText(parsed);
+        preview += stripThoughtProcess(extractSSEText(parsed));
       }
     } catch {
       // Ignore malformed stream chunks for logging.
@@ -1746,6 +1750,7 @@ export default {
     const isChat = body.responseFormat === "text";
     const tierResolution = await resolveEffectiveTier(request, env);
     const subscriptionTier = tierResolution.tier;
+    const testingBypass = tierResolution.source === "testing";
     const tierHeaders = {
       "X-Entitlement-Verified": String(tierResolution.verified),
       "X-Subscription-Source": tierResolution.source,
@@ -1754,8 +1759,18 @@ export default {
     // ─── Rate Limit Check ─────────────────────────────────
     const deviceId = request.headers.get("X-Device-ID") || request.headers.get("CF-Connecting-IP") || "unknown";
 
-    const rateResult = await peekRateLimit(deviceId, subscriptionTier, isChat, env);
-    if (!rateResult.allowed) {
+    const rateResult = testingBypass
+      ? {
+          allowed: true,
+          remaining: Number.MAX_SAFE_INTEGER,
+          limit: Number.MAX_SAFE_INTEGER,
+          retryAfter: 0,
+          count: 0,
+          key: `testing-${deviceId}-${isChat ? "chat" : "audit"}`,
+          periodKey: "testing",
+        }
+      : await peekRateLimit(deviceId, subscriptionTier, isChat, env);
+    if (!testingBypass && !rateResult.allowed) {
       const limitName = isChat ? "chats" : "audits";
       return new Response(
         JSON.stringify({
@@ -1776,7 +1791,7 @@ export default {
     }
 
     // ─── Per-Model Rate Limit (Pro only) ──────────────────
-    const modelQuota = isChat ? getModelQuotaWindow(subscriptionTier, body.model || "") : null;
+    const modelQuota = !testingBypass && isChat ? getModelQuotaWindow(subscriptionTier, body.model || "") : null;
     if (modelQuota) {
       const modelLimitName = `${subscriptionTier}-${deviceId}-chat-${modelQuota.modelId}`;
       const modelId = env.RATE_LIMITER?.idFromName(modelLimitName);
@@ -1806,7 +1821,7 @@ export default {
     }
 
     // ─── Per-Model Audit Rate Limit (Pro only) ───────────────
-    const auditModelQuota = !isChat ? getAuditModelQuotaWindow(subscriptionTier, body.model || "") : null;
+    const auditModelQuota = !testingBypass && !isChat ? getAuditModelQuotaWindow(subscriptionTier, body.model || "") : null;
     if (auditModelQuota && env.RATE_LIMITER) {
       const auditModelLimitName = `${subscriptionTier}-${deviceId}-audit-${auditModelQuota.modelId}`;
       const amId = env.RATE_LIMITER.idFromName(auditModelLimitName);
@@ -1881,9 +1896,9 @@ export default {
         }
       );
     }
-    const { handler, keyName } = getProviderHandler(selectedProvider);
+    const { handler, keyName, keyNames = [keyName] } = getProviderHandler(selectedProvider);
 
-    const apiKey = env[keyName];
+    const apiKey = keyNames.map((candidate) => env[candidate]).find(Boolean);
     if (!apiKey) {
       return new Response(
         JSON.stringify({
@@ -1928,7 +1943,9 @@ export default {
 
     // ─── Execute Provider Call ─────────────────────────────
     try {
-      const shouldStream = stream !== false;
+      // Structured audits should not stream. The app parses them as strict JSON,
+      // so a complete one-shot response is more reliable than partial SSE chunks.
+      const shouldStream = stream !== false && responseFormat === "text";
       const auditLogId = generateAuditLogId();
       const auditUserId = getRevenueCatAppUserId(request) || deviceId;
 
@@ -1940,7 +1957,7 @@ export default {
         stream: shouldStream,
         responseFormat: responseFormat || "json",
       });
-      const committedRateResult = await commitRateLimit(rateResult, env);
+      const committedRateResult = testingBypass ? rateResult : await commitRateLimit(rateResult, env);
 
       // Commit per-model rate limit (Pro only — chat model)
       if (modelQuota && env.RATE_LIMITER) {
@@ -1989,7 +2006,7 @@ export default {
         });
       }
 
-      const resultText = typeof result === "string" ? result : result?.text || "";
+      const resultText = stripThoughtProcess(typeof result === "string" ? result : result?.text || "");
       const usage = typeof result === "string" ? buildUsage() : buildUsage(result?.usage?.promptTokens, result?.usage?.completionTokens);
       await insertAuditLogRow(env.DB, {
         id: auditLogId,

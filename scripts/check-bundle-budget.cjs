@@ -10,7 +10,7 @@ const budgets = {
   portfolioShell: 5000,
   cardPortfolio: 70000,
   cardWizard: 50000,
-  settingsTab: 95000,
+  settingsTab: 100000,
   setupWizard: 70000,
   marketData: 45000,
   spreadsheet: 7000,

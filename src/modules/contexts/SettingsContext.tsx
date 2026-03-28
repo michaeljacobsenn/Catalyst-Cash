@@ -298,7 +298,6 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       setNotifPermission("prompt");
       setAiConsent(false);
       setShowAiConsent(false);
-      setThemeModeRaw("system");
       dispatchFinConfig({ type: "REPLACE", payload: DEFAULT_FINANCIAL_CONFIG });
       setActiveCurrencyCode(DEFAULT_FINANCIAL_CONFIG.currencyCode || "USD");
 
@@ -468,9 +467,9 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
 
   const setThemeMode = useCallback((mode: ThemeMode): void => {
     pendingThemeOverrideRef.current = mode;
-    setThemeModeRaw(mode);
+    setThemeModeRaw((prevMode) => (prevMode === mode ? prevMode : mode));
     forceRender((count: number) => count + 1);
-    db.set("theme-mode", mode);
+    void db.set("theme-mode", mode);
   }, []);
 
   useEffect(() => {

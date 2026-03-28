@@ -53,6 +53,7 @@ interface DashboardSectionProps {
 interface DashboardTabProps {
   onRestore?: () => void;
   proEnabled?: boolean;
+  themeTick?: number;
   onDemoAudit?: () => void;
   onRefreshDashboard?: () => void;
   onViewTransactions?: () => void;
@@ -97,12 +98,14 @@ const DashboardSection = ({ children, marginTop = 12 }: DashboardSectionProps) =
 
 export default memo(function DashboardTab({
   proEnabled = false,
+  themeTick: _themeTick = 0,
   onDemoAudit,
   onRefreshDashboard,
   onViewTransactions,
   onDiscussWithCFO,
   onRestore,
 }: DashboardTabProps) {
+  void _themeTick;
   const { current } = useAudit();
   const { financialConfig, setFinancialConfig, autoBackupInterval, personalRules } = useSettings();
   const { cards, setCards, bankAccounts, setBankAccounts, renewals, cardCatalog } = usePortfolio();
@@ -113,7 +116,7 @@ export default memo(function DashboardTab({
   const typedFinancialConfig = financialConfig as CatalystCashConfig;
 
   // ── Plaid Balance Sync (shared hook) ──
-  const { syncing, sync: handleSyncBalances } = usePlaidSync({
+  const { syncing, sync: handleSyncBalances, syncState } = usePlaidSync({
     cards,
     bankAccounts,
     financialConfig: typedFinancialConfig,
@@ -681,21 +684,22 @@ export default memo(function DashboardTab({
                  gap: 8,
                  marginBottom: 12,
                }}>
-                 {metrics.map(m => (
+               {metrics.map(m => (
                    <div
                      key={m.label}
                      style={{
-                       padding: "12px 10px",
-                       background: T.bg.card,
+                       padding: "13px 11px 12px",
+                       background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
                        border: `1px solid ${T.border.subtle}`,
-                       borderRadius: T.radius.md,
+                       borderRadius: T.radius.lg,
                        textAlign: "center",
+                       boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04)`,
                      }}
                    >
-                     <div style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4 }}>
+                     <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 5, fontFamily: T.font.mono }}>
                        {m.label}
                      </div>
-                     <div style={{ fontSize: 14, fontWeight: 800, color: privacyMode ? T.text.dim : m.color, fontFamily: T.font.mono, letterSpacing: "-0.02em" }}>
+                     <div style={{ fontSize: 14, fontWeight: 850, color: privacyMode ? T.text.dim : m.color, fontFamily: T.font.mono, letterSpacing: "-0.02em" }}>
                        {privacyMode ? "••••" : fmt(m.value)}
                      </div>
                    </div>
@@ -718,10 +722,10 @@ export default memo(function DashboardTab({
                    alignItems: "center",
                    justifyContent: "center",
                    gap: 6,
-                   padding: "12px",
-                   borderRadius: T.radius.md,
+                   padding: "12px 14px",
+                   borderRadius: T.radius.lg,
                    border: `1px solid ${T.border.subtle}`,
-                   background: T.bg.card,
+                   background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
                    color: T.text.primary,
                    cursor: syncing ? "wait" : "pointer",
                    transition: "all .2s",
@@ -746,17 +750,17 @@ export default memo(function DashboardTab({
                  }
                }}
                className="hover-btn"
-               style={{
-                 flex: "1 1 160px",
-                 display: "flex",
-                 alignItems: "center",
-                 justifyContent: "center",
-                 gap: 6,
-                 padding: "12px",
-                 borderRadius: T.radius.md,
-                 border: `1px solid ${T.border.subtle}`,
-                 background: T.bg.card,
-                 color: T.text.primary,
+                 style={{
+                   flex: "1 1 160px",
+                   display: "flex",
+                   alignItems: "center",
+                   justifyContent: "center",
+                   gap: 6,
+                   padding: "12px 14px",
+                   borderRadius: T.radius.lg,
+                   border: `1px solid ${T.border.subtle}`,
+                   background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
+                   color: T.text.primary,
                  cursor: "pointer",
                  transition: "all .2s",
                  position: "relative",
@@ -772,6 +776,63 @@ export default memo(function DashboardTab({
                LEDGER
              </button>
            </div>
+
+           {(syncState.phase === "syncing" || syncState.phase === "warning") && (
+             <div
+               style={{
+                 marginBottom: 12,
+                 padding: "12px 14px",
+                 borderRadius: T.radius.md,
+               border: `1px solid ${syncState.phase === "warning" ? `${T.status.amber}35` : `${T.status.blue}28`}`,
+               background:
+                 syncState.phase === "warning"
+                   ? `linear-gradient(180deg, ${T.status.amber}12, ${T.bg.card})`
+                   : `linear-gradient(180deg, ${T.status.blue}10, ${T.bg.card})`,
+               boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04)`,
+              }}
+            >
+               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 8 }}>
+                 <div style={{ fontSize: 12, fontWeight: 800, color: T.text.primary }}>
+                   {syncState.phase === "warning" ? "Bank sync needs attention" : syncState.message}
+                 </div>
+                 {syncState.phase === "syncing" && (
+                   <div style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary, fontFamily: T.font.mono }}>
+                     {syncState.completedCount}/{Math.max(syncState.requestedCount, 1)}
+                   </div>
+                 )}
+               </div>
+               {syncState.phase === "syncing" ? (
+                 <>
+                   <div
+                     style={{
+                       height: 6,
+                       borderRadius: 999,
+                       background: T.bg.elevated,
+                       overflow: "hidden",
+                       border: `1px solid ${T.border.subtle}`,
+                       marginBottom: 8,
+                     }}
+                   >
+                     <div
+                       style={{
+                         width: `${Math.round((syncState.completedCount / Math.max(syncState.requestedCount, 1)) * 100)}%`,
+                         height: "100%",
+                         background: `linear-gradient(90deg, ${T.status.blue}, ${T.accent.primary})`,
+                         transition: "width .25s ease",
+                       }}
+                     />
+                   </div>
+                   <div style={{ fontSize: 11, color: T.text.secondary }}>
+                     {syncState.activeInstitution ? `Refreshing ${syncState.activeInstitution}...` : "Refreshing linked accounts..."}
+                   </div>
+                 </>
+               ) : (
+                 <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5 }}>
+                   {syncState.warning}
+                 </div>
+               )}
+             </div>
+           )}
 
            {/* Pro upsell — compact strip for free users only */}
            {shouldShowGating() && !proEnabled && (

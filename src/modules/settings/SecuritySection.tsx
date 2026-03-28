@@ -4,7 +4,7 @@
   import { getConnections,removeConnection } from "../plaid.js";
   import { runSecurityDataDeletion } from "../recoveryFlows.js";
   import { deleteSecureItem } from "../secureStore.js";
-  import { Card,Label } from "../ui.js";
+  import { Card,Label,ListRow,ListSection,NoticeBanner } from "../ui.js";
   import { db } from "../utils.js";
 
 const Toggle = ({ value, onChange, ariaLabel, disabled = false }) => (
@@ -78,177 +78,124 @@ export default function SecuritySection({
     >
       <Label>Security Suite</Label>
       {(nativeUnavailable || webLimited) && (
-        <div
-          style={{
-            padding: "12px 14px",
-            borderRadius: T.radius.md,
-            marginBottom: 14,
-            background: nativeUnavailable ? `${T.status.red}10` : `${T.status.amber}10`,
-            border: `1px solid ${nativeUnavailable ? `${T.status.red}35` : `${T.status.amber}35`}`,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 800,
-              marginBottom: 4,
-              color: nativeUnavailable ? T.status.red : T.status.amber,
-            }}
-          >
-            {nativeUnavailable ? "Secure Storage Unavailable" : "Native-Only Security on Web"}
-          </div>
-          <p style={{ margin: 0, fontSize: 10, color: T.text.secondary, lineHeight: 1.5 }}>
-            {secretStorageStatus?.message}
-          </p>
-        </div>
+        <NoticeBanner
+          tone={nativeUnavailable ? "error" : "warning"}
+          compact
+          style={{ marginBottom: 14 }}
+          title={nativeUnavailable ? "Secure Storage Unavailable" : "Native-Only Security On Web"}
+          message={secretStorageStatus?.message}
+        />
       )}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: "12px 0",
-          borderBottom: `1px solid ${T.border.subtle}`,
-        }}
-      >
-        <div style={{ flex: 1, paddingRight: 12 }}>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>App Passcode (4 Digits)</span>
-          <p style={{ fontSize: 10, color: T.text.muted, marginTop: 2 }}>
-            Required failsafe before enabling App Lock
-          </p>
-        </div>
-        <form onSubmit={e => e.preventDefault()}>
-          <input
-            type="password"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={4}
-            value={appPasscode || ""}
-            onChange={handlePasscodeChange}
-            placeholder="••••"
-            aria-label="App passcode"
-            autoComplete="new-password"
-            disabled={secureControlsDisabled}
-            style={{
-              width: 60,
-              padding: 8,
-              borderRadius: T.radius.md,
-              border: `1px solid ${T.border.default}`,
-              background: T.bg.elevated,
-              color: T.text.primary,
-              fontSize: 16,
-              textAlign: "center",
-              letterSpacing: 4,
-              fontFamily: T.font.mono,
-              opacity: secureControlsDisabled ? 0.45 : 1,
-              cursor: secureControlsDisabled ? "not-allowed" : "text",
-            }}
-          />
-        </form>
-      </div>
+      <ListSection style={{ marginBottom: 18 }}>
+        <ListRow
+          title="App Passcode (4 Digits)"
+          description="Required failsafe before enabling App Lock"
+          action={
+            <form onSubmit={e => e.preventDefault()}>
+              <input
+                type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={4}
+                value={appPasscode || ""}
+                onChange={handlePasscodeChange}
+                placeholder="••••"
+                aria-label="App passcode"
+                autoComplete="new-password"
+                disabled={secureControlsDisabled}
+                style={{
+                  width: 68,
+                  padding: "10px 8px",
+                  borderRadius: T.radius.md,
+                  border: `1px solid ${T.border.default}`,
+                  background: T.bg.elevated,
+                  color: T.text.primary,
+                  fontSize: 16,
+                  textAlign: "center",
+                  letterSpacing: 4,
+                  fontFamily: T.font.mono,
+                  opacity: secureControlsDisabled ? 0.45 : 1,
+                  cursor: secureControlsDisabled ? "not-allowed" : "text",
+                }}
+              />
+            </form>
+          }
+        />
 
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: "12px 0",
-          borderBottom: requireAuth ? `1px solid ${T.border.subtle}` : "none",
-          opacity: appPasscode?.length === 4 ? 1 : 0.5,
-        }}
-      >
-        <div style={{ flex: 1, paddingRight: 12 }}>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>Require Passcode</span>
-          <p style={{ fontSize: 10, color: T.text.muted, marginTop: 2 }}>
-            Lock app natively on launch or background
-          </p>
-        </div>
-        <div style={{ pointerEvents: secureControlsDisabled ? "none" : "auto", opacity: secureControlsDisabled ? 0.45 : 1 }}>
-          <Toggle value={requireAuth} onChange={handleRequireAuthToggle} ariaLabel="Require Passcode" />
-        </div>
-      </div>
+        <ListRow
+          title="Require Passcode"
+          description="Lock app natively on launch or background"
+          isLast={!requireAuth}
+          style={{ opacity: appPasscode?.length === 4 ? 1 : 0.5 }}
+          action={
+            <div style={{ pointerEvents: secureControlsDisabled ? "none" : "auto", opacity: secureControlsDisabled ? 0.45 : 1 }}>
+              <Toggle value={requireAuth} onChange={handleRequireAuthToggle} ariaLabel="Require Passcode" />
+            </div>
+          }
+        />
 
       {requireAuth && (
         <>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "12px 0",
-              borderBottom: `1px solid ${T.border.subtle}`,
-            }}
-          >
-            <div style={{ flex: 1, paddingRight: 12 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: T.text.primary }}>
-                Enable Face ID / Touch ID
-              </span>
-              <p style={{ fontSize: 10, color: T.text.muted, marginTop: 2 }}>
-                {biometricToggleBusy ? "Verifying biometrics..." : "Use biometrics for faster unlocking"}
-              </p>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                pointerEvents: secureControlsDisabled || biometricToggleBusy ? "none" : "auto",
-                opacity: secureControlsDisabled ? 0.45 : 1,
-              }}
-            >
-              {biometricToggleBusy ? <Loader2 size={14} style={{ color: T.text.muted, animation: "spin 1s linear infinite" }} /> : null}
-              <Toggle
-                value={useFaceId}
-                onChange={handleUseFaceIdToggle}
-                ariaLabel="Enable Face ID / Touch ID"
-                disabled={secureControlsDisabled || biometricToggleBusy}
-              />
-            </div>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "12px 0",
-            }}
-          >
-            <div style={{ flex: 1, paddingRight: 12 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: T.text.primary }}>Relock After</span>
-              <p style={{ fontSize: 10, color: T.text.muted, marginTop: 2 }}>
-                Time before requiring re-authentication
-              </p>
-            </div>
-            <select
-              value={lockTimeout}
-              onChange={e => {
-                const v = parseInt(e.target.value);
-                setLockTimeout(v);
-                db.set("lock-timeout", v);
-              }}
-              aria-label="Relock timeout"
-              style={{
-                fontSize: 12,
-                padding: "8px 12px",
-                borderRadius: T.radius.md,
-                border: `1px solid ${T.border.default}`,
-                background: T.bg.elevated,
-                color: T.text.primary,
-                fontFamily: T.font.mono,
-                fontWeight: 600,
-              }}
-            >
-              <option value={0}>Immediately</option>
-              <option value={60}>1 minute</option>
-              <option value={300}>5 minutes</option>
-              <option value={900}>15 minutes</option>
-              <option value={1800}>30 minutes</option>
-              <option value={3600}>1 hour</option>
-              <option value={-1}>Never</option>
-            </select>
-          </div>
+          <ListRow
+            title="Enable Face ID / Touch ID"
+            description={biometricToggleBusy ? "Verifying biometrics..." : "Use biometrics for faster unlocking"}
+            action={
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  pointerEvents: secureControlsDisabled || biometricToggleBusy ? "none" : "auto",
+                  opacity: secureControlsDisabled ? 0.45 : 1,
+                }}
+              >
+                {biometricToggleBusy ? <Loader2 size={14} style={{ color: T.text.muted, animation: "spin 1s linear infinite" }} /> : null}
+                <Toggle
+                  value={useFaceId}
+                  onChange={handleUseFaceIdToggle}
+                  ariaLabel="Enable Face ID / Touch ID"
+                  disabled={secureControlsDisabled || biometricToggleBusy}
+                />
+              </div>
+            }
+          />
+          <ListRow
+            title="Relock After"
+            description="Time before requiring re-authentication"
+            isLast
+            action={
+              <select
+                value={lockTimeout}
+                onChange={e => {
+                  const v = parseInt(e.target.value);
+                  setLockTimeout(v);
+                  db.set("lock-timeout", v);
+                }}
+                aria-label="Relock timeout"
+                style={{
+                  fontSize: 12,
+                  padding: "8px 12px",
+                  borderRadius: T.radius.md,
+                  border: `1px solid ${T.border.default}`,
+                  background: T.bg.elevated,
+                  color: T.text.primary,
+                  fontFamily: T.font.mono,
+                  fontWeight: 600,
+                }}
+              >
+                <option value={0}>Immediately</option>
+                <option value={60}>1 minute</option>
+                <option value={300}>5 minutes</option>
+                <option value={900}>15 minutes</option>
+                <option value={1800}>30 minutes</option>
+                <option value={3600}>1 hour</option>
+                <option value={-1}>Never</option>
+              </select>
+            }
+          />
         </>
       )}
+      </ListSection>
 
       <div style={{ marginTop: 24, paddingTop: 20, borderTop: `1px solid ${T.border.subtle}` }}>
         <Label>Legal & Privacy</Label>
@@ -293,28 +240,18 @@ export default function SecuritySection({
             <span>Terms of Service</span>
             <ExternalLink size={14} color={T.text.dim} />
           </button>
-          <div
-            style={{
-              padding: "12px 16px",
-              borderRadius: T.radius.md,
-              background: `${T.status.amber}08`,
-              border: `1px solid ${T.status.amber}20`,
-            }}
-          >
-            <div style={{ fontSize: 11, fontWeight: 700, color: T.status.amber, marginBottom: 4 }}>
-              ⚠️ AI Disclaimer
-            </div>
-            <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.5, margin: 0 }}>
-              Catalyst Cash is not a financial advisor and does not act in a fiduciary capacity. All
-              AI-generated insights are for informational and educational purposes only. Always consult a
-              licensed financial professional before making significant financial decisions.
-            </p>
-          </div>
-          <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.5, marginTop: 4 }}>
-            🔒 Your core financial data is stored locally on your device. Chat history is encrypted at rest and
-            auto-expires after 24 hours. AI requests are routed through our secure backend proxy with PII
-            scrubbing.
-          </p>
+          <NoticeBanner
+            tone="warning"
+            compact
+            title="AI Disclaimer"
+            message="Catalyst Cash is not a fiduciary and does not replace licensed financial, tax, or legal advice. Use AI guidance to frame decisions, not to bypass professional judgment."
+          />
+          <NoticeBanner
+            tone="info"
+            compact
+            title="Privacy"
+            message="Core financial data stays on-device. Chat history is encrypted at rest, auto-expires after 24 hours, and AI requests are scrubbed before leaving the device."
+          />
 
           {/* CCPA/GDPR Data Deletion */}
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border.subtle}` }}>

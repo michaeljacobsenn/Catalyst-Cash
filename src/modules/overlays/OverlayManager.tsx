@@ -62,6 +62,7 @@ interface OverlayManagerProps {
     keys: () => Promise<string[]>;
     clear: () => Promise<void>;
   };
+  themeTick?: number;
 }
 
 export default function OverlayManager({
@@ -81,6 +82,7 @@ export default function OverlayManager({
   handleManualImport,
   setFinancialConfig,
   inputFormDb,
+  themeTick = 0,
 }: OverlayManagerProps) {
   const {
     tab,
@@ -299,6 +301,7 @@ export default function OverlayManager({
             <ErrorBoundary name="Results">
               <Suspense fallback={<TabFallback />}>
                 <ResultsView
+                  themeTick={themeTick}
                   audit={display}
                   moveChecks={displayMoveChecks}
                   onToggleMove={(index: number) => {
@@ -329,7 +332,7 @@ export default function OverlayManager({
       >
         <ErrorBoundary name="History">
           <Suspense fallback={<TabFallback />}>
-            <HistoryTab toast={toast} proEnabled={proEnabled} />
+            <HistoryTab toast={toast} proEnabled={proEnabled} themeTick={themeTick} />
           </Suspense>
         </ErrorBoundary>
       </InteractiveStackPane>

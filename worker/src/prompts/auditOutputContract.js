@@ -36,17 +36,22 @@ export function getJsonWrapper(_providerId, cSym = "$") {
   return `
 JSON OUTPUT SHAPE (MINIFIED CONTRACT)
 {
-  "headerCard": { "title": "string", "subtitle": "string", "status": "green|yellow|red" },
+  "headerCard": { "title": "string", "subtitle": "string", "status": "GREEN|YELLOW|RED", "confidence": "high|medium|low|null" },
   "alertsCard": [{ "level": "info|warn|critical", "title": "string", "detail": "string" }],
-  "dashboardCard": [{ "label": "string", "value": "${cSym}0.00", "tone": "good|neutral|warn|bad", "note": "string|null" }],
+  "dashboardCard": [{ "category": "Checking|Vault|Pending|Debts|Available", "amount": "${cSym}0.00", "status": "string" }],
   "healthScore": { "score": 0, "grade": "A-F", "trend": "up|flat|down", "summary": "string" },
   "weeklyMoves": [{ "title": "string", "detail": "string", "amount": "${cSym}0.00|null", "priority": "required|deadline|promo|optional" }],
   "moveItems": [{ "text": "string", "amount": 0, "tag": "string|null", "semanticKind": "string|null", "targetLabel": "string|null", "sourceLabel": "string|null", "targetKey": "string|null", "contributionKey": "string|null", "transactional": true }],
   "radar": { "next90Days": [], "longRange": [] },
   "nextAction": { "title": "string", "detail": "string", "amount": "${cSym}0.00|null" },
+  "investments": { "balance": "${cSym}0.00|N/A", "asOf": "YYYY-MM-DD|N/A", "gateStatus": "Open|Guarded|N/A", "netWorth": "${cSym}0.00|N/A|null" },
+  "assumptions": ["string"],
   "spendingAnalysis": null
 }
-- Required top-level anchors: headerCard, healthScore, weeklyMoves.
+- Required top-level anchors: headerCard, healthScore, dashboardCard, weeklyMoves, nextAction.
 - Add moveItems only for clear money actions.
+- dashboardCard must reconcile to snapshot/native anchors. Never zero-fill unless truly zero.
+- Use exact account/card/funding-source names. No placeholders like "CREDIT CARD #1" when names exist.
+- If data is partial or contradictory, say so in assumptions / alertsCard.
 - Use null for optional sections when data is missing; do not invent placeholders.`;
 }

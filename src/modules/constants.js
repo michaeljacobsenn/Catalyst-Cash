@@ -10,38 +10,38 @@ export const APP_VERSION = "2.0.0";
 
 export const DARK_TOKENS = {
   bg: {
-    base: "#05080F", // Deep, rich void for maximum contrast against neon accents
-    card: "#0A1018", // Slightly elevated card background
-    elevated: "#121824",
-    surface: "#1A202D",
-    hover: "rgba(110,75,180,0.08)",
-    glass: "rgba(5,8,15,0.75)",
-    navGlass: "rgba(5,8,15,0.88)",
+    base: "#05080F",
+    card: "#0B111A",
+    elevated: "#121A27",
+    surface: "#182131",
+    hover: "rgba(139,107,214,0.10)",
+    glass: "rgba(8,12,20,0.78)",
+    navGlass: "rgba(7,10,18,0.90)",
   },
   border: {
-    subtle: "rgba(160,140,220,0.04)",
-    default: "rgba(160,140,220,0.07)",
-    focus: "rgba(110,75,180,0.40)",
-    glow: "rgba(110,75,180,0.08)",
+    subtle: "rgba(164,148,214,0.08)",
+    default: "rgba(164,148,214,0.14)",
+    focus: "rgba(139,107,214,0.42)",
+    glow: "rgba(139,107,214,0.12)",
   },
   text: {
     primary: "#E4E6F0",
-    secondary: "#8890A6",
-    dim: "#6B7280",
-    muted: "#2E3248",
+    secondary: "#97A0B5",
+    dim: "#737C92",
+    muted: "#4B5368",
   },
   accent: {
-    primary: "#7B5EA7",
-    primaryDim: "rgba(123,94,167,0.12)",
-    primaryGlow: "rgba(123,94,167,0.15)",
-    primarySoft: "rgba(123,94,167,0.18)",
-    emerald: "#2ECC71",
-    emeraldDim: "rgba(46,204,113,0.10)",
-    emeraldSoft: "rgba(46,204,113,0.18)",
-    copper: "#2ECC71",
-    copperDim: "rgba(46,204,113,0.10)",
-    gradient: "linear-gradient(135deg,#7B5EA7,#1A9B5A)",
-    gradientNav: "linear-gradient(145deg,rgba(123,94,167,0.95),rgba(26,139,80,0.95))",
+    primary: "#8B6BD6",
+    primaryDim: "rgba(139,107,214,0.14)",
+    primaryGlow: "rgba(139,107,214,0.18)",
+    primarySoft: "rgba(139,107,214,0.22)",
+    emerald: "#39D07E",
+    emeraldDim: "rgba(57,208,126,0.12)",
+    emeraldSoft: "rgba(57,208,126,0.20)",
+    copper: "#39D07E",
+    copperDim: "rgba(57,208,126,0.12)",
+    gradient: "linear-gradient(135deg,#8B6BD6 0%, #39D07E 100%)",
+    gradientNav: "linear-gradient(145deg,rgba(139,107,214,0.96),rgba(57,208,126,0.92))",
   },
   status: {
     green: "#2ECC71",
@@ -57,33 +57,33 @@ export const DARK_TOKENS = {
   },
   shadow: {
     sm: "0 1px 2px rgba(0,0,0,0.4)",
-    card: "0 4px 16px rgba(0,0,0,0.2), 0 1px 3px rgba(0,0,0,0.15)",
-    elevated: "0 12px 32px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2)",
-    glow: "0 0 32px rgba(123,94,167,0.10), 0 0 12px rgba(123,94,167,0.08)",
-    navBtn: "0 4px 20px rgba(123,94,167,0.25), 0 2px 8px rgba(0,0,0,0.5), 0 0 24px rgba(46,204,113,0.10)",
+    card: "0 12px 28px rgba(0,0,0,0.24), 0 2px 8px rgba(0,0,0,0.18)",
+    elevated: "0 18px 42px rgba(0,0,0,0.34), 0 6px 18px rgba(0,0,0,0.20)",
+    glow: "0 0 36px rgba(139,107,214,0.12), 0 0 16px rgba(139,107,214,0.08)",
+    navBtn: "0 10px 28px rgba(139,107,214,0.22), 0 2px 10px rgba(0,0,0,0.45), 0 0 26px rgba(57,208,126,0.10)",
   },
 };
 
 export const LIGHT_TOKENS = {
   bg: {
-    base: "#F6F6F9", // Cool tinted paper-white
+    base: "#F5F5FA",
     card: "#FFFFFF",
-    elevated: "#FFFFFF", // rely on shadow for elevation
-    surface: "#F0EFFF", // Very faint violet tint for active surfaces
-    hover: "rgba(110,75,180,0.04)",
-    glass: "rgba(255,255,255,0.85)",
-    navGlass: "rgba(246,246,249,0.92)",
+    elevated: "#FFFFFF",
+    surface: "#F3F1FF",
+    hover: "rgba(121,72,214,0.05)",
+    glass: "rgba(255,255,255,0.88)",
+    navGlass: "rgba(245,245,250,0.94)",
   },
   border: {
-    subtle: "rgba(90,70,130,0.04)",
-    default: "rgba(90,70,130,0.08)",
-    focus: "rgba(121,72,214,0.30)",
-    glow: "rgba(121,72,214,0.06)",
+    subtle: "rgba(90,70,130,0.06)",
+    default: "rgba(90,70,130,0.11)",
+    focus: "rgba(121,72,214,0.28)",
+    glow: "rgba(121,72,214,0.08)",
   },
   text: {
-    primary: "#14121A", // Rich slate, replacing harsh black
-    secondary: "#5C586B",
-    dim: "#8A8498",
+    primary: "#15131C",
+    secondary: "#5D596E",
+    dim: "#868094",
     muted: "#ACA7B8",
   },
   accent: {
@@ -113,8 +113,8 @@ export const LIGHT_TOKENS = {
   },
   shadow: {
     sm: "0 1px 2px rgba(90,70,130,0.04)",
-    card: "0 8px 24px rgba(90,70,130,0.03), 0 2px 6px rgba(90,70,130,0.02)", // Diffused, tinted elevation
-    elevated: "0 16px 48px rgba(90,70,130,0.06), 0 4px 12px rgba(90,70,130,0.04)",
+    card: "0 10px 28px rgba(90,70,130,0.04), 0 2px 6px rgba(90,70,130,0.03)",
+    elevated: "0 18px 48px rgba(90,70,130,0.07), 0 6px 16px rgba(90,70,130,0.05)",
     glow: "0 0 32px rgba(121,72,214,0.08), 0 0 12px rgba(121,72,214,0.05)",
     navBtn: "0 4px 16px rgba(121,72,214,0.10), 0 2px 6px rgba(90,70,130,0.04)",
   },
@@ -122,7 +122,7 @@ export const LIGHT_TOKENS = {
 
 // Shared tokens (don't change between themes)
 export const SHARED_TOKENS = {
-  radius: { sm: 8, md: 12, lg: 16, xl: 24 },
+  radius: { sm: 10, md: 14, lg: 18, xl: 28 },
   font: {
     mono: "ui-monospace, 'SF Mono', 'JetBrains Mono', monospace",
     sans: "system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', sans-serif",

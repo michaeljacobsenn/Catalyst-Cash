@@ -133,11 +133,16 @@ export default function BankAccountsSection({
         const usesManualFallback = !!acct._plaidManualFallback || needsReconnect;
         const liveBalance = !usesManualFallback && acct._plaidBalance != null ? acct._plaidBalance : Number(acct.balance || 0);
         const plannedState = plannedBankBalances[acct.id];
+        const metaChips = [
+            needsReconnect ? { label: "Reconnect", tone: "warning" } : null,
+            usesManualFallback ? { label: "Manual", tone: "muted" } : null,
+            acct._plaidAccountId && !usesManualFallback ? { label: "Live", tone: "info" } : null,
+        ].filter(Boolean) as Array<{ label: string; tone: "warning" | "muted" | "good" | "info" }>;
         return (
             <div
                 key={acct.id}
                 style={{
-                    padding: "10px 16px",
+                    padding: "12px 16px",
                     borderBottom: i === total - 1 ? "none" : `1px solid ${T.border.subtle}`,
                 }}
             >
@@ -181,12 +186,40 @@ export default function BankAccountsSection({
                         </div>
                     </div>
                 ) : (
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                                <span style={{ fontSize: 12, fontWeight: 800, color: colors.text || colors.accent }}>{acct.bank}</span>
-                                <span style={{ fontSize: 10, color: T.text.dim }}>·</span>
-                                <span style={{ fontSize: 12, fontWeight: 600, color: T.text.primary }}>{(() => {
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", gap: 12 }}>
+                            <div
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: 10,
+                                    background: T.bg.surface,
+                                    border: `1px solid ${T.border.subtle}`,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
+                                    flexShrink: 0,
+                                }}
+                            >
+                                <Landmark size={15} color={colors.text || colors.accent || sectionColor} />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                                    <span
+                                        style={{
+                                            fontSize: 10,
+                                            fontWeight: 800,
+                                            color: colors.text || colors.accent,
+                                            fontFamily: T.font.mono,
+                                            letterSpacing: "0.08em",
+                                            textTransform: "uppercase",
+                                            opacity: 0.78,
+                                        }}
+                                    >
+                                        {acct.bank}
+                                    </span>
+                                    <span style={{ fontSize: 15, fontWeight: 760, color: T.text.primary, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.01em" }}>{(() => {
                                     const name = acct.name || "";
                                     const inst = acct.bank || "";
                                     if (inst && name.toLowerCase().startsWith(inst.toLowerCase())) {
@@ -195,21 +228,65 @@ export default function BankAccountsSection({
                                     }
                                     return name;
                                 })()}</span>
+                                </div>
+                                {(metaChips.length > 0 || (acct.apy ?? 0) > 0 || (acct.notes && !acct._plaidAccountId)) && (
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
+                                        {metaChips.map((chip) => (
+                                            <span
+                                                key={`${acct.id}-${chip.label}`}
+                                                style={{
+                                                    padding: "2px 7px",
+                                                    borderRadius: 999,
+                                                    fontSize: 9,
+                                                    fontWeight: 800,
+                                                    fontFamily: T.font.mono,
+                                                    letterSpacing: "0.02em",
+                                                    border:
+                                                        chip.tone === "warning" ? `1px solid ${T.status.amber}28`
+                                                        : chip.tone === "good" ? `1px solid ${T.accent.emerald}24`
+                                                        : chip.tone === "info" ? `1px solid ${sectionColor}26`
+                                                        : `1px solid ${T.border.subtle}`,
+                                                    background:
+                                                        chip.tone === "warning" ? `${T.status.amber}12`
+                                                        : chip.tone === "good" ? `${T.accent.emerald}12`
+                                                        : chip.tone === "info" ? `${sectionColor}12`
+                                                        : T.bg.surface,
+                                                    color:
+                                                        chip.tone === "warning" ? T.status.amber
+                                                        : chip.tone === "good" ? T.accent.emerald
+                                                        : chip.tone === "info" ? sectionColor
+                                                        : T.text.dim,
+                                                }}
+                                            >
+                                                {chip.label}
+                                            </span>
+                                        ))}
+                                        {(acct.apy ?? 0) > 0 ? (
+                                            <Mono size={10} color={T.text.dim}>{acct.apy}% APY</Mono>
+                                        ) : null}
+                                        {acct.notes && !acct._plaidAccountId ? (
+                                            <Mono size={10} color={T.text.dim} style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                {acct.notes}
+                                            </Mono>
+                                        ) : null}
+                                    </div>
+                                )}
                             </div>
-                            {((acct.apy ?? 0) > 0 || acct._plaidAccountId || (acct.notes && !acct._plaidAccountId)) && (
-                                <Mono size={10} color={T.text.dim} style={{ display: "block" }}>
-                                    {[
-                                        needsReconnect && "Reconnect required",
-                                        usesManualFallback && "Manual balance",
-                                        (acct.apy ?? 0) > 0 && `${acct.apy}% APY`,
-                                        acct._plaidAccountId && !usesManualFallback && `⚡ Plaid`,
-                                    ].filter(Boolean).join("  ·  ") || (acct.notes && !acct._plaidAccountId ? acct.notes : "")}
-                                </Mono>
-                            )}
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
-                                <Mono size={13} weight={800} color={!usesManualFallback && acct._plaidBalance != null ? sectionColor : T.text.muted}>{fmt(liveBalance)}</Mono>
+                                <div
+                                    style={{
+                                                padding: "8px 10px",
+                                                borderRadius: 14,
+                                                border: `1px solid ${!usesManualFallback && acct._plaidBalance != null ? `${sectionColor}28` : T.border.subtle}`,
+                                                background: !usesManualFallback && acct._plaidBalance != null ? `${sectionColor}10` : `linear-gradient(180deg, ${T.bg.surface}, ${T.bg.card})`,
+                                                minWidth: 104,
+                                                textAlign: "right",
+                                            }}
+                                        >
+                                            <Mono size={14} weight={900} color={!usesManualFallback && acct._plaidBalance != null ? sectionColor : T.text.primary}>{fmt(liveBalance)}</Mono>
+                                        </div>
                                 {plannedState?.remainingAmount ? (
                                     <div
                                         style={{
@@ -225,7 +302,7 @@ export default function BankAccountsSection({
                                     </div>
                                 ) : null}
                             </div>
-                            <button onClick={() => startEditBank(acct)} style={{ width: 28, height: 28, borderRadius: T.radius.md, border: "none", background: "transparent", color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} className="hover-btn"><Edit3 size={11} /></button>
+                            <button onClick={() => startEditBank(acct)} style={{ width: 30, height: 30, borderRadius: 10, border: `1px solid ${T.border.subtle}`, background: T.bg.surface, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)` }} className="hover-btn"><Edit3 size={11} /></button>
                         </div>
                     </div>
                 )}
@@ -294,7 +371,7 @@ export default function BankAccountsSection({
                     />
                 </div>
 
-                <div className="collapse-section" data-collapsed={String(collapsedSections.bankAccounts)}>
+                <div className="collapse-section stagger-container" data-collapsed={String(collapsedSections.bankAccounts)}>
                     {checkingAccounts.map((acct, i) => renderAccountRow(acct, i, checkingAccounts.length, T.status.blue))}
                 </div>
             </div>
@@ -362,7 +439,7 @@ export default function BankAccountsSection({
                     />
                 </div>
 
-                <div className="collapse-section" data-collapsed={String(collapsedSections.savingsAccounts)}>
+                <div className="collapse-section stagger-container" data-collapsed={String(collapsedSections.savingsAccounts)}>
                     {savingsAccounts.map((acct, i) => renderAccountRow(acct, i, savingsAccounts.length, T.accent.emerald))}
                 </div>
             </div>

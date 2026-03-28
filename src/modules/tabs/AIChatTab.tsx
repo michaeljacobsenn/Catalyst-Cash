@@ -59,6 +59,7 @@ const LazyProPaywall = React.lazy(() => import("./ProPaywall.js"));
 interface AIChatTabProps {
   proEnabled?: boolean;
   privacyMode?: boolean;
+  themeTick?: number;
   initialPrompt?: string | null;
   clearInitialPrompt?: (() => void) | null;
   onBack?: (() => void) | null;
@@ -161,16 +162,18 @@ const streamAuditTyped = streamAudit as (
 export default memo(function AIChatTab({
   proEnabled = false,
   privacyMode: _privacyModeTick = false,
+  themeTick: _themeTick = 0,
   initialPrompt = null,
   clearInitialPrompt = null,
   onBack = null,
   embedded = false,
 }: AIChatTabProps) {
   void _privacyModeTick;
+  void _themeTick;
   void onBack;
   const { current, history, trendContext } = useAudit();
   const { apiKey, aiProvider, aiModel, financialConfig, persona, personalRules, setAiModel } = useSettings();
-  const { cards, renewals } = usePortfolio();
+  const { cards, renewals, bankAccounts } = usePortfolio();
   const { privacyMode } = useSecurity() as SecurityApi;
   const { navState, clearNavState, registerChatStreamAbort } = useNavigation() as NavigationApi;
   const toast = useToast() as { error?: (message: string) => void } | undefined;
@@ -337,6 +340,7 @@ export default memo(function AIChatTab({
         current,
         financialConfig,
         cards,
+        bankAccounts,
         renewals,
         computedStrategy: chatStrategy,
       }) as DecisionRecommendation[];
@@ -373,6 +377,7 @@ export default memo(function AIChatTab({
         current,
         financialConfig,
         cards,
+        bankAccounts,
         renewals,
         history,
         trendContext,
@@ -667,17 +672,18 @@ export default memo(function AIChatTab({
 
   const [suggestions] = useState(() => getRandomSuggestions());
   const hasData = !!current?.parsed;
-  const compactEmbedded = embedded && viewport.height <= 820;
-  const denseEmbedded = embedded && viewport.height <= 760;
-  const suggestionCardMinHeight = denseEmbedded ? 84 : compactEmbedded ? 90 : 100;
-  const suggestionGridGap = denseEmbedded ? 6 : 8;
-  const emptyTopPadding = denseEmbedded ? 48 : compactEmbedded ? 60 : 84;
-  const orbSize = denseEmbedded ? 56 : compactEmbedded ? 60 : 64;
-  const orbIconSize = denseEmbedded ? 24 : 26;
-  const titleSize = denseEmbedded ? 22 : compactEmbedded ? 23 : 24;
-  const emptyCopySize = denseEmbedded ? 12 : 13;
-  const chipMarginBottom = denseEmbedded ? 8 : 12;
-  const promptClamp = denseEmbedded ? 2 : 3;
+  const compactEmbedded = embedded && viewport.height <= 860;
+  const denseEmbedded = embedded && viewport.height <= 780;
+  const ultraDenseEmbedded = embedded && viewport.height <= 700;
+  const suggestionCardMinHeight = ultraDenseEmbedded ? 72 : denseEmbedded ? 78 : compactEmbedded ? 86 : 100;
+  const suggestionGridGap = ultraDenseEmbedded ? 5 : denseEmbedded ? 6 : 8;
+  const emptyTopPadding = ultraDenseEmbedded ? 8 : denseEmbedded ? 18 : compactEmbedded ? 30 : 56;
+  const orbSize = ultraDenseEmbedded ? 42 : denseEmbedded ? 48 : compactEmbedded ? 54 : 64;
+  const orbIconSize = ultraDenseEmbedded ? 18 : denseEmbedded ? 20 : compactEmbedded ? 22 : 26;
+  const titleSize = ultraDenseEmbedded ? 18 : denseEmbedded ? 20 : compactEmbedded ? 21 : 24;
+  const emptyCopySize = ultraDenseEmbedded ? 11 : 12;
+  const chipMarginBottom = ultraDenseEmbedded ? 4 : denseEmbedded ? 6 : 10;
+  const promptClamp = ultraDenseEmbedded ? 2 : denseEmbedded ? 2 : 3;
 
   return (
     <div
@@ -749,7 +755,7 @@ export default memo(function AIChatTab({
         style={{
           flex: 1,
           overflowY: messages.length === 0 ? "hidden" : "auto",
-          padding: "16px 14px",
+          padding: messages.length === 0 && compactEmbedded ? "10px 14px 12px" : "16px 14px",
           display: "flex",
           flexDirection: "column",
           gap: 6,
@@ -783,7 +789,7 @@ export default memo(function AIChatTab({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                marginBottom: denseEmbedded ? 12 : 16,
+                marginBottom: ultraDenseEmbedded ? 8 : denseEmbedded ? 10 : 14,
                 flexShrink: 0,
                 boxShadow: `0 8px 32px ${T.accent.primary}25`,
               }}
@@ -827,7 +833,7 @@ export default memo(function AIChatTab({
                 color: T.text.secondary,
                 lineHeight: 1.5,
                 fontWeight: 500,
-                maxWidth: 240,
+                maxWidth: ultraDenseEmbedded ? 220 : 240,
                 marginBottom: chipMarginBottom,
               }}
             >
@@ -841,7 +847,7 @@ export default memo(function AIChatTab({
                 alignItems: "center",
                 gap: 6,
                 marginBottom: chipMarginBottom,
-                padding: "6px 14px",
+                padding: ultraDenseEmbedded ? "5px 12px" : "6px 14px",
                 borderRadius: 99,
                 background: `${T.status.green}10`,
                 border: `1px solid ${T.status.green}20`,
@@ -863,7 +869,7 @@ export default memo(function AIChatTab({
             </div>
 
             {/* Elite Horizontally Scrolling Suggestion Chips */}
-            <div style={{ position: "relative", width: "100%", margin: "0 -16px", padding: "0 16px" }}>
+            <div style={{ position: "relative", width: "100%", margin: compactEmbedded ? "0 -8px" : "0 -16px", padding: compactEmbedded ? "0 8px" : "0 16px" }}>
               <div
                 className="scroll-area hide-scrollbar"
                 style={{
@@ -871,7 +877,7 @@ export default memo(function AIChatTab({
                   gridTemplateColumns: "1fr 1fr",
                   gap: suggestionGridGap,
                   width: "100%",
-                  paddingBottom: denseEmbedded ? 8 : 12,
+                  paddingBottom: ultraDenseEmbedded ? 4 : denseEmbedded ? 6 : 10,
                 }}
               >
                 {suggestions.map((s, i) => (
@@ -886,7 +892,7 @@ export default memo(function AIChatTab({
                     alignItems: "flex-start",
                     justifyContent: "center",
                     gap: denseEmbedded ? 6 : 8,
-                    padding: denseEmbedded ? "12px" : compactEmbedded ? "14px" : "16px",
+                    padding: ultraDenseEmbedded ? "10px" : denseEmbedded ? "11px" : compactEmbedded ? "13px" : "16px",
                     borderRadius: 16,
                     border: `1px solid ${T.border.subtle}`,
                     background: T.bg.glass,

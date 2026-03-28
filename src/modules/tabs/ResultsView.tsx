@@ -32,6 +32,7 @@ interface ResultsViewProps {
   onToggleMove: (index: number) => void;
   onUpdateMoveAssignment?: ((index: number, patch: { sourceAccountId?: string | null; targetAccountId?: string | null }) => void) | null;
   streak?: number;
+  themeTick?: number;
   onBack?: (() => void) | null;
 }
 
@@ -134,9 +135,11 @@ export default memo(function ResultsView({
   onToggleMove,
   onUpdateMoveAssignment = null,
   streak = 0,
+  themeTick: _themeTick = 0,
   onBack = null,
 }: ResultsViewProps) {
   void streak;
+  void _themeTick;
   const { history, current } = useAudit();
   const { cards, bankAccounts } = usePortfolio();
   const { financialConfig } = useSettings();

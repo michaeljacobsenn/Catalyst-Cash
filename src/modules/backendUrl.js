@@ -1,7 +1,9 @@
 import { Capacitor } from "@capacitor/core";
 
-const PROD_BACKEND_URL = "https://api.catalystcash.app";
 const WORKERS_BACKEND_URL = "https://catalystcash-api.portfoliopro-app.workers.dev";
+// Keep the app on the healthy Workers hostname until the custom domain is
+// fully reliable across device networks and certificate chains again.
+const PROD_BACKEND_URL = WORKERS_BACKEND_URL;
 const CONFIGURED_BACKEND_URL = String(import.meta.env.VITE_PROXY_URL || "").trim();
 
 function isLoopbackHost(hostname) {
@@ -15,7 +17,7 @@ export function getBackendUrl() {
   if (CONFIGURED_BACKEND_URL) {
     try {
       const configuredHostname = new URL(CONFIGURED_BACKEND_URL).hostname;
-      if (preferWorkersHostname && configuredHostname === "api.catalystcash.app") {
+      if (configuredHostname === "api.catalystcash.app") {
         return WORKERS_BACKEND_URL;
       }
     } catch {

@@ -34,6 +34,11 @@ export function buildSnapshotMessage({
   financialConfig: _financialConfig,
   aiProvider,
 }) {
+  const plaidInvestments = activeConfig?.plaidInvestments || [];
+  const plaidBucketTotal = (bucket) =>
+    plaidInvestments
+      .filter((account) => account?.bucket === bucket)
+      .reduce((sum, account) => sum + (Number(account?._plaidBalance) || 0), 0);
   const toNum = v => {
     const n = parseFloat((v || "").toString().replace(/,/g, ""));
     return isNaN(n) ? 0 : n;
@@ -187,28 +192,34 @@ export function buildSnapshotMessage({
     !activeConfig.overrideRothValue &&
     holdingValues.roth > 0
       ? holdingValues.roth.toFixed(2)
-      : form.roth;
+      : plaidBucketTotal("roth") > 0 && !activeConfig.overrideRothValue
+        ? plaidBucketTotal("roth").toFixed(2)
+        : form.roth;
   const effectiveBrokerage =
     activeConfig.enableHoldings &&
     (activeConfig.holdings?.brokerage || []).length > 0 &&
     !activeConfig.overrideBrokerageValue &&
     holdingValues.brokerage > 0
       ? holdingValues.brokerage.toFixed(2)
-      : form.brokerage;
+      : plaidBucketTotal("brokerage") > 0 && !activeConfig.overrideBrokerageValue
+        ? plaidBucketTotal("brokerage").toFixed(2)
+        : form.brokerage;
   const effectiveK401 =
     activeConfig.enableHoldings &&
     (activeConfig.holdings?.k401 || []).length > 0 &&
     !activeConfig.override401kValue &&
     holdingValues.k401 > 0
       ? holdingValues.k401.toFixed(2)
-      : form.k401Balance || activeConfig.k401Balance || 0;
+      : plaidBucketTotal("k401") > 0 && !activeConfig.override401kValue
+        ? plaidBucketTotal("k401").toFixed(2)
+        : form.k401Balance || activeConfig.k401Balance || 0;
   if (effectiveRoth)
     headerLines.push(
-      `Roth IRA: $${effectiveRoth}${activeConfig.enableHoldings && !activeConfig.overrideRothValue && holdingValues.roth > 0 ? " (live)" : ""}`
+      `Roth IRA: $${effectiveRoth}${((activeConfig.enableHoldings && !activeConfig.overrideRothValue && holdingValues.roth > 0) || (plaidBucketTotal("roth") > 0 && !activeConfig.overrideRothValue)) ? " (live)" : ""}`
     );
   if (activeConfig.trackBrokerage && effectiveBrokerage)
     headerLines.push(
-      `Brokerage: $${effectiveBrokerage}${activeConfig.enableHoldings && !activeConfig.overrideBrokerageValue && holdingValues.brokerage > 0 ? " (live)" : ""}`
+      `Brokerage: $${effectiveBrokerage}${((activeConfig.enableHoldings && !activeConfig.overrideBrokerageValue && holdingValues.brokerage > 0) || (plaidBucketTotal("brokerage") > 0 && !activeConfig.overrideBrokerageValue)) ? " (live)" : ""}`
     );
   if (activeConfig.trackRothContributions) {
     headerLines.push(`Roth YTD Contributed: $${activeConfig.rothContributedYTD || 0}`);
@@ -216,7 +227,7 @@ export function buildSnapshotMessage({
   }
   if (activeConfig.track401k) {
     headerLines.push(
-      `401k Balance: $${effectiveK401}${activeConfig.enableHoldings && !activeConfig.override401kValue && holdingValues.k401 > 0 ? " (live)" : ""}`
+      `401k Balance: $${effectiveK401}${((activeConfig.enableHoldings && !activeConfig.override401kValue && holdingValues.k401 > 0) || (plaidBucketTotal("k401") > 0 && !activeConfig.override401kValue)) ? " (live)" : ""}`
     );
     headerLines.push(`401k YTD Contributed: $${activeConfig.k401ContributedYTD || 0}`);
     headerLines.push(`401k Annual Limit: $${activeConfig.k401AnnualLimit || 0}`);
@@ -228,9 +239,11 @@ export function buildSnapshotMessage({
       !activeConfig.overrideHSAValue &&
       holdingValues.hsa > 0
         ? holdingValues.hsa.toFixed(2)
-        : activeConfig.hsaBalance || 0;
+        : plaidBucketTotal("hsa") > 0 && !activeConfig.overrideHSAValue
+          ? plaidBucketTotal("hsa").toFixed(2)
+          : activeConfig.hsaBalance || 0;
     headerLines.push(
-      `HSA Balance: $${effectiveHSA}${activeConfig.enableHoldings && !activeConfig.overrideHSAValue && holdingValues.hsa > 0 ? " (live)" : ""}`
+      `HSA Balance: $${effectiveHSA}${((activeConfig.enableHoldings && !activeConfig.overrideHSAValue && holdingValues.hsa > 0) || (plaidBucketTotal("hsa") > 0 && !activeConfig.overrideHSAValue)) ? " (live)" : ""}`
     );
     headerLines.push(`HSA YTD Contributed: $${activeConfig.hsaContributedYTD || 0}`);
     headerLines.push(`HSA Annual Limit: $${activeConfig.hsaAnnualLimit || 0}`);

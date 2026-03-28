@@ -754,6 +754,8 @@ function buildFinancialBriefContext(financialBrief = null, chatIntent = null) {
   const credit = financialBrief.credit || {};
   const debt = financialBrief.debt || {};
   const cards = Array.isArray(financialBrief.cards) ? financialBrief.cards : [];
+  const bankAccounts = Array.isArray(financialBrief.bankAccounts) ? financialBrief.bankAccounts : [];
+  const nearTerm = financialBrief.nearTerm || {};
   const renewals = financialBrief.renewals || {};
   const trends = Array.isArray(financialBrief.trends) ? financialBrief.trends : [];
   const auditHistory = Array.isArray(financialBrief.auditHistory) ? financialBrief.auditHistory : [];
@@ -809,6 +811,7 @@ function buildFinancialBriefContext(financialBrief = null, chatIntent = null) {
   const floorLine = shouldIncludeBriefSection(chatIntent, "cash")
     ? [
     cash.pending != null ? `7-Day Obligations: ${fmt(cash.pending)}` : null,
+    nearTerm.totalDue14Days != null ? `14-Day Funding Load: ${fmt(nearTerm.totalDue14Days)}` : null,
     cash.emergencyFloor != null ? `Emergency Floor: ${fmt(cash.emergencyFloor)}` : null,
     cash.checkingBuffer != null ? `Checking Buffer: ${fmt(cash.checkingBuffer)}` : null,
     cash.weeklySpendAllowance != null ? `Weekly Spend Allowance: ${fmt(cash.weeklySpendAllowance)}` : null,
@@ -856,6 +859,19 @@ function buildFinancialBriefContext(financialBrief = null, chatIntent = null) {
     });
   }
 
+  if (shouldIncludeBriefSection(chatIntent, "cash") && bankAccounts.length > 0) {
+    parts.push("\n## Bank Accounts");
+    bankAccounts.forEach((account) => {
+      const detail = [
+        account?.balance != null ? fmt(account.balance) : null,
+        account?.accountType || null,
+        account?.apy != null ? `${account.apy}% APY` : null,
+        account?.reconnectRequired ? "reconnect required" : null,
+      ].filter(Boolean).join(" | ");
+      parts.push(`  - ${account?.name || "Bank account"}${detail ? `: ${detail}` : ""}`);
+    });
+  }
+
   if (shouldIncludeBriefSection(chatIntent, "renewals") && Array.isArray(renewals.items) && renewals.items.length > 0) {
     parts.push("\n## Recurring Bills & Subscriptions");
     renewals.items.forEach((renewal) => {
@@ -874,6 +890,18 @@ function buildFinancialBriefContext(financialBrief = null, chatIntent = null) {
     if (renewals.monthlyEstimate != null) {
       parts.push(`Estimated Monthly Recurring: ${fmt(renewals.monthlyEstimate)}`);
     }
+  }
+
+  if (shouldIncludeBriefSection(chatIntent, "cash") && Array.isArray(nearTerm.byFundingSource) && nearTerm.byFundingSource.length > 0) {
+    parts.push("\n## Near-Term Funding Map (14 days)");
+    nearTerm.byFundingSource.forEach((source) => {
+      const detail = [
+        source?.total != null ? fmt(source.total) : null,
+        source?.itemCount != null ? `${source.itemCount} items` : null,
+        source?.nextDue ? `next ${source.nextDue}` : null,
+      ].filter(Boolean).join(" | ");
+      parts.push(`  - ${source?.label || "Funding source"}${detail ? `: ${detail}` : ""}`);
+    });
   }
 
   if (shouldIncludeBriefSection(chatIntent, "trends") && trends.length > 0) {
@@ -993,6 +1021,35 @@ function buildRecurringLoadTool(financialBrief) {
         item?.chargedTo ? `charged to ${item.chargedTo}` : null,
       ].filter(Boolean).join(" | ");
       return `${item?.name || "Recurring charge"}${detail ? `: ${detail}` : ""}`;
+    }),
+  ]);
+}
+
+function buildNearTermFundingTool(financialBrief) {
+  const nearTerm = financialBrief?.nearTerm || {};
+  const items = Array.isArray(nearTerm.items) ? nearTerm.items : [];
+  const byFundingSource = Array.isArray(nearTerm.byFundingSource) ? nearTerm.byFundingSource : [];
+
+  return buildToolSection("near_term_funding", [
+    nearTerm.totalDue14Days != null ? `Total due in the next 14 days: ${fmt(nearTerm.totalDue14Days)}` : null,
+    byFundingSource.length > 0
+      ? `Funding sources with near-term obligations: ${fmtCount(byFundingSource.length, "source")}`
+      : "Funding sources with near-term obligations: none",
+    ...byFundingSource.slice(0, 4).map((source) => {
+      const detail = [
+        source?.total != null ? fmt(source.total) : null,
+        source?.itemCount != null ? `${source.itemCount} items` : null,
+        source?.nextDue ? `next ${source.nextDue}` : null,
+      ].filter(Boolean).join(" | ");
+      return `${source?.label || "Funding source"}${detail ? `: ${detail}` : ""}`;
+    }),
+    ...items.slice(0, 3).map((item) => {
+      const detail = [
+        item?.amount != null ? fmt(item.amount) : null,
+        item?.nextDue ? `due ${item.nextDue}` : null,
+        item?.chargedTo ? `via ${item.chargedTo}` : null,
+      ].filter(Boolean).join(" | ");
+      return `${item?.name || "Upcoming item"}${detail ? `: ${detail}` : ""}`;
     }),
   ]);
 }
@@ -1162,12 +1219,12 @@ function buildFinanceActionPacket(chatIntent = null, latestUserMessage = "", fin
   }
 
   const requiredToolsByLane = {
-    cash_deployment: ["cash_position", "budget_guardrails", "projection_guardrails"],
-    debt_paydown: ["debt_snapshot", "cash_position", "budget_guardrails"],
+    cash_deployment: ["cash_position", "near_term_funding", "budget_guardrails", "projection_guardrails"],
+    debt_paydown: ["debt_snapshot", "cash_position", "near_term_funding", "budget_guardrails"],
     card_selection: ["card_portfolio", "cash_position", "debt_snapshot"],
-    recurring_review: ["recurring_load", "budget_guardrails", "cash_position"],
-    investment_contribution: ["investment_posture", "cash_position", "debt_snapshot", "projection_guardrails"],
-    planning_gap: ["cash_position", "debt_snapshot", "budget_guardrails", "investment_posture"],
+    recurring_review: ["near_term_funding", "recurring_load", "budget_guardrails", "cash_position"],
+    investment_contribution: ["investment_posture", "cash_position", "near_term_funding", "debt_snapshot", "projection_guardrails"],
+    planning_gap: ["cash_position", "near_term_funding", "debt_snapshot", "budget_guardrails", "investment_posture"],
   };
 
   return {
@@ -1216,6 +1273,7 @@ function getStructuredToolOrder(chatIntent, latestUserMessage = "", actionPacket
       "finance_action_packet",
       "card_portfolio",
       "cash_position",
+      "near_term_funding",
       "debt_snapshot",
       ...(actionPacket?.secondaryLanes?.includes("investment_contribution") ? ["investment_posture", "projection_guardrails"] : []),
       "budget_guardrails",
@@ -1223,34 +1281,34 @@ function getStructuredToolOrder(chatIntent, latestUserMessage = "", actionPacket
   }
   if (primaryLane === "debt_paydown") {
     return wantsCards
-      ? ["finance_action_packet", "debt_snapshot", "cash_position", "card_portfolio", "budget_guardrails", "projection_guardrails"]
-      : ["finance_action_packet", "debt_snapshot", "cash_position", "budget_guardrails", "projection_guardrails", "recurring_load"];
+      ? ["finance_action_packet", "debt_snapshot", "cash_position", "near_term_funding", "card_portfolio", "budget_guardrails", "projection_guardrails"]
+      : ["finance_action_packet", "debt_snapshot", "cash_position", "near_term_funding", "budget_guardrails", "projection_guardrails", "recurring_load"];
   }
   if (primaryLane === "recurring_review") {
-    return ["finance_action_packet", "recurring_load", "budget_guardrails", "cash_position", "projection_guardrails"];
+    return ["finance_action_packet", "near_term_funding", "recurring_load", "budget_guardrails", "cash_position", "projection_guardrails"];
   }
   if (primaryLane === "investment_contribution") {
     return wantsCards
-      ? ["finance_action_packet", "investment_posture", "cash_position", "debt_snapshot", "card_portfolio", "projection_guardrails"]
-      : ["finance_action_packet", "investment_posture", "cash_position", "debt_snapshot", "projection_guardrails"];
+      ? ["finance_action_packet", "investment_posture", "cash_position", "near_term_funding", "debt_snapshot", "card_portfolio", "projection_guardrails"]
+      : ["finance_action_packet", "investment_posture", "cash_position", "near_term_funding", "debt_snapshot", "projection_guardrails"];
   }
   if (primaryLane === "cash_deployment") {
-    return ["finance_action_packet", "cash_position", "budget_guardrails", "projection_guardrails", "debt_snapshot", "investment_posture"];
+    return ["finance_action_packet", "cash_position", "near_term_funding", "budget_guardrails", "projection_guardrails", "debt_snapshot", "investment_posture"];
   }
 
   if (chatIntent?.id === "invest") {
     return wantsCards
-      ? ["finance_action_packet", "cash_position", "debt_snapshot", "card_portfolio", "investment_posture", "projection_guardrails"]
-      : ["finance_action_packet", "cash_position", "debt_snapshot", "investment_posture", "projection_guardrails"];
+      ? ["finance_action_packet", "cash_position", "near_term_funding", "debt_snapshot", "card_portfolio", "investment_posture", "projection_guardrails"]
+      : ["finance_action_packet", "cash_position", "near_term_funding", "debt_snapshot", "investment_posture", "projection_guardrails"];
   }
   if (chatIntent?.id === "spending") {
     return wantsCards
-      ? ["finance_action_packet", "cash_position", "debt_snapshot", "card_portfolio", "budget_guardrails", "recurring_load"]
-      : ["finance_action_packet", "cash_position", "debt_snapshot", "budget_guardrails", "recurring_load", "projection_guardrails"];
+      ? ["finance_action_packet", "cash_position", "near_term_funding", "debt_snapshot", "card_portfolio", "budget_guardrails", "recurring_load"]
+      : ["finance_action_packet", "cash_position", "near_term_funding", "debt_snapshot", "budget_guardrails", "recurring_load", "projection_guardrails"];
   }
   return wantsCards
-    ? ["finance_action_packet", "cash_position", "debt_snapshot", "card_portfolio", "budget_guardrails", "investment_posture"]
-    : ["finance_action_packet", "cash_position", "debt_snapshot", "budget_guardrails", "recurring_load", "investment_posture"];
+    ? ["finance_action_packet", "cash_position", "near_term_funding", "debt_snapshot", "card_portfolio", "budget_guardrails", "investment_posture"]
+    : ["finance_action_packet", "cash_position", "near_term_funding", "debt_snapshot", "budget_guardrails", "recurring_load", "investment_posture"];
 }
 
 function buildStructuredToolContext(financialBrief = null, chatIntent = null, latestUserMessage = "", actionPacket = null) {
@@ -1261,6 +1319,7 @@ function buildStructuredToolContext(financialBrief = null, chatIntent = null, la
     cash_position: buildCashPositionTool,
     debt_snapshot: buildDebtSnapshotTool,
     recurring_load: buildRecurringLoadTool,
+    near_term_funding: buildNearTermFundingTool,
     budget_guardrails: buildBudgetGuardrailsTool,
     investment_posture: buildInvestmentPostureTool,
     card_portfolio: buildCardPortfolioTool,
@@ -1500,9 +1559,10 @@ ${toolContext ? `\n\n${toolContext}` : ""}
 - Use short paragraphs. Use bullets only for concrete actions, ranked in the order the user should do them.
 - Cite exact dollars, dates, APRs, utilization percentages, card names, and deadlines from the user's live data whenever possible.
 - Separate observed facts from assumptions. If you infer something, label it clearly.
-- If decisive data is missing, give the best provisional answer first, then ask at most 2 tightly targeted follow-up questions.
+- If near-term obligations hit different funding sources, name the source before recommending transfers or payoff.
+- If data is missing, give the best provisional answer first, then ask at most 2 targeted follow-up questions.
 - When comparing options, make a recommendation, name the runner-up, and explain the tradeoff in plain English.
-- Do not default to generic financial education, motivational filler, or long option lists. Make the call.
+- Avoid generic education, filler, or long option lists. Make the call.
 
 ## Credit Building Strategy(Always Active)
 You are ALWAYS aware of credit optimization — it costs nothing and runs parallel to every financial phase:

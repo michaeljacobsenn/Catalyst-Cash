@@ -49,6 +49,15 @@ function getHeaderTitle(tab: AppTab) {
   return "";
 }
 
+function getHeaderEyebrow(tab: AppTab) {
+  if (tab === "dashboard") return "Weekly clarity";
+  if (tab === "audit") return "Operator mode";
+  if (tab === "chat") return "Private finance copilot";
+  if (tab === "cashflow") return "Bills and budget";
+  if (tab === "portfolio") return "Assets, vault, rewards";
+  return "";
+}
+
 export default function AppShellHeader({
   tab,
   topBarRef,
@@ -70,12 +79,12 @@ export default function AppShellHeader({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: `calc(env(safe-area-inset-top, 0px) + 4px) 16px 8px 16px`,
+        padding: `calc(env(safe-area-inset-top, 0px) + 6px) 16px 10px 16px`,
         background: T.bg.navGlass,
         flexShrink: 0,
         zIndex: 10,
-        backdropFilter: "blur(24px) saturate(1.8)",
-        WebkitBackdropFilter: "blur(24px) saturate(1.8)",
+        backdropFilter: "blur(28px) saturate(1.45)",
+        WebkitBackdropFilter: "blur(28px) saturate(1.45)",
         borderBottom: `1px solid ${T.border.subtle}`,
         transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
         transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -99,11 +108,11 @@ export default function AppShellHeader({
           style={{
             width: 44,
             height: 44,
-            borderRadius: 12,
+            borderRadius: 14,
             border: `1px solid ${showGuide ? T.border.focus : T.border.default}`,
-            background: showGuide ? T.bg.surface : T.bg.glass,
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
+            background: showGuide ? `linear-gradient(180deg, ${T.bg.surface}, ${T.bg.card})` : `linear-gradient(180deg, ${T.bg.glass}, ${T.bg.card})`,
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -122,11 +131,11 @@ export default function AppShellHeader({
           style={{
             width: 44,
             height: 44,
-            borderRadius: 12,
+            borderRadius: 14,
             border: `1px solid ${privacyMode ? T.border.focus : T.border.default}`,
-            background: privacyMode ? T.bg.surface : T.bg.glass,
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
+            background: privacyMode ? `linear-gradient(180deg, ${T.bg.surface}, ${T.bg.card})` : `linear-gradient(180deg, ${T.bg.glass}, ${T.bg.card})`,
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -152,12 +161,27 @@ export default function AppShellHeader({
       >
         <div
           style={{
-            fontSize: 16,
-            fontWeight: 800,
+            fontSize: 17,
+            fontWeight: 850,
             color: T.text.primary,
             letterSpacing: getTracking(16, "bold"),
+            textShadow: `0 2px 10px ${T.accent.primaryGlow}`,
           }}
         >
+          <div
+            style={{
+              fontSize: 9,
+              fontWeight: 800,
+              color: T.text.dim,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              fontFamily: T.font.mono,
+              marginBottom: 2,
+              opacity: 0.9,
+            }}
+          >
+            {getHeaderEyebrow(tab)}
+          </div>
           {getHeaderTitle(tab)}
         </div>
       </div>
@@ -168,11 +192,11 @@ export default function AppShellHeader({
         style={{
           width: 44,
           height: 44,
-          borderRadius: 12,
+          borderRadius: 14,
           border: `1px solid ${T.border.default}`,
-          background: T.bg.glass,
-          backdropFilter: "blur(12px)",
-          WebkitBackdropFilter: "blur(12px)",
+          background: `linear-gradient(180deg, ${T.bg.glass}, ${T.bg.card})`,
+          backdropFilter: "blur(14px)",
+          WebkitBackdropFilter: "blur(14px)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

@@ -2,9 +2,9 @@
   import { Capacitor } from "@capacitor/core";
   import { T } from "../constants.js";
   import { clearErrorLog,getErrorLog } from "../errorReporter.js";
-  import { AlertTriangle,CheckCircle,Cloud,Download,Loader2,Upload } from "../icons";
+  import { CheckCircle,Cloud,Download,Loader2,Upload } from "../icons";
   import { clearLogs,getLogsAsText } from "../logger.js";
-  import { Card,Label } from "../ui.js";
+  import { Card,Label,NoticeBanner } from "../ui.js";
   import { db } from "../utils.js";
 
 export default function BackupSection({ activeMenu, ...props }) {
@@ -242,30 +242,28 @@ export default function BackupSection({ activeMenu, ...props }) {
 
         {/* Status banner */}
         {statusMsg && (
-          <div
-            style={{
-              padding: "10px 12px",
-              borderRadius: T.radius.sm,
-              marginBottom: 12,
-              background:
-                backupStatus === "error" || restoreStatus === "error" ? T.status.redDim : T.status.greenDim,
-              border: `1px solid ${backupStatus === "error" || restoreStatus === "error" ? T.status.red : T.status.green}20`,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            {backupStatus === "error" || restoreStatus === "error" ? (
-              <AlertTriangle size={12} color={T.status.red} />
-            ) : (
-              <CheckCircle size={12} color={T.status.green} />
-            )}
-            <span style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5 }}>{statusMsg}</span>
-          </div>
+          <NoticeBanner
+            compact
+            style={{ marginBottom: 12 }}
+            tone={backupStatus === "error" || restoreStatus === "error" ? "error" : "success"}
+            title={backupStatus === "error" || restoreStatus === "error" ? "Backup Issue" : "Backup Update"}
+            message={statusMsg}
+          />
         )}
 
         {/* Export / Restore buttons */}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            padding: 10,
+            borderRadius: T.radius.lg,
+            border: `1px solid ${T.border.subtle}`,
+            background: `linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card})`,
+            marginBottom: 4,
+          }}
+        >
           <button
             onClick={handleExport}
             disabled={backupStatus === "exporting"}

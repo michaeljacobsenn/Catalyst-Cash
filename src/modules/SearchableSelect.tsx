@@ -175,20 +175,21 @@ export default function SearchableSelect({
               : { top: dropPos.top, left: dropPos.left }),
             width: dropPos.width,
             zIndex: 99999,
-            borderRadius: T.radius.md,
+            borderRadius: 18,
             border: `1px solid ${T.border.default}`,
-            background: T.bg.card,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            background: `linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card})`,
+            boxShadow: "0 22px 52px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.05)",
             overflow: "hidden",
             maxHeight: maxHeight + 50, // account for search input
             display: "flex",
             flexDirection: dropPos.flip ? "column-reverse" : "column",
+            animation: dropPos.flip ? "slideUpMenu .22s cubic-bezier(0.34,1.56,0.64,1) both" : "slideUp .22s cubic-bezier(0.34,1.56,0.64,1) both",
           }}
         >
           {/* Search input */}
           <div
             style={{
-              padding: "8px 8px 4px",
+              padding: "10px 10px 6px",
               borderBottom: dropPos.flip ? "none" : `1px solid ${T.border.subtle}`,
               borderTop: dropPos.flip ? `1px solid ${T.border.subtle}` : "none",
               order: dropPos.flip ? 2 : 0,
@@ -201,10 +202,10 @@ export default function SearchableSelect({
               placeholder="Type to search…"
               style={{
                 width: "100%",
-                padding: "7px 10px",
-                borderRadius: T.radius.sm,
+                padding: "9px 11px",
+                borderRadius: 12,
                 border: `1px solid ${T.border.default}`,
-                background: T.bg.base,
+                background: `linear-gradient(180deg, ${T.bg.base}, ${T.bg.surface})`,
                 color: T.text.primary,
                 fontSize: 12,
                 outline: "none",
@@ -215,7 +216,7 @@ export default function SearchableSelect({
           </div>
 
           {/* Options list */}
-          <div style={{ maxHeight, overflowY: "auto", padding: "4px 0", order: dropPos.flip ? 1 : 1 }}>
+          <div style={{ maxHeight, overflowY: "auto", padding: "6px 0", order: dropPos.flip ? 1 : 1 }}>
             {filtered.length === 0 && (
               <div style={{ padding: "12px 14px", fontSize: 11, color: T.text.muted, textAlign: "center" }}>
                 No results found
@@ -257,12 +258,13 @@ export default function SearchableSelect({
           setOpen(!open);
           setQuery("");
         }}
-        style={{
+      style={{
           width: "100%",
-          padding: "8px 10px",
-          borderRadius: T.radius.sm,
-          border: `1px solid ${open ? T.accent.primary : T.border.default}`,
-          background: T.bg.card,
+          minHeight: 42,
+          padding: "9px 11px",
+          borderRadius: 13,
+          border: `1px solid ${open ? T.accent.primarySoft : T.border.default}`,
+          background: `linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card})`,
           color: selectedLabel ? T.text.primary : T.text.muted,
           fontSize: 12,
           textAlign: "left",
@@ -272,14 +274,34 @@ export default function SearchableSelect({
           alignItems: "center",
           fontFamily: "inherit",
           outline: "none",
-          transition: "border-color .15s ease",
+          transition: "border-color .18s ease, box-shadow .18s ease, transform .18s ease",
           boxSizing: "border-box",
+          boxShadow: open ? `0 0 0 3px ${T.accent.primary}18, 0 16px 28px rgba(0,0,0,0.12)` : "inset 0 1px 0 rgba(255,255,255,0.04)",
         }}
       >
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
           {displayValue || selectedLabel || placeholder}
         </span>
-        <span style={{ fontSize: 10, color: T.text.dim, marginLeft: 6, flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
+        <span
+          style={{
+            fontSize: 10,
+            color: open ? T.accent.primary : T.text.dim,
+            marginLeft: 8,
+            flexShrink: 0,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 20,
+            height: 20,
+            borderRadius: 999,
+            background: open ? `${T.accent.primary}14` : T.bg.surface,
+            border: `1px solid ${open ? T.accent.primarySoft : T.border.subtle}`,
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform .18s ease, color .18s ease, background .18s ease",
+          }}
+        >
+          ▼
+        </span>
       </button>
 
       {dropdown}

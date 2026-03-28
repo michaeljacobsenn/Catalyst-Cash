@@ -6,6 +6,7 @@ export interface AuditDraftRecord {
   updatedAt: string;
   snapshotDate?: string | null;
   reason?: string | null;
+  promptSurfacedAt?: string | null;
 }
 
 interface ContributionConfig {

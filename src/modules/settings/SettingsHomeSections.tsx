@@ -1,6 +1,7 @@
 import { Building2, ChevronRight, Cpu, Database, Info, Lock, Monitor, Target } from "../icons";
 import { buildPromoLine } from "../planCatalog.js";
 import { T } from "../constants.js";
+import { ListRow, ListSection, NoticeBanner } from "../ui.js";
 import ProBanner from "../tabs/ProBanner.js";
 
 type SettingsMenu = "finance" | "profile" | "ai" | "backup" | "dev" | "security" | "plaid" | null;
@@ -104,11 +105,10 @@ export function RootSettingsSection({
           >
             {group.heading}
           </span>
-          <div style={{ background: T.bg.card, borderRadius: T.radius.xl, border: `1px solid ${T.border.subtle}` }}>
+          <ListSection>
             {group.items.map((item, index) => (
-              <button
+              <ListRow
                 key={item.id}
-                className="settings-row"
                 onClick={() => {
                   if (item.id === "guide") {
                     onGuide();
@@ -116,44 +116,30 @@ export function RootSettingsSection({
                   }
                   onSelectMenu(item.id as Exclude<SettingsMenu, null>);
                 }}
-                style={{
-                  margin: 0,
-                  width: "100%",
-                  minHeight: 64,
-                  padding: "12px 16px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  background: "transparent",
-                  border: "none",
-                  borderBottom: index < group.items.length - 1 ? `1px solid ${T.border.subtle}` : "none",
-                  cursor: "pointer",
-                  textAlign: "left",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                icon={
                   <div
                     style={{
-                      width: 30,
-                      height: 30,
-                      borderRadius: 8,
-                      background: `${item.color}20`,
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
+                      background: `${item.color}18`,
+                      border: `1px solid ${item.color}20`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
+                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
                     }}
                   >
-                    <item.icon size={16} color={item.color} />
+                    <item.icon size={17} color={item.color} />
                   </div>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: T.text.primary, lineHeight: 1.2 }}>{item.label}</div>
-                    <div style={{ fontSize: 11, color: T.text.muted, marginTop: 3, lineHeight: 1.45 }}>{item.desc}</div>
-                  </div>
-                </div>
-                <ChevronRight className="chevron-icon" size={18} color={T.text.muted} />
-              </button>
+                }
+                title={item.label}
+                description={item.desc}
+                action={<ChevronRight className="chevron-icon" size={18} color={T.text.muted} />}
+                isLast={index === group.items.length - 1}
+              />
             ))}
-          </div>
+          </ListSection>
         </div>
       ))}
 
@@ -362,6 +348,15 @@ export function RootSettingsSection({
                 </div>
               ))}
             </div>
+            {pct < 100 && (
+              <NoticeBanner
+                tone="info"
+                compact
+                style={{ marginTop: 12 }}
+                title="Finish The Foundation"
+                message="The app already looks polished, but the strongest UX comes from complete data. Income, spending floor, bills, and cards make the dashboard materially sharper."
+              />
+            )}
           </div>
         </div>
       )}

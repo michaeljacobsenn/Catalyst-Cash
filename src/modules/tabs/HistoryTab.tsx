@@ -2,6 +2,7 @@
     lazy,
     memo,
     Suspense,
+    useEffect,
     useState,
     type ChangeEvent,
     type CSSProperties,
@@ -33,9 +34,11 @@ interface ToastApi {
 interface HistoryTabProps {
   toast: ToastApi;
   proEnabled?: boolean;
+  themeTick?: number;
 }
 
 interface NavigationApi {
+  tab?: string;
   navTo: (tab: string, viewState?: AuditRecord | null) => void;
   setResultsBackTarget?: ((target: string | null) => void) | undefined;
 }
@@ -291,9 +294,16 @@ const HistoryOverviewCard = ({ audits }: { audits: AuditRecord[] }) => {
   );
 };
 
-export default memo(function HistoryTab({ toast, proEnabled = false }: HistoryTabProps) {
+export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: _themeTick = 0 }: HistoryTabProps) {
+  void _themeTick;
   const { history: audits, deleteHistoryItem: onDelete, handleManualImport } = useAudit();
-  const { navTo, setResultsBackTarget } = useNavigation() as NavigationApi;
+  const { tab, navTo, setResultsBackTarget } = useNavigation() as NavigationApi;
+
+  useEffect(() => {
+    if (tab === "history" && audits.length === 0) {
+      navTo("audit");
+    }
+  }, [audits.length, navTo, tab]);
 
   const onSelect = (audit: AuditRecord): void => {
     if (setResultsBackTarget) setResultsBackTarget("history");

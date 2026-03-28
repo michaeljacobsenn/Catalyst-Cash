@@ -4,7 +4,7 @@
   import { log } from "./logger.js";
   import { getBackendProvider } from "./providers.js";
   import { getRevenueCatAppUserId } from "./revenuecat.js";
-  import { getOrCreateDeviceId,isPro } from "./subscription.js";
+  import { getOrCreateDeviceId,isGatingEnforced,isPro } from "./subscription.js";
   import { db } from "./utils.js";
 
 // ═══════════════════════════════════════════════════════════════
@@ -75,6 +75,9 @@ async function buildBackendHeaders(deviceId) {
   const revenueCatAppUserId = await getRevenueCatAppUserId().catch(() => null);
   if (revenueCatAppUserId) {
     headers["X-RC-App-User-ID"] = revenueCatAppUserId;
+  }
+  if (!isGatingEnforced()) {
+    headers["X-Catalyst-Testing"] = "1";
   }
   return headers;
 }

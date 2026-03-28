@@ -18,6 +18,7 @@ interface CashflowTabProps {
   toast?: ToastApi | undefined;
   proEnabled?: boolean;
   privacyMode?: boolean;
+  themeTick?: number;
 }
 
 interface SwitchCashflowViewEvent extends Event {
@@ -43,13 +44,14 @@ interface RenewalsTabProps {
   proEnabled?: boolean;
   embedded?: boolean;
   privacyMode?: boolean;
+  themeTick?: number;
 }
 
 const TypedViewToggle = ViewToggle as unknown as (props: ViewToggleProps) => React.ReactNode;
 const TypedBudgetTab = BudgetTab as unknown as (props: BudgetTabProps) => React.ReactNode;
 const TypedRenewalsTab = RenewalsTab as unknown as (props: RenewalsTabProps) => React.ReactNode;
 
-export default function CashflowTab({ onRunAudit, toast, proEnabled = false, privacyMode = false }: CashflowTabProps) {
+export default function CashflowTab({ onRunAudit, toast, proEnabled = false, privacyMode = false, themeTick = 0 }: CashflowTabProps) {
   const [activeView, setActiveView] = useState<CashflowView>("renewals");
   const _cashflowTypesAnchor: {
     cards?: Card[];
@@ -98,7 +100,7 @@ export default function CashflowTab({ onRunAudit, toast, proEnabled = false, pri
           <TypedBudgetTab onRunAudit={onRunAudit} toast={toast} embedded proEnabled={proEnabled} privacyMode={privacyMode} />
         </div>
         <div style={{ display: activeView === "renewals" ? "block" : "none", height: "100%", minHeight: 0 }}>
-          <TypedRenewalsTab proEnabled={proEnabled} embedded privacyMode={privacyMode} />
+          <TypedRenewalsTab proEnabled={proEnabled} embedded privacyMode={privacyMode} themeTick={themeTick} />
         </div>
       </div>
     </div>
