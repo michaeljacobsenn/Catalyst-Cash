@@ -531,6 +531,193 @@ function defaultDashboardStatus(category, amount) {
   return "";
 }
 
+function daysBetweenIso(startDate, endDate) {
+  const start = new Date(`${startDate}T12:00:00Z`);
+  const end = new Date(`${endDate}T12:00:00Z`);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return null;
+  return Math.round((end.getTime() - start.getTime()) / 86400000);
+}
+
+function isCardChargedRenewal(renewal, cards = []) {
+  if (String(renewal?.chargedToType || "").trim().toLowerCase() === "card") return true;
+
+  const chargedToId = String(renewal?.chargedToId || "").trim();
+  if (chargedToId && cards.some((card) => String(card?.id || "") === chargedToId)) return true;
+
+  const chargedTo = String(renewal?.chargedTo || "").trim().toLowerCase();
+  if (!chargedTo) return false;
+  return cards.some((card) => {
+    const names = [card?.name, card?.nickname, card?.institution]
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter(Boolean);
+    return names.some((name) => chargedTo === name || chargedTo.includes(name));
+  });
+}
+
+function collectUpcomingCashObligations({
+  renewals = [],
+  cards = [],
+  snapshotDate,
+  horizonDays = 7,
+}) {
+  if (!snapshotDate) return [];
+
+  return (Array.isArray(renewals) ? renewals : [])
+    .filter((renewal) => renewal && !renewal.isCancelled && !renewal.archivedAt && renewal.nextDue)
+    .map((renewal) => {
+      const due = String(renewal.nextDue || "").trim();
+      const daysUntilDue = daysBetweenIso(snapshotDate, due);
+      const amount = parseCurrency(renewal.amount) || 0;
+      return {
+        renewal,
+        due,
+        daysUntilDue,
+        amount,
+        isCardCharge: isCardChargedRenewal(renewal, cards),
+      };
+    })
+    .filter((entry) => entry.amount > 0 && entry.daysUntilDue != null && entry.daysUntilDue >= 0 && entry.daysUntilDue <= horizonDays && !entry.isCardCharge)
+    .sort((left, right) => (left.due < right.due ? -1 : left.due > right.due ? 1 : right.amount - left.amount));
+}
+
+function collectRuleBasedCashObligations({
+  personalRules = "",
+  snapshotDate,
+  horizonDays = 21,
+}) {
+  const text = String(personalRules || "").trim();
+  if (!text || !snapshotDate) return [];
+
+  /** @type {Array<{renewal:{name:string}, due:string, daysUntilDue:number|null, amount:number, isCardCharge:boolean}>} */
+  const obligations = [];
+  const seen = new Set();
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+
+  const pushObligation = (name, amount, due) => {
+    const normalizedName = String(name || "").replace(/^\d+\)\s*/, "").trim();
+    const numericAmount = parseCurrency(amount) || 0;
+    const dueDate = String(due || "").trim();
+    const daysUntilDue = daysBetweenIso(snapshotDate, dueDate);
+    if (!normalizedName || numericAmount <= 0 || !dueDate || daysUntilDue == null || daysUntilDue < 0 || daysUntilDue > horizonDays) return;
+    const key = `${normalizedName}|${numericAmount}|${dueDate}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    obligations.push({
+      renewal: { name: normalizedName },
+      due: dueDate,
+      daysUntilDue,
+      amount: numericAmount,
+      isCardCharge: false,
+    });
+  };
+
+  for (const line of lines) {
+    const dueMatch = line.match(/^(?:\d+\)\s*)?([^:]+):\s*\$?([\d,]+(?:\.\d{1,2})?)\s+due\s+(\d{4}-\d{2}-\d{2})/i);
+    if (dueMatch) {
+      pushObligation(dueMatch[1], dueMatch[2], dueMatch[3]);
+    }
+  }
+
+  const netGapMatch = text.match(/Remaining Net Gap:\s*\$?([\d,]+(?:\.\d{1,2})?)/i);
+  const nyDueMatch = text.match(/Total NY Liability:\s*\$?[\d,]+(?:\.\d{1,2})?\s+due\s+(\d{4}-\d{2}-\d{2})/i);
+  if (netGapMatch && nyDueMatch) {
+    pushObligation("NY Tax Funding Gap", netGapMatch[1], nyDueMatch[1]);
+  }
+
+  return obligations.sort((left, right) => (left.due < right.due ? -1 : left.due > right.due ? 1 : right.amount - left.amount));
+}
+
+function buildObligationSummary(obligations = []) {
+  return obligations
+    .slice(0, 3)
+    .map((entry) => `${entry.renewal?.name || "Upcoming bill"} (${fmt(entry.amount)} by ${entry.due})`)
+    .join(", ");
+}
+
+function isGenericDebtCopy(text) {
+  const normalized = String(text || "").toLowerCase();
+  return (
+    /\bcredit card\s*#?\s*1\b/.test(normalized) ||
+    /\bcredit card 1\b/.test(normalized) ||
+    /\bhighest interest credit card debt\b/.test(normalized) ||
+    /\bhigh[- ]interest credit card debt\b/.test(normalized) ||
+    /\bpriority debt\b/.test(normalized)
+  );
+}
+
+function withExplicitDebtTarget(text, targetLabel) {
+  if (!text || !targetLabel) return text;
+  return String(text)
+    .replace(/\bCREDIT CARD\s*#?\s*1\b/gi, targetLabel)
+    .replace(/\bcredit card\s*#?\s*1\b/gi, targetLabel)
+    .replace(/\bhighest interest credit card debt\b/gi, targetLabel)
+    .replace(/\bhigh[- ]interest credit card debt\b/gi, targetLabel)
+    .replace(/\bpriority debt\b/gi, targetLabel);
+}
+
+function inferInvestmentGateStatus({
+  existingGateStatus,
+  cards = [],
+  formData = {},
+  computedStrategy = {},
+  nativeRiskFlags = [],
+  renewals = [],
+  personalRules = "",
+  snapshotDate,
+}) {
+  const explicit = typeof existingGateStatus === "string" ? existingGateStatus.trim() : "";
+  const cardDebt = (Array.isArray(formData?.debts) ? formData.debts : []).reduce(
+    (sum, debt) => sum + Math.max(0, parseCurrency(debt?.balance) || 0),
+    0
+  );
+  const liveCardDebt = (Array.isArray(cards) ? cards : []).reduce(
+    (sum, card) => sum + Math.max(0, parseCurrency(card?.balance) || 0),
+    0
+  );
+  const debtTotal = Math.max(cardDebt, liveCardDebt, Number(computedStrategy?.auditSignals?.debt?.total || 0));
+  const riskSet = new Set((Array.isArray(nativeRiskFlags) ? nativeRiskFlags : []).map((flag) => String(flag || "").trim()));
+  const urgentCashObligations = collectUpcomingCashObligations({
+    renewals,
+    cards,
+    snapshotDate,
+    horizonDays: 21,
+  });
+  const ruleBasedObligations = collectRuleBasedCashObligations({
+    personalRules,
+    snapshotDate,
+    horizonDays: 21,
+  });
+
+  const shouldGuard =
+    debtTotal > 0 ||
+    urgentCashObligations.length > 0 ||
+    ruleBasedObligations.length > 0 ||
+    riskSet.has("transfer-needed") ||
+    riskSet.has("floor-breach-risk") ||
+    riskSet.has("critical-promo-expiry") ||
+    riskSet.has("promo-expiry");
+
+  if (shouldGuard) return "Guarded — safety first";
+  if (explicit) return explicit;
+  return "Open";
+}
+
+function buildProtectedCashAction({
+  obligations = [],
+  computedStrategy = {},
+}) {
+  const amount = obligations.reduce((sum, item) => sum + Math.max(0, item.amount || 0), 0);
+  const obligationSummary = buildObligationSummary(obligations);
+  const fallbackAmount = Math.max(0, Number(computedStrategy?.requiredTransfer || 0), Number(computedStrategy?.operationalSurplus || 0));
+  return {
+    title: "Protect the next 7 days",
+    detail: obligationSummary
+      ? `Hold extra debt paydown and reserve cash for ${obligationSummary}.`
+      : "Hold extra debt paydown until near-term cash obligations are fully covered.",
+    amount: amount > 0 ? fmt(amount) : fallbackAmount > 0 ? fmt(fallbackAmount) : null,
+  };
+}
+
 function buildDashboardRowsFromAnchors(anchors = {}, existingRows = []) {
   const statusByCategory = new Map(
     (Array.isArray(existingRows) ? existingRows : [])
@@ -896,6 +1083,11 @@ function inferAuditStatusFromSignals(score, riskFlags = []) {
  *   nativeRiskFlags?: string[] | null;
  *   dashboardAnchors?: Record<string, number | null | undefined>;
  *   investmentAnchors?: { balance?: number | null; asOf?: string | null; gateStatus?: string | null; netWorth?: number | null } | null;
+ *   cards?: import("../types/index.js").Card[] | null;
+ *   renewals?: import("../types/index.js").Renewal[] | null;
+ *   formData?: import("../types/index.js").AuditFormData | null;
+ *   computedStrategy?: Record<string, unknown> | null;
+ *   personalRules?: string;
  * }} [options]
  * @returns {import("../types/index.js").ParsedAudit | null}
  */
@@ -908,6 +1100,11 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
     nativeRiskFlags = null,
     dashboardAnchors = null,
     investmentAnchors = null,
+    cards = null,
+    renewals = null,
+    formData = null,
+    computedStrategy = null,
+    personalRules = "",
   } = options;
 
   const auditFlags = Array.isArray(parsed.auditFlags) ? [...parsed.auditFlags] : [];
@@ -953,6 +1150,20 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
   }
 
   const normalizedInvestmentAnchors = normalizeInvestmentAnchors(investmentAnchors || {});
+  const snapshotDate =
+    typeof formData?.date === "string" && formData.date.trim()
+      ? formData.date.trim()
+      : normalizedInvestmentAnchors?.asOf || new Date().toISOString().split("T")[0];
+  const repairedGateStatus = inferInvestmentGateStatus({
+    existingGateStatus: parsed?.investments?.gateStatus || normalizedInvestmentAnchors?.gateStatus,
+    cards: Array.isArray(cards) ? cards : [],
+    formData: formData || {},
+    computedStrategy: computedStrategy || {},
+    nativeRiskFlags: normalizedNativeRiskFlags,
+    renewals: Array.isArray(renewals) ? renewals : [],
+    personalRules,
+    snapshotDate,
+  });
   const existingInvestmentMissing =
     !parsed.investments ||
     (!parsed.investments.balance || parsed.investments.balance === "N/A");
@@ -960,6 +1171,7 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
     parsed.investments = {
       ...parsed.investments,
       ...normalizedInvestmentAnchors,
+      gateStatus: repairedGateStatus,
       cryptoValue: parsed.investments?.cryptoValue ?? null,
     };
     if (parsed.structured && typeof parsed.structured === "object") {
@@ -976,6 +1188,28 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
       code: "investments-summary-repaired",
       severity: "low",
       message: "Investments summary was backfilled from tracked balances because the model omitted it.",
+    });
+  }
+
+  if (parsed.investments && repairedGateStatus && parsed.investments.gateStatus !== repairedGateStatus) {
+    parsed.investments = {
+      ...parsed.investments,
+      gateStatus: repairedGateStatus,
+    };
+    if (parsed.structured && typeof parsed.structured === "object") {
+      parsed.structured.investments = parsed.investments;
+    }
+    if (parsed.sections && typeof parsed.sections.investments === "string") {
+      parsed.sections = {
+        ...parsed.sections,
+        investments: `**Balance:** ${parsed.investments.balance}\n**As Of:** ${parsed.investments.asOf}\n**Gate:** ${parsed.investments.gateStatus}${parsed.investments.netWorth ? `\n**Net Worth:** ${parsed.investments.netWorth}` : ""}`,
+      };
+    }
+    consistency.investmentGateRepaired = true;
+    auditFlags.push({
+      code: "investment-gate-repaired",
+      severity: "medium",
+      message: `Investment gate was tightened to "${repairedGateStatus}" because debt, risk flags, or near-term obligations still require cash protection.`,
     });
   }
 
@@ -1068,6 +1302,138 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
     }
   }
 
+  const upcomingCashObligations = collectUpcomingCashObligations({
+    renewals: Array.isArray(renewals) ? renewals : [],
+    cards: Array.isArray(cards) ? cards : [],
+    snapshotDate,
+    horizonDays: 21,
+  });
+  const ruleBasedCashObligations = collectRuleBasedCashObligations({
+    personalRules,
+    snapshotDate,
+    horizonDays: 21,
+  });
+  const protectedCashObligations = [...upcomingCashObligations, ...ruleBasedCashObligations];
+  const shortTermCashNeed = protectedCashObligations.reduce((sum, item) => sum + Math.max(0, item.amount || 0), 0);
+  const shouldBlockGenericDebtPaydown =
+    shortTermCashNeed > Math.max(0, Number(operationalSurplus || 0)) ||
+    protectedCashObligations.length > 0 ||
+    normalizedNativeRiskFlags.includes("transfer-needed") ||
+    normalizedNativeRiskFlags.includes("floor-breach-risk");
+  const explicitDebtTarget = String(computedStrategy?.debtStrategy?.target || "").trim();
+
+  if (parsed.structured?.nextAction && typeof parsed.structured.nextAction === "object") {
+    const originalDetail = parsed.structured.nextAction.detail || "";
+    const originalTitle = parsed.structured.nextAction.title || "";
+    if ((isGenericDebtCopy(originalDetail) || isGenericDebtCopy(originalTitle)) && explicitDebtTarget) {
+      parsed.structured.nextAction = {
+        ...parsed.structured.nextAction,
+        title: withExplicitDebtTarget(originalTitle, explicitDebtTarget),
+        detail: withExplicitDebtTarget(originalDetail, explicitDebtTarget),
+      };
+      consistency.genericDebtLabelRepaired = true;
+      auditFlags.push({
+        code: "generic-debt-label-repaired",
+        severity: "medium",
+        message: `Generic debt label was replaced with the explicit target "${explicitDebtTarget}".`,
+      });
+    }
+  }
+
+  if (shouldBlockGenericDebtPaydown && parsed.structured?.nextAction && typeof parsed.structured.nextAction === "object") {
+    const nextActionText = `${parsed.structured.nextAction.title || ""} ${parsed.structured.nextAction.detail || ""}`.trim();
+    if (isGenericDebtCopy(nextActionText) || /\broute\b.*\bto\b/i.test(nextActionText)) {
+      const repairedAction = buildProtectedCashAction({
+        obligations: protectedCashObligations,
+        computedStrategy: computedStrategy || {},
+      });
+      parsed.structured.nextAction = repairedAction;
+      consistency.nextActionRepairedForCashPressure = true;
+      auditFlags.push({
+        code: "next-action-repaired-for-cash-pressure",
+        severity: "high",
+        message: "Generic debt paydown was replaced because near-term cash obligations still need protection.",
+      });
+    }
+  }
+
+  if (Array.isArray(parsed.structured?.weeklyMoves) && parsed.structured.weeklyMoves.length > 0) {
+    const firstMove = parsed.structured.weeklyMoves[0];
+    if (firstMove && typeof firstMove === "object") {
+      const firstMoveText = `${firstMove.title || ""} ${firstMove.detail || ""}`.trim();
+      if ((isGenericDebtCopy(firstMoveText) || /\broute\b.*\bto\b/i.test(firstMoveText)) && shouldBlockGenericDebtPaydown) {
+        const repairedAction = buildProtectedCashAction({
+          obligations: protectedCashObligations,
+          computedStrategy: computedStrategy || {},
+        });
+        parsed.structured.weeklyMoves[0] = {
+          ...firstMove,
+          title: repairedAction.title,
+          detail: repairedAction.detail,
+          amount: repairedAction.amount,
+          priority: "required",
+          semanticKind: "bank-checking-decrease",
+          targetLabel: "Checking",
+          sourceLabel: null,
+          targetKey: null,
+          contributionKey: null,
+          transactional: false,
+        };
+        consistency.weeklyMoveRepairedForCashPressure = true;
+      } else if ((isGenericDebtCopy(firstMoveText) || isGenericDebtCopy(firstMove.title || "")) && explicitDebtTarget) {
+        parsed.structured.weeklyMoves[0] = {
+          ...firstMove,
+          title: withExplicitDebtTarget(firstMove.title || "", explicitDebtTarget),
+          detail: withExplicitDebtTarget(firstMove.detail || "", explicitDebtTarget),
+        };
+        consistency.genericWeeklyMoveLabelRepaired = true;
+      }
+    }
+
+    if (repairedGateStatus !== "Open") {
+      parsed.structured.weeklyMoves = parsed.structured.weeklyMoves.map((move) => {
+        if (!move || typeof move !== "object") return move;
+        const text = `${move.title || ""} ${move.detail || ""}`.trim().toLowerCase();
+        if (!/\broth\b|\bbrokerage\b|\b401k\b|\b401\(k\)\b|\bhsa\b/.test(text)) return move;
+        return {
+          ...move,
+          title: "Keep investing on hold",
+          detail: "Keep Roth and other investment contributions paused until debt and near-term funding gates are cleared.",
+          amount: null,
+          priority: move.priority || "optional",
+          semanticKind: "spending-hold",
+          targetLabel: null,
+          sourceLabel: null,
+          targetKey: null,
+          contributionKey: null,
+          transactional: false,
+        };
+      });
+      consistency.investmentMoveGuarded = true;
+    }
+
+    const normalizedWeeklyMoves = normalizeWeeklyMoveEntries(parsed.structured.weeklyMoves);
+    parsed.weeklyMoves = normalizedWeeklyMoves.weeklyMoves;
+    parsed.moveItems = normalizeMoveItems(normalizedWeeklyMoves.moveItems, parsed.weeklyMoves);
+    if (parsed.sections && typeof parsed.sections.moves === "string") {
+      parsed.sections = {
+        ...parsed.sections,
+        moves: parsed.weeklyMoves.join("\n"),
+      };
+    }
+  }
+
+  if (parsed.structured?.nextAction && typeof parsed.structured.nextAction === "object") {
+    const normalizedNextAction = normalizeNextAction(parsed.structured.nextAction);
+    parsed.structured.nextAction = normalizedNextAction;
+    if (parsed.sections && typeof parsed.sections.nextAction === "string") {
+      parsed.sections = {
+        ...parsed.sections,
+        nextAction: [normalizedNextAction.title, normalizedNextAction.detail, normalizedNextAction.amount].filter(Boolean).join("\n"),
+      };
+    }
+  }
+
   return {
     ...parsed,
     auditFlags,
@@ -1085,6 +1451,7 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
  *   formData?: import("../types/index.js").AuditFormData;
  *   renewals?: import("../types/index.js").Renewal[];
  *   cards?: import("../types/index.js").Card[];
+ *   personalRules?: string;
  * }} [options]
  * @returns {import("../types/index.js").ParsedAudit}
  */
@@ -1097,6 +1464,7 @@ export function buildDegradedParsedAudit({
   formData = {},
   renewals = [],
   cards = [],
+  personalRules = "",
 } = {}) {
   const nativeScore = computedStrategy?.auditSignals?.nativeScore?.score ?? 0;
   const nativeGrade = computedStrategy?.auditSignals?.nativeScore?.grade ?? getGradeLetter(nativeScore);
@@ -1110,6 +1478,18 @@ export function buildDegradedParsedAudit({
     : 0;
   const floor = Number(financialConfig?.weeklySpendAllowance || 0) + Number(financialConfig?.emergencyFloor || 0);
   const operationalSurplus = Math.max(0, Number(computedStrategy?.operationalSurplus || 0));
+  const ruleBasedCashObligations = collectRuleBasedCashObligations({
+    personalRules,
+    snapshotDate: formData?.date,
+    horizonDays: 21,
+  });
+  const upcomingCashObligations = collectUpcomingCashObligations({
+    renewals,
+    cards,
+    snapshotDate: formData?.date,
+    horizonDays: 21,
+  });
+  const protectedCashObligations = [...upcomingCashObligations, ...ruleBasedCashObligations];
 
   const provisionalStatus =
     nativeScore < 70 || riskFlags.includes("floor-breach-risk") || riskFlags.includes("transfer-needed")
@@ -1139,7 +1519,21 @@ export function buildDegradedParsedAudit({
         : "GREEN";
 
   const weeklyMoves = [];
-  if ((computedStrategy?.requiredTransfer || 0) > 0) {
+  if (protectedCashObligations.length > 0) {
+    const protectedAction = buildProtectedCashAction({
+      obligations: protectedCashObligations,
+      computedStrategy,
+    });
+    weeklyMoves.push({
+      title: protectedAction.title,
+      detail: protectedAction.detail,
+      amount: protectedAction.amount,
+      priority: "required",
+      semanticKind: "spending-hold",
+      targetLabel: "Protected cash",
+      transactional: false,
+    });
+  } else if ((computedStrategy?.requiredTransfer || 0) > 0) {
     weeklyMoves.push(
       {
         title: "Protect checking floor",
@@ -1191,6 +1585,9 @@ export function buildDegradedParsedAudit({
 
   const alertsCard = [
     "Full AI narrative unavailable — showing deterministic engine output only.",
+    ...(protectedCashObligations.length > 0
+      ? [`Protected cash obligations: ${buildObligationSummary(protectedCashObligations)}.`]
+      : []),
     ...riskFlags.slice(0, 3).map(flag => `Risk flag: ${formatRiskFlag(flag)}`),
   ];
   const structuredAlerts = alertsCard.map((detail, index) => ({
@@ -1209,7 +1606,16 @@ export function buildDegradedParsedAudit({
 
   const nextAction = fallbackMoveTexts[0] || safetySnapshot.summary;
   const dateLabel = formData?.date || new Date().toISOString().split("T")[0];
-  const riskSummary = riskFlags.length > 0 ? riskFlags.slice(0, 3).map(formatRiskFlag).join(", ") : "No acute risk flags";
+  const riskSummary =
+    riskFlags.length > 0
+      ? riskFlags.slice(0, 3).map(formatRiskFlag).join(", ")
+      : protectedCashObligations.length > 0
+        ? "Protected cash obligations still require funding"
+        : safetySnapshot.level === "urgent"
+          ? "Urgent cash protection required"
+          : safetySnapshot.level === "caution"
+            ? "Near-term cash pressure requires caution"
+            : "No acute risk flags";
 
   return {
     raw,
@@ -1257,7 +1663,7 @@ export function buildDegradedParsedAudit({
       milestones: [],
       negotiationTargets: [],
       nextAction: {
-        title: "Next Action",
+        title: protectedCashObligations.length > 0 ? "Protect near-term obligations" : "Next Action",
         detail: nextAction,
         amount: null,
       },

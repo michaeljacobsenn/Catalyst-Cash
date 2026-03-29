@@ -88,6 +88,7 @@ interface ProBannerProps {
 
 interface ProPaywallProps {
   onClose: () => void;
+  source?: string;
 }
 
 interface SkeletonProps {
@@ -1575,7 +1576,7 @@ export default memo(function AIChatTab({
 
         {showPaywall && (
           <Suspense fallback={null}>
-            <LazyProPaywallTyped onClose={() => setShowPaywall(false)} />
+            <LazyProPaywallTyped onClose={() => setShowPaywall(false)} source="askai" />
           </Suspense>
         )}
       </div>

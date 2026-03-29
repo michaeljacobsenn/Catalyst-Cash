@@ -1370,7 +1370,7 @@ export function getChatSystemPrompt(
         trendContext,
         budgetContext
       );
-  const sanitizedPersonalRules = sanitizePersonalRules(personalRules);
+  const sanitizedPersonalRules = sanitizePersonalRules(personalRules, 4500);
   const serverRoutingBlock = `
 ## Server Intent Routing
 The backend already routed this query to ${chatIntent.agentLabel} based on the user's latest message.

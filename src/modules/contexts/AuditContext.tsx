@@ -96,6 +96,7 @@ interface AuditContextValue {
   setStreamText: Dispatch<SetStateAction<string>>;
   elapsed: number;
   setElapsed: Dispatch<SetStateAction<number>>;
+  auditLoadingPhase: "bundling" | "connecting" | "analysis" | "moves" | "finalize" | "complete";
   viewing: AuditRecord | null;
   setViewing: Dispatch<SetStateAction<AuditRecord | null>>;
   trendContext: TrendContextEntry[];
@@ -150,6 +151,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
   const [useStreaming, setUseStreaming] = useState<boolean>(true);
   const [streamText, setStreamText] = useState<string>("");
   const [elapsed, setElapsed] = useState<number>(0);
+  const [auditLoadingPhase, setAuditLoadingPhase] = useState<"bundling" | "connecting" | "analysis" | "moves" | "finalize" | "complete">("bundling");
   const [historyLimit, setHistoryLimit] = useState<number>(Infinity);
   const [viewing, setViewing] = useState<AuditRecord | null>(null);
   const [trendContext, setTrendContext] = useState<TrendContextEntry[]>([]);
@@ -356,6 +358,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
       setStreamText("");
       setActiveAuditDraftView(null);
       setElapsed(0);
+      setAuditLoadingPhase("bundling");
       timerRef.current = setInterval(() => setElapsed((seconds) => seconds + 1), 1000);
       const controller = new AbortController();
       abortRef.current = controller;
@@ -480,6 +483,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
 
           const scrubbedMsg = activeScrubber.scrub(msg);
           deviceId = await getOrCreateDeviceId();
+          setAuditLoadingPhase("connecting");
           if (useStream) {
             for await (const chunk of streamAudit(
               trimmedApiKey,
@@ -510,6 +514,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
 
           raw = activeScrubber.unscrub(raw);
           auditRawRef.current = raw;
+          setAuditLoadingPhase("analysis");
           const newApiHistory = [...apiHistory, { role: "user", content: msg }, { role: "assistant", content: raw }];
           await db.set(historyKey, newApiHistory.slice(-8));
         }
@@ -557,6 +562,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
             formData,
             renewals: promptRenewals,
             cards: strategyCards,
+            personalRules,
           }) as ParsedAudit;
         }
 
@@ -581,15 +587,23 @@ export function AuditProvider({ children }: AuditProviderProps) {
             )),
           available: computedStrategy?.operationalSurplus ?? null,
         };
+        const plaidBucketTotal = (bucket: string) =>
+          (Array.isArray(financialConfig?.plaidInvestments) ? financialConfig.plaidInvestments : [])
+            .filter((account) => account?.bucket === bucket)
+            .reduce((sum, account) => sum + (Number(account?._plaidBalance) || 0), 0);
+        const hasExplicitMoneyValue = (value: unknown) => String(value ?? "").trim() !== "";
+        const pickInvestmentAnchor = (formValue: unknown, plaidBucket: string, configValue: unknown) => {
+          if (hasExplicitMoneyValue(formValue)) return parseFloat(String(formValue)) || 0;
+          const livePlaid = plaidBucketTotal(plaidBucket);
+          if (livePlaid > 0) return livePlaid;
+          return Number(configValue || 0) || 0;
+        };
         const investmentAnchorBalance =
           [
-            Number(financialConfig?.investmentBrokerage || 0),
-            Number(financialConfig?.investmentRoth || 0),
-            Number(financialConfig?.k401Balance || 0),
-            Number(financialConfig?.hsaBalance || 0),
-            ...(Array.isArray(formData?.investments)
-              ? formData.investments.map((investment) => parseFloat(String(investment?.amount || 0)) || 0)
-              : []),
+            pickInvestmentAnchor(formData?.brokerage, "brokerage", financialConfig?.investmentBrokerage),
+            pickInvestmentAnchor(formData?.roth, "roth", financialConfig?.investmentRoth),
+            pickInvestmentAnchor(formData?.k401Balance, "k401", financialConfig?.k401Balance),
+            plaidBucketTotal("hsa") > 0 ? plaidBucketTotal("hsa") : (Number(financialConfig?.hsaBalance || 0) || 0),
           ].reduce((sum, value) => sum + value, 0);
 
         parsed = validateParsedAuditConsistency(parsed, {
@@ -597,11 +611,16 @@ export function AuditProvider({ children }: AuditProviderProps) {
           nativeScore: computedStrategy?.auditSignals?.nativeScore?.score ?? null,
           nativeRiskFlags: computedStrategy?.auditSignals?.riskFlags ?? [],
           dashboardAnchors,
+          cards: strategyCards,
+          renewals: promptRenewals,
+          formData,
+          computedStrategy,
+          personalRules,
           investmentAnchors: investmentAnchorBalance > 0
             ? {
                 balance: investmentAnchorBalance,
-                asOf: financialConfig?.investmentsAsOfDate || formData?.date || null,
-                gateStatus: "Tracked",
+                asOf: formData?.date || financialConfig?.investmentsAsOfDate || null,
+                gateStatus: null,
                 netWorth: parsed?.netWorth ?? null,
               }
             : null,
@@ -623,6 +642,8 @@ export function AuditProvider({ children }: AuditProviderProps) {
           driftDetails: drift.reasons,
           confidence,
         });
+        setAuditLoadingPhase("moves");
+        await new Promise((resolve) => setTimeout(resolve, 240));
 
         const audit: AuditRecord = {
           date: formData.date,
@@ -727,6 +748,10 @@ export function AuditProvider({ children }: AuditProviderProps) {
             });
           }
         }
+        setAuditLoadingPhase("finalize");
+        await new Promise((resolve) => setTimeout(resolve, 260));
+        setAuditLoadingPhase("complete");
+        await new Promise((resolve) => setTimeout(resolve, 220));
         haptic.success();
         toast.success(
           testMode
@@ -830,6 +855,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
         abortRef.current = null;
         activeAuditSessionTsRef.current = null;
         setLoading(false);
+        setAuditLoadingPhase("bundling");
         if (timerRef.current) clearInterval(timerRef.current);
       }
     },
@@ -873,6 +899,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
     if (timerRef.current) clearInterval(timerRef.current);
     setLoading(false);
     setStreamText("");
+    setAuditLoadingPhase("bundling");
     setError("Audit was cancelled.");
     if (history.length > 0) {
       setViewing(history[0] || null);
@@ -920,6 +947,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
     setError(null);
     navTo("results");
     setStreamText(resultText);
+    setAuditLoadingPhase("finalize");
     try {
       const parsedAudit = parseAudit(resultText) as ParsedAudit | null;
       if (!parsedAudit) throw new Error("Imported text is not valid Catalyst Cash audit JSON.");
@@ -959,6 +987,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
     } finally {
       setLoading(false);
       setStreamText("");
+      setAuditLoadingPhase("bundling");
     }
   }, [clearAuditDraft, financialConfig, navTo, setFinancialConfig, setResultsBackTarget, toast]);
 
@@ -979,6 +1008,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
     setStreamText,
     elapsed,
     setElapsed,
+    auditLoadingPhase,
     viewing,
     setViewing,
     trendContext,

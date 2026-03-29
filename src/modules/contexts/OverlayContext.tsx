@@ -19,6 +19,7 @@ interface OverlayContextValue {
   loading: boolean;
   streamText: string;
   elapsed: number;
+  auditLoadingPhase: "bundling" | "connecting" | "analysis" | "moves" | "finalize" | "complete";
   isTest: boolean;
   aiProvider: string;
   aiModel: string;

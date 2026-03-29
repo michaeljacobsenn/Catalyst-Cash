@@ -210,7 +210,7 @@ export default function BudgetTab({ embedded, proEnabled = false, privacyMode: _
         {shouldShowGating() && !proEnabled && (
           <ProBanner onUpgrade={() => setShowPaywall(true)} label="⚡ Paycheck CFO Budget" sublabel="Pro unlocks AI-seeded budgets and overspend alerts" />
         )}
-        {showPaywall && <Suspense fallback={null}><LazyProPaywall onClose={() => setShowPaywall(false)} /></Suspense>}
+        {showPaywall && <Suspense fallback={null}><LazyProPaywall onClose={() => setShowPaywall(false)} source="budget" /></Suspense>}
 
         {/* ── Paycheck Overview Card ── */}
         <Card className="slide-up" style={{ padding: "22px 20px", marginBottom: 16, background: T.bg.card, border: `1px solid ${T.border.subtle}`, borderRadius: 24 }}>

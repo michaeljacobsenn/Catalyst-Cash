@@ -270,6 +270,8 @@ Core object:
 - spendingAnalysis or null
 - Reconcile dashboardCard to native anchors; never zero-fill unless truly zero.
 - Use exact account/card/funding-source names.
+- If a hard deadline, locked escrow rule, or funding-source constraint is driving the recommendation, encode that explicitly in nextAction.detail and the first REQUIRED weeklyMoves[].detail.
+- Use recent-spending details to explain patterns or decision-relevant anomalies; do not surface a merchant-level callout unless it changes the recommendation materially.
 - If data is partial or contradictory, say so in assumptions or alertsCard.
 - Keep strings concise and mobile-readable; use null for missing optional values.`;
 }

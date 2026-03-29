@@ -1060,7 +1060,7 @@ export default function SettingsTab({
       {activeMenu ? detailScreen : rootScreen}
       {showPaywall && (
         <Suspense fallback={null}>
-          <LazyProPaywall onClose={() => setShowPaywall(false)} />
+          <LazyProPaywall onClose={() => setShowPaywall(false)} source="settings" />
         </Suspense>
       )}
     </div>

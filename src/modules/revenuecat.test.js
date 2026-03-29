@@ -6,6 +6,13 @@ async function loadRevenueCatModule() {
   const purchases = {
     getAppUserID: vi.fn(async () => ({ appUserID: "$RCAnonymousID:test" })),
     getCustomerInfo: vi.fn(async () => ({ entitlements: { active: {} } })),
+    getOfferings: vi.fn(async () => ({
+      current: {
+        monthly: { identifier: "$rc_monthly", product: { identifier: "com.catalystcash.pro.monthly.v2" } },
+        annual: { identifier: "$rc_annual", product: { identifier: "com.catalystcash.pro.yearly.v2" } },
+      },
+    })),
+    purchasePackage: vi.fn(async () => ({ customerInfo: { entitlements: { active: {} } } })),
     setLogLevel: vi.fn(async () => undefined),
     configure: vi.fn(async () => undefined),
     addCustomerInfoUpdateListener: vi.fn(),
@@ -73,5 +80,17 @@ describe("revenuecat", () => {
     expect(purchases.getAppUserID).toHaveBeenCalled();
     expect(purchases.getCustomerInfo).toHaveBeenCalled();
     expect(deactivatePro).toHaveBeenCalled();
+  });
+
+  it("purchases the selected yearly package when requested", async () => {
+    const { mod, purchases } = await loadRevenueCatModule();
+
+    await mod.initRevenueCat();
+    await mod.purchaseProPlan("yearly");
+
+    expect(purchases.getOfferings).toHaveBeenCalled();
+    expect(purchases.purchasePackage).toHaveBeenCalledWith({
+      aPackage: expect.objectContaining({ identifier: "$rc_annual" }),
+    });
   });
 });

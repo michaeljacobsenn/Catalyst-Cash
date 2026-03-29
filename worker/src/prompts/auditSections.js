@@ -21,7 +21,7 @@ export function estimatePromptTokens(prompt) {
   return Math.ceil(String(prompt || "").length / 4);
 }
 
-export function sanitizePersonalRules(rules) {
+export function sanitizePersonalRules(rules, maxChars = 4000) {
   if (typeof rules !== "string") return "";
 
   const injectionLinePattern = /(ignore previous|forget|new instructions|you are now|override|disregard)/i;
@@ -29,11 +29,13 @@ export function sanitizePersonalRules(rules) {
   return rules
     .replace(/<[^>]+>/g, "")
     .split(/\r?\n/)
+    .map(line => line.replace(/[ \t]{2,}/g, " ").trimEnd())
     .filter(line => !injectionLinePattern.test(line))
     .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
     .replace(/([*_`~[\]#>])/g, "\\$1")
     .trim()
-    .slice(0, 2000);
+    .slice(0, Math.max(500, Number(maxChars) || 4000));
 }
 
 export function buildContractorSection(config, cSym = "$", placement = "all") {
@@ -178,12 +180,9 @@ export function buildWealthBuildingSection(config, _cSym = "$") {
 ========================
 WEALTH BUILDING & TAX-ADVANTAGED LADDER
 ========================
-- Use this order unless a native risk flag or hard cash-flow constraint blocks it: 401k match → HSA → Roth IRA → 401k max → taxable brokerage.
-- FSA DEADLINE ALERT: remind the user about use-it-or-lose-it healthcare / dependent-care FSA deadlines when FSAs are mentioned.
-- BACKDOOR ROTH: mention only for high earners near/over direct Roth income limits and only as a CPA-assisted concept.
-- MEGA-BACKDOOR ROTH: mention only if the employer plan clearly supports after-tax contributions plus in-plan conversion.
-- 529 Education Savings Plans: mention only when dependents or education goals are present.
-- Short-term goals (<3 years) belong in HYSA / T-bills / money-market style vehicles, not equities.
+- Default ladder: 401k match → HSA → Roth IRA → 401k → taxable brokerage unless cash-flow risk blocks it.
+- Mention FSA deadlines, backdoor Roth, mega-backdoor Roth, or 529s only when clearly relevant.
+- Short-term goals (<3 years) belong in cash-like vehicles, not equities.
 - Never recommend new investing that breaks the checking floor, misses minimums, or ignores promo APR cliffs.
 `;
 }
@@ -201,34 +200,30 @@ CE) EXPANDED FINANCIAL SITUATION COVERAGE (CONCISE)
 Use only the scenarios that are relevant to the current snapshot or notes.
 
 ${hasHousing ? `MORTGAGE / RENT
-- Housing is a structural obligation. Treat rent or mortgage as highest-priority fixed cost.
-- Flag housing cost ratio above 30% of gross income as a drag on every other goal.
+- Housing is structural. Treat rent or mortgage as highest-priority fixed cost and flag >30% of gross income.
 ` : ""}${
     hasStudentDebt
       ? `STUDENT LOAN STRATEGIES
-- Check PSLF / IDR implications before recommending aggressive payoff of federal loans.
-- Private student debt follows normal debt prioritization.
+- Check PSLF / IDR tradeoffs before aggressive payoff of federal loans; private student debt follows normal prioritization.
 `
       : ""
   }MEDICAL DEBT
-- Medical debt is often negotiable; recommend itemized bills and provider negotiation before collections payoff.
+- Push itemized bills, hardship plans, and provider negotiation before collections payoff.
 
 ALIMONY / CHILD SUPPORT
 - Treat any court-ordered support as non-deferrable and legal-risk-bearing.
 
 ${hasDependents ? `DEPENDENT / CHILDCARE EXPENSES
-- Childcare and dependent-care costs are structural fixed costs.
-- Mention dependent-care FSA limits and education savings only when dependents are present.
+- Childcare/support costs are structural fixed costs; mention dependent-care FSA / education savings only when relevant.
 ` : ""}DEBT CONSOLIDATION / BALANCE TRANSFER
 - Mention balance transfers or consolidation only when multiple high-APR debts exist, and warn about fees plus relapse risk.
 
 ${config?.birthYear && new Date().getFullYear() - config.birthYear >= 30 ? `ESTATE PLANNING / LIFE INSURANCE
-- If the user is 30+ with dependents or meaningful assets, mention term life + basic estate documents as long-range protections.
+- If the user is 30+ with dependents or meaningful assets, mention term life + basic estate documents.
 ` : ""}${
     is55Plus
       ? `PENSION / ANNUITY / SOCIAL SECURITY
-- Treat pensions/annuities as guaranteed income when provided.
-- Mention Social Security timing, RMDs, and Medicare deadlines only when age makes them relevant.
+- Treat pensions/annuities as guaranteed income; mention Social Security timing, RMDs, and Medicare only when age-relevant.
 `
       : ""
   }RENTAL INCOME / REAL ESTATE

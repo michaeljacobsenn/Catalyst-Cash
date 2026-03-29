@@ -448,6 +448,137 @@ export function materializeManualFallbackForConnections(
   return { updatedCards, updatedBankAccounts, changed };
 }
 
+function getConnectionPlaidAccountIds(connection = {}) {
+  return new Set(
+    Array.from(connection?.accounts || [])
+      .map((account) => String(account?.plaidAccountId || "").trim())
+      .filter(Boolean)
+  );
+}
+
+function recordBelongsToConnection(record, connectionId, plaidAccountIds) {
+  const recordConnectionId = String(record?._plaidConnectionId || "").trim();
+  const recordPlaidAccountId = String(record?._plaidAccountId || "").trim();
+  if (connectionId && recordConnectionId === connectionId) return true;
+  if (recordPlaidAccountId && plaidAccountIds.has(recordPlaidAccountId)) return true;
+  return false;
+}
+
+export function disconnectConnectionPortfolioRecords(
+  connection,
+  cards = [],
+  bankAccounts = [],
+  plaidInvestments = [],
+  options = {}
+) {
+  const connectionId = String(connection?.id || "").trim();
+  const plaidAccountIds = getConnectionPlaidAccountIds(connection);
+  const removeLinkedRecords = options.removeLinkedRecords === true;
+
+  let cardsChanged = false;
+  let bankAccountsChanged = false;
+  let plaidInvestmentsChanged = false;
+  let removedCards = 0;
+  let removedBankAccounts = 0;
+  let removedPlaidInvestments = 0;
+
+  const updatedCards = removeLinkedRecords
+    ? cards.filter((card) => {
+        const shouldRemove = recordBelongsToConnection(card, connectionId, plaidAccountIds);
+        if (shouldRemove) {
+          removedCards += 1;
+          cardsChanged = true;
+        }
+        return !shouldRemove;
+      })
+    : cards.map((card) => {
+        if (!recordBelongsToConnection(card, connectionId, plaidAccountIds)) return card;
+        cardsChanged = true;
+        return {
+          ...card,
+          balance: toFiniteMoney(card._plaidBalance ?? card.balance) ?? card.balance ?? null,
+          limit: toFiniteMoney(card._plaidLimit ?? card.limit ?? card.creditLimit) ?? card.limit ?? null,
+          _plaidBalance: null,
+          _plaidAvailable: null,
+          _plaidLimit: null,
+          _plaidManualFallback: true,
+          _plaidLiability: null,
+          _plaidLastSync: null,
+          _plaidAccountId: undefined,
+          _plaidConnectionId: undefined,
+        };
+      });
+
+  const updatedBankAccounts = removeLinkedRecords
+    ? bankAccounts.filter((account) => {
+        const shouldRemove = recordBelongsToConnection(account, connectionId, plaidAccountIds);
+        if (shouldRemove) {
+          removedBankAccounts += 1;
+          bankAccountsChanged = true;
+        }
+        return !shouldRemove;
+      })
+    : bankAccounts.map((account) => {
+        if (!recordBelongsToConnection(account, connectionId, plaidAccountIds)) return account;
+        bankAccountsChanged = true;
+        return {
+          ...account,
+          balance: toFiniteMoney(account._plaidAvailable ?? account._plaidBalance ?? account.balance) ?? account.balance ?? null,
+          _plaidBalance: null,
+          _plaidAvailable: null,
+          _plaidManualFallback: true,
+          _plaidLastSync: null,
+          _plaidAccountId: undefined,
+          _plaidConnectionId: undefined,
+        };
+      });
+
+  const updatedPlaidInvestments = plaidInvestments.filter((investment) => {
+    const shouldRemove = recordBelongsToConnection(investment, connectionId, plaidAccountIds);
+    if (shouldRemove) {
+      removedPlaidInvestments += 1;
+      plaidInvestmentsChanged = true;
+    }
+    return !shouldRemove;
+  });
+
+  return {
+    updatedCards,
+    updatedBankAccounts,
+    updatedPlaidInvestments,
+    cardsChanged,
+    bankAccountsChanged,
+    plaidInvestmentsChanged,
+    removedCards,
+    removedBankAccounts,
+    removedPlaidInvestments,
+  };
+}
+
+export async function purgeStoredTransactionsForConnection(connection) {
+  const plaidAccountIds = getConnectionPlaidAccountIds(connection);
+  if (plaidAccountIds.size === 0) return 0;
+
+  const stored = await db.get(TRANSACTIONS_STORAGE_KEY);
+  const transactions = Array.isArray(stored?.data) ? stored.data : [];
+  if (!transactions.length) return 0;
+
+  const filtered = transactions.filter((transaction) => {
+    const accountId = String(transaction?.accountId || "").trim();
+    return !accountId || !plaidAccountIds.has(accountId);
+  });
+
+  const removed = transactions.length - filtered.length;
+  if (removed > 0) {
+    await db.set(TRANSACTIONS_STORAGE_KEY, {
+      data: filtered,
+      fetchedAt: stored?.fetchedAt || new Date().toISOString(),
+    });
+  }
+
+  return removed;
+}
+
 /**
  * Remove a connection by id.
  */
@@ -876,7 +1007,8 @@ export async function fetchBalances(connectionId, retryCount = 0) {
       );
     }
   }
-  conn.lastSync = data.last_synced_at || new Date().toISOString();
+  const balanceFreshness = data.sync_freshness?.[connectionId]?.balances || null;
+  conn.lastSync = balanceFreshness || conn.lastSync || data.last_synced_at || new Date().toISOString();
   await saveConnections(conns);
 
   return conn;
@@ -960,7 +1092,8 @@ export async function fetchLiabilities(connectionId, retryCount = 0) {
     }
   }
 
-  conn.lastLiabilitySync = data.last_synced_at || new Date().toISOString();
+  const liabilityFreshness = data.sync_freshness?.[connectionId]?.liabilities || null;
+  conn.lastLiabilitySync = liabilityFreshness || conn.lastLiabilitySync || data.last_synced_at || new Date().toISOString();
   await saveConnections(conns);
   return conn;
 }

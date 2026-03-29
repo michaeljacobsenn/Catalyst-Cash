@@ -79,6 +79,7 @@ interface ProBannerProps {
 
 interface ProPaywallProps {
   onClose: () => void;
+  source?: string;
 }
 
 const Card = UICard as unknown as (props: CardProps) => ReactNode;
@@ -376,7 +377,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
         )}
         {showPaywall && (
           <Suspense fallback={null}>
-            <TypedLazyProPaywall onClose={() => setShowPaywall(false)} />
+            <TypedLazyProPaywall onClose={() => setShowPaywall(false)} source="history" />
           </Suspense>
         )}
         {exportAuditRecord && (

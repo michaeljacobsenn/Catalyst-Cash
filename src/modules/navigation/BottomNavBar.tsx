@@ -288,16 +288,14 @@ export default function BottomNavBar({
                   style={{
                     width: 34,
                     height: 34,
-                    borderRadius: 12,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    background: active ? `${T.accent.primary}12` : "transparent",
-                    border: active ? `1px solid ${T.accent.primary}26` : "1px solid transparent",
+                    background: "transparent",
+                    border: "1px solid transparent",
                     transform: active ? "translateY(-1px)" : "translateY(1px)",
                     opacity: active ? 1 : 0.76,
-                    transition: "transform .3s cubic-bezier(0.16, 1, 0.3, 1), opacity .25s ease, background .25s ease, border-color .25s ease, box-shadow .25s ease",
-                    boxShadow: active ? `0 8px 14px rgba(0,0,0,0.08)` : "none",
+                    transition: "transform .3s cubic-bezier(0.16, 1, 0.3, 1), opacity .25s ease",
                   }}
                 >
                   <Icon size={20} strokeWidth={active ? 2.4 : 2} />

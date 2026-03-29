@@ -137,6 +137,7 @@ function CatalystCashShell() {
     loading,
     streamText,
     elapsed,
+    auditLoadingPhase,
     viewing,
     setViewing,
     trendContext,
@@ -324,7 +325,7 @@ function CatalystCashShell() {
     return () => window.clearTimeout(timer);
   }, [ready, isSecurityReady, isSettingsReady, isPortfolioReady, isAuditReady, onboardingComplete]);
 
-  const [proEnabled, setProEnabled] = useState(true);
+  const [proEnabled, setProEnabled] = useState(false);
   useBootServices(setProEnabled);
   useAppForegroundRefresh(ready, refreshAppState);
   useDeepLinkRouting(navTo);
@@ -750,6 +751,7 @@ function CatalystCashShell() {
         loading={loading}
         streamText={streamText}
         elapsed={elapsed}
+        auditLoadingPhase={auditLoadingPhase}
         isTest={isTest}
         aiProvider={aiProvider}
         aiModel={aiModel}

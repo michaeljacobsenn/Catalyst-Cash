@@ -180,6 +180,11 @@ export default memo(function ResultsView({
     );
   const parsed = audit.parsed;
   const sections = parsed.sections;
+  const nextActionCard =
+    parsed.structured?.nextAction && typeof parsed.structured.nextAction === "object"
+      ? parsed.structured.nextAction
+      : null;
+  const investmentsSummary = parsed.investments || null;
   const degradedInfo = parsed.degraded;
   const isDegraded = degradedInfo?.isDegraded;
   const isLiveCurrentAudit = Boolean(current?.ts && current.ts === audit.ts && !audit.isTest);
@@ -583,12 +588,41 @@ export default memo(function ResultsView({
               style={{
                 padding: isSmallPhone ? "16px" : "18px 20px",
                 borderRadius: T.radius.lg,
-                background: `${T.accent.primary}10`,
+                background: `linear-gradient(180deg, ${T.accent.primary}12, ${T.bg.elevated})`,
                 border: `1px solid ${T.accent.primary}18`,
                 boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
               }}
             >
-              <Md text={stripPaycheckParens(sections.nextAction)} />
+              {nextActionCard?.title ? (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em" }}>
+                    {nextActionCard.title}
+                  </div>
+                  {nextActionCard.amount ? (
+                    <div
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 999,
+                        background: `${T.accent.primary}14`,
+                        border: `1px solid ${T.accent.primary}24`,
+                        color: T.accent.primary,
+                        fontSize: 11,
+                        fontWeight: 900,
+                        fontFamily: T.font.mono,
+                        letterSpacing: "0.03em",
+                      }}
+                    >
+                      {nextActionCard.amount}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              <div style={{ fontSize: 13, lineHeight: 1.65, color: T.text.secondary }}>
+                {nextActionCard?.detail ? stripPaycheckParens(nextActionCard.detail) : <Md text={stripPaycheckParens(sections.nextAction)} />}
+              </div>
             </div>
           </section>
         )}
@@ -721,13 +755,125 @@ export default memo(function ResultsView({
         <ReportSection title="Radar — 90 Days" icon={Target} content={sections.radar} accentColor={T.status.amber} />
         <ReportSection title="Long-Range Radar" icon={Clock} content={sections.longRange} accentColor={T.text.secondary} />
         <ReportSection title="Forward Radar" icon={TrendingUp} content={sections.forwardRadar} accentColor={T.status.blue} />
-        <ReportSection
-          title="Investments & Roth"
-          icon={TrendingUp}
-          content={sections.investments}
-          accentColor={T.accent.primary}
-          isLast={true}
-        />
+        {investmentsSummary ? (
+          <section aria-labelledby="results-investments" style={{ padding: "22px 0 0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 10,
+                  background: `${T.accent.primary}15`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <TrendingUp size={16} color={T.accent.primary} strokeWidth={2.5} />
+              </div>
+              <h2 id="results-investments" style={{ fontSize: "clamp(17px, 4.8vw, 20px)", fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>
+                Investments & Roth
+              </h2>
+            </div>
+            <div
+              style={{
+                padding: isSmallPhone ? "16px" : "18px 20px",
+                borderRadius: T.radius.lg,
+                background: /guard|hold|closed/i.test(investmentsSummary.gateStatus || "")
+                  ? `linear-gradient(180deg, ${T.status.amber}10, ${T.bg.card})`
+                  : /open/i.test(investmentsSummary.gateStatus || "")
+                    ? `linear-gradient(180deg, ${T.status.green}10, ${T.bg.card})`
+                    : `linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card})`,
+                border: `1px solid ${
+                  /guard|hold|closed/i.test(investmentsSummary.gateStatus || "")
+                    ? `${T.status.amber}22`
+                    : /open/i.test(investmentsSummary.gateStatus || "")
+                      ? `${T.status.green}20`
+                      : T.border.default
+                }`,
+                display: "grid",
+                gridTemplateColumns: isSmallPhone ? "1fr" : "1.2fr 1fr 1fr",
+                gap: 12,
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
+                  Balance
+                </div>
+                <div style={{ fontSize: "clamp(22px, 6vw, 28px)", fontWeight: 900, letterSpacing: "-0.03em", color: T.text.primary }}>
+                  {investmentsSummary.balance || "N/A"}
+                </div>
+                {investmentsSummary.netWorth ? (
+                  <div style={{ marginTop: 6, fontSize: 11, color: T.text.secondary }}>
+                    Net worth anchor {investmentsSummary.netWorth}
+                  </div>
+                ) : null}
+              </div>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
+                  As Of
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary }}>
+                  {investmentsSummary.asOf || "N/A"}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
+                  Gate
+                </div>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "7px 10px",
+                    borderRadius: 999,
+                    background: /open/i.test(investmentsSummary.gateStatus || "")
+                      ? `${T.status.green}12`
+                      : /guard|hold|closed/i.test(investmentsSummary.gateStatus || "")
+                        ? `${T.status.amber}14`
+                        : `${T.accent.primary}12`,
+                    border: `1px solid ${
+                      /open/i.test(investmentsSummary.gateStatus || "")
+                        ? `${T.status.green}22`
+                        : /guard|hold|closed/i.test(investmentsSummary.gateStatus || "")
+                          ? `${T.status.amber}24`
+                          : `${T.accent.primary}18`
+                    }`,
+                    color: /open/i.test(investmentsSummary.gateStatus || "")
+                      ? T.status.green
+                      : /guard|hold|closed/i.test(investmentsSummary.gateStatus || "")
+                        ? T.status.amber
+                        : T.accent.primary,
+                    fontSize: 11,
+                    fontWeight: 900,
+                    fontFamily: T.font.mono,
+                    letterSpacing: "0.03em",
+                  }}
+                >
+                  {investmentsSummary.gateStatus || "N/A"}
+                </div>
+                {/guard|hold|closed/i.test(investmentsSummary.gateStatus || "") ? (
+                  <div style={{ marginTop: 8, fontSize: 11, lineHeight: 1.5, color: T.text.secondary, maxWidth: 220 }}>
+                    Investing stays on hold until debt and near-term cash obligations are protected.
+                  </div>
+                ) : /open/i.test(investmentsSummary.gateStatus || "") ? (
+                  <div style={{ marginTop: 8, fontSize: 11, lineHeight: 1.5, color: T.text.secondary, maxWidth: 220 }}>
+                    Contributions can resume once cash coverage and debt gates stay clear.
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        ) : (
+          <ReportSection
+            title="Investments & Roth"
+            icon={TrendingUp}
+            content={sections.investments}
+            accentColor={T.accent.primary}
+            isLast={true}
+          />
+        )}
       </Card>
 
       <Card

@@ -99,6 +99,32 @@ export function getMostRecentPlaidSyncTime(cards = [], bankAccounts = [], connec
   return Math.max(...timestamps);
 }
 
+function getPerConnectionPlaidSyncTimes(cards = [], bankAccounts = [], connectionIds = []) {
+  const ids = Array.from(connectionIds || []).map(id => String(id || "").trim()).filter(Boolean);
+  return new Map(ids.map((id) => [id, getMostRecentPlaidSyncTime(cards, bankAccounts, [id]) || 0]));
+}
+
+function toTimestamp(value) {
+  if (!value) return 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function formatSyncAgeLabel(value) {
+  const timestamp = toTimestamp(value);
+  if (!timestamp) return "the last cached sync";
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(timestamp));
+  } catch {
+    return "the last cached sync";
+  }
+}
+
 export function shouldFetchTransactionsForSync({
   autoFetchTransactions = false,
   effectiveTierId = "free",
@@ -140,11 +166,23 @@ export function summarizeSyncOutcome({
   requestedCount = 0,
   successCount = 0,
   pendingCount = 0,
+  staleCount = 0,
   forceSyncSucceeded = true,
   hadCachedSnapshot = false,
   successMessage = "Balances synced successfully",
 } = {}) {
   const normalizedRequestedCount = Math.max(requestedCount, successCount + pendingCount);
+  const freshSuccessCount = Math.max(0, successCount - staleCount);
+
+  if (freshSuccessCount > 0 && staleCount > 0) {
+    return {
+      kind: "info",
+      message:
+        staleCount === 1
+          ? `Live balances refreshed for ${freshSuccessCount} institution. 1 institution is still showing cached data.`
+          : `Live balances refreshed for ${freshSuccessCount} institutions. ${staleCount} institutions are still showing cached data.`,
+    };
+  }
 
   if (successCount > 0 && forceSyncSucceeded) {
     if (pendingCount > 0 || successCount < normalizedRequestedCount) {
@@ -292,6 +330,7 @@ export function usePlaidSync({
     const cooldown = PLAID_MANUAL_SYNC_COOLDOWNS[tier.id] || PLAID_MANUAL_SYNC_COOLDOWNS.free;
     const cooldownEnforced = shouldEnforcePlaidSyncCooldown({ gatingEnforced });
     const lastSyncAt = getMostRecentPlaidSyncTime(cards, bankAccounts, syncConnectionIds);
+    const preSyncTimestamps = getPerConnectionPlaidSyncTimes(cards, bankAccounts, syncConnectionIds);
     if (!background && cooldownEnforced && lastSyncAt && Date.now() - lastSyncAt < cooldown) {
       const minsLeft = Math.ceil((cooldown - (Date.now() - lastSyncAt)) / 60000);
       const hoursLeft = Math.floor(minsLeft / 60);
@@ -419,10 +458,27 @@ export function usePlaidSync({
           ? "Fresh balances are still processing."
           : String(result?._error || "Sync did not complete."),
       }));
+      const staleIssues = results
+        .filter(result => result && !result._error && !result._pendingSync)
+        .map((result) => {
+          const connectionId = String(result?.id || "").trim();
+          if (!connectionId || !syncConnectionIds.includes(connectionId)) return null;
+          const before = preSyncTimestamps.get(connectionId) || 0;
+          const after = Math.max(toTimestamp(result?.lastSync), toTimestamp(result?.lastLiabilitySync));
+          if (!forceSyncSucceeded || after <= 0 || after > before) return null;
+          return {
+            institutionName: result?.institutionName || "Linked institution",
+            pending: false,
+            message: `Still showing cached balances from ${formatSyncAgeLabel(result?.lastSync || result?.lastLiabilitySync)}.`,
+          };
+        })
+        .filter(Boolean);
+      const allIssues = [...issues, ...staleIssues];
       const syncOutcome = summarizeSyncOutcome({
         requestedCount,
         successCount,
         pendingCount,
+        staleCount: staleIssues.length,
         forceSyncSucceeded,
         hadCachedSnapshot,
         successMessage,
@@ -437,19 +493,19 @@ export function usePlaidSync({
               categorizeWithAi: false,
             }).catch(() => {});
           }
-          if (issues.length > 0) {
-            const issueNames = issues.slice(0, 2).map(issue => issue.institutionName).join(", ");
+          if (allIssues.length > 0) {
+            const issueNames = allIssues.slice(0, 2).map(issue => issue.institutionName).join(", ");
             _setSyncState({
               phase: "warning",
               requestedCount,
               completedCount: progressCompleted || requestedCount,
               activeInstitution: "",
-              message: `Sync finished with ${issues.length} issue${issues.length === 1 ? "" : "s"}.`,
+              message: `Sync finished with ${allIssues.length} issue${allIssues.length === 1 ? "" : "s"}.`,
               warning:
-                issues.length === 1
-                  ? `${issueNames} needs attention. Catalyst kept your last saved data where available.`
-                  : `${issueNames}${issues.length > 2 ? " and others" : ""} need attention. Catalyst kept your last saved data where available.`,
-              issues,
+                allIssues.length === 1
+                  ? `${issueNames} needs attention. ${allIssues[0].message}`
+                  : `${issueNames}${allIssues.length > 2 ? " and others" : ""} need attention. Some balances are still cached.`,
+              issues: allIssues,
               background: true,
             });
           } else {
@@ -478,19 +534,19 @@ export function usePlaidSync({
               `Restored ${restoredCount} ${restoredCount === 1 ? "linked account" : "linked accounts"} while syncing.`
             );
           }
-          if (issues.length > 0) {
-            const issueNames = issues.slice(0, 2).map(issue => issue.institutionName).join(", ");
+          if (allIssues.length > 0) {
+            const issueNames = allIssues.slice(0, 2).map(issue => issue.institutionName).join(", ");
             _setSyncState({
               phase: "warning",
               requestedCount,
               completedCount: progressCompleted || requestedCount,
               activeInstitution: "",
-              message: `Sync finished with ${issues.length} issue${issues.length === 1 ? "" : "s"}.`,
+              message: `Sync finished with ${allIssues.length} issue${allIssues.length === 1 ? "" : "s"}.`,
               warning:
-                issues.length === 1
-                  ? `${issueNames} needs attention. Catalyst kept your last saved data where available.`
-                  : `${issueNames}${issues.length > 2 ? " and others" : ""} need attention. Catalyst kept your last saved data where available.`,
-              issues,
+                allIssues.length === 1
+                  ? `${issueNames} needs attention. ${allIssues[0].message}`
+                  : `${issueNames}${allIssues.length > 2 ? " and others" : ""} need attention. Some balances are still cached.`,
+              issues: allIssues,
               background,
             });
           } else {
@@ -509,8 +565,8 @@ export function usePlaidSync({
         } else if (!background && window.toast) {
           window.toast.error(`Sync failed: ${firstErr}`);
         }
-        if (issues.length > 0) {
-          const issueNames = issues.slice(0, 2).map(issue => issue.institutionName).join(", ");
+        if (allIssues.length > 0) {
+          const issueNames = allIssues.slice(0, 2).map(issue => issue.institutionName).join(", ");
           _setSyncState({
             phase: "warning",
             requestedCount,
@@ -518,10 +574,10 @@ export function usePlaidSync({
             activeInstitution: "",
             message: "Sync did not fully complete.",
             warning:
-              issues.length === 1
-                ? `${issueNames} could not be refreshed.`
-                : `${issueNames}${issues.length > 2 ? " and others" : ""} could not be refreshed.`,
-            issues,
+              allIssues.length === 1
+                ? `${issueNames} could not be refreshed. ${allIssues[0].message}`
+                : `${issueNames}${allIssues.length > 2 ? " and others" : ""} could not be refreshed.`,
+            issues: allIssues,
             background,
           });
         } else {

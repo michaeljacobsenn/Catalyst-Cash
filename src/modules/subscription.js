@@ -56,8 +56,8 @@
 // ────────────────────────────────────────────────────────────
 const GATING_MODE_DEFAULT = "live";
 // Optional local preview override. Keep null in normal builds so remote config
-// and the persisted subscription state remain authoritative.
-const BUILD_GATING_OVERRIDE = "off";
+// is the operational source of truth for both tightening and relaxing gating.
+const BUILD_GATING_OVERRIDE = null;
 let _effectiveGatingMode = BUILD_GATING_OVERRIDE || GATING_MODE_DEFAULT;
 let _testGatingModeOverride = null;
 
@@ -118,10 +118,12 @@ export function getServerRateLimit() {
 
 /**
  * Sync gating mode from remote config.
- * Call on app boot. If the backend says "live" or a newer minVersion,
- * the client respects it — even if the hardcoded default is "off".
- * This is the anti-downgrade mechanism: old app versions with "off"
- * hardcoded will still get overridden to "live" when we flip the switch.
+ * Call on app boot. Remote config is the operational source of truth
+ * unless a local build override is explicitly enabled.
+ *
+ * This lets us tighten OR relax gating remotely without shipping a new build.
+ * We still preserve an anti-downgrade guard via minVersion, which can force
+ * "live" on older clients when needed.
  */
 export async function syncRemoteGatingMode() {
   if (BUILD_GATING_OVERRIDE && !_testGatingModeOverride) {
@@ -136,16 +138,11 @@ export async function syncRemoteGatingMode() {
       _lastServerRateLimit[key] = { remaining, limit, ts: Date.now() };
     });
 
-    const config = await fetchGatingConfig();
+    const config = await fetchGatingConfig({ forceRefresh: true });
     if (!config) return;
 
-    // Remote gating mode always wins if it's more restrictive
     const modes = ["off", "soft", "live"];
-    const localIdx = modes.indexOf(_effectiveGatingMode);
-    const remoteIdx = modes.indexOf(config.gatingMode);
-    if (remoteIdx > localIdx) {
-      _effectiveGatingMode = config.gatingMode;
-    }
+    _effectiveGatingMode = modes.includes(config.gatingMode) ? config.gatingMode : GATING_MODE_DEFAULT;
 
     // Check minimum version — if below, force live mode
     if (config.minVersion && compareVersions(APP_VERSION, config.minVersion) < 0) {

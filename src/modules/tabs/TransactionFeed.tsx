@@ -4,7 +4,7 @@
 // filtering, and CSV/JSON export.
 // ═══════════════════════════════════════════════════════════════
 
-  import { useCallback,useEffect,useMemo,useRef,useState } from "react";
+  import { Suspense, lazy, useCallback,useEffect,useMemo,useRef,useState } from "react";
   import type { CustomValuations,Card as PortfolioCard } from "../../types/index.js";
   import { EmptyState } from "../components.js";
   import { T } from "../constants.js";
@@ -58,7 +58,9 @@
   import { applyStoredTransactionOverrides, getHydratedStoredTransactions, normalizeStoredTransactions } from "../storedTransactions.js";
   import "./TransactionFeed.css";
   import { buildCSV, buildRewardComparison, estimateRewardCapUsage, formatDateHeader, formatMoney, formatRewardRate, formatTransactionTime, getCategoryMeta, isTransactionInSameMonth } from "./transactionFeed/helpers";
-  import { useTransactionFeedGestures } from "./transactionFeed/useTransactionFeedGestures";
+import { useTransactionFeedGestures } from "./transactionFeed/useTransactionFeedGestures";
+
+const LazyProPaywall = lazy(() => import("./ProPaywall.js"));
 
 interface ToastApi {
   success?: (message: string) => void;
@@ -162,6 +164,7 @@ const CATEGORY_ICON_MAP: Record<string, IconComponent> = {
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
 export default function TransactionFeed({ onClose, proEnabled = false, onConnectPlaid }: TransactionFeedProps) {
+  const [showPaywall, setShowPaywall] = useState(false);
   const { cards } = usePortfolio();
   const { financialConfig } = useSettings();
   const appWindow = window as Window & { toast?: ToastApi };
@@ -1562,41 +1565,76 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
               <div style={{ padding: "8px 16px 24px" }}>
                 <Card
                   style={{
-                    background: `linear-gradient(135deg, ${T.accent.primaryDim}, ${T.bg.surface})`,
-                    border: `1px solid ${T.accent.primary}40`,
+                    background: `linear-gradient(135deg, ${T.bg.card}, ${T.accent.primary}0F)`,
+                    border: `1px solid ${T.accent.primary}26`,
                     display: "flex",
                     flexDirection: "column",
-                    alignItems: "center",
-                    textAlign: "center",
-                    padding: 24,
-                    gap: 12,
+                    alignItems: "stretch",
+                    textAlign: "left",
+                    padding: 18,
+                    gap: 14,
                   }}
                 >
-                  <div
-                    style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 24,
-                      background: T.accent.primary,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      boxShadow: `0 8px 16px ${T.accent.primary}40`,
-                    }}
-                  >
-                    <Lock size={24} color="#FFF" />
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div
+                      style={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 14,
+                        background: `${T.accent.primary}18`,
+                        border: `1px solid ${T.accent.primary}24`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        boxShadow: `0 10px 24px ${T.accent.primary}18`,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Lock size={20} color={T.accent.primary} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 900, color: T.accent.primary, fontFamily: T.font.mono, letterSpacing: "0.08em", marginBottom: 3 }}>
+                        PRO LEDGER
+                      </div>
+                      <h4 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, margin: 0 }}>
+                      Unlock Full Ledger
+                      </h4>
+                    </div>
                   </div>
                   <div>
-                    <h4 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, margin: "0 0 6px 0" }}>
-                      Unlock Full Ledger
-                    </h4>
-                    <p style={{ fontSize: 13, color: T.text.secondary, margin: 0, lineHeight: 1.5 }}>
+                    <p style={{ fontSize: 13, color: T.text.secondary, margin: 0, lineHeight: 1.55 }}>
                       Free includes a live 5-transaction preview for one linked institution. Upgrade to Pro for full
                       multi-account search, deeper filtering, export, and the complete ledger.
                     </p>
                   </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 11, color: T.text.dim, lineHeight: 1.45 }}>
+                      Better for cleanup, audits, and recurring-spend analysis.
+                    </div>
+                    <button
+                      onClick={() => { haptic.medium(); setShowPaywall(true); }}
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: 12,
+                        border: `1px solid ${T.accent.primary}2a`,
+                        background: `${T.accent.primary}14`,
+                        color: T.accent.primary,
+                        fontSize: 12,
+                        fontWeight: 800,
+                        cursor: "pointer",
+                      }}
+                    >
+                      See Pro
+                    </button>
+                  </div>
                 </Card>
               </div>
+            )}
+
+            {showPaywall && (
+              <Suspense fallback={null}>
+                <LazyProPaywall onClose={() => setShowPaywall(false)} source="ledger" />
+              </Suspense>
             )}
 
             {/* Load More */}

@@ -80,6 +80,31 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
 
   // Bring in unified master metrics globally calculated
   const { portfolioMetrics, movePlan } = useDashboardData();
+  const lastPlaidSyncAt = useMemo(() => {
+    const timestamps = [...cards, ...bankAccounts]
+      .map((item) => {
+        const raw = (item && typeof item === "object" ? (item as { _plaidLastSync?: string | null })._plaidLastSync : null) || null;
+        if (!raw) return 0;
+        const timestamp = new Date(raw).getTime();
+        return Number.isFinite(timestamp) ? timestamp : 0;
+      })
+      .filter((timestamp) => timestamp > 0);
+    if (!timestamps.length) return null;
+    return new Date(Math.max(...timestamps));
+  }, [cards, bankAccounts]);
+  const lastPlaidSyncLabel = useMemo(() => {
+    if (!lastPlaidSyncAt) return null;
+    try {
+      return new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(lastPlaidSyncAt);
+    } catch {
+      return lastPlaidSyncAt.toLocaleString();
+    }
+  }, [lastPlaidSyncAt]);
 
   const demoOverrideContext = useMemo(() => {
     if (!isTest) return portfolioContext;
@@ -423,7 +448,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
                 size={10}
                 style={plaidRefreshing ? { animation: "spin .8s linear infinite", transformOrigin: "center" } : undefined}
               />
-              {plaidRefreshing ? "Syncing..." : "Sync Plaid"}
+              {plaidRefreshing ? "Refreshing..." : "Refresh Live"}
             </button>
           )}
         </div>
@@ -499,6 +524,24 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
               {syncState.warning}
             </div>
           )}
+        </div>
+      )}
+
+      {lastPlaidSyncLabel && syncState.phase === "idle" && (
+        <div
+          style={{
+            marginTop: 4,
+            marginBottom: 10,
+            padding: "10px 12px",
+            borderRadius: T.radius.md,
+            border: `1px solid ${T.border.subtle}`,
+            background: `linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card})`,
+            fontSize: 11,
+            color: T.text.secondary,
+            lineHeight: 1.55,
+          }}
+        >
+          Live-linked balances can update at different times by institution. Latest verified Plaid refresh: <span style={{ color: T.text.primary, fontWeight: 700 }}>{lastPlaidSyncLabel}</span>.
         </div>
       )}
 

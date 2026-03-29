@@ -266,6 +266,37 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
     minWidth: 50,
   };
 
+  const renewalActionButtonBase: CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flex: "1 1 0",
+    minWidth: 0,
+    height: 36,
+    minHeight: 36,
+    maxHeight: 36,
+    padding: "0 10px",
+    borderRadius: 11,
+    fontSize: 10.5,
+    fontWeight: 800,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    textDecoration: "none",
+    letterSpacing: "-0.01em",
+    background: T.bg.surface,
+    border: `1px solid ${T.border.default}`,
+    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
+    boxSizing: "border-box",
+    fontFamily: T.font.sans,
+    lineHeight: "36px",
+    appearance: "none",
+    WebkitAppearance: "none",
+    margin: 0,
+    cursor: "pointer",
+    verticalAlign: "middle",
+  };
+
   // Auto-archive expired one-time items (runs as effect, not during render)
   useEffect(() => {
     if (!renewals?.length) return;
@@ -897,7 +928,7 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
         )}
         {showPaywall && (
           <Suspense fallback={null}>
-            <LazyProPaywall onClose={() => setShowPaywall(false)} />
+            <LazyProPaywall onClose={() => setShowPaywall(false)} source="renewals" />
           </Suspense>
         )}
 
@@ -1550,28 +1581,8 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
                                     rel="noopener noreferrer"
                                     className="hover-btn"
                                     style={{
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      flex: "1 1 0",
-                                      minWidth: 0,
-                                      height: 36,
-                                      padding: "0 10px",
-                                      borderRadius: 11,
-                                      fontSize: 10.5,
-                                      fontWeight: 800,
-                                      whiteSpace: "nowrap",
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
+                                      ...renewalActionButtonBase,
                                       color: T.status.red,
-                                      textDecoration: "none",
-                                      letterSpacing: "-0.01em",
-                                      background: T.bg.surface,
-                                      border: `1px solid ${T.border.default}`,
-                                      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
-                                      boxSizing: "border-box",
-                                      fontFamily: T.font.sans,
-                                      lineHeight: 1,
                                     }}
                                   >
                                     Cancel
@@ -1584,28 +1595,8 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
                                     href={emailHref}
                                     className="hover-btn"
                                     style={{
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      flex: "1 1 0",
-                                      minWidth: 0,
-                                      height: 36,
-                                      padding: "0 10px",
-                                      borderRadius: 11,
-                                      fontSize: 10.5,
-                                      fontWeight: 800,
-                                      whiteSpace: "nowrap",
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
+                                      ...renewalActionButtonBase,
                                       color: T.text.secondary,
-                                      textDecoration: "none",
-                                      letterSpacing: "-0.01em",
-                                      background: T.bg.surface,
-                                      border: `1px solid ${T.border.default}`,
-                                      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
-                                      boxSizing: "border-box",
-                                      fontFamily: T.font.sans,
-                                      lineHeight: 1,
                                     }}
                                   >
                                     Email
@@ -1634,31 +1625,10 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
                                     }}
                                     className="hover-btn"
                                     style={{
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      flex: "1 1 0",
-                                      minWidth: 0,
-                                      height: 36,
-                                      padding: "0 10px",
-                                      borderRadius: 11,
-                                      fontSize: 10.5,
-                                      fontWeight: 800,
-                                      whiteSpace: "nowrap",
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
+                                      ...renewalActionButtonBase,
                                       color: T.accent.primary,
-                                      textDecoration: "none",
-                                      letterSpacing: "-0.01em",
-                                      background: T.bg.surface,
-                                      border: `1px solid ${T.border.default}`,
-                                      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
-                                      cursor: "pointer",
-                                      boxSizing: "border-box",
-                                      appearance: "none",
-                                      WebkitAppearance: "none",
-                                      lineHeight: 1,
-                                      fontFamily: T.font.sans,
+                                      background: `${T.accent.primary}08`,
+                                      border: `1px solid ${T.accent.primary}28`,
                                     }}
                                   >
                                     Negotiate

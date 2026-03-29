@@ -4,6 +4,7 @@ import {
   autoMatchAccounts,
   applyBalanceSync,
   ensureConnectionAccountsPresent,
+  disconnectConnectionPortfolioRecords,
   filterTransactionsForConnection,
   getPreferredFreeConnectionSwitchCooldownRemaining,
   mapTransactionsFromSyncStatus,
@@ -348,5 +349,123 @@ describe("Plaid manual fallback", () => {
     });
     expect(updatedCards[0]._plaidConnectionId).toBeUndefined();
     expect(updatedCards[0]._plaidAccountId).toBeUndefined();
+  });
+
+  it("can disconnect a connection while keeping linked cards and banks as manual records", () => {
+    const connection = {
+      id: "item_amex",
+      accounts: [
+        { plaidAccountId: "acct_card_1" },
+        { plaidAccountId: "acct_bank_1" },
+        { plaidAccountId: "acct_inv_1" },
+      ],
+    };
+
+    const result = disconnectConnectionPortfolioRecords(
+      connection,
+      [
+        {
+          id: "card_1",
+          institution: "American Express",
+          name: "Blue Cash Everyday",
+          balance: null,
+          limit: 10000,
+          _plaidConnectionId: "item_amex",
+          _plaidAccountId: "acct_card_1",
+          _plaidBalance: 3720.27,
+          _plaidAvailable: 6279.73,
+          _plaidLimit: 10000,
+        },
+      ],
+      [
+        {
+          id: "bank_1",
+          bank: "American Express",
+          accountType: "checking",
+          name: "Rewards Checking",
+          balance: null,
+          _plaidAccountId: "acct_bank_1",
+          _plaidBalance: 1250,
+          _plaidAvailable: 1200,
+        },
+      ],
+      [
+        {
+          id: "inv_1",
+          institution: "American Express",
+          name: "Brokerage",
+          bucket: "brokerage",
+          _plaidBalance: 2500,
+          _plaidAccountId: "acct_inv_1",
+          _plaidConnectionId: "item_amex",
+        },
+      ],
+      { removeLinkedRecords: false }
+    );
+
+    expect(result.updatedCards).toHaveLength(1);
+    expect(result.updatedCards[0]).toMatchObject({
+      balance: 3720.27,
+      limit: 10000,
+      _plaidManualFallback: true,
+    });
+    expect(result.updatedCards[0]._plaidConnectionId).toBeUndefined();
+    expect(result.updatedCards[0]._plaidAccountId).toBeUndefined();
+
+    expect(result.updatedBankAccounts).toHaveLength(1);
+    expect(result.updatedBankAccounts[0]).toMatchObject({
+      balance: 1200,
+      _plaidManualFallback: true,
+    });
+    expect(result.updatedBankAccounts[0]._plaidConnectionId).toBeUndefined();
+    expect(result.updatedBankAccounts[0]._plaidAccountId).toBeUndefined();
+
+    expect(result.updatedPlaidInvestments).toHaveLength(0);
+  });
+
+  it("can fully remove linked records when disconnecting a connection", () => {
+    const connection = {
+      id: "item_amex",
+      accounts: [{ plaidAccountId: "acct_card_1" }, { plaidAccountId: "acct_bank_1" }],
+    };
+
+    const result = disconnectConnectionPortfolioRecords(
+      connection,
+      [
+        {
+          id: "card_1",
+          institution: "American Express",
+          name: "Gold",
+          _plaidConnectionId: "item_amex",
+          _plaidAccountId: "acct_card_1",
+        },
+        {
+          id: "card_2",
+          institution: "Chase",
+          name: "Freedom",
+        },
+      ],
+      [
+        {
+          id: "bank_1",
+          bank: "American Express",
+          accountType: "checking",
+          name: "Checking",
+          _plaidAccountId: "acct_bank_1",
+        },
+      ],
+      [],
+      { removeLinkedRecords: true }
+    );
+
+    expect(result.updatedCards).toEqual([
+      expect.objectContaining({
+        id: "card_2",
+        name: "Freedom",
+      }),
+    ]);
+    expect(result.updatedBankAccounts).toEqual([]);
+    expect(result.removedCards).toBe(1);
+    expect(result.removedBankAccounts).toBe(1);
   });
 });

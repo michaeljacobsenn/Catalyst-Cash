@@ -8,9 +8,11 @@ import { useEffect,useState } from "react";
   import {
     applyBalanceSync,
     connectBank,
+    disconnectConnectionPortfolioRecords,
     ensureConnectionAccountsPresent,
     fetchBalancesAndLiabilities,
     forceBackendSync,
+    purgeStoredTransactionsForConnection,
     reconcilePlaidConnectionAccess,
     reconnectBank,
     removeConnection,
@@ -49,6 +51,11 @@ interface BalanceSyncResult {
   balanceSummary: unknown;
 }
 
+interface DisconnectPromptState {
+  id: string;
+  keepManualDefault?: boolean;
+}
+
 export default function PlaidSection({
   cards,
   setCards,
@@ -63,7 +70,8 @@ export default function PlaidSection({
   const [isPlaidConnecting, setIsPlaidConnecting] = useState(false);
   const [reconnectingId, setReconnectingId] = useState<string | null>(null);
   const [switchingActiveId, setSwitchingActiveId] = useState<string | null>(null);
-  const [confirmingDisconnect, setConfirmingDisconnect] = useState<string | null>(null);
+  const [confirmingDisconnect, setConfirmingDisconnect] = useState<DisconnectPromptState | null>(null);
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<{ tone: "error" | "info"; message: string } | null>(null);
   const [activeFreeConnectionId, setActiveFreeConnectionId] = useState<string | null>(null);
   const [hasFreeTierPausedConnections, setHasFreeTierPausedConnections] = useState(false);
@@ -84,22 +92,53 @@ export default function PlaidSection({
     reloadConnections().catch(() => {});
   }, []);
 
-  const handleDisconnect = async (conn: PlaidConnection) => {
-    // We already confirmed inline, just proceed to delete
+  const handleDisconnect = async (conn: PlaidConnection, options: { keepManual: boolean }) => {
+    const keepManual = options.keepManual === true;
     setConfirmingDisconnect(null);
-    await removeConnection(conn.id);
-    // Remove Plaid-imported cards/accounts that belonged to this connection
-    const connId = conn.id;
-    setCards(prev => prev.filter(c => c._plaidConnectionId !== connId));
-    setBankAccounts(prev => prev.filter(b => b._plaidConnectionId !== connId));
-    const plaidInvests = financialConfig?.plaidInvestments || [];
-    const filteredInvests = plaidInvests.filter(i => i._plaidConnectionId !== connId);
-    if (filteredInvests.length !== plaidInvests.length) {
-      setFinancialConfig({ type: "SET_FIELD", field: "plaidInvestments", value: filteredInvests });
+    setDisconnectingId(conn.id);
+    try {
+      await removeConnection(conn.id);
+      const plaidInvests = financialConfig?.plaidInvestments || [];
+      const disconnectedState = disconnectConnectionPortfolioRecords(
+        conn,
+        cards,
+        bankAccounts,
+        plaidInvests,
+        { removeLinkedRecords: !keepManual }
+      );
+
+      if (disconnectedState.cardsChanged) {
+        setCards(disconnectedState.updatedCards);
+      }
+      if (disconnectedState.bankAccountsChanged) {
+        setBankAccounts(disconnectedState.updatedBankAccounts);
+      }
+      if (disconnectedState.plaidInvestmentsChanged) {
+        setFinancialConfig({
+          type: "SET_FIELD",
+          field: "plaidInvestments",
+          value: disconnectedState.updatedPlaidInvestments,
+        });
+      }
+
+      await purgeStoredTransactionsForConnection(conn).catch(() => 0);
+      await reloadConnections();
+      setConnectionStatus(
+        keepManual
+          ? {
+              tone: "info",
+              message: `${conn.institutionName || "This bank"} was disconnected. Linked cards and cash accounts were kept as manual records. Auto-tracked investment balances were removed.`,
+            }
+          : null
+      );
+      window.toast?.success?.(
+        keepManual
+          ? "Disconnected. Linked accounts kept for manual handling."
+          : "Disconnected and removed from Portfolio."
+      );
+    } finally {
+      setDisconnectingId(null);
     }
-    await reloadConnections();
-    setConnectionStatus(null);
-    window.toast?.success?.("Connection and imported accounts removed");
   };
 
   const handleConnect = async () => {
@@ -456,7 +495,7 @@ export default function PlaidSection({
                 }
                 action={
                   <div style={{ display: "flex", gap: 8 }}>
-                  {conn._freeTierPaused && confirmingDisconnect !== conn.id && (
+                  {conn._freeTierPaused && confirmingDisconnect?.id !== conn.id && (
                     <button
                       onClick={() => handleKeepLive(conn)}
                       disabled={switchingActiveId === conn.id}
@@ -481,7 +520,7 @@ export default function PlaidSection({
                       {switchingActiveId === conn.id ? "Applying..." : "Keep Live"}
                     </button>
                   )}
-                  {conn._needsReconnect && confirmingDisconnect !== conn.id && (
+                  {conn._needsReconnect && confirmingDisconnect?.id !== conn.id && (
                     <button
                       onClick={() => handleReconnect(conn)}
                       disabled={reconnectingId === conn.id || conn._freeTierPaused}
@@ -510,10 +549,11 @@ export default function PlaidSection({
                       {reconnectingId === conn.id ? "Reconnecting..." : "Reconnect"}
                     </button>
                   )}
-                  {confirmingDisconnect === conn.id ? (
+                  {confirmingDisconnect?.id === conn.id ? (
                     <>
                       <button
                         onClick={() => setConfirmingDisconnect(null)}
+                        disabled={disconnectingId === conn.id}
                         style={{
                           padding: "0 12px",
                           height: 36,
@@ -521,15 +561,35 @@ export default function PlaidSection({
                           border: `1px solid ${T.border.default}`,
                           background: T.bg.card,
                           color: T.text.secondary,
-                          cursor: "pointer",
+                          cursor: disconnectingId === conn.id ? "not-allowed" : "pointer",
                           fontSize: 12,
                           fontWeight: 600,
+                          opacity: disconnectingId === conn.id ? 0.6 : 1,
                         }}
                       >
                         Cancel
                       </button>
                       <button
-                        onClick={() => handleDisconnect(conn)}
+                        onClick={() => handleDisconnect(conn, { keepManual: true })}
+                        disabled={disconnectingId === conn.id}
+                        style={{
+                          padding: "0 12px",
+                          height: 36,
+                          borderRadius: T.radius.sm,
+                          border: `1px solid ${T.accent.primary}30`,
+                          background: `${T.accent.primary}12`,
+                          color: T.accent.primary,
+                          cursor: disconnectingId === conn.id ? "not-allowed" : "pointer",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          opacity: disconnectingId === conn.id ? 0.6 : 1,
+                        }}
+                      >
+                        {disconnectingId === conn.id ? "Disconnecting..." : "Keep Manual"}
+                      </button>
+                      <button
+                        onClick={() => handleDisconnect(conn, { keepManual: false })}
+                        disabled={disconnectingId === conn.id}
                         style={{
                           padding: "0 12px",
                           height: 36,
@@ -537,17 +597,18 @@ export default function PlaidSection({
                           border: "none",
                           background: T.status.red,
                           color: "white",
-                          cursor: "pointer",
-                          fontSize: 12,
+                          cursor: disconnectingId === conn.id ? "not-allowed" : "pointer",
+                          fontSize: 11,
                           fontWeight: 700,
+                          opacity: disconnectingId === conn.id ? 0.6 : 1,
                         }}
                       >
-                        Confirm Delete
+                        {disconnectingId === conn.id ? "Disconnecting..." : "Remove Accounts"}
                       </button>
                     </>
                   ) : (
                     <button
-                      onClick={() => setConfirmingDisconnect(conn.id)}
+                      onClick={() => setConfirmingDisconnect({ id: conn.id })}
                       aria-label={`Disconnect ${conn.institutionName || "bank"}`}
                       style={{
                         width: 36,

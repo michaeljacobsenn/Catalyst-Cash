@@ -306,7 +306,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
         )}
         {showPaywall && (
           <Suspense fallback={null}>
-            <LazyProPaywall onClose={() => setShowPaywall(false)} />
+            <LazyProPaywall onClose={() => setShowPaywall(false)} source="audit" />
           </Suspense>
         )}
         {exportAuditRecord && (

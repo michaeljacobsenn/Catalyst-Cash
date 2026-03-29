@@ -395,8 +395,9 @@ const CONFIG_TTL = 15 * 60 * 1000; // 15 minutes
  * Returns { gatingMode, minVersion } or null if unreachable.
  * Caches for 15 minutes to avoid hammering.
  */
-export async function fetchGatingConfig() {
-  if (_cachedConfig && Date.now() - _configFetchedAt < CONFIG_TTL) {
+export async function fetchGatingConfig(options = {}) {
+  const forceRefresh = options?.forceRefresh === true;
+  if (!forceRefresh && _cachedConfig && Date.now() - _configFetchedAt < CONFIG_TTL) {
     return _cachedConfig;
   }
   try {

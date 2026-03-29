@@ -15,7 +15,6 @@
     Zap,
   } from "../icons";
 
-  import { Md } from "../components.js";
   import { performCloudBackup } from "../backup.js";
   import { useSecurity } from "../contexts/SecurityContext.js";
   import { haptic } from "../haptics.js";
@@ -95,6 +94,29 @@ const DashboardSection = ({ children, marginTop = 12 }: DashboardSectionProps) =
     </div>
   </section>
 );
+
+const splitDashboardSentences = (text: string | null | undefined): string[] =>
+  String(text || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(/(?<=[.?!])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+
+const buildDashboardNextAction = (text: string | null | undefined) => {
+  const clean = stripPaycheckParens(String(text || "")).replace(/\s+/g, " ").trim();
+  if (!clean) return null;
+  const sentences = splitDashboardSentences(clean);
+  const headline = sentences[0] || clean;
+  const detail = sentences.slice(1).join(" ");
+  const amountMatch = (headline.match(/\$[\d,]+(?:\.\d{1,2})?/) || detail.match(/\$[\d,]+(?:\.\d{1,2})?/))?.[0] || null;
+  const label =
+    /^route\b/i.test(headline) ? "Route now"
+      : /^protect\b/i.test(headline) ? "Protect cash"
+        : /^pause\b/i.test(headline) ? "Pause move"
+          : "Next move";
+  return { clean, headline, detail, amountMatch, label };
+};
 
 export default memo(function DashboardTab({
   proEnabled = false,
@@ -256,6 +278,10 @@ export default memo(function DashboardTab({
     : safetySnapshot.primaryRisk === "card-minimums" ? "Card minimums are the issue"
     : safetySnapshot.primaryRisk === "score" ? "Overall audit health is the issue"
     : "No major near-term issue detected";
+  const nextActionBrief = buildDashboardNextAction(p?.sections?.nextAction);
+  const insightSentences = splitDashboardSentences(hs?.narrative)
+    .filter((sentence) => !summary || sentence.toLowerCase() !== summary.toLowerCase())
+    .slice(0, 2);
 
   // ── Synthetic Percentile (client-side, no real user data) ──
   const percentile = (() => {
@@ -409,7 +435,7 @@ export default memo(function DashboardTab({
            {/* Pro Upgrade Banner — slim strip, placed after hero so data leads */}
            {showPaywall && (
              <Suspense fallback={null}>
-               <LazyProPaywall onClose={() => setShowPaywall(false)} />
+               <LazyProPaywall onClose={() => setShowPaywall(false)} source="dashboard" />
              </Suspense>
            )}
 
@@ -479,7 +505,7 @@ export default memo(function DashboardTab({
                      {safetySnapshot.summary}
                    </p>
                  </div>
-                   <div style={{ display: "grid", gridTemplateColumns: isCompactWidth ? "1fr 1fr" : "1.25fr repeat(3, minmax(0, 1fr))", gap: 8 }}>
+                   <div style={{ display: "grid", gridTemplateColumns: isCompactWidth ? "repeat(6, minmax(0, 1fr))" : "1.35fr repeat(3, minmax(0, 1fr))", gap: 8 }}>
                      <div
                        style={{
                          padding: isSmallPhone ? "11px 12px" : "12px 14px",
@@ -499,7 +525,7 @@ export default memo(function DashboardTab({
                          Protected need: {privacyMode ? "••••" : fmt(safetySnapshot.protectedNeed)}
                        </div>
                      </div>
-                     <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}`, minWidth: 0 }}>
+                     <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}`, minWidth: 0, gridColumn: isCompactWidth ? "span 2" : "auto" }}>
                        <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 4 }}>
                          RUNWAY
                        </div>
@@ -507,7 +533,7 @@ export default memo(function DashboardTab({
                          {safetySnapshot.runwayWeeks != null ? `${safetySnapshot.runwayWeeks.toFixed(1)}w` : "Set budget"}
                        </div>
                      </div>
-                     <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}`, minWidth: 0 }}>
+                     <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}`, minWidth: 0, gridColumn: isCompactWidth ? "span 2" : "auto" }}>
                        <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 4 }}>
                          PENDING
                        </div>
@@ -515,7 +541,7 @@ export default memo(function DashboardTab({
                          {privacyMode ? "••••" : fmt(safetySnapshot.pendingCharges)}
                        </div>
                      </div>
-                     <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}`, minWidth: 0 }}>
+                     <div style={{ padding: "10px 12px", borderRadius: T.radius.md, background: `${T.bg.card}`, border: `1px solid ${T.border.subtle}`, minWidth: 0, gridColumn: isCompactWidth ? "span 2" : "auto" }}>
                        <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 4 }}>
                          30-DAY BILLS
                        </div>
@@ -680,11 +706,13 @@ export default memo(function DashboardTab({
              return (
                <div style={{
                  display: "grid",
-                 gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))",
+                 gridTemplateColumns: isCompactWidth
+                   ? "repeat(2, minmax(0, 1fr))"
+                   : `repeat(${Math.min(metrics.length, 4)}, minmax(0, 1fr))`,
                  gap: 8,
                  marginBottom: 12,
                }}>
-               {metrics.map(m => (
+               {metrics.map((m, index) => (
                    <div
                      key={m.label}
                      style={{
@@ -694,6 +722,7 @@ export default memo(function DashboardTab({
                        borderRadius: T.radius.lg,
                        textAlign: "center",
                        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04)`,
+                       gridColumn: isCompactWidth && metrics.length % 2 === 1 && index === metrics.length - 1 ? "1 / -1" : "auto",
                      }}
                    >
                      <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 5, fontFamily: T.font.mono }}>
@@ -965,179 +994,276 @@ export default memo(function DashboardTab({
               </button>
             </div>
           )}
-          {/* AI Insights Action Hub */}
-          {(summary || hs?.narrative) && (
-            <section
-              aria-labelledby="dashboard-cfo-insights"
-              className="fade-in"
+          {(summary || insightSentences.length > 0 || nextActionBrief) && (
+            <Card
+              animate
               style={{
                 padding: isSmallPhone ? "18px 16px" : "20px 18px",
-                marginBottom: 24,
-                background: "transparent",
+                marginBottom: 10,
+                background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.surface})`,
                 border: `1px solid ${T.border.subtle}`,
-                borderRadius: 24,
-                animationDelay: "0.2s"
+                boxShadow: `0 18px 42px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.04)`,
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                <Zap size={16} color={scoreColor} strokeWidth={2.5} />
-                <h2 id="dashboard-cfo-insights" style={{ fontSize: "clamp(14px, 4vw, 15px)", fontWeight: 800, color: T.text.primary, margin: 0 }}>CFO Insights</h2>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 9,
+                      background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: `0 8px 18px ${T.accent.primary}35`,
+                    }}
+                  >
+                    <Zap size={15} color="#fff" strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, fontFamily: T.font.mono, letterSpacing: "0.05em", marginBottom: 2 }}>
+                      CFO INSIGHTS
+                    </div>
+                    <h2 id="dashboard-cfo-insights" style={{ fontSize: "clamp(14px, 4vw, 15px)", fontWeight: 800, color: T.text.primary, margin: 0 }}>
+                      Briefing Board
+                    </h2>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    background: `${safetyColor}12`,
+                    border: `1px solid ${safetyColor}25`,
+                    color: safetyColor,
+                    fontSize: 11,
+                    fontWeight: 800,
+                    fontFamily: T.font.mono,
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  {safetyIcon}
+                  {safetyLabel}
+                </div>
               </div>
-              
-              {summary && (
-                <p style={{ fontSize: 13, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 12px" }}>
-                  {summary}
-                </p>
-              )}
-              
-              {hs?.narrative && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {hs.narrative
-                    .split(/(?<=[.?!])\s+/)
-                    .filter(Boolean)
-                    .slice(0, 2)
-                    .map((sentence, i: number) => {
-                      // First sentence = positive/summary; subsequent = action/advisory
-                      const isPositive = i === 0;
-                      const iconColor = isPositive ? T.status.green : T.status.blue;
+
+              <div style={{ display: "grid", gap: 10 }}>
+                <div
+                  style={{
+                    padding: isSmallPhone ? "12px 12px 11px" : "13px 13px 12px",
+                    borderRadius: T.radius.lg,
+                    background: `${T.bg.surface}`,
+                    border: `1px solid ${T.border.subtle}`,
+                  }}
+                >
+                  <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, fontFamily: T.font.mono, letterSpacing: "0.05em", marginBottom: 6 }}>
+                    WHAT MATTERS NOW
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, lineHeight: 1.45, marginBottom: 8 }}>
+                    {summary || safetySnapshot.summary}
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "6px 9px",
+                        borderRadius: 999,
+                        background: `${T.bg.elevated}`,
+                        border: `1px solid ${T.border.subtle}`,
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        color: T.text.secondary,
+                      }}
+                    >
+                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: safetyColor }} />
+                      {safetySnapshot.headline}
+                    </div>
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "6px 9px",
+                        borderRadius: 999,
+                        background: `${T.bg.elevated}`,
+                        border: `1px solid ${T.border.subtle}`,
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        color: T.text.secondary,
+                      }}
+                    >
+                      <AlertTriangle size={12} color={scoreColor} strokeWidth={2.2} />
+                      {primaryRiskLabel}
+                    </div>
+                  </div>
+                </div>
+
+                {insightSentences.length > 0 && (
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {insightSentences.map((sentence, i) => {
                       return (
-                        <div key={i} style={{ display: "flex", gap: 10, alignItems: "start", background: T.bg.surface, padding: isSmallPhone ? "10px" : "10px 12px", borderRadius: T.radius.md, borderLeft: `2px solid ${iconColor}30`, minWidth: 0 }}>
+                        <div
+                          key={i}
+                          style={{
+                            display: "flex",
+                            gap: 10,
+                            alignItems: "flex-start",
+                            background: `${T.bg.surface}`,
+                            padding: isSmallPhone ? "10px 11px" : "11px 12px",
+                            borderRadius: T.radius.md,
+                            border: `1px solid ${T.border.subtle}`,
+                          }}
+                        >
                           <div style={{ marginTop: 2, flexShrink: 0 }}>
-                            {isPositive ? (
+                            {i === 0 ? (
                               <CheckCircle size={13} color={T.status.green} />
                             ) : (
                               <ArrowUpRight size={13} color={T.status.blue} />
                             )}
                           </div>
                           <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5, margin: 0, overflowWrap: "anywhere" }}>
-                            {sentence.trim()}
+                            {sentence}
                           </p>
                         </div>
                       );
                     })}
-                </div>
-              )}
-            </section>
-          )}
+                  </div>
+                )}
 
-          {/* ═══ NEXT ACTION ═══ */}
-          {p?.sections?.nextAction && (
-            <section aria-labelledby="dashboard-next-action" style={{ padding: isSmallPhone ? "20px 16px" : "24px 20px", background: "transparent", border: `1px solid ${T.border.subtle}`, borderRadius: 24, position: "relative" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                <div
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 8,
-                    background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: `0 4px 12px ${T.accent.primary}60`,
-                  }}
-                >
-                  <Zap size={15} color="#fff" strokeWidth={2.5} />
-                </div>
-                <h2 id="dashboard-next-action" style={{ fontSize: "clamp(13px, 3.8vw, 14px)", fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em", margin: 0 }}>
-                  Prioritized Next Action
-                </h2>
-              </div>
-              <div
-                style={{
-                  position: "relative",
-                  ...(nextActionExpanded ? {} : {
-                    display: "-webkit-box",
-                    WebkitLineClamp: 4,
-                    WebkitBoxOrient: "vertical",
-                    overflow: "hidden",
-                  }),
-                }}
-              >
-                <Md text={stripPaycheckParens(p.sections.nextAction)} />
-                {!nextActionExpanded && (
+                {nextActionBrief && (
                   <div
                     style={{
-                      position: "absolute",
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      height: "1.5em",
-                      background: `linear-gradient(transparent, ${T.bg.card})`,
-                      pointerEvents: "none",
+                      padding: isSmallPhone ? "14px 12px" : "15px 14px",
+                      borderRadius: T.radius.lg,
+                      background: `linear-gradient(180deg, ${T.accent.primary}0F, ${T.bg.surface})`,
+                      border: `1px solid ${T.accent.primary}18`,
+                      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04)`,
                     }}
-                  />
+                  >
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, fontFamily: T.font.mono, letterSpacing: "0.05em", marginBottom: 4 }}>
+                          PRIORITIZED NEXT ACTION
+                        </div>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: T.accent.primary }}>
+                          {nextActionBrief.label}
+                        </div>
+                      </div>
+                      {nextActionBrief.amountMatch && (
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: "6px 10px",
+                            borderRadius: 999,
+                            background: `${T.accent.primary}14`,
+                            border: `1px solid ${T.accent.primary}22`,
+                            color: T.accent.primary,
+                            fontSize: 12,
+                            fontWeight: 800,
+                            fontFamily: T.font.mono,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {nextActionBrief.amountMatch}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 850, color: T.text.primary, lineHeight: 1.28, letterSpacing: "-0.02em", marginBottom: nextActionBrief.detail ? 8 : 0 }}>
+                      {nextActionBrief.headline}
+                    </div>
+                    {nextActionBrief.detail && (
+                      <>
+                        <div
+                          style={{
+                            fontSize: 12.5,
+                            color: T.text.secondary,
+                            lineHeight: 1.55,
+                            ...(nextActionExpanded
+                              ? {}
+                              : {
+                                  display: "-webkit-box",
+                                  WebkitLineClamp: 2,
+                                  WebkitBoxOrient: "vertical",
+                                  overflow: "hidden",
+                                }),
+                          }}
+                        >
+                          {nextActionBrief.detail}
+                        </div>
+                        {nextActionBrief.detail.length > 110 && (
+                          <button
+                            onClick={() => {
+                              haptic.light();
+                              setNextActionExpanded((expanded) => !expanded);
+                            }}
+                            style={{
+                              marginTop: 8,
+                              background: "none",
+                              border: "none",
+                              color: T.accent.primary,
+                              fontSize: 11.5,
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              padding: "0",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                              fontFamily: T.font.mono,
+                              letterSpacing: "0.02em",
+                            }}
+                          >
+                            {nextActionExpanded ? "Show less ↑" : "Show more ↓"}
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {p && onDiscussWithCFO && (
+                  <button
+                    className="hover-btn"
+                    onClick={() => {
+                      haptic.light();
+                      const status = p?.status || "unknown";
+                      const hsScore = p?.healthScore?.score;
+                      const nextAction = p?.sections?.nextAction || "";
+                      const prompt = `I just reviewed my latest audit (Status: ${status}${hsScore != null ? `, Health Score: ${hsScore}/100` : ""}). ${nextAction ? `My next action says: "${nextAction.slice(0, 200)}"` : ""} Walk me through what I should focus on right now and explain why.`;
+                      onDiscussWithCFO(prompt);
+                    }}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 10,
+                      marginTop: 2,
+                      padding: "14px 18px",
+                      borderRadius: T.radius.lg,
+                      background: `linear-gradient(135deg, ${T.accent.primary}CC, #8B5CF6CC, ${T.accent.primary}CC)`,
+                      border: `1px solid ${T.accent.primary}55`,
+                      color: "#fff",
+                      fontSize: 14,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      letterSpacing: "-0.01em",
+                      boxShadow: `0 4px 18px ${T.accent.primary}30, inset 0 1px 0 rgba(255,255,255,0.08)`,
+                    }}
+                  >
+                    <MessageCircle size={16} strokeWidth={2.4} />
+                    Discuss with your AI CFO
+                  </button>
                 )}
               </div>
-              <button
-                onClick={() => { haptic.light(); setNextActionExpanded((expanded) => !expanded); }}
-                style={{
-                  marginTop: 8,
-                  background: "none",
-                  border: "none",
-                  color: T.accent.primary,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  padding: "4px 0",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                  fontFamily: T.font.mono,
-                  letterSpacing: "0.02em",
-                }}
-              >
-                {nextActionExpanded ? "Show less ↑" : "Show more ↓"}
-              </button>
-            </section>
-          )}
-
-
-          {/* ═══ DISCUSS WITH CFO ═══ */}
-          {p && onDiscussWithCFO && (
-            <button
-              className="hover-btn"
-              onClick={() => {
-                haptic.light();
-                const status = p?.status || "unknown";
-                const hsScore = p?.healthScore?.score;
-                const nextAction = p?.sections?.nextAction || "";
-                const prompt = `I just reviewed my latest audit (Status: ${status}${hsScore != null ? `, Health Score: ${hsScore}/100` : ""}). ${nextAction ? `My next action says: "${nextAction.slice(0, 200)}"` : ""} Walk me through what I should focus on right now and explain why.`;
-                onDiscussWithCFO(prompt);
-              }}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 10,
-                marginTop: 6,
-                marginBottom: 8,
-                padding: "15px 20px",
-                borderRadius: T.radius.lg,
-                background: `linear-gradient(135deg, ${T.accent.primary}CC, #8B5CF6CC, ${T.accent.primary}CC)`,
-                backgroundSize: "200% 200%",
-                border: `1px solid ${T.accent.primary}60`,
-                color: "#fff",
-                fontSize: 15,
-                fontWeight: 800,
-                cursor: "pointer",
-                letterSpacing: "-0.01em",
-                boxShadow: `0 4px 20px ${T.accent.primary}35, 0 1px 0 rgba(255,255,255,0.1) inset`,
-                transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
-                position: "relative",
-                overflow: "hidden",
-              }}
-            >
-              {/* Shimmer overlay */}
-              <div style={{
-                position: "absolute",
-                inset: 0,
-                background: "linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.08) 50%, transparent 60%)",
-                pointerEvents: "none",
-              }} />
-              <MessageCircle size={17} strokeWidth={2.5} />
-              Discuss with your AI CFO
-            </button>
+            </Card>
           )}
 
           </DashboardSection>

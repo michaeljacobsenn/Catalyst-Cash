@@ -559,6 +559,127 @@ describe("parseAudit", () => {
     );
   });
 
+  it("repairs generic debt paydown output when near-term cash obligations still dominate", () => {
+    const raw = JSON.stringify({
+      headerCard: { status: "YELLOW", title: "Watch cash flow", subtitle: "Near-term pressure", confidence: "medium" },
+      healthScore: { score: 76, grade: "C+", trend: "flat", summary: "Mixed picture." },
+      dashboardCard: [
+        { category: "Checking", amount: "$783.56", status: "ok" },
+        { category: "Vault", amount: "$2,155.39", status: "ok" },
+        { category: "Pending", amount: "$0.00", status: "ok" },
+        { category: "Debts", amount: "$3,753.96", status: "warn" },
+        { category: "Available", amount: "$331.31", status: "ok" },
+      ],
+      weeklyMoves: [
+        {
+          title: "Route $150 to CREDIT CARD 1",
+          detail: "Pay down your highest interest credit card debt.",
+          amount: "$150.00",
+          priority: "required",
+        },
+        {
+          title: "Consider contributing to Roth IRA",
+          detail: "Use extra cash to increase long-term investing.",
+          amount: "$150.00",
+          priority: "optional",
+        },
+      ],
+      alertsCard: [],
+      nextAction: {
+        title: "Route $150 to CREDIT CARD 1",
+        detail: "Pay down your highest interest credit card debt.",
+        amount: "$150.00",
+      },
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: { balance: "$5,809.31", asOf: "2026-03-29", gateStatus: "open", netWorth: "$4,994.30", cryptoValue: null },
+    });
+
+    const parsed = validateParsedAuditConsistency(parseAudit(raw), {
+      nativeScore: 76,
+      nativeRiskFlags: [],
+      operationalSurplus: 331.31,
+      cards: [{ id: "delta", name: "Delta Gold Business Card", balance: 3720.27, apr: 28.49 }],
+      formData: {
+        date: "2026-03-29",
+        checking: "783.56",
+        savings: "2155.39",
+        debts: [{ name: "Delta Gold Business Card", balance: "3720.27" }],
+      },
+      renewals: [
+        { name: "San Francisco Trip", amount: "750", nextDue: "2026-04-01", chargedTo: "Checking" },
+        { name: "Vape Bulk Order", amount: "188", nextDue: "2026-04-02", chargedTo: "360 Performance Savings" },
+      ],
+      computedStrategy: {
+        operationalSurplus: 331.31,
+        debtStrategy: { target: "Delta Gold Business Card", amount: 150 },
+      },
+      investmentAnchors: { balance: 5809.31, asOf: "2026-03-29", gateStatus: null, netWorth: 4994.3 },
+    });
+
+    expect(parsed.structured.nextAction.title).toBe("Protect the next 7 days");
+    expect(parsed.structured.nextAction.detail).toContain("San Francisco Trip");
+    expect(parsed.investments.gateStatus).toContain("Guarded");
+    expect(parsed.weeklyMoves[0]).toContain("Hold extra debt paydown");
+    expect(parsed.weeklyMoves[1]).toContain("Keep Roth");
+  });
+
+  it("replaces generic debt labels with explicit debt targets when debt paydown remains valid", () => {
+    const raw = JSON.stringify({
+      headerCard: { status: "GREEN", title: "On track", subtitle: "Plenty of cash", confidence: "high" },
+      healthScore: { score: 84, grade: "B", trend: "up", summary: "Good." },
+      dashboardCard: [
+        { category: "Checking", amount: "$4,500.00", status: "ok" },
+        { category: "Vault", amount: "$5,000.00", status: "ok" },
+        { category: "Pending", amount: "$0.00", status: "ok" },
+        { category: "Debts", amount: "$1,000.00", status: "warn" },
+        { category: "Available", amount: "$1,250.00", status: "ok" },
+      ],
+      weeklyMoves: [
+        {
+          title: "Pay priority debt",
+          detail: "Route $250 to CREDIT CARD 1 this week.",
+          amount: "$250.00",
+          priority: "required",
+        },
+      ],
+      alertsCard: [],
+      nextAction: {
+        title: "Route $250 to CREDIT CARD 1",
+        detail: "Pay down your highest interest credit card debt.",
+        amount: "$250.00",
+      },
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: { balance: "$5,809.31", asOf: "2026-03-29", gateStatus: "guarded", netWorth: "$4,994.30", cryptoValue: null },
+    });
+
+    const parsed = validateParsedAuditConsistency(parseAudit(raw), {
+      nativeScore: 84,
+      nativeRiskFlags: [],
+      operationalSurplus: 1250,
+      cards: [{ id: "delta", name: "Delta Gold Business Card", balance: 1000, apr: 28.49 }],
+      formData: {
+        date: "2026-03-29",
+        checking: "4500",
+        savings: "5000",
+        debts: [{ name: "Delta Gold Business Card", balance: "1000" }],
+      },
+      renewals: [],
+      computedStrategy: {
+        operationalSurplus: 1250,
+        debtStrategy: { target: "Delta Gold Business Card", amount: 250 },
+      },
+      investmentAnchors: { balance: 5809.31, asOf: "2026-03-29", gateStatus: "Guarded — safety first", netWorth: 4994.3 },
+    });
+
+    expect(parsed.structured.nextAction.title).toContain("Delta Gold Business Card");
+    expect(parsed.structured.nextAction.detail).toContain("Delta Gold Business Card");
+    expect(parsed.weeklyMoves[0]).toContain("Delta Gold Business Card");
+  });
+
   it("returns null for missing headerCard", () => {
     expect(parseAudit(JSON.stringify({ weeklyMoves: [] }))).toBeNull();
   });
@@ -590,6 +711,7 @@ describe("parseAudit", () => {
       },
       renewals: [],
       cards: [],
+      personalRules: "",
     });
 
     const markup = renderToStaticMarkup(
@@ -610,6 +732,46 @@ describe("parseAudit", () => {
     expect(markup).toContain("Full AI narrative unavailable");
     expect(markup).toContain("DEGRADED AUDIT");
     expect(markup).toContain("SAFETY STATE");
+  });
+
+  it("uses locked rule obligations to guard degraded fallback actions", () => {
+    const degradedParsed = buildDegradedParsedAudit({
+      reason: "Full AI narrative unavailable — showing deterministic engine signals only.",
+      retryAttempted: true,
+      computedStrategy: {
+        operationalSurplus: 331.31,
+        requiredTransfer: 0,
+        debtStrategy: { target: "Delta Gold Business Card", amount: 150 },
+        auditSignals: {
+          nativeScore: { score: 76, grade: "C" },
+          debt: { total: 3111.34 },
+          riskFlags: [],
+        },
+      },
+      financialConfig: {
+        weeklySpendAllowance: 200,
+        emergencyFloor: 0,
+      },
+      formData: {
+        date: "2026-03-29",
+        checking: 2189.56,
+        savings: 2155.39,
+      },
+      renewals: [],
+      cards: [],
+      personalRules: `
+1) TAX ESCROW (LOCKED)
+- Total NY Liability: $3,166.00 due 2026-04-14
+- Remaining Net Gap: $1,150.00 (primary cash funding gap)
+7) STRATEGIC SINKING FUNDS (VIRTUAL BUCKET TARGETS)
+- San Francisco Trip: $750.00 due 2026-04-02
+      `,
+    });
+
+    expect(degradedParsed.structured.nextAction.title).toBe("Protect near-term obligations");
+    expect(degradedParsed.structured.nextAction.detail).toContain("San Francisco Trip");
+    expect(degradedParsed.structured.nextAction.detail).toContain("NY Tax Funding Gap");
+    expect(degradedParsed.sections.forwardRadar).toContain("Protected cash obligations");
   });
 });
 

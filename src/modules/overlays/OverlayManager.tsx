@@ -94,6 +94,7 @@ export default function OverlayManager({
     loading,
     streamText,
     elapsed,
+    auditLoadingPhase,
     isTest,
     aiProvider,
     aiModel,
@@ -275,6 +276,7 @@ export default function OverlayManager({
             <StreamingView
               streamText={streamText}
               elapsed={elapsed}
+              phase={auditLoadingPhase}
               isTest={isTest}
               modelName={getModel(aiProvider, aiModel)?.name ?? aiModel}
               onCancel={handleCancelAudit}

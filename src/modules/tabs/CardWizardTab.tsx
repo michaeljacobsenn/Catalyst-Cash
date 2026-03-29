@@ -566,7 +566,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
         {/* Pro Banner Removed - Teaser is now in the results section */}
         {showPaywall && (
           <Suspense fallback={null}>
-            <LazyProPaywall onClose={() => setShowPaywall(false)} />
+            <LazyProPaywall onClose={() => setShowPaywall(false)} source="cardwizard" />
           </Suspense>
         )}
 

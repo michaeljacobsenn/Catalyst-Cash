@@ -86,6 +86,7 @@ interface StreamingViewProps {
   title?: string;
   statusLabel?: string;
   helperText?: string;
+  phase?: "bundling" | "connecting" | "analysis" | "moves" | "finalize" | "complete";
 }
 
 interface EmptyStateProps {
@@ -674,8 +675,10 @@ export const DI = ({ value, onChange, placeholder = "0.00", label = "Amount" }: 
 // ═══════════════════════════════════════════════════════════════
 // STREAMING VIEW — Audit Processing Screen
 // ═══════════════════════════════════════════════════════════════
-export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel, title, statusLabel, helperText }: StreamingViewProps) => {
-  const isReceiving = !!streamText && streamText.length > 5;
+export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel, title, statusLabel, helperText, phase }: StreamingViewProps) => {
+  const inferredReceiving = !!streamText && streamText.length > 5;
+  const currentPhase = phase || (inferredReceiving ? "finalize" : elapsed > 40 ? "moves" : elapsed > 15 ? "analysis" : elapsed > 5 ? "connecting" : "bundling");
+  const isReceiving = currentPhase === "finalize" || currentPhase === "complete";
 
   // ── Multi-phase progress with smooth interpolation (90s scale) ──
   // Phase 1 (0-5s):  0-15%  — Bundling
@@ -690,32 +693,57 @@ export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel
   else if (elapsed <= 40) baseProgress = 30 + ((elapsed - 15) / 25) * 35;
   else if (elapsed <= 75) baseProgress = 65 + ((elapsed - 40) / 35) * 25;
   else baseProgress = 90 + Math.min((elapsed - 75) / 20, 1) * 5;
-  const progress = isReceiving ? 100 : Math.min(baseProgress, 95);
+  const phaseProgressMap = {
+    bundling: 12,
+    connecting: 28,
+    analysis: 56,
+    moves: 82,
+    finalize: 94,
+    complete: 100,
+  };
+  const progress = phase ? phaseProgressMap[currentPhase] : (isReceiving ? 100 : Math.min(baseProgress, 95));
 
   // ── Status messages ──
   let currentMsg;
   if (statusLabel) currentMsg = statusLabel;
-  else if (isReceiving) currentMsg = "Processing final audit package...";
-  else if (elapsed > 75) currentMsg = "Refining AI CFO insights...";
-  else if (elapsed > 40) currentMsg = "Generating tactical recommendations...";
-  else if (elapsed > 15) currentMsg = "Analyzing transactions & balances...";
-  else if (elapsed > 5) currentMsg = "Connecting to AI engine...";
-  else if (elapsed > 0) currentMsg = "Bundling financial profile...";
+  else if (currentPhase === "complete") currentMsg = "Audit complete.";
+  else if (currentPhase === "finalize") currentMsg = "Packaging final briefing...";
+  else if (currentPhase === "moves") currentMsg = "Generating tactical recommendations...";
+  else if (currentPhase === "analysis") currentMsg = "Analyzing transactions & balances...";
+  else if (currentPhase === "connecting") currentMsg = "Connecting to AI engine...";
+  else if (currentPhase === "bundling") currentMsg = "Bundling financial profile...";
   else currentMsg = "Preparing audit...";
 
   // ── Estimated time ──
-  const eta = isReceiving
-    ? "< 5s"
-    : elapsed < 15
-      ? "~1m 15s"
-      : elapsed < 40
-        ? "~45s"
-        : elapsed < 75
-          ? "~15-30s"
-          : "Almost done...";
+  const eta = currentPhase === "complete"
+    ? "Ready"
+    : currentPhase === "finalize"
+      ? "< 5s"
+      : currentPhase === "moves"
+        ? "~15-30s"
+        : currentPhase === "analysis"
+          ? "~45s"
+          : currentPhase === "connecting"
+            ? "~1m 15s"
+            : "~1m 15s";
 
-  const showCancel = elapsed >= 5 && !isReceiving;
-  const showCancelProminent = elapsed >= 20 && !isReceiving;
+  const showCancel = elapsed >= 5 && currentPhase !== "finalize" && currentPhase !== "complete";
+  const showCancelProminent = elapsed >= 20 && currentPhase !== "finalize" && currentPhase !== "complete";
+  const stageIndexMap = {
+    bundling: 0,
+    connecting: 0,
+    analysis: 1,
+    moves: 2,
+    finalize: 3,
+    complete: 3,
+  };
+  const stageIndex = stageIndexMap[currentPhase];
+  const stages = [
+    { label: "Context", detail: "Bundling live balances and rules" },
+    { label: "Analysis", detail: "Running the cash-flow and risk pass" },
+    { label: "Moves", detail: "Building the briefing and actions" },
+    { label: "Finalize", detail: "Packaging the finished briefing" },
+  ];
 
   return (
     <div
@@ -832,10 +860,10 @@ export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel
             <span style={{ fontSize: 11, color: T.text.dim, fontWeight: 500 }}>
               Est. {eta}
             </span>
-            {isReceiving && (
+            {(currentPhase === "finalize" || currentPhase === "complete") && (
               <span style={{ fontSize: 11, color: T.status.green, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
                 <span style={{ width: 4, height: 4, borderRadius: "50%", background: T.status.green, animation: "pulse 1.5s infinite" }} />
-                Receiving
+                Finalizing
               </span>
             )}
           </div>
@@ -876,19 +904,129 @@ export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel
         )}
       </div>
 
-      <div style={{ transition: "opacity .3s ease", opacity: 0.6 }}>
-        {/* Skeleton placeholders that hint at card structure */}
-        <div className="shimmer-bg" style={{ height: 70, borderRadius: T.radius.lg, marginBottom: 10 }} />
-        <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-          <div className="shimmer-bg" style={{ height: 54, borderRadius: T.radius.md, flex: 1 }} />
-          <div className="shimmer-bg" style={{ height: 54, borderRadius: T.radius.md, flex: 1 }} />
-          <div className="shimmer-bg" style={{ height: 54, borderRadius: T.radius.md, flex: 1 }} />
-        </div>
+      <div
+        style={{
+          display: "grid",
+          gap: 12,
+          alignItems: "stretch",
+        }}
+      >
         <div
-          className="shimmer-bg"
-          style={{ height: 120, borderRadius: T.radius.lg, marginBottom: 10, animationDelay: "0.1s" }}
-        />
-        <div className="shimmer-bg" style={{ height: 80, borderRadius: T.radius.lg, animationDelay: "0.2s" }} />
+          style={{
+            borderRadius: 24,
+            padding: "18px 18px 16px",
+            background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.surface})`,
+            border: `1px solid ${T.border.default}`,
+            boxShadow: `0 18px 40px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.04)`,
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 12px",
+              borderRadius: 999,
+              background: `${T.accent.primary}12`,
+              border: `1px solid ${T.accent.primary}24`,
+              color: T.accent.primary,
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              marginBottom: 12,
+            }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.accent.primary, boxShadow: `0 0 0 4px ${T.accent.primary}18`, animation: "pulse 1.4s ease-in-out infinite" }} />
+            Catalyst is building your briefing
+          </div>
+
+          <div
+            style={{
+              fontSize: 17,
+              lineHeight: 1.35,
+              fontWeight: 800,
+              color: T.text.primary,
+              letterSpacing: "-0.02em",
+              marginBottom: 6,
+            }}
+          >
+            {currentMsg}
+          </div>
+
+          <div
+            style={{
+              fontSize: 12.5,
+              lineHeight: 1.6,
+              color: T.text.secondary,
+              maxWidth: 280,
+              margin: "0 auto",
+            }}
+          >
+            {helperText || "We’ll show the finished briefing once the structured audit is complete."}
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gap: 10,
+          }}
+        >
+          {stages.map((stage, index) => {
+            const isActive = index === stageIndex && currentPhase !== "complete";
+            const isDone = index < stageIndex || currentPhase === "complete" || (currentPhase === "finalize" && index === 3);
+            const accent = isActive ? T.accent.primary : isDone ? T.status.green : T.text.dim;
+            return (
+              <div
+                key={stage.label}
+                style={{
+                  borderRadius: 18,
+                  padding: "12px 12px 11px",
+                  background: isActive ? `${T.accent.primary}12` : `${T.bg.card}`,
+                  border: `1px solid ${isActive ? `${T.accent.primary}2e` : T.border.subtle}`,
+                  boxShadow: isActive ? `0 10px 26px ${T.accent.primary}18` : "none",
+                  transition: "all .25s ease",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 5,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: "50%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: `${accent}18`,
+                      color: accent,
+                      fontSize: 10,
+                      fontWeight: 900,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {isDone ? "✓" : index + 1}
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: isActive ? T.text.primary : T.text.secondary }}>
+                    {stage.label}
+                  </span>
+                </div>
+                <div style={{ fontSize: 11, lineHeight: 1.45, color: T.text.dim }}>
+                  {stage.detail}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

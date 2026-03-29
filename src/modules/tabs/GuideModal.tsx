@@ -342,7 +342,7 @@ export default function GuideModal({ onClose: onExplicitClose, proEnabled = fals
 
       {showUpgrade && !proEnabled && (
         <Suspense fallback={null}>
-          <LazyProPaywall onClose={() => setShowUpgrade(false)} />
+          <LazyProPaywall onClose={() => setShowUpgrade(false)} source="default" />
         </Suspense>
       )}
     </>

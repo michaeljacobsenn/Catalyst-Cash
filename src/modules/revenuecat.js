@@ -182,6 +182,51 @@ export async function presentPaywall() {
   }
 }
 
+function getPreferredPackageForPlan(offering, plan = "monthly") {
+  if (!offering) return null;
+  return plan === "yearly" ? (offering.annual || null) : (offering.monthly || null);
+}
+
+export async function purchaseProPlan(plan = "monthly") {
+  if (!isNative) return null;
+  if (!getRevenueCatApiKey()) {
+    if (window.toast) window.toast.error("Purchases are not configured in this build.");
+    return false;
+  }
+
+  if (!revenueCatConfigured) {
+    await initRevenueCat();
+  }
+
+  try {
+    const offerings = await withRevenueCatTimeout(
+      () => Purchases.getOfferings(),
+      "RevenueCat getOfferings"
+    );
+    const selectedPackage = getPreferredPackageForPlan(offerings?.current || null, plan);
+
+    if (!selectedPackage) {
+      log.warn("revenuecat", `No ${plan} package found in current offering, falling back to native paywall`);
+      return presentPaywall();
+    }
+
+    await withRevenueCatTimeout(
+      () => Purchases.purchasePackage({ aPackage: selectedPackage }),
+      `RevenueCat purchase ${plan} package`
+    );
+
+    await new Promise(r => setTimeout(r, 400));
+    return await syncProStatus();
+  } catch (error) {
+    log.error("revenuecat", "Error purchasing selected Pro plan", {
+      error: error instanceof Error ? error.message : "unknown",
+      plan,
+    });
+    if (window.toast) window.toast.error("Purchase did not complete.");
+    return false;
+  }
+}
+
 /**
  * Prompts RevenueCat to restore purchases and updates local state.
  */

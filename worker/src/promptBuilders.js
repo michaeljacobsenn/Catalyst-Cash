@@ -76,8 +76,8 @@ export const getSystemPromptCore = (config, cards = [], renewals = [], personalR
   const weeklySpendAllowance = Number.isFinite(config?.weeklySpendAllowance) ? config.weeklySpendAllowance : 0;
   const emergencyFloor = Number.isFinite(config?.emergencyFloor) ? config.emergencyFloor : 0;
   const cSym = getCurrencySymbol(config);
-  const sanitizedPersonalRules = sanitizePersonalRules(personalRules);
-  const sanitizedSnapshotNotes = sanitizePersonalRules(config?.notes || config?.snapshotNotes || "");
+  const sanitizedPersonalRules = sanitizePersonalRules(personalRules, 3000);
+  const sanitizedSnapshotNotes = sanitizePersonalRules(config?.notes || config?.snapshotNotes || "", 700);
 
   const budgetData =
     config?.budgetCategories?.length > 0
@@ -215,8 +215,12 @@ ${rothSection}${k401Section}${hsaSection}`
   const personalBlock =
     (sanitizedPersonalRules && sanitizedPersonalRules.trim()) || (sanitizedSnapshotNotes && sanitizedSnapshotNotes.trim())
       ? `========================
-PERSONAL RULES (USER-SUPPLIED, OPTIONAL)
+LOCKED USER RULES & SNAPSHOT NOTES (HARD OVERRIDE)
 ========================
+These are user-specific operating constraints, not generic preferences.
+- Locked escrow, refund, funding-source, cadence, and kill-switch rules override routing.
+- Locked refunds / escrow dollars are unavailable until released, and named obligations stay tied to that account.
+
 ${[sanitizedPersonalRules.trim(), sanitizedSnapshotNotes.trim()].filter(Boolean).join("\n\n")}
 ========================
 `
@@ -226,14 +230,17 @@ ${[sanitizedPersonalRules.trim(), sanitizedSnapshotNotes.trim()].filter(Boolean)
     ? `
 ========================
 <ALGORITHMIC_STRATEGY>
-The following calculations have been natively pre-computed for you. YOU MUST STRICTLY FOLLOW THESE NUMBERS. Do NOT re-calculate floors, paydays, or debt targets yourself. Your job is to format this strategy into the coaching output.
+The following calculations are the deterministic math anchor for floor protection, payday timing, transfer need, surplus sizing, and risk detection. Do NOT recompute them unless the inputs are impossible.
+
+IMPORTANT:
+- Preserve the native math, but if LOCKED USER RULES impose stricter escrow, funding-source, or deadline logic, apply the native math inside those constraints.
 
 - Next Payday: ${computedStrategy.nextPayday}
 - Total Checking Floor: ${cSym}${(computedStrategy.totalCheckingFloor || 0).toFixed(2)}
 - Time-Critical Bills Due (<= Next Payday): ${cSym}${(computedStrategy.timeCriticalAmount || 0).toFixed(2)}
 - Required Ally -> Checking Transfer: ${cSym}${(computedStrategy.requiredTransfer || 0).toFixed(2)}
 - Operational Surplus (After Bills & Floors): ${cSym}${(computedStrategy.operationalSurplus || 0).toFixed(2)}
-${computedStrategy.debtStrategy.target ? `- DEBT KILL OVERRIDE: Route ${cSym}${(computedStrategy.debtStrategy.amount || 0).toFixed(2)} of Operational Surplus to -> ${computedStrategy.debtStrategy.target}` : "- DEBT KILL: No specific native override. Follow standard arbitrage rules if surplus exists."}
+${computedStrategy.debtStrategy.target ? `- NATIVE DEBT ROUTE (apply only if no stricter locked-rule / deadline / escrow conflict exists): Route ${cSym}${(computedStrategy.debtStrategy.amount || 0).toFixed(2)} of Operational Surplus to -> ${computedStrategy.debtStrategy.target}` : "- DEBT KILL: No specific native override. Follow standard arbitrage rules only after locked rules, funding-source gaps, and hard deadlines are protected."}
 </ALGORITHMIC_STRATEGY>
 ========================`
     : "";
@@ -327,6 +334,11 @@ CANONICAL EXECUTION RULES (HARD)
 - Time-critical obligations second: bills, minimums, tax deadlines, and due-before-next-payday transfers.
 - Credit cards do not drain cash until a payment is executed. Card-charged renewals increase card balances only.
 - User notes anti-double-count: if the user says an item is already paid and reflected in balances, do not deduct it again.
+- Specific locked user rules outrank generic surplus deployment. If a rule names tax escrow, refund reserves, checking-only cash obligations, Ally-only obligations, or cadence-based bills, follow that rule.
+- Reserved refunds or tax escrow balances are not spendable liquidity until the stated tax obligation is satisfied.
+- When a renewal or bill clearly belongs to Checking, Ally, or another named source, evaluate that source separately before proposing transfers or debt payments.
+- If a hard deadline, locked escrow gap, or funding-source shortfall exists inside 21 days, it outranks generic debt acceleration.
+- If revolving debt remains or a hard sinking-fund / tax-escrow gap is open, do not mark the investments gate as open.
 - If cash cannot satisfy every goal, obey this order: Floor > Fixed Mandates > Time-Critical > Vault / Sinking Pace > Safety Card Cleanup > Promo Sprint > Optional Goals.
 - When a payment cannot be fully satisfied without breaking the floor, allocate the maximum safe partial payment and explain the shortfall.
 - Deterministic native signals outrank heuristic guesses. If they conflict with your reasoning, explain the conflict and keep confidence conservative.`,
@@ -348,8 +360,12 @@ A+) EXECUTIVE QUALITY STANDARD (HARD)
 - Lead with the highest-impact move and tie every recommendation to a concrete reason: liquidity, deadlines, APR, utilization, tax sheltering, or goal preservation.
 - Distinguish facts, assumptions, and contradictions explicitly. If the inputs are fragile or inconsistent, reduce confidence and say why.
 - Use exact ${cSym} amounts, due dates, card names, and percentages from LIVE APP DATA whenever possible.
-- If renewals or one-time items map to specific funding sources, reason about those sources separately before recommending transfers or debt paydown.
+- Reason about named funding sources separately before recommending transfers or debt paydown.
 - Never collapse named liabilities into placeholders like "CREDIT CARD #1" when a real card or account name exists.
+- nextAction and the first REQUIRED weekly move must name the exact funding source / account / card / due date that makes the action necessary.
+- Do not label money as "surplus" if a locked escrow gap, checking-only outflow, or hard sinking-fund deadline is still underfunded.
+- Only surface a merchant-level spending callout when it changes the recommendation materially or looks fraud / reimbursement / inventory related.
+- If a locked escrow gap or 7-day shortfall exists, nextAction cannot be debt paydown.
 - Avoid generic education, filler, or broad checklists that do not matter this week.
 - If the correct action is to hold steady, say that directly and explain what would change the recommendation.`,
     `========================
@@ -377,7 +393,7 @@ EXECUTION SEQUENCE (HARD)
 ========================
 1. Validate snapshot completeness and contradictions.
 2. Protect floor and due-before-next-payday obligations.
-3. Use native strategy for required transfer, surplus, debt routing, promo urgency, and risk flags.
+3. Use native strategy for required transfer, surplus, debt routing, promo urgency, and risk flags, but let explicit locked user rules override generic debt routing or surplus destination.
 4. Fund vault / sinking goals only after near-term safety is clear.
 5. Apply wealth-building ladder only when safety gates are clear.
 6. Reconcile buckets, net worth, and radar; then fill the JSON schema cleanly.

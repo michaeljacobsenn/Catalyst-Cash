@@ -8,16 +8,17 @@
   import { createPortal } from "react-dom";
   import { Mono } from "../components.js";
   import { T } from "../constants.js";
-  import { PAYWALL_FEATURES,PRICING_FACTS } from "../guides/guideData.js";
-  import { haptic } from "../haptics.js";
-  import { IAP_PRICING } from "../subscription.js";
-  import { log } from "../logger.js";
-  import { Card } from "../ui.js";
+import { PAYWALL_FEATURES, PRICING_FACTS } from "../guides/guideData.js";
+import { haptic } from "../haptics.js";
+import { IAP_PRICING } from "../subscription.js";
+import { log } from "../logger.js";
+import { Card } from "../ui.js";
 
 const loadRevenueCat = () => import("../revenuecat.js");
 
 interface ProPaywallProps {
   onClose: () => void;
+  source?: string;
 }
 
 interface LocalToastApi {
@@ -26,21 +27,99 @@ interface LocalToastApi {
   info?: (message: string) => void;
 }
 
-// ── Coming soon features (creates anticipation) ──────────────
-const COMING_SOON = [
-  { label: "Net Worth Projections", icon: "🔮", desc: "See where you could be in 1, 5, 10 years" },
-  { label: "Goal Tracking", icon: "🏁", desc: "Debt-free dates & savings milestones" },
-  { label: "iOS Widgets", icon: "📱", desc: "Glanceable net worth on your home screen" },
+const VALUE_PILLARS = [
+  {
+    title: "Deeper weekly decisions",
+    detail: "More audits, stronger models, and the history needed to see whether your moves are actually working.",
+    icon: "📊",
+  },
+  {
+    title: "Cleaner daily operations",
+    detail: "More linked institutions, full ledger search, and less manual cleanup across cards, cash, and renewals.",
+    icon: "🏦",
+  },
+  {
+    title: "Faster answers when it matters",
+    detail: "More AskAI capacity plus CFO and Boardroom reasoning when the choice is expensive, urgent, or unclear.",
+    icon: "🧠",
+  },
 ];
 
-export default function ProPaywall({ onClose }: ProPaywallProps) {
-  const [plan, setPlan] = useState<"yearly" | "monthly">("monthly");
+const PAYWALL_CONTEXT = {
+  default: {
+    eyebrow: "CATALYST CASH PRO",
+    title: "Run the full Catalyst operating system",
+    body:
+      "Pro is the clean upgrade for heavier users: more audits, more AskAI, more linked institutions, and the archive needed to make better money decisions over time.",
+    highlight: "Best for people who rely on Catalyst every week, not just occasionally.",
+  },
+  askai: {
+    eyebrow: "ASKAI PRO",
+    title: "Get deeper AI when the question is expensive",
+    body:
+      "Pro raises your AskAI capacity and unlocks CFO-level reasoning for harder tradeoffs across cash, debt, renewals, and timing.",
+    highlight: "Best if AskAI is becoming part of your real money workflow.",
+  },
+  audit: {
+    eyebrow: "WEEKLY BRIEFING PRO",
+    title: "Run more briefings with a deeper model stack",
+    body:
+      "Pro is built for people who rerun the briefing around paydays, large moves, and changing obligations instead of waiting a full week.",
+    highlight: "Best if you want your weekly system of record to stay current.",
+  },
+  history: {
+    eyebrow: "ARCHIVE PRO",
+    title: "Keep the full financial archive",
+    body:
+      "Pro keeps the complete briefing history so you can validate whether changes are actually improving cash safety, debt pressure, and trend direction.",
+    highlight: "Best if you want proof that your decisions are working over time.",
+  },
+  ledger: {
+    eyebrow: "LEDGER PRO",
+    title: "Turn transactions into a real operating tool",
+    body:
+      "Pro unlocks the full ledger: search, filter, export, and cleanup so the details behind the briefing are actually usable.",
+    highlight: "Best if raw transaction detail changes your decisions.",
+  },
+  renewals: {
+    eyebrow: "RENEWALS PRO",
+    title: "Clean up recurring spending faster",
+    body:
+      "Pro adds stronger renewals tooling, exports, and AI negotiation help so recurring waste is easier to spot and easier to act on.",
+    highlight: "Best if subscriptions and repeat charges are a meaningful leak.",
+  },
+  budget: {
+    eyebrow: "BUDGET PRO",
+    title: "Run a smarter paycheck budget",
+    body:
+      "Pro layers AI-seeded budgeting, overspend detection, and better archive depth on top of the paycheck workflow.",
+    highlight: "Best if you want your budget and briefing to reinforce each other.",
+  },
+  settings: {
+    eyebrow: "PRO PLAN",
+    title: "Upgrade only if the extra depth will matter",
+    body:
+      "Pro is for people who want broader Plaid coverage, deeper AI, and a cleaner long-term record of how their money system is changing.",
+    highlight: "Best if Catalyst is already earning a place in your weekly routine.",
+  },
+  cardwizard: {
+    eyebrow: "CARD WIZARD PRO",
+    title: "Unlock the full card strategy layer",
+    body:
+      "Pro gives you the premium decision support for choosing, comparing, and justifying the right cards across spending and retention scenarios.",
+    highlight: "Best if card strategy is part of your actual optimization loop.",
+  },
+} as const;
+
+export default function ProPaywall({ onClose, source = "default" }: ProPaywallProps) {
+  const [plan, setPlan] = useState<"yearly" | "monthly">("yearly");
   const [purchasing, setPurchasing] = useState(false);
   const [dragY, setDragY] = useState(0);
   const [closing, setClosing] = useState(false);
   const touchStart = useRef<number | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const appWindow = window as Window & { toast?: LocalToastApi };
+  const context = PAYWALL_CONTEXT[source as keyof typeof PAYWALL_CONTEXT] || PAYWALL_CONTEXT.default;
 
   const handleClose = useCallback(() => {
     setClosing(true);
@@ -82,14 +161,12 @@ export default function ProPaywall({ onClose }: ProPaywallProps) {
     haptic.medium();
     setPurchasing(true);
     try {
-      const { presentPaywall } = await loadRevenueCat();
-      const result = await presentPaywall();
+      const { purchaseProPlan } = await loadRevenueCat();
+      const result = await purchaseProPlan(plan);
       if (result === true) {
-        // Success
         appWindow.toast?.success?.("Welcome to Catalyst Cash Pro!");
         onClose();
       } else if (result === null) {
-        // Web fallback — IAP not available outside iOS
         appWindow.toast?.info?.("In-App Purchases are only available in the iOS app.");
       }
     } catch (e) {
@@ -202,12 +279,41 @@ export default function ProPaywall({ onClose }: ProPaywallProps) {
 
         {/* Hero */}
         <div style={{ textAlign: "center", marginBottom: 20 }}>
-          <div style={{ fontSize: 36, marginBottom: 8 }}>⚡</div>
-          <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 6px", color: T.text.primary }}>Upgrade to Pro</h2>
-          <p style={{ fontSize: 13, color: T.text.dim, margin: "0 0 10px", lineHeight: 1.4 }}>
-            20 audits per month, 30 AskAI messages per day, up to 8 Plaid institutions with quiet balance and ledger upkeep, and the full Catalyst power stack.
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              margin: "0 auto 12px",
+              borderRadius: 18,
+              background: `linear-gradient(135deg, ${T.accent.primary}22, #6C60FF22)`,
+              border: `1px solid ${T.accent.primary}26`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 28,
+              boxShadow: `0 16px 36px ${T.accent.primary}18`,
+            }}
+          >
+            ⚡
+          </div>
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 900,
+              color: T.accent.primary,
+              letterSpacing: "0.12em",
+              fontFamily: T.font.mono,
+              marginBottom: 8,
+            }}
+          >
+            {context.eyebrow}
+          </div>
+          <h2 style={{ fontSize: 24, fontWeight: 900, letterSpacing: "-0.03em", margin: "0 0 8px", color: T.text.primary }}>
+            {context.title}
+          </h2>
+          <p style={{ fontSize: 13, color: T.text.dim, margin: "0 0 12px", lineHeight: 1.55, maxWidth: 340, marginInline: "auto" }}>
+            {context.body}
           </p>
-          {/* Social proof / positioning */}
           <div
             style={{
               display: "inline-flex",
@@ -223,12 +329,289 @@ export default function ProPaywall({ onClose }: ProPaywallProps) {
               fontFamily: T.font.mono,
             }}
           >
-            🛡️ Designed for financial clarity · Privacy-first
+            🛡️ Privacy-first · Apple billing · cancel anytime
+          </div>
+          <div
+            style={{
+              marginTop: 10,
+              fontSize: 11,
+              color: T.text.secondary,
+              lineHeight: 1.45,
+              maxWidth: 330,
+              marginInline: "auto",
+            }}
+          >
+            {context.highlight}
           </div>
         </div>
 
+        <div style={{ display: "grid", gap: 10, marginBottom: 16 }}>
+          {VALUE_PILLARS.map((pillar, index) => (
+            <Card
+              key={pillar.title}
+              style={{
+                padding: "14px 14px 13px",
+                background: `linear-gradient(160deg, ${T.bg.elevated}, ${T.bg.card})`,
+                border: `1px solid ${T.border.subtle}`,
+                animation: `fadeInUp .28s ease-out ${index * 0.04}s both`,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <div
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 12,
+                    background: `${T.accent.primary}12`,
+                    border: `1px solid ${T.accent.primary}18`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 16,
+                    flexShrink: 0,
+                  }}
+                >
+                  {pillar.icon}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, marginBottom: 4 }}>
+                    {pillar.title}
+                  </div>
+                  <div style={{ fontSize: 11.5, lineHeight: 1.5, color: T.text.secondary }}>
+                    {pillar.detail}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+
+        {/* ── Plan Selector ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+          {(["monthly", "yearly"] as const).map(p => {
+            const pricing = IAP_PRICING[p];
+            const active = plan === p;
+            const isYearly = p === "yearly";
+            return (
+              <button
+                key={p}
+                onClick={() => {
+                  setPlan(p);
+                  haptic.light();
+                }}
+                style={{
+                  padding: "20px 14px 16px",
+                  borderRadius: T.radius.lg,
+                  cursor: "pointer",
+                  border: `2px solid ${active ? T.accent.primary : T.border.default}`,
+                  background: active
+                    ? `linear-gradient(160deg, ${T.accent.primary}12, ${T.accent.primary}06)`
+                    : T.bg.elevated,
+                  textAlign: "center",
+                  position: "relative",
+                  overflow: "visible",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 2,
+                  animation: active ? "planGlow 2.5s ease-in-out infinite" : "none",
+                  transition: "all 0.25s ease",
+                }}
+              >
+                {/* Savings badge for yearly */}
+                {isYearly && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: -9,
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      fontSize: 9,
+                      fontWeight: 800,
+                      whiteSpace: "nowrap",
+                      background: `linear-gradient(135deg, ${T.accent.primary}, ${T.status.green})`,
+                      color: "#fff",
+                      padding: "3px 10px",
+                      borderRadius: 99,
+                      fontFamily: T.font.mono,
+                      boxShadow: `0 2px 8px ${T.accent.primary}40`,
+                      zIndex: 2,
+                    }}
+                  >
+                    Most popular · {pricing.savings}
+                  </div>
+                )}
+                {/* Active indicator dot */}
+                {active && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 10,
+                      right: 10,
+                      width: 16,
+                      height: 16,
+                      borderRadius: "50%",
+                      background: T.status.green,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: `0 0 8px ${T.status.green}50`,
+                    }}
+                  >
+                    <span style={{ fontSize: 10, color: "#fff", fontWeight: 800, lineHeight: 1 }}>✓</span>
+                  </div>
+                )}
+                <Mono size={20} weight={800} color={active ? T.accent.primary : T.text.primary}>
+                  {pricing.price}
+                </Mono>
+                <div style={{ fontSize: 11, color: T.text.dim, fontWeight: 500 }}>per {pricing.period}</div>
+                {pricing.perMonth && (
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: active ? T.accent.primary : T.text.secondary,
+                      marginTop: 4,
+                      fontWeight: 700,
+                      fontFamily: T.font.mono,
+                    }}
+                  >
+                    ({pricing.perMonth}/mo)
+                  </div>
+                )}
+                {pricing.trial && (
+                  <div
+                    style={{
+                      fontSize: 9,
+                      color: T.status.green,
+                      marginTop: 4,
+                      fontWeight: 700,
+                      padding: "2px 8px",
+                      borderRadius: 99,
+                      background: `${T.status.green}10`,
+                    }}
+                  >
+                    {pricing.trial}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Value Note — yearly only */}
+        {plan === "yearly" && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "10px 14px",
+              background: `${T.accent.emerald}08`,
+              border: `1px solid ${T.accent.emerald}18`,
+              borderRadius: T.radius.md,
+              marginBottom: 14,
+              animation: "fadeInUp .3s ease-out",
+            }}
+          >
+            <span style={{ fontSize: 14, flexShrink: 0 }}>💡</span>
+            <span style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>
+              Annual plan includes {PRICING_FACTS.yearlySavings} and works out to {PRICING_FACTS.yearlyPerMonth} for professional-grade
+              financial intelligence.
+            </span>
+          </div>
+        )}
+
+        <Card
+          style={{
+            marginBottom: 16,
+            padding: "16px 16px 14px",
+            background: `linear-gradient(160deg, ${T.bg.card}, ${T.accent.primary}0C)`,
+            border: `1px solid ${T.accent.primary}16`,
+            boxShadow: `0 18px 36px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04)`,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 11, color: T.text.dim, fontWeight: 700, fontFamily: T.font.mono, letterSpacing: "0.05em" }}>
+                SELECTED PLAN
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary, marginTop: 2 }}>
+                {plan === "yearly" ? `${IAP_PRICING.yearly.price}/yr` : `${IAP_PRICING.monthly.price}/mo`}
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: T.text.secondary, textAlign: "right", lineHeight: 1.45, maxWidth: 180 }}>
+              {plan === "yearly" ? `${PRICING_FACTS.trial} • ${PRICING_FACTS.yearlySavings}` : "Lower upfront cost • cancel anytime"}
+            </div>
+          </div>
+
+          <button
+            onClick={handlePurchase}
+            disabled={purchasing}
+            className="hover-btn"
+            style={{
+              width: "100%",
+              padding: "16px 20px",
+              borderRadius: T.radius.lg,
+              border: "none",
+              background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF, ${T.accent.primary})`,
+              backgroundSize: "200% 100%",
+              color: "#fff",
+              fontSize: 15,
+              fontWeight: 800,
+              letterSpacing: "0.02em",
+              cursor: purchasing ? "wait" : "pointer",
+              opacity: purchasing ? 0.6 : 1,
+              marginBottom: 10,
+              boxShadow: `0 4px 24px ${T.accent.primary}45, 0 2px 8px rgba(0,0,0,0.2)`,
+              animation: purchasing ? "none" : "ctaPulse 3s ease-in-out infinite",
+              transition: "opacity 0.2s, transform 0.15s",
+              fontFamily: T.font.mono,
+            }}
+          >
+            {purchasing
+              ? `Starting ${plan === "yearly" ? "yearly" : "monthly"} plan...`
+              : plan === "yearly"
+                ? `Start Free Trial — then ${IAP_PRICING.yearly.price}/yr`
+                : `Start Monthly — ${IAP_PRICING.monthly.price}/mo`}
+          </button>
+
+          <div style={{ textAlign: "center", paddingBottom: 4 }}>
+            <button
+              onClick={handleRestore}
+              style={{
+                background: "none",
+                border: "none",
+                color: T.accent.primary,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+                padding: "10px 16px",
+                borderRadius: T.radius.md,
+                transition: "opacity 0.2s",
+                minHeight: 44,
+              }}
+            >
+              Restore Purchases
+            </button>
+          </div>
+          <p
+            style={{
+              fontSize: 10,
+              color: T.text.muted,
+              margin: "8px 8px 0",
+              lineHeight: 1.5,
+              letterSpacing: "0.01em",
+              textAlign: "center",
+            }}
+          >
+            Payment is charged to your Apple ID. Subscription auto-renews unless cancelled at least 24 hours before the end of the current period.
+            {plan === "yearly" &&
+              " Your 7-day free trial begins immediately, and you will not be charged until the trial ends."}
+          </p>
+        </Card>
+
         {/* Feature Comparison */}
-        <Card style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}>
+        <Card style={{ marginBottom: 12, padding: 0, overflow: "hidden" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 0 }}>
             <div
               style={{
@@ -320,287 +703,19 @@ export default function ProPaywall({ onClose }: ProPaywallProps) {
           </div>
         </Card>
 
-        {/* ── Coming Soon — premium teaser cards ── */}
-        <div style={{ marginBottom: 20 }}>
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 800,
-              color: T.text.dim,
-              fontFamily: T.font.mono,
-              letterSpacing: "0.1em",
-              marginBottom: 10,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <span>COMING SOON FOR PRO</span>
-            <div
-              style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${T.border.subtle}, transparent)` }}
-            />
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-            {COMING_SOON.map((f, i) => (
-              <div
-                key={i}
-                style={{
-                  padding: "14px 10px",
-                  borderRadius: T.radius.lg,
-                  background: `linear-gradient(160deg, ${T.bg.elevated}, ${T.bg.card})`,
-                  border: `1px solid ${T.border.subtle}`,
-                  textAlign: "center",
-                  minWidth: 0,
-                  animation: `fadeInUp .35s ease-out ${(PAYWALL_FEATURES.length + i) * 0.04}s both`,
-                }}
-              >
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 10,
-                    margin: "0 auto 8px",
-                    background: `${T.accent.primary}10`,
-                    border: `1px solid ${T.accent.primary}15`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 16,
-                  }}
-                >
-                  {f.icon}
-                </div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: T.text.primary,
-                    marginBottom: 3,
-                    lineHeight: 1.3,
-                  }}
-                >
-                  {f.label}
-                </div>
-                <div style={{ fontSize: 9, color: T.text.dim, lineHeight: 1.35 }}>{f.desc}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Plan Selector ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-          {(["monthly", "yearly"] as const).map(p => {
-            const pricing = IAP_PRICING[p];
-            const active = plan === p;
-            const isYearly = p === "yearly";
-            return (
-              <button
-                key={p}
-                onClick={() => {
-                  setPlan(p);
-                  haptic.light();
-                }}
-                style={{
-                  padding: "20px 14px 16px",
-                  borderRadius: T.radius.lg,
-                  cursor: "pointer",
-                  border: `2px solid ${active ? T.accent.primary : T.border.default}`,
-                  background: active
-                    ? `linear-gradient(160deg, ${T.accent.primary}12, ${T.accent.primary}06)`
-                    : T.bg.elevated,
-                  textAlign: "center",
-                  position: "relative",
-                  overflow: "visible",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 2,
-                  animation: active ? "planGlow 2.5s ease-in-out infinite" : "none",
-                  transition: "all 0.25s ease",
-                }}
-              >
-                {/* Savings badge for yearly */}
-                {isYearly && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: -9,
-                      left: "50%",
-                      transform: "translateX(-50%)",
-                      fontSize: 9,
-                      fontWeight: 800,
-                      whiteSpace: "nowrap",
-                      background: `linear-gradient(135deg, ${T.accent.primary}, ${T.status.green})`,
-                      color: "#fff",
-                      padding: "3px 10px",
-                      borderRadius: 99,
-                      fontFamily: T.font.mono,
-                      boxShadow: `0 2px 8px ${T.accent.primary}40`,
-                      zIndex: 2,
-                    }}
-                  >
-                    {pricing.savings}
-                  </div>
-                )}
-                {/* Active indicator dot */}
-                {active && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: 10,
-                      right: 10,
-                      width: 16,
-                      height: 16,
-                      borderRadius: "50%",
-                      background: T.status.green,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      boxShadow: `0 0 8px ${T.status.green}50`,
-                    }}
-                  >
-                    <span style={{ fontSize: 10, color: "#fff", fontWeight: 800, lineHeight: 1 }}>✓</span>
-                  </div>
-                )}
-                <Mono size={20} weight={800} color={active ? T.accent.primary : T.text.primary}>
-                  {pricing.price}
-                </Mono>
-                <div style={{ fontSize: 11, color: T.text.dim, fontWeight: 500 }}>per {pricing.period}</div>
-                {pricing.perMonth && (
-                  <div
-                    style={{
-                      fontSize: 10,
-                      color: active ? T.accent.primary : T.text.secondary,
-                      marginTop: 4,
-                      fontWeight: 700,
-                      fontFamily: T.font.mono,
-                    }}
-                  >
-                    ({pricing.perMonth}/mo)
-                  </div>
-                )}
-                {pricing.trial && (
-                  <div
-                    style={{
-                      fontSize: 9,
-                      color: T.status.green,
-                      marginTop: 4,
-                      fontWeight: 700,
-                      padding: "2px 8px",
-                      borderRadius: 99,
-                      background: `${T.status.green}10`,
-                    }}
-                  >
-                    {pricing.trial}
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Value Note — yearly only */}
-        {plan === "yearly" && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "10px 14px",
-              background: `${T.accent.emerald}08`,
-              border: `1px solid ${T.accent.emerald}18`,
-              borderRadius: T.radius.md,
-              marginBottom: 14,
-              animation: "fadeInUp .3s ease-out",
-            }}
-          >
-            <span style={{ fontSize: 14, flexShrink: 0 }}>💡</span>
-            <span style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>
-              Annual plan includes {PRICING_FACTS.yearlySavings} and works out to {PRICING_FACTS.yearlyPerMonth} for professional-grade
-              financial intelligence.
-            </span>
-          </div>
-        )}
-
-        {/* ── Purchase CTA ── */}
-        <button
-          onClick={handlePurchase}
-          disabled={purchasing}
-          className="hover-btn"
-          style={{
-            width: "100%",
-            padding: "16px 20px",
-            borderRadius: T.radius.lg,
-            border: "none",
-            background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF, ${T.accent.primary})`,
-            backgroundSize: "200% 100%",
-            color: "#fff",
-            fontSize: 15,
-            fontWeight: 800,
-            letterSpacing: "0.02em",
-            cursor: purchasing ? "wait" : "pointer",
-            opacity: purchasing ? 0.6 : 1,
-            marginBottom: 12,
-            boxShadow: `0 4px 24px ${T.accent.primary}45, 0 2px 8px rgba(0,0,0,0.2)`,
-            animation: purchasing ? "none" : "ctaPulse 3s ease-in-out infinite",
-            transition: "opacity 0.2s, transform 0.15s",
-            fontFamily: T.font.mono,
-          }}
-        >
-          {purchasing
-            ? "Processing..."
-            : plan === "yearly"
-              ? `Start Free Trial — then ${IAP_PRICING.yearly.price}/yr`
-              : `Subscribe — ${IAP_PRICING.monthly.price}/mo`}
-        </button>
-
-        {/* ── Restore + Legal ── */}
-        <div style={{ textAlign: "center", paddingBottom: 4 }}>
+        <div style={{ marginTop: 4, display: "flex", justifyContent: "center", gap: 16, paddingBottom: 6 }}>
           <button
-            onClick={handleRestore}
-            style={{
-              background: "none",
-              border: "none",
-              color: T.accent.primary,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-              padding: "10px 16px",
-              borderRadius: T.radius.md,
-              transition: "opacity 0.2s",
-              minHeight: 44,
-            }}
+            onClick={() => window.open("https://catalystcash.app/terms", "_blank")}
+            style={{ background: "none", border: "none", color: T.text.muted, fontSize: 10, textDecoration: "underline", cursor: "pointer" }}
           >
-            Restore Purchases
+            Terms of Service
           </button>
-          <p
-            style={{
-              fontSize: 10,
-              color: T.text.muted,
-              margin: "6px 16px 0",
-              lineHeight: 1.5,
-              letterSpacing: "0.01em",
-            }}
+          <button
+            onClick={() => window.open("https://catalystcash.app/privacy", "_blank")}
+            style={{ background: "none", border: "none", color: T.text.muted, fontSize: 10, textDecoration: "underline", cursor: "pointer" }}
           >
-            Payment charged to your Apple ID. Subscription auto-renews unless cancelled 24h before the end of the
-            current period.
-            {plan === "yearly" &&
-              " Your 7-day free trial begins immediately. You won't be charged until the trial ends."}
-          </p>
-          <div style={{ marginTop: 10, display: "flex", justifyContent: "center", gap: 16 }}>
-            <button
-              onClick={() => window.open("https://catalystcash.app/terms", "_blank")}
-              style={{ background: "none", border: "none", color: T.text.muted, fontSize: 10, textDecoration: "underline", cursor: "pointer" }}
-            >
-              Terms of Service
-            </button>
-            <button
-              onClick={() => window.open("https://catalystcash.app/privacy", "_blank")}
-              style={{ background: "none", border: "none", color: T.text.muted, fontSize: 10, textDecoration: "underline", cursor: "pointer" }}
-            >
-              Privacy Policy
-            </button>
-          </div>
+            Privacy Policy
+          </button>
         </div>
       </div>
     </div>,

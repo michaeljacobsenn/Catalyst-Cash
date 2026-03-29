@@ -96,6 +96,21 @@ describe("usePlaidSync helpers", () => {
     });
   });
 
+  it("downgrades success when one institution is still showing cached data", () => {
+    expect(
+      summarizeSyncOutcome({
+        requestedCount: 2,
+        successCount: 2,
+        staleCount: 1,
+        pendingCount: 0,
+        forceSyncSucceeded: true,
+      })
+    ).toEqual({
+      kind: "info",
+      message: "Live balances refreshed for 1 institution. 1 institution is still showing cached data.",
+    });
+  });
+
   it("treats existing linked plaid balances as cached fallback data", () => {
     expect(
       hasCachedPlaidSnapshot(
