@@ -83,6 +83,9 @@ interface StreamingViewProps {
   isTest?: boolean;
   modelName?: string;
   onCancel?: () => void;
+  title?: string;
+  statusLabel?: string;
+  helperText?: string;
 }
 
 interface EmptyStateProps {
@@ -671,16 +674,8 @@ export const DI = ({ value, onChange, placeholder = "0.00", label = "Amount" }: 
 // ═══════════════════════════════════════════════════════════════
 // STREAMING VIEW — Audit Processing Screen
 // ═══════════════════════════════════════════════════════════════
-export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel }: StreamingViewProps) => {
+export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel, title, statusLabel, helperText }: StreamingViewProps) => {
   const isReceiving = !!streamText && streamText.length > 5;
-  const streamScrollRef = useRef<HTMLDivElement | null>(null);
-
-  // Auto-scroll stream text to bottom
-  useEffect(() => {
-    if (streamScrollRef.current) {
-      streamScrollRef.current.scrollTop = streamScrollRef.current.scrollHeight;
-    }
-  }, [streamText]);
 
   // ── Multi-phase progress with smooth interpolation (90s scale) ──
   // Phase 1 (0-5s):  0-15%  — Bundling
@@ -699,7 +694,8 @@ export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel
 
   // ── Status messages ──
   let currentMsg;
-  if (isReceiving) currentMsg = "Streaming audit results...";
+  if (statusLabel) currentMsg = statusLabel;
+  else if (isReceiving) currentMsg = "Processing final audit package...";
   else if (elapsed > 75) currentMsg = "Refining AI CFO insights...";
   else if (elapsed > 40) currentMsg = "Generating tactical recommendations...";
   else if (elapsed > 15) currentMsg = "Analyzing transactions & balances...";
@@ -768,7 +764,7 @@ export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel
               color: T.text.primary
             }}
           >
-            Running Audit
+            {title || "Running Audit"}
           </h2>
           {isTest && <Badge variant="amber" style={{ height: "fit-content" }}>TEST</Badge>}
         </div>
@@ -845,6 +841,21 @@ export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel
           </div>
         </div>
 
+        {helperText && (
+          <div
+            style={{
+              marginTop: 14,
+              fontSize: 12,
+              lineHeight: 1.5,
+              color: T.text.secondary,
+              maxWidth: 320,
+              marginInline: "auto",
+            }}
+          >
+            {helperText}
+          </div>
+        )}
+
         {/* ── Cancel button — visible after 3s, prominent after 10s ── */}
         {onCancel && showCancel && (
           <div style={{ marginTop: 18 }}>
@@ -865,87 +876,20 @@ export const StreamingView = ({ streamText, elapsed, isTest, modelName, onCancel
         )}
       </div>
 
-      {/* ── Stream Output or Skeleton ── */}
-      {streamText ? (
-        <div className="slide-up">
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              marginBottom: 8,
-              paddingLeft: 2,
-            }}
-          >
-            <div
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: T.status.green,
-                animation: "pulse 1s ease infinite",
-                flexShrink: 0,
-              }}
-            />
-            <Mono size={10} color={T.text.dim}>
-              Live stream from {modelName || "AI"}
-            </Mono>
-          </div>
-          <Card
-            style={{
-              maxHeight: "45vh",
-              overflow: "auto",
-              border: `1px solid ${T.accent.primary}20`,
-              background: T.bg.elevated,
-              boxShadow: `inset 0 4px 24px ${T.bg.base}`,
-            }}
-          >
-            <div ref={streamScrollRef} style={{ maxHeight: "40vh", overflow: "auto" }}>
-              <pre
-                style={{
-                  fontSize: 10,
-                  lineHeight: 1.65,
-                  color: T.text.secondary,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                  fontFamily: T.font.mono,
-                  opacity: 0.9,
-                  margin: 0,
-                }}
-              >
-                {streamText}
-                <span
-                  style={{
-                    display: "inline-block",
-                    width: 7,
-                    height: 14,
-                    background: T.status.green,
-                    animation: "pulse 1s ease infinite",
-                    verticalAlign: "text-bottom",
-                    borderRadius: 2,
-                    marginLeft: 3,
-                  }}
-                />
-              </pre>
-            </div>
-          </Card>
+      <div style={{ transition: "opacity .3s ease", opacity: 0.6 }}>
+        {/* Skeleton placeholders that hint at card structure */}
+        <div className="shimmer-bg" style={{ height: 70, borderRadius: T.radius.lg, marginBottom: 10 }} />
+        <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+          <div className="shimmer-bg" style={{ height: 54, borderRadius: T.radius.md, flex: 1 }} />
+          <div className="shimmer-bg" style={{ height: 54, borderRadius: T.radius.md, flex: 1 }} />
+          <div className="shimmer-bg" style={{ height: 54, borderRadius: T.radius.md, flex: 1 }} />
         </div>
-      ) : (
-        <div style={{ transition: "opacity .3s ease", opacity: 0.6 }}>
-          {/* Skeleton placeholders that hint at card structure */}
-          <div className="shimmer-bg" style={{ height: 70, borderRadius: T.radius.lg, marginBottom: 10 }} />
-          <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-            <div className="shimmer-bg" style={{ height: 54, borderRadius: T.radius.md, flex: 1 }} />
-            <div className="shimmer-bg" style={{ height: 54, borderRadius: T.radius.md, flex: 1 }} />
-            <div className="shimmer-bg" style={{ height: 54, borderRadius: T.radius.md, flex: 1 }} />
-          </div>
-          <div
-            className="shimmer-bg"
-            style={{ height: 120, borderRadius: T.radius.lg, marginBottom: 10, animationDelay: "0.1s" }}
-          />
-          <div className="shimmer-bg" style={{ height: 80, borderRadius: T.radius.lg, animationDelay: "0.2s" }} />
-        </div>
-      )}
+        <div
+          className="shimmer-bg"
+          style={{ height: 120, borderRadius: T.radius.lg, marginBottom: 10, animationDelay: "0.1s" }}
+        />
+        <div className="shimmer-bg" style={{ height: 80, borderRadius: T.radius.lg, animationDelay: "0.2s" }} />
+      </div>
     </div>
   );
 };

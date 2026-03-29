@@ -2,8 +2,22 @@ import { extractDashboardMetrics, fmt } from "./utils.js";
 
 function normalizeExportValue(value) {
   if (value == null) return "";
-  if (Array.isArray(value)) return value.filter(Boolean).join(" | ");
-  if (typeof value === "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return value.map((entry) => normalizeExportValue(entry)).filter(Boolean).join(" | ");
+  if (typeof value === "object") {
+    if (typeof value.title === "string" || typeof value.detail === "string") {
+      return [value.title, value.detail, value.amount].filter(Boolean).join(" — ");
+    }
+    if (typeof value.level === "string") {
+      return `[${String(value.level).toUpperCase()}] ${[value.title, value.detail].filter(Boolean).join(": ")}`;
+    }
+    if (typeof value.status === "string") {
+      return [value.title, value.subtitle, value.status].filter(Boolean).join(" — ");
+    }
+    if (typeof value.item === "string") {
+      return [value.date, value.item, value.amount].filter(Boolean).join(" — ");
+    }
+    return JSON.stringify(value);
+  }
   return String(value);
 }
 
@@ -94,7 +108,13 @@ export function buildAuditHtmlDocument(audit, dateStr) {
   const content = `
     <h2 style="font-size: 18px; font-weight: 700; color: #111827; border-bottom: 1px solid #E5E7EB; padding-bottom: 8px; margin-bottom: 16px;">Executive AI Summary</h2>
     <div style="background-color: #F9FAFB; padding: 20px; border-radius: 8px; border: 1px solid #E5E7EB; margin-bottom: 30px;">
-      <p style="white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: #374151; margin: 0;">${htmlEscape(parsed.raw || "No summary available.")}</p>
+      <p style="white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: #374151; margin: 0;">${htmlEscape(
+        [
+          parsed?.healthScore?.summary,
+          normalizeExportValue(parsed?.structured?.nextAction || parsed?.sections?.nextAction),
+          ...normalizeList(parsed?.alertsCard).slice(0, 2),
+        ].filter(Boolean).join(" ")
+      )}</p>
     </div>
     <h2 style="font-size: 18px; font-weight: 700; color: #111827; border-bottom: 1px solid #E5E7EB; padding-bottom: 8px; margin-bottom: 16px;">Financial Snapshot</h2>
     <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">

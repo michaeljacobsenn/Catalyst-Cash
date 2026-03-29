@@ -276,24 +276,93 @@ function normalizeStringArray(value) {
     .filter(Boolean);
 }
 
-function normalizeWeeklyMoveEntries(value) {
-  if (!Array.isArray(value)) return { weeklyMoves: [], moveItems: [] };
+function normalizeHeaderCard(value) {
+  if (!value || typeof value !== "object") {
+    return { status: "UNKNOWN", title: "", subtitle: "", confidence: null, details: [], headline: "" };
+  }
 
-  const moveItems = value
+  const details = Array.isArray(value.details)
+    ? value.details.map((item) => (typeof item === "string" ? item.trim() : "")).filter(Boolean)
+    : [];
+
+  return {
+    status: normalizeAuditStatus(value.status || value.headline || value.title),
+    title: typeof value.title === "string" ? value.title.trim() : "",
+    subtitle: typeof value.subtitle === "string" ? value.subtitle.trim() : "",
+    confidence:
+      value.confidence === "high" || value.confidence === "medium" || value.confidence === "low"
+        ? value.confidence
+        : null,
+    details,
+    headline: typeof value.headline === "string" ? value.headline.trim() : "",
+  };
+}
+
+function normalizeAlertEntries(value) {
+  if (!Array.isArray(value)) return { lines: [], items: [] };
+
+  const items = value
+    .map((entry) => {
+      if (typeof entry === "string") {
+        const text = entry.trim();
+        return text ? { level: "warn", title: text, detail: text } : null;
+      }
+      if (!entry || typeof entry !== "object") return null;
+      const title = typeof entry.title === "string" ? entry.title.trim() : "";
+      const detail = typeof entry.detail === "string" ? entry.detail.trim() : title;
+      const level = typeof entry.level === "string" ? entry.level.trim().toLowerCase() : "warn";
+      if (!title && !detail) return null;
+      return {
+        level: level || "warn",
+        title: title || detail,
+        detail: detail || title,
+      };
+    })
+    .filter(Boolean);
+
+  return {
+    items,
+    lines: items.map((item) => {
+      const prefix = item.level === "critical" ? "❗" : item.level === "info" ? "ℹ️" : "⚠️";
+      return `${prefix} ${item.title}${item.detail && item.detail !== item.title ? ` — ${item.detail}` : ""}`;
+    }),
+  };
+}
+
+function normalizeWeeklyMoveEntries(value) {
+  if (!Array.isArray(value)) return { weeklyMoves: [], moveItems: [], moveCards: [] };
+
+  const moveCards = value
     .map((item) => {
       if (typeof item === "string") {
         const text = item.trim();
-        return text ? { text } : null;
+        return text
+          ? {
+              title: text,
+              detail: text,
+              amount: null,
+              priority: null,
+              tag: null,
+              semanticKind: null,
+              targetLabel: null,
+              sourceLabel: null,
+              targetKey: null,
+              contributionKey: null,
+              transactional: undefined,
+            }
+          : null;
       }
       if (!item || typeof item !== "object") return null;
       const title = typeof item.title === "string" ? item.title.trim() : "";
       const detail = typeof item.detail === "string" ? item.detail.trim() : "";
-      const text = detail || title;
+      const text = detail || title || (typeof item.text === "string" ? item.text.trim() : "");
       if (!text) return null;
-      const normalized = {
-        text,
+      return {
+        title: title || text,
+        detail: detail || text,
+        amount: typeof item.amount === "string" ? item.amount : item.amount == null ? null : fmt(parseCurrency(item.amount) || 0),
+        priority: typeof item.priority === "string" ? item.priority.trim().toLowerCase() : null,
         tag: typeof item.priority === "string" ? item.priority.trim().toUpperCase() : typeof item.tag === "string" ? item.tag.trim().toUpperCase() : null,
-        amount: parseCurrency(item.amount),
         semanticKind: typeof item.semanticKind === "string" ? item.semanticKind.trim() : null,
         targetLabel: typeof item.targetLabel === "string" ? item.targetLabel.trim() : null,
         sourceLabel: typeof item.sourceLabel === "string" ? item.sourceLabel.trim() : null,
@@ -301,13 +370,99 @@ function normalizeWeeklyMoveEntries(value) {
         contributionKey: typeof item.contributionKey === "string" ? item.contributionKey.trim() : null,
         transactional: typeof item.transactional === "boolean" ? item.transactional : undefined,
       };
-      return normalized;
     })
     .filter(Boolean);
 
+  const moveItems = moveCards.map((item) => ({
+    text: item.detail || item.title,
+    tag: item.tag,
+    amount: parseCurrency(item.amount),
+    semanticKind: item.semanticKind,
+    targetLabel: item.targetLabel,
+    sourceLabel: item.sourceLabel,
+    targetKey: item.targetKey,
+    contributionKey: item.contributionKey,
+    transactional: item.transactional,
+  }));
+
   return {
-    weeklyMoves: moveItems.map((item) => item.text),
+    weeklyMoves: moveCards.map((item) => item.detail || item.title),
     moveItems,
+    moveCards,
+  };
+}
+
+function normalizeRadarItems(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (typeof entry === "string") {
+        const text = entry.trim();
+        return text ? { item: text, amount: "$0.00", date: "" } : null;
+      }
+      if (!entry || typeof entry !== "object") return null;
+      const item = typeof entry.item === "string" ? entry.item.trim() : "";
+      if (!item) return null;
+      return {
+        item,
+        amount:
+          typeof entry.amount === "string"
+            ? entry.amount.trim()
+            : entry.amount != null && parseCurrency(entry.amount) != null
+              ? fmt(parseCurrency(entry.amount))
+              : "$0.00",
+        date: typeof entry.date === "string" ? entry.date.trim() : "",
+      };
+    })
+    .filter(Boolean);
+}
+
+function normalizeRadar(radarValue, longRangeRadarValue) {
+  if (radarValue && typeof radarValue === "object" && !Array.isArray(radarValue)) {
+    return {
+      next90Days: normalizeRadarItems(radarValue.next90Days || radarValue.shortRange || []),
+      longRange: normalizeRadarItems(radarValue.longRange || radarValue.longRangeRadar || longRangeRadarValue || []),
+    };
+  }
+
+  return {
+    next90Days: normalizeRadarItems(radarValue || []),
+    longRange: normalizeRadarItems(longRangeRadarValue || []),
+  };
+}
+
+function normalizeNextAction(value) {
+  if (typeof value === "string") {
+    const detail = value.trim();
+    return {
+      title: detail ? "Next Action" : "",
+      detail,
+      amount: null,
+    };
+  }
+
+  if (!value || typeof value !== "object") {
+    return {
+      title: "",
+      detail: "",
+      amount: null,
+    };
+  }
+
+  return {
+    title: typeof value.title === "string" ? value.title.trim() : "Next Action",
+    detail:
+      typeof value.detail === "string"
+        ? value.detail.trim()
+        : typeof value.summary === "string"
+          ? value.summary.trim()
+          : "",
+    amount:
+      typeof value.amount === "string"
+        ? value.amount.trim()
+        : value.amount != null && parseCurrency(value.amount) != null
+          ? fmt(parseCurrency(value.amount))
+          : null,
   };
 }
 
@@ -532,12 +687,17 @@ export function parseJSON(raw) {
   // Map to the internal structure expected by ResultsView/Dashboard
   const normalizedWeeklyMoves = normalizeWeeklyMoveEntries(j.weeklyMoves);
   const weeklyMoves = normalizedWeeklyMoves.weeklyMoves;
-  const alertsCard = normalizeStringArray(j.alertsCard);
+  const normalizedHeaderCard = normalizeHeaderCard(j.headerCard);
+  const normalizedNextAction = normalizeNextAction(j.nextAction);
+  const normalizedAlerts = normalizeAlertEntries(j.alertsCard || j.alerts);
+  const alertsCard = normalizedAlerts.lines;
   const { rows: dashboardCard, nonCanonicalCategories } = normalizeDashboardCard(j.dashboardCard);
   const investments = normalizeInvestmentsSummary(j.investments);
   const spendingAnalysis = normalizeSpendingAnalysis(j.spendingAnalysis);
   const negotiationTargets = normalizeNegotiationTargets(j.negotiationTargets);
   const normalizedHealthScore = normalizeHealthScore(j.healthScore);
+  const normalizedRadar = normalizeRadar(j.radar, j.longRangeRadar);
+  const assumptions = normalizeStringArray(j.assumptions);
   const auditFlags = [];
   if (normalizedHealthScore.gradeCorrected && normalizedHealthScore.value) {
     auditFlags.push({
@@ -550,7 +710,37 @@ export function parseJSON(raw) {
       },
     });
   }
-  const normalizedStatus = normalizeAuditStatus(j.headerCard?.status || j.status || j.headerCard?.headline);
+  const normalizedStatus = normalizeAuditStatus(
+    normalizedHeaderCard.status === "UNKNOWN"
+      ? j.status || normalizedHeaderCard.headline || normalizedHeaderCard.title
+      : normalizedHeaderCard.status
+  );
+  const structuredWeeklyMoves = normalizedWeeklyMoves.moveCards.map((item) => ({
+    title: item.title || item.detail,
+    detail: item.detail || item.title,
+    amount: item.amount ?? null,
+    priority: item.priority || "optional",
+  }));
+  const structuredMoveItems = normalizeMoveItems(
+    Array.isArray(j.moveItems) && j.moveItems.length > 0 ? j.moveItems : normalizedWeeklyMoves.moveItems,
+    weeklyMoves
+  );
+  const structured = {
+    ...j,
+    headerCard: normalizedHeaderCard,
+    alertsCard: normalizedAlerts.items,
+    dashboardCard,
+    weeklyMoves: structuredWeeklyMoves,
+    moveItems: structuredMoveItems,
+    radar: normalizedRadar,
+    longRangeRadar: normalizedRadar.longRange,
+    investments,
+    nextAction: normalizedNextAction,
+    spendingAnalysis,
+    negotiationTargets,
+    assumptions,
+    riskFlags: normalizeStringArray(j.riskFlags),
+  };
   return {
     raw,
     status: normalizedStatus,
@@ -565,34 +755,24 @@ export function parseJSON(raw) {
     weeklyMoves,
     investments,
     spendingAnalysis,
-    structured: j,
+    structured,
     sections: {
       header: `**${new Date().toISOString().split("T")[0]}** · FULL · ${normalizedStatus}`,
-      alerts: alertsCard
-        .map(
-          a =>
-            `⚠️ ${String(a)
-              .replace(/^(?:!|\s|\u26A0|\uFE0F|\u2757|\u203C)+/u, "")
-              .trim()}`
-        )
-        .join("\n"),
+      alerts: alertsCard.join("\n"),
       dashboard: dashboardCard
         .map(d => `**${d.category}:** ${d.amount} ${d.status ? `(${d.status})` : ""}`)
         .join("\n"),
       moves: weeklyMoves.join("\n"),
-      radar: (j.radar || []).map(r => `**${r.date}** ${r.item} ${r.amount}`).join("\n"),
-      longRange: (j.longRangeRadar || []).map(r => `**${r.date}** ${r.item} ${r.amount}`).join("\n"),
-      forwardRadar: (j.milestones || []).join("\n"), // Re-mapped milestones to forward radar slot for now
-      investments: `**Balance:** ${investments?.balance || "N/A"}\n**As Of:** ${investments?.asOf || "N/A"}\n**Gate:** ${investments?.gateStatus || "N/A"}`,
-      nextAction: j.nextAction || "",
+      radar: normalizedRadar.next90Days.map(r => `**${r.date || "Upcoming"}** ${r.item} ${r.amount}`).join("\n"),
+      longRange: normalizedRadar.longRange.map(r => `**${r.date || "Later"}** ${r.item} ${r.amount}`).join("\n"),
+      forwardRadar: assumptions.join("\n"),
+      investments: `**Balance:** ${investments?.balance || "N/A"}\n**As Of:** ${investments?.asOf || "N/A"}\n**Gate:** ${investments?.gateStatus || "N/A"}${investments?.netWorth ? `\n**Net Worth:** ${investments.netWorth}` : ""}`,
+      nextAction: [normalizedNextAction.title, normalizedNextAction.detail, normalizedNextAction.amount].filter(Boolean).join("\n"),
       autoUpdates: "Handled natively via JSON output",
       qualityScore: "Strict JSON Mode Active",
     },
     // Map moves to actionable checkboxes
-    moveItems: normalizeMoveItems(
-      Array.isArray(j.moveItems) && j.moveItems.length > 0 ? j.moveItems : normalizedWeeklyMoves.moveItems,
-      weeklyMoves
-    ),
+    moveItems: structuredMoveItems,
     paceData: Array.isArray(j.paceData) ? j.paceData : [], // Extracted from JSON if present, kept for backwards compat
     negotiationTargets,
     dashboardData: {
@@ -1013,6 +1193,11 @@ export function buildDegradedParsedAudit({
     "Full AI narrative unavailable — showing deterministic engine output only.",
     ...riskFlags.slice(0, 3).map(flag => `Risk flag: ${formatRiskFlag(flag)}`),
   ];
+  const structuredAlerts = alertsCard.map((detail, index) => ({
+    level: index === 0 ? "warn" : "critical",
+    title: index === 0 ? "Deterministic fallback active" : `Risk flag ${index}`,
+    detail,
+  }));
 
   const dashboardCard = [
     { category: "Checking", amount: fmt(checking), status: safetySnapshot.level === "urgent" ? "At risk" : "Tracked" },
@@ -1046,7 +1231,10 @@ export function buildDegradedParsedAudit({
     spendingAnalysis: null,
     structured: {
       headerCard: {
+        title: "Deterministic fallback active",
+        subtitle: safetySnapshot.headline,
         status,
+        confidence: "low",
         headline: "Deterministic fallback active",
         details: [safetySnapshot.headline, riskSummary],
       },
@@ -1060,11 +1248,20 @@ export function buildDegradedParsedAudit({
       dashboardCard,
       weeklyMoves,
       moveItems: normalizedFallbackMoves.moveItems,
-      alertsCard,
+      alertsCard: structuredAlerts,
+      radar: {
+        next90Days: [],
+        longRange: [],
+      },
       longRangeRadar: [],
       milestones: [],
       negotiationTargets: [],
-      nextAction,
+      nextAction: {
+        title: "Next Action",
+        detail: nextAction,
+        amount: null,
+      },
+      assumptions: [reason],
       riskFlags,
     },
     sections: {

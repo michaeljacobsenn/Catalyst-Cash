@@ -10,7 +10,7 @@ import React,{
     type KeyboardEvent,
     type ReactNode
 } from "react";
-import { streamAudit } from "../api.js";
+import { callAudit, streamAudit } from "../api.js";
 import {
   analyzeChatInputRisk,
   buildDeterministicChatFallback,
@@ -24,7 +24,7 @@ import { generateStrategy, mergeSnapshotDebts } from "../engine.js";
 import { haptic } from "../haptics.js";
 import { AlertTriangle, ArrowDown, ArrowUpRight, CheckCircle2, MessageCircle, Sparkles, Trash2 } from "../icons";
 import { log } from "../logger.js";
-import { extractMemoryTags } from "../memory.js";
+import { extractMemoryTags, extractUserMemoryFacts } from "../memory.js";
 import { isLikelyNetworkError, toUserFacingRequestError } from "../networkErrors.js";
 import { buildScrubber } from "../scrubber.js";
 import { checkChatQuota, isGatingEnforced, recordChatUsage, shouldShowGating } from "../subscription.js";
@@ -121,6 +121,7 @@ interface ChatMessageFeedback {
 }
 
 type ChatFeedbackStore = Record<string, ChatMessageFeedback>;
+type AssistantPhase = "thinking" | "replying";
 
 const CHAT_FEEDBACK_KEY = "ai-chat-feedback";
 const CHAT_FEEDBACK_REASON_OPTIONS: Array<{ value: ChatFeedbackReason; label: string }> = [
@@ -156,8 +157,37 @@ const streamAuditTyped = streamAudit as (
   signal?: AbortSignal,
   isChat?: boolean
 ) => AsyncGenerator<string, void, unknown>;
+const callAuditTyped = callAudit as (
+  apiKey: string,
+  snapshot: string,
+  providerId: string,
+  model: string,
+  context: Record<string, unknown>,
+  history?: ChatHistoryMessage[] | GeminiHistoryMessage[],
+  deviceId?: string,
+  isChat?: boolean,
+  signal?: AbortSignal
+) => Promise<string>;
 
-// ── Typing indicator (accessible) ──
+function TypingDots() {
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      {[0, 1, 2].map((dot) => (
+        <span
+          key={dot}
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: T.accent.primary,
+            opacity: 0.45,
+            animation: `chatTypingPulse 1.1s ease-in-out ${dot * 0.14}s infinite`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 export default memo(function AIChatTab({
   proEnabled = false,
@@ -186,6 +216,8 @@ export default memo(function AIChatTab({
   const [inputFocused, setInputFocused] = useState<boolean>(false);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
   const [messageFeedback, setMessageFeedback] = useState<ChatFeedbackStore>({});
+  const [assistantPhase, setAssistantPhase] = useState<AssistantPhase | null>(null);
+  const [liveAssistantPreview, setLiveAssistantPreview] = useState<string>("");
   const [viewport, setViewport] = useState(() => ({
     width: typeof window === "undefined" ? 390 : window.innerWidth,
     height: typeof window === "undefined" ? 844 : window.innerHeight,
@@ -345,10 +377,14 @@ export default memo(function AIChatTab({
         computedStrategy: chatStrategy,
       }) as DecisionRecommendation[];
       const inputRisk = analyzeChatInputRiskTyped(trimmedText);
+      const userMemoryFacts = extractUserMemoryFacts(trimmedText);
 
       setMessages(newMsgs);
       setInput("");
       setError(null);
+      if (userMemoryFacts.length > 0) {
+        void rememberFacts(userMemoryFacts);
+      }
 
       if (inputRisk.blocked) {
         const blockedReply = createChatMessage(
@@ -369,6 +405,8 @@ export default memo(function AIChatTab({
 
       setIsStreaming(true);
       isStreamingRef.current = true;
+      setAssistantPhase("thinking");
+      setLiveAssistantPreview("");
       haptic.light();
 
       const memBlock = getMemoryBlock();
@@ -409,62 +447,130 @@ export default memo(function AIChatTab({
 
       let accumulated = "";
       const assistantMsg: ChatHistoryMessage = { role: "assistant", content: "", ts: Date.now() };
+      const preferNonStreamingChat = /gemini/i.test(String(effectiveChatModel || ""));
+
+      const finalizeAssistantResponse = async (
+        rawText: string,
+        errorCode: string
+      ): Promise<boolean> => {
+        const restored = scrubber.unscrub(rawText || "");
+        const { cleanText, newFacts } = extractMemoryTags(restored);
+        const displayText = stripThoughtProcess(cleanText || restored);
+        const normalizedResponse = normalizeChatAssistantOutputTyped(displayText);
+        if (!normalizedResponse.valid) return false;
+
+        const finalMsgs = [...newMsgs, { ...assistantMsg, content: normalizedResponse.text, ts: Date.now() }];
+        setMessages(finalMsgs);
+        void persistMessages(finalMsgs);
+        if (newFacts.length > 0) {
+          void rememberFacts(newFacts);
+        }
+        recordChatUsage(effectiveChatModel).catch(() => { });
+        const q = await checkChatQuota(effectiveChatModel);
+        setChatQuota(q);
+        setError(null);
+        setAssistantPhase(null);
+        setLiveAssistantPreview("");
+        log.info("chat", "Chat response finalized", {
+          model: effectiveChatModel,
+          source: errorCode,
+        });
+        return true;
+      };
+
+      const tryNonStreamingRecovery = async (reason: string): Promise<boolean> => {
+        try {
+          log.warn("chat", "Retrying AskAI with non-streaming recovery", {
+            model: effectiveChatModel,
+            reason,
+          });
+          const retryRaw = await callAuditTyped(
+            apiKey,
+            transport.snapshot,
+            aiProvider,
+            effectiveChatModel,
+            transport.promptContext,
+            transport.apiHistory,
+            undefined,
+            true,
+            abort.signal
+          );
+          return await finalizeAssistantResponse(retryRaw, `non-stream-recovery:${reason}`);
+        } catch (retryError) {
+          log.warn("chat", "Non-streaming recovery failed", {
+            model: effectiveChatModel,
+            reason,
+            error: retryError instanceof Error ? retryError.message : String(retryError),
+          });
+          return false;
+        }
+      };
 
       try {
         log.info("chat", "Chat message sent", { provider: aiProvider, model: aiModel });
 
-        // effectiveChatModel is computed at the top of the component
-        const stream = streamAuditTyped(
-          apiKey,
-          transport.snapshot,
-          aiProvider,
-          effectiveChatModel,
-          transport.promptContext,
-          transport.apiHistory,
-          undefined, // deviceId — handled by backend
-          abort.signal,
-          true // isChat — tells the backend to return natural language, not JSON
-        );
+        if (preferNonStreamingChat) {
+          const raw = await callAuditTyped(
+            apiKey,
+            transport.snapshot,
+            aiProvider,
+            effectiveChatModel,
+            transport.promptContext,
+            transport.apiHistory,
+            undefined,
+            true,
+            abort.signal
+          );
+          accumulated = raw || "";
+        } else {
+          const stream = streamAuditTyped(
+            apiKey,
+            transport.snapshot,
+            aiProvider,
+            effectiveChatModel,
+            transport.promptContext,
+            transport.apiHistory,
+            undefined,
+            abort.signal,
+            true
+          );
 
-        for await (const chunk of stream) {
-          if (abort.signal.aborted) break;
-          accumulated += chunk;
-          assistantMsg.content = stripThoughtProcess(scrubber.unscrub(accumulated));
-          assistantMsg.ts = Date.now();
-          setMessages([...newMsgs, { ...assistantMsg }]);
+          for await (const chunk of stream) {
+            if (abort.signal.aborted) break;
+            accumulated += chunk;
+            assistantMsg.content = stripThoughtProcess(scrubber.unscrub(accumulated));
+            assistantMsg.ts = Date.now();
+            setAssistantPhase("replying");
+            setLiveAssistantPreview(assistantMsg.content);
+            setMessages([...newMsgs, { ...assistantMsg }]);
+          }
         }
 
-        // Finalize
         if (accumulated.trim()) {
-          // Extract REMEMBER tags and strip thought_process blocks before persisting/displaying
-          const restored = scrubber.unscrub(accumulated);
-          const { cleanText, newFacts } = extractMemoryTags(restored);
-          const displayText = stripThoughtProcess(cleanText || restored);
-          const normalizedResponse = normalizeChatAssistantOutputTyped(displayText);
-          const finalText = normalizedResponse.valid
-            ? normalizedResponse.text
-            : buildDeterministicChatFallbackTyped({
+          const finalized = await finalizeAssistantResponse(
+            accumulated,
+            preferNonStreamingChat ? "non-stream-primary" : "stream-primary"
+          );
+          if (!finalized) {
+            const recovered = preferNonStreamingChat
+              ? false
+              : await tryNonStreamingRecovery("empty-or-malformed-chat-output");
+            if (!recovered) {
+              const fallbackText = buildDeterministicChatFallbackTyped({
                 current,
                 computedStrategy: chatStrategy,
                 decisionRecommendations,
                 error: "empty-or-malformed-chat-output",
               });
-          const finalMsgs = [...newMsgs, { ...assistantMsg, content: finalText }];
-          setMessages(finalMsgs);
-          void persistMessages(finalMsgs);
-          // Persist any new facts the AI learned
-          if (normalizedResponse.valid && newFacts.length > 0) {
-            void rememberFacts(newFacts);
-          }
-          if (normalizedResponse.valid) {
-            // Record usage after successful response (pass model for per-model pro tracking)
-            recordChatUsage(effectiveChatModel).catch(() => { });
-            const q = await checkChatQuota(effectiveChatModel);
-            setChatQuota(q);
-          } else {
-            setError("AI response was incomplete. Showing native fallback guidance instead.");
+              const finalMsgs = [...newMsgs, createChatMessage("assistant", fallbackText)];
+              setMessages(finalMsgs);
+              void persistMessages(finalMsgs);
+              setError("AI response was incomplete. Showing native fallback guidance instead.");
+            }
           }
         } else {
+          const recovered = await tryNonStreamingRecovery("empty-chat-output");
+          if (!recovered) {
           const fallbackText = buildDeterministicChatFallbackTyped({
             current,
             computedStrategy: chatStrategy,
@@ -475,6 +581,7 @@ export default memo(function AIChatTab({
           setMessages(finalMsgs);
           void persistMessages(finalMsgs);
           setError("AI response was empty. Showing native fallback guidance instead.");
+          }
         }
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "AbortError") {
@@ -484,7 +591,12 @@ export default memo(function AIChatTab({
             const finalMsgs = [...newMsgs, { ...assistantMsg, content: restored + "\n\n*[Response cancelled]*" }];
             setMessages(finalMsgs);
             void persistMessages(finalMsgs);
+          } else {
+            const finalMsgs = [...newMsgs, createChatMessage("assistant", "Response stopped.")];
+            setMessages(finalMsgs);
+            void persistMessages(finalMsgs);
           }
+          setError(null);
         } else {
           // ── Per-model cap auto-switch (Pro only) ──
           const modelCap = (err as Record<string, unknown>)?.modelCapReached;
@@ -499,11 +611,15 @@ export default memo(function AIChatTab({
                 "gpt-4.1": "Catalyst AI CFO",
               };
               setError(`Daily ${modelNames[modelCap] || modelCap} limit reached. Switched to ${modelNames[nextModel] || nextModel} — send your message again.`);
-              toast?.error?.(`Switched to ${modelNames[nextModel] || nextModel}`);
               // Remove the failed assistant message so user can retry cleanly
               setMessages(newMsgs);
               return;
             }
+          }
+
+          if (!preferNonStreamingChat && !String(accumulated || "").trim()) {
+            const recovered = await tryNonStreamingRecovery("stream-transport-error");
+            if (recovered) return;
           }
 
           const failure = toUserFacingRequestError(err, { context: "chat" });
@@ -516,7 +632,6 @@ export default memo(function AIChatTab({
           });
           const finalMsgs = [...newMsgs, createChatMessage("assistant", fallbackText)];
           setError(`${failure.userMessage} Showing native fallback guidance.`);
-          toast?.error?.(failure.userMessage);
           setMessages(finalMsgs);
           void persistMessages(finalMsgs);
         }
@@ -524,6 +639,8 @@ export default memo(function AIChatTab({
         setIsStreaming(false);
         isStreamingRef.current = false;
         abortRef.current = null;
+        setAssistantPhase(null);
+        setLiveAssistantPreview("");
       }
     },
     [
@@ -703,6 +820,7 @@ export default memo(function AIChatTab({
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
       <style>{`
             @keyframes chatBubbleIn { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+            @keyframes chatTypingPulse { 0%, 80%, 100% { transform: translateY(0); opacity: .3; } 40% { transform: translateY(-3px); opacity: 1; } }
             .chat-bubble-in { animation: chatBubbleIn .3s cubic-bezier(.16,1,.3,1) both; }
         `}</style>
 
@@ -838,8 +956,8 @@ export default memo(function AIChatTab({
               }}
             >
               {hasData
-                ? "Your financial data is loaded. Ask me anything about your money."
-                : "Run your first audit to unlock personalized insights."}
+                ? "Your latest financial briefing is loaded. Ask follow-up questions about your money."
+                : "Run your first weekly briefing to unlock personalized insights."}
             </p>
             <div
               style={{
@@ -961,15 +1079,15 @@ export default memo(function AIChatTab({
                 >
                   <div
                     style={{
-                      maxWidth: isUser ? "80%" : "88%", // More balanced constraints for both sides
-                      minWidth: isUser ? "unset" : "60%", // Ensure AI messages don't get too squished
-                      padding: isUser ? "12px 18px" : "14px 18px", // Tighter padding for markdown 
+                      maxWidth: isUser ? "72%" : "79%",
+                      minWidth: isUser ? "unset" : 0,
+                      padding: isUser ? "10px 15px" : "12px 16px",
                       borderRadius: borderRadius,
                       background: isUser ? T.accent.gradient : T.bg.elevated,
                       border: isUser ? "none" : `1px solid ${T.border.subtle}`,
                       color: isUser ? "#fff" : T.text.primary,
-                      fontSize: 14,
-                      lineHeight: 1.55,
+                      fontSize: 13.5,
+                      lineHeight: 1.5,
                       boxShadow: isUser ? `0 8px 24px rgba(123,94,167,0.3)` : T.shadow.card,
                       position: "relative",
                       wordBreak: "break-word",
@@ -1111,54 +1229,59 @@ export default memo(function AIChatTab({
               );
             })}
 
-            {/* Error display */}
-            {error && !isStreaming && (
+            {isStreaming && !liveAssistantPreview && (
               <div
                 className="chat-bubble-in"
                 style={{
                   display: "flex",
-                  justifyContent: "flex-start",
-                  marginTop: 4,
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  marginBottom: 12,
                 }}
               >
                 <div
                   style={{
-                    maxWidth: "90%",
-                    padding: "10px 14px",
-                    borderRadius: T.radius.lg,
-                    background: T.status.redDim,
-                    border: `1px solid ${T.status.red}25`,
-                    fontSize: 12,
-                    color: T.status.red,
+                    maxWidth: "79%",
+                    minWidth: 168,
+                    padding: "12px 15px",
+                    borderRadius: "22px 22px 22px 6px",
+                    background: T.bg.elevated,
+                    border: `1px solid ${T.border.subtle}`,
+                    color: T.text.primary,
+                    boxShadow: T.shadow.card,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                    <AlertTriangle size={13} strokeWidth={2.5} />
-                    <strong>Error</strong>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        background: T.accent.gradient,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        boxShadow: `0 6px 16px ${T.accent.primary}30`,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Sparkles size={13} color="#fff" strokeWidth={2.3} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary }}>
+                        {assistantPhase === "replying" ? "Catalyst is replying" : "Catalyst is thinking"}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: T.text.secondary, marginTop: 2, lineHeight: 1.35 }}>
+                        {assistantPhase === "replying"
+                          ? "Finishing the answer from your live financial context."
+                          : "Reviewing your latest financial context before replying."}
+                      </div>
+                    </div>
                   </div>
-                  <p style={{ margin: 0, color: T.text.secondary, lineHeight: 1.5 }}>{error}</p>
-                  <button
-                    onClick={() => {
-                      setError(null);
-                      // Retry the last USER message, not the last message (which may be assistant/error)
-                      const retryText =
-                        lastUserMsgRef.current || messages.filter(m => m.role === "user").pop()?.content;
-                      if (retryText) sendMessage(retryText);
-                    }}
-                    style={{
-                      marginTop: 8,
-                      padding: "6px 14px",
-                      borderRadius: T.radius.sm,
-                      border: `1px solid ${T.status.red}40`,
-                      background: "transparent",
-                      color: T.status.red,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Retry
-                  </button>
+                  <TypingDots />
                 </div>
               </div>
             )}
@@ -1268,7 +1391,13 @@ export default memo(function AIChatTab({
               onKeyDown={handleKeyDown}
               onFocus={() => setInputFocused(true)}
               onBlur={() => setInputFocused(false)}
-              placeholder={isStreaming ? "Waiting for response..." : "Ask about your finances..."}
+              placeholder={
+                isStreaming
+                  ? assistantPhase === "replying"
+                    ? "Catalyst is replying..."
+                    : "Catalyst is thinking..."
+                  : "Ask about your finances..."
+              }
               disabled={isStreaming}
               rows={1}
               style={{
@@ -1293,6 +1422,8 @@ export default memo(function AIChatTab({
               <button
                 type="button"
                 onClick={cancelStream}
+                aria-label="Stop generating response"
+                title="Stop generating response"
                 onMouseOver={e => e.currentTarget.style.transform = "scale(0.95)"}
                 onMouseOut={e => e.currentTarget.style.transform = "scale(1)"}
                 style={{

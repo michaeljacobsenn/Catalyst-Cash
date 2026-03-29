@@ -323,8 +323,8 @@ export function AuditProvider({ children }: AuditProviderProps) {
   const openRecoverableAuditDraft = useCallback((): void => {
     if (!recoverableAuditDraft) return;
     setActiveAuditDraftView(recoverableAuditDraft);
-    setStreamText(recoverableAuditDraft.raw);
-    setError("Recovered interrupted audit draft. Review the partial output, then rerun the audit if needed.");
+    setStreamText("");
+    setError("Recovered an interrupted audit session. Rerun the audit to generate a complete result.");
   }, [recoverableAuditDraft]);
 
   const dismissRecoverableAuditDraft = useCallback(async (): Promise<void> => {
@@ -424,7 +424,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
             {
               providerId: aiProvider || "gemini",
               financialConfig,
-              cards,
+              cards: strategyCards,
               bankAccounts,
               renewals: promptRenewals,
               personalRules: personalRules || "",
@@ -872,16 +872,13 @@ export function AuditProvider({ children }: AuditProviderProps) {
     }
     if (timerRef.current) clearInterval(timerRef.current);
     setLoading(false);
-    setStreamText((prev) => prev + "\n\n[Audit Cancelled by User]");
-
-    setTimeout(() => {
-      setError("Audit was cancelled.");
-      if (history.length > 0) {
-        setViewing(history[0] || null);
-      } else {
-        navTo("dashboard");
-      }
-    }, 1500);
+    setStreamText("");
+    setError("Audit was cancelled.");
+    if (history.length > 0) {
+      setViewing(history[0] || null);
+    } else {
+      navTo("dashboard");
+    }
   }, [history, navTo]);
 
   const clearAll = useCallback(async (): Promise<void> => {

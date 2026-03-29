@@ -23,6 +23,18 @@ function compactChatPrompt(prompt) {
 
   next = replaceChatSection(
     next,
+    `## Credit Building Strategy(Always Active)`,
+    `## Internal Reasoning Protocol`,
+    `## Credit Building Strategy (Always Active)
+- Aim for 1-9% reported utilization per card and under 10% overall when practical.
+- Statement-close timing matters more than due date for score optimization.
+- Suggest soft-pull limit increases or product changes only when they improve utilization or preserve account age without adding risk.
+
+`
+  );
+
+  next = replaceChatSection(
+    next,
     `## "Ensemble of Experts" Routing (MANDATORY)`,
     `## Wealth Building at Every Stage`,
     `## Internal Routing (MANDATORY)
@@ -102,14 +114,13 @@ Route the answer internally through a spending, investing, or planning lens befo
     `## Safety Guardrails(HARD — HIGHEST PRIORITY)`,
     `## Persistent Memory(IMPORTANT)`,
     `## Safety Guardrails(HARD — HIGHEST PRIORITY)
-1. MANDATORY DISCLAIMER: For investment, tax, or debt-strategy advice, include once per conversation: "This is for educational and informational purposes only — not professional financial, tax, legal, or investment advice. Consult a licensed advisor before making financial decisions."
-2. NO GUARANTEES OR LICENSED-ADVICE CLAIMS.
-3. NO SPECIFIC STOCK / ETF / CRYPTO PICKS OR TAX-FILING INSTRUCTIONS.
-4. CRISIS / SELF-HARM: give 988 / Crisis Text Line resources immediately.
-5. GAMBLING / ADDICTION: do not optimize it; direct them to 1-800-522-4700.
-6. ILLEGAL ACTIVITY: refuse guidance that facilitates it.
-7. EXTREME FINANCIAL RISK: point to HUD / NFCC when the snapshot indicates housing or hardship danger.
-8. MLM / PYRAMID SCHEMES: treat MLM income as unreliable. FTC data shows 99% of MLM participants lose money; do not build plans that depend on MLM growth.
+1. For investment, tax, or debt-strategy advice, include once per conversation: "This is for educational and informational purposes only — not professional financial, tax, legal, or investment advice. Consult a licensed advisor before making financial decisions."
+2. No guarantees, licensed-advice claims, stock/ETF/crypto picks, or tax-filing instructions.
+3. Crisis / self-harm: give 988 / Crisis Text Line resources immediately.
+4. Gambling / addiction: refuse optimization and direct them to 1-800-522-4700.
+5. Illegal activity: refuse guidance that facilitates it.
+6. Extreme hardship: point to HUD / NFCC when the snapshot indicates housing or hardship danger.
+7. Treat MLM income as unreliable and do not build plans around MLM growth.
 
 `
   );
@@ -752,7 +763,6 @@ function buildFinancialBriefContext(financialBrief = null, chatIntent = null) {
   const income = financialBrief.income || {};
   const cash = financialBrief.cash || {};
   const credit = financialBrief.credit || {};
-  const debt = financialBrief.debt || {};
   const cards = Array.isArray(financialBrief.cards) ? financialBrief.cards : [];
   const bankAccounts = Array.isArray(financialBrief.bankAccounts) ? financialBrief.bankAccounts : [];
   const nearTerm = financialBrief.nearTerm || {};
@@ -760,7 +770,7 @@ function buildFinancialBriefContext(financialBrief = null, chatIntent = null) {
   const trends = Array.isArray(financialBrief.trends) ? financialBrief.trends : [];
   const auditHistory = Array.isArray(financialBrief.auditHistory) ? financialBrief.auditHistory : [];
 
-  parts.push("## Current Financial Position");
+  parts.push("## Compact Financial Brief");
 
   if (shouldIncludeBriefSection(chatIntent, "profile") && profile.birthYear) {
     const currentYear = new Date().getFullYear();
@@ -788,146 +798,68 @@ function buildFinancialBriefContext(financialBrief = null, chatIntent = null) {
 
   const incomeLine = shouldIncludeBriefSection(chatIntent, "income")
     ? [
-    income.estimatedMonthly != null ? `Estimated Monthly Net Income: ${fmt(income.estimatedMonthly)}` : null,
-    income.cycleNet != null ? `Per-${profile.payFrequency || "paycheck"} Take-Home: ${fmt(income.cycleNet)}` : null,
-    profile.incomeType ? `Income Type: ${profile.incomeType}` : null,
+        income.estimatedMonthly != null ? `Estimated Monthly Net Income: ${fmt(income.estimatedMonthly)}` : null,
+        income.cycleNet != null ? `Per-${profile.payFrequency || "paycheck"} Take-Home: ${fmt(income.cycleNet)}` : null,
+        profile.incomeType ? `Income Type: ${profile.incomeType}` : null,
       ].filter(Boolean)
     : [];
   if (incomeLine.length > 0) parts.push(incomeLine.join(" | "));
 
-  if (shouldIncludeBriefSection(chatIntent, "income") && Array.isArray(income.sources) && income.sources.length > 0) {
-    parts.push("Income Sources:");
-    income.sources.forEach((source) => {
-      const detail = [
-        source?.amount != null ? fmt(source.amount) : null,
-        source?.frequency || null,
-        source?.type || null,
-        source?.nextDate ? `next ${source.nextDate}` : null,
-      ].filter(Boolean).join(", ");
-      parts.push(`  - ${source?.name || "Income"}${detail ? `: ${detail}` : ""}`);
-    });
-  }
-
   const floorLine = shouldIncludeBriefSection(chatIntent, "cash")
     ? [
-    cash.pending != null ? `7-Day Obligations: ${fmt(cash.pending)}` : null,
-    nearTerm.totalDue14Days != null ? `14-Day Funding Load: ${fmt(nearTerm.totalDue14Days)}` : null,
-    cash.emergencyFloor != null ? `Emergency Floor: ${fmt(cash.emergencyFloor)}` : null,
-    cash.checkingBuffer != null ? `Checking Buffer: ${fmt(cash.checkingBuffer)}` : null,
-    cash.weeklySpendAllowance != null ? `Weekly Spend Allowance: ${fmt(cash.weeklySpendAllowance)}` : null,
+        cash.pending != null ? `7-Day Obligations: ${fmt(cash.pending)}` : null,
+        nearTerm.totalDue14Days != null ? `14-Day Funding Load: ${fmt(nearTerm.totalDue14Days)}` : null,
+        cash.emergencyFloor != null ? `Emergency Floor: ${fmt(cash.emergencyFloor)}` : null,
+        cash.checkingBuffer != null ? `Checking Buffer: ${fmt(cash.checkingBuffer)}` : null,
+        cash.weeklySpendAllowance != null ? `Weekly Spend Allowance: ${fmt(cash.weeklySpendAllowance)}` : null,
       ].filter(Boolean)
     : [];
   if (floorLine.length > 0) parts.push(floorLine.join(" | "));
 
   const creditLine = shouldIncludeBriefSection(chatIntent, "credit")
     ? [
-    credit.creditScore != null ? `Credit Score: ${credit.creditScore}` : null,
-    credit.creditUtilization != null ? `Manual Utilization Input: ${credit.creditUtilization}%` : null,
-    credit.totalCardDebt != null ? `Total CC Debt: ${fmt(credit.totalCardDebt)}` : null,
-    credit.totalCardLimit != null ? `Total Limits: ${fmt(credit.totalCardLimit)}` : null,
-    credit.overallUtilization != null ? `Overall Utilization: ${credit.overallUtilization}%` : null,
+        credit.creditScore != null ? `Credit Score: ${credit.creditScore}` : null,
+        credit.creditUtilization != null ? `Manual Utilization Input: ${credit.creditUtilization}%` : null,
+        credit.totalCardDebt != null ? `Total CC Debt: ${fmt(credit.totalCardDebt)}` : null,
+        credit.totalCardLimit != null ? `Total Limits: ${fmt(credit.totalCardLimit)}` : null,
+        credit.overallUtilization != null ? `Overall Utilization: ${credit.overallUtilization}%` : null,
       ].filter(Boolean)
     : [];
   if (creditLine.length > 0) parts.push(creditLine.join(" | "));
 
-  if (shouldIncludeBriefSection(chatIntent, "debt") && Array.isArray(debt.nonCardDebts) && debt.nonCardDebts.length > 0) {
-    parts.push("\nNon-Card Debts:");
-    debt.nonCardDebts.forEach((item) => {
-      const details = [
-        item?.balance != null ? fmt(item.balance) : null,
-        item?.apr != null ? `${item.apr}% APR` : null,
-        item?.minPayment != null ? `min ${fmt(item.minPayment)}` : null,
-      ].filter(Boolean).join(", ");
-      parts.push(`  - ${item?.name || "Debt"}${details ? `: ${details}` : ""}`);
-    });
+  if (shouldIncludeBriefSection(chatIntent, "cards") && cards[0]?.name) {
+    parts.push(`Lead Card Context: ${cards[0].name}`);
   }
 
-  if (shouldIncludeBriefSection(chatIntent, "cards") && cards.length > 0) {
-    parts.push("\n## Credit Card Portfolio");
-    cards.forEach((card) => {
-      const line = [
-        card?.balance != null ? fmt(card.balance) : null,
-        card?.limit != null ? fmt(card.limit) : null,
-        card?.utilization != null ? `${card.utilization}% util` : null,
-        card?.apr != null ? `${card.apr}% APR` : null,
-        card?.minPayment != null ? `min ${fmt(card.minPayment)}` : null,
-        card?.paymentDueDay != null ? `due day ${card.paymentDueDay}` : null,
-        card?.statementCloseDay != null ? `statement close ${card.statementCloseDay}` : null,
-        card?.annualFee != null && card.annualFee > 0 ? `annual fee ${fmt(card.annualFee)}` : null,
-      ].filter(Boolean).join(", ");
-      parts.push(`  - ${card?.name || "Card"}${line ? `: ${line}` : ""}`);
-    });
+  if (shouldIncludeBriefSection(chatIntent, "renewals") && Array.isArray(renewals.items) && renewals.items[0]?.name) {
+    parts.push(`Lead Recurring Charge: ${renewals.items[0].name}`);
   }
 
-  if (shouldIncludeBriefSection(chatIntent, "cash") && bankAccounts.length > 0) {
-    parts.push("\n## Bank Accounts");
-    bankAccounts.forEach((account) => {
-      const detail = [
-        account?.balance != null ? fmt(account.balance) : null,
-        account?.accountType || null,
-        account?.apy != null ? `${account.apy}% APY` : null,
-        account?.reconnectRequired ? "reconnect required" : null,
-      ].filter(Boolean).join(" | ");
-      parts.push(`  - ${account?.name || "Bank account"}${detail ? `: ${detail}` : ""}`);
-    });
+  if (shouldIncludeBriefSection(chatIntent, "cash") && Array.isArray(bankAccounts) && bankAccounts[0]?.name) {
+    parts.push(`Primary Bank Account: ${bankAccounts[0].name}${bankAccounts[0].balance != null ? ` (${fmt(bankAccounts[0].balance)})` : ""}`);
   }
 
-  if (shouldIncludeBriefSection(chatIntent, "renewals") && Array.isArray(renewals.items) && renewals.items.length > 0) {
-    parts.push("\n## Recurring Bills & Subscriptions");
-    renewals.items.forEach((renewal) => {
-      const cadence = renewal?.intervalUnit === "one-time"
-        ? "(one-time)"
-        : `every ${renewal?.interval || 1} ${renewal?.intervalUnit || "months"}`;
-      const detail = [
-        renewal?.amount != null ? fmt(renewal.amount) : null,
-        cadence,
-        renewal?.monthlyAmount != null ? `~${fmt(renewal.monthlyAmount)}/mo` : null,
-        renewal?.nextDue ? `next ${renewal.nextDue}` : null,
-        renewal?.chargedTo ? `charged to ${renewal.chargedTo}` : null,
-      ].filter(Boolean).join(" | ");
-      parts.push(`  - ${renewal?.name || "Recurring charge"}: ${detail}`);
-    });
-    if (renewals.monthlyEstimate != null) {
-      parts.push(`Estimated Monthly Recurring: ${fmt(renewals.monthlyEstimate)}`);
-    }
+  if (shouldIncludeBriefSection(chatIntent, "trends") && trends[0]) {
+    const latestTrend = trends[trends.length - 1];
+    const priorTrend = trends.length > 1 ? trends[trends.length - 2] : null;
+    const trendLine = [
+      latestTrend?.date ? `Latest trend: ${latestTrend.date}` : null,
+      latestTrend?.score != null ? `score ${latestTrend.score}` : null,
+      latestTrend?.status || null,
+      priorTrend?.score != null ? `prior score ${priorTrend.score}` : null,
+    ].filter(Boolean);
+    if (trendLine.length > 0) parts.push(trendLine.join(" | "));
   }
 
-  if (shouldIncludeBriefSection(chatIntent, "cash") && Array.isArray(nearTerm.byFundingSource) && nearTerm.byFundingSource.length > 0) {
-    parts.push("\n## Near-Term Funding Map (14 days)");
-    nearTerm.byFundingSource.forEach((source) => {
-      const detail = [
-        source?.total != null ? fmt(source.total) : null,
-        source?.itemCount != null ? `${source.itemCount} items` : null,
-        source?.nextDue ? `next ${source.nextDue}` : null,
-      ].filter(Boolean).join(" | ");
-      parts.push(`  - ${source?.label || "Funding source"}${detail ? `: ${detail}` : ""}`);
-    });
-  }
-
-  if (shouldIncludeBriefSection(chatIntent, "trends") && trends.length > 0) {
-    parts.push("\n## Recent Trend");
-    trends.forEach((entry) => {
-      const detail = [
-        entry?.score != null ? `score ${entry.score}` : null,
-        entry?.status || null,
-        entry?.checking != null ? `checking ${fmt(entry.checking)}` : null,
-        entry?.vault != null ? `vault ${fmt(entry.vault)}` : null,
-        entry?.totalDebt != null ? `debt ${fmt(entry.totalDebt)}` : null,
-      ].filter(Boolean).join(" | ");
-      parts.push(`  - ${entry?.date || "Recent"}: ${detail}`);
-    });
-  }
-
-  if (shouldIncludeBriefSection(chatIntent, "auditHistory") && auditHistory.length > 0) {
-    parts.push("\n## Audit History Snapshot");
-    auditHistory.forEach((audit) => {
-      const detail = [
-        audit?.parsed?.netWorth != null ? `NW ${fmt(audit.parsed.netWorth)}` : null,
-        audit?.parsed?.healthScore?.score != null ? `score ${audit.parsed.healthScore.score}` : null,
-        audit?.parsed?.healthScore?.grade ? `grade ${audit.parsed.healthScore.grade}` : null,
-      ].filter(Boolean).join(" | ");
-      parts.push(`  - ${audit?.date || audit?.ts || "Audit"}: ${detail}`);
-    });
+  if (shouldIncludeBriefSection(chatIntent, "auditHistory") && auditHistory[0]) {
+    const latestAudit = auditHistory[0];
+    const historyLine = [
+      latestAudit?.date || latestAudit?.ts || "Latest audit",
+      latestAudit?.parsed?.healthScore?.score != null ? `score ${latestAudit.parsed.healthScore.score}` : null,
+      latestAudit?.parsed?.healthScore?.grade ? `grade ${latestAudit.parsed.healthScore.grade}` : null,
+      latestAudit?.parsed?.netWorth != null ? `NW ${fmt(latestAudit.parsed.netWorth)}` : null,
+    ].filter(Boolean);
+    if (historyLine.length > 0) parts.push(`Latest Audit Snapshot: ${historyLine.join(" | ")}`);
   }
 
   return parts.join("\n");
@@ -1563,6 +1495,7 @@ ${toolContext ? `\n\n${toolContext}` : ""}
 - If data is missing, give the best provisional answer first, then ask at most 2 targeted follow-up questions.
 - When comparing options, make a recommendation, name the runner-up, and explain the tradeoff in plain English.
 - Avoid generic education, filler, or long option lists. Make the call.
+- If persistent memory says a balance is inventory-backed, reimbursable, or temporary, treat it as a timing and execution risk, not automatic lifestyle overspending. Focus on liquidity, sale/reimbursement timing, and payoff discipline.
 
 ## Credit Building Strategy(Always Active)
 You are ALWAYS aware of credit optimization — it costs nothing and runs parallel to every financial phase:
@@ -1574,8 +1507,10 @@ You are ALWAYS aware of credit optimization — it costs nothing and runs parall
 - **Authorized User Strategy**: If the user has thin credit history, being added as an authorized user on a responsible person's old, high-limit card can instantly boost their score.
 
 ## Internal Reasoning Protocol
-Before answering, use a hidden \`<thought_process>\` block to check the math, follow the routed specialist lens, and confirm you are not violating any safety guardrails.
-After closing \`</thought_process>\`, output only the clean user-facing answer.
+Do the reasoning silently before answering.
+- Never output hidden reasoning tags, XML blocks, chain-of-thought, or internal scratch work.
+- Return only the clean user-facing answer.
+- If you need to verify math or route through a specialist lens, do that privately and keep the final answer natural.
 
 ## Wealth Building at Every Stage
 Investing is NOT just for people with $0 debt.Apply the right strategy for their phase:

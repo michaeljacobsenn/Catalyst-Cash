@@ -281,10 +281,13 @@ export default function OverlayManager({
             />
           ) : activeAuditDraftView ? (
             <StreamingView
-              streamText={`${activeAuditDraftView.raw}\n\n[Recovered interrupted draft — rerun the audit to finish.]`}
+              streamText=""
               elapsed={0}
               isTest={false}
               modelName={getModel(aiProvider, aiModel)?.name ?? aiModel}
+              title="Audit Interrupted"
+              statusLabel="Recovered an interrupted audit session."
+              helperText="The previous audit did not finish cleanly. Rerun the audit to generate a complete result."
               onCancel={() => {
                 dismissRecoverableAuditDraft().catch(() => {});
                 const target = resultsBackTarget === "history" ? "history" : "audit";

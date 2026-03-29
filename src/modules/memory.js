@@ -7,11 +7,14 @@
 // ═══════════════════════════════════════════════════════════════
 
   import { decryptAtRestDetailed,encryptAtRest,isEncrypted } from "./crypto.js";
+  import { getIdentitySession } from "./identitySession.js";
+  import { getOrCreateDeviceId } from "./subscription.js";
   import { db } from "./utils.js";
 
 const MEMORY_DB_KEY = "ai-persistent-memory";
 const MAX_FACTS = 30;
 const MAX_MILESTONES = 20;
+let cachedScopedMemoryKey = null;
 
 // ── PII scrubber (mirrors AIChatTab pattern) ──
 const PII_PATTERNS = [
@@ -33,6 +36,32 @@ function scrubPII(text) {
   return clean;
 }
 
+async function getScopedMemoryKey() {
+  if (cachedScopedMemoryKey) return cachedScopedMemoryKey;
+  try {
+    const session = await getIdentitySession().catch(() => null);
+    if (session?.actorId) {
+      cachedScopedMemoryKey = `${MEMORY_DB_KEY}:${session.actorId}`;
+      return cachedScopedMemoryKey;
+    }
+  } catch {
+    // Ignore identity bootstrap issues and fall back to local device scoping.
+  }
+
+  try {
+    const deviceId = await getOrCreateDeviceId().catch(() => "unknown");
+    if (deviceId && deviceId !== "unknown") {
+      cachedScopedMemoryKey = `${MEMORY_DB_KEY}:device:${deviceId}`;
+      return cachedScopedMemoryKey;
+    }
+  } catch {
+    // Ignore device-id failures and fall back to the legacy local key.
+  }
+
+  cachedScopedMemoryKey = MEMORY_DB_KEY;
+  return cachedScopedMemoryKey;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // LOAD / SAVE
 // ═══════════════════════════════════════════════════════════════
@@ -43,7 +72,15 @@ function scrubPII(text) {
  */
 export async function loadMemory() {
   try {
-    let raw = await db.get(MEMORY_DB_KEY);
+    const scopedKey = await getScopedMemoryKey();
+    let raw = await db.get(scopedKey);
+    if (!raw && scopedKey !== MEMORY_DB_KEY) {
+      const legacy = await db.get(MEMORY_DB_KEY);
+      if (legacy) {
+        raw = legacy;
+        await db.set(scopedKey, legacy).catch(() => {});
+      }
+    }
     if (!raw) return { facts: [], milestones: [] };
     if (isEncrypted(raw)) {
       const decrypted = await decryptAtRestDetailed(raw, db).catch(() => ({ data: null, usedLegacyKey: false }));
@@ -67,8 +104,9 @@ export async function loadMemory() {
  * Persist memory to DB (encrypted at rest).
  */
 async function persistMemory(memory) {
+  const scopedKey = await getScopedMemoryKey();
   const payload = await encryptAtRest(memory, db).catch(() => memory);
-  await db.set(MEMORY_DB_KEY, payload);
+  await db.set(scopedKey, payload);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -115,6 +153,62 @@ function categorize(fact) {
   if (/\b(partner|spouse|wife|husband|kid|child|family|job|work|salary|income)\b/.test(lower)) return "context";
   if (/\b(hit|reached|achieved|cleared|paid off|zeroed|milestone|first)\b/.test(lower)) return "milestone";
   return "context";
+}
+
+function normalizeMemoryCandidate(sentence) {
+  return scrubPII(
+    String(sentence || "")
+      .replace(/\s+/g, " ")
+      .replace(/^[•\-\s]+/, "")
+      .trim()
+      .replace(/[.?!]+$/, "")
+  );
+}
+
+export function extractUserMemoryFacts(messageText) {
+  const text = String(messageText || "").trim();
+  if (!text) return [];
+
+  const sentences = text
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((sentence) => ({
+      raw: String(sentence || "").trim(),
+      normalized: normalizeMemoryCandidate(sentence),
+    }))
+    .filter((entry) => entry.normalized);
+
+  const remembered = [];
+  const seen = new Set();
+
+  for (const entry of sentences) {
+    const sentence = entry.normalized;
+    const lower = sentence.toLowerCase();
+    if (sentence.length < 12 || sentence.length > 220) continue;
+    if (/[?]\s*$/.test(entry.raw)) continue;
+
+    const isPreference =
+      /\b(i prefer|i always|i never|i avoid|i hate|i love|i only|i usually|i typically)\b/.test(lower);
+    const isGoal =
+      /\b(i am saving for|i'm saving for|my goal is|i want to|i plan to)\b/.test(lower);
+    const isTemporaryDebtContext =
+      (/\b(balance|debt|charge|purchase|card|item)\b/.test(lower) &&
+        /\b(reimburse|reimbursable|reimbursement|resell|reselling|resale|inventory|flip|sell|buyer|paid back|pay me back|fronted|fronting)\b/.test(lower)) ||
+      (/\b(reimburse|reimbursable|reimbursement|resell|reselling|resale|inventory|flip|sell|buyer|paid back|pay me back|fronted|fronting)\b/.test(lower) &&
+        /\b(balance|debt|charge|purchase|card|item)\b/.test(lower));
+    const isFundingPattern =
+      /\b(i use|i put|i charge)\b/.test(lower) && /\b(card|account)\b/.test(lower) && /\bfor\b/.test(lower);
+
+    if (!isPreference && !isGoal && !isTemporaryDebtContext && !isFundingPattern) continue;
+
+    const fact = normalizeMemoryCandidate(sentence);
+    const key = fact.toLowerCase();
+    if (!fact || seen.has(key)) continue;
+    seen.add(key);
+    remembered.push(fact);
+    if (remembered.length >= 2) break;
+  }
+
+  return remembered;
 }
 
 // ═══════════════════════════════════════════════════════════════

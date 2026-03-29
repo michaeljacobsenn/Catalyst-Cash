@@ -177,7 +177,7 @@ async function* streamBackend(snapshot, model, context, history, deviceId, backe
   }
 }
 
-async function callBackend(snapshot, model, context, history, deviceId, backendProvider, responseFormat, requestType = "audit") {
+async function callBackend(snapshot, model, context, history, deviceId, backendProvider, responseFormat, requestType = "audit", signal) {
   const resolvedProvider = resolveProvider(model, backendProvider);
 
   const res = await fetchWithRetry(`${getBackendUrl()}/audit`, {
@@ -193,6 +193,7 @@ async function callBackend(snapshot, model, context, history, deviceId, backendP
       provider: resolvedProvider,
       responseFormat: responseFormat || "json",
     }),
+    signal,
   });
 
   if (!res.ok) {
@@ -272,7 +273,8 @@ export async function callAudit(
   context,
   history = [],
   deviceId,
-  isChat = false
+  isChat = false,
+  signal
 ) {
   const responseFormat = isChat ? "text" : "json";
   log.info("audit", "Audit started", { provider: "backend", model, streaming: false, isChat });
@@ -284,7 +286,8 @@ export async function callAudit(
     deviceId,
     getBackendProvider(model),
     responseFormat,
-    isChat ? "chat" : "audit"
+    isChat ? "chat" : "audit",
+    signal
   );
 }
 

@@ -1,4 +1,5 @@
 import { fetchWithTimeout } from "./http.js";
+import { getAuditJsonSchema } from "../prompts/auditOutputContract.js";
 
 const ANTHROPIC_VERSION = "2023-06-01";
 
@@ -10,6 +11,25 @@ export const DEFAULTS = {
   claude: "claude-haiku-4-5",
   anthropic: "claude-haiku-4-5",
 };
+
+function isReasoningModel(model = "") {
+  return String(model || "").startsWith("o");
+}
+
+function resolveOutputBudget(provider, model, responseFormat) {
+  const structured = responseFormat !== "text";
+  const reasoning = isReasoningModel(model);
+
+  if (structured) {
+    if (provider === "openai") return reasoning ? 3400 : 3000;
+    if (provider === "gemini") return 2800;
+    return 3000;
+  }
+
+  if (provider === "openai") return reasoning ? 1400 : 1100;
+  if (provider === "gemini") return 1000;
+  return 1200;
+}
 
 function buildUsage(promptTokens = 0, completionTokens = 0) {
   return {
@@ -37,12 +57,13 @@ export async function callGemini(apiKey, { snapshot, systemPrompt, history, mode
     : `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
 
   const genConfig = {
-    maxOutputTokens: 12000,
+    maxOutputTokens: resolveOutputBudget("gemini", m, responseFormat),
     temperature: 0.1,
     topP: 0.95,
   };
   if (responseFormat !== "text") {
     genConfig.responseMimeType = "application/json";
+    genConfig.responseJsonSchema = getAuditJsonSchema();
   }
 
   const body = {
@@ -88,7 +109,8 @@ export async function callGemini(apiKey, { snapshot, systemPrompt, history, mode
 
 export async function callOpenAI(apiKey, { snapshot, systemPrompt, history, model, stream, responseFormat, timeoutMs = 240_000 }) {
   const m = model || DEFAULTS.openai;
-  const isReasoning = m.startsWith("o");
+  const isReasoning = isReasoningModel(m);
+  const maxOutputTokens = resolveOutputBudget("openai", m, responseFormat);
 
   const body = {
     model: m,
@@ -97,21 +119,24 @@ export async function callOpenAI(apiKey, { snapshot, systemPrompt, history, mode
   };
 
   if (isReasoning) {
-    body.max_completion_tokens = 12000;
+    body.max_completion_tokens = maxOutputTokens;
     if (stream) body.stream_options = { include_usage: true };
-    if (responseFormat !== "text") {
-      const jsonSuffix =
-        "\n\nCRITICAL: You MUST respond with RAW JSON only. No markdown, no code fences, no prose, no explanation. Your entire response must be a single valid JSON object starting with { and ending with }.";
-      body.messages[0].content += jsonSuffix;
-    }
   } else {
-    body.max_tokens = 12000;
+    body.max_tokens = maxOutputTokens;
     body.temperature = 0.1;
     body.top_p = 0.95;
     if (stream) body.stream_options = { include_usage: true };
-    if (responseFormat !== "text") {
-      body.response_format = { type: "json_object" };
-    }
+  }
+
+  if (responseFormat !== "text") {
+    body.response_format = {
+      type: "json_schema",
+      json_schema: {
+        name: "catalyst_audit",
+        strict: true,
+        schema: getAuditJsonSchema(),
+      },
+    };
   }
 
   const res = await fetchWithTimeout(

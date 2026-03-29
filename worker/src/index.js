@@ -487,6 +487,71 @@ function logPromptProfile(env, type, provider, prompt) {
   );
 }
 
+function extractHistoryText(entry) {
+  if (!entry) return "";
+  if (typeof entry.content === "string") return entry.content;
+  if (Array.isArray(entry.parts)) {
+    return entry.parts
+      .map((part) => (typeof part?.text === "string" ? part.text : ""))
+      .filter(Boolean)
+      .join("\n");
+  }
+  return "";
+}
+
+function estimateHistoryTokens(history = []) {
+  if (!Array.isArray(history) || history.length === 0) return 0;
+  return history.reduce((sum, entry) => sum + estimatePromptTokens(extractHistoryText(entry)), 0);
+}
+
+function getPromptBudget(type) {
+  if (type === "chat") {
+    return {
+      maxPromptTokens: 6200,
+      maxSnapshotChars: 2400,
+    };
+  }
+
+  return {
+    maxPromptTokens: 7800,
+    maxSnapshotChars: 7000,
+  };
+}
+
+function clampSnapshot(snapshot, maxChars) {
+  const raw = String(snapshot || "");
+  if (raw.length <= maxChars) return raw;
+  return `${raw.slice(0, Math.max(0, maxChars - 24)).trim()}\n[TRUNCATED FOR BUDGET]`;
+}
+
+function enforcePromptBudget(type, systemPrompt, snapshot, history = []) {
+  const budget = getPromptBudget(type);
+  const trimmedHistory = Array.isArray(history) ? [...history] : [];
+  let effectiveSnapshot = clampSnapshot(snapshot, budget.maxSnapshotChars);
+  let estimatedTokens =
+    estimatePromptTokens(systemPrompt) +
+    estimatePromptTokens(effectiveSnapshot) +
+    estimateHistoryTokens(trimmedHistory);
+
+  while (trimmedHistory.length > 0 && estimatedTokens > budget.maxPromptTokens) {
+    trimmedHistory.shift();
+    estimatedTokens =
+      estimatePromptTokens(systemPrompt) +
+      estimatePromptTokens(effectiveSnapshot) +
+      estimateHistoryTokens(trimmedHistory);
+  }
+
+  return {
+    snapshot: effectiveSnapshot,
+    history: trimmedHistory,
+    estimatedTokens,
+    historyTrimmed: Array.isArray(history) ? history.length - trimmedHistory.length : 0,
+    snapshotTrimmed: String(snapshot || "").length > effectiveSnapshot.length,
+    overBudget: estimatedTokens > budget.maxPromptTokens,
+    budget,
+  };
+}
+
 function getWorkerGatingMode(env) {
   return env.GATING_MODE || "soft";
 }
@@ -1940,6 +2005,20 @@ export default {
 
     const resolvedSystemPrompt = systemPrompt || buildSystemPrompt(resolvedType, effectiveContext, selectedProvider, snapshot);
     logPromptProfile(env, resolvedType, selectedProvider, resolvedSystemPrompt);
+    const budgetedRequest = enforcePromptBudget(resolvedType, resolvedSystemPrompt, snapshot, history);
+    if (budgetedRequest.historyTrimmed > 0 || budgetedRequest.snapshotTrimmed || budgetedRequest.overBudget) {
+      workerLog(env, "warn", "prompt-budget", "Prompt payload required budget adjustments.", {
+        type: resolvedType,
+        provider: selectedProvider,
+        estimatedTokens: budgetedRequest.estimatedTokens,
+        maxPromptTokens: budgetedRequest.budget.maxPromptTokens,
+        historyTrimmed: budgetedRequest.historyTrimmed,
+        snapshotTrimmed: budgetedRequest.snapshotTrimmed,
+        overBudget: budgetedRequest.overBudget,
+      });
+    }
+    const effectiveSnapshot = budgetedRequest.snapshot;
+    const effectiveHistory = budgetedRequest.history;
 
     // ─── Execute Provider Call ─────────────────────────────
     try {
@@ -1950,9 +2029,9 @@ export default {
       const auditUserId = getRevenueCatAppUserId(request) || deviceId;
 
       const result = await handler(apiKey, {
-        snapshot,
+        snapshot: effectiveSnapshot,
         systemPrompt: resolvedSystemPrompt,
-        history,
+        history: effectiveHistory,
         model: resolvedModel,
         stream: shouldStream,
         responseFormat: responseFormat || "json",

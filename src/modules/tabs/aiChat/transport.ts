@@ -222,7 +222,7 @@ function summarizeCards(cards: Card[] | null | undefined) {
       if (rightBalance !== leftBalance) return rightBalance - leftBalance;
       return (Number(right?.limit) || 0) - (Number(left?.limit) || 0);
     })
-    .slice(0, 8)
+    .slice(0, 5)
     .map((card) => {
       const balance = roundMoney(card?.balance);
       const limit = roundMoney(card?.limit ?? card?.creditLimit);
@@ -280,7 +280,7 @@ function summarizeRenewals(renewals: Renewal[] | null | undefined) {
 
   return {
     monthlyEstimate: roundMoney(items.reduce((sum, item) => sum + item.monthlyAmount, 0)),
-    items: items.slice(0, 10),
+    items: items.slice(0, 5),
   };
 }
 
@@ -289,7 +289,7 @@ function summarizeBankAccounts(bankAccounts: BankAccount[] | null | undefined) {
   return [...bankAccounts]
     .filter(Boolean)
     .sort((left, right) => (Number(right?._plaidBalance ?? right?.balance) || 0) - (Number(left?._plaidBalance ?? left?.balance) || 0))
-    .slice(0, 8)
+    .slice(0, 4)
     .map((account) => ({
       id: String(account?.id || ""),
       name: String(account?.name || "Bank account"),
@@ -337,14 +337,15 @@ function summarizeNearTermFunding(renewals: Renewal[] | null | undefined) {
     totalDue14Days: roundMoney(items.reduce((sum, item) => sum + item.amount, 0)),
     byFundingSource: [...sourceMap.entries()]
       .map(([label, payload]) => ({ label, ...payload }))
-      .sort((left, right) => right.total - left.total),
-    items: items.slice(0, 12),
+      .sort((left, right) => right.total - left.total)
+      .slice(0, 4),
+    items: items.slice(0, 5),
   };
 }
 
 function summarizeTrends(trendContext: TrendContextEntry[] | null | undefined) {
   if (!Array.isArray(trendContext) || trendContext.length === 0) return [];
-  return trendContext.slice(-6).map((entry) => ({
+  return trendContext.slice(-4).map((entry) => ({
     date: String(entry?.date || ""),
     score: toNumber(entry?.score),
     status: String(entry?.status || ""),
@@ -358,7 +359,7 @@ export function compactChatAuditHistory(history: AuditRecord[] | null | undefine
   if (!Array.isArray(history) || history.length === 0) return [];
   return history
     .filter(Boolean)
-    .slice(0, 8)
+    .slice(0, 3)
     .map((audit) => ({
       date: audit.date,
       ts: audit.ts,
@@ -428,7 +429,7 @@ export function buildCompactFinancialBrief({
       estimatedMonthly: estimateMonthlyIncome(financialConfig),
       sources: (Array.isArray(financialConfig?.incomeSources) ? financialConfig.incomeSources : [])
         .filter(Boolean)
-        .slice(0, 4)
+        .slice(0, 2)
         .map((source) => ({
           name: String(source?.name || "Income"),
           amount: roundMoney(source?.amount),

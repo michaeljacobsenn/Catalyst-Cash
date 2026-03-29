@@ -71,7 +71,7 @@ describe("buildSnapshotMessage", () => {
 
   it("includes debts section", () => {
     const msg = buildSnapshotMessage(baseParams());
-    expect(msg).toContain("Debts:");
+    expect(msg).toContain("Snapshot Debt Overrides:");
     expect(msg).toContain("$450");
   });
 
@@ -82,11 +82,10 @@ describe("buildSnapshotMessage", () => {
     expect(msg).toContain("Groceries");
   });
 
-  it("includes renewals section with category codes", () => {
+  it("omits duplicated renewals section because live renewals are sent structurally", () => {
     const msg = buildSnapshotMessage(baseParams());
-    expect(msg).toContain("Renewals/Subscriptions");
-    expect(msg).toContain("Netflix");
-    expect(msg).toContain("H-Subs");
+    expect(msg).not.toContain("Renewals/Subscriptions");
+    expect(msg).not.toContain("Netflix");
   });
 
   it("includes user notes", () => {
@@ -99,18 +98,17 @@ describe("buildSnapshotMessage", () => {
     expect(msg).toContain("Gym Count: 3");
   });
 
-  it("includes card portfolio data", () => {
+  it("omits duplicated card portfolio data because cards are sent structurally", () => {
     const msg = buildSnapshotMessage(baseParams());
-    expect(msg).toContain("Card Portfolio");
-    expect(msg).toContain("Chase");
-    expect(msg).toContain("Sapphire Preferred");
+    expect(msg).not.toContain("Card Portfolio");
+    expect(msg).not.toContain("Sapphire Preferred");
   });
 
   it('shows "none" when no debts are provided', () => {
     const params = baseParams();
     params.form.debts = [];
     const msg = buildSnapshotMessage(params);
-    expect(msg).toContain("Debts:\n  none");
+    expect(msg).toContain("Snapshot Debt Overrides:\n  none");
   });
 
   it('shows "none" when no cards are provided', () => {
@@ -139,29 +137,28 @@ describe("buildSnapshotMessage", () => {
     expect(msg).toContain("Food: $85.50");
   });
 
-  it("includes non-card debts when present", () => {
+  it("omits non-card debts because they live in structured context", () => {
     const params = baseParams();
     params.activeConfig.nonCardDebts = [{ name: "Student Loan", type: "loan", balance: 25000, minimum: 250, apr: 5.5 }];
     const msg = buildSnapshotMessage(params);
-    expect(msg).toContain("Non-Card Debts");
-    expect(msg).toContain("Student Loan");
+    expect(msg).not.toContain("Non-Card Debts");
+    expect(msg).not.toContain("Student Loan");
   });
 
-  it("includes credit score when present", () => {
+  it("omits credit score because it is sent structurally", () => {
     const params = baseParams();
     params.activeConfig.creditScore = 750;
     params.activeConfig.creditScoreDate = "2026-02-15";
     const msg = buildSnapshotMessage(params);
-    expect(msg).toContain("Credit Score: 750");
-    expect(msg).toContain("as of 2026-02-15");
+    expect(msg).not.toContain("Credit Score: 750");
   });
 
-  it("includes savings goals when present", () => {
+  it("omits savings goals because they are sent structurally", () => {
     const params = baseParams();
     params.activeConfig.savingsGoals = [{ name: "Emergency Fund", currentAmount: 3000, targetAmount: 10000 }];
     const msg = buildSnapshotMessage(params);
-    expect(msg).toContain("Savings Goals");
-    expect(msg).toContain("Emergency Fund");
+    expect(msg).not.toContain("Savings Goals");
+    expect(msg).not.toContain("Emergency Fund");
   });
 
   it("uses live holding values when enabled and not overridden", () => {

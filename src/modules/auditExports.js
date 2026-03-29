@@ -18,11 +18,29 @@ function normalizeList(value) {
   return normalized ? [normalized] : [];
 }
 
+function summarizeAuditObject(value) {
+  if (!value || typeof value !== "object") return "";
+  if (typeof value.title === "string" || typeof value.detail === "string") {
+    const parts = [value.title, value.detail, value.amount].filter(Boolean);
+    return parts.join(" — ");
+  }
+  if (typeof value.level === "string" && (typeof value.title === "string" || typeof value.detail === "string")) {
+    return `[${String(value.level).toUpperCase()}] ${[value.title, value.detail].filter(Boolean).join(": ")}`;
+  }
+  if (typeof value.status === "string" && (typeof value.title === "string" || typeof value.subtitle === "string")) {
+    return [value.title, value.subtitle, value.status].filter(Boolean).join(" — ");
+  }
+  if (typeof value.item === "string") {
+    return [value.date, value.item, value.amount].filter(Boolean).join(" — ");
+  }
+  return JSON.stringify(value);
+}
+
 function formatPdfScalar(value, { money = false } = {}) {
   if (value == null || value === "") return "—";
   if (money && typeof value === "number") return fmt(value);
   if (Array.isArray(value)) return value.map((entry) => normalizeExportValue(entry)).filter(Boolean).join(" | ") || "—";
-  if (typeof value === "object") return JSON.stringify(value);
+  if (typeof value === "object") return summarizeAuditObject(value) || "—";
   return String(value);
 }
 
@@ -193,12 +211,19 @@ function buildAuditPdfBase64(audit, dateStr) {
   cursorY += cardHeight + 26;
 
   addSectionHeading("Executive AI Summary");
-  addWrappedText(parsed.raw || "No summary available.", {
-    size: 11,
-    color: [55, 65, 81],
-    lineHeight: 16,
-    gapAfter: 14,
-  });
+  addWrappedText(
+    [
+      parsed?.healthScore?.summary,
+      normalizeExportValue(parsed?.structured?.nextAction || parsed?.sections?.nextAction),
+      ...normalizeList(parsed?.alertsCard).slice(0, 2),
+    ].filter(Boolean).join(" "),
+    {
+      size: 11,
+      color: [55, 65, 81],
+      lineHeight: 16,
+      gapAfter: 14,
+    }
+  );
 
   addSectionHeading("Financial Snapshot");
   const snapshotRows = [
@@ -257,8 +282,8 @@ function buildCsvContent(rows) {
 
 function normalizeExportValue(value) {
   if (value == null) return "";
-  if (Array.isArray(value)) return value.filter(Boolean).join(" | ");
-  if (typeof value === "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return value.map((entry) => normalizeExportValue(entry)).filter(Boolean).join(" | ");
+  if (typeof value === "object") return summarizeAuditObject(value);
   return String(value);
 }
 
@@ -287,12 +312,21 @@ function buildSingleAuditCsv(audit) {
   pushAuditExportRow(rows, "Cash", "Pending", metrics.pending ?? "");
   pushAuditExportRow(rows, "Cash", "Debts", metrics.debts ?? "");
   pushAuditExportRow(rows, "Cash", "Available", metrics.available ?? "");
-  pushAuditExportRow(rows, "Narrative", "Headline", parsed?.structured?.headerCard?.headline ?? "");
-  pushAuditExportRow(rows, "Narrative", "Next Action", parsed?.nextAction || parsed?.sections?.nextAction || "");
+  pushAuditExportRow(rows, "Narrative", "Headline", normalizeExportValue(parsed?.structured?.headerCard || ""));
+  pushAuditExportRow(rows, "Narrative", "Next Action", normalizeExportValue(parsed?.structured?.nextAction || parsed?.sections?.nextAction || ""));
   pushAuditExportRow(rows, "Narrative", "Alerts", parsed?.alertsCard || []);
   pushAuditExportRow(rows, "Narrative", "Weekly Moves", parsed?.weeklyMoves || []);
   pushAuditExportRow(rows, "Narrative", "Risk Flags", parsed?.structured?.riskFlags || parsed?.degraded?.riskFlags || []);
-  pushAuditExportRow(rows, "Narrative", "Executive Summary", parsed?.raw || "");
+  pushAuditExportRow(
+    rows,
+    "Narrative",
+    "Executive Summary",
+    [
+      parsed?.healthScore?.summary,
+      normalizeExportValue(parsed?.structured?.nextAction || parsed?.sections?.nextAction),
+      ...normalizeList(parsed?.alertsCard).slice(0, 2),
+    ].filter(Boolean).join(" ")
+  );
 
   (parsed?.dashboardCard || []).forEach((row, index) => {
     pushAuditExportRow(rows, "Dashboard", `Card ${index + 1} Category`, row?.category || "");

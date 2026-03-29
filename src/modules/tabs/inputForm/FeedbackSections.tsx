@@ -39,6 +39,9 @@ interface PlaidTransactionsCardProps {
   txnFetchedAt: string | number | null;
   showTxns: boolean;
   setShowTxns: (value: boolean | ((prev: boolean) => boolean)) => void;
+  includeRecentSpending: boolean;
+  setIncludeRecentSpending: (value: boolean | ((prev: boolean) => boolean)) => void;
+  proEnabled: boolean;
 }
 
 interface AuditQuotaNoticeProps {
@@ -138,59 +141,164 @@ export function PlaidTransactionsCard({
   txnFetchedAt,
   showTxns,
   setShowTxns,
+  includeRecentSpending,
+  setIncludeRecentSpending,
+  proEnabled,
 }: PlaidTransactionsCardProps) {
   if (!plaidTransactions.length) return null;
+  const totalSpend = plaidTransactions.reduce((sum, txn) => sum + txn.amount, 0);
   return (
-    <div style={{ marginBottom: 12, overflow: "hidden", border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.xl, padding: 16, background: T.bg.card }}>
-      <button
-        onClick={() => setShowTxns((prev) => !prev)}
+    <div
+      style={{
+        marginBottom: 12,
+        overflow: "hidden",
+        border: `1px solid ${T.border.subtle}`,
+        borderRadius: T.radius.xl,
+        padding: 16,
+        background: T.bg.card,
+        boxShadow: T.shadow.soft,
+      }}
+    >
+      <div
         style={{
-          width: "100%",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: 0,
-          border: "none",
-          background: "none",
-          cursor: "pointer",
-          color: T.text.primary,
           gap: 8,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <TrendingUp size={15} color={T.accent.primary} />
-          <span style={{ fontSize: 13, fontWeight: 700 }}>Recent Spending</span>
-          <Badge style={{ background: T.accent.primary + "20", color: T.accent.primary, fontSize: 10, fontWeight: 800 }}>
-            {plaidTransactions.length} txns
-          </Badge>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: T.text.primary }}>Recent Spending</span>
+              <Badge style={{ background: T.accent.primary + "20", color: T.accent.primary, fontSize: 10, fontWeight: 800 }}>
+                {plaidTransactions.length} txns
+              </Badge>
+            </div>
+            <div style={{ fontSize: 10.5, color: T.text.dim, marginTop: 3 }}>
+              {txnFetchedAt
+                ? `Synced ${new Date(txnFetchedAt).toLocaleDateString()} · Last 7 days`
+                : "Last 7 days of linked spend"}
+            </div>
+          </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: T.status.red, fontFamily: T.font.mono }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+          <span style={{ fontSize: 13, fontWeight: 800, color: T.status.red, fontFamily: T.font.mono }}>
             -$
-            {plaidTransactions.reduce((sum, txn) => sum + txn.amount, 0).toLocaleString(undefined, {
+            {totalSpend.toLocaleString(undefined, {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             })}
           </span>
-          {showTxns ? <ChevronUp size={14} color={T.text.muted} /> : <ChevronDown size={14} color={T.text.muted} />}
+          <Badge style={{ background: T.accent.primary + "20", color: T.accent.primary, fontSize: 10, fontWeight: 800 }}>
+            {includeRecentSpending ? "Included" : proEnabled ? "Excluded" : "Pro only"}
+          </Badge>
         </div>
-      </button>
-      {txnFetchedAt && (
-        <p style={{ fontSize: 10, color: T.text.dim, marginTop: 4, marginBottom: showTxns ? 8 : 0 }}>
-          Synced {new Date(txnFetchedAt).toLocaleDateString()} · Last 7 days · Auto-included in audit
-        </p>
-      )}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          marginTop: 12,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            if (!proEnabled) return;
+            haptic.light();
+            setIncludeRecentSpending((prev) => !prev);
+          }}
+          disabled={!proEnabled}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            minHeight: 34,
+            padding: "0 12px",
+            borderRadius: 999,
+            border: `1px solid ${
+              includeRecentSpending && proEnabled ? `${T.accent.primary}35` : T.border.default
+            }`,
+            background: includeRecentSpending && proEnabled ? `${T.accent.primary}12` : T.bg.surface,
+            color: !proEnabled
+              ? T.text.dim
+              : includeRecentSpending
+                ? T.accent.primary
+                : T.text.secondary,
+            fontSize: 11,
+            fontWeight: 800,
+            cursor: proEnabled ? "pointer" : "not-allowed",
+            opacity: proEnabled ? 1 : 0.75,
+          }}
+        >
+          <span
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: 999,
+              background: !proEnabled
+                ? T.text.dim
+                : includeRecentSpending
+                  ? T.accent.primary
+                  : T.text.dim,
+            }}
+          />
+          {proEnabled ? (includeRecentSpending ? "Included in briefing" : "Exclude from briefing") : "Ledger is Pro"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            haptic.light();
+            setShowTxns((prev) => !prev);
+          }}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            minHeight: 34,
+            padding: "0 12px",
+            borderRadius: 999,
+            border: `1px solid ${T.border.default}`,
+            background: T.bg.surface,
+            color: T.text.secondary,
+            fontSize: 11,
+            fontWeight: 800,
+            cursor: "pointer",
+          }}
+        >
+          {showTxns ? "Hide detail" : "Show detail"}
+          {showTxns ? <ChevronUp size={14} color={T.text.muted} /> : <ChevronDown size={14} color={T.text.muted} />}
+        </button>
+      </div>
       {showTxns && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 280, overflowY: "auto" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
+            maxHeight: 280,
+            overflowY: "auto",
+            marginTop: 12,
+            paddingTop: 12,
+            borderTop: `1px solid ${T.border.subtle}`,
+          }}
+        >
           {plaidTransactions.map((txn, index) => (
             <div
               key={txn.id || index}
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                alignItems: "center",
-                padding: "6px 0",
-                borderTop: index > 0 ? `1px solid ${T.border.subtle}` : "none",
+                alignItems: "flex-start",
+                gap: 10,
+                padding: "10px 12px",
+                borderRadius: 14,
+                background: T.bg.elevated,
+                border: index > 0 ? `1px solid ${T.border.subtle}` : `1px solid ${T.border.subtle}`,
               }}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -206,7 +314,7 @@ export function PlaidTransactionsCard({
                 >
                   {txn.description}
                 </div>
-                <div style={{ fontSize: 10, color: T.text.dim, marginTop: 1 }}>
+                <div style={{ fontSize: 10, color: T.text.dim, marginTop: 3, lineHeight: 1.35 }}>
                   {txn.date} · {txn.category || "Uncategorized"}
                   {txn.accountName ? ` · ${txn.accountName}` : ""}
                 </div>
@@ -409,7 +517,7 @@ export function SubmitBar({ canSubmit, isLoading, isTestMode, setIsTestMode, onS
         ) : (
           <>
             <Zap size={18} strokeWidth={2.5} />
-            {isTestMode ? "Test Audit" : "Run Catalyst Audit"}
+            {isTestMode ? "Test Briefing" : "Refresh Weekly Briefing"}
           </>
         )}
       </button>

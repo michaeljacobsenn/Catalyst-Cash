@@ -264,7 +264,7 @@ export default memo(function ResultsView({
                 marginBottom: 4,
               }}
             >
-              AUDIT REPORT
+              WEEKLY BRIEFING
             </div>
             <h1
               style={{
@@ -276,7 +276,7 @@ export default memo(function ResultsView({
                 fontWeight: 900,
               }}
             >
-              Full Results
+              Full Briefing
             </h1>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
               <Mono size={11} color={T.text.dim}>

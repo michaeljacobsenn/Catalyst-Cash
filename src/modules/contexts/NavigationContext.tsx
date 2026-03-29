@@ -26,6 +26,8 @@ interface NavigationContextValue {
   tab: AppTab;
   setTab: Dispatch<SetStateAction<AppTab>>;
   navTo: (newTab: AppTab, viewState?: NavViewState | null) => void;
+  navState: NavViewStateRecord | null;
+  clearNavState: () => void;
   syncTab: (newTab: AppTab) => void;
   swipeToTab: (direction: "left" | "right") => void;
   swipeAnimClass: string;
@@ -64,6 +66,7 @@ const SWIPE_TAB_ORDER: readonly AppTab[] = ["dashboard", "cashflow", "audit", "p
 
 export function NavigationProvider({ children }: NavigationProviderProps) {
   const [tab, setTab] = useState<AppTab>("dashboard");
+  const [navState, setNavState] = useState<NavViewStateRecord | null>(null);
   const [resultsBackTarget, setResultsBackTarget] = useState<AppTab | null>(null);
   const [setupReturnTab, setSetupReturnTab] = useState<AppTab | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState(true); // true until proven otherwise
@@ -98,6 +101,7 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
 
   const resetNavigationState = useCallback((nextTab: AppTab = "dashboard") => {
     setTab(nextTab);
+    setNavState(null);
     setResultsBackTarget(null);
     setSetupReturnTab(null);
     setShowGuide(false);
@@ -134,6 +138,10 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
     chatStreamAbortRef.current?.();
   }, []);
 
+  const clearNavState = useCallback(() => {
+    setNavState(null);
+  }, []);
+
   const navTo = useCallback((newTab: AppTab, viewState: NavViewState | null = null) => {
     const prevTab = tabRef.current;
     // 1) Set state internally so UI bottom bar highlights instantly
@@ -156,6 +164,13 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
     if (viewState !== undefined && viewState !== null) {
         window.dispatchEvent(new CustomEvent<NavViewState>("app-nav-viewing", { detail: viewState }));
     }
+
+    const isAuxiliaryNavState =
+      !!viewState &&
+      typeof viewState === "object" &&
+      !("parsed" in viewState) &&
+      !("form" in viewState);
+    setNavState(isAuxiliaryNavState ? (viewState as NavViewStateRecord) : null);
 
     if (OVERLAY_TABS.includes(newTab)) {
       const resolvedSource =
@@ -190,6 +205,7 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
       if (newTab === "dashboard" || newTab === "input") lastCenterTab.current = newTab;
       setOverlaySourceTab(null);
       setOverlayBaseTab(null);
+      setNavState(null);
       window.history.pushState({ tab: newTab, viewingTs: null }, "", "");
       return newTab;
     });
@@ -232,6 +248,7 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
         if (st.tab) {
           const nextTab = st.tab as AppTab;
           setTab(nextTab);
+          setNavState(null);
           if (!OVERLAY_TABS.includes(nextTab)) {
             setOverlaySourceTab(null);
             setOverlayBaseTab(null);
@@ -247,6 +264,8 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
     tab,
     setTab,
     navTo,
+    navState,
+    clearNavState,
     syncTab,
     swipeToTab,
     swipeAnimClass,

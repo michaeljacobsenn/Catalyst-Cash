@@ -32,26 +32,244 @@ ${common}
 </gemini_system_directive>`;
 }
 
-export function getJsonWrapper(_providerId, cSym = "$") {
+export function getAuditJsonSchema() {
+  const moneyString = { type: "string" };
+  const nullableMoneyString = { type: ["string", "null"] };
+  const nullableString = { type: ["string", "null"] };
+  const nullableNumber = { type: ["number", "null"] };
+
+  const alertSchema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      level: { type: "string", enum: ["info", "warn", "critical"] },
+      title: { type: "string" },
+      detail: { type: "string" },
+    },
+    required: ["level", "title", "detail"],
+  };
+
+  const dashboardRowSchema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      category: { type: "string", enum: ["Checking", "Vault", "Pending", "Debts", "Available"] },
+      amount: moneyString,
+      status: { type: "string" },
+    },
+    required: ["category", "amount", "status"],
+  };
+
+  const weeklyMoveSchema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      title: { type: "string" },
+      detail: { type: "string" },
+      amount: nullableMoneyString,
+      priority: { type: "string", enum: ["required", "deadline", "promo", "optional"] },
+    },
+    required: ["title", "detail", "amount", "priority"],
+  };
+
+  const moveItemSchema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      text: { type: "string" },
+      amount: nullableNumber,
+      tag: nullableString,
+      semanticKind: nullableString,
+      targetLabel: nullableString,
+      sourceLabel: nullableString,
+      targetKey: nullableString,
+      contributionKey: nullableString,
+      transactional: { type: "boolean" },
+    },
+    required: [
+      "text",
+      "amount",
+      "tag",
+      "semanticKind",
+      "targetLabel",
+      "sourceLabel",
+      "targetKey",
+      "contributionKey",
+      "transactional",
+    ],
+  };
+
+  const radarItemSchema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      item: { type: "string" },
+      amount: moneyString,
+      date: { type: "string" },
+    },
+    required: ["item", "amount", "date"],
+  };
+
+  const nextActionSchema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      title: { type: "string" },
+      detail: { type: "string" },
+      amount: nullableMoneyString,
+    },
+    required: ["title", "detail", "amount"],
+  };
+
+  const investmentsSchema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      balance: { type: "string" },
+      asOf: { type: "string" },
+      gateStatus: { type: "string" },
+      netWorth: nullableMoneyString,
+      cryptoValue: nullableMoneyString,
+    },
+    required: ["balance", "asOf", "gateStatus", "netWorth", "cryptoValue"],
+  };
+
+  const spendingAnalysisSchema = {
+    type: ["object", "null"],
+    additionalProperties: false,
+    properties: {
+      totalSpent: moneyString,
+      dailyAverage: moneyString,
+      vsAllowance: { type: "string" },
+      topCategories: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            category: { type: "string" },
+            amount: moneyString,
+            pctOfTotal: { type: "string" },
+          },
+          required: ["category", "amount", "pctOfTotal"],
+        },
+      },
+      alerts: { type: "array", items: { type: "string" } },
+      debtImpact: { type: "string" },
+    },
+    required: ["totalSpent", "dailyAverage", "vsAllowance", "topCategories", "alerts", "debtImpact"],
+  };
+
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      headerCard: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          title: { type: "string" },
+          subtitle: { type: "string" },
+          status: { type: "string", enum: ["GREEN", "YELLOW", "RED"] },
+          confidence: { type: ["string", "null"], enum: ["high", "medium", "low", null] },
+        },
+        required: ["title", "subtitle", "status", "confidence"],
+      },
+      alertsCard: { type: "array", items: alertSchema },
+      dashboardCard: { type: "array", items: dashboardRowSchema, minItems: 5, maxItems: 5 },
+      healthScore: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          score: { type: "number", minimum: 0, maximum: 100 },
+          grade: { type: "string" },
+          trend: { type: "string", enum: ["up", "flat", "down"] },
+          summary: { type: "string" },
+        },
+        required: ["score", "grade", "trend", "summary"],
+      },
+      weeklyMoves: { type: "array", items: weeklyMoveSchema, minItems: 1, maxItems: 4 },
+      moveItems: { type: "array", items: moveItemSchema },
+      radar: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          next90Days: { type: "array", items: radarItemSchema },
+          longRange: { type: "array", items: radarItemSchema },
+        },
+        required: ["next90Days", "longRange"],
+      },
+      nextAction: nextActionSchema,
+      investments: investmentsSchema,
+      assumptions: { type: "array", items: { type: "string" } },
+      spendingAnalysis: spendingAnalysisSchema,
+      riskFlags: { type: "array", items: { type: "string" } },
+      negotiationTargets: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            target: { type: "string" },
+            strategy: { type: "string" },
+            estimatedAnnualSavings: { type: "number" },
+          },
+          required: ["target", "strategy", "estimatedAnnualSavings"],
+        },
+      },
+      longRangeRadar: { type: "array", items: radarItemSchema },
+      milestones: { type: "array", items: { type: "string" } },
+      paceData: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            category: { type: "string" },
+            amount: moneyString,
+            pctOfTotal: { type: "string" },
+          },
+          required: ["category", "amount", "pctOfTotal"],
+        },
+      },
+      rotatingCategories: { type: "array", items: { type: "string" } },
+      netWorth: { type: ["string", "number", "null"] },
+      netWorthDelta: { type: ["string", "number", "null"] },
+      liquidNetWorth: { type: ["string", "number", "null"] },
+    },
+    required: [
+      "headerCard",
+      "alertsCard",
+      "dashboardCard",
+      "healthScore",
+      "weeklyMoves",
+      "moveItems",
+      "radar",
+      "nextAction",
+      "investments",
+      "assumptions",
+      "spendingAnalysis",
+    ],
+  };
+}
+
+export function getJsonWrapper(_providerId, _cSym = "$") {
   return `
 JSON OUTPUT SHAPE (MINIFIED CONTRACT)
-{
-  "headerCard": { "title": "string", "subtitle": "string", "status": "GREEN|YELLOW|RED", "confidence": "high|medium|low|null" },
-  "alertsCard": [{ "level": "info|warn|critical", "title": "string", "detail": "string" }],
-  "dashboardCard": [{ "category": "Checking|Vault|Pending|Debts|Available", "amount": "${cSym}0.00", "status": "string" }],
-  "healthScore": { "score": 0, "grade": "A-F", "trend": "up|flat|down", "summary": "string" },
-  "weeklyMoves": [{ "title": "string", "detail": "string", "amount": "${cSym}0.00|null", "priority": "required|deadline|promo|optional" }],
-  "moveItems": [{ "text": "string", "amount": 0, "tag": "string|null", "semanticKind": "string|null", "targetLabel": "string|null", "sourceLabel": "string|null", "targetKey": "string|null", "contributionKey": "string|null", "transactional": true }],
-  "radar": { "next90Days": [], "longRange": [] },
-  "nextAction": { "title": "string", "detail": "string", "amount": "${cSym}0.00|null" },
-  "investments": { "balance": "${cSym}0.00|N/A", "asOf": "YYYY-MM-DD|N/A", "gateStatus": "Open|Guarded|N/A", "netWorth": "${cSym}0.00|N/A|null" },
-  "assumptions": ["string"],
-  "spendingAnalysis": null
-}
-- Required top-level anchors: headerCard, healthScore, dashboardCard, weeklyMoves, nextAction.
-- Add moveItems only for clear money actions.
-- dashboardCard must reconcile to snapshot/native anchors. Never zero-fill unless truly zero.
-- Use exact account/card/funding-source names. No placeholders like "CREDIT CARD #1" when names exist.
-- If data is partial or contradictory, say so in assumptions / alertsCard.
-- Use null for optional sections when data is missing; do not invent placeholders.`;
+Core object:
+- headerCard { title, subtitle, status, confidence }
+- alertsCard[] { level, title, detail }
+- dashboardCard[] fixed categories: Checking, Vault, Pending, Debts, Available
+- healthScore { score, grade, trend, summary }
+- weeklyMoves[] { title, detail, amount, priority }
+- moveItems[] for only clear money actions
+- radar { next90Days[], longRange[] }
+- nextAction { title, detail, amount }
+- investments { balance, asOf, gateStatus, netWorth, cryptoValue }
+- assumptions[]
+- spendingAnalysis or null
+- Reconcile dashboardCard to native anchors; never zero-fill unless truly zero.
+- Use exact account/card/funding-source names.
+- If data is partial or contradictory, say so in assumptions or alertsCard.
+- Keep strings concise and mobile-readable; use null for missing optional values.`;
 }

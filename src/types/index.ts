@@ -103,6 +103,9 @@ export interface AuditSuccessResponse {
 
 export interface HeaderCard {
   status: AuditStatus;
+  title?: string;
+  subtitle?: string;
+  confidence?: "high" | "medium" | "low" | null | string;
   details?: string[];
   headline?: string;
 }
@@ -146,6 +149,30 @@ export interface NegotiationTarget {
   target: string;
   strategy: string;
   estimatedAnnualSavings: number;
+}
+
+export interface AlertCardItem {
+  level: "info" | "warn" | "critical" | string;
+  title: string;
+  detail: string;
+}
+
+export interface WeeklyMoveCardItem {
+  title: string;
+  detail: string;
+  amount: string | null;
+  priority: "required" | "deadline" | "promo" | "optional" | string;
+}
+
+export interface NextActionCard {
+  title: string;
+  detail: string;
+  amount: string | null;
+}
+
+export interface AuditRadarBuckets {
+  next90Days: RadarItem[];
+  longRange: RadarItem[];
 }
 
 export interface AuditFlag {
@@ -206,14 +233,15 @@ export interface AuditStructuredResponse {
   netWorth?: string | number | null;
   netWorthDelta?: string | number | null;
   healthScore: HealthScore | null;
-  alertsCard: string[];
+  alertsCard: AlertCardItem[];
   dashboardCard: DashboardCardRow[];
-  weeklyMoves: string[];
-  radar?: RadarItem[];
+  weeklyMoves: WeeklyMoveCardItem[];
+  radar?: AuditRadarBuckets;
   longRangeRadar: RadarItem[];
   milestones: string[];
   investments?: InvestmentsSummary;
-  nextAction: string;
+  nextAction: string | NextActionCard;
+  assumptions?: string[];
   spendingAnalysis?: SpendingAnalysis | null;
   negotiationTargets: NegotiationTarget[];
   paceData?: PaceDataPoint[];

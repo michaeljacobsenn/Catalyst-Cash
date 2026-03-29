@@ -150,7 +150,11 @@ describe("parseAudit", () => {
     expect(parsed.status).toBe("RED");
     expect(parsed.healthScore.score).toBe(60);
     expect(parsed.weeklyMoves).toEqual(["Fix budget"]);
-    expect(parsed.structured.nextAction).toBe("Cut spending.");
+    expect(parsed.structured.nextAction).toEqual({
+      title: "Next Action",
+      detail: "Cut spending.",
+      amount: null,
+    });
   });
 
   it("normalizes hostile imported statuses instead of preserving raw markup", () => {
@@ -303,6 +307,42 @@ describe("parseAudit", () => {
         transactional: true,
       },
     ]);
+  });
+
+  it("normalizes object-based alerts, radar buckets, and next action cards", () => {
+    const raw = JSON.stringify({
+      headerCard: { title: "Weekly Briefing", subtitle: "Floor protected", status: "YELLOW", confidence: "medium" },
+      healthScore: { score: 74, grade: "C", trend: "flat", summary: "Cash is tight but stable." },
+      alertsCard: [{ level: "critical", title: "Protect liquidity", detail: "Checking is close to the floor." }],
+      dashboardCard: [
+        { category: "Checking", amount: "$783.56", status: "Tracked" },
+        { category: "Vault", amount: "$2,155.39", status: "Tracked" },
+        { category: "Pending", amount: "$0.00", status: "Clear" },
+        { category: "Debts", amount: "$3,753.96", status: "Tracked" },
+        { category: "Available", amount: "$0.00", status: "Protected" },
+      ],
+      weeklyMoves: [{ title: "Protect floor", detail: "Transfer $250 to checking.", amount: "$250.00", priority: "required" }],
+      moveItems: [{ text: "Transfer $250 to checking.", amount: 250, tag: "REQUIRED", semanticKind: "bank-checking-increase", targetLabel: "Checking", sourceLabel: "Savings", targetKey: null, contributionKey: null, transactional: true }],
+      radar: {
+        next90Days: [{ item: "NY tax bill", amount: "$1,150.00", date: "2026-04-07" }],
+        longRange: [{ item: "Emergency fund target", amount: "$2,500.00", date: "2026-06-01" }],
+      },
+      nextAction: { title: "Protect checking", detail: "Transfer $250 from savings to checking.", amount: "$250.00" },
+      investments: { balance: "$5,809.31", asOf: "2026-03-29", gateStatus: "Guarded", netWorth: "$4,994.30", cryptoValue: null },
+      assumptions: ["Recent spending excluded from this run."],
+      spendingAnalysis: null,
+    });
+
+    const parsed = parseAudit(raw);
+    expect(parsed).not.toBeNull();
+    expect(parsed.alertsCard).toEqual(["❗ Protect liquidity — Checking is close to the floor."]);
+    expect(parsed.sections.nextAction).toContain("Protect checking");
+    expect(parsed.structured.radar.next90Days).toHaveLength(1);
+    expect(parsed.structured.nextAction).toEqual({
+      title: "Protect checking",
+      detail: "Transfer $250 from savings to checking.",
+      amount: "$250.00",
+    });
   });
 
   it("normalizes dashboardCard to the stable 5-row order", () => {

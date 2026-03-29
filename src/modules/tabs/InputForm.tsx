@@ -226,6 +226,98 @@ interface CustomSelectProps {
 
 let overrideInputIdCounter = 0;
 
+function formatAuditDateDisplay(value: string): string {
+  if (!value) return "Select date";
+  const parsed = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatAuditTimeDisplay(value: string): string {
+  if (!value) return "Select time";
+  const parsed = new Date(`1970-01-01T${value}`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function AuditPickerField({
+  type,
+  ariaLabel,
+  value,
+  onChange,
+  displayValue,
+}: {
+  type: "date" | "time";
+  ariaLabel: string;
+  value: string;
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  displayValue: string;
+}) {
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        minHeight: 44,
+        borderRadius: T.radius.md,
+        background: T.bg.elevated,
+        border: `1.5px solid ${focused ? T.accent.primary : T.border.default}`,
+        boxSizing: "border-box",
+        boxShadow: focused ? `0 0 0 3px ${T.accent.primary}24` : "none",
+        transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        aria-hidden="true"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "100%",
+          minHeight: 44,
+          padding: "10px 12px",
+          color: T.text.primary,
+          fontSize: 13,
+          fontFamily: T.font.sans,
+          fontWeight: 700,
+          letterSpacing: "-0.01em",
+          boxSizing: "border-box",
+        }}
+      >
+        {displayValue}
+      </div>
+      <input
+        type={type}
+        aria-label={ariaLabel}
+        value={value}
+        onChange={onChange}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          opacity: 0,
+          cursor: "pointer",
+          WebkitAppearance: "none",
+          appearance: "none",
+        }}
+      />
+    </div>
+  );
+}
+
 function InlineOverrideMoneyInput({
   value,
   onChange,
@@ -370,9 +462,16 @@ export default function InputForm({
   const [plaidTransactions, setPlaidTransactions] = useState<PlaidTransaction[]>([]);
   const [txnFetchedAt, setTxnFetchedAt] = useState<string | number | null>(null);
   const [showTxns, setShowTxns] = useState<boolean>(false);
+  const [includeRecentSpending, setIncludeRecentSpending] = useState<boolean>(!!proEnabled);
   useEffect(() => {
     void loadRecentPlaidTransactions(setPlaidTransactions, setTxnFetchedAt);
   }, []);
+
+  useEffect(() => {
+    if (!proEnabled) {
+      setIncludeRecentSpending(false);
+    }
+  }, [proEnabled]);
 
   const [form, setForm] = useState<InputFormState>(
     () =>
@@ -544,12 +643,211 @@ export default function InputForm({
       cards,
       renewals,
       cardAnnualFees,
-      parsedTransactions: plaidTransactions,
+      parsedTransactions: includeRecentSpending ? plaidTransactions : [],
       budgetActuals,
       holdingValues,
       financialConfig,
       aiProvider,
     });
+
+  const investmentBalancesSection =
+    (activeConfig.trackRoth || activeConfig.trackRothContributions || activeConfig.trackBrokerage || activeConfig.track401k) ? (
+      <Card variant="glass" style={{ marginBottom: 8, position: "relative", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <Label style={{ marginBottom: 0, fontWeight: 800 }}>Investment Balances</Label>
+          {financialConfig?.enableHoldings && (
+            <Badge
+              variant="outline"
+              style={{ fontSize: 9, color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}
+            >
+              AUTO-TRACKED
+            </Badge>
+          )}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {(activeConfig.trackRoth || activeConfig.trackRothContributions) &&
+            (() => {
+              const hasAutoValue = investmentAutoValues.roth > 0;
+              return (
+                <div
+                  style={{
+                    padding: "10px 12px",
+                    background: T.bg.elevated,
+                    borderRadius: T.radius.md,
+                    border: `1px solid ${T.border.subtle}`,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: overrideInvest.roth ? 8 : 0,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: 3, background: "#8B5CF6" }} />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>Roth IRA</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {hasAutoValue && !overrideInvest.roth && (
+                        <Mono size={13} weight={800} color={T.accent.emerald}>
+                          {fmt(investmentAutoValues.roth)}
+                        </Mono>
+                      )}
+                      {hasAutoValue && (
+                        <button
+                          onClick={() => setOverrideInvest(p => ({ ...p, roth: !p.roth }))}
+                          style={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            fontFamily: T.font.mono,
+                            padding: "3px 8px",
+                            borderRadius: T.radius.sm,
+                            border: `1px solid ${overrideInvest.roth ? T.accent.primary : T.border.default}`,
+                            background: overrideInvest.roth ? `${T.accent.primary}15` : "transparent",
+                            color: overrideInvest.roth ? T.accent.primary : T.text.dim,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {overrideInvest.roth ? "CANCEL" : "OVERRIDE"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {(!hasAutoValue || overrideInvest.roth) && (
+                    <DI
+                      value={form.roth}
+                      onChange={e => s("roth", sanitizeDollar(e.target.value))}
+                      placeholder={hasAutoValue ? `Auto: ${fmt(investmentAutoValues.roth)}` : "Enter value"}
+                    />
+                  )}
+                </div>
+              );
+            })()}
+          {activeConfig.trackBrokerage &&
+            (() => {
+              const hasAutoValue = investmentAutoValues.brokerage > 0;
+              return (
+                <div
+                  style={{
+                    padding: "10px 12px",
+                    background: T.bg.elevated,
+                    borderRadius: T.radius.md,
+                    border: `1px solid ${T.border.subtle}`,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: overrideInvest.brokerage ? 8 : 0,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: 3, background: "#10B981" }} />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>Brokerage</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {hasAutoValue && !overrideInvest.brokerage && (
+                        <Mono size={13} weight={800} color={T.accent.emerald}>
+                          {fmt(investmentAutoValues.brokerage)}
+                        </Mono>
+                      )}
+                      {hasAutoValue && (
+                        <button
+                          onClick={() => setOverrideInvest(p => ({ ...p, brokerage: !p.brokerage }))}
+                          style={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            fontFamily: T.font.mono,
+                            padding: "3px 8px",
+                            borderRadius: T.radius.sm,
+                            border: `1px solid ${overrideInvest.brokerage ? T.accent.primary : T.border.default}`,
+                            background: overrideInvest.brokerage ? `${T.accent.primary}15` : "transparent",
+                            color: overrideInvest.brokerage ? T.accent.primary : T.text.dim,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {overrideInvest.brokerage ? "CANCEL" : "OVERRIDE"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {(!hasAutoValue || overrideInvest.brokerage) && (
+                    <DI
+                      value={form.brokerage}
+                      onChange={e => s("brokerage", sanitizeDollar(e.target.value))}
+                      placeholder={hasAutoValue ? `Auto: ${fmt(investmentAutoValues.brokerage)}` : "Enter value"}
+                    />
+                  )}
+                </div>
+              );
+            })()}
+          {activeConfig.track401k &&
+            (() => {
+              const hasAutoValue = investmentAutoValues.k401 > 0;
+              return (
+                <div
+                  style={{
+                    padding: "10px 12px",
+                    background: T.bg.elevated,
+                    borderRadius: T.radius.md,
+                    border: `1px solid ${T.border.subtle}`,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: overrideInvest.k401 ? 8 : 0,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: 3, background: "#3B82F6" }} />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>401(k)</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {hasAutoValue && !overrideInvest.k401 && (
+                        <Mono size={13} weight={800} color={T.accent.emerald}>
+                          {fmt(investmentAutoValues.k401)}
+                        </Mono>
+                      )}
+                      {hasAutoValue && (
+                        <button
+                          onClick={() => setOverrideInvest(p => ({ ...p, k401: !p.k401 }))}
+                          style={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            fontFamily: T.font.mono,
+                            padding: "3px 8px",
+                            borderRadius: T.radius.sm,
+                            border: `1px solid ${overrideInvest.k401 ? T.accent.primary : T.border.default}`,
+                            background: overrideInvest.k401 ? `${T.accent.primary}15` : "transparent",
+                            color: overrideInvest.k401 ? T.accent.primary : T.text.dim,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {overrideInvest.k401 ? "CANCEL" : "OVERRIDE"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {(!hasAutoValue || overrideInvest.k401) && (
+                    <DI
+                      value={form.k401Balance || ""}
+                      onChange={e => s("k401Balance", sanitizeDollar(e.target.value))}
+                      placeholder={hasAutoValue ? `Auto: ${fmt(investmentAutoValues.k401)}` : "Enter value"}
+                    />
+                  )}
+                </div>
+              );
+            })()}
+        </div>
+      </Card>
+    ) : null;
 
   return (
     <div
@@ -656,61 +954,19 @@ export default function InputForm({
           />
           <Label style={{ fontWeight: 800 }}>Date & Time</Label>
           <div style={{ display: "grid", gridTemplateColumns: "1.4fr 0.9fr", gap: 8 }}>
-            <input
+            <AuditPickerField
               type="date"
-              aria-label="Audit date"
+              ariaLabel="Audit date"
               value={form.date}
               onChange={e => s("date", e.target.value)}
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                borderRadius: T.radius.md,
-                background: T.bg.elevated,
-                border: `1.5px solid ${T.border.default}`,
-                color: T.text.primary,
-                fontSize: 13,
-                outline: "none",
-                boxSizing: "border-box",
-                transition: "all 0.2s",
-                fontFamily: T.font.sans,
-                fontWeight: 700,
-              }}
-              onFocus={e => {
-                e.target.style.borderColor = T.accent.primary;
-                e.target.style.boxShadow = `0 0 0 3px ${T.accent.primary}30`;
-              }}
-              onBlur={e => {
-                e.target.style.borderColor = T.border.default;
-                e.target.style.boxShadow = "none";
-              }}
+              displayValue={formatAuditDateDisplay(form.date)}
             />
-            <input
+            <AuditPickerField
               type="time"
-              aria-label="Audit time"
+              ariaLabel="Audit time"
               value={form.time}
               onChange={e => s("time", e.target.value)}
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                borderRadius: T.radius.md,
-                background: T.bg.elevated,
-                border: `1.5px solid ${T.border.default}`,
-                color: T.text.primary,
-                fontSize: 13,
-                outline: "none",
-                boxSizing: "border-box",
-                transition: "all 0.2s",
-                fontFamily: T.font.sans,
-                fontWeight: 700,
-              }}
-              onFocus={e => {
-                e.target.style.borderColor = T.accent.primary;
-                e.target.style.boxShadow = `0 0 0 3px ${T.accent.primary}30`;
-              }}
-              onBlur={e => {
-                e.target.style.borderColor = T.border.default;
-                e.target.style.boxShadow = "none";
-              }}
+              displayValue={formatAuditTimeDisplay(form.time)}
             />
           </div>
         </Card>
@@ -1288,6 +1544,28 @@ export default function InputForm({
         />
       </Card>
 
+      {investmentBalancesSection}
+
+      <ConfigSection
+        showConfig={showConfig}
+        setShowConfig={setShowConfig}
+        configSummary={configSummary}
+        typedFinancialConfig={typedFinancialConfig}
+        setTypedFinancialConfig={setTypedFinancialConfig}
+        personalRules={personalRules}
+        setPersonalRules={setPersonalRules}
+      />
+
+      <PlaidTransactionsCard
+        plaidTransactions={plaidTransactions}
+        txnFetchedAt={txnFetchedAt}
+        showTxns={showTxns}
+        setShowTxns={setShowTxns}
+        includeRecentSpending={includeRecentSpending}
+        setIncludeRecentSpending={setIncludeRecentSpending}
+        proEnabled={!!proEnabled}
+      />
+
       {/* ── ADVANCED DETAILS TOGGLE ── */}
       <div style={{ marginTop: 8, marginBottom: 8, borderTop: `1px solid ${T.border.subtle}`, paddingTop: 10 }}>
         <button
@@ -1480,204 +1758,6 @@ export default function InputForm({
                 </div>
               </Card>
             )}
-            {/* Investment auto-tracking section */}
-            {(activeConfig.trackRoth || activeConfig.trackRothContributions || activeConfig.trackBrokerage || activeConfig.track401k) && (
-              <Card variant="glass" style={{ marginBottom: 10, position: "relative", overflow: "hidden" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                  <Label style={{ marginBottom: 0, fontWeight: 800 }}>Investment Balances</Label>
-                  {financialConfig?.enableHoldings && (
-                    <Badge
-                      variant="outline"
-                      style={{ fontSize: 9, color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}
-                    >
-                      AUTO-TRACKED
-                    </Badge>
-                  )}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {(activeConfig.trackRoth || activeConfig.trackRothContributions) &&
-                    (() => {
-                      const hasAutoValue = investmentAutoValues.roth > 0;
-                      return (
-                        <div
-                          style={{
-                            padding: "10px 12px",
-                            background: T.bg.elevated,
-                            borderRadius: T.radius.md,
-                            border: `1px solid ${T.border.subtle}`,
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              marginBottom: overrideInvest.roth ? 8 : 0,
-                            }}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <div style={{ width: 6, height: 6, borderRadius: 3, background: "#8B5CF6" }} />
-                              <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>Roth IRA</span>
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              {hasAutoValue && !overrideInvest.roth && (
-                                <Mono size={13} weight={800} color={T.accent.emerald}>
-                                  {fmt(investmentAutoValues.roth)}
-                                </Mono>
-                              )}
-                              {hasAutoValue && (
-                                <button
-                                  onClick={() => setOverrideInvest(p => ({ ...p, roth: !p.roth }))}
-                                  style={{
-                                    fontSize: 9,
-                                    fontWeight: 700,
-                                    fontFamily: T.font.mono,
-                                    padding: "3px 8px",
-                                    borderRadius: T.radius.sm,
-                                    border: `1px solid ${overrideInvest.roth ? T.accent.primary : T.border.default}`,
-                                    background: overrideInvest.roth ? `${T.accent.primary}15` : "transparent",
-                                    color: overrideInvest.roth ? T.accent.primary : T.text.dim,
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  {overrideInvest.roth ? "CANCEL" : "OVERRIDE"}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          {(!hasAutoValue || overrideInvest.roth) && (
-                            <DI
-                              value={form.roth}
-                              onChange={e => s("roth", sanitizeDollar(e.target.value))}
-                              placeholder={hasAutoValue ? `Auto: ${fmt(investmentAutoValues.roth)}` : "Enter value"}
-                            />
-                          )}
-                        </div>
-                      );
-                    })()}
-                  {activeConfig.trackBrokerage &&
-                    (() => {
-                      const hasAutoValue = investmentAutoValues.brokerage > 0;
-                      return (
-                        <div
-                          style={{
-                            padding: "10px 12px",
-                            background: T.bg.elevated,
-                            borderRadius: T.radius.md,
-                            border: `1px solid ${T.border.subtle}`,
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              marginBottom: overrideInvest.brokerage ? 8 : 0,
-                            }}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <div style={{ width: 6, height: 6, borderRadius: 3, background: "#10B981" }} />
-                              <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>Brokerage</span>
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              {hasAutoValue && !overrideInvest.brokerage && (
-                                <Mono size={13} weight={800} color={T.accent.emerald}>
-                                  {fmt(investmentAutoValues.brokerage)}
-                                </Mono>
-                              )}
-                              {hasAutoValue && (
-                                <button
-                                  onClick={() => setOverrideInvest(p => ({ ...p, brokerage: !p.brokerage }))}
-                                  style={{
-                                    fontSize: 9,
-                                    fontWeight: 700,
-                                    fontFamily: T.font.mono,
-                                    padding: "3px 8px",
-                                    borderRadius: T.radius.sm,
-                                    border: `1px solid ${overrideInvest.brokerage ? T.accent.primary : T.border.default}`,
-                                    background: overrideInvest.brokerage ? `${T.accent.primary}15` : "transparent",
-                                    color: overrideInvest.brokerage ? T.accent.primary : T.text.dim,
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  {overrideInvest.brokerage ? "CANCEL" : "OVERRIDE"}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          {(!hasAutoValue || overrideInvest.brokerage) && (
-                            <DI
-                              value={form.brokerage}
-                              onChange={e => s("brokerage", sanitizeDollar(e.target.value))}
-                              placeholder={hasAutoValue ? `Auto: ${fmt(investmentAutoValues.brokerage)}` : "Enter value"}
-                            />
-                          )}
-                        </div>
-                      );
-                    })()}
-                  {activeConfig.track401k &&
-                    (() => {
-                      const hasAutoValue = investmentAutoValues.k401 > 0;
-                      return (
-                        <div
-                          style={{
-                            padding: "10px 12px",
-                            background: T.bg.elevated,
-                            borderRadius: T.radius.md,
-                            border: `1px solid ${T.border.subtle}`,
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              marginBottom: overrideInvest.k401 ? 8 : 0,
-                            }}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <div style={{ width: 6, height: 6, borderRadius: 3, background: "#3B82F6" }} />
-                              <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>401(k)</span>
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              {hasAutoValue && !overrideInvest.k401 && (
-                                <Mono size={13} weight={800} color={T.accent.emerald}>
-                                  {fmt(investmentAutoValues.k401)}
-                                </Mono>
-                              )}
-                              {hasAutoValue && (
-                                <button
-                                  onClick={() => setOverrideInvest(p => ({ ...p, k401: !p.k401 }))}
-                                  style={{
-                                    fontSize: 9,
-                                    fontWeight: 700,
-                                    fontFamily: T.font.mono,
-                                    padding: "3px 8px",
-                                    borderRadius: T.radius.sm,
-                                    border: `1px solid ${overrideInvest.k401 ? T.accent.primary : T.border.default}`,
-                                    background: overrideInvest.k401 ? `${T.accent.primary}15` : "transparent",
-                                    color: overrideInvest.k401 ? T.accent.primary : T.text.dim,
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  {overrideInvest.k401 ? "CANCEL" : "OVERRIDE"}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          {(!hasAutoValue || overrideInvest.k401) && (
-                            <DI
-                              value={form.k401Balance || ""}
-                              onChange={e => s("k401Balance", sanitizeDollar(e.target.value))}
-                              placeholder={hasAutoValue ? `Auto: ${fmt(investmentAutoValues.k401)}` : "Enter value"}
-                            />
-                          )}
-                        </div>
-                      );
-                    })()}
-                </div>
-              </Card>
-            )}
             {financialConfig?.enableHoldings &&
               financialConfig?.trackCrypto !== false &&
               (financialConfig?.holdings?.crypto || []).length > 0 &&
@@ -1830,24 +1910,6 @@ export default function InputForm({
           </div>
         )
       }
-
-      <ConfigSection
-        showConfig={showConfig}
-        setShowConfig={setShowConfig}
-        configSummary={configSummary}
-        typedFinancialConfig={typedFinancialConfig}
-        setTypedFinancialConfig={setTypedFinancialConfig}
-        personalRules={personalRules}
-        setPersonalRules={setPersonalRules}
-      />
-
-      {/* ── Plaid Transactions Card ── */}
-      <PlaidTransactionsCard
-        plaidTransactions={plaidTransactions}
-        txnFetchedAt={txnFetchedAt}
-        showTxns={showTxns}
-        setShowTxns={setShowTxns}
-      />
 
       <ValidationFeedback validationErrors={validationErrors} validationWarnings={validationWarnings} />
 

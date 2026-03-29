@@ -25,8 +25,8 @@ interface ChecklistStep {
 }
 
 /**
- * EmptyDashboard — Rendered when no audit exists. 
- * A guided onboarding experience to get users connecting banks and running their first audit.
+ * EmptyDashboard — Rendered when no weekly briefing exists.
+ * A guided onboarding experience to get users connecting banks and generating their first weekly plan.
  */
 export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboardProps) {
   const { financialConfig } = useSettings();
@@ -95,14 +95,14 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
   const isSmallPhone = typeof window !== "undefined" ? window.innerWidth <= 390 : false;
   const nextRecommendedStep = steps.find((step) => !step.done) || null;
   const setupComplete = completedSteps === steps.length;
-  const heroLabel = setupComplete ? "Ready to turn data into direction" : "Ready for your first audit";
+  const heroLabel = setupComplete ? "Ready to refresh your weekly briefing" : "Ready for your first weekly briefing";
   const heroTitle = setupComplete
-    ? "Your dashboard has context. Now make it decisive."
-    : "Run one audit and unlock the dashboard.";
+    ? "Your dashboard has context. Refresh the plan."
+    : "Run one weekly briefing and unlock the dashboard.";
   const heroBody = setupComplete
-    ? "You already connected the inputs that matter. Run an audit to generate a health score, next action, and cash guidance from your real setup."
-    : "Start with one audit. You can add bank sync, subscriptions, and extra detail afterward without losing momentum.";
-  const primaryCtaLabel = setupComplete ? "Run your first audit now" : "Begin first audit";
+    ? "You already connected the inputs that matter. Refresh your weekly briefing to generate a health score, next action, and cash guidance from your real setup."
+    : "Start with one weekly briefing. You can add bank sync, subscriptions, and extra detail afterward without losing momentum.";
+  const primaryCtaLabel = setupComplete ? "Refresh weekly briefing" : "Begin weekly briefing";
 
   return (
     <main aria-label="Empty dashboard" style={{ width: "100%" }}>
@@ -235,7 +235,7 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
               {setupComplete ? "Connected inputs" : "Suggested setup"}
             </Label>
             <div style={{ fontSize: 11, color: T.text.dim, marginTop: 2 }}>
-              {setupComplete ? "You already added the core context that sharpens your audit." : "Finish the core context that improves your audit quality"}
+              {setupComplete ? "You already added the core context that sharpens your weekly briefing." : "Finish the core context that improves your weekly briefing quality"}
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

@@ -624,7 +624,7 @@ export default memo(function DashboardTab({
                    }}
                  >
                    <Zap size={10} color={T.accent.primary} strokeWidth={3} />
-                   <span style={{ fontSize: 10, fontWeight: 700, color: T.accent.primary }}>Run Audit</span>
+                   <span style={{ fontSize: 10, fontWeight: 700, color: T.accent.primary }}>Refresh Briefing</span>
                  </div>
                )}
              </div>
