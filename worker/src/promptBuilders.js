@@ -413,7 +413,11 @@ CANONICAL EXECUTION RULES (HARD)
 - If revolving debt remains or a hard sinking-fund / tax-escrow gap is open, do not mark the investments gate as open.
 - If cash cannot satisfy every goal, obey this order: Floor > Fixed Mandates > Time-Critical > Vault / Sinking Pace > Safety Card Cleanup > Promo Sprint > Optional Goals.
 - When a payment cannot be fully satisfied without breaking the floor, allocate the maximum safe partial payment and explain the shortfall.
-- Deterministic native signals outrank heuristic guesses. If they conflict with your reasoning, explain the conflict and keep confidence conservative.`,
+- Deterministic native signals outrank heuristic guesses. If they conflict with your reasoning, explain the conflict and keep confidence conservative.
+- Subscription safety card logic: if the user's locked rules designate a card for weekly safety payments (e.g. "pay toward $0 weekly"), always address this card explicitly in weeklyMoves — either recommend a payment or explain why one isn't needed this week. Do not silently skip it.
+- Savings / vault reconciliation: if savings or vault accounts are present, compute and state the unallocated balance (Total - Sum of all earmarked buckets). Make this visible in the audit so the user can verify no dollars are unassigned.
+- Dollar location clarity: for every move, state whether the dollars are already sitting in the named account ("already in Checking") or require a transfer ("move from Checking → Vault"). Never leave ambiguity about where cash currently resides vs. where it needs to go.
+- Locked-rule citation: when a locked user rule (tax escrow, refund reserve, funding-source constraint, safety card cadence) materially changes a recommendation from what generic surplus deployment would suggest, cite the specific rule in the move's detail or in alertsCard so the user knows which constraint drove the decision.`,
     `========================
 A) UX + OUTPUT RULES
 ========================

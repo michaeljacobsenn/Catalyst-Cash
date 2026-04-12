@@ -504,7 +504,7 @@ function CashAccountSection({
                 </div>
 
                 {isOverridden ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, maxWidth: 180 }}>
                     <InlineOverrideMoneyInput
                       label={`${account.displayLabel} override`}
                       value={overrideValue}
@@ -666,7 +666,7 @@ function InlineOverrideMoneyInput({
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "minmax(0, 1fr) auto",
+        gridTemplateColumns: "minmax(0, 1fr) 30px",
         gap: 6,
         alignItems: "center",
         minWidth: 0,
@@ -721,7 +721,7 @@ function InlineOverrideMoneyInput({
           style={{
             width: "100%",
             minWidth: 0,
-            height: 44,
+            height: 38,
             padding: "11px 12px 11px 26px",
             borderRadius: T.radius.md,
             background: toneBackground,
@@ -1680,7 +1680,7 @@ export default function InputForm({
                     </div>
 
                     {/* Balance bubble / override */}
-                    <div style={{ flexShrink: 0 }}>
+                    <div style={{ flexShrink: 0, maxWidth: 180 }}>
                       {hasPlaid && !isOverridden ? (
                         <button
                           onClick={() => {
