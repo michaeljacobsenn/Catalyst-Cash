@@ -4,7 +4,7 @@
   import { T } from "../constants.js";
   import { formatInterval } from "../constants.js";
   import { haptic } from "../haptics.js";
-  import { AlertTriangle,AlignLeft,Calendar,Check,CheckCircle2,ChevronDown,CreditCard,Plus,X } from "../icons";
+  import { AlertTriangle,Calendar,Check,CheckCircle2,ChevronDown,CreditCard,Plus,X } from "../icons";
   import SearchableSelectBase from "../SearchableSelect.js";
   import { shouldShowGating } from "../subscription.js";
   import { Badge as UIBadge,Card as UICard,FormGroup as UIFormGroup,FormRow as UIFormRow } from "../ui.js";
@@ -272,24 +272,24 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
     justifyContent: "center",
     flex: "1 1 0",
     minWidth: 0,
-    height: 36,
-    minHeight: 36,
-    maxHeight: 36,
-    padding: "0 10px",
-    borderRadius: 11,
-    fontSize: 10.5,
-    fontWeight: 800,
+    height: 28,
+    minHeight: 28,
+    maxHeight: 28,
+    padding: "0 8px",
+    borderRadius: 8,
+    fontSize: 10,
+    fontWeight: 700,
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
     textDecoration: "none",
     letterSpacing: "-0.01em",
-    background: T.bg.surface,
-    border: `1px solid ${T.border.default}`,
-    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
+    background: "transparent",
+    border: `1px solid ${T.border.subtle}`,
+    boxShadow: "none",
     boxSizing: "border-box",
     fontFamily: T.font.sans,
-    lineHeight: "36px",
+    lineHeight: "28px",
     appearance: "none",
     WebkitAppearance: "none",
     margin: 0,
@@ -1167,11 +1167,11 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
           grouped.map((cat) => (
             <div
               key={cat.id}
-              style={{ marginBottom: 24, padding: 0, overflow: "hidden", background: "transparent" }}
+              style={{ marginBottom: 16, padding: 0, overflow: "hidden", background: "transparent" }}
             >
               <div
                 style={{
-                  padding: "16px",
+                  padding: "10px 14px 6px",
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
@@ -1179,17 +1179,17 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
               >
                 <span
                   style={{
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: 700,
                     color: cat.color,
                     textTransform: "uppercase",
-                    letterSpacing: "0.08em",
+                    letterSpacing: "0.1em",
                   }}
                 >
                   {cat.label}
                 </span>
-                <Mono size={10} color={T.text.dim}>
-                  {cat.items.length} items
+                <Mono size={9} color={T.text.dim}>
+                  {cat.items.length}
                 </Mono>
               </div>
               <div style={{ background: T.bg.card, borderRadius: T.radius.lg, overflow: "hidden" }}>
@@ -1213,9 +1213,9 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
                     <div
                       key={itemKey}
                       style={{
-                        borderBottom: i === cat.items.length - 1 ? "none" : `1px solid ${T.border.subtle}`,
-                        padding: "12px 16px",
-                        animation: `fadeInUp .3s ease-out ${Math.min(i * 0.04, 0.4)}s both`,
+                        borderBottom: i === cat.items.length - 1 ? "none" : `1px solid ${T.border.subtle}40`,
+                        padding: "8px 14px",
+                        animation: `fadeInUp .25s ease-out ${Math.min(i * 0.03, 0.3)}s both`,
                       }}
                     >
                       {editing === renewalIndex ? (
@@ -1461,23 +1461,23 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
                           justifyContent: "space-between",
                           alignItems: "flex-start",
                           minHeight: 0,
-                          padding: "8px 0",
+                          padding: "4px 0",
                         }}>
                           <div
                             style={{
                               flex: 1,
                               minWidth: 0,
-                              paddingRight: 12,
+                              paddingRight: 10,
                               display: "flex",
                               flexDirection: "column",
                               justifyContent: "center",
                             }}
                           >
                             {/* Top Row: Title & Badges */}
-                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4, flexWrap: "wrap" }}>
                               <span
                                 style={{
-                                  fontSize: 14,
+                                  fontSize: 13.5,
                                   fontWeight: 700,
                                   color: item.isCancelled || item.isExpired ? T.text.muted : T.text.primary,
                                   textDecoration: item.isCancelled ? "line-through" : "none",
@@ -1485,19 +1485,19 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
                               >
                                 {item.name}
                               </span>
-                              {item.isCardAF && <Badge variant="gold" style={{ fontSize: 9, padding: "2px 6px" }}>AUTO</Badge>}
-                              {item.isWaived && <Badge variant="outline" style={{ fontSize: 9, padding: "2px 6px", color: T.status.green, borderColor: `${T.status.green}40` }}>WAIVED</Badge>}
-                              {item.isCancelled && <Badge variant="outline" style={{ fontSize: 9, padding: "2px 6px", color: T.text.muted, borderColor: T.border.default }}>CANCELLED</Badge>}
-                              {item.isExpired && <Badge variant="outline" style={{ fontSize: 9, padding: "2px 6px", color: T.text.muted, borderColor: T.border.default }}>EXPIRED</Badge>}
+                              {item.isCardAF && <Badge variant="gold" style={{ fontSize: 8, padding: "1px 5px" }}>AUTO</Badge>}
+                              {item.isWaived && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.status.green, borderColor: `${T.status.green}40` }}>WAIVED</Badge>}
+                              {item.isCancelled && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.muted, borderColor: T.border.default }}>CANCELLED</Badge>}
+                              {item.isExpired && <Badge variant="outline" style={{ fontSize: 8, padding: "1px 5px", color: T.text.muted, borderColor: T.border.default }}>EXPIRED</Badge>}
                             </div>
 
                             {/* Metadata Container */}
-                            <div style={{ display: "flex", flexWrap: "wrap", rowGap: 6, alignItems: "center" }}>
+                            <div style={{ display: "flex", flexWrap: "wrap", rowGap: 3, alignItems: "center" }}>
                               {([
                                 {
                                   key: "cadence",
                                   node: (
-                                    <Mono size={13} color={T.text.dim}>
+                                    <Mono size={11} color={T.text.dim}>
                                       {item.cadence || formatInterval(item.interval, item.intervalUnit)}
                                     </Mono>
                                   ),
@@ -1506,9 +1506,9 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
                                   ? {
                                       key: "card",
                                       node: (
-                                        <div style={{ display: "flex", alignItems: "center", gap: 5, maxWidth: "100%" }}>
-                                          <CreditCard size={13} color={T.accent.primary} style={{ flexShrink: 0 }} />
-                                          <span style={{ fontSize: 12, color: T.text.secondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 4, maxWidth: "100%" }}>
+                                          <CreditCard size={11} color={T.accent.primary} style={{ flexShrink: 0 }} />
+                                          <span style={{ fontSize: 11, color: T.text.secondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                             {item.chargedTo.replace(/^(American Express|Barclays|Capital One|Chase|Citi|Discover) /, "")}
                                           </span>
                                         </div>
@@ -1519,10 +1519,10 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
                                   ? {
                                       key: "due",
                                       node: (
-                                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                          <Calendar size={13} color={T.text.dim} style={{ flexShrink: 0 }} />
-                                          <span style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
-                                            Due {formatRenewalDueDate(item.nextDue)}
+                                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                          <Calendar size={11} color={T.text.dim} style={{ flexShrink: 0 }} />
+                                          <span style={{ fontSize: 10, fontWeight: 700, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
+                                            DUE {formatRenewalDueDate(item.nextDue)}
                                           </span>
                                         </div>
                                       ),
@@ -1535,10 +1535,10 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
                                       aria-hidden="true"
                                       style={{
                                         width: 1,
-                                        height: 12,
+                                        height: 10,
                                         backgroundColor: T.text.dim,
-                                        opacity: 0.5,
-                                        margin: "0 10px",
+                                        opacity: 0.35,
+                                        margin: "0 7px",
                                       }}
                                     />
                                   )}
@@ -1546,31 +1546,25 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
                                 </React.Fragment>
                               ))}
 
-                              {/* Notes / Source */}
+                              {/* Notes / Source — single-line truncated */}
                               {item.source && (
-                                <div style={{ display: "flex", alignItems: "flex-start", gap: 6, width: "100%", marginTop: 4 }}>
-                                  <AlignLeft size={13} color={T.text.dim} style={{ flexShrink: 0, marginTop: 1 }} />
-                                  <span style={{ fontSize: 12, color: T.text.muted, fontStyle: "italic", lineHeight: 1.35 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 4, width: "100%", marginTop: 2 }}>
+                                  <span style={{ fontSize: 11, color: T.text.muted, fontStyle: "italic", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                     {item.source}
                                   </span>
                                 </div>
                               )}
                             </div>
 
-                            {/* Action Buttons Row */}
+                            {/* Action Buttons Row — compact inline */}
                             {!item.isCardAF && !item.archivedAt && actionCount > 0 && (
                               <div
                                 style={{
                                   display: "flex",
                                   alignItems: "center",
-                                  gap: 6,
-                                  marginTop: 10,
+                                  gap: 5,
+                                  marginTop: 6,
                                   width: "100%",
-                                  padding: 5,
-                                  borderRadius: 15,
-                                  background: `${T.bg.base}d9`,
-                                  border: `1px solid ${T.border.subtle}`,
-                                  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03), 0 1px 0 rgba(0,0,0,0.18)`,
                                 }}
                               >
                                 {/* Cancel Link */}
@@ -1639,21 +1633,26 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
                           </div>
 
                           {/* Right Column: Amount & Actions */}
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 }}>
-                            <span style={{ fontSize: 17, fontWeight: 800, color: T.text.primary, marginBottom: 10 }}>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0, gap: 6 }}>
+                            <span style={{
+                              fontSize: 14,
+                              fontWeight: 800,
+                              color: item.isCancelled || item.isExpired ? T.text.muted : T.text.primary,
+                              fontFamily: T.font.mono,
+                              letterSpacing: "-0.02em",
+                            }}>
                               ${(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
 
                             {!item.isCardAF && isUserRenewal && editing !== renewalIndex && (
-                              <div style={{ display: "flex", gap: 6 }}>
+                              <div style={{ display: "flex", gap: 5 }}>
                                 <button
                                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEdit(item, renewalIndex); }}
                                   className="hover-btn"
                                   style={{
-                                    width: 30, height: 30, borderRadius: T.radius.md,
-                                    background: T.bg.base, color: T.text.secondary, border: `1px solid ${T.border.default}`,
-                                    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14,
-                                    boxShadow: `0 2px 4px rgba(0,0,0,0.1)`
+                                    width: 26, height: 26, borderRadius: T.radius.sm,
+                                    background: T.bg.base, color: T.text.secondary, border: `1px solid ${T.border.subtle}`,
+                                    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 12,
                                   }}
                                 >
                                   ✎
@@ -1662,13 +1661,12 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
                                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeItem(renewalIndex, item.name); }}
                                   className="hover-btn"
                                   style={{
-                                    width: 30, height: 30, borderRadius: T.radius.md, border: "none",
+                                    width: 26, height: 26, borderRadius: T.radius.sm, border: "none",
                                     background: T.status.redDim, color: T.status.red,
                                     display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-                                    boxShadow: `0 2px 4px rgba(0,0,0,0.1)`
                                   }}
                                 >
-                                  <X size={14} />
+                                  <X size={12} />
                                 </button>
                               </div>
                             )}

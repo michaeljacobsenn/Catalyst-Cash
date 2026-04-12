@@ -142,8 +142,8 @@ export default function BankAccountsSection({
             <div
                 key={acct.id}
                 style={{
-                    padding: "12px 16px",
-                    borderBottom: i === total - 1 ? "none" : `1px solid ${T.border.subtle}`,
+                    padding: "10px 14px",
+                    borderBottom: i === total - 1 ? "none" : `1px solid ${T.border.subtle}40`,
                 }}
             >
                 {editingBank === acct.id ? (
@@ -186,40 +186,39 @@ export default function BankAccountsSection({
                         </div>
                     </div>
                 ) : (
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-                        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", gap: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", gap: 10 }}>
                             <div
                                 style={{
-                                    width: 32,
-                                    height: 32,
-                                    borderRadius: 10,
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: 8,
                                     background: T.bg.surface,
                                     border: `1px solid ${T.border.subtle}`,
                                     display: "flex",
                                     alignItems: "center",
                                     justifyContent: "center",
-                                    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
                                     flexShrink: 0,
                                 }}
                             >
-                                <Landmark size={15} color={colors.text || colors.accent || sectionColor} />
+                                <Landmark size={13} color={colors.text || colors.accent || sectionColor} />
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
                                     <span
                                         style={{
-                                            fontSize: 10,
+                                            fontSize: 8,
                                             fontWeight: 800,
                                             color: colors.text || colors.accent,
                                             fontFamily: T.font.mono,
-                                            letterSpacing: "0.08em",
+                                            letterSpacing: "0.1em",
                                             textTransform: "uppercase",
                                             opacity: 0.78,
                                         }}
                                     >
                                         {acct.bank}
                                     </span>
-                                    <span style={{ fontSize: 15, fontWeight: 760, color: T.text.primary, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.01em" }}>{(() => {
+                                    <span style={{ fontSize: 13.5, fontWeight: 750, color: T.text.primary, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.01em" }}>{(() => {
                                     const name = acct.name || "";
                                     const inst = acct.bank || "";
                                     if (inst && name.toLowerCase().startsWith(inst.toLowerCase())) {
@@ -230,14 +229,14 @@ export default function BankAccountsSection({
                                 })()}</span>
                                 </div>
                                 {(metaChips.length > 0 || (acct.apy ?? 0) > 0 || (acct.notes && !acct._plaidAccountId)) && (
-                                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
                                         {metaChips.map((chip) => (
                                             <span
                                                 key={`${acct.id}-${chip.label}`}
                                                 style={{
-                                                    padding: "2px 7px",
+                                                    padding: "1px 6px",
                                                     borderRadius: 999,
-                                                    fontSize: 9,
+                                                    fontSize: 8,
                                                     fontWeight: 800,
                                                     fontFamily: T.font.mono,
                                                     letterSpacing: "0.02em",
@@ -262,10 +261,10 @@ export default function BankAccountsSection({
                                             </span>
                                         ))}
                                         {(acct.apy ?? 0) > 0 ? (
-                                            <Mono size={10} color={T.text.dim}>{acct.apy}% APY</Mono>
+                                            <Mono size={9} color={T.text.dim}>{acct.apy}% APY</Mono>
                                         ) : null}
                                         {acct.notes && !acct._plaidAccountId ? (
-                                            <Mono size={10} color={T.text.dim} style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                            <Mono size={9} color={T.text.dim} style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                                 {acct.notes}
                                             </Mono>
                                         ) : null}
@@ -273,36 +272,36 @@ export default function BankAccountsSection({
                                 )}
                             </div>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
                                 <div
                                     style={{
-                                                padding: "8px 10px",
-                                                borderRadius: 14,
+                                                padding: "6px 9px",
+                                                borderRadius: 10,
                                                 border: `1px solid ${!usesManualFallback && acct._plaidBalance != null ? `${sectionColor}28` : T.border.subtle}`,
                                                 background: !usesManualFallback && acct._plaidBalance != null ? `${sectionColor}10` : `linear-gradient(180deg, ${T.bg.surface}, ${T.bg.card})`,
-                                                minWidth: 104,
+                                                minWidth: 80,
                                                 textAlign: "right",
                                             }}
                                         >
-                                            <Mono size={14} weight={900} color={!usesManualFallback && acct._plaidBalance != null ? sectionColor : T.text.primary}>{fmt(liveBalance)}</Mono>
+                                            <Mono size={13} weight={850} color={!usesManualFallback && acct._plaidBalance != null ? sectionColor : T.text.primary}>{fmt(liveBalance)}</Mono>
                                         </div>
                                 {plannedState?.remainingAmount ? (
                                     <div
                                         style={{
-                                            padding: "3px 7px",
+                                            padding: "2px 6px",
                                             borderRadius: 999,
                                             background: `${T.accent.emerald}12`,
                                             border: `1px solid ${T.accent.emerald}1f`,
-                                            maxWidth: 128,
+                                            maxWidth: 120,
                                             textAlign: "right",
                                         }}
                                     >
-                                        <Mono size={9} weight={800} color={T.accent.emerald}>Planned {fmt(plannedState.projectedBalance || 0)}</Mono>
+                                        <Mono size={8} weight={800} color={T.accent.emerald}>Planned {fmt(plannedState.projectedBalance || 0)}</Mono>
                                     </div>
                                 ) : null}
                             </div>
-                            <button onClick={() => startEditBank(acct)} style={{ width: 30, height: 30, borderRadius: 10, border: `1px solid ${T.border.subtle}`, background: T.bg.surface, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)` }} className="hover-btn"><Edit3 size={11} /></button>
+                            <button onClick={() => startEditBank(acct)} style={{ width: 24, height: 24, borderRadius: 8, border: `1px solid ${T.border.subtle}`, background: T.bg.surface, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} className="hover-btn"><Edit3 size={10} /></button>
                         </div>
                     </div>
                 )}

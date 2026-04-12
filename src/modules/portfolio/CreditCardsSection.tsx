@@ -279,7 +279,7 @@ export default function CreditCardsSection({
                         <p style={{ fontSize: 11, color: T.text.muted }}>No credit cards yet — tap Add Account to get started.</p>
                     </div>
                 ) : (
-                    <div className="stagger-container" style={{ padding: "4px 8px 8px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div className="stagger-container" style={{ padding: "0", display: "flex", flexDirection: "column", gap: 0 }}>
                         {sortedCards.map((card) => {
                             const colors = ic(card.institution);
                             const needsReconnect = !!(card._plaidConnectionId && reconnectConnectionIds.has(card._plaidConnectionId));
@@ -310,9 +310,10 @@ export default function CreditCardsSection({
                                 annualFee > 0 ? (card.annualFeeWaived ? "AF waived" : `${fmt(annualFee)} fee`) : null,
                                 !usesManualFallback && card._plaidBalance != null ? `•••${(card.notes || "").match(/···(\d+)/)?.[1] || "Plaid"}` : null,
                             ].filter(Boolean).join("  ·  ");
+                            const isZeroBalance = Math.abs(visibleBalance) < 0.01;
                             return (
-                                <div key={card.id} style={{ background: `linear-gradient(180deg, ${T.bg.surface}, ${T.bg.card})`, borderRadius: 14, boxShadow: "0 6px 18px rgba(0,0,0,0.05)", border: `1px solid ${T.border.subtle}` }}>
-                                    <div style={{ padding: "12px 16px" }}>
+                                <div key={card.id} style={{ borderBottom: `1px solid ${T.border.subtle}40`, opacity: isZeroBalance && !plannedState?.remainingAmount ? 0.72 : 1, transition: "opacity 0.2s" }}>
+                                    <div style={{ padding: "10px 14px" }}>
                                     {editingCard === card.id ? (
                                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                                             {(() => {
@@ -456,31 +457,30 @@ export default function CreditCardsSection({
                                             </div>
                                         </div>
                                     ) : (
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-                                            <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", gap: 12 }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                                            <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", gap: 10 }}>
                                                 <div
                                                     style={{
-                                                        width: 32,
-                                                        height: 32,
-                                                        borderRadius: 10,
+                                                        width: 28,
+                                                        height: 28,
+                                                        borderRadius: 8,
                                                         background: T.bg.surface,
                                                         border: `1px solid ${T.border.subtle}`,
                                                         display: "flex",
                                                         alignItems: "center",
                                                         justifyContent: "center",
-                                                        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
                                                         flexShrink: 0,
                                                     }}
                                                 >
-                                                    <CreditCard size={15} color={colors.text} />
+                                                    <CreditCard size={13} color={colors.text} />
                                                 </div>
                                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                                    <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+                                                    <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
                                                         <span
                                                             style={{
                                                                 color: colors.text,
                                                                 fontWeight: 750,
-                                                                fontSize: 9,
+                                                                fontSize: 8,
                                                                 fontFamily: T.font.mono,
                                                                 letterSpacing: "0.12em",
                                                                 textTransform: "uppercase",
@@ -491,30 +491,29 @@ export default function CreditCardsSection({
                                                         </span>
                                                         <span
                                                             style={{
-                                                                fontSize: 15,
-                                                                fontWeight: 780,
+                                                                fontSize: 13.5,
+                                                                fontWeight: 750,
                                                                 color: T.text.primary,
                                                                 minWidth: 0,
                                                                 overflow: "hidden",
+                                                                textOverflow: "ellipsis",
+                                                                whiteSpace: "nowrap",
                                                                 letterSpacing: "-0.01em",
-                                                                lineHeight: 1.18,
-                                                                display: "-webkit-box",
-                                                                WebkitLineClamp: 2,
-                                                                WebkitBoxOrient: "vertical",
+                                                                lineHeight: 1.2,
                                                                 maxWidth: "100%",
                                                             }}
                                                         >
                                                             {getCardDisplayName(card)}
                                                         </span>
                                                     </div>
-                                                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
                                                         {detailChips.map((chip) => (
                                                             <span
                                                                 key={`${card.id}-${chip.label}`}
                                                                 style={{
-                                                                    padding: "2px 7px",
+                                                                    padding: "1px 6px",
                                                                     borderRadius: 999,
-                                                                    fontSize: 9,
+                                                                    fontSize: 8,
                                                                     fontWeight: 800,
                                                                     fontFamily: T.font.mono,
                                                                     letterSpacing: "0.02em",
@@ -540,48 +539,48 @@ export default function CreditCardsSection({
                                                         ))}
                                                     </div>
                                                     {secondaryMeta ? (
-                                                        <div style={{ marginTop: 6, maxWidth: "100%" }}>
-                                                            <Mono size={10} color={T.text.dim} style={{ lineHeight: 1.35, opacity: 0.88 }}>
+                                                        <div style={{ marginTop: 3, maxWidth: "100%" }}>
+                                                            <Mono size={9} color={T.text.dim} style={{ lineHeight: 1.3, opacity: 0.8 }}>
                                                                 {secondaryMeta}
                                                             </Mono>
                                                         </div>
                                                     ) : null}
                                                 </div>
                                             </div>
-                                            <div style={{ display: "flex", alignItems: "flex-start", gap: 6, flexShrink: 0 }}>
+                                            <div style={{ display: "flex", alignItems: "flex-start", gap: 5, flexShrink: 0 }}>
                                                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
                                                     <div
                                                         style={{
-                                                            padding: "8px 11px",
-                                                            borderRadius: 13,
+                                                            padding: "6px 9px",
+                                                            borderRadius: 10,
                                                             border: `1px solid ${balanceTone.border}`,
                                                             background: balanceTone.bg,
-                                                            minWidth: 96,
+                                                            minWidth: 80,
                                                             textAlign: "right",
                                                         }}
                                                     >
-                                                        <Mono size={14} weight={900} color={balanceTone.fg}>{fmt(visibleBalance)}</Mono>
+                                                        <Mono size={13} weight={850} color={balanceTone.fg}>{fmt(visibleBalance)}</Mono>
                                                     </div>
                                                     {plannedState?.remainingAmount ? (
                                                         <div
                                                             style={{
-                                                                marginTop: 4,
-                                                                padding: "3px 7px",
+                                                                marginTop: 3,
+                                                                padding: "2px 6px",
                                                                 borderRadius: 999,
                                                                 background: `${T.accent.emerald}12`,
                                                                 border: `1px solid ${T.accent.emerald}1f`,
-                                                                maxWidth: 128,
+                                                                maxWidth: 120,
                                                                 textAlign: "right",
                                                             }}
                                                         >
-                                                            <Mono size={9} weight={800} color={T.accent.emerald}>
+                                                            <Mono size={8} weight={800} color={T.accent.emerald}>
                                                                 Planned {fmt(plannedState.projectedBalance || 0)}
                                                             </Mono>
                                                         </div>
                                                     ) : null}
-                                                    {limit > 0 ? <Mono size={10} weight={700} color={T.text.dim} style={{ marginTop: 4 }}>{`Limit ${fmt(limit)}`}</Mono> : null}
+                                                    {limit > 0 ? <Mono size={9} weight={700} color={T.text.dim} style={{ marginTop: 3 }}>{`Limit ${fmt(limit)}`}</Mono> : null}
                                                 </div>
-                                                <button onClick={() => startEdit(card)} style={{ width: 28, height: 28, borderRadius: 10, border: `1px solid ${T.border.subtle}`, background: T.bg.surface, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`, marginTop: 1 }}><Edit3 size={10.5} /></button>
+                                                <button onClick={() => startEdit(card)} style={{ width: 24, height: 24, borderRadius: 8, border: `1px solid ${T.border.subtle}`, background: T.bg.surface, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 1 }}><Edit3 size={10} /></button>
                                             </div>
                                         </div>
                                     )}
