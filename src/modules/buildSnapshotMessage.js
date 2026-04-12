@@ -216,14 +216,28 @@ export function buildSnapshotMessage({
       : plaidBucketTotal("k401") > 0 && !activeConfig.override401kValue
         ? plaidBucketTotal("k401").toFixed(2)
         : form.k401Balance || activeConfig.k401Balance || 0;
-  if (effectiveRoth)
+  if (effectiveRoth) {
+    const rothIsLive = (activeConfig.enableHoldings && !activeConfig.overrideRothValue && holdingValues.roth > 0) || (plaidBucketTotal("roth") > 0 && !activeConfig.overrideRothValue);
+    const rothFormVal = Number(form.roth) || 0;
+    const rothEffVal = Number(effectiveRoth) || 0;
+    const rothDivergence = rothIsLive && rothFormVal > 0 && Math.abs(rothEffVal - rothFormVal) > 1
+      ? ` [NOTE: live value $${rothEffVal.toFixed(2)} differs from user-entered $${rothFormVal.toFixed(2)} by $${Math.abs(rothEffVal - rothFormVal).toFixed(2)} — use the live value but acknowledge the discrepancy]`
+      : "";
     headerLines.push(
-      `Roth IRA: $${effectiveRoth}${((activeConfig.enableHoldings && !activeConfig.overrideRothValue && holdingValues.roth > 0) || (plaidBucketTotal("roth") > 0 && !activeConfig.overrideRothValue)) ? " (live)" : ""}`
+      `Roth IRA: $${effectiveRoth}${rothIsLive ? " (live)" : ""}${rothDivergence}`
     );
-  if (activeConfig.trackBrokerage && effectiveBrokerage)
+  }
+  if (activeConfig.trackBrokerage && effectiveBrokerage) {
+    const brokIsLive = (activeConfig.enableHoldings && !activeConfig.overrideBrokerageValue && holdingValues.brokerage > 0) || (plaidBucketTotal("brokerage") > 0 && !activeConfig.overrideBrokerageValue);
+    const brokFormVal = Number(form.brokerage) || 0;
+    const brokEffVal = Number(effectiveBrokerage) || 0;
+    const brokDivergence = brokIsLive && brokFormVal > 0 && Math.abs(brokEffVal - brokFormVal) > 1
+      ? ` [NOTE: live value $${brokEffVal.toFixed(2)} differs from user-entered $${brokFormVal.toFixed(2)} by $${Math.abs(brokEffVal - brokFormVal).toFixed(2)} — use the live value but acknowledge the discrepancy]`
+      : "";
     headerLines.push(
-      `Brokerage: $${effectiveBrokerage}${((activeConfig.enableHoldings && !activeConfig.overrideBrokerageValue && holdingValues.brokerage > 0) || (plaidBucketTotal("brokerage") > 0 && !activeConfig.overrideBrokerageValue)) ? " (live)" : ""}`
+      `Brokerage: $${effectiveBrokerage}${brokIsLive ? " (live)" : ""}${brokDivergence}`
     );
+  }
   if (activeConfig.trackRothContributions) {
     headerLines.push(`Roth YTD Contributed: $${activeConfig.rothContributedYTD || 0}`);
     headerLines.push(`Roth Annual Limit: $${activeConfig.rothAnnualLimit || 0}`);
