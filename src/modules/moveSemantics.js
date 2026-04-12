@@ -65,18 +65,24 @@ function normalizeMoveItemShape(item) {
   }
 
   if (!item || typeof item !== "object") return null;
-  const text = String(item.text || item.label || item.title || "").trim();
+  const title = String(item.title || item.label || "").trim();
+  const detail = String(item.detail || "").trim();
+  const text = String(item.text || detail || title || "").trim();
   if (!text) return null;
   const normalized = {
     tag: item.tag || null,
     text,
     done: false,
   };
+  if (title) normalized.title = title;
+  if (detail) normalized.detail = detail;
   const amount = toFiniteAmount(item.amount);
   if (amount != null) normalized.amount = amount;
   if (typeof item.semanticKind === "string" && item.semanticKind.trim()) normalized.semanticKind = item.semanticKind.trim();
   if (typeof item.targetLabel === "string" && item.targetLabel.trim()) normalized.targetLabel = item.targetLabel.trim();
   if (typeof item.sourceLabel === "string" && item.sourceLabel.trim()) normalized.sourceLabel = item.sourceLabel.trim();
+  if (typeof item.routeLabel === "string" && item.routeLabel.trim()) normalized.routeLabel = item.routeLabel.trim();
+  if (typeof item.fundingLabel === "string" && item.fundingLabel.trim()) normalized.fundingLabel = item.fundingLabel.trim();
   if (typeof item.targetKey === "string" && item.targetKey.trim()) normalized.targetKey = item.targetKey.trim();
   if (typeof item.contributionKey === "string" && item.contributionKey.trim()) normalized.contributionKey = item.contributionKey.trim();
   if (typeof item.transactional === "boolean") normalized.transactional = item.transactional;

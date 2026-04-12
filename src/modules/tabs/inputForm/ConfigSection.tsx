@@ -32,7 +32,7 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
   setPersonalRules,
 }: ConfigSectionProps<TConfig>) {
   return (
-    <div style={{ marginTop: 8, marginBottom: 16, borderTop: `1px solid ${T.border.subtle}`, paddingTop: 10 }}>
+    <div style={{ margin: 0 }}>
       <button
         onClick={() => {
           haptic.medium();
@@ -43,16 +43,16 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "16px 20px",
+          padding: "15px 18px",
           borderRadius: T.radius.lg,
-          border: `1px solid ${showConfig ? `${T.accent.primary}50` : T.border.subtle}`,
-          background: showConfig ? `${T.accent.primary}0D` : T.bg.glass,
-          backdropFilter: "blur(12px)",
-          WebkitBackdropFilter: "blur(12px)",
+          border: `1px solid ${showConfig ? `${T.accent.primary}42` : T.border.subtle}`,
+          background: showConfig ? `${T.accent.primary}0F` : T.bg.card,
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
           color: showConfig ? T.text.primary : T.text.secondary,
           cursor: "pointer",
-          transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
-          boxShadow: showConfig ? `0 4px 16px ${T.accent.primary}1A, inset 0 1px 0 ${T.accent.primary}15` : "none",
+          transition: "all 0.24s ease",
+          boxShadow: showConfig ? `0 6px 20px ${T.accent.primary}12, inset 0 1px 0 ${T.accent.primary}12` : T.shadow.soft,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
@@ -114,8 +114,8 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
       </button>
 
       {showConfig && (
-        <div style={{ animation: "fadeInUp 0.4s ease-out both", marginTop: 12 }}>
-          <Card style={{ marginBottom: 12 }}>
+        <div style={{ animation: "fadeInUp 0.32s ease-out both", marginTop: 10 }}>
+          <Card style={{ marginBottom: 10, background: T.bg.card }}>
             <Label>Income & Cash Flow</Label>
             <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
               {(["salary", "hourly", "variable"] as const).map((type) => (
@@ -307,7 +307,7 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
             )}
           </Card>
 
-          <Card style={{ marginBottom: 12 }}>
+          <Card style={{ marginBottom: 0, background: T.bg.card }}>
             <Label>Custom AI Rules & Persona</Label>
             <p style={{ fontSize: 11, color: T.text.muted, marginBottom: 10, lineHeight: 1.4 }}>
               Define strict rules or change how the AI speaks to you.

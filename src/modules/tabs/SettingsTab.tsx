@@ -556,7 +556,14 @@ export default function SettingsTab({
     { label: "Housing", value: housingSummary },
     { label: "Region", value: financialConfig?.stateCode || "Not in US" },
     { label: "Currency", value: currencyLabel },
-    { label: "Profile", value: financialConfig?.birthYear ? `Born ${financialConfig.birthYear}` : "Demographics light" },
+    {
+      label: "Profile",
+      value: financialConfig?.preferredName
+        ? `${financialConfig.preferredName}${financialConfig?.birthYear ? ` · Born ${financialConfig.birthYear}` : ""}`
+        : financialConfig?.birthYear
+          ? `Born ${financialConfig.birthYear}`
+          : "Demographics light",
+    },
   ];
 
   useEffect(() => {

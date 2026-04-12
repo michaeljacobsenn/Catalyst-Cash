@@ -12,6 +12,7 @@
  * @param {Object} params.form - Current form state (date, time, checking, savings, debts, pendingCharges, etc.)
  * @param {Object} params.activeConfig - The resolved financial config
  * @param {Array}  params.cards - User's credit cards
+ * @param {Array}  params.bankAccounts - Linked bank accounts for cash-account breakdown context
  * @param {Array}  params.renewals - Active renewals (from expense tracker)
  * @param {Array}  params.cardAnnualFees - Card annual fee renewals
  * @param {Array}  params.parsedTransactions - Plaid-synced recent transactions
@@ -25,6 +26,7 @@ export function buildSnapshotMessage({
   form,
   activeConfig,
   cards,
+  bankAccounts,
   renewals,
   cardAnnualFees,
   parsedTransactions,
@@ -32,10 +34,10 @@ export function buildSnapshotMessage({
   holdingValues,
   financialConfig: _financialConfig,
   aiProvider,
+  computedStrategy,
 }) {
-  void renewals;
-  void cardAnnualFees;
   const plaidInvestments = activeConfig?.plaidInvestments || [];
+  const allRecurringItems = [...(Array.isArray(renewals) ? renewals : []), ...(Array.isArray(cardAnnualFees) ? cardAnnualFees : [])];
   const plaidBucketTotal = (bucket) =>
     plaidInvestments
       .filter((account) => account?.bucket === bucket)
@@ -45,6 +47,21 @@ export function buildSnapshotMessage({
     return isNaN(n) ? 0 : n;
   };
   const fmt = n => n.toFixed(2);
+  const linkedCashAccounts = Array.isArray(form?.cashAccounts) && form.cashAccounts.length > 0
+    ? form.cashAccounts
+    : (Array.isArray(bankAccounts) ? bankAccounts : [])
+        .filter(account => {
+          const type = String(account?.accountType || "").toLowerCase();
+          return type === "checking" || type === "savings";
+        })
+        .map((account) => ({
+          id: account?.id,
+          bank: account?.bank,
+          name: account?.name,
+          accountType: account?.accountType,
+          amount: Number(account?._plaidAvailable ?? account?._plaidBalance ?? account?.balance ?? 0) || 0,
+          source: "live",
+        }));
   const dayIndex = (name = "") => {
     const map = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
     return map[name.toLowerCase()] ?? 5;
@@ -134,6 +151,39 @@ export function buildSnapshotMessage({
   if (activeConfig.trackSavings !== false && form.savings) {
     headerLines.push(`Savings: $${form.savings}`);
   }
+  const linkedCheckingAccounts = linkedCashAccounts.filter(account => String(account?.accountType || "").toLowerCase() === "checking");
+  const linkedSavingsAccounts = linkedCashAccounts.filter(account => String(account?.accountType || "").toLowerCase() === "savings");
+  const linkedCheckingTotal = linkedCheckingAccounts.reduce((sum, account) => sum + toNum(account?.amount), 0);
+  const linkedSavingsTotal = linkedSavingsAccounts.reduce((sum, account) => sum + toNum(account?.amount), 0);
+  const checkingOverrideActive = Boolean(form?.cashSummary?.checkingOverride) || (linkedCheckingAccounts.length > 0 && Math.abs(linkedCheckingTotal - effectiveChecking) > 0.009);
+  const savingsTotalUsed = toNum(form?.cashSummary?.savingsTotalUsed ?? form?.savings);
+  const savingsOverrideActive = Boolean(form?.cashSummary?.savingsOverride) || (linkedSavingsAccounts.length > 0 && Math.abs(linkedSavingsTotal - savingsTotalUsed) > 0.009);
+  if (linkedCheckingAccounts.length > 0 || linkedSavingsAccounts.length > 0) {
+    const cashLines = [];
+    if (linkedCheckingAccounts.length > 0) {
+      cashLines.push(`  Checking Accounts (${linkedCheckingAccounts.length}) — ${checkingOverrideActive ? "audit" : "live"} total $${fmt(checkingOverrideActive ? effectiveChecking : linkedCheckingTotal)}`);
+      linkedCheckingAccounts.forEach((account) => {
+        const isOverridden = Boolean(account.overridden);
+        const label = `${account.bank ? `${account.bank} · ` : ""}${account.name || "Checking"}`;
+        cashLines.push(`    ${label}: $${fmt(toNum(account.amount))}${isOverridden ? " (user override)" : ""}`);
+      });
+    }
+    if (linkedSavingsAccounts.length > 0) {
+      cashLines.push(`  Savings / Vault Accounts (${linkedSavingsAccounts.length}) — ${savingsOverrideActive ? "audit" : "live"} total $${fmt(savingsOverrideActive ? savingsTotalUsed : linkedSavingsTotal)}`);
+      linkedSavingsAccounts.forEach((account) => {
+        const isOverridden = Boolean(account.overridden);
+        const label = `${account.bank ? `${account.bank} · ` : ""}${account.name || "Savings"}`;
+        cashLines.push(`    ${label}: $${fmt(toNum(account.amount))}${isOverridden ? " (user override)" : ""}`);
+      });
+    }
+    headerLines.push(`Linked Cash Accounts:\n${cashLines.join("\n")}`);
+  }
+  if (checkingOverrideActive) {
+    headerLines.push(`Checking Override Active: use $${fmt(effectiveChecking)} for this audit even though linked checking currently totals $${fmt(linkedCheckingTotal)}.`);
+  }
+  if (savingsOverrideActive) {
+    headerLines.push(`Savings Override Active: use $${fmt(savingsTotalUsed)} for this audit even though linked savings/vault currently totals $${fmt(linkedSavingsTotal)}.`);
+  }
   headerLines.push(`Pending Charges: ${pendingStr}`);
   if (autoPaycheckApplied) headerLines.push(`Paycheck Auto-Add: $${fmt(autoPaycheckAddAmt)}`);
   if (activeConfig.trackHabits !== false)
@@ -214,6 +264,25 @@ export function buildSnapshotMessage({
       .join("\n");
     if (actualsLines) headerLines.push(`Budget Actuals (this week):\n${actualsLines}`);
   }
+  // Debt payoff projection from native engine
+  const dp = computedStrategy?.debtPayoff;
+  if (dp?.withExtraPayment?.totalMonths != null) {
+    const lines = [`Native Debt Payoff Projection (pre-computed — do not recompute):`];
+    if (dp.minimumsOnly?.totalMonths != null) {
+      lines.push(`  Minimums only: ${dp.minimumsOnly.totalMonths} months, $${dp.minimumsOnly.totalInterestPaid?.toFixed(2) ?? "?"} interest${dp.minimumsOnly.debtFreeDate ? `, debt-free ${dp.minimumsOnly.debtFreeDate}` : ""}`);
+    }
+    const we = dp.withExtraPayment;
+    lines.push(`  With surplus ($${we.extraMonthly?.toFixed(2) ?? "?"}/ mo extra): ${we.totalMonths} months, $${we.totalInterestPaid?.toFixed(2) ?? "?"} interest${we.debtFreeDate ? `, debt-free ${we.debtFreeDate}` : ""}`);
+    if (we.interestSaved > 0 || we.monthsSaved > 0) {
+      lines.push(`  Savings vs minimums: $${we.interestSaved?.toFixed(2) ?? "0"} interest saved, ${we.monthsSaved ?? 0} months sooner`);
+    }
+    headerLines.push(lines.join("\n"));
+  }
+  // Savings rate signal
+  const sr = computedStrategy?.auditSignals?.savingsRate;
+  if (sr?.pct != null) {
+    headerLines.push(`Savings Rate: ${sr.pct}% of weekly income ($${sr.weeklySurplus?.toFixed(2) ?? "?"} / $${sr.weeklyIncome?.toFixed(2) ?? "?"})`);
+  }
   const cappedTransactions = Array.isArray(parsedTransactions) ? parsedTransactions.slice(0, 12) : [];
   const totalSpend = cappedTransactions.reduce((s, t) => s + t.amount, 0);
   const days = new Set(cappedTransactions.map(t => t.date)).size || 1;
@@ -234,6 +303,51 @@ export function buildSnapshotMessage({
 
   const blocks = {
     debts: `Snapshot Debt Overrides:\n${debts}`,
+    obligations: (() => {
+      if (allRecurringItems.length === 0) return "Tracked Obligations (Next 12 Months): none mapped";
+      const today = new Date(`${form.date || new Date().toISOString().slice(0, 10)}T12:00:00`);
+      const yearOut = new Date(today.getTime() + 365 * 86400000);
+      const normalized = allRecurringItems
+        .filter((item) => item && !item.isCancelled && !item.archivedAt && Number(item.amount) > 0)
+        .map((item) => {
+          const nextDue = item.nextDue ? new Date(`${item.nextDue}T12:00:00`) : null;
+          const withinYear = !nextDue || !Number.isFinite(nextDue.getTime()) ? true : nextDue >= today && nextDue <= yearOut;
+          const interval = Number(item.interval) || 1;
+          const unit = String(item.intervalUnit || "months").toLowerCase();
+          let annualized = Number(item.amount) || 0;
+          if (unit.startsWith("week")) annualized = annualized * (52 / interval);
+          else if (unit.startsWith("month")) annualized = annualized * (12 / interval);
+          else if (unit.startsWith("quarter")) annualized = annualized * (4 / interval);
+          else if (unit.startsWith("year") || unit.startsWith("annual")) annualized = annualized / interval;
+          return {
+            name: item.name || "Unnamed obligation",
+            amount: Number(item.amount) || 0,
+            nextDue: item.nextDue || "",
+            chargedTo: item.chargedTo || "Unassigned",
+            annualized,
+            withinYear,
+          };
+        })
+        .filter((item) => item.withinYear)
+        .sort((left, right) => {
+          if (left.nextDue && right.nextDue) return left.nextDue.localeCompare(right.nextDue);
+          if (left.nextDue) return -1;
+          if (right.nextDue) return 1;
+          return right.annualized - left.annualized;
+        });
+
+      if (normalized.length === 0) return "Tracked Obligations (Next 12 Months): none mapped";
+
+      const totalAnnualized = normalized.reduce((sum, item) => sum + item.annualized, 0);
+      const detail = normalized
+        .slice(0, 24)
+        .map((item) => {
+          const duePart = item.nextDue ? ` next ${item.nextDue}` : " no due date";
+          return `  ${item.name}: $${item.amount.toFixed(2)} via ${item.chargedTo}${duePart} | annualized ~$${item.annualized.toFixed(2)}`;
+        })
+        .join("\n");
+      return `Tracked Obligations (Next 12 Months): ~${normalized.length} items | annualized ~$${totalAnnualized.toFixed(2)}\n${detail}`;
+    })(),
     transactions: (() => {
       if (cappedTransactions.length === 0) return "Recent Spending (Last 7 Days): none provided";
       return `Recent Spending (Last 7 Days — capped for prompt efficiency):\nSummary: Total $${totalSpend.toFixed(2)} | Daily Avg $${dailyAvg.toFixed(2)} | ${days} days | ${cappedTransactions.length} transactions\nTop Categories:\n${topCats || "  none"}\nDetail:\n${txnLines}`;
@@ -260,6 +374,8 @@ export function buildSnapshotMessage({
             .join("\n"),
       "",
       "### Audit Inputs",
+      blocks.obligations,
+      "",
       blocks.transactions,
       "",
       blocks.notes,
@@ -274,6 +390,8 @@ export function buildSnapshotMessage({
       "",
       blocks.debts,
       "",
+      blocks.obligations,
+      "",
       blocks.transactions,
       "",
       blocks.notes,
@@ -286,6 +404,8 @@ export function buildSnapshotMessage({
     ...headerLines,
     "",
     blocks.debts,
+    "",
+    blocks.obligations,
     "",
     blocks.transactions,
     "",

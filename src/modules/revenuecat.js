@@ -54,7 +54,13 @@ async function applyCustomerInfo(customerInfo) {
   }
 
   if (entitlement) {
-    await activatePro(entitlement.productIdentifier || "com.catalystcash.pro.rc", 3650);
+    // Detect lifetime (non-consumable) purchases — they have no expirationDate
+    const isLifetime = !entitlement.expirationDate || entitlement.productIdentifier?.includes("lifetime");
+    await activatePro(
+      entitlement.productIdentifier || "com.catalystcash.pro.rc",
+      isLifetime ? 36500 : 3650,
+      { isLifetime },
+    );
     return true;
   }
 
@@ -184,6 +190,7 @@ export async function presentPaywall() {
 
 function getPreferredPackageForPlan(offering, plan = "monthly") {
   if (!offering) return null;
+  if (plan === "lifetime") return offering.lifetime || null;
   return plan === "yearly" ? (offering.annual || null) : (offering.monthly || null);
 }
 

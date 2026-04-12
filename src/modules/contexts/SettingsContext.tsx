@@ -158,6 +158,7 @@ async function withSettingsBootFallback<T>(step: string, task: () => Promise<T>,
 }
 
 export const DEFAULT_FINANCIAL_CONFIG: CatalystCashConfig = {
+  preferredName: "",
   payday: "Friday",
   paycheckTime: "06:00",
   paycheckStandard: 0.0,

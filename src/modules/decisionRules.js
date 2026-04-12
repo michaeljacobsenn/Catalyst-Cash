@@ -797,6 +797,75 @@ export function detectMixedDebtPortfolioComplexity(financialState = {}) {
   );
 }
 
+export function detectSavingsGoalAtRisk(financialState = {}) {
+  const financialConfig = financialState?.financialConfig || {};
+  const goals = Array.isArray(financialConfig?.savingsGoals) ? financialConfig.savingsGoals : [];
+  const goalsWithDates = goals.filter(g =>
+    g?.targetAmount > 0 && g?.targetDate && g?.name
+  );
+
+  if (goalsWithDates.length === 0) {
+    return buildRecommendation(
+      "savings-goal-at-risk",
+      false,
+      "none",
+      "No savings goals with target dates are configured.",
+      "Consider setting a target date for your savings goals to track pace."
+    );
+  }
+
+  const now = new Date();
+  const behindGoals = [];
+
+  for (const goal of goalsWithDates) {
+    const target = parseIsoDate(goal.targetDate);
+    if (!target || target <= now) continue;
+
+    const remaining = Math.max(0, toNumber(goal.targetAmount) - toNumber(goal.currentAmount));
+    if (remaining <= 0) continue;
+
+    const monthsLeft = Math.max(1, (target.getFullYear() - now.getFullYear()) * 12 + (target.getMonth() - now.getMonth()));
+    const requiredMonthly = remaining / monthsLeft;
+    const monthlySurplus = toNumber(financialState?.computedStrategy?.operationalSurplus) * 4.33;
+
+    if (monthlySurplus > 0 && requiredMonthly > monthlySurplus * 0.6) {
+      behindGoals.push({
+        name: goal.name,
+        remaining,
+        monthsLeft,
+        requiredMonthly,
+        pctOfSurplus: Math.round((requiredMonthly / monthlySurplus) * 100),
+      });
+    }
+  }
+
+  if (behindGoals.length === 0) {
+    return buildRecommendation(
+      "savings-goal-at-risk",
+      false,
+      "none",
+      "All savings goals with target dates are on pace.",
+      "Continue current allocation."
+    );
+  }
+
+  const worst = behindGoals.sort((a, b) => b.pctOfSurplus - a.pctOfSurplus)[0];
+  const isUnreachable = worst.pctOfSurplus > 100;
+
+  return buildEnhancedRecommendation(
+    "savings-goal-at-risk",
+    true,
+    isUnreachable ? "high" : "medium",
+    `"${worst.name}" needs ${formatMoney(worst.requiredMonthly)}/mo for ${worst.monthsLeft} months to reach its target, which is ${worst.pctOfSurplus}% of current surplus.${behindGoals.length > 1 ? ` ${behindGoals.length} goals are behind pace.` : ""}`,
+    isUnreachable
+      ? `At current surplus, "${worst.name}" cannot be reached by its target date. Consider extending the deadline, reducing the target, or increasing income/cutting expenses.`
+      : `Increase savings allocation toward "${worst.name}" or adjust timeline. Current pace covers only ${Math.round((1 / worst.pctOfSurplus) * 100 * 100) / 100}% of the required rate.`,
+    {
+      confidence: isUnreachable ? "high" : "medium",
+    }
+  );
+}
+
 export function evaluateChatDecisionRules(financialState = {}) {
   return [
     detectContradictoryFinancialInputs(financialState),
@@ -811,5 +880,6 @@ export function evaluateChatDecisionRules(financialState = {}) {
     detectEmergencyReserveGap(financialState),
     detectFixedCostTrap(financialState),
     detectLowAprArbitrageOpportunity(financialState),
+    detectSavingsGoalAtRisk(financialState),
   ];
 }

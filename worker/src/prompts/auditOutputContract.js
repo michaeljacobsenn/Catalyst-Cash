@@ -82,6 +82,8 @@ export function getAuditJsonSchema() {
       semanticKind: nullableString,
       targetLabel: nullableString,
       sourceLabel: nullableString,
+      routeLabel: nullableString,
+      fundingLabel: nullableString,
       targetKey: nullableString,
       contributionKey: nullableString,
       transactional: { type: "boolean" },
@@ -270,6 +272,19 @@ Core object:
 - spendingAnalysis or null
 - Reconcile dashboardCard to native anchors; never zero-fill unless truly zero.
 - Use exact account/card/funding-source names.
+- Write the action plan like an owner-operator managing these exact balances personally, not like a detached summary.
+- weeklyMoves[] must read in execution order: what to do first, second, third, and why.
+- moveItems[] must be the concrete step-by-step checklist that implements weeklyMoves[]. Prefer 2-6 ordered items when action is required.
+- Each moveItems[] entry should describe one action only: hold, transfer, reserve, pay, delay, or stage.
+- If multiple protected obligations are driving the plan, separate them into distinct moveItems[] rows instead of cramming them into one sentence.
+- If Operational Surplus is greater than $0.00, allocate that full amount across named destinations in weeklyMoves[] / moveItems[] until it is exhausted. Do not leave deployable cash unassigned.
+- Each dollar move should answer: from where, to what destination, how much, and why now.
+- For moveItems[], populate sourceLabel, targetLabel, and routeLabel / fundingLabel whenever a money movement or reserve action exists.
+- If the user supplied Custom AI / Persona rules for this run, treat them as hard run-specific constraints, not soft preferences.
+- End the action set with the remaining parked cash / protected gap / unallocated amount when that number matters to execution.
+- If Operational Surplus is $0.00, say that explicitly and frame the plan as protection / staging rather than pretending there is free money to deploy.
+- If protected obligations exceed deployable cash, show the allocation order first, then state the remaining protected gap explicitly.
+- nextAction should be the single first move. Keep it crisp. Put the fuller sequencing in weeklyMoves[] and moveItems[].
 - If a hard deadline, locked escrow rule, or funding-source constraint is driving the recommendation, encode that explicitly in nextAction.detail and the first REQUIRED weeklyMoves[].detail.
 - Use recent-spending details to explain patterns or decision-relevant anomalies; do not surface a merchant-level callout unless it changes the recommendation materially.
 - If data is partial or contradictory, say so in assumptions or alertsCard.

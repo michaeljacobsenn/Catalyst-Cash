@@ -15,6 +15,7 @@ vi.mock("./constants.js", () => ({
 
 vi.mock("./subscription.js", () => ({
   isPro: vi.fn(async () => false),
+  isGatingEnforced: vi.fn(() => false),
 }));
 
 vi.mock("./revenuecat.js", () => ({

@@ -82,10 +82,11 @@ describe("buildSnapshotMessage", () => {
     expect(msg).toContain("Groceries");
   });
 
-  it("omits duplicated renewals section because live renewals are sent structurally", () => {
+  it("includes the mapped obligations horizon instead of the legacy renewals block", () => {
     const msg = buildSnapshotMessage(baseParams());
     expect(msg).not.toContain("Renewals/Subscriptions");
-    expect(msg).not.toContain("Netflix");
+    expect(msg).toContain("Tracked Obligations (Next 12 Months)");
+    expect(msg).toContain("Netflix");
   });
 
   it("includes user notes", () => {

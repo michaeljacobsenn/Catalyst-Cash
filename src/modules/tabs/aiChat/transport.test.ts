@@ -18,7 +18,7 @@ describe("ai chat transport", () => {
     }));
 
     const compacted = compactChatAuditHistory(history as never[]);
-    expect(compacted).toHaveLength(8);
+    expect(compacted).toHaveLength(3);
     expect(compacted[0]).toEqual({
       date: "2026-03-01",
       ts: "audit-0",
@@ -73,6 +73,7 @@ describe("ai chat transport", () => {
         },
       },
       financialConfig: {
+        preferredName: "Michael",
         birthYear: 1990,
         payFrequency: "bi-weekly",
         paycheckStandard: 2200,
@@ -88,6 +89,7 @@ describe("ai chat transport", () => {
     } as never);
 
     expect(brief.snapshot.netWorth).toBe(42000);
+    expect(brief.profile.preferredName).toBe("Michael");
     expect(brief.income.estimatedMonthly).toBeCloseTo(4766.67, 2);
     expect(brief.cards[0]).toMatchObject({
       name: "Chase Sapphire Preferred",

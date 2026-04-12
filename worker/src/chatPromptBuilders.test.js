@@ -71,7 +71,7 @@ describe("chatPromptBuilders", () => {
       null,
       null,
       {
-        profile: { birthYear: 1990, age: 36, payFrequency: "bi-weekly", incomeType: "salary" },
+        profile: { preferredName: "Michael", birthYear: 1990, age: 36, payFrequency: "bi-weekly", incomeType: "salary" },
         income: {
           estimatedMonthly: 5366.67,
           cycleNet: 2476.92,
@@ -92,6 +92,7 @@ describe("chatPromptBuilders", () => {
     );
 
     expect(prompt).toContain("Estimated Monthly Net Income: $5,366.67");
+    expect(prompt).toContain("Preferred name: Michael");
     expect(prompt).toContain("Chase Sapphire Preferred");
     expect(prompt).toContain("This user has minimal debt (**$800.00**).");
     expect(prompt).toContain("Netflix");

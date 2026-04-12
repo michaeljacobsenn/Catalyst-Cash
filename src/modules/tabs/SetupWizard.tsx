@@ -71,6 +71,7 @@ interface WizardPageMeta {
 }
 
 export interface SetupWizardIncomeState {
+  preferredName: string;
   payFrequency: PayFrequency;
   payday: CatalystCashConfig["payday"];
   incomeType: IncomeType;
@@ -228,6 +229,7 @@ export default function SetupWizard() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const [income, setIncome] = useState<SetupWizardIncomeState>({
+    preferredName: "",
     payFrequency: "bi-weekly",
     payday: "Friday",
     incomeType: "salary",
@@ -304,6 +306,7 @@ export default function SetupWizard() {
       if (typedConfig) {
         setIncome((prev) => ({
           ...prev,
+          preferredName: typedConfig.preferredName ?? prev.preferredName,
           payFrequency: typedConfig.payFrequency ?? prev.payFrequency,
           payday: typedConfig.payday ?? prev.payday,
           incomeType: typedConfig.incomeType ?? prev.incomeType,
@@ -426,6 +429,7 @@ export default function SetupWizard() {
     try {
       const existing = ((await db.get("financial-config")) || {}) as Partial<CatalystCashConfig> & Record<string, unknown>;
       const payload: Partial<CatalystCashConfig> = {
+        preferredName: String(income.preferredName || existing.preferredName || "").trim(),
         payFrequency: income.payFrequency,
         payday: income.payday,
         incomeType: income.incomeType || "salary",

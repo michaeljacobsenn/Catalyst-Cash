@@ -52,6 +52,7 @@ import { handleHouseholdRoute } from "./routes/householdRoutes.js";
 import { handleMarketRoute } from "./routes/marketRoutes.js";
 import { handleSystemRoute } from "./routes/systemRoutes.js";
 import { handleTelemetryRoute } from "./routes/telemetryRoutes.js";
+import { handleReferralRoute } from "./routes/referralRoutes.js";
 
 export { buildHouseholdIntegrityTag, sha256Hex } from "./lib/householdSecurity.js";
 export {
@@ -259,6 +260,43 @@ async function markPlaidDatasetTimestamp(db, userId, itemId, dataset) {
   await markPlaidAction(db, userId, getPlaidDatasetAction(dataset), itemId);
 }
 
+function extractPlaidProviderError(error) {
+  const rawMessage = error instanceof Error ? error.message : String(error || "");
+  const jsonStart = rawMessage.indexOf("{");
+  let parsed = null;
+
+  if (jsonStart >= 0) {
+    const jsonCandidate = rawMessage.slice(jsonStart);
+    try {
+      parsed = JSON.parse(jsonCandidate);
+    } catch {
+      parsed = null;
+    }
+  }
+
+  const errorCode = String(parsed?.error_code || parsed?.errorCode || "").trim() || null;
+  const errorType = String(parsed?.error_type || parsed?.errorType || "").trim() || null;
+  const displayMessage =
+    String(parsed?.display_message || parsed?.displayMessage || parsed?.error_message || parsed?.errorMessage || "").trim() || null;
+
+  const reconnectRequiredCodes = new Set([
+    "ITEM_LOGIN_REQUIRED",
+    "INVALID_ACCESS_TOKEN",
+    "ACCESS_NOT_GRANTED",
+    "USER_PERMISSION_REVOKED",
+    "NO_AUTH_ACCOUNTS",
+    "ITEM_LOCKED",
+  ]);
+
+  return {
+    rawMessage,
+    errorCode,
+    errorType,
+    displayMessage,
+    reconnectRequired: Boolean(errorCode && reconnectRequiredCodes.has(errorCode)),
+  };
+}
+
 async function refreshPlaidItemCache({
   db,
   userId,
@@ -371,6 +409,7 @@ Constraints:
 - healthScore.score must be a number from 0-100.
 - healthScore.grade must match the score exactly.
 - weeklyMoves must be 1-3 concrete actions. If operational surplus is positive, at least one weekly move must assign dollars.
+- If operational surplus is positive, the weekly moves should allocate that full amount across named destinations instead of leaving it generic.
 - riskFlags must be an array of short kebab-case strings.
 
 Native anchors:
@@ -386,6 +425,136 @@ Return this exact JSON shape:
   "weeklyMoves": ["Route $150 to the highest-priority target."],
   "riskFlags": ["example-flag"]
 }`;
+}
+
+function formatMoney(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "$0.00";
+  const sign = num < 0 ? "-" : "";
+  return `${sign}$${Math.abs(num).toFixed(2)}`;
+}
+
+function summarizeRiskLevel(riskFlags = []) {
+  const flags = Array.isArray(riskFlags) ? riskFlags : [];
+  if (flags.includes("floor-breach-risk") || flags.includes("transfer-needed")) return "RED";
+  if (flags.length > 0) return "YELLOW";
+  return "GREEN";
+}
+
+function inferFallbackMove({ operationalSurplus = 0, riskFlags = [], debtTotal = 0 }) {
+  const available = Math.max(0, Number(operationalSurplus) || 0);
+  const flags = Array.isArray(riskFlags) ? riskFlags : [];
+
+  if (flags.includes("floor-breach-risk") || flags.includes("transfer-needed")) {
+    return {
+      title: "Protect near-term cash",
+      detail: "Preserve liquidity for near-term obligations before routing cash to debt or investing.",
+      amount: available > 0 ? formatMoney(available) : null,
+      priority: "required",
+    };
+  }
+
+  if (available > 0 && debtTotal > 0) {
+    return {
+      title: "Route operational surplus",
+      detail: "Apply this week's operational surplus to the highest-priority debt target.",
+      amount: formatMoney(available),
+      priority: "required",
+    };
+  }
+
+  return {
+    title: "Hold the line",
+    detail: "Keep spending controlled and protect cash until the next audit refresh.",
+    amount: null,
+    priority: "required",
+  };
+}
+
+function buildStructuredAuditFallback(context = {}, snapshot = "") {
+  const computedStrategy = context?.computedStrategy || {};
+  const financialConfig = context?.financialConfig || {};
+  const riskFlags = Array.isArray(computedStrategy?.auditSignals?.riskFlags)
+    ? computedStrategy.auditSignals.riskFlags.filter(Boolean)
+    : [];
+  const nativeScore = Number(computedStrategy?.auditSignals?.nativeScore?.score);
+  const score = Number.isFinite(nativeScore) ? Math.max(0, Math.min(100, Math.round(nativeScore))) : 68;
+  const dashboard = {
+    checking: Number(financialConfig?.checkingBalance || 0),
+    vault: Number(financialConfig?.allyBalance || financialConfig?.savingsBalance || 0),
+    pending: Number(computedStrategy?.timeCriticalAmount || 0),
+    debts: Number(computedStrategy?.auditSignals?.debt?.total || 0),
+    available: Math.max(0, Number(computedStrategy?.operationalSurplus || 0)),
+  };
+  const move = inferFallbackMove({
+    operationalSurplus: dashboard.available,
+    riskFlags,
+    debtTotal: dashboard.debts,
+  });
+  const fallback = {
+    headerCard: {
+      title: "Weekly Financial Audit",
+      subtitle: "Deterministic fallback briefing generated because the full model response was unavailable.",
+      status: summarizeRiskLevel(riskFlags),
+      confidence: "low",
+    },
+    alertsCard: riskFlags.slice(0, 3).map((flag) => ({
+      level: flag.includes("risk") || flag.includes("transfer") ? "critical" : "warn",
+      title: String(flag).replace(/-/g, " "),
+      detail: "Native audit safeguards flagged this category for attention.",
+    })),
+    dashboardCard: [
+      { category: "Checking", amount: formatMoney(dashboard.checking), status: dashboard.checking > 0 ? "ok" : "low" },
+      { category: "Vault", amount: formatMoney(dashboard.vault), status: dashboard.vault > 0 ? "ok" : "low" },
+      { category: "Pending", amount: formatMoney(dashboard.pending), status: dashboard.pending > 0 ? "watch" : "clear" },
+      { category: "Debts", amount: formatMoney(dashboard.debts), status: dashboard.debts > 0 ? "high" : "clear" },
+      { category: "Available", amount: formatMoney(dashboard.available), status: dashboard.available > 0 ? "ok" : "tight" },
+    ],
+    healthScore: {
+      score,
+      grade: score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : score >= 60 ? "D" : "F",
+      trend: "flat",
+      summary: "Catalyst used deterministic strategy signals to keep the briefing available.",
+    },
+    weeklyMoves: [move],
+    moveItems: [],
+    radar: { next90Days: [], longRange: [] },
+    nextAction: {
+      title: move.title,
+      detail: move.detail,
+      amount: move.amount,
+    },
+    investments: {
+      balance: formatMoney(
+        Number(financialConfig?.investmentBrokerage || 0) +
+        Number(financialConfig?.investmentRoth || 0) +
+        Number(financialConfig?.k401Balance || 0) +
+        Number(financialConfig?.hsaBalance || 0)
+      ),
+      asOf: context?.formData?.date || new Date().toISOString().split("T")[0],
+      gateStatus: dashboard.debts > 0 || riskFlags.length > 0 ? "Guarded — safety first" : "Open",
+      netWorth: null,
+      cryptoValue: null,
+    },
+    assumptions: [
+      "Structured fallback mode was used because the provider response was malformed.",
+      "Rerun the audit if you want a fresh full-model narrative.",
+    ],
+    spendingAnalysis: null,
+    riskFlags,
+    negotiationTargets: [],
+    longRangeRadar: [],
+  };
+
+  if (!fallback.alertsCard.length && snapshot) {
+    fallback.alertsCard.push({
+      level: "warn",
+      title: "model response unavailable",
+      detail: "Catalyst returned a deterministic fallback briefing instead of a full narrative.",
+    });
+  }
+
+  return JSON.stringify(fallback);
 }
 
 function buildNegotiationPrompt(context = {}) {
@@ -696,6 +865,89 @@ function stripThoughtProcess(text) {
   return String(text || "").replace(/<thought_process>[\s\S]*?<\/thought_process>/gi, "").trim();
 }
 
+function coerceStructuredJsonResult(text) {
+  const cleaned = String(text || "")
+    .replace(/```json?\s*/gi, "")
+    .replace(/```/g, "")
+    .trim();
+  if (!cleaned) return null;
+
+  const tryParse = (candidate) => {
+    const parsed = JSON.parse(candidate);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return JSON.stringify(parsed);
+  };
+
+  const repairTruncatedJson = (candidate) => {
+    const source = String(candidate || "").trim();
+    if (!source) return null;
+
+    let repaired = source
+      .replace(/,\s*([}\]])/g, "$1")
+      .replace(/,\s*$/g, "");
+
+    const stack = [];
+    let inString = false;
+    let escaped = false;
+
+    for (const char of repaired) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === "\"") {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (char === "{" || char === "[") stack.push(char);
+      if (char === "}" && stack[stack.length - 1] === "{") stack.pop();
+      if (char === "]" && stack[stack.length - 1] === "[") stack.pop();
+    }
+
+    if (inString) repaired += "\"";
+    while (stack.length > 0) {
+      repaired += stack.pop() === "{" ? "}" : "]";
+    }
+    return repaired.replace(/,\s*([}\]])/g, "$1");
+  };
+
+  const candidates = [];
+  candidates.push(cleaned);
+
+  const objectStart = cleaned.indexOf("{");
+  const objectEnd = cleaned.lastIndexOf("}");
+  if (objectStart >= 0) {
+    const objectSlice = objectEnd > objectStart ? cleaned.slice(objectStart, objectEnd + 1) : cleaned.slice(objectStart);
+    candidates.push(objectSlice);
+    candidates.push(repairTruncatedJson(objectSlice) || objectSlice);
+  }
+
+  const arrayStart = cleaned.indexOf("[");
+  const arrayEnd = cleaned.lastIndexOf("]");
+  if (arrayStart >= 0) {
+    const arraySlice = arrayEnd > arrayStart ? cleaned.slice(arrayStart, arrayEnd + 1) : cleaned.slice(arrayStart);
+    candidates.push(arraySlice);
+    candidates.push(repairTruncatedJson(arraySlice) || arraySlice);
+  }
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      const serialized = tryParse(candidate);
+      if (serialized) return serialized;
+    } catch {
+      // keep trying repair candidates
+    }
+  }
+
+  return null;
+}
+
 function trimResponsePreview(text) {
   let s = stripThoughtProcess(text);
   // Account / routing numbers: 8-17 consecutive digits
@@ -902,6 +1154,11 @@ export default {
       workerLog,
     });
     if (systemResponse) return systemResponse;
+
+    // ─── Referral Endpoints ──────────────────────────────────────
+    if (url.pathname.startsWith("/referral/")) {
+      return handleReferralRoute(request, env, url.pathname, cors);
+    }
 
     // ─── Plaid Endpoints ─────────────────────────────────────
     if (url.pathname.startsWith("/plaid/") || url.pathname.startsWith("/api/sync/")) {
@@ -1546,6 +1803,7 @@ export default {
           }
 
           let anySuccess = false;
+          const failedItems = [];
           for (const item of targetItems) {
             const { access_token, item_id: syncItemId } = item;
             try {
@@ -1572,6 +1830,14 @@ export default {
               });
               anySuccess = true;
             } catch (err) {
+              const providerError = extractPlaidProviderError(err);
+              failedItems.push({
+                itemId: syncItemId || "default",
+                errorCode: providerError.errorCode,
+                errorType: providerError.errorType,
+                reconnectRequired: providerError.reconnectRequired,
+                message: providerError.displayMessage || providerError.rawMessage || "Live Plaid sync failed.",
+              });
               workerLog(env, "warn", "plaid-sync", "Manual sync item failed", {
                 error: err,
                 itemId: syncItemId || "default",
@@ -1586,7 +1852,21 @@ export default {
               limitedToItemId,
             }), { status: 200, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           } else {
-            return new Response(JSON.stringify({ error: "Failed to sync items" }), { status: 500, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+            const reconnectRequiredItemIds = failedItems
+              .filter((item) => item.reconnectRequired)
+              .map((item) => item.itemId);
+            const allReconnectRequired = failedItems.length > 0 && reconnectRequiredItemIds.length === failedItems.length;
+            return new Response(JSON.stringify({
+              error: allReconnectRequired ? "reconnect_required" : "sync_failed",
+              message: allReconnectRequired
+                ? "One or more linked banks need to be reconnected before live balances can refresh."
+                : "Live Plaid sync failed before fresh balances were returned.",
+              failedItems,
+              reconnectRequiredItemIds,
+            }), {
+              status: allReconnectRequired ? 409 : 500,
+              headers: buildHeaders(cors, { "Content-Type": "application/json" }),
+            });
           }
         } else if (url.pathname === "/api/sync/deep") {
           // On-demand deep sync: liabilities-only enrichment.
@@ -2085,7 +2365,51 @@ export default {
         });
       }
 
-      const resultText = stripThoughtProcess(typeof result === "string" ? result : result?.text || "");
+      let resultText = stripThoughtProcess(typeof result === "string" ? result : result?.text || "");
+      if ((responseFormat || "json") !== "text") {
+        const coercedStructuredJson = coerceStructuredJsonResult(resultText);
+        if (coercedStructuredJson) {
+          resultText = coercedStructuredJson;
+        } else {
+          workerLog(env, "warn", "structured-json", "Provider returned invalid structured JSON after repair attempts. Retrying on worker.", {
+            provider: selectedProvider,
+            model: resolvedModel,
+            rawLength: resultText.length,
+          });
+          try {
+            const retryResult = await handler(apiKey, {
+              snapshot: effectiveSnapshot,
+              systemPrompt: buildCriticalRetryPrompt({
+                computedStrategy: effectiveContext?.computedStrategy || {},
+                formData: effectiveContext?.formData || {},
+              }),
+              history: [],
+              model: resolvedModel,
+              stream: false,
+              responseFormat: "json",
+            });
+            const retryText = stripThoughtProcess(typeof retryResult === "string" ? retryResult : retryResult?.text || "");
+            const coercedRetryJson = coerceStructuredJsonResult(retryText);
+            if (coercedRetryJson) {
+              resultText = coercedRetryJson;
+            } else {
+              workerLog(env, "warn", "structured-json", "Critical retry also returned invalid JSON. Emitting deterministic structured fallback.", {
+                provider: selectedProvider,
+                model: resolvedModel,
+                rawLength: retryText.length,
+              });
+              resultText = buildStructuredAuditFallback(effectiveContext, effectiveSnapshot);
+            }
+          } catch (retryError) {
+            workerLog(env, "warn", "structured-json", "Critical retry failed. Emitting deterministic structured fallback.", {
+              provider: selectedProvider,
+              model: resolvedModel,
+              error: redactForWorkerLogs(retryError),
+            });
+            resultText = buildStructuredAuditFallback(effectiveContext, effectiveSnapshot);
+          }
+        }
+      }
       const usage = typeof result === "string" ? buildUsage() : buildUsage(result?.usage?.promptTokens, result?.usage?.completionTokens);
       await insertAuditLogRow(env.DB, {
         id: auditLogId,

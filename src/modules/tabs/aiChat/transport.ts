@@ -19,6 +19,7 @@ export interface CompactFinancialBrief {
   snapshotDate: string | null;
   currencyCode: string;
   profile: {
+    preferredName: string;
     birthYear: number | null;
     age: number | null;
     payFrequency: string;
@@ -417,6 +418,7 @@ export function buildCompactFinancialBrief({
     snapshotDate: current?.date || null,
     currencyCode: String(financialConfig?.currencyCode || "USD"),
     profile: {
+      preferredName: String(financialConfig?.preferredName || "").trim(),
       birthYear,
       age: birthYear != null ? currentYear - birthYear : null,
       payFrequency: String(financialConfig?.payFrequency || "bi-weekly"),

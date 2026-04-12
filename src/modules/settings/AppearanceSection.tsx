@@ -26,7 +26,18 @@ export function AppearanceSection({
 
   return (
     <div style={{ display: activeMenu === "profile" ? "block" : "none", marginTop: 16 }}>
-      <Card style={{ padding: 0, overflow: "hidden", borderLeft: `3px solid ${T.accent.purple}40`, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTop: "none" }}>
+      <Card
+        style={{
+          padding: 0,
+          overflow: "hidden",
+          borderStyle: "solid",
+          borderColor: T.border.default,
+          borderWidth: "0 1px 1px 3px",
+          borderLeftColor: `${T.accent.purple}40`,
+          borderTopLeftRadius: 0,
+          borderTopRightRadius: 0,
+        }}
+      >
         <div style={{ padding: "16px" }}>
           <Label>Appearance</Label>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

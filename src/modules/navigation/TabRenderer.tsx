@@ -72,11 +72,6 @@ export default function TabRenderer({
   }, [activeTab]);
 
   useEffect(() => {
-    if (themeTick <= 0) return;
-    setMountedTabs(new Set(SWIPE_TAB_ORDER));
-  }, [SWIPE_TAB_ORDER, themeTick]);
-
-  useEffect(() => {
     if (typeof window === "undefined") return undefined;
 
     const warmup = () => {

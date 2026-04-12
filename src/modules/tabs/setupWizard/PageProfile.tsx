@@ -66,6 +66,18 @@ export function PageProfile({ data, onChange, onNext, onBack }: PageProfileProps
         </p>
       </div>
 
+      <div style={{ marginBottom: 16 }}>
+        <WizField label="Preferred Name" hint="Used for more natural AskAI and audit personalization">
+          <WizInput
+            value={data.preferredName || ""}
+            onChange={v => onChange("preferredName", v.slice(0, 40))}
+            placeholder="e.g. Michael"
+            aria-label="Preferred name"
+            autoComplete="given-name"
+          />
+        </WizField>
+      </div>
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <WizField label="Currency" hint="Display currency">
           <WizSelect

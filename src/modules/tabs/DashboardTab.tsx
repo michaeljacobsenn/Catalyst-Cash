@@ -176,6 +176,7 @@ export default memo(function DashboardTab({
     alerts,
     safetySnapshot,
     portfolioMetrics,
+    fireProjection,
   } = useDashboardData();
   const handleNativeBackup = useCallback(
     async (passcode: string | null) => {
@@ -736,6 +737,72 @@ export default memo(function DashboardTab({
                </div>
              );
            })()}
+
+           {/* ═══ SAVINGS RATE WIDGET ═══ */}
+           {fireProjection?.savingsRatePct != null && fireProjection.status === "ok" && (
+             (() => {
+               const pct = fireProjection.savingsRatePct as number;
+               const clampedPct = Math.max(0, Math.min(100, pct));
+               const rateColor = pct >= 20 ? T.status.green : pct >= 10 ? T.status.blue : pct >= 0 ? T.status.amber : T.status.red;
+               const circumference = 2 * Math.PI * 22;
+               const strokeDashoffset = circumference - (clampedPct / 100) * circumference;
+               const rateLabel = pct >= 20 ? "Excellent" : pct >= 10 ? "Good" : pct >= 0 ? "Low" : "Negative";
+               return (
+                 <div
+                   style={{
+                     display: "flex",
+                     alignItems: "center",
+                     gap: 14,
+                     padding: "14px 16px",
+                     borderRadius: T.radius.lg,
+                     background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
+                     border: `1px solid ${T.border.subtle}`,
+                     marginBottom: 12,
+                     boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04)`,
+                   }}
+                 >
+                   <div style={{ position: "relative", width: 52, height: 52, flexShrink: 0 }}>
+                     <svg width="52" height="52" style={{ transform: "rotate(-90deg)" }}>
+                       <circle cx="26" cy="26" r="22" fill="none" stroke={`${T.border.subtle}`} strokeWidth="4" />
+                       <circle
+                         cx="26" cy="26" r="22" fill="none"
+                         stroke={rateColor} strokeWidth="4"
+                         strokeDasharray={circumference}
+                         strokeDashoffset={strokeDashoffset}
+                         strokeLinecap="round"
+                         style={{ transition: "stroke-dashoffset .6s ease" }}
+                       />
+                     </svg>
+                     <div style={{
+                       position: "absolute", inset: 0,
+                       display: "flex", alignItems: "center", justifyContent: "center",
+                       fontSize: 12, fontWeight: 900, color: rateColor, fontFamily: T.font.mono,
+                     }}>
+                       {pct.toFixed(0)}%
+                     </div>
+                   </div>
+                   <div style={{ minWidth: 0, flex: 1 }}>
+                     <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase", fontFamily: T.font.mono, marginBottom: 3 }}>
+                       SAVINGS RATE
+                     </div>
+                     <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, lineHeight: 1.3 }}>
+                       {rateLabel}
+                     </div>
+                     <div style={{ fontSize: 10, color: T.text.secondary, lineHeight: 1.35, marginTop: 2 }}>
+                       {pct >= 20
+                         ? "You're saving more than most — keep it up."
+                         : pct >= 10
+                           ? "Solid ground. Push toward 20% for faster FIRE progress."
+                           : pct >= 0
+                             ? "Low savings rate. Look for expenses to cut or income to increase."
+                             : "Spending exceeds income. Prioritize cash flow repair."
+                       }
+                     </div>
+                   </div>
+                 </div>
+               );
+             })()
+           )}
 
            {/* ═══ ACTION ROW — Sync + Ledger ═══ */}
            <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>

@@ -8,6 +8,7 @@
   import {
     Activity,
     CheckCircle,
+    ChevronRight,
     Download,
     Filter,
     Plus,
@@ -457,6 +458,45 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
           </Card>
         )}
 
+        {/* Proactive upgrade nudge for free users with a scored audit */}
+        {shouldShowGating() && !proEnabled && score != null && !demoActive && (
+          <button
+            onClick={() => { haptic.light(); setShowPaywall(true); }}
+            style={{
+              width: "100%",
+              marginTop: 10,
+              padding: "12px 14px",
+              borderRadius: T.radius.md,
+              border: `1px solid ${T.accent.primary}20`,
+              background: `linear-gradient(160deg, ${T.bg.card}, ${T.accent.primary}08)`,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              textAlign: "left" as const,
+              transition: "all .2s ease",
+            }}
+          >
+            <div style={{
+              width: 30, height: 30, borderRadius: 10,
+              background: `${T.accent.primary}14`, border: `1px solid ${T.accent.primary}20`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 14, flexShrink: 0,
+            }}>⚡</div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: T.text.primary, lineHeight: 1.4 }}>
+                {score >= 75 ? "Keep this momentum going" : "Unlock deeper financial insights"}
+              </div>
+              <div style={{ fontSize: 10, color: T.text.dim, lineHeight: 1.35, marginTop: 2 }}>
+                {score >= 75
+                  ? "Pro gives you unlimited audits and the archive to prove your progress."
+                  : "Pro unlocks stronger AI models, more audits, and the tools to improve your score faster."}
+              </div>
+            </div>
+            <ChevronRight size={14} color={T.text.muted} />
+          </button>
+        )}
+
         {/* ═══ HERO CTA — RUN NEW AUDIT ═══ */}
         <button
           onClick={onRunAudit}
@@ -517,126 +557,236 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
         )}
 
         {/* ═══ HISTORY SECTION ═══ */}
-        <div style={{ marginTop: 24 }}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
-            <div style={{ display: "grid", gap: 3 }}>
+        {audits.length > 0 && (
+        <div style={{ marginTop: 26, display: "grid", gap: 12 }}>
+          <Card
+            style={{
+              padding: "18px",
+              background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
+              borderColor: T.border.default,
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                right: -20,
+                top: -20,
+                width: 80,
+                height: 80,
+                background: T.accent.primary,
+                filter: "blur(50px)",
+                opacity: 0.06,
+                borderRadius: "50%",
+                pointerEvents: "none",
+              }}
+            />
+
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Activity size={14} color={T.text.secondary} strokeWidth={2.5} />
-                <span style={{ fontSize: 14, fontWeight: 800, color: T.text.primary }}>History</span>
-                <Mono size={10} color={T.text.dim}>{audits.length} audits</Mono>
+                <div
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 9,
+                    background: `${T.accent.primary}15`,
+                    border: `1px solid ${T.accent.primary}25`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Activity size={13} color={T.accent.primary} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
+                    Audit Archive
+                  </div>
+                  <div style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, marginTop: 1 }}>
+                    {audits.length} total · {audits.filter(a => !a.isTest).length} live · {audits.filter(a => a.isTest).length} test
+                  </div>
+                </div>
               </div>
-              <span style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.4 }}>
-                Keep the useful audits, filter the noise, and export only what you need.
-              </span>
-            </div>
-            {audits.length > 0 && (
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+
+              {/* Compact export toolbar */}
+              <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
                 {selMode && sel.size > 0 && (
                   <button
                     onClick={() => void doExportSel()}
                     style={{
-                      display: "flex", alignItems: "center", gap: 4, padding: "0 12px", height: 32,
-                      borderRadius: 12, border: `1px solid ${T.accent.primary}40`,
-                      background: T.accent.primaryDim, color: T.accent.primary,
-                      fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 3,
+                      padding: "0 10px",
+                      height: 30,
+                      borderRadius: 8,
+                      border: `1px solid ${T.accent.primary}40`,
+                      background: T.accent.primaryDim,
+                      color: T.accent.primary,
+                      fontSize: 9,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      fontFamily: T.font.mono,
                     }}
                   >
-                    <Download size={9} /> EXPORT {sel.size}
+                    <Download size={9} /> {sel.size}
                   </button>
                 )}
                 <button
                   onClick={() => { setSelMode(!selMode); setSel(new Set()); }}
+                  title="Select audits"
                   style={{
-                    padding: "0 12px", height: 32, borderRadius: 12,
-                    border: `1px solid ${T.border.default}`, background: T.bg.elevated,
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    border: `1px solid ${selMode ? T.accent.primary + "40" : T.border.default}`,
+                    background: selMode ? `${T.accent.primary}12` : T.bg.elevated,
                     color: selMode ? T.accent.primary : T.text.dim,
-                    fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 8,
+                    fontWeight: 800,
+                    fontFamily: T.font.mono,
                   }}
                 >
-                  {selMode ? "CANCEL" : "SELECT"}
+                  {selMode ? "✕" : <CheckCircle size={12} />}
                 </button>
                 <button
                   onClick={() => void handleExportCsv()}
                   title="Export CSV"
                   style={{
-                    padding: "0 12px", height: 32, borderRadius: 12,
-                    border: `1px solid ${T.border.default}`, background: T.bg.elevated,
-                    color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center",
-                    justifyContent: "center", fontSize: 10, fontWeight: 700, fontFamily: T.font.mono,
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    border: `1px solid ${T.border.default}`,
+                    background: T.bg.elevated,
+                    color: T.text.dim,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 7,
+                    fontWeight: 800,
+                    fontFamily: T.font.mono,
                   }}
                 >
                   CSV
                 </button>
                 <button
                   onClick={() => void handleExportJson()}
-                  title="Export All JSON"
+                  title="Export JSON"
                   style={{
-                    padding: "0 12px", height: 32, borderRadius: 12,
-                    border: `1px solid ${T.border.default}`, background: T.bg.elevated,
-                    color: T.text.dim, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: T.font.mono,
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    border: `1px solid ${T.border.default}`,
+                    background: T.bg.elevated,
+                    color: T.text.dim,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 7,
+                    fontWeight: 800,
+                    fontFamily: T.font.mono,
                   }}
                 >
                   JSON
                 </button>
               </div>
-            )}
-          </div>
-
-
-          {/* Select All */}
-          {selMode && audits.length > 0 && (
-            <div
-              onClick={toggleAll}
-              style={{
-                display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", marginBottom: 8,
-                borderRadius: T.radius.md, background: T.bg.card, cursor: "pointer", border: `1px solid ${T.border.subtle}`,
-              }}
-            >
-              <div style={{
-                width: 18, height: 18, borderRadius: 5, flexShrink: 0,
-                border: `2px solid ${allSel ? "transparent" : T.text.dim}`,
-                background: allSel ? T.accent.primary : "transparent",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                {allSel && <CheckCircle size={11} color={T.bg.base} strokeWidth={3} />}
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 600, color: T.text.secondary }}>{allSel ? "Deselect All" : "Select All"}</span>
-              {sel.size > 0 && <Mono size={10} color={T.accent.primary} style={{ marginLeft: "auto" }}>{sel.size} selected</Mono>}
             </div>
-          )}
 
-          {/* Status filter pills */}
-          {audits.length > 0 && (
-            <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-              {[null, "GREEN", "YELLOW", "RED"].map(f => {
+            {/* Select All bar */}
+            {selMode && audits.length > 0 && (
+              <div
+                onClick={toggleAll}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "8px 10px",
+                  marginBottom: 12,
+                  borderRadius: 10,
+                  background: `${T.bg.elevated}D0`,
+                  cursor: "pointer",
+                  border: `1px solid ${T.border.subtle}`,
+                }}
+              >
+                <div
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 4,
+                    flexShrink: 0,
+                    border: `2px solid ${allSel ? "transparent" : T.text.dim}`,
+                    background: allSel ? T.accent.primary : "transparent",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {allSel && <CheckCircle size={10} color={T.bg.base} strokeWidth={3} />}
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 700, color: T.text.secondary }}>
+                  {allSel ? "Deselect all" : "Select all"}
+                </span>
+                {sel.size > 0 && (
+                  <Mono size={9} color={T.accent.primary} style={{ marginLeft: "auto" }}>
+                    {sel.size} selected
+                  </Mono>
+                )}
+              </div>
+            )}
+
+            {/* Filter pills — inline, no wrapping */}
+            <div style={{ display: "flex", gap: 6 }}>
+              {[null, "GREEN", "YELLOW", "RED"].map((f) => {
                 const active = statusFilter === f;
                 const label = f || "All";
                 const c = colorFor(f);
-                const count = f ? audits.filter(a => getAuditColor(a) === f).length : audits.length;
+                const count = f ? audits.filter((a) => getAuditColor(a) === f).length : audits.length;
                 return (
                   <button
                     key={label}
-                    onClick={() => { setStatusFilter(f); setSel(new Set()); }}
+                    onClick={() => {
+                      setStatusFilter(f);
+                      setSel(new Set());
+                    }}
                     style={{
-                      padding: "0 12px", height: 30, borderRadius: 999, fontSize: 10, fontWeight: 700,
-                      border: `1px solid ${active ? c : T.border.default}`,
-                      background: active ? `${c}18` : T.bg.elevated,
-                      color: active ? c : T.text.dim, cursor: "pointer", fontFamily: T.font.mono,
-                      letterSpacing: "0.03em", display: "flex", alignItems: "center", gap: 4,
+                      flex: 1,
+                      padding: "6px 0",
+                      borderRadius: 8,
+                      fontSize: 10,
+                      fontWeight: 800,
+                      border: `1px solid ${active ? `${c}50` : T.border.subtle}`,
+                      background: active ? `${c}14` : "transparent",
+                      color: active ? c : T.text.dim,
+                      cursor: "pointer",
+                      fontFamily: T.font.mono,
+                      letterSpacing: "0.02em",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 4,
+                      transition: "all .2s ease",
                     }}
                   >
-                    {f && <div style={{ width: 6, height: 6, borderRadius: "50%", background: c }} />}
-                    {label} <span style={{ opacity: 0.6, fontSize: 9 }}>({count})</span>
+                    {f && <div style={{ width: 5, height: 5, borderRadius: "50%", background: c }} />}
+                    {count}
                   </button>
                 );
               })}
             </div>
-          )}
+          </Card>
 
           {filteredAudits.length === 0 && audits.length > 0 ? (
             <EmptyState icon={Filter} title={`No ${statusFilter} Audits`} message="Try a different filter or run a new audit." />
           ) : audits.length === 0 ? null : (
-            <Card style={{ padding: 0, overflow: "hidden" }}>
+            <div style={{ display: "grid", gap: 8 }}>
               {(() => {
                 let lastMonth: string | null = null;
                 return filteredAudits.map((a, i) => {
@@ -644,151 +794,276 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                   const showMonthHeader = monthKey !== lastMonth;
                   lastMonth = monthKey;
                   const isConfirming = confirmDelete === i;
-                  const rawStatus = a.parsed?.status || "UNKNOWN";
-                  let sColor = "UNKNOWN";
-                  let sText = rawStatus;
-                  const m = rawStatus.match(/^(GREEN|YELLOW|RED)[\s:;-]*(.*)$/i);
-                  if (m) { sColor = (m[1] ?? "UNKNOWN").toUpperCase(); sText = m[2] ? m[2].trim() : ""; }
-                  else if (rawStatus.toUpperCase().includes("GREEN")) { sColor = "GREEN"; sText = rawStatus.replace(/GREEN/i, "").trim(); }
-                  else if (rawStatus.toUpperCase().includes("YELLOW")) { sColor = "YELLOW"; sText = rawStatus.replace(/YELLOW/i, "").trim(); }
-                  else if (rawStatus.toUpperCase().includes("RED")) { sColor = "RED"; sText = rawStatus.replace(/RED/i, "").trim(); }
-                  if (sText.startsWith(":") || sText.startsWith("-")) sText = sText.slice(1).trim();
-                  const cardHex = colorFor(sColor);
+                  const auditColor = getAuditColor(a);
+                  const cardHex = colorFor(auditColor);
+                  const scoreValue = a.parsed?.healthScore?.score;
+                  const gradeLabel = scoreValue != null ? getGradeLetter(scoreValue) : null;
+                  const debtTotal = (a.form?.debts ?? []).reduce((sum, debt) => sum + (Number(debt.balance) || 0), 0);
+                  const checkingVal = a.form?.checking != null ? Number(a.form.checking) || 0 : null;
+                  const subtitle = String(a.parsed?.status || "")
+                    .replace(/^(GREEN|YELLOW|RED)[\s:;-]*/i, "")
+                    .trim();
 
                   return (
                     <div key={a.ts || i}>
                       {showMonthHeader && (
-                        <div style={{ padding: "10px 16px", background: T.bg.surface, borderBottom: `1px solid ${T.border.subtle}`, borderTop: i > 0 ? `1px solid ${T.border.subtle}` : "none", display: "flex", alignItems: "center" }}>
-                          <span style={{ fontSize: 11, fontWeight: 800, color: T.text.secondary, fontFamily: T.font.mono, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: i > 0 ? 8 : 0, marginBottom: 6 }}>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 800,
+                              color: T.text.dim,
+                              fontFamily: T.font.mono,
+                              letterSpacing: "0.05em",
+                              textTransform: "uppercase",
+                            }}
+                          >
                             {monthKey}
                           </span>
+                          <div style={{ flex: 1, height: 1, background: T.border.subtle }} />
                         </div>
                       )}
-                      <div
-                        onClick={selMode ? () => toggle(i) : isConfirming ? undefined : () => onViewResult(a)}
-                        className="hover-card-row"
+                      <Card
+                        {...(isConfirming
+                          ? {}
+                          : { onClick: selMode ? () => toggle(i) : () => onViewResult(a) })}
                         style={{
-                          padding: "16px 20px",
+                          padding: "14px 16px",
                           position: "relative",
-                          cursor: "pointer",
-                          background: T.bg.card,
-                          borderBottom: i === filteredAudits.length - 1 ? "none" : `1px solid ${T.border.subtle}`,
-                          transition: "background 0.2s ease",
-                          ...(sel.has(i) ? { background: `${T.accent.primary}08` } : {}),
-                          ...(isConfirming ? { background: `${T.status.red}06` } : {}),
+                          overflow: "hidden",
+                          cursor: isConfirming ? "default" : "pointer",
+                          borderColor: sel.has(i) ? `${T.accent.primary}35` : `${cardHex}20`,
+                          background: isConfirming
+                            ? `${T.status.red}06`
+                            : sel.has(i)
+                              ? `${T.accent.primary}08`
+                              : T.bg.card,
+                          transition: "all 0.2s ease",
                         }}
                       >
+                        {/* Color accent strip */}
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: 3,
+                            background: cardHex,
+                            opacity: 0.9,
+                          }}
+                        />
 
-                      {isConfirming ? (
-                        <div>
-                          <p style={{ fontSize: 12, color: T.status.red, fontWeight: 600, marginBottom: 10 }}>Delete audit from {fmtDate(a.date)}?</p>
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <button
-                              onClick={e => { e.stopPropagation(); onDelete(a); setConfirmDelete(null); }}
-                              style={{ flex: 1, padding: 10, borderRadius: T.radius.md, border: "none", background: T.status.red, color: "white", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-                            >Delete</button>
-                            <button onClick={e => { e.stopPropagation(); setConfirmDelete(null); }} className="btn-secondary" style={{ flex: 1 }}>Cancel</button>
+                        {isConfirming ? (
+                          <div style={{ display: "grid", gap: 12 }}>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: T.status.red }}>
+                              Delete the {fmtDate(a.date)} audit?
+                            </div>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDelete(a);
+                                  setConfirmDelete(null);
+                                }}
+                                style={{
+                                  flex: 1,
+                                  height: 38,
+                                  borderRadius: 10,
+                                  border: "none",
+                                  background: T.status.red,
+                                  color: "white",
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Delete
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setConfirmDelete(null);
+                                }}
+                                className="btn-secondary"
+                                style={{ flex: 1, height: 38 }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                          {/* Left Value / Score Pill */}
-                          <div style={{ display: "flex", flexDirection: "column", gap: 4, width: 44, flexShrink: 0 }}>
-                            {a.parsed?.healthScore?.score != null ? (() => {
-                                const s = a.parsed.healthScore.score;
-                                const sc = s >= 80 ? T.status.green : s >= 60 ? T.status.amber : T.status.red;
-                                return (
-                                  <div style={{
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                    height: 24, borderRadius: 12, background: `${sc}15`, border: `1px solid ${sc}40`,
-                                    color: sc, fontSize: 11, fontWeight: 800, fontFamily: T.font.mono
-                                  }}>
-                                    {s}
+                        ) : (
+                          <div style={{ position: "relative", display: "grid", gap: 10 }}>
+                            {/* Row 1: Score pill + Date + Actions */}
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                                {/* Score/Status pill */}
+                                <div
+                                  style={{
+                                    minWidth: 44,
+                                    height: 26,
+                                    padding: "0 9px",
+                                    borderRadius: 7,
+                                    background: `${cardHex}14`,
+                                    border: `1px solid ${cardHex}30`,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: 4,
+                                    color: cardHex,
+                                    fontSize: 11,
+                                    fontWeight: 800,
+                                    fontFamily: T.font.mono,
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  <div style={{ width: 5, height: 5, borderRadius: "50%", background: cardHex }} />
+                                  {scoreValue != null ? `${gradeLabel}` : auditColor.slice(0, 3)}
+                                </div>
+
+                                {/* Date + relative time */}
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+                                    <span style={{ fontSize: 15, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
+                                      {fmtDate(a.date)}
+                                    </span>
+                                    {a.isTest && <Badge variant="amber">TEST</Badge>}
                                   </div>
-                                )
-                            })() : (
-                              <div style={{
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                                height: 24, borderRadius: 12, background: `${cardHex}15`, border: `1px solid ${cardHex}40`,
-                                color: cardHex, fontSize: 10, fontWeight: 800, fontFamily: T.font.mono
-                              }}>
-                                {sColor.slice(0, 3)}
+                                  <div style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, marginTop: 1 }}>
+                                    {relativeTime(a.date || a.ts)}
+                                    {scoreValue != null && ` · ${scoreValue} pts`}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Actions */}
+                              <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                                {selMode ? (
+                                  <div
+                                    style={{
+                                      width: 18,
+                                      height: 18,
+                                      borderRadius: 5,
+                                      border: `2px solid ${sel.has(i) ? "transparent" : T.text.dim}`,
+                                      background: sel.has(i) ? T.accent.primary : "transparent",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                    }}
+                                  >
+                                    {sel.has(i) && <CheckCircle size={11} color={T.bg.base} strokeWidth={3} />}
+                                  </div>
+                                ) : (
+                                  <>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setExportAuditRecord(a);
+                                      }}
+                                      style={{
+                                        width: 30,
+                                        height: 30,
+                                        borderRadius: 8,
+                                        border: `1px solid ${T.border.subtle}`,
+                                        background: T.bg.elevated,
+                                        color: T.text.dim,
+                                        cursor: "pointer",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                      }}
+                                    >
+                                      <Download size={12} />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setConfirmDelete(i);
+                                        haptic.warning();
+                                      }}
+                                      style={{
+                                        width: 30,
+                                        height: 30,
+                                        borderRadius: 8,
+                                        border: `1px solid ${T.status.red}20`,
+                                        background: `${T.status.red}08`,
+                                        color: T.status.red,
+                                        cursor: "pointer",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                      }}
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Row 2: Inline metrics */}
+                            {(checkingVal != null || debtTotal > 0 || a.parsed?.netWorth != null) && (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 12,
+                                  paddingTop: 8,
+                                  borderTop: `1px solid ${T.border.subtle}`,
+                                  fontSize: 11,
+                                  fontFamily: T.font.mono,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {a.parsed?.netWorth != null && (
+                                  <span style={{ color: T.text.secondary }}>
+                                    <span style={{ color: T.text.dim, fontSize: 9, letterSpacing: "0.04em" }}>NW </span>
+                                    {fmt(a.parsed.netWorth)}
+                                  </span>
+                                )}
+                                {checkingVal != null && (
+                                  <span style={{ color: T.text.secondary }}>
+                                    <span style={{ color: T.accent.emerald, fontSize: 9, letterSpacing: "0.04em" }}>CHK </span>
+                                    {fmt(checkingVal)}
+                                  </span>
+                                )}
+                                {debtTotal > 0 && (
+                                  <span style={{ color: T.status.red }}>
+                                    <span style={{ fontSize: 9, letterSpacing: "0.04em" }}>DEBT </span>
+                                    {fmt(debtTotal)}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Row 3: Status subtitle */}
+                            {subtitle && (
+                              <div
+                                style={{
+                                  fontSize: 11,
+                                  color: T.text.secondary,
+                                  lineHeight: 1.5,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  display: "-webkit-box",
+                                  WebkitLineClamp: 2,
+                                  WebkitBoxOrient: "vertical",
+                                }}
+                              >
+                                {subtitle}
                               </div>
                             )}
                           </div>
-
-                          {/* Center Content */}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 2 }}>
-                               <span style={{ fontSize: 15, fontWeight: 600, color: T.text.primary, letterSpacing: "-0.01em" }}>
-                                  {fmtDate(a.date)}
-                               </span>
-                               {a.isTest && <Badge variant="amber" style={{ padding: "1px 4px", fontSize: 8 }}>TEST</Badge>}
-                               {selMode && (
-                                  <div style={{
-                                    width: 14, height: 14, borderRadius: 4, flexShrink: 0, marginLeft: 'auto',
-                                    border: `1px solid ${sel.has(i) ? "transparent" : T.text.dim}`,
-                                    background: sel.has(i) ? T.accent.primary : "transparent",
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                  }}>
-                                    {sel.has(i) && <CheckCircle size={10} color={T.bg.base} strokeWidth={3} />}
-                                  </div>
-                               )}
-                            </div>
-
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 11, color: T.text.secondary }}>
-                              {a.parsed?.netWorth != null && (
-                                <span style={{ fontWeight: 500, color: T.text.primary }}>NW: <span style={{ fontFamily: T.font.mono, fontWeight: 600 }}>{fmt(a.parsed.netWorth)}</span></span>
-                              )}
-                              {a.form?.checking != null && (
-                                <span>Chk: <span style={{ fontFamily: T.font.mono }}>{fmt(Number(a.form.checking) || 0)}</span></span>
-                              )}
-                              {(a.form?.debts?.length ?? 0) > 0 && (
-                                <span style={{ color: T.status.red }}>Debt: <span style={{ fontFamily: T.font.mono }}>{fmt((a.form?.debts ?? []).reduce((s, d) => s + (Number(d.balance) || 0), 0))}</span></span>
-                              )}
-                            </div>
-
-                            {/* Status subtitle stripped down */}
-                            {sText && (
-                              <div style={{
-                                fontSize: 11, color: T.text.dim, lineHeight: 1.4, marginTop: 4,
-                                overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box",
-                                WebkitLineClamp: 1, WebkitBoxOrient: "vertical"
-                              }}>
-                                {sText}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Right actions (if any) */}
-                           <div style={{ display: "flex", gap: 8, alignItems: "center", opacity: 0.4 }}>
-                              {!selMode && (
-                                <button
-                                  onClick={e => { e.stopPropagation(); setExportAuditRecord(a); }}
-                                  style={{ background: "none", border: "none", color: T.text.dim, cursor: "pointer", padding: 4 }}
-                                >
-                                  <Download size={14} />
-                                </button>
-                              )}
-                              {!selMode && (
-                                <button
-                                  onClick={e => { e.stopPropagation(); setConfirmDelete(i); haptic.warning(); }}
-                                  style={{ background: "none", border: "none", color: T.status.red, cursor: "pointer", padding: 4 }}
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              )}
-                           </div>
-                        </div>
-                      )}
-                      </div>
+                        )}
+                      </Card>
                     </div>
                   );
                 });
               })()}
-            </Card>
+            </div>
           )}
         </div>
+        )}
 
         {/* AI Disclaimer */}
         <p style={{ fontSize: 9, color: T.text.muted, textAlign: "center", marginTop: 20, lineHeight: 1.5, opacity: 0.6 }}>

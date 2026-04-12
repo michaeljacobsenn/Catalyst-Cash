@@ -26,6 +26,7 @@ export const TIER_MODEL_IDS = {
 export const IAP_PRODUCTS = {
   monthly: "com.catalystcash.pro.monthly.v2",
   yearly: "com.catalystcash.pro.yearly.v2",
+  lifetime: "com.catalystcash.pro.lifetime",
 };
 
 export const IAP_PRICING = {
@@ -37,6 +38,14 @@ export const IAP_PRICING = {
     perMonth: "$8.33",
     original: "$119.88",
     trial: "7-day free trial",
+  },
+  lifetime: {
+    price: "$249.99",
+    period: "lifetime",
+    savings: "Never pay again",
+    perMonth: null,
+    original: null,
+    trial: null,
   },
 };
 

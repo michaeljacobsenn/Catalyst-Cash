@@ -17,13 +17,14 @@ import {
     autoMatchAccounts,
     connectBank,
     fetchBalancesAndLiabilities,
+    getConnections,
     purgeBrokenConnections,
     saveConnectionLinks,
   } from "../plaid.js";
   import BankAccountsSection from "../portfolio/BankAccountsSection.js";
   import CreditCardsSection from "../portfolio/CreditCardsSection.js";
   import CreditUtilizationWidget from "../portfolio/CreditUtilizationWidget.js";
-  import { usePlaidSync } from "../usePlaidSync.js";
+  import { parsePlaidSyncTimestamp,usePlaidSync } from "../usePlaidSync.js";
   import { fmt } from "../utils.js";
 const InvestmentsSection = lazy(() => import("../portfolio/InvestmentsSection.js"));
 const OtherAssetsSection = lazy(() => import("../portfolio/OtherAssetsSection.js"));
@@ -77,6 +78,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
 
   const { cardCatalog } = portfolioContext;
   const { financialConfig = {} as CatalystCashConfig, setFinancialConfig } = useSettings();
+  const [plaidReconnectStatus, setPlaidReconnectStatus] = useState<Map<string, boolean>>(new Map());
 
   // Bring in unified master metrics globally calculated
   const { portfolioMetrics, movePlan } = useDashboardData();
@@ -85,7 +87,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
       .map((item) => {
         const raw = (item && typeof item === "object" ? (item as { _plaidLastSync?: string | null })._plaidLastSync : null) || null;
         if (!raw) return 0;
-        const timestamp = new Date(raw).getTime();
+        const timestamp = parsePlaidSyncTimestamp(raw);
         return Number.isFinite(timestamp) ? timestamp : 0;
       })
       .filter((timestamp) => timestamp > 0);
@@ -105,6 +107,88 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
       return lastPlaidSyncAt.toLocaleString();
     }
   }, [lastPlaidSyncAt]);
+  const stalePlaidInstitutions = useMemo(() => {
+    if (!lastPlaidSyncAt) return [];
+    const STALE_THRESHOLD_MS = 10 * 60 * 1000;
+    const byConnection = new Map<string, { connectionId: string; name: string; lastSyncAt: number }>();
+    const linkedItems = [...cards, ...bankAccounts];
+
+    for (const item of linkedItems) {
+      const connectionId = String(item?._plaidConnectionId || "").trim();
+      if (!connectionId) continue;
+      const syncAt = parsePlaidSyncTimestamp((item as { _plaidLastSync?: string | null })._plaidLastSync);
+      if (!syncAt) continue;
+      const existing = byConnection.get(connectionId);
+      const name =
+        String((item as { institution?: string; bank?: string; name?: string }).institution || (item as { bank?: string }).bank || (item as { name?: string }).name || "Linked institution").trim();
+      if (!existing || syncAt > existing.lastSyncAt) {
+        byConnection.set(connectionId, { connectionId, name, lastSyncAt: syncAt });
+      }
+    }
+
+    return Array.from(byConnection.values())
+      .filter((entry) => (lastPlaidSyncAt.getTime() - entry.lastSyncAt) > STALE_THRESHOLD_MS)
+      .sort((a, b) => a.lastSyncAt - b.lastSyncAt);
+  }, [cards, bankAccounts, lastPlaidSyncAt]);
+  const stalePlaidBreakdown = useMemo(() => {
+    const reconnectRequired: Array<{ connectionId: string; name: string; lastSyncAt: number }> = [];
+    const connectedButCached: Array<{ connectionId: string; name: string; lastSyncAt: number }> = [];
+    for (const entry of stalePlaidInstitutions) {
+      const needsReconnect = plaidReconnectStatus.get(String(entry.connectionId || "").trim()) === true;
+      if (needsReconnect) reconnectRequired.push(entry);
+      else connectedButCached.push(entry);
+    }
+    return { reconnectRequired, connectedButCached };
+  }, [stalePlaidInstitutions, plaidReconnectStatus]);
+  const staleConnectedSummary = useMemo(() => {
+    if (!stalePlaidBreakdown.connectedButCached.length) return null;
+    const formatTime = (timestamp: number) => {
+      try {
+        return new Intl.DateTimeFormat(undefined, {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        }).format(new Date(timestamp));
+      } catch {
+        return new Date(timestamp).toLocaleString();
+      }
+    };
+    const preview = stalePlaidBreakdown.connectedButCached
+      .slice(0, 2)
+      .map((entry) => `${entry.name} (${formatTime(entry.lastSyncAt)})`)
+      .join(", ");
+    return stalePlaidBreakdown.connectedButCached.length > 2 ? `${preview}, and others` : preview;
+  }, [stalePlaidBreakdown]);
+  const reconnectRequiredSummary = useMemo(() => {
+    if (!stalePlaidBreakdown.reconnectRequired.length) return null;
+    const preview = stalePlaidBreakdown.reconnectRequired
+      .slice(0, 2)
+      .map((entry) => entry.name)
+      .join(", ");
+    return stalePlaidBreakdown.reconnectRequired.length > 2 ? `${preview}, and others` : preview;
+  }, [stalePlaidBreakdown]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getConnections()
+      .then((connections) => {
+        if (cancelled) return;
+        const next = new Map();
+        for (const connection of connections || []) {
+          const connectionId = String(connection?.id || "").trim();
+          if (!connectionId) continue;
+          next.set(connectionId, Boolean(connection?._needsReconnect));
+        }
+        setPlaidReconnectStatus(next);
+      })
+      .catch(() => {
+        if (!cancelled) setPlaidReconnectStatus(new Map());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cards, bankAccounts]);
 
   const demoOverrideContext = useMemo(() => {
     if (!isTest) return portfolioContext;
@@ -466,6 +550,11 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
       </div>
 
       {(syncState.phase === "syncing" || syncState.phase === "warning") && (
+        (() => {
+          const visibleIssues = Array.isArray(syncState.issues)
+            ? syncState.issues.slice(0, 4) as Array<{ institutionName?: string; message?: string }>
+            : [];
+          return (
         <div
           style={{
             marginTop: 6,
@@ -520,11 +609,37 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
               </div>
             </>
           ) : (
-            <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5 }}>
-              {syncState.warning}
+            <div style={{ display: "grid", gap: 8 }}>
+              <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5 }}>
+                {syncState.warning}
+              </div>
+              {visibleIssues.length > 0 && (
+                <div style={{ display: "grid", gap: 6 }}>
+                  {visibleIssues.map((issue, index) => (
+                    <div
+                      key={`${issue?.institutionName || "issue"}-${index}`}
+                      style={{
+                        padding: "8px 10px",
+                        borderRadius: T.radius.sm,
+                        background: `${T.bg.elevated}D0`,
+                        border: `1px solid ${T.border.subtle}`,
+                      }}
+                    >
+                      <div style={{ fontSize: 11, fontWeight: 700, color: T.text.primary }}>
+                        {issue?.institutionName || "Linked institution"}
+                      </div>
+                      <div style={{ marginTop: 2, fontSize: 10.5, color: T.text.secondary, lineHeight: 1.45 }}>
+                        {issue?.message || "Needs attention."}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
+          );
+        })()
       )}
 
       {lastPlaidSyncLabel && syncState.phase === "idle" && (
@@ -542,6 +657,17 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
           }}
         >
           Live-linked balances can update at different times by institution. Latest verified Plaid refresh: <span style={{ color: T.text.primary, fontWeight: 700 }}>{lastPlaidSyncLabel}</span>.
+          {staleConnectedSummary ? (
+            <div style={{ marginTop: 6, color: T.status.amber }}>
+              Still connected, but Plaid returned older cached balances for: <span style={{ color: T.text.primary, fontWeight: 700 }}>{staleConnectedSummary}</span>.
+              <span style={{ color: T.text.secondary }}> Reconnect is not currently required for these institutions.</span>
+            </div>
+          ) : null}
+          {reconnectRequiredSummary ? (
+            <div style={{ marginTop: 6, color: T.status.red }}>
+              Reconnect required before live balances can resume: <span style={{ color: T.text.primary, fontWeight: 700 }}>{reconnectRequiredSummary}</span>.
+            </div>
+          ) : null}
         </div>
       )}
 

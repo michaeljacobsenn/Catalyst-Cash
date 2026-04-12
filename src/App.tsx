@@ -16,6 +16,7 @@
     useHeaderChrome,
     useHouseholdSync,
     useLoadReadyHaptic,
+    useNotificationDeepLinks,
     usePrivacyModeMirror,
     useRecoverableAuditLifecycle,
     useSimulatedGeofenceNotification,
@@ -329,6 +330,7 @@ function CatalystCashShell() {
   useBootServices(setProEnabled);
   useAppForegroundRefresh(ready, refreshAppState);
   useDeepLinkRouting(navTo);
+  useNotificationDeepLinks(navTo);
 
   const { simulatedNotification, dismissSimulatedNotification } = useSimulatedGeofenceNotification(
     cards,
@@ -703,6 +705,7 @@ function CatalystCashShell() {
       <SkipToContentLink />
       {showShellHeader && (
         <AppShellHeader
+          key={`shell-header-${themeTick}`}
           tab={renderedBaseTab}
           topBarRef={topBarRef}
           headerHidden={headerHidden}
@@ -716,15 +719,16 @@ function CatalystCashShell() {
       {!online && <OfflineBanner />}
 
       <ScrollSnapContainer
+        key={`snap-${themeTick}`}
         ready={ready}
         onboardingComplete={onboardingComplete}
         tab={renderedBaseTab}
-        refreshTick={themeTick}
         syncTab={syncTab}
         SWIPE_TAB_ORDER={SWIPE_TAB_ORDER}
         hidden={tab === "settings" || tab === "results" || tab === "history" || tab === "guide" || tab === "input"}
       >
       <TabRenderer
+          key={`tabs-${themeTick}`}
           SWIPE_TAB_ORDER={SWIPE_TAB_ORDER}
           activeTab={renderedBaseTab}
           themeTick={themeTick}
@@ -800,6 +804,7 @@ function CatalystCashShell() {
       </OverlayProvider>
 
       <BottomNavBar
+        key={`bottom-nav-${themeTick}`}
         tab={tab}
         navTo={navTo}
         loading={loading}

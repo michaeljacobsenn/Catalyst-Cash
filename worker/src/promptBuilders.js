@@ -26,6 +26,12 @@ import { getJsonWrapper, getProviderTweaks } from "./prompts/auditOutputContract
 
 export { estimatePromptTokens, sanitizePersonalRules } from "./prompts/auditSections.js";
 
+function normalizePreferredName(value) {
+  const trimmed = String(value || "").trim().replace(/\s+/g, " ");
+  if (!trimmed) return "";
+  return trimmed.slice(0, 40);
+}
+
 function buildBankAccountData(bankAccounts = [], cSym = "$") {
   if (!Array.isArray(bankAccounts) || bankAccounts.length === 0) return null;
   return bankAccounts
@@ -72,12 +78,64 @@ function buildNearTermFundingMap(renewals = [], cSym = "$") {
     .join("\n");
 }
 
+function buildAnnualObligationMap(renewals = [], cSym = "$") {
+  if (!Array.isArray(renewals) || renewals.length === 0) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const horizon = new Date(today.getTime() + 365 * 86400000);
+
+  const normalized = renewals
+    .filter((renewal) => renewal && !renewal.isCancelled && !renewal.archivedAt && Number(renewal.amount) > 0)
+    .map((renewal) => {
+      const amount = Number(renewal.amount) || 0;
+      const interval = Number(renewal.interval) || 1;
+      const unit = String(renewal.intervalUnit || "months").toLowerCase();
+      const due = renewal.nextDue ? new Date(`${renewal.nextDue}T12:00:00Z`) : null;
+      const withinYear = !due || !Number.isFinite(due.getTime()) ? true : due >= today && due <= horizon;
+      let annualized = amount;
+      if (unit.startsWith("week")) annualized = amount * (52 / interval);
+      else if (unit.startsWith("month")) annualized = amount * (12 / interval);
+      else if (unit.startsWith("quarter")) annualized = amount * (4 / interval);
+      else if (unit.startsWith("year") || unit.startsWith("annual")) annualized = amount / interval;
+      return {
+        name: renewal.name || "Unnamed obligation",
+        chargedTo: renewal.chargedTo || "Unassigned",
+        amount,
+        nextDue: renewal.nextDue || null,
+        annualized,
+        withinYear,
+      };
+    })
+    .filter((renewal) => renewal.withinYear)
+    .sort((left, right) => {
+      if (left.nextDue && right.nextDue) return left.nextDue.localeCompare(right.nextDue);
+      if (left.nextDue) return -1;
+      if (right.nextDue) return 1;
+      return right.annualized - left.annualized;
+    });
+
+  if (normalized.length === 0) return null;
+
+  const totalAnnualized = normalized.reduce((sum, renewal) => sum + renewal.annualized, 0);
+  const detail = normalized
+    .slice(0, 16)
+    .map(
+      (renewal) =>
+        `  - ${renewal.name}: ${cSym}${renewal.amount.toFixed(2)} via ${renewal.chargedTo}${renewal.nextDue ? ` (next ${renewal.nextDue})` : ""} | annualized ~${cSym}${renewal.annualized.toFixed(2)}`
+    )
+    .join("\n");
+
+  return `  Total modeled obligations over next 12 months: ~${cSym}${totalAnnualized.toFixed(2)}\n${detail}`;
+}
+
 export const getSystemPromptCore = (config, cards = [], renewals = [], personalRules = "", computedStrategy = null, context = {}) => {
   const weeklySpendAllowance = Number.isFinite(config?.weeklySpendAllowance) ? config.weeklySpendAllowance : 0;
   const emergencyFloor = Number.isFinite(config?.emergencyFloor) ? config.emergencyFloor : 0;
   const cSym = getCurrencySymbol(config);
   const sanitizedPersonalRules = sanitizePersonalRules(personalRules, 3000);
   const sanitizedSnapshotNotes = sanitizePersonalRules(config?.notes || config?.snapshotNotes || "", 700);
+  const preferredName = normalizePreferredName(config?.preferredName);
 
   const budgetData =
     config?.budgetCategories?.length > 0
@@ -159,6 +217,7 @@ export const getSystemPromptCore = (config, cards = [], renewals = [], personalR
   const totalCheckingFloor = weeklySpendAllowance + emergencyFloor;
   const bankAccountData = buildBankAccountData(context?.bankAccounts, cSym);
   const nearTermFundingMap = buildNearTermFundingMap(renewals, cSym);
+  const annualObligationMap = buildAnnualObligationMap(renewals, cSym);
   const contractorLiveDataSection = buildContractorSection(config, cSym, "liveData");
   const contractorRulesSection = buildContractorSection(config, cSym, "rules");
   const insuranceSection = buildInsuranceSection(config, insuranceData);
@@ -275,6 +334,7 @@ HARD RULES:
     bankAccountData ? `BANK ACCOUNTS:\n${bankAccountData}` : "",
     `ACTIVE RENEWALS & BILLS:\n${renewalData}`,
     nearTermFundingMap ? `14-DAY FUNDING MAP (CRITICAL):\n${nearTermFundingMap}` : "",
+    annualObligationMap ? `12-MONTH OBLIGATION HORIZON:\n${annualObligationMap}` : "",
     budgetData ? `MONTHLY BUDGET CATEGORIES:\n${budgetData}` : "",
     cyclebudgetData
       ? `PAYCHECK-CYCLE BUDGET (HARD — use this for per-paycheck coaching):\n${cyclebudgetData}\n  NOTE: Audit category totals in parsed.categories are MONTHLY. Divide by paychecksPerMonth (${bc?.paychecksPerMonth ?? "2.17"}) to get per-cycle actual. For each budget line, state: over/under/on-track + exact variance in dollars.`
@@ -302,6 +362,10 @@ HARD RULES:
 FINANCIAL AUDIT INSTRUCTIONS v2
 ========================
 ROLE: disciplined financial audit engine. Prioritize deterministic math, solvency protection, contradiction handling, and concise mobile-readable output.`,
+    `HORIZON RULES:
+- Weekly moves must protect immediate liquidity first, but you must still consider the full 12-month obligation horizon supplied in LIVE APP DATA.
+- Treat all mapped balances (cash, cards, investments, debts, renewals, annual fees) as real planning inputs unless the user explicitly says otherwise.
+- Do not ignore a future obligation simply because it is outside the next 7 days; stage it appropriately in radar, protected obligations, or the playbook.`,
     `========================
 LEGAL DISCLAIMER & SAFETY GUARDRAILS (HARD — HIGHEST PRIORITY)
 ========================
@@ -328,6 +392,13 @@ ${engineBlock.trim()}
 ${auditSignalBlock.trim()}
 </LIVE_APP_DATA>`,
     `========================
+IDENTITY & TONE (HARD)
+========================
+- Write the visible audit like a personalized briefing, not a case file.
+- Use second person ("you") by default.
+${preferredName ? `- Preferred name: ${preferredName}. You may use ${preferredName} sparingly for warmth or emphasis.` : ""}
+- Never refer to the person as "The User" or "the user" in visible output.`,
+    `========================
 CANONICAL EXECUTION RULES (HARD)
 ========================
 - Floor first: protect TotalCheckingFloor / MinCashFloor before any optimization.
@@ -335,6 +406,7 @@ CANONICAL EXECUTION RULES (HARD)
 - Credit cards do not drain cash until a payment is executed. Card-charged renewals increase card balances only.
 - User notes anti-double-count: if the user says an item is already paid and reflected in balances, do not deduct it again.
 - Specific locked user rules outrank generic surplus deployment. If a rule names tax escrow, refund reserves, checking-only cash obligations, Ally-only obligations, or cadence-based bills, follow that rule.
+- Custom AI / Persona rules typed into this audit run are temporary hard constraints for this run. They are not commentary. Obey them unless they directly conflict with safety or the app's deterministic balances.
 - Reserved refunds or tax escrow balances are not spendable liquidity until the stated tax obligation is satisfied.
 - When a renewal or bill clearly belongs to Checking, Ally, or another named source, evaluate that source separately before proposing transfers or debt payments.
 - If a hard deadline, locked escrow gap, or funding-source shortfall exists inside 21 days, it outranks generic debt acceleration.
@@ -357,6 +429,7 @@ A) UX + OUTPUT RULES
 A+) EXECUTIVE QUALITY STANDARD (HARD)
 ========================
 - Write like a CFO / operator reviewing weekly cash position, not like a generic finance blogger.
+- Reason like these are your own balances and this is the exact sequence you would personally execute this week.
 - Lead with the highest-impact move and tie every recommendation to a concrete reason: liquidity, deadlines, APR, utilization, tax sheltering, or goal preservation.
 - Distinguish facts, assumptions, and contradictions explicitly. If the inputs are fragile or inconsistent, reduce confidence and say why.
 - Use exact ${cSym} amounts, due dates, card names, and percentages from LIVE APP DATA whenever possible.
@@ -368,6 +441,26 @@ A+) EXECUTIVE QUALITY STANDARD (HARD)
 - If a locked escrow gap or 7-day shortfall exists, nextAction cannot be debt paydown.
 - Avoid generic education, filler, or broad checklists that do not matter this week.
 - If the correct action is to hold steady, say that directly and explain what would change the recommendation.`,
+    `========================
+A++) ACTION SEQUENCING STANDARD (HARD)
+========================
+- Build the plan as an ordered execution sequence, not a compressed paragraph.
+- Ask internally: "If these were my own balances, what exact steps would I take first, second, third?"
+- nextAction = the first move only.
+- weeklyMoves = the ranked sequence for the week.
+- moveItems = the literal checklist that operationalizes weeklyMoves.
+- If Operational Surplus is above ${cSym}0.00, allocate the entire amount across named destinations in order until no deployable dollars remain.
+- Every money move must say where the dollars come from and exactly where they go: reserve bucket, card, loan, checking, savings, Roth, brokerage, etc.
+- For every reserve or payment step, say whether the dollars are already sitting in that account or whether a transfer is still required.
+- If Operational Surplus is ${cSym}0.00, say that directly. Do not write as if free cash exists.
+- If protected obligations are larger than available cash, allocate the available cash first, then state the remaining protected gap.
+- If the current liquid pool is not fully deployed, say what remains parked in Checking / Vault after the listed steps.
+- Prefer one action per step:
+  1. hold / protect
+  2. transfer / reserve
+  3. pay / delay / stage
+- When obligations come from different funding sources, separate them into different steps instead of collapsing them together.
+- If a note-based payoff plan exists after protected obligations are covered, include it as a later staged step, not the first move.`,
     `========================
 Z) 90-DAY FORWARD RADAR — KEY MILESTONES (CONCISE)
 ========================

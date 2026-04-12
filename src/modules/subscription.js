@@ -301,7 +301,8 @@ const STATE_KEY = "subscription-state";
 
 const DEFAULT_STATE = {
   tier: "free",
-  expiresAt: null, // ISO string, null = never (for free)
+  isLifetime: false, // true if activated via lifetime one-time purchase
+  expiresAt: null, // ISO string, null = never (for free or lifetime)
   productId: null, // Last purchased product ID
   purchaseDate: null, // ISO string
   purchaseAnchorDay: null, // Day-of-month when Pro was purchased (1-31)
@@ -313,6 +314,8 @@ const DEFAULT_STATE = {
   chatMessagesToday: 0, // Reset daily at midnight
   chatDayKey: null, // UTC day key, e.g. "2026-03-01"
   chatMessagesByModel: {}, // Per-model daily usage map { modelId: count } — Pro only
+  referralCode: null, // User's unique referral code
+  referralBonusMonths: 0, // Bonus months earned from referrals
 };
 
 /**
@@ -565,8 +568,8 @@ export async function getSubscriptionState() {
       state.chatMessagesToday = Math.max(state.chatMessagesToday, kcState.chatMessagesToday || 0);
     }
 
-    // Check if Pro expired
-    if (state.tier === "pro" && state.expiresAt) {
+    // Check if Pro expired (skip for lifetime — they never expire)
+    if (state.tier === "pro" && state.expiresAt && !state.isLifetime) {
       if (new Date(state.expiresAt) < new Date()) {
         state.tier = "free";
       }
@@ -814,21 +817,29 @@ export async function getHistoryLimit() {
 
 /**
  * Activate Pro subscription (called after successful IAP).
+ * @param {string} productId - The IAP product identifier
+ * @param {number} durationDays - Days until expiry (ignored for lifetime)
+ * @param {{ isLifetime?: boolean }} options
  */
-export async function activatePro(productId, durationDays = 30) {
+export async function activatePro(productId, durationDays = 30, { isLifetime = false } = {}) {
   const state = await getSubscriptionState();
   const now = new Date();
   state.tier = "pro";
   state.productId = productId;
   state.purchaseDate = now.toISOString();
+  state.isLifetime = isLifetime;
 
   // Determine the anchor day (1-31) in UTC to lock in the billing cycle
   state.purchaseAnchorDay = now.getUTCDate();
   state.billingCycleKey = getBillingCycleKey(state.purchaseAnchorDay, now);
 
-  const expires = new Date(now);
-  expires.setDate(expires.getDate() + durationDays);
-  state.expiresAt = expires.toISOString();
+  if (isLifetime) {
+    state.expiresAt = null; // Lifetime never expires
+  } else {
+    const expires = new Date(now);
+    expires.setDate(expires.getDate() + durationDays);
+    state.expiresAt = expires.toISOString();
+  }
   await db.set(STATE_KEY, state);
   return state;
 }

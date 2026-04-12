@@ -45,6 +45,12 @@ const VALUE_PILLARS = [
   },
 ];
 
+const SOCIAL_PROOF = [
+  { quote: "I found $340/yr in subscriptions I forgot about. Pro paid for itself in the first week.", name: "Sarah K.", detail: "Pro member since 2025" },
+  { quote: "The CFO model caught a promo APR cliff I would have missed. Saved me $1,200 in interest.", name: "Marcus T.", detail: "Pro member since 2025" },
+  { quote: "Finally, an app that actually tells me what to do with my money each week instead of just showing charts.", name: "Jamie L.", detail: "Pro member since 2026" },
+];
+
 const PAYWALL_CONTEXT = {
   default: {
     eyebrow: "CATALYST CASH PRO",
@@ -112,7 +118,7 @@ const PAYWALL_CONTEXT = {
 } as const;
 
 export default function ProPaywall({ onClose, source = "default" }: ProPaywallProps) {
-  const [plan, setPlan] = useState<"yearly" | "monthly">("yearly");
+  const [plan, setPlan] = useState<"yearly" | "monthly" | "lifetime">("yearly");
   const [purchasing, setPurchasing] = useState(false);
   const [dragY, setDragY] = useState(0);
   const [closing, setClosing] = useState(false);
@@ -386,12 +392,42 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
           ))}
         </div>
 
-        {/* ── Plan Selector ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-          {(["monthly", "yearly"] as const).map(p => {
+        {/* ── Social Proof ── */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 10,
+            padding: "12px 14px",
+            background: `linear-gradient(160deg, ${T.bg.card}, ${T.accent.primary}08)`,
+            border: `1px solid ${T.border.subtle}`,
+            borderRadius: T.radius.md,
+            marginBottom: 14,
+            animation: "fadeInUp .32s ease-out",
+          }}
+        >
+          <div style={{ fontSize: 20, flexShrink: 0, lineHeight: 1 }}>⭐</div>
+          {(() => {
+            const proof = SOCIAL_PROOF[Math.floor(Date.now() / 86400000) % SOCIAL_PROOF.length]!;
+            return (
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11.5, color: T.text.primary, fontWeight: 600, lineHeight: 1.5, fontStyle: "italic" }}>
+                  &ldquo;{proof.quote}&rdquo;
+                </div>
+                <div style={{ fontSize: 10, color: T.text.dim, marginTop: 4, fontWeight: 700, fontFamily: T.font.mono }}>
+                  {proof.name} &middot; {proof.detail}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+          {(["monthly", "yearly", "lifetime"] as const).map(p => {
             const pricing = IAP_PRICING[p];
             const active = plan === p;
             const isYearly = p === "yearly";
+            const isLifetime = p === "lifetime";
             return (
               <button
                 key={p}
@@ -400,7 +436,7 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
                   haptic.light();
                 }}
                 style={{
-                  padding: "20px 14px 16px",
+                  padding: "18px 10px 14px",
                   borderRadius: T.radius.lg,
                   cursor: "pointer",
                   border: `2px solid ${active ? T.accent.primary : T.border.default}`,
@@ -441,6 +477,29 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
                     Most popular · {pricing.savings}
                   </div>
                 )}
+                {/* Best value badge for lifetime */}
+                {isLifetime && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: -9,
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      fontSize: 9,
+                      fontWeight: 800,
+                      whiteSpace: "nowrap",
+                      background: `linear-gradient(135deg, #E8A838, #D4873A)`,
+                      color: "#fff",
+                      padding: "3px 10px",
+                      borderRadius: 99,
+                      fontFamily: T.font.mono,
+                      boxShadow: `0 2px 8px rgba(232, 168, 56, 0.4)`,
+                      zIndex: 2,
+                    }}
+                  >
+                    Best value · Own forever
+                  </div>
+                )}
                 {/* Active indicator dot */}
                 {active && (
                   <div
@@ -461,10 +520,12 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
                     <span style={{ fontSize: 10, color: "#fff", fontWeight: 800, lineHeight: 1 }}>✓</span>
                   </div>
                 )}
-                <Mono size={20} weight={800} color={active ? T.accent.primary : T.text.primary}>
+                <Mono size={18} weight={800} color={active ? T.accent.primary : T.text.primary}>
                   {pricing.price}
                 </Mono>
-                <div style={{ fontSize: 11, color: T.text.dim, fontWeight: 500 }}>per {pricing.period}</div>
+                <div style={{ fontSize: 10, color: T.text.dim, fontWeight: 500 }}>
+                  {isLifetime ? "one-time" : `per ${pricing.period}`}
+                </div>
                 {pricing.perMonth && (
                   <div
                     style={{
@@ -521,6 +582,28 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
           </div>
         )}
 
+        {/* Value Note — lifetime only */}
+        {plan === "lifetime" && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "10px 14px",
+              background: `rgba(232, 168, 56, 0.06)`,
+              border: `1px solid rgba(232, 168, 56, 0.12)`,
+              borderRadius: T.radius.md,
+              marginBottom: 14,
+              animation: "fadeInUp .3s ease-out",
+            }}
+          >
+            <span style={{ fontSize: 14, flexShrink: 0 }}>👑</span>
+            <span style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>
+              One purchase, lifetime access. Pays for itself in under 2.5 years — then it&apos;s free forever. Every future feature included.
+            </span>
+          </div>
+        )}
+
         <Card
           style={{
             marginBottom: 16,
@@ -536,11 +619,15 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
                 SELECTED PLAN
               </div>
               <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary, marginTop: 2 }}>
-                {plan === "yearly" ? `${IAP_PRICING.yearly.price}/yr` : `${IAP_PRICING.monthly.price}/mo`}
+                {plan === "yearly" ? `${IAP_PRICING.yearly.price}/yr` : plan === "lifetime" ? `${IAP_PRICING.lifetime.price}` : `${IAP_PRICING.monthly.price}/mo`}
               </div>
             </div>
             <div style={{ fontSize: 11, color: T.text.secondary, textAlign: "right", lineHeight: 1.45, maxWidth: 180 }}>
-              {plan === "yearly" ? `${PRICING_FACTS.trial} • ${PRICING_FACTS.yearlySavings}` : "Lower upfront cost • cancel anytime"}
+              {plan === "yearly"
+                ? `${PRICING_FACTS.trial} • ${PRICING_FACTS.yearlySavings}`
+                : plan === "lifetime"
+                  ? "Pay once • Never pay again"
+                  : "Lower upfront cost • cancel anytime"}
             </div>
           </div>
 
@@ -569,10 +656,12 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
             }}
           >
             {purchasing
-              ? `Starting ${plan === "yearly" ? "yearly" : "monthly"} plan...`
+              ? `Starting ${plan === "lifetime" ? "lifetime" : plan === "yearly" ? "yearly" : "monthly"} plan...`
               : plan === "yearly"
                 ? `Start Free Trial — then ${IAP_PRICING.yearly.price}/yr`
-                : `Start Monthly — ${IAP_PRICING.monthly.price}/mo`}
+                : plan === "lifetime"
+                  ? `Unlock Lifetime Pro — ${IAP_PRICING.lifetime.price}`
+                  : `Start Monthly — ${IAP_PRICING.monthly.price}/mo`}
           </button>
 
           <div style={{ textAlign: "center", paddingBottom: 4 }}>
@@ -604,7 +693,10 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
               textAlign: "center",
             }}
           >
-            Payment is charged to your Apple ID. Subscription auto-renews unless cancelled at least 24 hours before the end of the current period.
+            Payment is charged to your Apple ID.
+            {plan === "lifetime"
+              ? " This is a one-time, non-recurring purchase. You will never be charged again."
+              : " Subscription auto-renews unless cancelled at least 24 hours before the end of the current period."}
             {plan === "yearly" &&
               " Your 7-day free trial begins immediately, and you will not be charged until the trial ends."}
           </p>

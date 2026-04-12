@@ -101,7 +101,16 @@ export default function AppShellHeader({
           background: `linear-gradient(90deg, transparent, ${T.accent.emerald}40, ${T.accent.primary}60, transparent)`,
         }}
       />
-      <div style={{ display: "flex", gap: 8 }}>
+      <div
+        style={{
+          width: 96,
+          minWidth: 96,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          justifyContent: "flex-start",
+        }}
+      >
         <button
           onClick={() => setShowGuide((prev) => !prev)}
           className="gesture-glass"
@@ -152,11 +161,11 @@ export default function AppShellHeader({
 
       <div
         style={{
-          position: "absolute",
-          left: "50%",
-          transform: "translateX(-50%)",
+          flex: 1,
+          minWidth: 0,
           textAlign: "center",
           pointerEvents: "none",
+          padding: "0 8px",
         }}
       >
         <div
@@ -186,28 +195,30 @@ export default function AppShellHeader({
         </div>
       </div>
 
-      <button
-        onClick={() => navTo("settings")}
-        className="gesture-glass"
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: 14,
-          border: `1px solid ${T.border.default}`,
-          background: `linear-gradient(180deg, ${T.bg.glass}, ${T.bg.card})`,
-          backdropFilter: "blur(14px)",
-          WebkitBackdropFilter: "blur(14px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          color: T.text.dim,
-          transition: "color .2s, border-color .2s",
-        }}
-        aria-label="Open Settings"
-      >
-        <Settings size={18} strokeWidth={1.8} />
-      </button>
+      <div style={{ width: 44, minWidth: 44, display: "flex", justifyContent: "flex-end" }}>
+        <button
+          onClick={() => navTo("settings")}
+          className="gesture-glass"
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 14,
+            border: `1px solid ${T.border.default}`,
+            background: `linear-gradient(180deg, ${T.bg.glass}, ${T.bg.card})`,
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            color: T.text.dim,
+            transition: "color .2s, border-color .2s",
+          }}
+          aria-label="Open Settings"
+        >
+          <Settings size={18} strokeWidth={1.8} />
+        </button>
+      </div>
     </header>
   );
 }

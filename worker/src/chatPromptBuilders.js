@@ -10,6 +10,12 @@
 import { sanitizePersonalRules } from "./promptBuilders.js";
 import { extractDashboardMetrics, fmt, runRetirementForecast } from "./promptSupport.js";
 
+function normalizePreferredName(value) {
+  const trimmed = String(value || "").trim().replace(/\s+/g, " ");
+  if (!trimmed) return "";
+  return trimmed.slice(0, 40);
+}
+
 function replaceChatSection(prompt, startMarker, endMarker, replacement) {
   const start = prompt.indexOf(startMarker);
   if (start === -1) return prompt;
@@ -772,6 +778,10 @@ function buildFinancialBriefContext(financialBrief = null, chatIntent = null) {
 
   parts.push("## Compact Financial Brief");
 
+  if (profile.preferredName) {
+    parts.push(`Preferred Name: ${profile.preferredName}`);
+  }
+
   if (shouldIncludeBriefSection(chatIntent, "profile") && profile.birthYear) {
     const currentYear = new Date().getFullYear();
     const age = profile.age ?? currentYear - profile.birthYear;
@@ -1386,8 +1396,10 @@ The backend already routed this query to ${chatIntent.agentLabel} based on the u
   const briefSnapshot = financialBrief?.snapshot || {};
   const briefCredit = financialBrief?.credit || {};
   const briefDebt = financialBrief?.debt || {};
+  const preferredName = normalizePreferredName(financialConfig?.preferredName ?? briefProfile.preferredName ?? "");
   const fc = {
     ...(financialConfig || {}),
+    preferredName,
     birthYear: financialConfig?.birthYear ?? briefProfile.birthYear ?? null,
     incomeType: financialConfig?.incomeType ?? briefProfile.incomeType ?? null,
   };
@@ -1457,6 +1469,18 @@ This user has **${fc.incomeType === "hourly" ? "hourly" : "variable/freelance"}*
 - Frame budgets around typical pay with explicit downside contingencies.`;
   }
 
+  const identityPersonalizationBlock = preferredName
+    ? `
+## Personalization
+Preferred name: ${preferredName}
+- In the visible response, use second person by default.
+- You may use ${preferredName} sparingly for warmth or emphasis.
+- Never refer to ${preferredName} as "the user" in the visible answer.`
+    : `
+## Personalization
+- Use second person ("you") in the visible response.
+- Never refer to the person as "the user" in the visible answer.`;
+
   const prompt = `You are ${personaName}, the user's financial planning assistant inside Catalyst Cash — a privacy-first personal finance app.
 
 ## Your Identity & Mindset
@@ -1479,6 +1503,7 @@ ${personaStyle}
 ${phaseBlock}
 ${retirementPhaseBlock}
 ${variableIncomeBlock}
+${identityPersonalizationBlock}
 ${buildDecisionRulesBlock(decisionRecommendations)}
 ${buildInputRiskBlock(chatInputRisk)}
 ${serverRoutingBlock}

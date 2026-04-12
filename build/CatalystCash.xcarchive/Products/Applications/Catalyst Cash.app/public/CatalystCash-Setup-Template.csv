@@ -1,0 +1,50 @@
+field_key,display_name,your_value,notes
+payFrequency,Pay Frequency,,Options: weekly | bi-weekly | semi-monthly | monthly
+payday,Payday,,Options: Monday | Tuesday | Wednesday | Thursday | Friday | Saturday | Sunday
+incomeType,Income Type,,Options: salary | hourly | variable
+hourlyRateNet,Net Hourly Rate ($),,For hourly workers: take-home pay per hour after taxes
+typicalHours,Typical Hours,,For hourly workers: hours worked per pay period
+averagePaycheck,Average Paycheck ($),,For variable/commission workers: expected average paycheck
+paycheckStandard,Standard Paycheck ($),,Your typical take-home pay per paycheck after taxes
+paycheckFirstOfMonth,First-of-Month Paycheck ($),,Leave blank if same as standard paycheck
+isContractor,Self-Employed / Contractor,,Options: true | false
+weeklySpendAllowance,Weekly Spend Allowance ($),,Target max spending per week excluding bills
+emergencyFloor,Emergency Floor ($),,Minimum checking balance you never want to go below
+checkingBuffer,Checking Buffer ($),,Comfortable buffer above your emergency floor
+greenStatusTarget,Green Status Target ($),,Checking balance that means you are in great shape
+emergencyReserveTarget,Emergency Reserve Target ($),,Savings goal for your emergency fund
+defaultAPR,Default APR (%),,Used to estimate interest on unpaid card balances (e.g. 24.99)
+arbitrageTargetAPR,Arbitrage Target APR (%),,Target APR for balance transfer / arbitrage (e.g. 6.00)
+heavyHorizonStart,Heavy Horizon Start (days),,Days before payday where spending is scrutinized more (e.g. 15)
+heavyHorizonEnd,Heavy Horizon End (days),,End of heavy horizon window (e.g. 45)
+heavyHorizonThreshold,Heavy Horizon Threshold ($),,Checking balance that triggers heavy horizon mode
+trackHabits,Track Active Habit,,Options: true | false
+habitName,Habit Name,,Name of the habit you are tracking (e.g. Coffee Pods)
+habitRestockCost,Habit Restock Cost ($),,Cost to purchase a new batch of this habit (e.g. 25.00)
+habitCheckThreshold,Habit Check Threshold,,Number of units remaining that triggers a warning (e.g. 6)
+habitCriticalThreshold,Habit Critical Threshold,,Number of units remaining that triggers critical alert (e.g. 3)
+trackRoth,Track Roth IRA,,Options: true | false
+rothAnnualLimit,Roth Annual Contribution Limit ($),,IRS limit for the year (e.g. 7000)
+rothContributedYTD,Roth Contributed YTD ($),,How much you have contributed so far this year
+investmentRoth,Roth IRA Balance ($),,Current Roth IRA account balance
+rothStockPct,Roth Stock Allocation (%),,Equity allocation percentage (e.g. 90)
+track401k,Track 401k,,Options: true | false
+k401AnnualLimit,401k Annual Contribution Limit ($),,IRS limit for the year (e.g. 23000)
+k401ContributedYTD,401k Contributed YTD ($),,How much you have contributed so far this year
+k401Balance,401k Balance ($),,Current 401k account balance
+k401EmployerMatchPct,401k Employer Match (%),,Employer matches X% of your contributions (e.g. 50)
+k401EmployerMatchLimit,401k Employer Match Ceiling (%),,Up to X% of your salary (e.g. 6)
+k401VestingPct,401k Vesting (%),,How much of matched funds are yours today (e.g. 100)
+k401StockPct,401k Stock Allocation (%),,Equity allocation percentage (e.g. 90)
+trackBrokerage,Track Brokerage,,Options: true | false
+investmentBrokerage,Brokerage Balance ($),,Current taxable brokerage account balance
+brokerageStockPct,Brokerage Stock Allocation (%),,Equity allocation percentage (e.g. 90)
+creditScore,Credit Score,,Your current FICO score (e.g. 750)
+creditScoreDate,Credit Score Date,,Date of last credit score check (YYYY-MM-DD)
+creditUtilization,Credit Utilization (%),,Current overall credit utilization percentage
+taxWithholdingRate,Tax Withholding Rate (%),,Effective tax withholding rate (e.g. 22)
+quarterlyTaxEstimate,Quarterly Tax Estimate ($),,Estimated quarterly tax payment if self-employed
+homeEquity,Home Equity ($),,Estimated home equity value
+vehicleValue,Vehicle Value ($),,Estimated vehicle value
+otherAssets,Other Assets ($),,Value of other significant assets
+otherAssetsLabel,Other Assets Label,,Description of other assets (e.g. Rental Property)

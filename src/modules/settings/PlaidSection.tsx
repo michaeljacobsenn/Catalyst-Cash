@@ -282,7 +282,8 @@ export default function PlaidSection({
       const basePlaidInvestments = financialConfig?.plaidInvestments || [];
 
       try {
-        const forceSyncSucceeded = await forceBackendSync({ connectionId: conn.id });
+        const forceSyncResult = await forceBackendSync({ connectionId: conn.id });
+        const forceSyncSucceeded = Boolean(forceSyncResult?.success);
         const refreshed = await fetchBalancesAndLiabilities(conn.id);
         if (refreshed && !refreshed._error && !refreshed._pendingSync) {
           const hydratedState = ensureConnectionAccountsPresent(
@@ -325,7 +326,9 @@ export default function PlaidSection({
             );
           }
         } else if (!forceSyncSucceeded || refreshed?._pendingSync) {
-          window.toast?.info?.(`${conn.institutionName || "This bank"} is now live. Fresh balances may take another moment to arrive.`);
+          window.toast?.info?.(
+            forceSyncResult?.message || `${conn.institutionName || "This bank"} is now live. Fresh balances may take another moment to arrive.`
+          );
         }
       } catch (error) {
         void log.warn("plaid", "Active live bank refresh did not complete immediately", {

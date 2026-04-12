@@ -17,7 +17,7 @@ export function createInitialInputFormState({ today, plaidData, config }) {
     k401Balance: config?.k401Balance || "",
     pendingCharges: [],
     habitCount: 10,
-    debts: plaidData.debts?.length > 0 ? plaidData.debts : [{ cardId: "", name: "", balance: "" }],
+    debts: plaidData.debts?.length > 0 ? plaidData.debts : [],
     notes: "",
     autoPaycheckAdd: false,
     paycheckAddOverride: "",
@@ -38,7 +38,7 @@ export function buildCardSelectGroups(cards, getShortCardLabel) {
   }));
 }
 
-export function mergePlaidAutoFillIntoForm(previousForm: any, freshPlaid: any, overridePlaid: any) {
+export function mergePlaidAutoFillIntoForm(previousForm: any, freshPlaid: any, overridePlaid: any, deletedDebtCardIds: Record<string, boolean> = {}) {
   const updates: Record<string, unknown> = {};
   if (freshPlaid.checking !== null && !overridePlaid.checking) updates.checking = freshPlaid.checking;
   if (freshPlaid.vault !== null && !overridePlaid.vault) updates.savings = freshPlaid.vault;
@@ -50,7 +50,9 @@ export function mergePlaidAutoFillIntoForm(previousForm: any, freshPlaid: any, o
       return pd ? { ...d, balance: pd.balance } : d;
     });
     const existingIds = new Set(newDebts.map(d => d.cardId).filter(Boolean));
-    const additions = freshPlaid.debts.filter(pd => pd.cardId && !existingIds.has(pd.cardId));
+    const additions = freshPlaid.debts.filter(
+      pd => pd.cardId && !existingIds.has(pd.cardId) && !deletedDebtCardIds[pd.cardId]
+    );
     if (additions.length > 0 || newDebts.some((d, i) => d !== (previousForm.debts || [])[i])) {
       updates.debts = [...newDebts, ...additions];
     }
@@ -90,7 +92,7 @@ export function mergeLastAuditIntoForm({ previousForm, lastAudit, cards, bankAcc
   return {
     ...previousForm,
     ...lastAudit.form,
-    debts: plaidNow.debts?.length > 0 ? plaidNow.debts : debtWithBalance.length ? debtWithBalance : [{ cardId: "", name: "", balance: "" }],
+    debts: plaidNow.debts?.length > 0 ? plaidNow.debts : debtWithBalance.length ? debtWithBalance : [],
     date: today.toISOString().split("T")[0] ?? today.toISOString().slice(0, 10),
     time: (today.toTimeString().split(" ")[0] ?? "00:00:00").slice(0, 5),
     checking: plaidNow.checking !== null ? plaidNow.checking : toMoneyInput(lastAudit?.form?.checking),
@@ -100,7 +102,9 @@ export function mergeLastAuditIntoForm({ previousForm, lastAudit, cards, bankAcc
     brokerage: toMoneyInput(priorForm.brokerage ?? previousForm.brokerage),
     k401Balance: toMoneyInput(priorForm.k401Balance ?? previousForm.k401Balance),
     autoPaycheckAdd: typeof priorForm.autoPaycheckAdd === "boolean" ? priorForm.autoPaycheckAdd : false,
-    paycheckAddOverride: typeof priorForm.paycheckAddOverride === "string" ? priorForm.paycheckAddOverride : "",
+    // The audit form now uses the profile income input as the single source of truth.
+    // Never hydrate a stale hidden paycheck override back into the form.
+    paycheckAddOverride: "",
   };
 }
 

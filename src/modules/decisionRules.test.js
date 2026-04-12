@@ -10,6 +10,7 @@ import {
   detectLowAprArbitrageOpportunity,
   detectMixedDebtPortfolioComplexity,
   detectPromoAprCliff,
+  detectSavingsGoalAtRisk,
   detectSpendingAllowancePressure,
   detectToxicDebtTriage,
 } from "./decisionRules.js";
@@ -575,5 +576,76 @@ describe("decisionRules", () => {
     expect(result.active).toBe(true);
     expect(result.severity).toBe("high");
     expect(result.requiresProfessionalHelp).toBe(true);
+  });
+});
+
+describe("detectSavingsGoalAtRisk", () => {
+  // Future target date far enough out for all tests
+  const futureDate = new Date();
+  futureDate.setFullYear(futureDate.getFullYear() + 1);
+  const futureStr = futureDate.toISOString().slice(0, 10);
+
+  it("does not trigger when no savings goals are configured", () => {
+    const result = detectSavingsGoalAtRisk({
+      financialConfig: {},
+    });
+    expect(result.active).toBe(false);
+  });
+
+  it("does not trigger when goal is on pace", () => {
+    // Need $6000 remaining over 12 months = $500/mo. Surplus $300/wk = ~$1299/mo. 500/1299 = 38% < 60%
+    const result = detectSavingsGoalAtRisk({
+      financialConfig: {
+        savingsGoals: [
+          { name: "Emergency Fund", targetAmount: 10000, currentAmount: 4000, targetDate: futureStr },
+        ],
+      },
+      computedStrategy: { operationalSurplus: 300 },
+    });
+    expect(result.active).toBe(false);
+  });
+
+  it("triggers with medium severity when goal is behind pace", () => {
+    // Need $9000 remaining over 12 months = $750/mo. Surplus $200/wk = ~$866/mo. 750/866 = 87% > 60%
+    const result = detectSavingsGoalAtRisk({
+      financialConfig: {
+        savingsGoals: [
+          { name: "House Fund", targetAmount: 10000, currentAmount: 1000, targetDate: futureStr },
+        ],
+      },
+      computedStrategy: { operationalSurplus: 200 },
+    });
+    expect(result.active).toBe(true);
+    expect(result.severity).toBe("medium");
+    expect(result.flag).toBe("savings-goal-at-risk");
+    expect(result.rationale).toContain("House Fund");
+  });
+
+  it("triggers with high severity when goal is unreachable at current surplus", () => {
+    // Need $9500 remaining over 12 months = $791/mo. Surplus $100/wk = ~$433/mo. 791/433 = 183% > 100%
+    const result = detectSavingsGoalAtRisk({
+      financialConfig: {
+        savingsGoals: [
+          { name: "Vacation", targetAmount: 10000, currentAmount: 500, targetDate: futureStr },
+        ],
+      },
+      computedStrategy: { operationalSurplus: 100 },
+    });
+    expect(result.active).toBe(true);
+    expect(result.severity).toBe("high");
+    expect(result.recommendation).toContain("cannot be reached");
+  });
+
+  it("ignores goals whose target date has already passed", () => {
+    const result = detectSavingsGoalAtRisk({
+      financialConfig: {
+        savingsGoals: [
+          { name: "Past Goal", targetAmount: 5000, currentAmount: 1000, targetDate: "2020-01-01" },
+        ],
+      },
+      computedStrategy: { operationalSurplus: 50 },
+    });
+    // Past-due goal is filtered out, no goals remain behind pace
+    expect(result.active).toBe(false);
   });
 });

@@ -1,7 +1,8 @@
   import {
-    useEffect,
-    useMemo,
-    useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
     type ChangeEvent,
     type CSSProperties,
     type ReactNode,
@@ -106,6 +107,7 @@ interface OverridePlaidState {
   checking: boolean;
   vault: boolean;
   debts: Record<string, boolean | undefined>;
+  cashAccounts: Record<string, MoneyInput | undefined>;
 }
 
 interface AuditQuota {
@@ -133,6 +135,30 @@ interface PlaidAutoFillData {
   checking: number | null;
   vault: number | null;
   debts: InputDebt[];
+}
+
+interface CashAccountMeta {
+  count: number;
+  label: string;
+  total: number | null;
+  accounts: Array<{
+    id: string;
+    bank: string;
+    name: string;
+    accountType: "checking" | "savings";
+    amount: number;
+    displayLabel: string;
+  }>;
+}
+
+interface InvestmentAuditField {
+  key: "roth" | "brokerage" | "k401";
+  label: string;
+  enabled: boolean;
+  accent: string;
+  autoValue: number;
+  formValue: MoneyInput | "";
+  override: boolean;
 }
 
 interface InputFormConfig extends CatalystCashConfig {
@@ -237,14 +263,316 @@ function formatAuditDateDisplay(value: string): string {
   });
 }
 
-function formatAuditTimeDisplay(value: string): string {
-  if (!value) return "Select time";
-  const parsed = new Date(`1970-01-01T${value}`);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+function getCurrentAuditTime(): string {
+  return (new Date().toTimeString().split(" ")[0] ?? "00:00:00").slice(0, 5);
+}
+
+function buildCashAccountMeta(accounts: BankAccount[] = [], accountType: "checking" | "savings", fallbackLabel: string): CashAccountMeta {
+  const matches = (accounts || []).filter(
+    (account) => String(account?.accountType || "").trim().toLowerCase() === accountType
+  );
+  if (matches.length === 0) {
+    return {
+      count: 0,
+      label: fallbackLabel,
+      total: null,
+      accounts: [],
+    };
+  }
+
+  const label =
+    matches.length === 1
+      ? String(matches[0]?.name || fallbackLabel)
+      : `${fallbackLabel} (${matches.length})`;
+
+  const total = matches.reduce(
+    (sum, account) => sum + Number(account?._plaidAvailable ?? account?._plaidBalance ?? account?.balance ?? 0),
+    0
+  );
+
+  return {
+    count: matches.length,
+    label,
+    total,
+    accounts: matches.map((account) => {
+      const amount = Number(account?._plaidAvailable ?? account?._plaidBalance ?? account?.balance ?? 0) || 0;
+      const bank = String(account?.bank || "").trim();
+      const name = String(account?.name || fallbackLabel).trim();
+      const displayLabel =
+        bank && name && !name.toLowerCase().includes(bank.toLowerCase())
+          ? `${bank} · ${name}`
+          : name || bank || fallbackLabel;
+      return {
+        id: String(account?.id || account?._plaidAccountId || `${accountType}-${displayLabel}`),
+        bank,
+        name,
+        accountType,
+        amount,
+        displayLabel,
+      };
+    }),
+  };
+}
+
+function buildAuditCashAccountSnapshot(
+  checkingAccountMeta: CashAccountMeta,
+  savingsAccountMeta: CashAccountMeta
+) {
+  return [...checkingAccountMeta.accounts, ...savingsAccountMeta.accounts].map((account) => ({
+    id: account.id,
+    bank: account.bank,
+    name: account.name,
+    accountType: account.accountType,
+    amount: Number(account.amount || 0).toFixed(2),
+    source: "live",
+  }));
+}
+
+function buildResolvedInvestmentSnapshot({
+  visibleInvestmentFields,
+  form,
+}: {
+  visibleInvestmentFields: InvestmentAuditField[];
+  form: InputFormState;
+}) {
+  const snapshot: Record<string, number> = {};
+  for (const field of visibleInvestmentFields) {
+    const explicitValue = toNumber(
+      field.key === "k401" ? form.k401Balance : field.key === "brokerage" ? form.brokerage : form.roth
+    );
+    const resolvedValue = explicitValue > 0 ? explicitValue : Number(field.autoValue || 0);
+    if (resolvedValue > 0) snapshot[field.key] = Number(resolvedValue.toFixed(2));
+  }
+  return {
+    roth: snapshot.roth ?? "",
+    brokerage: snapshot.brokerage ?? "",
+    k401Balance: snapshot.k401 ?? "",
+  };
+}
+
+function CashAccountSection({
+  meta,
+  toneColor,
+  title,
+  accountOverrides,
+  onOverrideAccount,
+  onResetAccount,
+  aggregateOverrideActive,
+  onEnableAggregateOverride,
+  aggregateOverrideValue,
+  onAggregateChange,
+  onResetAggregate,
+  inputLabel,
+}: {
+  meta: CashAccountMeta;
+  toneColor: string;
+  title: string;
+  accountOverrides: Record<string, MoneyInput | undefined>;
+  onOverrideAccount: (id: string, value: MoneyInput) => void;
+  onResetAccount: (id: string) => void;
+  aggregateOverrideActive: boolean;
+  onEnableAggregateOverride: () => void;
+  aggregateOverrideValue: MoneyInput | "";
+  onAggregateChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onResetAggregate: () => void;
+  inputLabel: string;
+}) {
+  const hasAccounts = meta.accounts.length > 0;
+  const hasMultipleAccounts = meta.accounts.length > 1;
+
+  // Compute effective total: for each account, use override if present, otherwise live value
+  const effectiveTotal = hasAccounts
+    ? meta.accounts.reduce((sum, account) => {
+        const override = accountOverrides[account.id];
+        return sum + (override !== undefined ? toNumber(override) : account.amount);
+      }, 0)
+    : meta.total;
+  const anyAccountOverridden = hasAccounts && meta.accounts.some((a) => accountOverrides[a.id] !== undefined);
+
+  return (
+    <Card
+      className="hover-card"
+      variant="glass"
+      style={{ marginBottom: 8, position: "relative", overflow: "hidden" }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          right: -18,
+          top: -18,
+          width: 60,
+          height: 60,
+          background: toneColor,
+          filter: "blur(40px)",
+          opacity: 0.07,
+          borderRadius: "50%",
+          pointerEvents: "none",
+        }}
+      />
+      {/* Header: title + total */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: hasAccounts ? 10 : 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <div
+            style={{
+              width: 4,
+              height: 24,
+              borderRadius: 2,
+              background: toneColor,
+              flexShrink: 0,
+            }}
+          />
+          <div style={{ minWidth: 0 }}>
+            <Label style={{ fontWeight: 800, marginBottom: 0, fontSize: 11, lineHeight: 1.15 }}>{title}</Label>
+            {hasMultipleAccounts && (
+              <div
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: T.text.dim,
+                  fontFamily: T.font.mono,
+                  letterSpacing: "0.04em",
+                  marginTop: 1,
+                }}
+              >
+                {meta.count} ACCOUNTS
+              </div>
+            )}
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          {anyAccountOverridden && (
+            <span
+              style={{
+                fontSize: 8,
+                fontWeight: 800,
+                fontFamily: T.font.mono,
+                letterSpacing: "0.06em",
+                color: toneColor,
+                padding: "2px 6px",
+                borderRadius: 4,
+                background: `${toneColor}15`,
+                border: `1px solid ${toneColor}30`,
+              }}
+            >
+              OVERRIDE
+            </span>
+          )}
+          <Mono size={14} weight={800} color={anyAccountOverridden ? toneColor : T.text.primary}>
+            {fmt(effectiveTotal ?? 0)}
+          </Mono>
+        </div>
+      </div>
+
+      {/* Per-account rows */}
+      {hasAccounts ? (
+        <div style={{ display: "grid", gap: 6 }}>
+          {meta.accounts.map((account) => {
+            const overrideValue = accountOverrides[account.id];
+            const isOverridden = overrideValue !== undefined;
+
+            return (
+              <div
+                key={account.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "8px 10px",
+                  borderRadius: T.radius.md,
+                  background: isOverridden ? `${toneColor}08` : `${T.bg.elevated}C0`,
+                  border: `1px solid ${isOverridden ? `${toneColor}35` : T.border.subtle}`,
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: T.text.primary,
+                      lineHeight: 1.25,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {account.displayLabel}
+                  </div>
+                  <div style={{ fontSize: 9.5, color: T.text.dim, marginTop: 1 }}>
+                    {isOverridden ? "Manual override" : "Live balance"}
+                  </div>
+                </div>
+
+                {isOverridden ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                    <InlineOverrideMoneyInput
+                      label={`${account.displayLabel} override`}
+                      value={overrideValue}
+                      onChange={(e) => onOverrideAccount(account.id, sanitizeDollar(e.target.value))}
+                      placeholder={fmt(account.amount)}
+                      onReset={() => onResetAccount(account.id)}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => onOverrideAccount(account.id, "" as MoneyInput)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      minWidth: 80,
+                      height: 32,
+                      background: `${toneColor}0C`,
+                      border: `1px solid ${toneColor}30`,
+                      borderRadius: T.radius.md,
+                      cursor: "pointer",
+                      padding: "0 10px",
+                      flexShrink: 0,
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    <Mono size={12} weight={800} color={toneColor}>
+                      {fmt(account.amount)}
+                    </Mono>
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        // Fallback for no linked accounts — aggregate total override
+        effectiveTotal !== null && !aggregateOverrideActive ? (
+          <button
+            onClick={onEnableAggregateOverride}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: 38,
+              background: `${toneColor}10`,
+              border: `1px solid ${toneColor}40`,
+              borderRadius: T.radius.md,
+              cursor: "pointer",
+            }}
+          >
+            <Mono size={13} weight={800} color={toneColor}>
+              {fmt(effectiveTotal)}
+            </Mono>
+          </button>
+        ) : (
+          <InlineOverrideMoneyInput
+            label={inputLabel}
+            value={aggregateOverrideValue}
+            onChange={onAggregateChange}
+            placeholder={effectiveTotal !== null ? `${fmt(effectiveTotal)}` : "0.00"}
+            onReset={onResetAggregate}
+          />
+        )
+      )}
+    </Card>
+  );
 }
 
 function AuditPickerField({
@@ -324,12 +652,26 @@ function InlineOverrideMoneyInput({
   placeholder = "0.00",
   label = "Amount",
   onReset,
-}: DollarInputProps & { onReset: () => void }) {
+  tone = "primary",
+}: DollarInputProps & { onReset: () => void; tone?: "primary" | "danger" }) {
   const [id] = useState(() => `override-di-${++overrideInputIdCounter}`);
   const [focused, setFocused] = useState(false);
+  const toneColor = tone === "danger" ? T.status.red : T.accent.primary;
+  const toneBackground = tone === "danger" ? T.status.redDim : `${T.accent.primary}10`;
+  const toneBorder = tone === "danger" ? `${T.status.red}70` : `${T.accent.primary}70`;
+  const toneResetBackground = tone === "danger" ? "rgba(255, 107, 129, 0.12)" : `${T.accent.primary}18`;
+  const toneResetBorder = tone === "danger" ? `${T.status.red}40` : `${T.accent.primary}40`;
 
   return (
-    <div style={{ position: "relative" }}>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(0, 1fr) auto",
+        gap: 6,
+        alignItems: "center",
+        minWidth: 0,
+      }}
+    >
       <label
         htmlFor={id}
         style={{
@@ -343,78 +685,81 @@ function InlineOverrideMoneyInput({
       >
         {label}
       </label>
-      <span
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          left: 14,
-          top: "50%",
-          transform: "translateY(-50%)",
-          color: T.accent.primary,
-          fontFamily: T.font.mono,
-          fontSize: 14,
-          fontWeight: 700,
-          transition: "color 0.2s ease",
-          zIndex: 1,
-        }}
-      >
-        $
-      </span>
-      <input
-        id={id}
-        type="number"
-        inputMode="decimal"
-        pattern="[0-9]*"
-        step="0.01"
-        value={value}
-        placeholder={placeholder}
-        onChange={onChange}
-        onFocus={e => {
-          setFocused(true);
-          setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
-        }}
-        onBlur={() => setFocused(false)}
-        aria-label={label}
-        className="app-input"
-        style={{
-          width: "100%",
-          padding: "12px 14px",
-          paddingLeft: 28,
-          paddingRight: 52,
-          borderRadius: T.radius.md,
-          background: `${T.accent.primary}10`,
-          border: `1.5px solid ${focused ? T.accent.primary : `${T.accent.primary}70`}`,
-          color: T.text.primary,
-          fontSize: 14,
-          outline: "none",
-          boxSizing: "border-box",
-          transition: "all 0.2s",
-          fontFamily: T.font.mono,
-          fontWeight: 700,
-          boxShadow: focused ? `0 0 0 3px ${T.accent.primary}22` : "none",
-        }}
-      />
+      <div style={{ position: "relative", minWidth: 0 }}>
+        <span
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: 12,
+            top: "50%",
+            transform: "translateY(-50%)",
+            color: toneColor,
+            fontFamily: T.font.mono,
+            fontSize: 13,
+            fontWeight: 800,
+            transition: "color 0.2s ease",
+            zIndex: 1,
+          }}
+        >
+          $
+        </span>
+        <input
+          id={id}
+          type="text"
+          inputMode="decimal"
+          pattern="[0-9.]*"
+          value={value}
+          placeholder={placeholder}
+          onChange={onChange}
+          onFocus={e => {
+            setFocused(true);
+            setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
+          }}
+          onBlur={() => setFocused(false)}
+          aria-label={label}
+          className="app-input"
+          style={{
+            width: "100%",
+            minWidth: 0,
+            height: 44,
+            padding: "11px 12px 11px 26px",
+            borderRadius: T.radius.md,
+            background: toneBackground,
+            border: `1.5px solid ${focused ? toneColor : toneBorder}`,
+            color: T.text.primary,
+            fontSize: 16,
+            outline: "none",
+            boxSizing: "border-box",
+            transition: "all 0.2s",
+            fontFamily: T.font.mono,
+            fontWeight: 800,
+            lineHeight: 1.1,
+            letterSpacing: "-0.02em",
+            boxShadow: focused ? `0 0 0 3px ${toneColor}22` : "none",
+          }}
+        />
+      </div>
       <button
         type="button"
         onMouseDown={event => event.preventDefault()}
         onClick={onReset}
         aria-label={`Reset ${label} to live value`}
         style={{
-          position: "absolute",
-          top: 4,
-          right: 4,
-          width: 38,
-          height: "calc(100% - 8px)",
-          borderRadius: T.radius.sm,
-          border: `1px solid ${T.accent.primary}40`,
-          background: `${T.accent.primary}18`,
-          color: T.accent.primary,
+          width: 30,
+          height: 30,
+          borderRadius: 999,
+          border: `1px solid ${toneResetBorder}`,
+          background: toneResetBackground,
+          color: toneColor,
           cursor: "pointer",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: 900,
+          lineHeight: 1,
+          boxShadow: `0 2px 10px ${toneColor}12`,
+          flexShrink: 0,
         }}
       >
         ✕
@@ -486,7 +831,9 @@ export default function InputForm({
   const [budgetActuals, setBudgetActuals] = useState<Record<string, string | number>>({});
   const [holdingValues, setHoldingValues] = useState<HoldingValues>({ roth: 0, k401: 0, brokerage: 0, crypto: 0, hsa: 0 });
   const [overrideInvest, setOverrideInvest] = useState<OverrideInvestState>({ roth: false, brokerage: false, k401: false });
-  const [overridePlaid, setOverridePlaid] = useState<OverridePlaidState>({ checking: false, vault: false, debts: {} });
+  const [overridePlaid, setOverridePlaid] = useState<OverridePlaidState>({ checking: false, vault: false, debts: {}, cashAccounts: {} });
+  const [deletedDebtCardIds, setDeletedDebtCardIds] = useState<Record<string, boolean>>({});
+  const hydratedAuditSeedKeyRef = useRef<string | null>(null);
 
   const [auditQuota, setAuditQuota] = useState<AuditQuota | null>(null);
   useEffect(() => {
@@ -509,8 +856,8 @@ export default function InputForm({
   // Re-sync Plaid balances when cards or bankAccounts update (e.g. after Plaid sync finishes)
   useEffect(() => {
     const freshPlaid = getPlaidAutoFill(cards || [], bankAccounts || []) as PlaidAutoFillData;
-    setForm(p => mergePlaidAutoFillIntoForm(p, freshPlaid, overridePlaid) as InputFormState);
-  }, [cards, bankAccounts, overridePlaid]);
+    setForm(p => mergePlaidAutoFillIntoForm(p, freshPlaid, overridePlaid, deletedDebtCardIds) as InputFormState);
+  }, [cards, bankAccounts, overridePlaid, deletedDebtCardIds]);
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
   const [showConfig, setShowConfig] = useState<boolean>(false);
 
@@ -526,6 +873,17 @@ export default function InputForm({
 
   // Identify if the generated system prompt has drifted from the last downloaded version
   const activeConfig: InputFormConfig = typedFinancialConfig;
+  const checkingAccountMeta = useMemo(
+    () => buildCashAccountMeta(bankAccounts || [], "checking", "Checking"),
+    [bankAccounts]
+  );
+  const savingsAccountMeta = useMemo(
+    () => buildCashAccountMeta(bankAccounts || [], "savings", "Savings"),
+    [bankAccounts]
+  );
+  const showCheckingAccount = activeConfig.trackChecking !== false && checkingAccountMeta.count > 0;
+  const showSavingsAccount = activeConfig.trackSavings !== false && savingsAccountMeta.count > 0;
+  const hasPortfolioAuditInputs = showCheckingAccount || showSavingsAccount || (cards || []).length > 0;
   const plaidInvestmentTotals = useMemo(() => {
     const plaidInvestments = activeConfig?.plaidInvestments || [];
     const sumBucket = (bucket: "roth" | "brokerage" | "k401" | "hsa") =>
@@ -566,6 +924,60 @@ export default function InputForm({
       plaidInvestmentTotals.roth,
     ]
   );
+  const investmentFields = useMemo<InvestmentAuditField[]>(
+    () => [
+      {
+        key: "roth",
+        label: "Roth IRA",
+        enabled: Boolean(activeConfig.trackRoth || activeConfig.trackRothContributions),
+        accent: "#8B5CF6",
+        autoValue: investmentAutoValues.roth,
+        formValue: form.roth,
+        override: overrideInvest.roth,
+      },
+      {
+        key: "brokerage",
+        label: "Brokerage",
+        enabled: Boolean(activeConfig.trackBrokerage),
+        accent: "#10B981",
+        autoValue: investmentAutoValues.brokerage,
+        formValue: form.brokerage,
+        override: overrideInvest.brokerage,
+      },
+      {
+        key: "k401",
+        label: "401(k)",
+        enabled: Boolean(activeConfig.track401k),
+        accent: "#3B82F6",
+        autoValue: investmentAutoValues.k401,
+        formValue: form.k401Balance,
+        override: overrideInvest.k401,
+      },
+    ],
+    [
+      activeConfig.track401k,
+      activeConfig.trackBrokerage,
+      activeConfig.trackRoth,
+      activeConfig.trackRothContributions,
+      form.brokerage,
+      form.k401Balance,
+      form.roth,
+      investmentAutoValues.brokerage,
+      investmentAutoValues.k401,
+      investmentAutoValues.roth,
+      overrideInvest.brokerage,
+      overrideInvest.k401,
+      overrideInvest.roth,
+    ]
+  );
+  const visibleInvestmentFields = investmentFields.filter((field) => {
+    if (!field.enabled) return false;
+    if (field.override) return true;
+    if (Math.abs(Number(field.autoValue || 0)) > 0.004) return true;
+    return Math.abs(toNumber(field.formValue)) > 0.004;
+  });
+  const hiddenInvestmentFields = investmentFields.filter((field) => field.enabled && !visibleInvestmentFields.includes(field));
+  const showInvestmentSection = visibleInvestmentFields.length > 0 || hiddenInvestmentFields.length > 0;
 
 
   // Compute exact strategy using current form inputs
@@ -573,20 +985,47 @@ export default function InputForm({
   const cardOptions = useMemo<SelectGroup[]>(() => {
     return buildCardSelectGroups(cards || [], getShortCardLabel) as SelectGroup[];
   }, [cards]);
+  const lastAuditSeedKey = useMemo(() => {
+    if (!hasReusableAuditSeed(lastAudit)) return null;
+    return `${String(lastAudit?.ts || lastAudit?.date || "seed")}:${lastAudit?.isTest ? "test" : "live"}`;
+  }, [lastAudit]);
 
   useEffect(() => {
-    if (hasReusableAuditSeed(lastAudit)) {
-      setForm(p =>
-        mergeLastAuditIntoForm({
-          previousForm: p,
-          lastAudit,
-          cards,
-          bankAccounts,
-          today: new Date(),
-        }) as InputFormState
-      );
+    if (!lastAuditSeedKey || hydratedAuditSeedKeyRef.current === lastAuditSeedKey) return;
+    hydratedAuditSeedKeyRef.current = lastAuditSeedKey;
+    setForm(p =>
+      mergeLastAuditIntoForm({
+        previousForm: p,
+        lastAudit,
+        cards,
+        bankAccounts,
+        today: new Date(),
+      }) as InputFormState
+    );
+    // Restore per-account cash overrides from the last audit so they survive Plaid refresh
+    const lastCashAccounts = lastAudit?.form?.cashAccounts;
+    if (Array.isArray(lastCashAccounts)) {
+      const restoredOverrides: Record<string, MoneyInput | undefined> = {};
+      let hasCheckingOverride = false;
+      let hasSavingsOverride = false;
+      for (const acct of lastCashAccounts) {
+        if (acct?.overridden && acct?.id) {
+          restoredOverrides[acct.id] = String(acct.amount ?? "") as MoneyInput;
+          const type = String(acct.accountType || "").toLowerCase();
+          if (type === "checking") hasCheckingOverride = true;
+          if (type === "savings") hasSavingsOverride = true;
+        }
+      }
+      if (Object.keys(restoredOverrides).length > 0) {
+        setOverridePlaid(p => ({
+          ...p,
+          checking: p.checking || hasCheckingOverride,
+          vault: p.vault || hasSavingsOverride,
+          cashAccounts: { ...p.cashAccounts, ...restoredOverrides },
+        }));
+      }
     }
-  }, [lastAudit, cards, bankAccounts]);
+  }, [bankAccounts, cards, lastAudit, lastAuditSeedKey]);
   function s<K extends keyof InputFormState>(key: K, value: InputFormState[K]): void {
     setForm((p) => ({ ...p, [key]: value }));
   }
@@ -596,6 +1035,10 @@ export default function InputForm({
   };
   const rmD = (i: number) => {
     haptic.light();
+    const removedDebt = form.debts[i];
+    if (removedDebt?.cardId) {
+      setDeletedDebtCardIds(p => ({ ...p, [removedDebt.cardId]: true }));
+    }
     s(
       "debts",
       form.debts.filter((_, j) => j !== i)
@@ -629,18 +1072,19 @@ export default function InputForm({
     activeConfig.currencyCode || "USD",
     personalRules?.trim() ? "Custom AI rules" : "Default AI rules",
   ].join(" • ");
-  const configuredPaycheckPlaceholder =
+  const configuredPaycheckDisplay =
     activeConfig.incomeType === "hourly"
-      ? `Use config ${Number(activeConfig.typicalHours || 0)} hrs`
+      ? `${Number(activeConfig.typicalHours || 0)} hrs from Income & Cash Flow`
       : activeConfig.incomeType === "variable"
-        ? `Use config $${fmt(Number(activeConfig.averagePaycheck || 0))}`
-        : `Use config $${fmt(Number(activeConfig.paycheckStandard || 0))}`;
+        ? `${fmt(Number(activeConfig.averagePaycheck || 0))} from Income & Cash Flow`
+        : `${fmt(Number(activeConfig.paycheckStandard || 0))} from Income & Cash Flow`;
 
-  const buildMsg = () =>
+  const buildMsg = (formOverride: InputFormState = form) =>
     buildInputSnapshotMessage({
-      form,
+      form: formOverride,
       activeConfig,
       cards,
+      bankAccounts,
       renewals,
       cardAnnualFees,
       parsedTransactions: includeRecentSpending ? plaidTransactions : [],
@@ -651,7 +1095,7 @@ export default function InputForm({
     });
 
   const investmentBalancesSection =
-    (activeConfig.trackRoth || activeConfig.trackRothContributions || activeConfig.trackBrokerage || activeConfig.track401k) ? (
+    showInvestmentSection ? (
       <Card variant="glass" style={{ marginBottom: 8, position: "relative", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
           <Label style={{ marginBottom: 0, fontWeight: 800 }}>Investment Balances</Label>
@@ -665,186 +1109,159 @@ export default function InputForm({
           )}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {(activeConfig.trackRoth || activeConfig.trackRothContributions) &&
-            (() => {
-              const hasAutoValue = investmentAutoValues.roth > 0;
-              return (
+          {visibleInvestmentFields.length === 0 && (
+            <div
+              style={{
+                padding: "14px 14px 12px",
+                borderRadius: T.radius.lg,
+                background: T.bg.elevated,
+                border: `1px solid ${T.border.subtle}`,
+              }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 800, color: T.text.primary, marginBottom: 4 }}>
+                No investment balances included yet
+              </div>
+              <div style={{ fontSize: 11.5, color: T.text.secondary, lineHeight: 1.5 }}>
+                Add only the investment buckets you want the briefing to consider. Hidden empty categories stay out of the way.
+              </div>
+            </div>
+          )}
+          {visibleInvestmentFields.map((field) => {
+            const hasAutoValue = Math.abs(Number(field.autoValue || 0)) > 0.004;
+            const showManualInput = !hasAutoValue || field.override;
+            const overrideActionLabel = hasAutoValue
+              ? field.override
+                ? "CANCEL"
+                : "OVERRIDE"
+              : field.override
+                ? "HIDE"
+                : "";
+
+            return (
+              <div
+                key={field.key}
+                style={{
+                  padding: "10px 12px",
+                  background: T.bg.elevated,
+                  borderRadius: T.radius.md,
+                  border: `1px solid ${T.border.subtle}`,
+                  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
+                }}
+              >
                 <div
                   style={{
-                    padding: "10px 12px",
-                    background: T.bg.elevated,
-                    borderRadius: T.radius.md,
-                    border: `1px solid ${T.border.subtle}`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    marginBottom: showManualInput ? 8 : 0,
                   }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      marginBottom: overrideInvest.roth ? 8 : 0,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <div style={{ width: 6, height: 6, borderRadius: 3, background: "#8B5CF6" }} />
-                      <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>Roth IRA</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      {hasAutoValue && !overrideInvest.roth && (
-                        <Mono size={13} weight={800} color={T.accent.emerald}>
-                          {fmt(investmentAutoValues.roth)}
-                        </Mono>
-                      )}
-                      {hasAutoValue && (
-                        <button
-                          onClick={() => setOverrideInvest(p => ({ ...p, roth: !p.roth }))}
-                          style={{
-                            fontSize: 9,
-                            fontWeight: 700,
-                            fontFamily: T.font.mono,
-                            padding: "3px 8px",
-                            borderRadius: T.radius.sm,
-                            border: `1px solid ${overrideInvest.roth ? T.accent.primary : T.border.default}`,
-                            background: overrideInvest.roth ? `${T.accent.primary}15` : "transparent",
-                            color: overrideInvest.roth ? T.accent.primary : T.text.dim,
-                            cursor: "pointer",
-                          }}
-                        >
-                          {overrideInvest.roth ? "CANCEL" : "OVERRIDE"}
-                        </button>
-                      )}
-                    </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: 3, background: field.accent, flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary, minWidth: 0 }}>{field.label}</span>
                   </div>
-                  {(!hasAutoValue || overrideInvest.roth) && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    {hasAutoValue && !field.override && (
+                      <Mono size={13} weight={800} color={T.accent.emerald}>
+                        {fmt(field.autoValue)}
+                      </Mono>
+                    )}
+                    {overrideActionLabel ? (
+                      <button
+                        onClick={() =>
+                          setOverrideInvest((prev) => ({
+                            ...prev,
+                            [field.key]: !prev[field.key],
+                          }))
+                        }
+                        style={{
+                          fontSize: 9,
+                          fontWeight: 700,
+                          fontFamily: T.font.mono,
+                          padding: "3px 8px",
+                          borderRadius: T.radius.sm,
+                          border: `1px solid ${field.override ? `${field.accent}50` : T.border.default}`,
+                          background: field.override ? `${field.accent}16` : "transparent",
+                          color: field.override ? field.accent : T.text.dim,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {overrideActionLabel}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                {showManualInput &&
+                  (field.key === "roth" ? (
                     <DI
                       value={form.roth}
                       onChange={e => s("roth", sanitizeDollar(e.target.value))}
-                      placeholder={hasAutoValue ? `Auto: ${fmt(investmentAutoValues.roth)}` : "Enter value"}
+                      placeholder={hasAutoValue ? `Auto: ${fmt(field.autoValue)}` : "Enter value"}
                     />
-                  )}
-                </div>
-              );
-            })()}
-          {activeConfig.trackBrokerage &&
-            (() => {
-              const hasAutoValue = investmentAutoValues.brokerage > 0;
-              return (
-                <div
-                  style={{
-                    padding: "10px 12px",
-                    background: T.bg.elevated,
-                    borderRadius: T.radius.md,
-                    border: `1px solid ${T.border.subtle}`,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      marginBottom: overrideInvest.brokerage ? 8 : 0,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <div style={{ width: 6, height: 6, borderRadius: 3, background: "#10B981" }} />
-                      <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>Brokerage</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      {hasAutoValue && !overrideInvest.brokerage && (
-                        <Mono size={13} weight={800} color={T.accent.emerald}>
-                          {fmt(investmentAutoValues.brokerage)}
-                        </Mono>
-                      )}
-                      {hasAutoValue && (
-                        <button
-                          onClick={() => setOverrideInvest(p => ({ ...p, brokerage: !p.brokerage }))}
-                          style={{
-                            fontSize: 9,
-                            fontWeight: 700,
-                            fontFamily: T.font.mono,
-                            padding: "3px 8px",
-                            borderRadius: T.radius.sm,
-                            border: `1px solid ${overrideInvest.brokerage ? T.accent.primary : T.border.default}`,
-                            background: overrideInvest.brokerage ? `${T.accent.primary}15` : "transparent",
-                            color: overrideInvest.brokerage ? T.accent.primary : T.text.dim,
-                            cursor: "pointer",
-                          }}
-                        >
-                          {overrideInvest.brokerage ? "CANCEL" : "OVERRIDE"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {(!hasAutoValue || overrideInvest.brokerage) && (
+                  ) : field.key === "brokerage" ? (
                     <DI
                       value={form.brokerage}
                       onChange={e => s("brokerage", sanitizeDollar(e.target.value))}
-                      placeholder={hasAutoValue ? `Auto: ${fmt(investmentAutoValues.brokerage)}` : "Enter value"}
+                      placeholder={hasAutoValue ? `Auto: ${fmt(field.autoValue)}` : "Enter value"}
                     />
-                  )}
-                </div>
-              );
-            })()}
-          {activeConfig.track401k &&
-            (() => {
-              const hasAutoValue = investmentAutoValues.k401 > 0;
-              return (
-                <div
-                  style={{
-                    padding: "10px 12px",
-                    background: T.bg.elevated,
-                    borderRadius: T.radius.md,
-                    border: `1px solid ${T.border.subtle}`,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      marginBottom: overrideInvest.k401 ? 8 : 0,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <div style={{ width: 6, height: 6, borderRadius: 3, background: "#3B82F6" }} />
-                      <span style={{ fontSize: 12, fontWeight: 700, color: T.text.primary }}>401(k)</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      {hasAutoValue && !overrideInvest.k401 && (
-                        <Mono size={13} weight={800} color={T.accent.emerald}>
-                          {fmt(investmentAutoValues.k401)}
-                        </Mono>
-                      )}
-                      {hasAutoValue && (
-                        <button
-                          onClick={() => setOverrideInvest(p => ({ ...p, k401: !p.k401 }))}
-                          style={{
-                            fontSize: 9,
-                            fontWeight: 700,
-                            fontFamily: T.font.mono,
-                            padding: "3px 8px",
-                            borderRadius: T.radius.sm,
-                            border: `1px solid ${overrideInvest.k401 ? T.accent.primary : T.border.default}`,
-                            background: overrideInvest.k401 ? `${T.accent.primary}15` : "transparent",
-                            color: overrideInvest.k401 ? T.accent.primary : T.text.dim,
-                            cursor: "pointer",
-                          }}
-                        >
-                          {overrideInvest.k401 ? "CANCEL" : "OVERRIDE"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {(!hasAutoValue || overrideInvest.k401) && (
+                  ) : (
                     <DI
                       value={form.k401Balance || ""}
                       onChange={e => s("k401Balance", sanitizeDollar(e.target.value))}
-                      placeholder={hasAutoValue ? `Auto: ${fmt(investmentAutoValues.k401)}` : "Enter value"}
+                      placeholder={hasAutoValue ? `Auto: ${fmt(field.autoValue)}` : "Enter value"}
                     />
-                  )}
-                </div>
-              );
-            })()}
+                  ))}
+              </div>
+            );
+          })}
+          {hiddenInvestmentFields.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+                flexWrap: "wrap",
+                paddingTop: visibleInvestmentFields.length > 0 ? 2 : 0,
+              }}
+            >
+              <span style={{ fontSize: 11, color: T.text.dim, fontWeight: 700 }}>
+                Add category
+              </span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {hiddenInvestmentFields.map((field) => (
+                  <button
+                    key={field.key}
+                    type="button"
+                    onClick={() =>
+                      setOverrideInvest((prev) => ({
+                        ...prev,
+                        [field.key]: true,
+                      }))
+                    }
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 7,
+                      minHeight: 32,
+                      padding: "0 12px",
+                      borderRadius: 999,
+                      border: `1px solid ${field.accent}35`,
+                      background: `${field.accent}12`,
+                      color: field.accent,
+                      fontSize: 11,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Plus size={11} strokeWidth={2.6} />
+                    {field.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </Card>
     ) : null;
@@ -931,6 +1348,49 @@ export default function InputForm({
         </div>
       </div>
       <InputFormErrorBanner error={error} />
+      {!hasPortfolioAuditInputs && (
+        <Card variant="glass" style={{ marginBottom: 16, position: "relative", overflow: "hidden" }}>
+          <div
+            style={{
+              position: "absolute",
+              right: -18,
+              top: -18,
+              width: 72,
+              height: 72,
+              background: T.accent.primary,
+              filter: "blur(42px)",
+              opacity: 0.08,
+              borderRadius: "50%",
+              pointerEvents: "none",
+            }}
+          />
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+            <div
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 12,
+                display: "grid",
+                placeItems: "center",
+                background: `${T.accent.primary}18`,
+                color: T.accent.primary,
+                flexShrink: 0,
+              }}
+            >
+              <Zap size={16} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, marginBottom: 6 }}>
+                Add accounts in Portfolio first
+              </div>
+              <div style={{ fontSize: 13, lineHeight: 1.5, color: T.text.secondary }}>
+                The audit should be built from the accounts you actually track. Add your bank accounts and cards in
+                Portfolio, then come back here to review live balances and generate a real briefing.
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
       {/* ── SNAPSHOT ITEMS ── */}
       <div style={{ marginBottom: 20 }}>
         <Card
@@ -952,8 +1412,8 @@ export default function InputForm({
               pointerEvents: "none",
             }}
           />
-          <Label style={{ fontWeight: 800 }}>Date & Time</Label>
-          <div style={{ display: "grid", gridTemplateColumns: "1.4fr 0.9fr", gap: 8 }}>
+          <Label style={{ fontWeight: 800 }}>Date</Label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8 }}>
             <AuditPickerField
               type="date"
               ariaLabel="Audit date"
@@ -961,146 +1421,82 @@ export default function InputForm({
               onChange={e => s("date", e.target.value)}
               displayValue={formatAuditDateDisplay(form.date)}
             />
-            <AuditPickerField
-              type="time"
-              ariaLabel="Audit time"
-              value={form.time}
-              onChange={e => s("time", e.target.value)}
-              displayValue={formatAuditTimeDisplay(form.time)}
-            />
           </div>
         </Card>
-        {(activeConfig.trackChecking !== false || activeConfig.trackSavings !== false) && (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns:
-                activeConfig.trackChecking !== false && activeConfig.trackSavings !== false ? "1fr 1fr" : "1fr",
-              gap: 8,
-            }}
-          >
-            {activeConfig.trackChecking !== false &&
-              (() => {
-                const hasPlaid = plaidData.checking !== null;
-                return (
-                  <Card
-                    className="hover-card"
-                    variant="glass"
-                    style={{ marginBottom: 8, position: "relative", overflow: "hidden" }}
-                  >
-                    <div
-                      style={{
-                        position: "absolute",
-                        right: -15,
-                        top: -15,
-                        width: 50,
-                        height: 50,
-                        background: T.accent.emerald,
-                        filter: "blur(35px)",
-                        opacity: 0.07,
-                        borderRadius: "50%",
-                        pointerEvents: "none",
-                      }}
-                    />
-                    <Label style={{ fontWeight: 800, marginBottom: 4, fontSize: 10 }}>Checking</Label>
-                    {hasPlaid && !overridePlaid.checking ? (
-                      <button
-                        onClick={() => setOverridePlaid(p => ({ ...p, checking: true }))}
-                        style={{
-                          width: "100%",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          height: 36,
-                          background: `${T.accent.emerald}10`,
-                          border: `1px solid ${T.accent.emerald}40`,
-                          borderRadius: T.radius.md,
-                          cursor: "pointer",
-                        }}
-                      >
-                        <Mono size={13} weight={800} color={T.accent.emerald}>
-                          {fmt(plaidData.checking)}
-                        </Mono>
-                      </button>
-                    ) : (
-                      <div style={{ position: "relative" }}>
-                        <InlineOverrideMoneyInput
-                          label="Checking balance"
-                          value={form.checking}
-                          onChange={e => s("checking", sanitizeDollar(e.target.value))}
-                          placeholder={hasPlaid ? `${fmt(plaidData.checking)}` : "0.00"}
-                          onReset={() => {
-                            setOverridePlaid(p => ({ ...p, checking: false }));
-                            s("checking", plaidData.checking ?? "");
-                          }}
-                        />
-                      </div>
-                    )}
-                  </Card>
-                );
-              })()}
-            {activeConfig.trackSavings !== false &&
-              (() => {
-                const hasPlaid = plaidData.vault !== null;
-                return (
-                  <Card
-                    className="hover-card"
-                    variant="glass"
-                    style={{ marginBottom: 8, position: "relative", overflow: "hidden" }}
-                  >
-                    <div
-                      style={{
-                        position: "absolute",
-                        right: -15,
-                        top: -15,
-                        width: 50,
-                        height: 50,
-                        background: "#3B82F6",
-                        filter: "blur(35px)",
-                        opacity: 0.07,
-                        borderRadius: "50%",
-                        pointerEvents: "none",
-                      }}
-                    />
-                    <Label style={{ fontWeight: 800, marginBottom: 4, fontSize: 10 }}>Savings</Label>
-                    {hasPlaid && !overridePlaid.vault ? (
-                      <button
-                        onClick={() => setOverridePlaid(p => ({ ...p, vault: true }))}
-                        style={{
-                          width: "100%",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          height: 36,
-                          background: `${T.accent.emerald}10`,
-                          border: `1px solid ${T.accent.emerald}40`,
-                          borderRadius: T.radius.md,
-                          cursor: "pointer",
-                        }}
-                      >
-                        <Mono size={13} weight={800} color={T.accent.emerald}>
-                          {fmt(plaidData.vault)}
-                        </Mono>
-                      </button>
-                    ) : (
-                      <div style={{ position: "relative" }}>
-                        <InlineOverrideMoneyInput
-                          label="Savings balance"
-                          value={form.savings}
-                          onChange={e => s("savings", sanitizeDollar(e.target.value))}
-                          placeholder={hasPlaid ? `${fmt(plaidData.vault)}` : "0.00"}
-                          onReset={() => {
-                            setOverridePlaid(p => ({ ...p, vault: false }));
-                            s("savings", plaidData.vault ?? "");
-                          }}
-                        />
-                      </div>
-                    )}
-                  </Card>
-                );
-              })()}
+        {(showCheckingAccount || showSavingsAccount) && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {showCheckingAccount && (
+              <CashAccountSection
+                meta={checkingAccountMeta}
+                toneColor={T.accent.emerald}
+                title={checkingAccountMeta.count > 1 ? "Checking & Cash" : checkingAccountMeta.label}
+                accountOverrides={overridePlaid.cashAccounts}
+                onOverrideAccount={(id, value) =>
+                  setOverridePlaid((p) => ({
+                    ...p,
+                    checking: true,
+                    cashAccounts: { ...p.cashAccounts, [id]: value },
+                  }))
+                }
+                onResetAccount={(id) =>
+                  setOverridePlaid((p) => {
+                    const next = { ...p.cashAccounts };
+                    delete next[id];
+                    const anyCheckingStillOverridden = checkingAccountMeta.accounts.some(
+                      (a) => a.id !== id && next[a.id] !== undefined
+                    );
+                    return { ...p, checking: anyCheckingStillOverridden, cashAccounts: next };
+                  })
+                }
+                aggregateOverrideActive={overridePlaid.checking}
+                onEnableAggregateOverride={() => setOverridePlaid((p) => ({ ...p, checking: true }))}
+                aggregateOverrideValue={form.checking}
+                onAggregateChange={(e) => s("checking", sanitizeDollar(e.target.value))}
+                onResetAggregate={() => {
+                  setOverridePlaid((p) => ({ ...p, checking: false }));
+                  s("checking", checkingAccountMeta.total ?? "");
+                }}
+                inputLabel="Checking balance"
+              />
+            )}
+            {showSavingsAccount && (
+              <CashAccountSection
+                meta={savingsAccountMeta}
+                toneColor="#3B82F6"
+                title={savingsAccountMeta.count > 1 ? "Savings & Vault" : savingsAccountMeta.label}
+                accountOverrides={overridePlaid.cashAccounts}
+                onOverrideAccount={(id, value) =>
+                  setOverridePlaid((p) => ({
+                    ...p,
+                    vault: true,
+                    cashAccounts: { ...p.cashAccounts, [id]: value },
+                  }))
+                }
+                onResetAccount={(id) =>
+                  setOverridePlaid((p) => {
+                    const next = { ...p.cashAccounts };
+                    delete next[id];
+                    const anySavingsStillOverridden = savingsAccountMeta.accounts.some(
+                      (a) => a.id !== id && next[a.id] !== undefined
+                    );
+                    return { ...p, vault: anySavingsStillOverridden, cashAccounts: next };
+                  })
+                }
+                aggregateOverrideActive={overridePlaid.vault}
+                onEnableAggregateOverride={() => setOverridePlaid((p) => ({ ...p, vault: true }))}
+                aggregateOverrideValue={form.savings}
+                onAggregateChange={(e) => s("savings", sanitizeDollar(e.target.value))}
+                onResetAggregate={() => {
+                  setOverridePlaid((p) => ({ ...p, vault: false }));
+                  s("savings", savingsAccountMeta.total ?? "");
+                }}
+                inputLabel="Savings balance"
+              />
+            )}
           </div>
         )}
+
+        {investmentBalancesSection}
 
         <Card
           className="hover-card"
@@ -1121,8 +1517,8 @@ export default function InputForm({
               pointerEvents: "none",
             }}
           />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <Label style={{ fontWeight: 800, marginBottom: 0 }}>Credit Card Balances</Label>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
+            <Label style={{ fontWeight: 800, marginBottom: 0, lineHeight: 1.15 }}>Credit Card Balances</Label>
             <button
               className="hover-btn"
               onClick={addD}
@@ -1130,22 +1526,40 @@ export default function InputForm({
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                padding: "8px 14px",
+                padding: "7px 12px",
                 borderRadius: T.radius.sm,
                 border: `1px solid ${T.accent.primary}40`,
                 background: `${T.accent.primary}15`,
                 color: T.accent.primary,
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: 800,
                 cursor: "pointer",
                 fontFamily: T.font.mono,
                 transition: "all .2s ease",
-                boxShadow: `0 2px 10px ${T.accent.primary}20`,
+                boxShadow: `0 2px 8px ${T.accent.primary}18`,
+                flexShrink: 0,
               }}
             >
-              <Plus size={13} strokeWidth={3} /> ADD
+              <Plus size={12} strokeWidth={3} /> ADD
             </button>
           </div>
+          {form.debts.length === 0 && (
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: T.radius.md,
+                background: T.bg.elevated,
+                border: `1px solid ${T.border.subtle}`,
+                color: T.text.secondary,
+                fontSize: 12,
+                lineHeight: 1.5,
+              }}
+            >
+              {(cards || []).length === 0
+                ? "No credit cards added yet. Add cards in Portfolio, then include only the debt balances you want considered in this briefing."
+                : "No debt balances included yet. Tap ADD to include only the card balances you want considered in this briefing."}
+            </div>
+          )}
           {form.debts.map((d, i) => {
             const plaidDebt = d.cardId ? plaidData.debts?.find(pd => pd.cardId === d.cardId) : null;
             const hasPlaid = plaidDebt && plaidDebt.balance !== null;
@@ -1162,8 +1576,8 @@ export default function InputForm({
                     display: "grid",
                     gridTemplateColumns:
                       form.debts.length > 1
-                        ? "minmax(0, 1fr) minmax(132px, 0.58fr) 44px"
-                        : "minmax(0, 1fr) minmax(132px, 0.58fr)",
+                        ? "minmax(0, 1fr) minmax(152px, 0.68fr) 44px"
+                        : "minmax(0, 1fr) minmax(152px, 0.68fr)",
                     gap: 8,
                     alignItems: "center",
                   }}
@@ -1175,6 +1589,7 @@ export default function InputForm({
                       const card = (cards || []).find(c => c.id === val || c.name === val);
                       const newCardId = card?.id || "";
                       const newName = card ? resolveCardLabel(cards || [], card.id, card.name) : "";
+                      const previousCardId = d.cardId || "";
 
                       setForm(p => ({
                         ...p,
@@ -1182,6 +1597,17 @@ export default function InputForm({
                           j === i ? { ...debt, cardId: newCardId, name: newName } : debt
                         ),
                       }));
+                      if (newCardId) {
+                        setDeletedDebtCardIds(p => {
+                          if (!p[newCardId] && !p[previousCardId]) return p;
+                          const next = { ...p };
+                          delete next[newCardId];
+                          if (previousCardId && previousCardId !== newCardId && !form.debts.some((debt, j) => j !== i && debt.cardId === previousCardId)) {
+                            delete next[previousCardId];
+                          }
+                          return next;
+                        });
+                      }
                     }}
                     placeholder="Card..."
                     options={cardOptions}
@@ -1199,14 +1625,14 @@ export default function InputForm({
                           justifyContent: "center",
                           gap: 4,
                           height: 38,
-                          background: `${T.accent.emerald}10`,
-                          border: `1px solid ${T.accent.emerald}40`,
+                          background: T.status.redDim,
+                          border: `1px solid ${T.status.red}40`,
                           borderRadius: T.radius.md,
                           padding: "0 12px",
                           cursor: "pointer",
                         }}
                       >
-                          <Mono size={12} weight={800} color={T.accent.emerald}>
+                          <Mono size={12} weight={800} color={T.status.red}>
                             {fmt(plaidDebt.balance)}
                           </Mono>
                         </button>
@@ -1217,6 +1643,7 @@ export default function InputForm({
                           value={d.balance}
                           onChange={e => sD(i, "balance", sanitizeDollar(e.target.value))}
                           placeholder={`${fmt(plaidDebt.balance)}`}
+                          tone="danger"
                           onReset={() => {
                             setOverridePlaid(p => ({ ...p, debts: { ...p.debts, [d.cardId]: false } }));
                             sD(i, "balance", plaidDebt.balance);
@@ -1491,8 +1918,8 @@ export default function InputForm({
         </Card >
       )}
 
-      {/* ── Notes for this Week (always visible — critical for AI context) ── */}
-      <Card variant="glass" style={{ position: "relative", overflow: "hidden" }}>
+      {/* ── Notes + Briefing Context ── */}
+      <Card variant="glass" style={{ position: "relative", overflow: "hidden", marginBottom: 2 }}>
         <div
           style={{
             position: "absolute",
@@ -1509,8 +1936,7 @@ export default function InputForm({
         />
         <Label style={{ fontWeight: 800, marginBottom: 6 }}>Notes for this Paycheck</Label>
         <p style={{ fontSize: 10, color: T.text.muted, marginBottom: 8, lineHeight: 1.4 }}>
-          Tell the AI anything it needs to know — e.g. "I already paid rent", "expecting a reimbursement", "skip gas
-          budget this paycheck".
+          Tell the AI anything it needs to know — e.g. "I already paid rent", "expecting a reimbursement", "skip gas budget this paycheck".
         </p>
         <textarea
           aria-label="Notes for this week"
@@ -1544,30 +1970,27 @@ export default function InputForm({
         />
       </Card>
 
-      {investmentBalancesSection}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
+        <ConfigSection
+          showConfig={showConfig}
+          setShowConfig={setShowConfig}
+          configSummary={configSummary}
+          typedFinancialConfig={typedFinancialConfig}
+          setTypedFinancialConfig={setTypedFinancialConfig}
+          personalRules={personalRules}
+          setPersonalRules={setPersonalRules}
+        />
 
-      <ConfigSection
-        showConfig={showConfig}
-        setShowConfig={setShowConfig}
-        configSummary={configSummary}
-        typedFinancialConfig={typedFinancialConfig}
-        setTypedFinancialConfig={setTypedFinancialConfig}
-        personalRules={personalRules}
-        setPersonalRules={setPersonalRules}
-      />
+        <PlaidTransactionsCard
+          plaidTransactions={plaidTransactions}
+          txnFetchedAt={txnFetchedAt}
+          showTxns={showTxns}
+          setShowTxns={setShowTxns}
+          includeRecentSpending={includeRecentSpending}
+          setIncludeRecentSpending={setIncludeRecentSpending}
+          proEnabled={!!proEnabled}
+        />
 
-      <PlaidTransactionsCard
-        plaidTransactions={plaidTransactions}
-        txnFetchedAt={txnFetchedAt}
-        showTxns={showTxns}
-        setShowTxns={setShowTxns}
-        includeRecentSpending={includeRecentSpending}
-        setIncludeRecentSpending={setIncludeRecentSpending}
-        proEnabled={!!proEnabled}
-      />
-
-      {/* ── ADVANCED DETAILS TOGGLE ── */}
-      <div style={{ marginTop: 8, marginBottom: 8, borderTop: `1px solid ${T.border.subtle}`, paddingTop: 10 }}>
         <button
           onClick={() => {
             haptic.medium();
@@ -1578,16 +2001,16 @@ export default function InputForm({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "16px 20px",
+            padding: "15px 18px",
             borderRadius: T.radius.lg,
-            border: `1px solid ${showAdvanced ? T.accent.primary + "50" : T.border.subtle}`,
-            background: showAdvanced ? `${T.accent.primary}0D` : T.bg.glass,
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
+            border: `1px solid ${showAdvanced ? `${T.accent.primary}42` : T.border.subtle}`,
+            background: showAdvanced ? `${T.accent.primary}0F` : T.bg.card,
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
             color: showAdvanced ? T.text.primary : T.text.secondary,
             cursor: "pointer",
-            transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
-            boxShadow: showAdvanced ? `0 4px 16px ${T.accent.primary}1A, inset 0 1px 0 ${T.accent.primary}15` : "none",
+            transition: "all 0.24s ease",
+            boxShadow: showAdvanced ? `0 6px 20px ${T.accent.primary}12, inset 0 1px 0 ${T.accent.primary}12` : T.shadow.soft,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
@@ -1647,13 +2070,9 @@ export default function InputForm({
             </svg>
           </div>
         </button>
-      </div>
 
-      {/* ── ADVANCED PAYLOAD ── */}
-      {
-        showAdvanced && (
-          <div style={{ animation: "fadeInUp 0.4s ease-out both" }}>
-            {/* ── Paycheck Plan-Ahead (moved inside Advanced) ── */}
+        {showAdvanced && (
+          <div style={{ animation: "fadeInUp 0.32s ease-out both", marginTop: -2 }}>
             {activeConfig.trackPaycheck !== false && (
               <Card style={{ marginBottom: 10 }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1712,6 +2131,8 @@ export default function InputForm({
                       borderRadius: T.radius.md,
                       padding: "10px 12px",
                       border: `1px solid ${T.border.default}`,
+                      display: "grid",
+                      gap: 4,
                     }}
                   >
                     <div
@@ -1720,40 +2141,16 @@ export default function InputForm({
                         fontWeight: 700,
                         color: T.text.secondary,
                         fontFamily: T.font.mono,
-                        marginBottom: 8,
                       }}
                     >
-                      {activeConfig.incomeType === "hourly"
-                        ? "HOURS WORKED"
-                        : activeConfig.incomeType === "variable"
-                          ? "PAYCHECK AMOUNT"
-                          : "PAYCHECK OVERRIDE"}
+                      PAYCHECK SOURCE
                     </div>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      pattern="[0-9]*"
-                      step={activeConfig.incomeType === "hourly" ? "0.5" : "0.01"}
-                      aria-label={
-                        activeConfig.incomeType === "hourly"
-                          ? "Hours worked"
-                          : activeConfig.incomeType === "variable"
-                            ? "Paycheck amount"
-                            : "Paycheck override"
-                      }
-                      value={form.paycheckAddOverride}
-                      onChange={e => s("paycheckAddOverride", e.target.value)}
-                      placeholder={configuredPaycheckPlaceholder}
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        borderRadius: T.radius.md,
-                        border: `1px solid ${T.border.default}`,
-                        background: T.bg.card,
-                        color: T.text.primary,
-                        fontSize: 14,
-                      }}
-                    />
+                    <div style={{ fontSize: 14, fontWeight: 700, color: T.text.primary }}>
+                      {configuredPaycheckDisplay}
+                    </div>
+                    <div style={{ fontSize: 11, lineHeight: 1.45, color: T.text.muted }}>
+                      The plan-ahead toggle uses the income amount you set above in Financial Profile &amp; AI Rules.
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -1770,16 +2167,18 @@ export default function InputForm({
                     </span>
                   </div>
                   <div style={{ fontSize: 10, color: T.text.muted, marginTop: 4, fontFamily: T.font.mono }}>
-                    {((typedFinancialConfig.holdings?.crypto || []) as Array<{ symbol?: string }>).map((h) => (h.symbol || "").replace("-USD", "")).join(" · ")} ·
-                    Live
+                    {((typedFinancialConfig.holdings?.crypto || []) as Array<{ symbol?: string }>)
+                      .map((h) => (h.symbol || "").replace("-USD", ""))
+                      .join(" · ")}{" "}
+                    · Live
                   </div>
                 </Card>
               )}
             {financialConfig?.trackHabits !== false && (
-              <Card style={{ padding: "12px 12px" }}>
+              <Card style={{ padding: "12px 12px", marginBottom: activeConfig.budgetCategories?.length > 0 ? 10 : 0 }}>
                 <Label>{financialConfig?.habitName || "Habit"} Restock Count</Label>
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                  {[-1, 1].map(dir => (
+                  {[-1, 1].map((dir) => (
                     <button
                       key={dir}
                       onClick={() => {
@@ -1834,9 +2233,7 @@ export default function InputForm({
                         }}
                       >
                         <AlertTriangle size={10} />
-                        {(form.habitCount || 0) <= (financialConfig?.habitCriticalThreshold || 3)
-                          ? "CRITICAL"
-                          : "BELOW THRESHOLD"}
+                        {(form.habitCount || 0) <= (financialConfig?.habitCriticalThreshold || 3) ? "CRITICAL" : "BELOW THRESHOLD"}
                       </div>
                     )}
                   </div>
@@ -1851,7 +2248,7 @@ export default function InputForm({
                 </p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   {activeConfig.budgetCategories
-                    .filter(c => c.name)
+                    .filter((c) => c.name)
                     .map((cat, i) => (
                       <div key={i}>
                         <div
@@ -1886,7 +2283,7 @@ export default function InputForm({
                             step="0.01"
                             aria-label={`${cat.name} weekly spending`}
                             value={budgetActuals[cat.name] || ""}
-                            onChange={e => setBudgetActuals(p => ({ ...p, [cat.name]: e.target.value }))}
+                            onChange={e => setBudgetActuals((p) => ({ ...p, [cat.name]: e.target.value }))}
                             placeholder="0.00"
                             style={{
                               width: "100%",
@@ -1905,38 +2302,33 @@ export default function InputForm({
                 </div>
               </Card>
             )}
-
-            {/* Notes moved to always-visible section above */}
           </div>
-        )
-      }
+        )}
+      </div>
 
       <ValidationFeedback validationErrors={validationErrors} validationWarnings={validationWarnings} />
 
-      {/* Easy Win 1: Pre-fill indicator */}
-      {
-        (plaidData.checking !== null || (lastAudit?.form?.checking && form.checking === lastAudit.form.checking)) && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              marginBottom: 10,
-              padding: "8px 12px",
-              borderRadius: T.radius.md,
-              background: `${T.accent.primary}10`,
-              border: `1px solid ${T.accent.primary}20`,
-            }}
-          >
-            <span style={{ fontSize: 12 }}>{plaidData.checking !== null ? "🏦" : "💡"}</span>
-            <span style={{ fontSize: 11, color: T.text.secondary }}>
-              {plaidData.checking !== null
-                ? "Balances pulled live from your linked bank accounts."
-                : "Balances pre-filled from your last audit — update what's changed."}
-            </span>
-          </div>
-        )
-      }
+      {(plaidData.checking !== null || (lastAudit?.form?.checking && form.checking === lastAudit.form.checking)) && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            marginBottom: 10,
+            padding: "9px 12px",
+            borderRadius: T.radius.lg,
+            background: `${T.accent.primary}0D`,
+            border: `1px solid ${T.accent.primary}24`,
+          }}
+        >
+          <span style={{ fontSize: 12 }}>{plaidData.checking !== null ? "🏦" : "💡"}</span>
+          <span style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>
+            {plaidData.checking !== null
+              ? "Balances pulled live from your linked bank accounts."
+              : "Balances pre-filled from your last audit — update what's changed."}
+          </span>
+        </div>
+      )}
 
       <ModelChatQuotaWidget
         chatQuota={chatQuota}
@@ -1949,9 +2341,60 @@ export default function InputForm({
         isLoading={isLoading}
         isTestMode={isTestMode}
         setIsTestMode={setIsTestMode}
-        onSubmit={() => canSubmit && onSubmit(buildMsg(), { ...form, budgetActuals }, isTestMode)}
+        onSubmit={() => {
+          if (!canSubmit) return;
+          const visibleInvestmentKeys = visibleInvestmentFields.map((field) => field.key);
+          const resolvedInvestmentSnapshot = buildResolvedInvestmentSnapshot({
+            visibleInvestmentFields,
+            form,
+          });
+          const sanitizedInvestments = {
+            roth: visibleInvestmentKeys.includes("roth") ? resolvedInvestmentSnapshot.roth : "",
+            brokerage: visibleInvestmentKeys.includes("brokerage") ? resolvedInvestmentSnapshot.brokerage : "",
+            k401Balance: visibleInvestmentKeys.includes("k401") ? resolvedInvestmentSnapshot.k401Balance : "",
+          };
+          const cashAccounts = buildAuditCashAccountSnapshot(checkingAccountMeta, savingsAccountMeta);
+          // Compute effective totals from per-account overrides
+          const effectiveCheckingTotal = checkingAccountMeta.accounts.length > 0
+            ? checkingAccountMeta.accounts.reduce((sum, a) => {
+                const ov = overridePlaid.cashAccounts[a.id];
+                return sum + (ov !== undefined ? toNumber(ov) : a.amount);
+              }, 0)
+            : toNumber(form.checking);
+          const effectiveSavingsTotal = savingsAccountMeta.accounts.length > 0
+            ? savingsAccountMeta.accounts.reduce((sum, a) => {
+                const ov = overridePlaid.cashAccounts[a.id];
+                return sum + (ov !== undefined ? toNumber(ov) : a.amount);
+              }, 0)
+            : toNumber(form.savings);
+          const anyCheckingOverridden = checkingAccountMeta.accounts.some((a) => overridePlaid.cashAccounts[a.id] !== undefined);
+          const anySavingsOverridden = savingsAccountMeta.accounts.some((a) => overridePlaid.cashAccounts[a.id] !== undefined);
+          const formWithAutoTime = {
+            ...form,
+            checking: effectiveCheckingTotal as unknown as MoneyInput,
+            savings: effectiveSavingsTotal as unknown as MoneyInput,
+            ...sanitizedInvestments,
+            includedInvestmentKeys: visibleInvestmentKeys,
+            investmentSnapshot: resolvedInvestmentSnapshot,
+            cashAccounts: cashAccounts.map((a) => {
+              const ov = overridePlaid.cashAccounts[a.id];
+              return ov !== undefined ? { ...a, amount: toNumber(ov).toFixed(2), overridden: true } : a;
+            }),
+            cashSummary: {
+              checkingTotalUsed: effectiveCheckingTotal,
+              savingsTotalUsed: effectiveSavingsTotal,
+              linkedCheckingTotal: checkingAccountMeta.total ?? "",
+              linkedSavingsTotal: savingsAccountMeta.total ?? "",
+              checkingOverride: overridePlaid.checking || anyCheckingOverridden,
+              savingsOverride: overridePlaid.vault || anySavingsOverridden,
+            },
+            paycheckAddOverride: "",
+            time: getCurrentAuditTime(),
+          };
+          onSubmit(buildMsg(formWithAutoTime), { ...formWithAutoTime, budgetActuals }, isTestMode);
+        }}
       />
       </div>
-    </div >
+    </div>
   );
 }

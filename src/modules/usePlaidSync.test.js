@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getMostRecentPlaidSyncTime,
   hasCachedPlaidSnapshot,
+  parsePlaidSyncTimestamp,
   shouldRunBackgroundPlaidMaintenance,
   shouldEnforcePlaidSyncCooldown,
   shouldFetchTransactionsForSync,
@@ -18,6 +19,10 @@ describe("usePlaidSync helpers", () => {
 
     const lastSyncAt = getMostRecentPlaidSyncTime(cards, bankAccounts, ["item_active"]);
     expect(lastSyncAt).toBe(new Date("2026-03-17T18:00:00.000Z").getTime());
+  });
+
+  it("treats SQL-style Plaid sync timestamps as UTC before formatting locally", () => {
+    expect(parsePlaidSyncTimestamp("2026-04-12 15:00:00")).toBe(new Date("2026-04-12T15:00:00.000Z").getTime());
   });
 
   it("fetches transactions only when the current effective tier can actually use them", () => {
@@ -107,7 +112,7 @@ describe("usePlaidSync helpers", () => {
       })
     ).toEqual({
       kind: "info",
-      message: "Live balances refreshed for 1 institution. 1 institution is still showing cached data.",
+      message: "Live balances refreshed for 1 institution. 1 institution is still connected but showing older cached balances.",
     });
   });
 

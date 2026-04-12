@@ -17,7 +17,7 @@ import { getMoveAssignmentOptions } from "../moveSemantics.js";
     type LucideIcon,
   } from "../icons";
   import { Badge as UIBadge,Card as UICard,InlineTooltip as UIInlineTooltip } from "../ui.js";
-  import { fmtDate,stripPaycheckParens } from "../utils.js";
+  import { fmtDate,parseCurrency,stripPaycheckParens } from "../utils.js";
   import AuditExportSheet from "./AuditExportSheet.js";
 
   import type { AuditRecord,MoveCheckState,ParsedMoveItem } from "../../types/index.js";
@@ -129,6 +129,50 @@ const ReportSection = ({ title, icon: Icon, content, accentColor, badge, isLast 
   );
 };
 
+function formatMoveItemAmount(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return `$${value.toFixed(2)}`;
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.startsWith("$") ? text : `$${text}`;
+}
+
+function extractDueDate(text: string | null | undefined) {
+  const match = String(text || "").match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  return match ? match[1] : "";
+}
+
+function buildActionPreviewRows(moveItems: ParsedMoveItem[] = []) {
+  return moveItems
+    .filter((item) => {
+      const amount = typeof item?.amount === "number" ? item.amount : null;
+      return Number.isFinite(amount) && Math.abs(amount || 0) > 0;
+    })
+    .slice(0, 4)
+    .map((item) => ({
+      label: String(item?.targetLabel || item?.title || item?.text || "Action").trim(),
+      amount: formatMoveItemAmount(item?.amount),
+      date: extractDueDate(String(item?.detail || item?.text || "")),
+      detail: String(item?.detail || item?.text || "").trim(),
+      route: String(item?.fundingLabel || item?.routeLabel || "").trim(),
+    }));
+}
+
+function cleanAllocationLead(detail: string | null | undefined) {
+  const text = String(detail || "");
+  if (!text) return "";
+  const withoutFiller = text.replace(/[^.]*only dollars left after those allocations can go to debt payoff or savings\.?/i, "");
+  const withoutRows = withoutFiller.replace(/([^,.;]+?)\s*\(\$[\d,]+(?:\.\d{2})?\s+by\s+\d{4}-\d{2}-\d{2}\)/g, "").replace(/\s+,/g, ",");
+  const cleaned = withoutRows
+    .replace(/\s{2,}/g, " ")
+    .replace(/,\s*,/g, ",")
+    .replace(/,\s*\./g, ".")
+    .replace(/^[^a-z0-9$]+/i, "")
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/[,:;]\s*$/, "")
+    .trim();
+  return /[a-z0-9]/i.test(cleaned) ? cleaned : "";
+}
+
 export default memo(function ResultsView({
   audit,
   moveChecks,
@@ -184,7 +228,70 @@ export default memo(function ResultsView({
     parsed.structured?.nextAction && typeof parsed.structured.nextAction === "object"
       ? parsed.structured.nextAction
       : null;
-  const investmentsSummary = parsed.investments || null;
+  const nextActionAllocationRows = buildActionPreviewRows(parsed.moveItems || []);
+  const nextActionLead = cleanAllocationLead(nextActionCard?.detail || sections.nextAction);
+  const allocationLedger = useMemo(() => {
+    const consistency = parsed?.consistency || {};
+    const rows: Array<{ label: string; value: string }> = [];
+    if (Number.isFinite(Number(consistency.currentLiquidCash))) {
+      rows.push({ label: "Liquid now", value: formatMoveItemAmount(Number(consistency.currentLiquidCash)) });
+    }
+    if (Number.isFinite(Number(consistency.protectedAllocatedNow)) && Number(consistency.protectedAllocatedNow) > 0) {
+      rows.push({ label: "Protected now", value: formatMoveItemAmount(Number(consistency.protectedAllocatedNow)) });
+    }
+    if (Number.isFinite(Number(consistency.optionalAllocatedNow)) && Number(consistency.optionalAllocatedNow) > 0) {
+      rows.push({ label: "Optional deploy", value: formatMoveItemAmount(Number(consistency.optionalAllocatedNow)) });
+    }
+    const parkedCash =
+      (Number.isFinite(Number(consistency.remainingCheckingPool)) ? Number(consistency.remainingCheckingPool) : 0) +
+      (Number.isFinite(Number(consistency.remainingVaultPool)) ? Number(consistency.remainingVaultPool) : 0);
+    if (parkedCash > 0) {
+      rows.push({ label: "Still parked", value: formatMoveItemAmount(parkedCash) });
+    }
+    if (Number.isFinite(Number(consistency.protectedGapNow)) && Number(consistency.protectedGapNow) > 0) {
+      rows.push({ label: "Protected gap", value: formatMoveItemAmount(Number(consistency.protectedGapNow)) });
+    }
+    return rows.slice(0, 5);
+  }, [parsed?.consistency]);
+  const submittedInvestmentSnapshot = audit?.form?.investmentSnapshot || {};
+  const explicitInvestmentValues = {
+    roth: parseCurrency(submittedInvestmentSnapshot?.roth ?? audit?.form?.roth),
+    brokerage: parseCurrency(submittedInvestmentSnapshot?.brokerage ?? audit?.form?.brokerage),
+    k401: parseCurrency(submittedInvestmentSnapshot?.k401Balance ?? audit?.form?.k401Balance),
+  };
+  const submittedInvestmentKeyList = Array.isArray(audit?.form?.includedInvestmentKeys)
+    ? audit.form.includedInvestmentKeys.map((key) => String(key || ""))
+    : [];
+  const visibleInvestmentKeys = new Set(
+    submittedInvestmentKeyList.length > 0
+      ? submittedInvestmentKeyList
+      : Object.entries(explicitInvestmentValues)
+          .filter(([, value]) => value != null && Math.abs(value) > 0)
+          .map(([key]) => key)
+  );
+  const hasSubmittedInvestmentSnapshot =
+    submittedInvestmentKeyList.length > 0 ||
+    Object.values(explicitInvestmentValues).some((value) => value != null);
+  const visibleInvestmentTotal =
+    (visibleInvestmentKeys.has("roth") ? explicitInvestmentValues.roth || 0 : 0) +
+    (visibleInvestmentKeys.has("brokerage") ? explicitInvestmentValues.brokerage || 0 : 0) +
+    (visibleInvestmentKeys.has("k401") ? explicitInvestmentValues.k401 || 0 : 0);
+  const parsedInvestmentBalance = parseCurrency(parsed?.investments?.balance) || 0;
+  const investmentsSummary =
+    parsed?.investments && hasSubmittedInvestmentSnapshot
+      ? {
+          ...parsed.investments,
+          balance: `$${visibleInvestmentTotal.toFixed(2)}`,
+          asOf: audit?.form?.date || parsed.investments?.asOf || "N/A",
+          netWorth:
+            visibleInvestmentTotal > 0 && Math.abs(parsedInvestmentBalance - visibleInvestmentTotal) > 1
+              ? undefined
+              : parsed.investments?.netWorth,
+        }
+      : parsed.investments || null;
+  const showInvestmentNetWorthAnchor =
+    Boolean(investmentsSummary?.netWorth) &&
+    !/^-?\$?0(?:\.00)?$/i.test(String(investmentsSummary?.netWorth || "").replace(/\s+/g, ""));
   const degradedInfo = parsed.degraded;
   const isDegraded = degradedInfo?.isDegraded;
   const isLiveCurrentAudit = Boolean(current?.ts && current.ts === audit.ts && !audit.isTest);
@@ -620,9 +727,118 @@ export default memo(function ResultsView({
                   ) : null}
                 </div>
               ) : null}
-              <div style={{ fontSize: 13, lineHeight: 1.65, color: T.text.secondary }}>
-                {nextActionCard?.detail ? stripPaycheckParens(nextActionCard.detail) : <Md text={stripPaycheckParens(sections.nextAction)} />}
-              </div>
+              {nextActionLead ? (
+                <div style={{ fontSize: 13, lineHeight: 1.65, color: T.text.secondary }}>
+                  {stripPaycheckParens(nextActionLead)}
+                </div>
+              ) : null}
+              {allocationLedger.length > 0 ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: isSmallPhone ? "1fr 1fr" : "repeat(auto-fit, minmax(120px, 1fr))",
+                    gap: 8,
+                  }}
+                >
+                  {allocationLedger.map((entry) => (
+                    <div
+                      key={entry.label}
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: 14,
+                        background: `${T.bg.card}92`,
+                        border: `1px solid ${T.border.subtle}`,
+                        minWidth: 0,
+                      }}
+                    >
+                      <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                        {entry.label}
+                      </div>
+                      <div style={{ marginTop: 6, fontSize: 14, fontWeight: 800, color: T.text.primary, fontFamily: T.font.mono }}>
+                        {entry.value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {nextActionAllocationRows.length > 0 ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: 10,
+                    paddingTop: 6,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      color: T.text.dim,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {(nextActionCard?.amount && nextActionCard.amount !== "$0.00") ? "This Week's Allocation" : "Protected Need Queue"}
+                  </div>
+                  {nextActionAllocationRows.map((row) => (
+                    <div
+                      key={`${row.label}-${row.date}-${row.amount}`}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: isSmallPhone ? "1fr auto" : "minmax(0, 1fr) auto",
+                        gap: 10,
+                        alignItems: "start",
+                        padding: isSmallPhone ? "10px 12px" : "11px 14px",
+                        borderRadius: 14,
+                        background: `${T.bg.card}88`,
+                        border: `1px solid ${T.border.subtle}`,
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 12.5,
+                            fontWeight: 700,
+                            color: T.text.primary,
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {row.label}
+                        </div>
+                        <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 3 }}>
+                          {row.route ? (
+                            <div style={{ fontSize: 10.5, color: T.accent.primary, fontFamily: T.font.mono, fontWeight: 800 }}>
+                              {row.route}
+                            </div>
+                          ) : null}
+                          <div style={{ fontSize: 10.5, color: T.text.dim, lineHeight: 1.45 }}>
+                            {row.date ? `Due ${row.date}` : row.detail}
+                          </div>
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          padding: "5px 9px",
+                          borderRadius: 999,
+                          background: `${T.accent.primary}12`,
+                          border: `1px solid ${T.accent.primary}20`,
+                          color: T.accent.primary,
+                          fontSize: 10.5,
+                          fontWeight: 900,
+                          fontFamily: T.font.mono,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {row.amount}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: 13, lineHeight: 1.65, color: T.text.secondary }}>
+                  {nextActionCard?.detail ? stripPaycheckParens(nextActionCard.detail) : <Md text={stripPaycheckParens(sections.nextAction)} />}
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -651,13 +867,18 @@ export default memo(function ResultsView({
                 >
                   <CheckSquare size={16} color={T.accent.primary} strokeWidth={2.5} />
                 </div>
-                <h2 id="results-playbook" style={{ fontSize: "clamp(17px, 4.8vw, 20px)", fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>Tactical Playbook</h2>
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <h2 id="results-playbook" style={{ fontSize: "clamp(17px, 4.8vw, 20px)", fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>Tactical Playbook</h2>
+                  <div style={{ fontSize: 11, color: T.text.dim, fontWeight: 700, letterSpacing: "0.02em" }}>
+                    Execute in this order
+                  </div>
+                </div>
               </div>
               <Mono size={12} color={T.text.dim}>
                 {Object.values(moveChecks).filter(Boolean).length}/{parsed.moveItems.length} Complete
               </Mono>
             </div>
-            <div style={{ background: `${T.bg.elevated}50`, borderRadius: T.radius.lg, padding: isSmallPhone ? "6px 12px" : "8px 16px" }}>
+            <div style={{ display: "grid", gap: 12 }}>
               {parsed.moveItems.map((moveItem: ParsedMoveItem, index: number) => (
                 <MoveRow
                   key={index}
@@ -792,77 +1013,94 @@ export default memo(function ResultsView({
                       : T.border.default
                 }`,
                 display: "grid",
-                gridTemplateColumns: isSmallPhone ? "1fr" : "1.2fr 1fr 1fr",
-                gap: 12,
+                gap: 14,
               }}
             >
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
+              <div style={{ display: "grid", gap: 6 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.06em", textTransform: "uppercase" }}>
                   Balance
                 </div>
-                <div style={{ fontSize: "clamp(22px, 6vw, 28px)", fontWeight: 900, letterSpacing: "-0.03em", color: T.text.primary }}>
+                <div style={{ fontSize: "clamp(24px, 7vw, 30px)", fontWeight: 900, letterSpacing: "-0.03em", color: T.text.primary }}>
                   {investmentsSummary.balance || "N/A"}
                 </div>
-                {investmentsSummary.netWorth ? (
-                  <div style={{ marginTop: 6, fontSize: 11, color: T.text.secondary }}>
+                {showInvestmentNetWorthAnchor ? (
+                  <div style={{ fontSize: 11, color: T.text.secondary }}>
                     Net worth anchor {investmentsSummary.netWorth}
                   </div>
                 ) : null}
               </div>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
-                  As Of
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary }}>
-                  {investmentsSummary.asOf || "N/A"}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
-                  Gate
+
+              <div style={{ display: "grid", gridTemplateColumns: isSmallPhone ? "1fr" : "minmax(0,1fr) minmax(0,1fr)", gap: 10 }}>
+                <div
+                  style={{
+                    padding: "12px 14px",
+                    borderRadius: 14,
+                    background: `${T.bg.card}88`,
+                    border: `1px solid ${T.border.subtle}`,
+                  }}
+                >
+                  <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
+                    As Of
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary }}>
+                    {investmentsSummary.asOf || "N/A"}
+                  </div>
                 </div>
                 <div
                   style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "7px 10px",
-                    borderRadius: 999,
-                    background: /open/i.test(investmentsSummary.gateStatus || "")
-                      ? `${T.status.green}12`
-                      : /guard|hold|closed/i.test(investmentsSummary.gateStatus || "")
-                        ? `${T.status.amber}14`
-                        : `${T.accent.primary}12`,
-                    border: `1px solid ${
-                      /open/i.test(investmentsSummary.gateStatus || "")
-                        ? `${T.status.green}22`
-                        : /guard|hold|closed/i.test(investmentsSummary.gateStatus || "")
-                          ? `${T.status.amber}24`
-                          : `${T.accent.primary}18`
-                    }`,
-                    color: /open/i.test(investmentsSummary.gateStatus || "")
-                      ? T.status.green
-                      : /guard|hold|closed/i.test(investmentsSummary.gateStatus || "")
-                        ? T.status.amber
-                        : T.accent.primary,
-                    fontSize: 11,
-                    fontWeight: 900,
-                    fontFamily: T.font.mono,
-                    letterSpacing: "0.03em",
+                    padding: "12px 14px",
+                    borderRadius: 14,
+                    background: `${T.bg.card}88`,
+                    border: `1px solid ${T.border.subtle}`,
                   }}
                 >
-                  {investmentsSummary.gateStatus || "N/A"}
+                  <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
+                    Gate
+                  </div>
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "7px 10px",
+                      borderRadius: 999,
+                      background: /open/i.test(investmentsSummary.gateStatus || "")
+                        ? `${T.status.green}12`
+                        : /guard|hold|closed/i.test(investmentsSummary.gateStatus || "")
+                          ? `${T.status.amber}14`
+                          : `${T.accent.primary}12`,
+                      border: `1px solid ${
+                        /open/i.test(investmentsSummary.gateStatus || "")
+                          ? `${T.status.green}22`
+                          : /guard|hold|closed/i.test(investmentsSummary.gateStatus || "")
+                            ? `${T.status.amber}24`
+                            : `${T.accent.primary}18`
+                      }`,
+                      color: /open/i.test(investmentsSummary.gateStatus || "")
+                        ? T.status.green
+                        : /guard|hold|closed/i.test(investmentsSummary.gateStatus || "")
+                          ? T.status.amber
+                          : T.accent.primary,
+                      fontSize: 11,
+                      fontWeight: 900,
+                      fontFamily: T.font.mono,
+                      letterSpacing: "0.03em",
+                    }}
+                  >
+                    {investmentsSummary.gateStatus || "N/A"}
+                  </div>
                 </div>
-                {/guard|hold|closed/i.test(investmentsSummary.gateStatus || "") ? (
-                  <div style={{ marginTop: 8, fontSize: 11, lineHeight: 1.5, color: T.text.secondary, maxWidth: 220 }}>
-                    Investing stays on hold until debt and near-term cash obligations are protected.
-                  </div>
-                ) : /open/i.test(investmentsSummary.gateStatus || "") ? (
-                  <div style={{ marginTop: 8, fontSize: 11, lineHeight: 1.5, color: T.text.secondary, maxWidth: 220 }}>
-                    Contributions can resume once cash coverage and debt gates stay clear.
-                  </div>
-                ) : null}
               </div>
+
+              {/guard|hold|closed/i.test(investmentsSummary.gateStatus || "") ? (
+                <div style={{ fontSize: 12, lineHeight: 1.6, color: T.text.secondary }}>
+                  Investing stays on hold until debt and near-term cash obligations are protected.
+                </div>
+              ) : /open/i.test(investmentsSummary.gateStatus || "") ? (
+                <div style={{ fontSize: 12, lineHeight: 1.6, color: T.text.secondary }}>
+                  Contributions can resume once cash coverage and debt gates stay clear.
+                </div>
+              ) : null}
             </div>
           </section>
         ) : (

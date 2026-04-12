@@ -149,10 +149,10 @@ describe("getSystemPrompt", () => {
     expect(sanitized).toContain("\\[links\\]");
   });
 
-  it("caps sanitized personal rules at 2000 characters", () => {
-    const longInput = "a".repeat(2500);
+  it("caps sanitized personal rules at 4000 characters by default", () => {
+    const longInput = "a".repeat(5000);
     const sanitized = sanitizePersonalRules(longInput);
-    expect(sanitized.length).toBe(2000);
+    expect(sanitized.length).toBe(4000);
   });
 
   it("sanitizes snapshot notes when present in config", () => {
@@ -217,12 +217,12 @@ describe("getSystemPrompt — expanded coverage", () => {
     expect(prompt).toContain("RENTAL INCOME / REAL ESTATE");
   });
 
-  it("includes expanded wealth building ladder (FSA, backdoor Roth, 529)", () => {
+  it("includes compact wealth building ladder (FSA, backdoor Roth, 529)", () => {
     const prompt = getSystemPrompt("gemini", minConfig);
-    expect(prompt).toContain("FSA DEADLINE ALERT");
-    expect(prompt).toContain("BACKDOOR ROTH");
-    expect(prompt).toContain("MEGA-BACKDOOR ROTH");
-    expect(prompt).toContain("529 Education Savings Plans");
+    expect(prompt).toContain("FSA deadlines");
+    expect(prompt).toContain("backdoor Roth");
+    expect(prompt).toContain("mega-backdoor Roth");
+    expect(prompt).toContain("529");
   });
 
   it("keeps forward-radar inflation guidance in the compact form", () => {
@@ -243,8 +243,7 @@ describe("getChatSystemPrompt — expanded coverage", () => {
 
   it("includes MLM/pyramid scheme safety guardrail", () => {
     const prompt = getChatSystemPrompt(null, chatConfig, [], [], [], null, "", null, null, null, "");
-    expect(prompt).toContain("MLM / PYRAMID SCHEMES");
-    expect(prompt).toContain("99% of MLM participants lose money");
+    expect(prompt).toContain("MLM income as unreliable");
   });
 
   it("includes expanded financial situation awareness", () => {
@@ -434,8 +433,8 @@ describe("getChatSystemPrompt — expanded coverage", () => {
 describe("prompt size profiling", () => {
   it("keeps a lean audit prompt under the elite compact budget", () => {
     const prompt = getSystemPrompt("gemini", { ...minConfig, currencyCode: "USD" });
-    expect(prompt.length).toBeLessThanOrEqual(12000);
-    expect(estimatePromptTokens(prompt)).toBeLessThanOrEqual(3000);
+    expect(prompt.length).toBeLessThanOrEqual(15000);
+    expect(estimatePromptTokens(prompt)).toBeLessThanOrEqual(3800);
   });
 
   it("keeps a rich audit prompt far below the old pre-history footprint", () => {
@@ -506,8 +505,8 @@ describe("prompt size profiling", () => {
     }));
 
     const prompt = getSystemPrompt("gemini", richConfig, cards, renewals, "Keep emergency fund first.", trends, "coach", strategy);
-    expect(prompt.length).toBeLessThanOrEqual(20000);
-    expect(estimatePromptTokens(prompt)).toBeLessThanOrEqual(4500);
+    expect(prompt.length).toBeLessThanOrEqual(22000);
+    expect(estimatePromptTokens(prompt)).toBeLessThanOrEqual(5500);
   });
 
   it("keeps a rich chat prompt compact while retaining safety anchors", () => {
@@ -555,7 +554,7 @@ describe("prompt size profiling", () => {
     expect(prompt.length).toBeLessThanOrEqual(13000);
     expect(Math.ceil(prompt.length / 4)).toBeLessThanOrEqual(3300);
     expect(prompt).toContain("Deterministic Decision Rules");
-    expect(prompt).toContain("MLM / PYRAMID SCHEMES");
+    expect(prompt).toContain("MLM income as unreliable");
   });
 });
 

@@ -188,6 +188,7 @@ export interface AuditConsistencyInfo {
   nonCanonicalDashboardCategories?: string[];
   weeklyMoveDollarTotal?: number;
   expectedOperationalSurplus?: number;
+  operationalAllocationTotal?: number;
   nativeScoreAnchor?: number;
   nativeScoreDelta?: number;
   nativeRiskFlags?: string[];
@@ -195,6 +196,13 @@ export interface AuditConsistencyInfo {
   statusCorrected?: boolean;
   dashboardRepaired?: boolean;
   investmentSummaryRepaired?: boolean;
+  deterministicPlanReanchored?: boolean;
+  currentLiquidCash?: number;
+  protectedAllocatedNow?: number;
+  optionalAllocatedNow?: number;
+  remainingCheckingPool?: number;
+  remainingVaultPool?: number;
+  protectedGapNow?: number;
 }
 
 export interface DegradedSafetyState {
@@ -269,9 +277,13 @@ export interface ParsedMoveItem {
   text: string;
   done: boolean;
   amount?: number;
+  title?: string | null;
+  detail?: string | null;
   semanticKind?: string | null;
   targetLabel?: string | null;
   sourceLabel?: string | null;
+  routeLabel?: string | null;
+  fundingLabel?: string | null;
   targetKey?: string | null;
   contributionKey?: string | null;
   transactional?: boolean;
@@ -327,6 +339,31 @@ export interface AuditFormInvestment {
   type?: string;
 }
 
+export interface AuditFormCashAccount {
+  id?: string;
+  bank?: string;
+  name?: string;
+  accountType?: "checking" | "savings" | string;
+  amount: number | string;
+  source?: "live" | "manual" | string;
+  overridden?: boolean;
+}
+
+export interface AuditFormInvestmentSnapshot {
+  roth?: number | string;
+  brokerage?: number | string;
+  k401Balance?: number | string;
+}
+
+export interface AuditFormCashSummary {
+  checkingTotalUsed?: number | string;
+  savingsTotalUsed?: number | string;
+  linkedCheckingTotal?: number | string;
+  linkedSavingsTotal?: number | string;
+  checkingOverride?: boolean;
+  savingsOverride?: boolean;
+}
+
 export interface AuditFormData {
   date: string;
   time?: string;
@@ -335,6 +372,9 @@ export interface AuditFormData {
   ally?: number | string;
   debts?: AuditFormDebt[];
   investments?: AuditFormInvestment[];
+  cashAccounts?: AuditFormCashAccount[];
+  investmentSnapshot?: AuditFormInvestmentSnapshot;
+  cashSummary?: AuditFormCashSummary;
   budgetActuals?: Record<string, unknown>;
   [key: string]: unknown;
 }
@@ -622,6 +662,7 @@ export interface MarketPriceMap {
 }
 
 export interface CatalystCashConfigCore {
+  preferredName: string;
   payday: Payday;
   paycheckTime: string;
   paycheckStandard: number;

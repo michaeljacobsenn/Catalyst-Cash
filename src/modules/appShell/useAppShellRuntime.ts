@@ -6,7 +6,7 @@ import { normalizeAppError } from "../appErrors.js";
 import { isBiometricInteractionActive } from "../biometricSession.js";
 import { haptic } from "../haptics.js";
 import { log } from "../logger.js";
-import { triggerStoreArrivalNotification } from "../notifications.js";
+import { registerNotificationDeepLinks, triggerStoreArrivalNotification } from "../notifications.js";
 import { getGatingMode, isPro, syncRemoteGatingMode } from "../subscription.js";
 import type { ToastApi } from "../Toast.js";
 type AppTab = "dashboard" | "cashflow" | "audit" | "portfolio" | "chat" | "settings" | "history" | "results" | "input";
@@ -576,6 +576,17 @@ export function useDeepLinkRouting(navTo: (tab: AppTab) => void) {
         try {
           const url = new URL(event.url);
           const path = url.pathname.replace(/^\//, "").toLowerCase();
+
+          // ── Referral deep link: /ref/{CODE} ──
+          const refMatch = path.match(/^ref\/([a-z0-9-]+)$/i);
+          if (refMatch?.[1]) {
+            const code = refMatch[1].toUpperCase();
+            void import("../referral.js").then((mod) => mod.storePendingReferral(code)).catch(() => {});
+            navToRef.current("settings");
+            void log.info("deeplink", "Referral deep link captured", { code });
+            return;
+          }
+
           const TAB_MAP: Record<string, AppTab> = {
             audit: "input",
             history: "history",
@@ -594,6 +605,42 @@ export function useDeepLinkRouting(navTo: (tab: AppTab) => void) {
 
     register().catch(() => {});
     return () => { handle?.remove().catch(() => {}); };
+  }, []);
+}
+
+/**
+ * Listens for notification taps with deep-link routing data.
+ * When a user taps a notification, navigates to the tab specified
+ * in extra.route (e.g., "audit", "dashboard", "budget", "cashflow").
+ */
+export function useNotificationDeepLinks(navTo: (tab: AppTab) => void) {
+  const navToRef = useRef(navTo);
+  useEffect(() => { navToRef.current = navTo; }, [navTo]);
+
+  useEffect(() => {
+    // Register the Capacitor listener once on boot
+    registerNotificationDeepLinks();
+
+    // Listen for the custom event dispatched by the listener
+    const handler = (event: Event) => {
+      const route = (event as CustomEvent<{ route: string }>).detail?.route;
+      if (route && typeof route === "string") {
+        const TAB_MAP: Record<string, AppTab> = {
+          audit: "audit",
+          dashboard: "dashboard",
+          budget: "cashflow",
+          cashflow: "cashflow",
+          portfolio: "portfolio",
+          chat: "chat",
+          settings: "settings",
+          history: "history",
+        };
+        navToRef.current(TAB_MAP[route] ?? "dashboard");
+      }
+    };
+
+    window.addEventListener("app-notification-route", handler);
+    return () => window.removeEventListener("app-notification-route", handler);
   }, []);
 }
 

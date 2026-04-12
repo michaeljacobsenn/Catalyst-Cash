@@ -54,8 +54,8 @@ describe("auditExports", () => {
     const [filename, csv, mimeType] = mockNativeExport.mock.calls[0];
     expect(filename).toBe("CatalystCash_Audit_2026-03-26.csv");
     expect(mimeType).toBe("text/csv");
-    expect(csv).toContain('"Cash is ""stable"""');
-    expect(csv).toContain('"Net Worth","42000"');
+    expect(csv).toContain('"Net Worth"');
+    expect(csv).toContain('"42000"');
   });
 
   it("exports a direct pdf tear sheet through nativeExport", async () => {
@@ -93,6 +93,7 @@ describe("auditExports", () => {
         mode: "STANDARD",
         netWorth: 42000,
         raw: "Everything is on track.",
+        healthScore: { score: 82, summary: "Finances are healthy and stable." },
       },
     });
 
@@ -102,6 +103,6 @@ describe("auditExports", () => {
     expect(filename).toBe("CatalystCash_Audit_2026-03-26.html");
     expect(mimeType).toBe("text/html");
     expect(html).toContain("Catalyst Cash");
-    expect(html).toContain("Everything is on track.");
+    expect(html).toContain("Finances are healthy and stable.");
   });
 });

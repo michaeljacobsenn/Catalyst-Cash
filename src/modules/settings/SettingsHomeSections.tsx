@@ -1,8 +1,184 @@
-import { Building2, ChevronRight, Cpu, Database, Info, Lock, Monitor, Target } from "../icons";
+import { useCallback, useEffect, useState } from "react";
+import { Building2, ChevronRight, Cpu, Database, Info, Lock, Monitor, Share2, Target } from "../icons";
 import { buildPromoLine } from "../planCatalog.js";
 import { T } from "../constants.js";
 import { ListRow, ListSection, NoticeBanner } from "../ui.js";
 import ProBanner from "../tabs/ProBanner.js";
+import { haptic } from "../haptics.js";
+
+const loadReferral = () => import("../referral.js");
+
+function ReferralCard() {
+  const [code, setCode] = useState<string | null>(null);
+  const [stats, setStats] = useState({ totalReferred: 0, bonusMonthsEarned: 0 });
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    loadReferral().then(async (mod) => {
+      if (!active) return;
+      const result = await mod.getReferralStats();
+      setCode(result.code);
+      setStats({ totalReferred: result.totalReferred, bonusMonthsEarned: result.bonusMonthsEarned });
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  const handleShare = useCallback(async () => {
+    haptic.medium();
+    try {
+      const mod = await loadReferral();
+      await mod.shareReferralLink();
+    } catch {}
+  }, []);
+
+  const handleCopy = useCallback(async () => {
+    if (!code) return;
+    haptic.light();
+    try {
+      await navigator.clipboard.writeText(`https://catalystcash.app/ref/${code}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  }, [code]);
+
+  return (
+    <div>
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 800,
+          color: T.text.secondary,
+          marginLeft: 16,
+          marginBottom: 8,
+          display: "block",
+          letterSpacing: "0.03em",
+          textTransform: "uppercase",
+        }}
+      >
+        Refer a Friend
+      </span>
+      <div
+        style={{
+          background: `linear-gradient(145deg, ${T.bg.card}, ${T.bg.surface})`,
+          borderRadius: T.radius.xl,
+          border: `1px solid ${T.border.subtle}`,
+          padding: "16px 16px 14px",
+          boxShadow: "0 6px 18px rgba(0,0,0,0.10)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              background: `linear-gradient(135deg, ${T.accent.primary}20, ${T.accent.emerald}20)`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 18,
+              flexShrink: 0,
+            }}
+          >
+            🎁
+          </div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary }}>
+              Give a month, get a month
+            </div>
+            <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.4, marginTop: 2 }}>
+              Share your code — you both get 1 free month of Pro
+            </div>
+          </div>
+        </div>
+
+        {/* Referral code display */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 12,
+          }}
+        >
+          <button
+            onClick={handleCopy}
+            style={{
+              flex: 1,
+              padding: "10px 14px",
+              borderRadius: T.radius.md,
+              border: `1px dashed ${T.accent.primary}40`,
+              background: `${T.accent.primary}08`,
+              color: T.accent.primary,
+              fontSize: 16,
+              fontWeight: 800,
+              fontFamily: T.font.mono,
+              letterSpacing: "0.1em",
+              textAlign: "center",
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+          >
+            {copied ? "Copied! ✓" : code || "···"}
+          </button>
+          <button
+            onClick={handleShare}
+            className="hover-btn"
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: T.radius.md,
+              border: "none",
+              background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`,
+              color: "#fff",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: `0 4px 12px ${T.accent.primary}40`,
+              flexShrink: 0,
+            }}
+          >
+            <Share2 size={18} />
+          </button>
+        </div>
+
+        {/* Stats */}
+        {stats.totalReferred > 0 && (
+          <div
+            style={{
+              display: "flex",
+              gap: 16,
+              padding: "8px 12px",
+              background: `${T.status.green}0A`,
+              borderRadius: T.radius.md,
+              border: `1px solid ${T.status.green}15`,
+            }}
+          >
+            <div style={{ textAlign: "center", flex: 1 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: T.status.green, fontFamily: T.font.mono }}>
+                {stats.totalReferred}
+              </div>
+              <div style={{ fontSize: 9, color: T.text.muted, fontWeight: 700, textTransform: "uppercase" }}>
+                Friends referred
+              </div>
+            </div>
+            <div style={{ width: 1, background: `${T.status.green}15` }} />
+            <div style={{ textAlign: "center", flex: 1 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: T.status.green, fontFamily: T.font.mono }}>
+                {stats.bonusMonthsEarned}
+              </div>
+              <div style={{ fontSize: 9, color: T.text.muted, fontWeight: 700, textTransform: "uppercase" }}>
+                Bonus months
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 type SettingsMenu = "finance" | "profile" | "ai" | "backup" | "dev" | "security" | "plaid" | null;
 type SetupStep = {
@@ -187,6 +363,9 @@ export function RootSettingsSection({
           )}
         </div>
       )}
+
+      {/* ── Refer a Friend ── */}
+      <ReferralCard />
 
       {showSetupProgress && (
         <div style={{ marginBottom: 4 }}>

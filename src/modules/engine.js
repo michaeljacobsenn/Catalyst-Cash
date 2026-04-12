@@ -138,6 +138,47 @@ function round1(value) {
   return Math.round(value * 10) / 10;
 }
 
+function estimateWeeklyIncomeCents(config) {
+  const freq = String(config?.payFrequency || "bi-weekly").toLowerCase();
+  if (config?.incomeType === "hourly") {
+    const hourly = Math.max(0, toCents(config?.hourlyRateNet || 0));
+    const hours = Math.max(0, Number(config?.typicalHours) || 0);
+    const paycheck = hourly * hours;
+    if (freq.includes("weekly") && !freq.includes("bi")) return paycheck;
+    if (freq.includes("bi") || freq === "every-2-weeks") return Math.round(paycheck / 2);
+    if (freq.includes("semi") || freq.includes("twice")) return Math.round(paycheck / 2);
+    if (freq === "monthly") return Math.round(paycheck / 4.33);
+    return Math.round(paycheck / 2);
+  }
+  if (config?.incomeType === "variable") {
+    const avg = Math.max(0, toCents(config?.averagePaycheck || 0));
+    if (freq.includes("weekly") && !freq.includes("bi")) return avg;
+    if (freq.includes("bi") || freq === "every-2-weeks") return Math.round(avg / 2);
+    if (freq.includes("semi") || freq.includes("twice")) return Math.round(avg / 2);
+    if (freq === "monthly") return Math.round(avg / 4.33);
+    return Math.round(avg / 2);
+  }
+  const standard = Math.max(0, toCents(config?.paycheckStandard || 0));
+  const firstOfMonth = Math.max(0, toCents(config?.paycheckFirstOfMonth || 0));
+  if (standard <= 0 && firstOfMonth <= 0) return 0;
+  // Estimate annual → weekly
+  let annualCents = 0;
+  if (firstOfMonth > 0) {
+    if (freq.includes("weekly") && !freq.includes("bi")) annualCents = firstOfMonth * 12 + standard * 40;
+    else if (freq.includes("bi") || freq === "every-2-weeks") annualCents = firstOfMonth * 12 + standard * 14;
+    else if (freq.includes("semi") || freq.includes("twice")) annualCents = (firstOfMonth + standard) * 12;
+    else if (freq === "monthly") annualCents = firstOfMonth * 12;
+    else annualCents = firstOfMonth * 12 + standard * 14;
+  } else {
+    if (freq.includes("weekly") && !freq.includes("bi")) annualCents = standard * 52;
+    else if (freq.includes("bi") || freq === "every-2-weeks") annualCents = standard * 26;
+    else if (freq.includes("semi") || freq.includes("twice")) annualCents = standard * 24;
+    else if (freq === "monthly") annualCents = standard * 12;
+    else annualCents = standard * 26;
+  }
+  return Math.round(annualCents / 52);
+}
+
 function buildAuditSignals(
   config,
   {
@@ -237,6 +278,13 @@ function buildAuditSignals(
   else if (utilizationPct != null && utilizationPct >= 30) riskFlags.push("elevated-utilization");
   if (emergencyCoverageWeeks != null && emergencyCoverageWeeks < 4) riskFlags.push("thin-emergency-fund");
 
+  // Savings rate: operationalSurplus / estimated weekly income
+  const weeklyIncomeCents = estimateWeeklyIncomeCents(config);
+  const savingsRatePct = weeklyIncomeCents > 0
+    ? round1((operationalSurplusCents / weeklyIncomeCents) * 100)
+    : null;
+  if (savingsRatePct != null && savingsRatePct < 0) riskFlags.push("negative-savings-rate");
+
   return {
     nativeScore: {
       score: nativeScore,
@@ -263,6 +311,11 @@ function buildAuditSignals(
       pct: utilizationPct,
       revolvingDebt: fromCents(revolvingDebtCents),
       totalLimits: fromCents(totalCardLimitCents),
+    },
+    savingsRate: {
+      pct: savingsRatePct,
+      weeklyIncome: fromCents(weeklyIncomeCents),
+      weeklySurplus: fromCents(operationalSurplusCents),
     },
     riskFlags,
   };
@@ -308,10 +361,36 @@ function findSnapshotDebtForCard(card, snapshotDebts) {
 
 // Merge debt balances entered in the audit form onto portfolio cards.
 // This prevents stale strategy decisions when the user overrides balances in snapshot input.
-export function mergeSnapshotDebts(cards = [], snapshotDebts = [], defaultApr = 0) {
+export function mergeSnapshotDebts(cards = [], snapshotDebts = [], defaultApr = 0, options = {}) {
   const defaultAprBps = toBps(defaultApr);
+  const authoritativeSnapshot = options?.authoritativeSnapshot === true;
+  const normalizedSnapshotDebts = Array.isArray(snapshotDebts) ? snapshotDebts : [];
+
+  if (authoritativeSnapshot && normalizedSnapshotDebts.length > 0) {
+    return normalizedSnapshotDebts
+      .map((debt, index) => {
+        const matchedCard = (cards || []).find((card) => findSnapshotDebtForCard(card, [debt]));
+        if (matchedCard) {
+          return normalizeSnapshotDebt(matchedCard, debt, defaultAprBps);
+        }
+
+        const debtAprBps = toBps(debt?.apr ?? 0);
+        return {
+          id: String(debt?.cardId || debt?.id || `snapshot-debt-${index}`),
+          name: debt?.name || "Manual debt",
+          institution: debt?.institution || debt?.name || "Manual debt",
+          nickname: debt?.nickname || debt?.name || "",
+          balance: fromCents(toCents(debt?.balance ?? debt?.amount ?? 0)),
+          minPayment: fromCents(toCents(debt?.minPayment ?? debt?.minimum ?? 0)),
+          apr: (debtAprBps > 0 ? debtAprBps : defaultAprBps) / 100,
+          limit: debt?.limit ?? null,
+        };
+      })
+      .filter((debt) => Number(debt?.balance || 0) > 0 || Number(debt?.minPayment || 0) > 0);
+  }
+
   return (cards || []).map(card =>
-    normalizeSnapshotDebt(card, findSnapshotDebtForCard(card, snapshotDebts || []), defaultAprBps)
+    normalizeSnapshotDebt(card, findSnapshotDebtForCard(card, normalizedSnapshotDebts), defaultAprBps)
   );
 }
 

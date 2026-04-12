@@ -111,6 +111,7 @@ export async function triggerStoreArrivalNotification(store, body, { forceReset 
           sound: "default",
           smallIcon: "ic_stat_icon_config_sample",
           iconColor: "#7C6FFF",
+          extra: { route: "portfolio" },
         },
       ],
     });
@@ -202,6 +203,7 @@ export async function schedulePaydayReminder(payday, paycheckTime) {
           sound: "default",
           smallIcon: "ic_stat_icon_config_sample",
           iconColor: "#7C6FFF",
+          extra: { route: "audit" },
         },
       ],
     });
@@ -263,6 +265,7 @@ export async function scheduleOverrunNotification(overruns) {
         sound: undefined,
         smallIcon: "ic_stat_notify",
         iconColor: "#FF6B6B",
+        extra: { route: "budget" },
       }],
     });
     return true;
@@ -313,6 +316,7 @@ export async function schedulePostAuditCelebration(score, streak) {
           sound: "default",
           smallIcon: "ic_stat_icon_config_sample",
           iconColor: "#2ECC71",
+          extra: { route: "dashboard" },
         },
       ],
     });
@@ -357,6 +361,7 @@ export async function scheduleMidWeekCheckIn(weeklyAllowance) {
           sound: "default",
           smallIcon: "ic_stat_icon_config_sample",
           iconColor: "#7B5EA7",
+          extra: { route: "dashboard" },
         },
       ],
     });
@@ -397,6 +402,7 @@ export async function scheduleMonthEndSummary() {
           sound: "default",
           smallIcon: "ic_stat_icon_config_sample",
           iconColor: "#E0A84D",
+          extra: { route: "audit" },
         },
       ],
     });
@@ -435,6 +441,7 @@ export async function scheduleWeeklyAuditNudge() {
           sound: "default",
           smallIcon: "ic_stat_icon_config_sample",
           iconColor: "#2ECC71",
+          extra: { route: "audit" },
         },
       ],
     });
@@ -566,6 +573,7 @@ export async function scheduleBillReminders(renewals = []) {
         sound: "default",
         smallIcon: "ic_stat_icon_config_sample",
         iconColor: "#E0A84D",
+        extra: { route: "cashflow" },
       });
     });
 
@@ -577,5 +585,37 @@ export async function scheduleBillReminders(renewals = []) {
   } catch (err) {
     void log.warn("notifications", "scheduleBillReminders failed", { error: err });
     return 0;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NOTIFICATION DEEP-LINK LISTENER
+// ═══════════════════════════════════════════════════════════════
+let _listenerRegistered = false;
+
+/**
+ * Register a listener for notification taps that navigates to the
+ * correct app tab. Call once on app boot. Dispatches a custom event
+ * `app-notification-route` with `detail = { route: string }` that
+ * the app shell should handle.
+ */
+export async function registerNotificationDeepLinks() {
+  if (!supportsLocalNotifications() || _listenerRegistered) return;
+  _listenerRegistered = true;
+  try {
+    await LocalNotifications.addListener(
+      "localNotificationActionPerformed",
+      (action) => {
+        const route = action?.notification?.extra?.route;
+        if (route && typeof route === "string") {
+          log.info("notifications", "Deep-link tap", { route, id: action?.notification?.id });
+          window.dispatchEvent(
+            new CustomEvent("app-notification-route", { detail: { route } })
+          );
+        }
+      }
+    );
+  } catch (err) {
+    void log.warn("notifications", "registerNotificationDeepLinks failed", { error: err });
   }
 }

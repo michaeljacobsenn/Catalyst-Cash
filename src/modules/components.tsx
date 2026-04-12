@@ -63,7 +63,7 @@ interface SectionProps {
 }
 
 interface MoveRowProps {
-  item: { text: string; tag?: string | null };
+  item: { text: string; tag?: string | null; amount?: number | string | null; title?: string | null; detail?: string | null; sourceLabel?: string | null; targetLabel?: string | null; routeLabel?: string | null; fundingLabel?: string | null };
   checked?: boolean;
   onToggle: () => void;
   index: number;
@@ -531,6 +531,9 @@ export const MoveRow = ({ item, checked, onToggle, index, detail = null }: MoveR
     else haptic.selection();
     onToggle();
   };
+  const headline = String(item.targetLabel || item.title || item.text || "").trim();
+  const subline = String(item.detail || "").trim();
+  const routeLine = String(item.fundingLabel || item.routeLabel || "").trim();
   return (
     <div
       className="slide-up"
@@ -548,13 +551,15 @@ export const MoveRow = ({ item, checked, onToggle, index, detail = null }: MoveR
       style={{
         display: "flex",
         alignItems: "flex-start",
-        gap: 10,
-        padding: "12px 0",
-        borderBottom: `1px solid ${T.border.subtle}`,
+        gap: 12,
+        padding: "16px 16px",
+        borderRadius: 18,
+        border: `1px solid ${checked ? `${T.accent.primary}18` : T.border.subtle}`,
+        background: checked ? `${T.accent.primary}08` : `${T.bg.card}88`,
         cursor: "pointer",
         opacity: checked ? 0.3 : 1,
         animationDelay: `${index * 35}ms`,
-        transition: "opacity .2s",
+        transition: "opacity .2s, border-color .2s, background .2s",
       }}
     >
       <div
@@ -576,21 +581,72 @@ export const MoveRow = ({ item, checked, onToggle, index, detail = null }: MoveR
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         {item.tag && (
-          <div style={{ marginBottom: 4 }}>
+          <div style={{ marginBottom: 6 }}>
             <Badge variant={tm[item.tag] || "gray"}>{item.tag}</Badge>
           </div>
         )}
-        <p
-          style={{
-            fontSize: 12,
-            lineHeight: 1.6,
-            textDecoration: checked ? "line-through" : "none",
-            color: checked ? T.text.dim : T.text.secondary,
-            wordBreak: "break-word",
-          }}
-        >
-          {item.text}
-        </p>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: subline ? 8 : 0 }}>
+          <div
+            style={{
+              fontSize: 13.5,
+              lineHeight: 1.45,
+              fontWeight: 700,
+              textDecoration: checked ? "line-through" : "none",
+              color: checked ? T.text.dim : T.text.primary,
+              wordBreak: "break-word",
+            }}
+          >
+            {headline}
+          </div>
+          {item.amount ? (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "5px 9px",
+                borderRadius: 999,
+                background: `${T.accent.primary}12`,
+                border: `1px solid ${T.accent.primary}18`,
+                color: T.accent.primary,
+                fontSize: 10.5,
+                fontWeight: 900,
+                fontFamily: T.font.mono,
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+              }}
+            >
+              {typeof item.amount === "number" ? `$${item.amount.toFixed(2)}` : item.amount}
+            </div>
+          ) : null}
+        </div>
+        {routeLine ? (
+          <div
+            style={{
+              marginBottom: subline ? 6 : 0,
+              fontSize: 10.5,
+              fontWeight: 800,
+              color: T.accent.primary,
+              fontFamily: T.font.mono,
+              letterSpacing: "0.03em",
+            }}
+          >
+            {routeLine}
+          </div>
+        ) : null}
+        {subline ? (
+          <p
+            style={{
+              margin: 0,
+              fontSize: 12.5,
+              lineHeight: 1.62,
+              textDecoration: checked ? "line-through" : "none",
+              color: checked ? T.text.dim : T.text.secondary,
+              wordBreak: "break-word",
+            }}
+          >
+            {subline}
+          </p>
+        ) : null}
         {detail ? <div style={{ marginTop: 8 }}>{detail}</div> : null}
       </div>
     </div>

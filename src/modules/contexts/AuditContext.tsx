@@ -30,7 +30,7 @@ import { getProvider } from "../providers.js";
 import { buildScrubber } from "../scrubber.js";
 import { getHistoryLimit, getOrCreateDeviceId, recordAuditUsage } from "../subscription.js";
 import { useToast } from "../Toast.js";
-import { buildDegradedParsedAudit, cyrb53, db, detectAuditDrift, parseAudit, validateParsedAuditConsistency } from "../utils.js";
+import { buildDegradedParsedAudit, cyrb53, db, detectAuditDrift, parseAudit, parseCurrency, validateParsedAuditConsistency } from "../utils.js";
 import { maybeRequestReview } from "../ratePrompt.js";
 import { scheduleOverrunNotification } from "../notifications.js";
 import { useNavigation } from "./NavigationContext.js";
@@ -368,16 +368,15 @@ export function AuditProvider({ children }: AuditProviderProps) {
       auditAbortReasonRef.current = null;
 
       let nextHistory: AuditRecord[];
+      let raw = "";
+      let computedStrategy: ReturnType<typeof generateStrategy> | null = null;
+      let promptRenewals: typeof renewals = [...renewals, ...cardAnnualFees];
+      let strategyCards = cards;
+      let scrubber: { scrub: (input: string) => string; unscrub: (input: string) => string } | null = null;
+      let historyForProvider: Array<{ role: string; content: string } | { role: string; parts: Array<{ text: string }> }> = [];
+      let deviceId: string | null = null;
 
       try {
-        let raw = "";
-        let computedStrategy: ReturnType<typeof generateStrategy> | null = null;
-        let promptRenewals: typeof renewals = [...renewals, ...cardAnnualFees];
-        let strategyCards = cards;
-        let scrubber: { scrub: (input: string) => string; unscrub: (input: string) => string } | null = null;
-        let historyForProvider: Array<{ role: string; content: string } | { role: string; parts: Array<{ text: string }> }> = [];
-        let deviceId: string | null = null;
-
         if (manualResultText) {
           raw = manualResultText;
           auditRawRef.current = raw;
@@ -390,7 +389,12 @@ export function AuditProvider({ children }: AuditProviderProps) {
           const useStream = false;
           promptRenewals = [...renewals, ...cardAnnualFees];
 
-          strategyCards = mergeSnapshotDebts(cards || [], (formData?.debts || []) as never[], financialConfig?.defaultAPR || 0) as typeof cards;
+          strategyCards = mergeSnapshotDebts(
+            cards || [],
+            (formData?.debts || []) as never[],
+            financialConfig?.defaultAPR || 0,
+            { authoritativeSnapshot: Array.isArray(formData?.debts) && formData.debts.length > 0 }
+          ) as typeof cards;
           computedStrategy = generateStrategy(financialConfig, {
             checkingBalance: parseFloat(String(formData.checking || 0)),
             savingsTotal: parseFloat(String(formData.savings || 0)),
@@ -433,7 +437,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
               personalRules: personalRules || "",
               trendContext,
               persona,
-              computedStrategy,
+              computedStrategy: computedStrategy || undefined,
               chatContext,
               memoryBlock: memBlock,
               aiConsent,
@@ -519,45 +523,75 @@ export function AuditProvider({ children }: AuditProviderProps) {
           await db.set(historyKey, newApiHistory.slice(-8));
         }
 
-        let parsed = parseAudit(raw) as ParsedAudit | null;
+        let parsed = null as ParsedAudit | null;
         const primaryAuditLogId = consumeLastAuditLogId();
         let retryAuditLogId: string | null = null;
         let hitDegradedFallback = false;
-
-        if (!parsed && !manualResultText && computedStrategy && scrubber && deviceId) {
-          log.warn("audit", "Primary parse failed; retrying with critical-field prompt");
-          await reportAuditLogOutcome(primaryAuditLogId, false, false);
-          const retryRaw = await callAudit(
-            trimmedApiKey,
-            scrubber.scrub(msg),
-            aiProvider,
-            aiModel,
-            scrubPromptContext(
-              {
-                variant: "critical-retry",
-                financialConfig,
-                computedStrategy,
-                formData,
-                aiConsent,
-              },
-              scrubber.scrub
-            ),
-            [],
-            deviceId
-          );
-          raw = scrubber.unscrub(String(retryRaw || ""));
-          setStreamText(raw);
-          retryAuditLogId = consumeLastAuditLogId();
+        const deterministicComputedStrategy = (computedStrategy || {}) as Record<string, unknown>;
+        const includedInvestmentKeys = new Set(
+          Array.isArray(formData?.includedInvestmentKeys)
+            ? formData.includedInvestmentKeys.map((key) => String(key || ""))
+            : []
+        );
+        try {
           parsed = parseAudit(raw) as ParsedAudit | null;
-        }
 
-        if (!parsed && !manualResultText && computedStrategy) {
+          if (!parsed && !manualResultText && computedStrategy && scrubber && deviceId) {
+            log.warn("audit", "Primary parse failed; retrying with critical-field prompt");
+            await reportAuditLogOutcome(primaryAuditLogId, false, false);
+            const retryRaw = await callAudit(
+              trimmedApiKey,
+              scrubber.scrub(msg),
+              aiProvider,
+              aiModel,
+              scrubPromptContext(
+                {
+                  variant: "critical-retry",
+                  financialConfig,
+                  computedStrategy: deterministicComputedStrategy,
+                  formData,
+                  aiConsent,
+                },
+                scrubber.scrub
+              ),
+              [],
+              deviceId
+            );
+            raw = scrubber.unscrub(String(retryRaw || ""));
+            setStreamText(raw);
+            retryAuditLogId = consumeLastAuditLogId();
+            parsed = parseAudit(raw) as ParsedAudit | null;
+          }
+
+          if (!parsed && !manualResultText) {
+            hitDegradedFallback = true;
+            parsed = buildDegradedParsedAudit({
+              raw,
+              reason: "Full AI narrative unavailable — showing deterministic engine signals only.",
+              retryAttempted: true,
+              computedStrategy: deterministicComputedStrategy,
+              financialConfig,
+              formData,
+              renewals: promptRenewals,
+              cards: strategyCards,
+              personalRules,
+            }) as ParsedAudit;
+          }
+
+          if (!parsed) {
+            await reportAuditLogOutcome(retryAuditLogId || primaryAuditLogId, false, false, {
+              confidence: "low",
+            });
+            throw new Error("Model output was not valid audit JSON. Please retry.");
+          }
+        } catch (parsePipelineError) {
+          log.warn("audit", "Audit parse pipeline failed; falling back to deterministic briefing", { error: parsePipelineError });
           hitDegradedFallback = true;
           parsed = buildDegradedParsedAudit({
             raw,
             reason: "Full AI narrative unavailable — showing deterministic engine signals only.",
             retryAttempted: true,
-            computedStrategy,
+            computedStrategy: deterministicComputedStrategy,
             financialConfig,
             formData,
             renewals: promptRenewals,
@@ -565,26 +599,21 @@ export function AuditProvider({ children }: AuditProviderProps) {
             personalRules,
           }) as ParsedAudit;
         }
-
-        if (!parsed) {
-          await reportAuditLogOutcome(retryAuditLogId || primaryAuditLogId, false, false, {
-            confidence: "low",
-          });
-          throw new Error("Model output was not valid audit JSON. Please retry.");
-        }
         const pendingChargesTotal = Array.isArray(formData?.pendingCharges)
-          ? formData.pendingCharges.reduce((sum, charge) => sum + (parseFloat(String(charge?.amount || 0)) || 0), 0)
+          ? formData.pendingCharges.reduce((sum, charge) => sum + (parseCurrency(charge?.amount) || 0), 0)
           : 0;
+        const explicitDebtSnapshotTotal =
+          Array.isArray(formData?.debts) && formData.debts.length > 0
+            ? formData.debts.reduce(
+                (sum, debt) => sum + (parseCurrency(debt?.balance || debt?.amount) || 0),
+                0
+              )
+            : null;
         const dashboardAnchors = {
-          checking: parseFloat(String(formData?.checking || 0)) || 0,
-          vault: (parseFloat(String(formData?.savings || 0)) || 0) + (parseFloat(String(formData?.ally || 0)) || 0),
+          checking: parseCurrency(formData?.checking) || 0,
+          vault: (parseCurrency(formData?.savings) || 0) + (parseCurrency(formData?.ally) || 0),
           pending: pendingChargesTotal,
-          debts:
-            computedStrategy?.auditSignals?.debt?.total ??
-            ((Array.isArray(formData?.debts) ? formData.debts : []).reduce(
-              (sum, debt) => sum + (parseFloat(String(debt?.balance || debt?.amount || 0)) || 0),
-              0
-            )),
+          debts: explicitDebtSnapshotTotal ?? computedStrategy?.auditSignals?.debt?.total ?? 0,
           available: computedStrategy?.operationalSurplus ?? null,
         };
         const plaidBucketTotal = (bucket: string) =>
@@ -592,21 +621,23 @@ export function AuditProvider({ children }: AuditProviderProps) {
             .filter((account) => account?.bucket === bucket)
             .reduce((sum, account) => sum + (Number(account?._plaidBalance) || 0), 0);
         const hasExplicitMoneyValue = (value: unknown) => String(value ?? "").trim() !== "";
-        const pickInvestmentAnchor = (formValue: unknown, plaidBucket: string, configValue: unknown) => {
-          if (hasExplicitMoneyValue(formValue)) return parseFloat(String(formValue)) || 0;
+        const pickInvestmentAnchor = (fieldKey: string, formValue: unknown, plaidBucket: string, configValue: unknown) => {
+          if (includedInvestmentKeys.size > 0 && !includedInvestmentKeys.has(fieldKey)) return 0;
+          if (hasExplicitMoneyValue(formValue)) return parseCurrency(formValue) || 0;
           const livePlaid = plaidBucketTotal(plaidBucket);
           if (livePlaid > 0) return livePlaid;
           return Number(configValue || 0) || 0;
         };
+        const investmentSnapshot = formData?.investmentSnapshot || {};
         const investmentAnchorBalance =
           [
-            pickInvestmentAnchor(formData?.brokerage, "brokerage", financialConfig?.investmentBrokerage),
-            pickInvestmentAnchor(formData?.roth, "roth", financialConfig?.investmentRoth),
-            pickInvestmentAnchor(formData?.k401Balance, "k401", financialConfig?.k401Balance),
-            plaidBucketTotal("hsa") > 0 ? plaidBucketTotal("hsa") : (Number(financialConfig?.hsaBalance || 0) || 0),
+            pickInvestmentAnchor("brokerage", investmentSnapshot?.brokerage ?? formData?.brokerage, "brokerage", financialConfig?.investmentBrokerage),
+            pickInvestmentAnchor("roth", investmentSnapshot?.roth ?? formData?.roth, "roth", financialConfig?.investmentRoth),
+            pickInvestmentAnchor("k401", investmentSnapshot?.k401Balance ?? formData?.k401Balance, "k401", financialConfig?.k401Balance),
           ].reduce((sum, value) => sum + value, 0);
 
-        parsed = validateParsedAuditConsistency(parsed, {
+        try {
+          parsed = validateParsedAuditConsistency(parsed, {
           operationalSurplus: computedStrategy?.operationalSurplus ?? null,
           nativeScore: computedStrategy?.auditSignals?.nativeScore?.score ?? null,
           nativeRiskFlags: computedStrategy?.auditSignals?.riskFlags ?? [],
@@ -624,7 +655,43 @@ export function AuditProvider({ children }: AuditProviderProps) {
                 netWorth: parsed?.netWorth ?? null,
               }
             : null,
-        }) as ParsedAudit;
+          }) as ParsedAudit;
+        } catch (validationError) {
+          log.warn("audit", "Audit validation failed; rebuilding deterministic fallback", { error: validationError });
+          hitDegradedFallback = true;
+          parsed = validateParsedAuditConsistency(
+            buildDegradedParsedAudit({
+              raw,
+              reason: "Full AI narrative unavailable — showing deterministic engine signals only.",
+              retryAttempted: true,
+              computedStrategy: deterministicComputedStrategy,
+              financialConfig,
+              formData,
+              renewals: promptRenewals,
+              cards: strategyCards,
+              personalRules,
+            }) as ParsedAudit,
+            {
+              operationalSurplus: computedStrategy?.operationalSurplus ?? null,
+              nativeScore: computedStrategy?.auditSignals?.nativeScore?.score ?? null,
+              nativeRiskFlags: computedStrategy?.auditSignals?.riskFlags ?? [],
+              dashboardAnchors,
+              cards: strategyCards,
+              renewals: promptRenewals,
+              formData,
+              computedStrategy,
+              personalRules,
+              investmentAnchors: investmentAnchorBalance > 0
+                ? {
+                    balance: investmentAnchorBalance,
+                    asOf: formData?.date || financialConfig?.investmentsAsOfDate || null,
+                    gateStatus: null,
+                    netWorth: null,
+                  }
+                : null,
+            }
+          ) as ParsedAudit;
+        }
         const previousComparableAudit = history.find((audit) => {
           if (!audit?.ts || audit.isTest) return false;
           const ageMs = Date.now() - Date.parse(audit.ts);
@@ -653,7 +720,9 @@ export function AuditProvider({ children }: AuditProviderProps) {
           isTest: testMode,
           moveChecks: {},
         };
-        await clearAuditDraft();
+        await clearAuditDraft().catch((error) => {
+          log.warn("audit", "Failed to clear recoverable draft after successful parse", { error });
+        });
 
         if (testMode) {
           setViewing(audit);
@@ -679,7 +748,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
             week: getISOWeekNum(formData.date),
             date: formData.date,
             checking: String(formData.checking || "0"),
-            vault: String(formData.ally || "0"),
+            vault: String((parseCurrency(formData.savings) || 0) + (parseCurrency(formData.ally) || 0)),
             totalDebt:
               formData.debts?.reduce((sum, debt) => sum + (parseFloat(String(debt.balance)) || 0), 0).toFixed(0) || "0",
             score: parsed.healthScore?.score || null,
@@ -752,6 +821,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
         await new Promise((resolve) => setTimeout(resolve, 260));
         setAuditLoadingPhase("complete");
         await new Promise((resolve) => setTimeout(resolve, 220));
+        setError(null);
         haptic.success();
         toast.success(
           testMode
@@ -847,6 +917,126 @@ export function AuditProvider({ children }: AuditProviderProps) {
         } else if (isAbort) {
           setError("Audit was interrupted before completion. Your inputs are still here.");
         } else {
+          if (!manualResultText && computedStrategy) {
+            try {
+              const pendingChargesTotal = Array.isArray(formData?.pendingCharges)
+                ? formData.pendingCharges.reduce((sum, charge) => sum + (parseCurrency(charge?.amount) || 0), 0)
+                : 0;
+              const dashboardAnchors = {
+                checking: parseCurrency(formData?.checking) || 0,
+                vault: (parseCurrency(formData?.savings) || 0) + (parseCurrency(formData?.ally) || 0),
+                pending: pendingChargesTotal,
+                debts:
+                  computedStrategy?.auditSignals?.debt?.total ??
+                  ((Array.isArray(formData?.debts) ? formData.debts : []).reduce(
+                    (sum, debt) => sum + (parseCurrency(debt?.balance || debt?.amount) || 0),
+                    0
+                  )),
+                available: computedStrategy?.operationalSurplus ?? null,
+              };
+              const plaidBucketTotal = (bucket: string) =>
+                (Array.isArray(financialConfig?.plaidInvestments) ? financialConfig.plaidInvestments : [])
+                  .filter((account) => account?.bucket === bucket)
+                  .reduce((sum, account) => sum + (Number(account?._plaidBalance) || 0), 0);
+              const includedInvestmentKeys = new Set(
+                Array.isArray(formData?.includedInvestmentKeys)
+                  ? formData.includedInvestmentKeys.map((key) => String(key))
+                  : []
+              );
+              const hasExplicitMoneyValue = (value: unknown) => String(value ?? "").trim() !== "";
+              const pickInvestmentAnchor = (fieldKey: string, formValue: unknown, plaidBucket: string, configValue: unknown) => {
+                if (includedInvestmentKeys.size > 0 && !includedInvestmentKeys.has(fieldKey)) return 0;
+                if (hasExplicitMoneyValue(formValue)) return parseCurrency(formValue) || 0;
+                const livePlaid = plaidBucketTotal(plaidBucket);
+                if (livePlaid > 0) return livePlaid;
+                return Number(configValue || 0) || 0;
+              };
+              const investmentSnapshot = formData?.investmentSnapshot || {};
+              const investmentAnchorBalance =
+                [
+                  pickInvestmentAnchor("brokerage", investmentSnapshot?.brokerage ?? formData?.brokerage, "brokerage", financialConfig?.investmentBrokerage),
+                  pickInvestmentAnchor("roth", investmentSnapshot?.roth ?? formData?.roth, "roth", financialConfig?.investmentRoth),
+                  pickInvestmentAnchor("k401", investmentSnapshot?.k401Balance ?? formData?.k401Balance, "k401", financialConfig?.k401Balance),
+                ].reduce((sum, value) => sum + value, 0);
+
+              const degradedParsed = validateParsedAuditConsistency(
+                buildDegradedParsedAudit({
+                  raw,
+                  reason: failure.userMessage,
+                  retryAttempted: false,
+                  computedStrategy: (computedStrategy || {}) as Record<string, unknown>,
+                  financialConfig,
+                  formData,
+                  renewals: promptRenewals,
+                  cards: strategyCards,
+                  personalRules,
+                }) as ParsedAudit,
+                {
+                  operationalSurplus: computedStrategy?.operationalSurplus ?? null,
+                  nativeScore: computedStrategy?.auditSignals?.nativeScore?.score ?? null,
+                  nativeRiskFlags: computedStrategy?.auditSignals?.riskFlags ?? [],
+                  dashboardAnchors,
+                  cards: strategyCards,
+                  renewals: promptRenewals,
+                  formData,
+                  computedStrategy,
+                  personalRules,
+                  investmentAnchors: investmentAnchorBalance > 0
+                    ? {
+                        balance: investmentAnchorBalance,
+                        asOf: formData?.date || financialConfig?.investmentsAsOfDate || null,
+                        gateStatus: null,
+                        netWorth: null,
+                      }
+                    : null,
+                }
+              ) as ParsedAudit;
+
+              const degradedAudit: AuditRecord = {
+                date: formData.date,
+                ts: auditSessionTs,
+                form: formData,
+                parsed: degradedParsed,
+                isTest: testMode,
+                moveChecks: {},
+              };
+
+              await clearAuditDraft().catch((error) => {
+                log.warn("audit", "Failed to clear recoverable draft after degraded fallback", { error });
+              });
+
+              if (testMode) {
+                setViewing(degradedAudit);
+                nextHistory = [degradedAudit, ...history].slice(0, 52);
+                setHistory(nextHistory);
+                await db.set("audit-history", nextHistory).catch((error) => {
+                  log.warn("audit", "Failed to persist degraded test audit history", { error });
+                });
+              } else {
+                setCurrent(degradedAudit);
+                setMoveChecks({});
+                setViewing(null);
+                nextHistory = [degradedAudit, ...history].slice(0, 52);
+                setHistory(nextHistory);
+                await Promise.all([
+                  db.set("current-audit", degradedAudit),
+                  db.set("move-states", {}),
+                  db.set("audit-history", nextHistory),
+                ]).catch((error) => {
+                  log.warn("audit", "Failed to persist degraded fallback audit", { error });
+                });
+              }
+
+              setError(null);
+              setAuditLoadingPhase("complete");
+              haptic.success();
+              toast.success("Audit completed with deterministic fallback");
+              return;
+            } catch (degradedError) {
+              log.warn("audit", "Deterministic fallback after request failure also failed", { error: degradedError });
+            }
+          }
+
           setError(failure.userMessage);
         }
         navTo("input");

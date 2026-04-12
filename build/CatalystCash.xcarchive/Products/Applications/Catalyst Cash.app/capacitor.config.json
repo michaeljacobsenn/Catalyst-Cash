@@ -1,0 +1,43 @@
+{
+  "appId": "com.jacobsen.portfoliopro",
+  "appName": "Catalyst Cash",
+  "webDir": "dist",
+  "server": {
+    "allowNavigation": ["catalystcash.app"]
+  },
+  "ios": {
+    "contentInset": "never",
+    "preferredContentMode": "mobile",
+    "allowsLinkPreview": false,
+    "allowsBackForwardNavigationGestures": false,
+    "scheme": "catalystcash",
+    "limitsNavigationsToAppBoundDomains": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0,
+      "launchAutoHide": true,
+      "backgroundColor": "#0C121B",
+      "showSpinner": false,
+      "androidSplashResourceName": "splash",
+      "iosSpinnerStyle": "small"
+    },
+    "StatusBar": {
+      "style": "Dark",
+      "backgroundColor": "#0C121B"
+    },
+    "Preferences": {
+      "group": "CatalystCashStorage"
+    }
+  },
+  "packageClassList": [
+    "SignInWithApple",
+    "SecureStoragePlugin",
+    "PurchasesPlugin",
+    "RevenueCatUIPlugin",
+    "FaceIdPlugin",
+    "PdfViewerPlugin",
+    "ICloudSyncPlugin",
+    "ExportFilePlugin"
+  ]
+}

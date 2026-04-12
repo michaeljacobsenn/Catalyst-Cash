@@ -43,6 +43,8 @@ export const PRICING_FACTS = {
   yearlyPerMonth: `${IAP_PRICING.yearly.perMonth}/mo effective`,
   yearlySavings: IAP_PRICING.yearly.savings,
   trial: IAP_PRICING.yearly.trial,
+  lifetime: `${IAP_PRICING.lifetime.price} once`,
+  lifetimeSavings: IAP_PRICING.lifetime.savings,
 };
 
 export const PAYWALL_FEATURES = [

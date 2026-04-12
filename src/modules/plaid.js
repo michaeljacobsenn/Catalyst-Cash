@@ -918,15 +918,50 @@ export async function forceBackendSync(options = {}) {
     timeoutMs: SYNC_FORCE_TIMEOUT_MS,
     authBootstrapTimeoutMs: LINK_TOKEN_TIMEOUT_MS,
   });
+  let payload = null;
+  try {
+    payload = await res.clone().json();
+  } catch {
+    payload = null;
+  }
   if (!res.ok) {
     if (res.status === 429) {
       void log.warn("plaid", `Force sync throttled by backend cooldown. Using cached D1 data.`);
-      return false;
+      return {
+        success: false,
+        throttled: true,
+        status: res.status,
+        message: payload?.message || "Manual sync is on cooldown.",
+        reconnectRequired: false,
+        failedItems: [],
+      };
     }
-    void log.error("plaid", `Force sync failed: HTTP ${res.status}`);
-    return false;
+    const reconnectRequired =
+      payload?.error === "reconnect_required" ||
+      (Array.isArray(payload?.reconnectRequiredItemIds) && payload.reconnectRequiredItemIds.length > 0);
+    const message = payload?.message || `Force sync failed: HTTP ${res.status}`;
+    void log.error("plaid", `Force sync failed: HTTP ${res.status}`, {
+      reconnectRequired,
+      message,
+      failedItems: payload?.failedItems || [],
+    });
+    return {
+      success: false,
+      throttled: false,
+      status: res.status,
+      message,
+      reconnectRequired,
+      failedItems: payload?.failedItems || [],
+    };
   }
-  return true;
+  return {
+    success: true,
+    throttled: false,
+    status: res.status,
+    message: payload?.message || "Live sync completed.",
+    reconnectRequired: false,
+    failedItems: [],
+  };
 }
 
 export async function maintainBackendSync() {
@@ -1975,12 +2010,18 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
  */
 export function getPlaidAutoFill(cards = [], bankAccounts = []) {
   // Sum checking accounts
-  const checkingAccounts = bankAccounts.filter(b => b.accountType === "checking" && b._plaidBalance != null);
-  const checking = checkingAccounts.reduce((sum, b) => sum + (b._plaidAvailable ?? b._plaidBalance ?? 0), 0);
+  const checkingAccounts = bankAccounts.filter(b => b.accountType === "checking");
+  const checking = checkingAccounts.reduce(
+    (sum, b) => sum + Number(b._plaidAvailable ?? b._plaidBalance ?? b.balance ?? 0),
+    0
+  );
 
   // Sum savings/vault accounts
-  const savingsAccounts = bankAccounts.filter(b => b.accountType === "savings" && b._plaidBalance != null);
-  const vault = savingsAccounts.reduce((sum, b) => sum + (b._plaidAvailable ?? b._plaidBalance ?? 0), 0);
+  const savingsAccounts = bankAccounts.filter(b => b.accountType === "savings");
+  const vault = savingsAccounts.reduce(
+    (sum, b) => sum + Number(b._plaidAvailable ?? b._plaidBalance ?? b.balance ?? 0),
+    0
+  );
 
   // Credit card balances (debts)
   const debts = cards

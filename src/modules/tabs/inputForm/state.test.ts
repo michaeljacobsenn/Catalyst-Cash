@@ -52,6 +52,28 @@ describe("input form state helpers", () => {
     expect(result.debts[0].balance).toBe(450);
   });
 
+  it("mergePlaidAutoFillIntoForm does not re-add debt rows explicitly deleted by the user", () => {
+    const result = mergePlaidAutoFillIntoForm(
+      {
+        checking: 900,
+        savings: 700,
+        debts: [{ cardId: "card-1", name: "Visa", balance: 450 }],
+      },
+      {
+        checking: 1200,
+        vault: 800,
+        debts: [
+          { cardId: "card-1", name: "Visa", balance: 300 },
+          { cardId: "card-2", name: "Amex", balance: 125 },
+        ],
+      },
+      { checking: false, vault: false, debts: {} },
+      { "card-2": true }
+    );
+
+    expect(result.debts).toEqual([{ cardId: "card-1", name: "Visa", balance: 300 }]);
+  });
+
   it("mergeLastAuditIntoForm prefers fresh plaid balances over last audit values", () => {
     const result = mergeLastAuditIntoForm({
       previousForm: {
@@ -65,6 +87,8 @@ describe("input form state helpers", () => {
           checking: "100",
           savings: "200",
           debts: [{ name: "Visa", balance: "700" }],
+          autoPaycheckAdd: true,
+          paycheckAddOverride: "1800",
         },
       },
       cards: [{ id: "card-1", name: "Visa" }],
@@ -76,6 +100,8 @@ describe("input form state helpers", () => {
     expect(result.savings).toBe(2200);
     expect(result.debts[0].cardId).toBe("card-1");
     expect(result.debts[0].balance).toBe(400);
+    expect(result.autoPaycheckAdd).toBe(true);
+    expect(result.paycheckAddOverride).toBe("");
   });
 
   it("treats imported audits with date-only form snapshots as non-reusable seed data", () => {

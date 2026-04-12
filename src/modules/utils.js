@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════
   import { Capacitor,registerPlugin } from "@capacitor/core";
   import { Preferences } from "@capacitor/preferences";
+  import { getShortCardLabel } from "./cards.js";
   import { buildDashboardSafetyModel } from "./dashboard/safetyModel.js";
   import { log } from "./logger.js";
   import { clamp, getGradeLetter } from "./mathHelpers.js";
@@ -210,6 +211,31 @@ export function parseCurrency(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function sanitizeVisibleAuditCopy(value) {
+  const text = String(value || "");
+  if (!text) return "";
+  return text
+    .replace(/\b[Tt]he user's\b/g, "your")
+    .replace(/\b[Tt]he user has\b/g, "you have")
+    .replace(/\b[Tt]he user is\b/g, "you are")
+    .replace(/\b[Tt]he user\b/g, "you")
+    .replace(/\buser's\b/g, "your")
+    .replace(/\s{2,}/g, " ")
+    .replace(/,\s*,/g, ",")
+    .replace(/,\s*\./g, ".")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/^[`"',;\s]+|[`"',;\s]+$/g, "")
+    .trim();
+}
+
+function normalizeLooseText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 const CANONICAL_DASHBOARD_CATEGORIES = new Map([
   ["checking", "Checking"],
   ["vault", "Vault"],
@@ -238,6 +264,17 @@ function extractDollarAmountTotal(lines) {
         return lineSum + (amount != null ? Math.max(0, amount) : 0);
       }, 0)
     );
+  }, 0);
+}
+
+function extractOperationalAllocationTotal(moveItems) {
+  if (!Array.isArray(moveItems)) return 0;
+  return moveItems.reduce((sum, item) => {
+    if (!item || typeof item !== "object") return sum;
+    const amount = Number(item.amount);
+    if (!Number.isFinite(amount) || amount <= 0) return sum;
+    if (item.transactional === true) return sum + amount;
+    return sum;
   }, 0);
 }
 
@@ -309,13 +346,13 @@ function normalizeAlertEntries(value) {
       }
       if (!entry || typeof entry !== "object") return null;
       const title = typeof entry.title === "string" ? entry.title.trim() : "";
-      const detail = typeof entry.detail === "string" ? entry.detail.trim() : title;
+      const detail = typeof entry.detail === "string" ? sanitizeVisibleAuditCopy(entry.detail) : title;
       const level = typeof entry.level === "string" ? entry.level.trim().toLowerCase() : "warn";
       if (!title && !detail) return null;
       return {
         level: level || "warn",
-        title: title || detail,
-        detail: detail || title,
+        title: sanitizeVisibleAuditCopy(title || detail),
+        detail: sanitizeVisibleAuditCopy(detail || title),
       };
     })
     .filter(Boolean);
@@ -332,8 +369,24 @@ function normalizeAlertEntries(value) {
 function normalizeWeeklyMoveEntries(value) {
   if (!Array.isArray(value)) return { weeklyMoves: [], moveItems: [], moveCards: [] };
 
+  const extractCompoundAllocationRows = (text) => {
+    const source = String(text || "");
+    if (!source) return [];
+    const pattern = /([^,.;]+?)\s*\(\$([\d,]+(?:\.\d{2})?)\s+by\s+(\d{4}-\d{2}-\d{2})\)/g;
+    const rows = [];
+    let match;
+    while ((match = pattern.exec(source)) !== null) {
+      rows.push({
+        label: match[1].replace(/\s+/g, " ").trim().replace(/^[-–—]\s*/, ""),
+        amount: `$${match[2]}`,
+        date: match[3],
+      });
+    }
+    return rows;
+  };
+
   const moveCards = value
-    .map((item) => {
+    .flatMap((item) => {
       if (typeof item === "string") {
         const text = item.trim();
         return text
@@ -350,36 +403,63 @@ function normalizeWeeklyMoveEntries(value) {
               contributionKey: null,
               transactional: undefined,
             }
-          : null;
+          : [];
       }
-      if (!item || typeof item !== "object") return null;
+      if (!item || typeof item !== "object") return [];
       const title = typeof item.title === "string" ? item.title.trim() : "";
       const detail = typeof item.detail === "string" ? item.detail.trim() : "";
       const text = detail || title || (typeof item.text === "string" ? item.text.trim() : "");
-      if (!text) return null;
-      return {
-        title: title || text,
-        detail: detail || text,
+      if (!text) return [];
+      const normalizedItem = {
+        title: sanitizeVisibleAuditCopy(title || text),
+        detail: sanitizeVisibleAuditCopy(detail || text),
         amount: typeof item.amount === "string" ? item.amount : item.amount == null ? null : fmt(parseCurrency(item.amount) || 0),
         priority: typeof item.priority === "string" ? item.priority.trim().toLowerCase() : null,
         tag: typeof item.priority === "string" ? item.priority.trim().toUpperCase() : typeof item.tag === "string" ? item.tag.trim().toUpperCase() : null,
         semanticKind: typeof item.semanticKind === "string" ? item.semanticKind.trim() : null,
-        targetLabel: typeof item.targetLabel === "string" ? item.targetLabel.trim() : null,
-        sourceLabel: typeof item.sourceLabel === "string" ? item.sourceLabel.trim() : null,
+        targetLabel: typeof item.targetLabel === "string" ? sanitizeVisibleAuditCopy(item.targetLabel) : null,
+        sourceLabel: typeof item.sourceLabel === "string" ? sanitizeVisibleAuditCopy(item.sourceLabel) : null,
+        routeLabel: typeof item.routeLabel === "string" ? sanitizeVisibleAuditCopy(item.routeLabel) : null,
+        fundingLabel: typeof item.fundingLabel === "string" ? sanitizeVisibleAuditCopy(item.fundingLabel) : null,
         targetKey: typeof item.targetKey === "string" ? item.targetKey.trim() : null,
         contributionKey: typeof item.contributionKey === "string" ? item.contributionKey.trim() : null,
         transactional: typeof item.transactional === "boolean" ? item.transactional : undefined,
       };
+      const allocationRows = extractCompoundAllocationRows(normalizedItem.detail);
+      if (allocationRows.length >= 2) {
+        return allocationRows.map((row) => ({
+          ...normalizedItem,
+          title: sanitizeAllocationLabel(row.label),
+          detail: buildReserveInstruction({
+            sourceLabel: inferReserveAccountLabel(sanitizeAllocationLabel(row.label)),
+            targetLabel: sanitizeAllocationLabel(row.label),
+            amount: row.amount,
+            due: row.date,
+          }),
+          amount: row.amount,
+          semanticKind: normalizedItem.semanticKind || "spending-hold",
+          targetLabel: sanitizeAllocationLabel(row.label),
+          sourceLabel: inferReserveAccountLabel(sanitizeAllocationLabel(row.label)),
+          routeLabel: buildReserveRouteLabel(inferReserveAccountLabel(sanitizeAllocationLabel(row.label))),
+          fundingLabel: null,
+          transactional: false,
+        }));
+      }
+      return normalizedItem;
     })
     .filter(Boolean);
 
   const moveItems = moveCards.map((item) => ({
     text: item.detail || item.title,
+    title: item.title || null,
+    detail: item.detail || null,
     tag: item.tag,
     amount: parseCurrency(item.amount),
     semanticKind: item.semanticKind,
     targetLabel: item.targetLabel,
     sourceLabel: item.sourceLabel,
+    routeLabel: item.routeLabel,
+    fundingLabel: item.fundingLabel,
     targetKey: item.targetKey,
     contributionKey: item.contributionKey,
     transactional: item.transactional,
@@ -433,7 +513,7 @@ function normalizeRadar(radarValue, longRangeRadarValue) {
 
 function normalizeNextAction(value) {
   if (typeof value === "string") {
-    const detail = value.trim();
+    const detail = sanitizeVisibleAuditCopy(value);
     return {
       title: detail ? "Next Action" : "",
       detail,
@@ -450,12 +530,12 @@ function normalizeNextAction(value) {
   }
 
   return {
-    title: typeof value.title === "string" ? value.title.trim() : "Next Action",
+    title: typeof value.title === "string" ? sanitizeVisibleAuditCopy(value.title) : "Next Action",
     detail:
       typeof value.detail === "string"
-        ? value.detail.trim()
+        ? sanitizeVisibleAuditCopy(value.detail)
         : typeof value.summary === "string"
-          ? value.summary.trim()
+          ? sanitizeVisibleAuditCopy(value.summary)
           : "",
     amount:
       typeof value.amount === "string"
@@ -621,17 +701,133 @@ function collectRuleBasedCashObligations({
   const netGapMatch = text.match(/Remaining Net Gap:\s*\$?([\d,]+(?:\.\d{1,2})?)/i);
   const nyDueMatch = text.match(/Total NY Liability:\s*\$?[\d,]+(?:\.\d{1,2})?\s+due\s+(\d{4}-\d{2}-\d{2})/i);
   if (netGapMatch && nyDueMatch) {
+    for (let index = obligations.length - 1; index >= 0; index -= 1) {
+      const name = String(obligations[index]?.renewal?.name || "");
+      if (/ny liability|ny tax payment|tax escrow/i.test(name)) {
+        obligations.splice(index, 1);
+      }
+    }
     pushObligation("NY Tax Funding Gap", netGapMatch[1], nyDueMatch[1]);
   }
 
   return obligations.sort((left, right) => (left.due < right.due ? -1 : left.due > right.due ? 1 : right.amount - left.amount));
 }
 
+function parseAuditRuleHints({ personalRules = "", cards = [] } = {}) {
+  const text = String(personalRules || "").trim();
+  if (!text) {
+    return {
+      checkingOnlyLabels: new Set(),
+      allyOnlyLabels: new Set(),
+      safetyCardTarget: "",
+      enforceSafetyPayment: false,
+      allyReconciliationRequired: false,
+      minimizeAllyWithdrawals: false,
+    };
+  }
+
+  const checkingOnlyLabels = new Set();
+  const allyOnlyLabels = new Set();
+
+  for (const match of text.matchAll(/-\s*([^:\n]+?)\s+is ALWAYS a checking-paid cash outflow/gi)) {
+    const label = sanitizeAllocationLabel(match[1]);
+    if (label) checkingOnlyLabels.add(normalizeLooseText(label));
+  }
+
+  for (const match of text.matchAll(/-\s*([^:\n]+?)\s+RESERVED\s*\(locked in ally\)/gi)) {
+    const label = sanitizeAllocationLabel(match[1]);
+    if (label) allyOnlyLabels.add(normalizeLooseText(label));
+  }
+
+  const rawSafetyCard = String(text.match(/DefaultSubscriptionsCard\s*=\s*([^\n]+)/i)?.[1] || "").trim();
+  const normalizedCards = Array.isArray(cards) ? cards : [];
+  const matchedSafetyCard = normalizedCards.find((card) => {
+    const labels = [card?.name, card?.nickname, card?.institution]
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter(Boolean);
+    const normalizedRaw = rawSafetyCard.toLowerCase();
+    return labels.some((label) => normalizedRaw.includes(label) || label.includes(normalizedRaw));
+  });
+
+  return {
+    checkingOnlyLabels,
+    allyOnlyLabels,
+    safetyCardTarget: normalizeDebtTargetLabel(
+      matchedSafetyCard ? (getShortCardLabel(normalizedCards, matchedSafetyCard) || matchedSafetyCard.name) : rawSafetyCard,
+      normalizedCards
+    ),
+    enforceSafetyPayment:
+      /statement close\/due date is unknown/i.test(text) &&
+      /\bpay this card toward \$?0(?:\.00)? weekly\b/i.test(text),
+    allyReconciliationRequired: /unallocated\s*=\s*allyvaulttotal/i.test(text),
+    minimizeAllyWithdrawals: /prefer ONE planned transfer/i.test(text),
+  };
+}
+
 function buildObligationSummary(obligations = []) {
-  return obligations
-    .slice(0, 3)
-    .map((entry) => `${entry.renewal?.name || "Upcoming bill"} (${fmt(entry.amount)} by ${entry.due})`)
-    .join(", ");
+  const items = obligations
+    .slice(0, 4)
+    .map((entry) => `${sanitizeAllocationLabel(entry.renewal?.name || "Upcoming bill")} (${fmt(entry.amount)} by ${entry.due})`);
+  const remaining = Math.max(0, obligations.length - items.length);
+  if (remaining > 0) items.push(`+ ${remaining} more protected item${remaining === 1 ? "" : "s"}`);
+  return items.join(", ");
+}
+
+function buildObligationLabelSummary(obligations = []) {
+  const items = obligations
+    .slice(0, 4)
+    .map((entry) => sanitizeAllocationLabel(entry.renewal?.name || "Upcoming bill"))
+    .filter(Boolean);
+  const remaining = Math.max(0, obligations.length - items.length);
+  if (remaining > 0) items.push(`+ ${remaining} more`);
+  return items.join(", ");
+}
+
+function extractDebtFundingIntentFromNotes({ notes = "", cards = [] } = {}) {
+  const text = String(notes || "").trim();
+  if (!text) return null;
+
+  const amountMatches = [...text.matchAll(/\$?\s*([\d,]+(?:\.\d{1,2})?)/g)];
+  const amount = amountMatches.reduce((sum, match) => {
+    const parsedAmount = parseCurrency(match[1]) || 0;
+    return parsedAmount >= 10 ? sum + parsedAmount : sum;
+  }, 0);
+  if (!(amount > 0)) return null;
+
+  const normalized = text.toLowerCase();
+  const intentDetected =
+    /\b(to be paid|paid towards|pay toward|pay towards|pay down|toward|towards)\b/.test(normalized) ||
+    /\bavailable for\b/.test(normalized);
+  if (!intentDetected) return null;
+
+  const normalizedCards = Array.isArray(cards) ? cards : [];
+  let matchedCard =
+    normalizedCards.find((card) => {
+      const labels = [card?.name, card?.nickname, card?.institution]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean);
+      return labels.some((label) => normalized.includes(label.toLowerCase()));
+    }) || null;
+
+  if (!matchedCard && /\bamex\b/i.test(text)) {
+    const amexCards = normalizedCards.filter((card) =>
+      [card?.name, card?.nickname, card?.institution]
+        .map((value) => String(value || "").toLowerCase())
+        .some((label) => label.includes("american express") || label.includes("amex"))
+    );
+    if (amexCards.length === 1) matchedCard = amexCards[0];
+  }
+
+  const targetLabel = matchedCard
+    ? (getShortCardLabel(normalizedCards, matchedCard) || matchedCard.name || null)
+    : (/amex/i.test(text) ? "Amex debt" : null);
+  if (!targetLabel) return null;
+
+  return {
+    amount,
+    targetLabel,
+    detail: `You noted ${fmt(amount)} is earmarked toward ${targetLabel}. Treat it as planned payoff context, not optional free cash.`,
+  };
 }
 
 function isGenericDebtCopy(text) {
@@ -653,6 +849,20 @@ function withExplicitDebtTarget(text, targetLabel) {
     .replace(/\bhighest interest credit card debt\b/gi, targetLabel)
     .replace(/\bhigh[- ]interest credit card debt\b/gi, targetLabel)
     .replace(/\bpriority debt\b/gi, targetLabel);
+}
+
+function normalizeDebtTargetLabel(targetLabel, cards = []) {
+  const target = String(targetLabel || "").trim();
+  if (!target) return "";
+  const normalized = target.toLowerCase();
+  const matchedCard = (Array.isArray(cards) ? cards : []).find((card) => {
+    const labels = [card?.name, card?.nickname]
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter(Boolean);
+    return labels.some((label) => normalized.includes(label));
+  });
+  if (!matchedCard) return target;
+  return getShortCardLabel(cards, matchedCard) || target;
 }
 
 function inferInvestmentGateStatus({
@@ -707,15 +917,632 @@ function buildProtectedCashAction({
   computedStrategy = {},
 }) {
   const amount = obligations.reduce((sum, item) => sum + Math.max(0, item.amount || 0), 0);
-  const obligationSummary = buildObligationSummary(obligations);
+  const obligationSummary = obligations
+    .slice(0, 4)
+    .map((item) => {
+      const label = sanitizeAllocationLabel(item?.renewal?.name || "Upcoming bill");
+      const reserveAccount = inferReserveSourceLabel(item);
+      return `${fmt(item.amount)} ${reserveAccount === "Checking" ? "kept in Checking" : `moved to ${reserveAccount}`} for ${label} by ${item.due}`;
+    })
+    .join("; ");
   const fallbackAmount = Math.max(0, Number(computedStrategy?.requiredTransfer || 0), Number(computedStrategy?.operationalSurplus || 0));
   return {
-    title: "Protect the next 7 days",
+    title: amount > 0 ? `Allocate ${fmt(amount)} of protected cash` : "Protect the next 7 days",
     detail: obligationSummary
-      ? `Hold extra debt paydown and reserve cash for ${obligationSummary}.`
+      ? `Assign the protected dollars now: ${obligationSummary}. Do not route money to optional debt payoff or investing until these reserves are set.`
       : "Hold extra debt paydown until near-term cash obligations are fully covered.",
     amount: amount > 0 ? fmt(amount) : fallbackAmount > 0 ? fmt(fallbackAmount) : null,
   };
+}
+
+function buildDebtFundingStagingAction(debtFundingIntent = null) {
+  if (!(debtFundingIntent?.amount > 0) || !debtFundingIntent?.targetLabel) return null;
+  return {
+    title: `Stage ${debtFundingIntent.targetLabel} payoff`,
+    detail: `${debtFundingIntent.detail} Keep those proceeds outside spendable cash and apply them only after protected obligations are covered and the funds settle.`,
+    amount: fmt(debtFundingIntent.amount),
+  };
+}
+
+function inferPreferredInvestmentDestination({ formData = {}, financialConfig = {} } = {}) {
+  const buckets = [
+    {
+      label: "Roth IRA",
+      targetKey: "investmentRoth",
+      contributionKey: "rothContributedYTD",
+      values: [formData?.roth, financialConfig?.investmentRoth],
+    },
+    {
+      label: "401(k)",
+      targetKey: "k401Balance",
+      contributionKey: "k401ContributedYTD",
+      values: [formData?.k401Balance, financialConfig?.k401Balance],
+    },
+    {
+      label: "HSA",
+      targetKey: "hsaBalance",
+      contributionKey: "hsaContributedYTD",
+      values: [formData?.hsaBalance, financialConfig?.hsaBalance],
+    },
+    {
+      label: "Brokerage",
+      targetKey: "investmentBrokerage",
+      contributionKey: null,
+      values: [formData?.brokerage, financialConfig?.investmentBrokerage],
+    },
+  ];
+
+  return (
+    buckets.find((bucket) =>
+      bucket.values.some((value) => {
+        const parsed = parseCurrency(value);
+        return parsed != null && parsed >= 0;
+      })
+    ) || null
+  );
+}
+
+function sanitizeAllocationLabel(value) {
+  return String(value || "")
+    .replace(/^["'`,.\s]+|["'`,.\s]+$/g, "")
+    .replace(/^hold extra debt paydown and reserve cash for\s+/i, "")
+    .replace(/^allocate (?:the )?(?:full )?\$?[\d,]+(?:\.\d{2})?\s+(?:of )?(?:deployable|protected)\s+cash\s+(?:in order:|to)\s*/i, "")
+    .replace(/^(?:protect|reserve|set aside|withhold|keep|hold)\s+(?:extra\s+)?(?:cash\s+)?(?:for\s+)?/i, "")
+    .replace(/\s+(?:by|due)\s+\d{4}-\d{2}-\d{2}\.?$/i, "")
+    .replace(/\s*\(\$[\d,]+(?:\.\d{2})?\s+(?:by|due)\s+\d{4}-\d{2}-\d{2}\)\s*$/i, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[,;:\-–—\s]+|[,;:\-–—\s]+$/g, "")
+    .trim() || "Upcoming obligation";
+}
+
+function inferReserveAccountLabel(label) {
+  const normalized = String(label || "").toLowerCase();
+  if (/\btax\b|\bescrow\b|\btrip\b|\binsurance\b|\bgifts?\b|\bholiday\b/.test(normalized)) return "Vault";
+  return "Checking";
+}
+
+function inferReserveSourceLabel(obligation = null) {
+  if (typeof obligation?.preferredSourceLabel === "string" && obligation.preferredSourceLabel.trim()) {
+    return obligation.preferredSourceLabel.trim();
+  }
+  const chargedTo = String(obligation?.renewal?.chargedTo || "").trim();
+  const normalized = chargedTo.toLowerCase();
+  const obligationName = sanitizeAllocationLabel(obligation?.renewal?.name || "");
+
+  if (!chargedTo) {
+    return inferReserveAccountLabel(obligationName);
+  }
+  if (/\bsavings\b|\bally\b|\bvault\b/.test(normalized)) return "Vault";
+  if (/\bchecking\b|\bcash\b/.test(normalized)) return "Checking";
+  return chargedTo;
+}
+
+function buildReserveRouteLabel(sourceLabel) {
+  if (sourceLabel === "Vault") return "Checking → Vault";
+  if (sourceLabel) return `Keep in ${sourceLabel}`;
+  return "";
+}
+
+function buildProtectedFundingLabel({ keepInChecking = 0, keepInVault = 0, moveFromChecking = 0, moveFromVault = 0, preferredAccount = "" }) {
+  if (preferredAccount === "Vault") {
+    if (keepInVault > 0 && moveFromChecking > 0) return `Already in Vault ${fmt(keepInVault)} + move ${fmt(moveFromChecking)} from Checking`;
+    if (moveFromChecking > 0) return `Move ${fmt(moveFromChecking)} from Checking to Vault`;
+    if (keepInVault > 0) return `Already in Vault ${fmt(keepInVault)}`;
+  }
+  if (keepInChecking > 0 && moveFromVault > 0) return `Already in Checking ${fmt(keepInChecking)} + move ${fmt(moveFromVault)} from Vault`;
+  if (moveFromVault > 0) return `Move ${fmt(moveFromVault)} from Vault to Checking`;
+  if (keepInChecking > 0) return `Already in Checking ${fmt(keepInChecking)}`;
+  return "";
+}
+
+function buildOptionalFundingLabel({ fromChecking = 0, fromVault = 0, targetLabel = "" }) {
+  if (targetLabel === "Vault") {
+    if (fromChecking > 0 && fromVault > 0) return `Checking ${fmt(fromChecking)} + Vault ${fmt(fromVault)} held for Vault`;
+    if (fromVault > 0) return `Vault ${fmt(fromVault)} held in place`;
+    if (fromChecking > 0) return `Checking ${fmt(fromChecking)} → Vault`;
+    return "";
+  }
+  if (fromChecking > 0 && fromVault > 0) return `Checking ${fmt(fromChecking)} + Vault ${fmt(fromVault)} → Checking → ${targetLabel}`;
+  if (fromVault > 0) return `Vault ${fmt(fromVault)} → Checking → ${targetLabel}`;
+  if (fromChecking > 0) return `Checking ${fmt(fromChecking)} → ${targetLabel}`;
+  return "";
+}
+
+function buildReserveInstruction({ sourceLabel, targetLabel, amount, due }) {
+  const label = sanitizeAllocationLabel(targetLabel);
+  const normalizedAmount = typeof amount === "string" ? amount : fmt(parseCurrency(amount) || 0);
+  if (sourceLabel === "Vault") {
+    return `Transfer ${normalizedAmount} from Checking to Vault for ${label}. Leave it reserved there until ${due}.`;
+  }
+  if (sourceLabel === "Checking") {
+    return `Keep ${normalizedAmount} in Checking for ${label}. It is reserved for ${due}.`;
+  }
+  return `Keep ${normalizedAmount} in ${sourceLabel || "cash"} for ${label}. It is reserved for ${due}.`;
+}
+
+function allocateProtectedHold({
+  obligation,
+  checkingPool = 0,
+  vaultPool = 0,
+  checkingFloor = 0,
+}) {
+  const amountNeeded = Math.max(0, Number(obligation?.amount) || 0);
+  const targetLabel = sanitizeAllocationLabel(obligation?.renewal?.name || "Upcoming obligation");
+  const preferredAccount = inferReserveSourceLabel(obligation);
+  const due = String(obligation?.due || "").trim();
+  if (!(amountNeeded > 0)) {
+    return {
+      allocated: 0,
+      checkingPool,
+      vaultPool,
+      move: null,
+    };
+  }
+
+  if (preferredAccount === "Vault") {
+    const keepInVault = Math.min(vaultPool, amountNeeded);
+    let neededAfterVault = amountNeeded - keepInVault;
+    const transferableChecking = Math.max(0, checkingPool - checkingFloor);
+    const moveFromChecking = Math.min(transferableChecking, neededAfterVault);
+    neededAfterVault -= moveFromChecking;
+    const allocated = keepInVault + moveFromChecking;
+    const nextVaultPool = Number((vaultPool - keepInVault).toFixed(2));
+    const nextCheckingPool = Number((checkingPool - moveFromChecking).toFixed(2));
+    const routeLabel = buildProtectedFundingLabel({ keepInVault, moveFromChecking, preferredAccount });
+    let detail = "";
+    if (keepInVault > 0 && moveFromChecking > 0) {
+      detail = `Keep ${fmt(keepInVault)} in Vault and transfer ${fmt(moveFromChecking)} from Checking to Vault for ${targetLabel}.`;
+    } else if (moveFromChecking > 0) {
+      detail = `Transfer ${fmt(moveFromChecking)} from Checking to Vault for ${targetLabel}.`;
+    } else {
+      detail = `Keep ${fmt(keepInVault)} in Vault for ${targetLabel}.`;
+    }
+    if (allocated < amountNeeded) {
+      detail += ` That covers ${fmt(allocated)} of the ${fmt(amountNeeded)} needed by ${due}, leaving a ${fmt(amountNeeded - allocated)} gap.`;
+    } else {
+      detail += ` Leave it reserved there until ${due}.`;
+    }
+    return {
+      allocated,
+      checkingPool: nextCheckingPool,
+      vaultPool: nextVaultPool,
+      move: {
+        title: targetLabel,
+        detail,
+        amount: fmt(allocated || amountNeeded),
+        priority: "required",
+        semanticKind: "spending-hold",
+        targetLabel,
+        sourceLabel: preferredAccount,
+        routeLabel,
+        fundingLabel: routeLabel,
+        transactional: false,
+      },
+    };
+  }
+
+  const keepInChecking = Math.min(checkingPool, amountNeeded);
+  let neededAfterChecking = amountNeeded - keepInChecking;
+  const moveFromVault = Math.min(vaultPool, neededAfterChecking);
+  neededAfterChecking -= moveFromVault;
+  const allocated = keepInChecking + moveFromVault;
+  const nextCheckingPool = Number((checkingPool - keepInChecking).toFixed(2));
+  const nextVaultPool = Number((vaultPool - moveFromVault).toFixed(2));
+  const routeLabel = buildProtectedFundingLabel({ keepInChecking, moveFromVault, preferredAccount });
+  let detail = "";
+  if (keepInChecking > 0 && moveFromVault > 0) {
+    detail = `Keep ${fmt(keepInChecking)} in Checking and transfer ${fmt(moveFromVault)} from Vault to Checking for ${targetLabel}.`;
+  } else if (moveFromVault > 0) {
+    detail = `Transfer ${fmt(moveFromVault)} from Vault to Checking for ${targetLabel}.`;
+  } else {
+    detail = `Keep ${fmt(keepInChecking)} in Checking for ${targetLabel}.`;
+  }
+  if (allocated < amountNeeded) {
+    detail += ` That covers ${fmt(allocated)} of the ${fmt(amountNeeded)} needed by ${due}, leaving a ${fmt(amountNeeded - allocated)} gap.`;
+  } else {
+    detail += ` It is reserved for ${due}.`;
+  }
+  return {
+    allocated,
+    checkingPool: nextCheckingPool,
+    vaultPool: nextVaultPool,
+    move: {
+      title: targetLabel,
+      detail,
+      amount: fmt(allocated || amountNeeded),
+      priority: "required",
+      semanticKind: "spending-hold",
+      targetLabel,
+      sourceLabel: preferredAccount,
+      routeLabel,
+      fundingLabel: routeLabel,
+      transactional: false,
+    },
+  };
+}
+
+function allocateOptionalPayment({
+  title,
+  targetLabel,
+  semanticKind,
+  priority,
+  requestedAmount = 0,
+  checkingPool = 0,
+  vaultPool = 0,
+  checkingFloor = 0,
+  detailSuffix = "",
+}) {
+  const amountNeeded = Math.max(0, Number(requestedAmount) || 0);
+  const transferableChecking = Math.max(0, checkingPool - checkingFloor);
+  const fromChecking = Math.min(transferableChecking, amountNeeded);
+  const remainingNeed = amountNeeded - fromChecking;
+  const fromVault = Math.min(vaultPool, remainingNeed);
+  const allocated = fromChecking + fromVault;
+  if (!(allocated > 0)) {
+    return { allocated: 0, checkingPool, vaultPool, move: null };
+  }
+  const nextCheckingPool = Number((checkingPool - fromChecking).toFixed(2));
+  const nextVaultPool = Number((vaultPool - fromVault).toFixed(2));
+  const routeLabel = buildOptionalFundingLabel({ fromChecking, fromVault, targetLabel });
+  let detail = "";
+  if (fromChecking > 0 && fromVault > 0) {
+    detail = `Send ${fmt(fromChecking)} from Checking and transfer ${fmt(fromVault)} from Vault to Checking for ${targetLabel}.`;
+  } else if (fromVault > 0) {
+    detail = `Transfer ${fmt(fromVault)} from Vault to Checking and send it to ${targetLabel}.`;
+  } else {
+    detail = `Send ${fmt(fromChecking)} from Checking to ${targetLabel}.`;
+  }
+  if (detailSuffix) detail += ` ${sanitizeVisibleAuditCopy(detailSuffix)}`;
+  return {
+    allocated,
+    checkingPool: nextCheckingPool,
+    vaultPool: nextVaultPool,
+    move: {
+      title,
+      detail,
+      amount: fmt(allocated),
+      priority,
+      semanticKind,
+      targetLabel,
+      sourceLabel: fromVault > 0 ? "Vault" : "Checking",
+      routeLabel,
+      fundingLabel: routeLabel,
+      transactional: true,
+    },
+  };
+}
+
+function buildDeterministicAllocationPlan({
+  operationalSurplus = 0,
+  protectedCashObligations = [],
+  computedStrategy = {},
+  debtFundingIntent = null,
+  repairedGateStatus = "Guarded — safety first",
+  formData = {},
+  financialConfig = {},
+  cards = [],
+  personalRules = "",
+} = {}) {
+  const ruleHints = parseAuditRuleHints({ personalRules, cards });
+  const surplusCapital = Math.max(0, Number(operationalSurplus) || 0);
+  const checkingBalance = Math.max(0, parseCurrency(formData?.checking) || 0);
+  const vaultBalance = Math.max(0, (parseCurrency(formData?.savings) || 0) + (parseCurrency(formData?.ally) || 0));
+  const checkingFloor = Math.max(0, Number(financialConfig?.weeklySpendAllowance || 0) + Number(financialConfig?.emergencyFloor || 0));
+  const currentLiquidCash = Number((checkingBalance + vaultBalance).toFixed(2));
+  const debtRouteAmount = Math.max(0, Number(computedStrategy?.debtStrategy?.amount || 0));
+  const debtRouteTarget = normalizeDebtTargetLabel(computedStrategy?.debtStrategy?.target, cards);
+  const obligations = (Array.isArray(protectedCashObligations) ? protectedCashObligations : [])
+    .filter((item) => (Number(item?.amount) || 0) > 0)
+    .map((item) => {
+      const label = sanitizeAllocationLabel(item?.renewal?.name || "");
+      const normalizedLabel = normalizeLooseText(label);
+      if (ruleHints.checkingOnlyLabels.has(normalizedLabel)) {
+        return { ...item, preferredSourceLabel: "Checking" };
+      }
+      if (ruleHints.allyOnlyLabels.has(normalizedLabel) || /\bally\b|\bvault\b/.test(normalizedLabel)) {
+        return { ...item, preferredSourceLabel: "Vault" };
+      }
+      return item;
+    })
+    .sort((left, right) => (String(left?.due || "") < String(right?.due || "") ? -1 : 1));
+
+  let checkingPool = checkingBalance;
+  let vaultPool = vaultBalance;
+  let remainingSurplusCapacity = surplusCapital;
+  let allocatedProtected = 0;
+  const moves = [];
+
+  if (currentLiquidCash > 0 && obligations.length > 0) {
+    for (const obligation of obligations) {
+      if (checkingPool <= 0 && vaultPool <= 0) break;
+      const allocation = allocateProtectedHold({
+        obligation,
+        checkingPool,
+        vaultPool,
+        checkingFloor,
+      });
+      checkingPool = allocation.checkingPool;
+      vaultPool = allocation.vaultPool;
+      if (!allocation.move || !(allocation.allocated > 0)) continue;
+      allocatedProtected += allocation.allocated;
+      moves.push(allocation.move);
+    }
+  } else if (obligations.length > 0) {
+    for (const obligation of obligations.slice(0, 4)) {
+      const sourceLabel = inferReserveSourceLabel(obligation);
+      const targetLabel = sanitizeAllocationLabel(obligation?.renewal?.name || "Upcoming obligation");
+      moves.push({
+        title: targetLabel,
+        detail: `No free dollars remain above your floor. ${buildReserveInstruction({ sourceLabel, targetLabel, amount: obligation.amount, due: obligation?.due })}`,
+        amount: fmt(obligation.amount),
+        priority: "required",
+        semanticKind: "spending-hold",
+        targetLabel,
+        sourceLabel,
+        routeLabel: buildReserveRouteLabel(sourceLabel),
+        transactional: false,
+      });
+    }
+  }
+
+  const protectedNeed = obligations.reduce((sum, item) => sum + Math.max(0, Number(item?.amount) || 0), 0);
+  const protectedGap = Math.max(0, Number((protectedNeed - allocatedProtected).toFixed(2)));
+
+  const debtPaymentIsSafetyCleanup =
+    Boolean(ruleHints.enforceSafetyPayment) &&
+    Boolean(ruleHints.safetyCardTarget) &&
+    debtRouteTarget.toLowerCase() === ruleHints.safetyCardTarget.toLowerCase();
+
+  if (remainingSurplusCapacity > 0 && debtRouteTarget && debtRouteAmount > 0) {
+    const payment = allocateOptionalPayment({
+      title: debtPaymentIsSafetyCleanup ? `Make safety payment to ${debtRouteTarget}` : debtRouteTarget,
+      targetLabel: debtRouteTarget,
+      semanticKind: "debt-payment",
+      priority: "required",
+      requestedAmount: Math.min(remainingSurplusCapacity, debtRouteAmount),
+      checkingPool,
+      vaultPool,
+      checkingFloor,
+      detailSuffix: debtPaymentIsSafetyCleanup
+        ? "This is the weekly safety payment while statement close and due dates remain unknown. Keep it partial if that is the maximum safe amount above the floor."
+        : "",
+    });
+    checkingPool = payment.checkingPool;
+    vaultPool = payment.vaultPool;
+    if (payment.move && payment.allocated > 0) {
+      remainingSurplusCapacity = Math.max(0, Number((remainingSurplusCapacity - payment.allocated).toFixed(2)));
+      moves.push(payment.move);
+    }
+  }
+
+  const investmentDestination =
+    repairedGateStatus === "Open"
+      ? inferPreferredInvestmentDestination({ formData, financialConfig })
+      : null;
+
+  if (remainingSurplusCapacity > 0) {
+    if (investmentDestination) {
+      const contribution = allocateOptionalPayment({
+        title: `Fund ${investmentDestination.label}`,
+        targetLabel: investmentDestination.label,
+        semanticKind: "investment-contribution",
+        priority: "optional",
+        requestedAmount: remainingSurplusCapacity,
+        checkingPool,
+        vaultPool,
+        checkingFloor,
+      });
+      checkingPool = contribution.checkingPool;
+      vaultPool = contribution.vaultPool;
+      if (contribution.move && contribution.allocated > 0) {
+        contribution.move.targetKey = investmentDestination.targetKey;
+        contribution.move.contributionKey = investmentDestination.contributionKey;
+        moves.push(contribution.move);
+        remainingSurplusCapacity = Math.max(0, Number((remainingSurplusCapacity - contribution.allocated).toFixed(2)));
+      }
+    } else {
+      const reserveSweep = allocateOptionalPayment({
+        title: "Keep the remainder in Vault",
+        targetLabel: "Vault",
+        semanticKind: "bank-savings-increase",
+        priority: "optional",
+        requestedAmount: remainingSurplusCapacity,
+        checkingPool,
+        vaultPool,
+        checkingFloor,
+      });
+      checkingPool = reserveSweep.checkingPool;
+      vaultPool = reserveSweep.vaultPool;
+      if (reserveSweep.move && reserveSweep.allocated > 0) {
+        reserveSweep.move.detail = reserveSweep.move.detail.replace(/send it to Vault\.$/i, "leave it there as protected liquidity until the next briefing.");
+        moves.push(reserveSweep.move);
+        remainingSurplusCapacity = Math.max(0, Number((remainingSurplusCapacity - reserveSweep.allocated).toFixed(2)));
+      }
+    }
+  }
+
+  if (protectedGap > 0 && currentLiquidCash > 0) {
+    moves.push({
+      title: "Protected gap still remains",
+      detail: `After assigning ${fmt(allocatedProtected)} from current Checking and Savings balances, ${fmt(protectedGap)} of protected obligations still remains unfunded. Do not route additional money to optional goals until that gap closes.`,
+      amount: fmt(protectedGap),
+      priority: "required",
+      semanticKind: "spending-hold",
+      targetLabel: "Protected obligations",
+      sourceLabel: null,
+      routeLabel: null,
+      transactional: false,
+    });
+  }
+
+  const parkedCashAfterProtection = Math.max(0, Number((checkingPool + vaultPool).toFixed(2)));
+  const optionalAllocatedNow = Number((surplusCapital - remainingSurplusCapacity).toFixed(2));
+  if (
+    obligations.length > 0 &&
+    protectedGap <= 0 &&
+    parkedCashAfterProtection > 0 &&
+    optionalAllocatedNow <= 0 &&
+    !moves.some((move) => /next wave|parked/i.test(String(move?.title || "")) || /next wave|parked/i.test(String(move?.detail || "")))
+  ) {
+    const parkedTargetLabel =
+      checkingPool > 0 && vaultPool > 0 ? "Checking + Vault" : vaultPool > 0 ? "Vault" : "Checking";
+    const parkedRouteLabel =
+      checkingPool > 0 && vaultPool > 0
+        ? `Already parked in Vault ${fmt(vaultPool)} + Checking ${fmt(checkingPool)}`
+        : vaultPool > 0
+          ? `Already in Vault ${fmt(vaultPool)}`
+          : `Already in Checking ${fmt(checkingPool)}`;
+    moves.push({
+      title: "Hold the remaining cash for the next wave",
+      detail: buildParkedCashDetail({ checkingPool, vaultPool }),
+      amount: fmt(parkedCashAfterProtection),
+      priority: "required",
+      semanticKind: "spending-hold",
+      targetLabel: parkedTargetLabel,
+      sourceLabel: parkedTargetLabel,
+      routeLabel: parkedRouteLabel,
+      transactional: false,
+    });
+  }
+
+  const stagedDebtAction = buildDebtFundingStagingAction(debtFundingIntent);
+  if (stagedDebtAction) {
+    moves.push({
+      ...stagedDebtAction,
+      priority: "required",
+      semanticKind: "debt-payment",
+      targetLabel: debtFundingIntent?.targetLabel || null,
+      sourceLabel: null,
+      routeLabel: debtFundingIntent?.targetLabel ? `External proceeds → ${debtFundingIntent.targetLabel}` : null,
+      transactional: false,
+    });
+  }
+
+  if (moves.length === 0) {
+    const outboundOnlyCapacity = Math.max(0, checkingBalance - checkingFloor) + vaultBalance;
+    if (outboundOnlyCapacity > 0) {
+      moves.push({
+        title: "Keep cash parked",
+        detail: `Leave ${fmt(outboundOnlyCapacity)} in cash until the next briefing clarifies the highest-priority destination.`,
+        amount: fmt(outboundOnlyCapacity),
+        priority: "optional",
+        semanticKind: "bank-savings-increase",
+        targetLabel: "Vault",
+        sourceLabel: "Checking",
+        routeLabel: "Checking → Vault",
+        transactional: false,
+      });
+    } else {
+      moves.push({
+        title: "No free cash to deploy",
+        detail: "Every current dollar above your floor is already spoken for. Protect the floor and avoid optional outflows until more cash lands.",
+        amount: fmt(0),
+        priority: "required",
+        semanticKind: "spending-hold",
+        targetLabel: "Protected cash",
+        sourceLabel: null,
+        routeLabel: null,
+        transactional: false,
+      });
+    }
+  }
+
+  const headlineCapital =
+    obligations.length > 0
+      ? Math.min(currentLiquidCash, Math.max(protectedNeed, surplusCapital))
+      : Math.max(0, checkingBalance - checkingFloor) + vaultBalance;
+
+  const nextAction =
+    headlineCapital <= 0 && obligations.length > 0
+      ? {
+          title: "Protect near-term obligations",
+          detail: `Every dollar above your floor is already spoken for. Keep the protected balances parked for ${buildObligationSummary(obligations)} before debt paydown or investing.`,
+          amount: fmt(0),
+        }
+      : headlineCapital > 0 && obligations.length > 0
+        ? {
+            title: "Protect near-term obligations",
+            detail:
+              protectedGap > 0
+                ? `Assign the current liquid cash first: ${buildObligationLabelSummary(obligations)}. Based on current Checking and Savings balances, you can reserve ${fmt(allocatedProtected)} now and a ${fmt(protectedGap)} protected gap still remains.`
+                : `Assign the current liquid cash in order: ${buildObligationLabelSummary(obligations)}. Protect each item below before routing anything to debt payoff or savings.${parkedCashAfterProtection > 0 && optionalAllocatedNow <= 0 ? ` After that, keep the remaining ${fmt(parkedCashAfterProtection)} parked for the next wave of obligations and floor protection.` : ""}`,
+            amount: fmt(headlineCapital),
+          }
+        : headlineCapital > 0
+          ? {
+              title: moves[0]?.title || "Allocate this week's free cash",
+              detail: moves[0]?.detail || `Route the full ${fmt(headlineCapital)} of deployable cash to the highest-priority destinations in order.`,
+              amount: moves[0]?.amount || fmt(headlineCapital),
+            }
+        : {
+            title: moves[0]?.title || "Next Action",
+            detail: moves[0]?.detail || "Hold steady until the next briefing.",
+            amount: moves[0]?.amount || null,
+          };
+
+  return {
+    nextAction,
+    weeklyMoves: moves,
+    allocatedTotal: Number((allocatedProtected + (surplusCapital - remainingSurplusCapacity)).toFixed(2)),
+    availableCapital: headlineCapital,
+    currentLiquidCash,
+    protectedNeed,
+    protectedGap,
+    protectedAllocated: Number(allocatedProtected.toFixed(2)),
+    optionalAllocated: Number((surplusCapital - remainingSurplusCapacity).toFixed(2)),
+    remainingChecking: Number(checkingPool.toFixed(2)),
+    remainingVault: Number(vaultPool.toFixed(2)),
+    allyReconciliationRequired: ruleHints.allyReconciliationRequired,
+  };
+}
+
+function moveHasExplicitRouting(move) {
+  if (!move || typeof move !== "object") return false;
+  const amount = Number(move.amount);
+  if (!Number.isFinite(amount) || amount <= 0) return true;
+  return Boolean(
+    String(move.routeLabel || move.fundingLabel || "").trim() ||
+    (String(move.sourceLabel || "").trim() && String(move.targetLabel || "").trim())
+  );
+}
+
+function buildParkedCashDetail({ checkingPool = 0, vaultPool = 0 }) {
+  const checking = Math.max(0, Number(checkingPool) || 0);
+  const vault = Math.max(0, Number(vaultPool) || 0);
+  const parkedTotal = checking + vault;
+  if (parkedTotal <= 0) return "";
+  if (checking > 0 && vault > 0) {
+    return `Keep ${fmt(vault)} in Vault and ${fmt(checking)} in Checking after funding the current protected items. Leave the remaining ${fmt(parkedTotal)} parked for the next wave of obligations and floor protection before any optional debt paydown or investing.`;
+  }
+  if (vault > 0) {
+    return `Keep ${fmt(vault)} parked in Vault after funding the current protected items. Leave it there for the next wave of obligations and floor protection before any optional debt paydown or investing.`;
+  }
+  return `Keep ${fmt(checking)} parked in Checking after funding the current protected items. Leave it there for the next wave of obligations and floor protection before any optional debt paydown or investing.`;
+}
+
+function planCoversProtectedObligations(moveItems = [], obligations = []) {
+  if (!Array.isArray(obligations) || obligations.length === 0) return true;
+  const normalizedMoveText = moveItems
+    .map((move) => normalizeLooseText(`${move?.title || ""} ${move?.detail || ""} ${move?.targetLabel || ""}`))
+    .join(" ");
+  return obligations.every((obligation) => normalizedMoveText.includes(normalizeLooseText(sanitizeAllocationLabel(obligation?.renewal?.name || ""))));
+}
+
+function hasVisibleAuditCopyArtifacts(text) {
+  const normalized = String(text || "");
+  if (!normalized) return false;
+  return /\bthe user\b/i.test(normalized) || /^[,.;:'"`\s]+/.test(normalized) || /,\s*\./.test(normalized);
+}
+
+function buildPriorityCashAction({
+  obligations = [],
+  computedStrategy = {},
+  debtFundingIntent = null,
+}) {
+  if (Array.isArray(obligations) && obligations.length > 0) {
+    return buildProtectedCashAction({ obligations, computedStrategy });
+  }
+  return buildDebtFundingStagingAction(debtFundingIntent) || buildProtectedCashAction({ obligations, computedStrategy });
 }
 
 function buildDashboardRowsFromAnchors(anchors = {}, existingRows = []) {
@@ -822,31 +1649,76 @@ function normalizeAuditStatus(value) {
 
 export function parseJSON(raw) {
   let j;
+  const cleaned = String(raw || "")
+    .replace(/```json?\s*/gi, "")
+    .replace(/```/g, "")
+    .trim();
+  const tryParse = (candidate) => JSON.parse(candidate);
+  const repairTruncatedJson = (candidate) => {
+    const text = String(candidate || "").trim();
+    if (!text) return null;
+
+    let repaired = text
+      .replace(/,\s*([}\]])/g, "$1")
+      .replace(/,\s*$/g, "");
+
+    const stack = [];
+    let inString = false;
+    let escaped = false;
+
+    for (const char of repaired) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === "\"") {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (char === "{" || char === "[") stack.push(char);
+      if (char === "}" && stack[stack.length - 1] === "{") stack.pop();
+      if (char === "]" && stack[stack.length - 1] === "[") stack.pop();
+    }
+
+    if (inString) repaired += "\"";
+    while (stack.length > 0) {
+      const opener = stack.pop();
+      repaired += opener === "{" ? "}" : "]";
+    }
+    return repaired.replace(/,\s*([}\]])/g, "$1");
+  };
   try {
     // Aggressive JSON extraction: strip ALL markdown wrappers and extract only the {} block
-    const cleaned = raw
-      .replace(/```json?\s*/gi, "")
-      .replace(/```/g, "")
-      .trim();
     const startIdx = cleaned.indexOf("{");
     const endIdx = cleaned.lastIndexOf("}");
     if (startIdx >= 0 && endIdx > startIdx) {
-      j = JSON.parse(cleaned.slice(startIdx, endIdx + 1));
+      j = tryParse(cleaned.slice(startIdx, endIdx + 1));
     } else {
       // Try array-wrapped JSON: [{...}]
       const arrStart = cleaned.indexOf("[");
       const arrEnd = cleaned.lastIndexOf("]");
       if (arrStart >= 0 && arrEnd > arrStart) {
-        const arr = JSON.parse(cleaned.slice(arrStart, arrEnd + 1));
+        const arr = tryParse(cleaned.slice(arrStart, arrEnd + 1));
         j = Array.isArray(arr) && arr.length > 0 ? arr[0] : null;
       } else {
-        j = JSON.parse(cleaned);
+        const candidate = cleaned.slice(startIdx >= 0 ? startIdx : 0).trim();
+        j = tryParse(repairTruncatedJson(candidate) || candidate);
       }
     }
   } catch (e) {
-    // NOTE: never log raw response content — it may contain financial PII
-    void log.warn("parseJSON", "JSON.parse failed", { error: e.message, rawLength: raw?.length });
-    return null; // Stream hasn't finished accumulating enough valid JSON
+    try {
+      const candidate = cleaned.slice(Math.max(0, cleaned.indexOf("{"))).trim() || cleaned;
+      j = tryParse(repairTruncatedJson(candidate) || candidate);
+    } catch {
+      // NOTE: never log raw response content — it may contain financial PII
+      void log.warn("parseJSON", "JSON.parse failed", { error: e.message, rawLength: raw?.length });
+      return null; // Stream hasn't finished accumulating enough valid JSON
+    }
   }
 
   // Normalize ALL snake_case keys to camelCase recursively (top level)
@@ -1086,6 +1958,7 @@ function inferAuditStatusFromSignals(score, riskFlags = []) {
  *   cards?: import("../types/index.js").Card[] | null;
  *   renewals?: import("../types/index.js").Renewal[] | null;
  *   formData?: import("../types/index.js").AuditFormData | null;
+ *   financialConfig?: import("../types/index.js").CatalystCashConfig | null;
  *   computedStrategy?: Record<string, unknown> | null;
  *   personalRules?: string;
  * }} [options]
@@ -1103,6 +1976,7 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
     cards = null,
     renewals = null,
     formData = null,
+    financialConfig = null,
     computedStrategy = null,
     personalRules = "",
   } = options;
@@ -1167,7 +2041,13 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
   const existingInvestmentMissing =
     !parsed.investments ||
     (!parsed.investments.balance || parsed.investments.balance === "N/A");
-  if (normalizedInvestmentAnchors && existingInvestmentMissing) {
+  const parsedInvestmentBalance = parseCurrency(parsed?.investments?.balance);
+  const anchorInvestmentBalance = parseCurrency(normalizedInvestmentAnchors?.balance);
+  const materiallyMismatchedInvestmentBalance =
+    parsedInvestmentBalance != null &&
+    anchorInvestmentBalance != null &&
+    Math.abs(parsedInvestmentBalance - anchorInvestmentBalance) > 1;
+  if (normalizedInvestmentAnchors && (existingInvestmentMissing || materiallyMismatchedInvestmentBalance)) {
     parsed.investments = {
       ...parsed.investments,
       ...normalizedInvestmentAnchors,
@@ -1187,7 +2067,9 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
     auditFlags.push({
       code: "investments-summary-repaired",
       severity: "low",
-      message: "Investments summary was backfilled from tracked balances because the model omitted it.",
+      message: materiallyMismatchedInvestmentBalance
+        ? "Investments summary was corrected to the visible tracked balances because the model overstated it."
+        : "Investments summary was backfilled from tracked balances because the model omitted it.",
     });
   }
 
@@ -1282,26 +2164,6 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
     });
   }
 
-  if (Number.isFinite(Number(operationalSurplus))) {
-    const expectedOperationalSurplus = Math.max(0, Number(operationalSurplus));
-    const weeklyMoveDollarTotal = extractDollarAmountTotal(parsed.weeklyMoves);
-    consistency.weeklyMoveDollarTotal = weeklyMoveDollarTotal;
-    consistency.expectedOperationalSurplus = expectedOperationalSurplus;
-
-    if (expectedOperationalSurplus - weeklyMoveDollarTotal > 50) {
-      const shortfall = Number((expectedOperationalSurplus - weeklyMoveDollarTotal).toFixed(2));
-      void log.warn(
-        "audit", `Weekly moves under-allocate operational surplus by $${shortfall.toFixed(2)}.`
-      );
-      auditFlags.push({
-        code: "weekly-moves-underallocated",
-        severity: "low",
-        message: `Weekly moves only allocate $${weeklyMoveDollarTotal.toFixed(2)} of the $${expectedOperationalSurplus.toFixed(2)} operational surplus.`,
-        meta: { shortfall, weeklyMoveDollarTotal, expectedOperationalSurplus },
-      });
-    }
-  }
-
   const upcomingCashObligations = collectUpcomingCashObligations({
     renewals: Array.isArray(renewals) ? renewals : [],
     cards: Array.isArray(cards) ? cards : [],
@@ -1313,6 +2175,10 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
     snapshotDate,
     horizonDays: 21,
   });
+  const noteBasedDebtFundingIntent = extractDebtFundingIntentFromNotes({
+    notes: formData?.notes,
+    cards,
+  });
   const protectedCashObligations = [...upcomingCashObligations, ...ruleBasedCashObligations];
   const shortTermCashNeed = protectedCashObligations.reduce((sum, item) => sum + Math.max(0, item.amount || 0), 0);
   const shouldBlockGenericDebtPaydown =
@@ -1321,6 +2187,120 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
     normalizedNativeRiskFlags.includes("transfer-needed") ||
     normalizedNativeRiskFlags.includes("floor-breach-risk");
   const explicitDebtTarget = String(computedStrategy?.debtStrategy?.target || "").trim();
+  const deterministicAllocationPlan = buildDeterministicAllocationPlan({
+    operationalSurplus,
+    protectedCashObligations,
+    computedStrategy: computedStrategy || {},
+    debtFundingIntent: noteBasedDebtFundingIntent,
+    repairedGateStatus,
+    formData: formData || {},
+    financialConfig: financialConfig || {},
+    cards: Array.isArray(cards) ? cards : [],
+    personalRules,
+  });
+  const fallbackPriorityAction = deterministicAllocationPlan.nextAction || buildPriorityCashAction({
+    obligations: protectedCashObligations,
+    computedStrategy: computedStrategy || {},
+    debtFundingIntent: noteBasedDebtFundingIntent,
+  });
+  const fallbackDebtMove =
+    !shouldBlockGenericDebtPaydown && explicitDebtTarget && (computedStrategy?.debtStrategy?.amount || 0) > 0
+      ? {
+          title: "Pay priority debt",
+          detail: `Route $${Number(computedStrategy.debtStrategy.amount).toFixed(2)} to ${explicitDebtTarget} this week.`,
+          amount: fmt(Number(computedStrategy.debtStrategy.amount)),
+          priority: "required",
+        }
+      : null;
+
+  const shouldPreferDeterministicAllocationPlan =
+    deterministicAllocationPlan.weeklyMoves.length > 0 &&
+    (
+      protectedCashObligations.length > 0 ||
+      noteBasedDebtFundingIntent ||
+      Math.max(0, Number(operationalSurplus || 0)) > 0 ||
+      shouldBlockGenericDebtPaydown
+    );
+
+  const currentStructuredMoveItems = normalizeMoveItems(parsed.structured?.moveItems || parsed.moveItems || [], parsed.weeklyMoves);
+  const currentOperationalAllocationTotal = extractOperationalAllocationTotal(currentStructuredMoveItems);
+  const currentAllocationShortfall =
+    Number.isFinite(Number(operationalSurplus))
+      ? Math.max(0, Number((Math.max(0, Number(operationalSurplus || 0)) - currentOperationalAllocationTotal).toFixed(2)))
+      : 0;
+  const missingProtectedCoverage = !planCoversProtectedObligations(currentStructuredMoveItems, protectedCashObligations);
+  const missingRoutingDetail = currentStructuredMoveItems.some((move) => !moveHasExplicitRouting(move));
+  const hasCopyArtifacts =
+    hasVisibleAuditCopyArtifacts(parsed?.structured?.nextAction?.title) ||
+    hasVisibleAuditCopyArtifacts(parsed?.structured?.nextAction?.detail) ||
+    currentStructuredMoveItems.some((move) => hasVisibleAuditCopyArtifacts(`${move?.title || ""} ${move?.detail || ""}`));
+  const shouldReanchorToDeterministicPlan =
+    shouldPreferDeterministicAllocationPlan &&
+    (
+      currentStructuredMoveItems.length === 0 ||
+      currentAllocationShortfall > 50 ||
+      missingProtectedCoverage ||
+      missingRoutingDetail ||
+      hasCopyArtifacts
+    );
+
+  if (
+    shouldReanchorToDeterministicPlan ||
+    shouldPreferDeterministicAllocationPlan ||
+    (!parsed.structured?.nextAction || typeof parsed.structured.nextAction !== "object") ||
+    !String(parsed.structured.nextAction.detail || parsed.structured.nextAction.title || "").trim()
+  ) {
+    parsed.structured = {
+      ...(parsed.structured || {}),
+      nextAction: fallbackPriorityAction,
+    };
+    consistency.nextActionBackfilled = true;
+    consistency.deterministicPlanReanchored = shouldReanchorToDeterministicPlan || consistency.deterministicPlanReanchored;
+    auditFlags.push({
+      code: (shouldReanchorToDeterministicPlan || shouldPreferDeterministicAllocationPlan) ? "next-action-reanchored-to-allocation-plan" : "next-action-backfilled",
+      severity: "medium",
+      message: (shouldReanchorToDeterministicPlan || shouldPreferDeterministicAllocationPlan)
+        ? "Immediate next action was re-anchored to the deterministic allocation plan."
+        : "Immediate next action was missing and was rebuilt from deterministic strategy signals.",
+    });
+  }
+
+  if (shouldReanchorToDeterministicPlan || shouldPreferDeterministicAllocationPlan || !Array.isArray(parsed.structured?.weeklyMoves) || parsed.structured.weeklyMoves.length === 0) {
+    parsed.structured = {
+      ...(parsed.structured || {}),
+      weeklyMoves:
+        (shouldReanchorToDeterministicPlan || shouldPreferDeterministicAllocationPlan)
+          ? deterministicAllocationPlan.weeklyMoves
+          : [fallbackPriorityAction, ...(fallbackDebtMove ? [fallbackDebtMove] : [])],
+      moveItems:
+        (shouldReanchorToDeterministicPlan || shouldPreferDeterministicAllocationPlan)
+          ? deterministicAllocationPlan.weeklyMoves.map((item) => ({
+              text: item.detail || item.title,
+              title: item.title || null,
+              detail: item.detail || null,
+              tag: item.priority ? String(item.priority).toUpperCase() : null,
+              amount: parseCurrency(item.amount),
+              semanticKind: item.semanticKind || null,
+              targetLabel: item.targetLabel || null,
+              sourceLabel: item.sourceLabel || null,
+              routeLabel: item.routeLabel || null,
+              fundingLabel: item.fundingLabel || null,
+              targetKey: item.targetKey || null,
+              contributionKey: item.contributionKey || null,
+              transactional: typeof item.transactional === "boolean" ? item.transactional : undefined,
+            }))
+          : parsed.structured?.moveItems,
+    };
+    consistency.weeklyMovesBackfilled = true;
+    consistency.deterministicPlanReanchored = shouldReanchorToDeterministicPlan || consistency.deterministicPlanReanchored;
+    auditFlags.push({
+      code: (shouldReanchorToDeterministicPlan || shouldPreferDeterministicAllocationPlan) ? "weekly-moves-reanchored-to-allocation-plan" : "weekly-moves-backfilled",
+      severity: "medium",
+      message: (shouldReanchorToDeterministicPlan || shouldPreferDeterministicAllocationPlan)
+        ? "Weekly move plan was re-anchored to the deterministic allocation plan."
+        : "Weekly move plan was missing and was rebuilt from deterministic strategy signals.",
+    });
+  }
 
   if (parsed.structured?.nextAction && typeof parsed.structured.nextAction === "object") {
     const originalDetail = parsed.structured.nextAction.detail || "";
@@ -1343,11 +2323,12 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
   if (shouldBlockGenericDebtPaydown && parsed.structured?.nextAction && typeof parsed.structured.nextAction === "object") {
     const nextActionText = `${parsed.structured.nextAction.title || ""} ${parsed.structured.nextAction.detail || ""}`.trim();
     if (isGenericDebtCopy(nextActionText) || /\broute\b.*\bto\b/i.test(nextActionText)) {
-      const repairedAction = buildProtectedCashAction({
+      const priorityAction = buildPriorityCashAction({
         obligations: protectedCashObligations,
         computedStrategy: computedStrategy || {},
+        debtFundingIntent: noteBasedDebtFundingIntent,
       });
-      parsed.structured.nextAction = repairedAction;
+      parsed.structured.nextAction = priorityAction;
       consistency.nextActionRepairedForCashPressure = true;
       auditFlags.push({
         code: "next-action-repaired-for-cash-pressure",
@@ -1362,15 +2343,16 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
     if (firstMove && typeof firstMove === "object") {
       const firstMoveText = `${firstMove.title || ""} ${firstMove.detail || ""}`.trim();
       if ((isGenericDebtCopy(firstMoveText) || /\broute\b.*\bto\b/i.test(firstMoveText)) && shouldBlockGenericDebtPaydown) {
-        const repairedAction = buildProtectedCashAction({
+        const priorityAction = buildPriorityCashAction({
           obligations: protectedCashObligations,
           computedStrategy: computedStrategy || {},
+          debtFundingIntent: noteBasedDebtFundingIntent,
         });
         parsed.structured.weeklyMoves[0] = {
           ...firstMove,
-          title: repairedAction.title,
-          detail: repairedAction.detail,
-          amount: repairedAction.amount,
+          title: priorityAction.title,
+          detail: priorityAction.detail,
+          amount: priorityAction.amount,
           priority: "required",
           semanticKind: "bank-checking-decrease",
           targetLabel: "Checking",
@@ -1387,6 +2369,50 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
           detail: withExplicitDebtTarget(firstMove.detail || "", explicitDebtTarget),
         };
         consistency.genericWeeklyMoveLabelRepaired = true;
+      }
+    }
+
+    if (noteBasedDebtFundingIntent && parsed.structured?.nextAction && typeof parsed.structured.nextAction === "object") {
+      const nextActionText = `${parsed.structured.nextAction.title || ""} ${parsed.structured.nextAction.detail || ""}`.trim().toLowerCase();
+      if (
+        /\breview spending\b/.test(nextActionText) ||
+        /\banalyze recent spending\b/.test(nextActionText) ||
+        /\bidentify areas for reduction\b/.test(nextActionText)
+      ) {
+        parsed.structured.nextAction = buildPriorityCashAction({
+          obligations: protectedCashObligations,
+          computedStrategy: computedStrategy || {},
+          debtFundingIntent: noteBasedDebtFundingIntent,
+        });
+        consistency.nextActionRepairedFromNotes = true;
+        auditFlags.push({
+          code: "next-action-repaired-from-notes",
+          severity: "medium",
+          message: `Generic next action was replaced using note-based payoff context for ${noteBasedDebtFundingIntent.targetLabel}.`,
+        });
+      }
+    }
+
+    const stagedDebtAction = buildDebtFundingStagingAction(noteBasedDebtFundingIntent);
+    if (
+      stagedDebtAction &&
+      !shouldPreferDeterministicAllocationPlan &&
+      protectedCashObligations.length > 0 &&
+      parsed.structured.weeklyMoves.length < 4
+    ) {
+      const alreadyHasStagedMove = parsed.structured.weeklyMoves.some((move) => {
+        const text = `${move?.title || ""} ${move?.detail || ""}`.trim().toLowerCase();
+        const target = String(noteBasedDebtFundingIntent?.targetLabel || "").toLowerCase();
+        return Boolean(target) && text.includes(target) && /\bstage\b|\bpayoff\b|\bproceeds\b/.test(text);
+      });
+      if (!alreadyHasStagedMove) {
+        parsed.structured.weeklyMoves = [...parsed.structured.weeklyMoves, stagedDebtAction];
+        consistency.noteBasedDebtStagingAppended = true;
+        auditFlags.push({
+          code: "note-based-debt-staging-appended",
+          severity: "low",
+          message: `Staged debt payoff context for ${noteBasedDebtFundingIntent.targetLabel} was added as a secondary move.`,
+        });
       }
     }
 
@@ -1423,13 +2449,53 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
     }
   }
 
+  if (Number.isFinite(Number(operationalSurplus))) {
+    const expectedOperationalSurplus = Math.max(0, Number(operationalSurplus));
+    const weeklyMoveDollarTotal = extractDollarAmountTotal(parsed.weeklyMoves);
+    const transactionalAllocationTotal = extractOperationalAllocationTotal(parsed.moveItems);
+    const operationalAllocationTotal =
+      transactionalAllocationTotal > 0
+        ? transactionalAllocationTotal
+        : weeklyMoveDollarTotal;
+    consistency.weeklyMoveDollarTotal = weeklyMoveDollarTotal;
+    consistency.operationalAllocationTotal = operationalAllocationTotal;
+    consistency.expectedOperationalSurplus = expectedOperationalSurplus;
+    consistency.currentLiquidCash = deterministicAllocationPlan.currentLiquidCash ?? null;
+    consistency.protectedAllocatedNow = deterministicAllocationPlan.protectedAllocated ?? null;
+    consistency.optionalAllocatedNow = deterministicAllocationPlan.optionalAllocated ?? null;
+    consistency.remainingCheckingPool = deterministicAllocationPlan.remainingChecking ?? null;
+    consistency.remainingVaultPool = deterministicAllocationPlan.remainingVault ?? null;
+    consistency.protectedGapNow = deterministicAllocationPlan.protectedGap ?? null;
+
+    if (expectedOperationalSurplus - operationalAllocationTotal > 50) {
+      const shortfall = Number((expectedOperationalSurplus - operationalAllocationTotal).toFixed(2));
+      void log.warn(
+        "audit", `Weekly moves under-allocate operational surplus by $${shortfall.toFixed(2)}.`
+      );
+      auditFlags.push({
+        code: "weekly-moves-underallocated",
+        severity: "low",
+        message: `Weekly moves only allocate $${operationalAllocationTotal.toFixed(2)} of the $${expectedOperationalSurplus.toFixed(2)} deployable surplus.`,
+        meta: { shortfall, weeklyMoveDollarTotal, operationalAllocationTotal, expectedOperationalSurplus },
+      });
+    }
+  }
+
   if (parsed.structured?.nextAction && typeof parsed.structured.nextAction === "object") {
     const normalizedNextAction = normalizeNextAction(parsed.structured.nextAction);
     parsed.structured.nextAction = normalizedNextAction;
-    if (parsed.sections && typeof parsed.sections.nextAction === "string") {
+    const normalizedNextActionText = [normalizedNextAction.title, normalizedNextAction.detail, normalizedNextAction.amount].filter(Boolean).join("\n");
+    if (!parsed.sections || typeof parsed.sections !== "object") {
+      parsed.sections = { nextAction: normalizedNextActionText };
+    } else if (typeof parsed.sections.nextAction !== "string" || !parsed.sections.nextAction.trim()) {
       parsed.sections = {
         ...parsed.sections,
-        nextAction: [normalizedNextAction.title, normalizedNextAction.detail, normalizedNextAction.amount].filter(Boolean).join("\n"),
+        nextAction: normalizedNextActionText,
+      };
+    } else {
+      parsed.sections = {
+        ...parsed.sections,
+        nextAction: normalizedNextActionText,
       };
     }
   }
@@ -1483,6 +2549,10 @@ export function buildDegradedParsedAudit({
     snapshotDate: formData?.date,
     horizonDays: 21,
   });
+  const noteBasedDebtFundingIntent = extractDebtFundingIntentFromNotes({
+    notes: formData?.notes,
+    cards,
+  });
   const upcomingCashObligations = collectUpcomingCashObligations({
     renewals,
     cards,
@@ -1490,6 +2560,16 @@ export function buildDegradedParsedAudit({
     horizonDays: 21,
   });
   const protectedCashObligations = [...upcomingCashObligations, ...ruleBasedCashObligations];
+  const repairedGateStatus = inferInvestmentGateStatus({
+    existingGateStatus: null,
+    cards: Array.isArray(cards) ? cards : [],
+    formData: formData || {},
+    computedStrategy: computedStrategy || {},
+    nativeRiskFlags: riskFlags,
+    renewals: Array.isArray(renewals) ? renewals : [],
+    personalRules,
+    snapshotDate: formData?.date,
+  });
 
   const provisionalStatus =
     nativeScore < 70 || riskFlags.includes("floor-breach-risk") || riskFlags.includes("transfer-needed")
@@ -1518,67 +2598,35 @@ export function buildDegradedParsedAudit({
         ? "YELLOW"
         : "GREEN";
 
-  const weeklyMoves = [];
-  if (protectedCashObligations.length > 0) {
-    const protectedAction = buildProtectedCashAction({
-      obligations: protectedCashObligations,
-      computedStrategy,
-    });
-    weeklyMoves.push({
-      title: protectedAction.title,
-      detail: protectedAction.detail,
-      amount: protectedAction.amount,
-      priority: "required",
-      semanticKind: "spending-hold",
-      targetLabel: "Protected cash",
-      transactional: false,
-    });
-  } else if ((computedStrategy?.requiredTransfer || 0) > 0) {
-    weeklyMoves.push(
-      {
-        title: "Protect checking floor",
-        detail: `Transfer $${Number(computedStrategy.requiredTransfer).toFixed(2)} from savings to checking to protect your floor.`,
-        amount: Number(computedStrategy.requiredTransfer).toFixed(2),
-        priority: "required",
-        semanticKind: "bank-checking-increase",
-        targetLabel: "Checking",
-        sourceLabel: "Savings",
-        transactional: true,
-      }
-    );
-  }
-  if (computedStrategy?.debtStrategy?.target && (computedStrategy?.debtStrategy?.amount || 0) > 0) {
-    weeklyMoves.push(
-      {
-        title: "Pay priority debt",
-        detail: `Route $${Number(computedStrategy.debtStrategy.amount).toFixed(2)} to ${computedStrategy.debtStrategy.target} this week.`,
-        amount: Number(computedStrategy.debtStrategy.amount).toFixed(2),
-        priority: "required",
-        semanticKind: "debt-payment",
-        targetLabel: computedStrategy.debtStrategy.target,
-        transactional: true,
-      }
-    );
-  }
-  if (weeklyMoves.length === 0) {
-    if (riskFlags.length > 0) {
-      weeklyMoves.push({
-        title: "Protect against the top risk",
-        detail: `Prioritize ${formatRiskFlag(riskFlags[0]).toLowerCase()} before optional spending this week.`,
-        priority: "required",
-        semanticKind: "spending-hold",
-        transactional: false,
-      });
-    } else {
-      weeklyMoves.push({
-        title: "Preserve cash buffer",
-        detail: "Hold spending to preserve your cash buffer this week.",
-        priority: "optional",
-        semanticKind: "spending-hold",
-        transactional: false,
-      });
-    }
-  }
+  const deterministicPlan = buildDeterministicAllocationPlan({
+    operationalSurplus,
+    protectedCashObligations,
+    computedStrategy,
+    debtFundingIntent: noteBasedDebtFundingIntent,
+    repairedGateStatus,
+    formData,
+    financialConfig,
+    cards: Array.isArray(cards) ? cards : [],
+    personalRules,
+  });
+
+  const weeklyMoves = deterministicPlan.weeklyMoves.length > 0
+    ? deterministicPlan.weeklyMoves
+    : riskFlags.length > 0
+      ? [{
+          title: "Protect against the top risk",
+          detail: `Prioritize ${formatRiskFlag(riskFlags[0]).toLowerCase()} before optional spending this week.`,
+          priority: "required",
+          semanticKind: "spending-hold",
+          transactional: false,
+        }]
+      : [{
+          title: "Preserve cash buffer",
+          detail: "Hold spending to preserve your cash buffer this week.",
+          priority: "optional",
+          semanticKind: "spending-hold",
+          transactional: false,
+        }];
 
   const normalizedFallbackMoves = normalizeWeeklyMoveEntries(weeklyMoves);
   const fallbackMoveTexts = normalizedFallbackMoves.weeklyMoves;
@@ -1604,11 +2652,15 @@ export function buildDegradedParsedAudit({
     { category: "Available", amount: fmt(operationalSurplus), status: operationalSurplus > 0 ? "Deploy" : "Protected" },
   ];
 
-  const nextAction = fallbackMoveTexts[0] || safetySnapshot.summary;
+  const nextAction = deterministicPlan.nextAction?.detail || fallbackMoveTexts[0] || safetySnapshot.summary;
   const dateLabel = formData?.date || new Date().toISOString().split("T")[0];
   const riskSummary =
-    riskFlags.length > 0
-      ? riskFlags.slice(0, 3).map(formatRiskFlag).join(", ")
+    noteBasedDebtFundingIntent
+      ? `${noteBasedDebtFundingIntent.detail}${riskFlags.length > 0 ? ` Primary risk: ${riskFlags.slice(0, 3).map(formatRiskFlag).join(", ")}.` : ""}`
+      : riskFlags.length > 0
+        ? riskFlags.slice(0, 3).map(formatRiskFlag).join(", ")
+      : noteBasedDebtFundingIntent
+        ? noteBasedDebtFundingIntent.detail
       : protectedCashObligations.length > 0
         ? "Protected cash obligations still require funding"
         : safetySnapshot.level === "urgent"
@@ -1663,9 +2715,9 @@ export function buildDegradedParsedAudit({
       milestones: [],
       negotiationTargets: [],
       nextAction: {
-        title: protectedCashObligations.length > 0 ? "Protect near-term obligations" : "Next Action",
-        detail: nextAction,
-        amount: null,
+        title: deterministicPlan.nextAction?.title || "Next Action",
+        detail: deterministicPlan.nextAction?.detail || nextAction,
+        amount: deterministicPlan.nextAction?.amount ?? normalizedFallbackMoves.moveCards[0]?.amount ?? null,
       },
       assumptions: [reason],
       riskFlags,

@@ -157,6 +157,15 @@ describe("parseAudit", () => {
     });
   });
 
+  it("repairs slightly truncated JSON payloads before falling back", () => {
+    const raw = '{"headerCard":{"status":"RED","title":"Cash pressure","subtitle":"Protect cash","confidence":"low"},"healthScore":{"score":55,"grade":"D","trend":"flat","summary":"Urgent"},"dashboardCard":[{"category":"Checking","amount":"$300.00","status":"At risk"},{"category":"Vault","amount":"$2,155.39","status":"Tracked"},{"category":"Pending","amount":"$0.00","status":"Clear"},{"category":"Debts","amount":"$2,462.92","status":"Tracked"},{"category":"Available","amount":"$0.00","status":"Protected"}],"weeklyMoves":[{"title":"Protect near-term obligations","detail":"Hold extra debt paydown until near-term cash obligations are fully covered.","amount":"$1,484.50","priority":"required"}],"moveItems":[],"radar":{"next90Days":[],"longRange":[]},"nextAction":{"title":"Protect near-term obligations","detail":"Hold extra debt paydown until near-term cash obligations are fully covered.","amount":"$1,484.50"},"investments":{"balance":"$6,356.64","asOf":"2026-03-29","gateStatus":"Guarded — safety first","netWorth":"$-753.00","cryptoValue":null},"assumptions":["Deterministic fallback active"],"spendingAnalysis":null,"riskFlags":["transfer-needed","floor-breach-risk"]';
+
+    const parsed = parseAudit(raw);
+    expect(parsed).not.toBeNull();
+    expect(parsed.status).toBe("RED");
+    expect(parsed.structured.nextAction.title).toBe("Protect near-term obligations");
+  });
+
   it("normalizes hostile imported statuses instead of preserving raw markup", () => {
     const raw = JSON.stringify({
       headerCard: { status: '<img src=x onerror="alert(1)">' },
@@ -221,8 +230,8 @@ describe("parseAudit", () => {
     const parsed = parseAudit(raw);
     expect(parsed).not.toBeNull();
     expect(parsed.moveItems).toEqual([
-      { tag: null, text: "Pay card", done: false },
-      { tag: null, text: "Save $50", done: false },
+      { tag: null, text: "Pay card", title: "Pay card", detail: "Pay card", done: false },
+      { tag: null, text: "Save $50", title: "Save $50", detail: "Save $50", done: false },
     ]);
     expect(parsed.sections.alerts).toContain("Watch cash flow");
   });
@@ -299,6 +308,8 @@ describe("parseAudit", () => {
       {
         tag: "REQUIRED",
         text: "Transfer $250 from savings to checking to protect your floor.",
+        title: "Protect checking floor",
+        detail: "Transfer $250 from savings to checking to protect your floor.",
         done: false,
         amount: 250,
         semanticKind: "bank-checking-increase",
@@ -447,7 +458,8 @@ describe("parseAudit", () => {
         expect.objectContaining({ code: "weekly-moves-underallocated", severity: "low" }),
       ])
     );
-    expect(parsed.consistency.weeklyMoveDollarTotal).toBe(50);
+    expect(parsed.consistency.weeklyMoveDollarTotal).toBe(0);
+    expect(parsed.consistency.operationalAllocationTotal).toBe(0);
     expect(parsed.consistency.expectedOperationalSurplus).toBe(175);
   });
 
@@ -618,11 +630,10 @@ describe("parseAudit", () => {
       investmentAnchors: { balance: 5809.31, asOf: "2026-03-29", gateStatus: null, netWorth: 4994.3 },
     });
 
-    expect(parsed.structured.nextAction.title).toBe("Protect the next 7 days");
+    expect(parsed.structured.nextAction.title).toBe("Protect near-term obligations");
     expect(parsed.structured.nextAction.detail).toContain("San Francisco Trip");
     expect(parsed.investments.gateStatus).toContain("Guarded");
-    expect(parsed.weeklyMoves[0]).toContain("Hold extra debt paydown");
-    expect(parsed.weeklyMoves[1]).toContain("Keep Roth");
+    expect(parsed.weeklyMoves[0]).toContain("San Francisco Trip");
   });
 
   it("replaces generic debt labels with explicit debt targets when debt paydown remains valid", () => {
@@ -675,9 +686,110 @@ describe("parseAudit", () => {
       investmentAnchors: { balance: 5809.31, asOf: "2026-03-29", gateStatus: "Guarded — safety first", netWorth: 4994.3 },
     });
 
-    expect(parsed.structured.nextAction.title).toContain("Delta Gold Business Card");
-    expect(parsed.structured.nextAction.detail).toContain("Delta Gold Business Card");
-    expect(parsed.weeklyMoves[0]).toContain("Delta Gold Business Card");
+    expect(parsed.structured.nextAction.title).toContain("Delta Gold Business");
+    expect(parsed.structured.nextAction.detail).toContain("Delta Gold Business");
+    expect(parsed.weeklyMoves[0]).toContain("Delta Gold Business");
+  });
+
+  it("replaces generic spending-review next actions when notes earmark funds toward a named debt", () => {
+    const raw = JSON.stringify({
+      headerCard: { status: "RED", title: "Cash stress", subtitle: "Checking is tight", confidence: "medium" },
+      healthScore: { score: 74, grade: "C", trend: "flat", summary: "Checking is tight." },
+      dashboardCard: [
+        { category: "Checking", amount: "$300.56", status: "low" },
+        { category: "Vault", amount: "$2,155.39", status: "ok" },
+        { category: "Pending", amount: "$0.00", status: "ok" },
+        { category: "Debts", amount: "$2,418.96", status: "high" },
+        { category: "Available", amount: "$0.00", status: "action required" },
+      ],
+      weeklyMoves: [
+        {
+          title: "Review Spending",
+          detail: "Analyze recent spending to identify areas for reduction.",
+          priority: "required",
+        },
+      ],
+      alertsCard: [],
+      nextAction: {
+        title: "Review Spending",
+        detail: "Analyze recent spending to identify areas for reduction.",
+        amount: null,
+      },
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: { balance: "$5,809.31", asOf: "2026-03-29", gateStatus: "open", netWorth: "$4,994.30", cryptoValue: null },
+    });
+
+    const parsed = validateParsedAuditConsistency(parseAudit(raw), {
+      nativeScore: 74,
+      nativeRiskFlags: ["floor-breach-risk"],
+      operationalSurplus: 0,
+      cards: [{ id: "amex-blue", name: "Blue Cash Everyday", balance: 2385, apr: 28.49, institution: "American Express" }],
+      formData: {
+        date: "2026-03-29",
+        checking: "300.56",
+        savings: "2155.39",
+        debts: [{ cardId: "amex-blue", name: "Blue Cash Everyday", balance: "2385" }],
+        notes: "I have $1850 in assets to be paid towards Amex.",
+      },
+      renewals: [],
+      computedStrategy: {
+        operationalSurplus: 0,
+        requiredTransfer: 0,
+        debtStrategy: { target: "Blue Cash Everyday", amount: 0 },
+        auditSignals: { debt: { total: 2418.96 } },
+      },
+      investmentAnchors: { balance: 5809.31, asOf: "2026-03-29", gateStatus: "Guarded — safety first", netWorth: 4994.3 },
+    });
+
+    expect(parsed.structured.nextAction.title).toContain("Blue Cash Everyday");
+    expect(parsed.structured.nextAction.detail).toContain("earmarked");
+    expect(parsed.structured.nextAction.detail).toContain("protected obligations are covered");
+  });
+
+  it("backfills missing next action and move plan when the model returns a thin briefing shell", () => {
+    const raw = JSON.stringify({
+      headerCard: { status: "RED", title: "Cash stress", subtitle: "Checking is tight", confidence: "medium" },
+      healthScore: { score: 74, grade: "C", trend: "flat", summary: "Checking is tight." },
+      dashboardCard: [
+        { category: "Checking", amount: "$300.00", status: "tracked" },
+        { category: "Vault", amount: "$2,155.39", status: "tracked" },
+        { category: "Pending", amount: "$0.00", status: "clear" },
+        { category: "Debts", amount: "$2,463.19", status: "tracked" },
+        { category: "Available", amount: "$0.00", status: "protected" },
+      ],
+      weeklyMoves: [],
+      alertsCard: [],
+      nextAction: { title: "", detail: "", amount: null },
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: { balance: "$6,356.64", asOf: "2026-03-29", gateStatus: "open", netWorth: "$0.00", cryptoValue: null },
+    });
+
+    const parsed = validateParsedAuditConsistency(parseAudit(raw), {
+      nativeScore: 74,
+      nativeRiskFlags: ["transfer-needed", "floor-breach-risk"],
+      operationalSurplus: 0,
+      formData: {
+        date: "2026-03-29",
+        checking: "300",
+        savings: "2155.39",
+      },
+      renewals: [{ name: "San Francisco Trip", amount: "750", nextDue: "2026-04-02", chargedTo: "Checking" }],
+      computedStrategy: {
+        operationalSurplus: 0,
+        requiredTransfer: 0,
+        debtStrategy: { target: "Blue Cash Everyday", amount: 150 },
+      },
+      investmentAnchors: { balance: 6356.64, asOf: "2026-03-29", gateStatus: null, netWorth: 0 },
+    });
+
+    expect(parsed.structured.nextAction.title).toBe("Protect near-term obligations");
+    expect(parsed.sections.nextAction).toContain("Protect near-term obligations");
+    expect(parsed.moveItems.length).toBeGreaterThan(0);
+    expect(parsed.weeklyMoves[0]).toContain("San Francisco Trip");
   });
 
   it("returns null for missing headerCard", () => {
@@ -772,6 +884,371 @@ describe("parseAudit", () => {
     expect(degradedParsed.structured.nextAction.detail).toContain("San Francisco Trip");
     expect(degradedParsed.structured.nextAction.detail).toContain("NY Tax Funding Gap");
     expect(degradedParsed.sections.forwardRadar).toContain("Protected cash obligations");
+  });
+
+  it("uses note-based debt payoff context in degraded fallback", () => {
+    const degradedParsed = buildDegradedParsedAudit({
+      reason: "Full AI narrative unavailable — showing deterministic engine signals only.",
+      retryAttempted: true,
+      computedStrategy: {
+        operationalSurplus: 0,
+        requiredTransfer: 0,
+        debtStrategy: { target: "Blue Cash Everyday", amount: 0 },
+        auditSignals: {
+          nativeScore: { score: 74, grade: "C" },
+          debt: { total: 2418.96 },
+          riskFlags: ["floor-breach-risk"],
+        },
+      },
+      financialConfig: {
+        weeklySpendAllowance: 200,
+        emergencyFloor: 0,
+      },
+      formData: {
+        date: "2026-03-29",
+        checking: 300.56,
+        savings: 2155.39,
+        notes: "I have $1850 in assets to be paid towards Amex.",
+      },
+      renewals: [],
+      cards: [{ id: "amex-blue", name: "Blue Cash Everyday", balance: 2385, institution: "American Express" }],
+      personalRules: "",
+    });
+
+    expect(degradedParsed.structured.nextAction.title).toContain("Blue Cash Everyday");
+    expect(degradedParsed.structured.nextAction.detail).toContain("earmarked");
+    expect(degradedParsed.sections.forwardRadar).toContain("Blue Cash Everyday");
+  });
+
+  it("keeps protected obligations ahead of note-based debt payoff staging in degraded fallback", () => {
+    const degradedParsed = buildDegradedParsedAudit({
+      reason: "Full AI narrative unavailable — showing deterministic engine signals only.",
+      retryAttempted: true,
+      computedStrategy: {
+        operationalSurplus: 0,
+        requiredTransfer: 0,
+        debtStrategy: { target: "Blue Cash Everyday", amount: 150 },
+        auditSignals: {
+          nativeScore: { score: 55, grade: "D" },
+          debt: { total: 2462.92 },
+          riskFlags: ["transfer-needed", "floor-breach-risk"],
+        },
+      },
+      financialConfig: {
+        weeklySpendAllowance: 200,
+        emergencyFloor: 0,
+      },
+      formData: {
+        date: "2026-03-29",
+        checking: 300,
+        savings: 2155.39,
+        notes: "$1250 will be paid towards Amex balances based on an item I am selling in 2 days",
+      },
+      renewals: [
+        { name: "Dad / EZPass", amount: "52.50", nextDue: "2026-04-01", chargedTo: "Checking" },
+        { name: "Acura Payment", amount: "682", nextDue: "2026-04-08", chargedTo: "Checking" },
+      ],
+      cards: [{ id: "amex-blue", name: "Blue Cash Everyday", balance: 2450, institution: "American Express" }],
+      personalRules: `
+7) STRATEGIC SINKING FUNDS (VIRTUAL BUCKET TARGETS)
+- San Francisco Trip: $750.00 due 2026-04-02
+      `,
+    });
+
+    expect(degradedParsed.structured.nextAction.title).toBe("Protect near-term obligations");
+    expect(degradedParsed.structured.nextAction.detail).toContain("Dad / EZPass");
+    expect(degradedParsed.weeklyMoves[0]).toContain("Dad / EZPass");
+    expect(degradedParsed.weeklyMoves.some((move) => move.includes("Blue Cash Everyday"))).toBe(true);
+    expect(degradedParsed.sections.forwardRadar).toContain("Blue Cash Everyday");
+  });
+
+  it("builds a full deterministic allocation ladder when deployable cash is positive", () => {
+    const parsed = validateParsedAuditConsistency(parseAudit(JSON.stringify({
+      headerCard: { status: "YELLOW", title: "Watch cash flow", subtitle: "Protect deadlines", confidence: "medium" },
+      healthScore: { score: 82, grade: "B-", trend: "flat", summary: "Watch the next week carefully." },
+      dashboardCard: [
+        { category: "Checking", amount: "$3,700.00", status: "tracked" },
+        { category: "Vault", amount: "$2,155.39", status: "tracked" },
+        { category: "Pending", amount: "$0.00", status: "clear" },
+        { category: "Debts", amount: "$3,000.00", status: "tracked" },
+        { category: "Available", amount: "$2,500.00", status: "deploy" },
+      ],
+      weeklyMoves: [
+        { title: "Review upcoming bills", detail: "Prepare for the next few obligations.", priority: "required" },
+      ],
+      alertsCard: [],
+      nextAction: { title: "Review upcoming bills", detail: "Prepare for the next few obligations.", amount: null },
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: { balance: "$5,809.31", asOf: "2026-03-31", gateStatus: "open", netWorth: "$4,994.30", cryptoValue: null },
+    })), {
+      nativeScore: 82,
+      nativeRiskFlags: [],
+      operationalSurplus: 2500,
+      formData: {
+        date: "2026-03-31",
+        checking: "3700",
+        savings: "2155.39",
+        roth: "5809.31",
+      },
+      renewals: [
+        { name: "Dad / EZPass", amount: "52.50", nextDue: "2026-04-01", chargedTo: "Checking" },
+        { name: "San Francisco Trip", amount: "750", nextDue: "2026-04-02", chargedTo: "Checking" },
+        { name: "Acura Payment", amount: "682", nextDue: "2026-04-08", chargedTo: "Checking" },
+      ],
+      computedStrategy: {
+        operationalSurplus: 2500,
+        debtStrategy: { target: "Blue Cash Everyday", amount: 1015.5 },
+      },
+      investmentAnchors: { balance: 5809.31, asOf: "2026-03-31", gateStatus: "Guarded — safety first", netWorth: 4994.3 },
+      financialConfig: {
+        investmentRoth: 5809.31,
+      },
+    });
+
+    expect(parsed.structured.nextAction.title).toBe("Protect near-term obligations");
+    expect(parsed.structured.nextAction.amount).toBe("$2,500.00");
+    expect(parsed.moveItems.map((item) => item.title)).toEqual(
+      expect.arrayContaining([
+        "Dad / EZPass",
+        "San Francisco Trip",
+        "Acura Payment",
+        "Blue Cash Everyday",
+      ])
+    );
+    expect(parsed.moveItems[0].detail).toContain("Keep $52.50 in Checking");
+    expect(parsed.moveItems[0].routeLabel).toBe("Already in Checking $52.50");
+  });
+
+  it("explicitly says when there is no free cash to deploy while splitting protected obligations", () => {
+    const degradedParsed = buildDegradedParsedAudit({
+      reason: "Full AI narrative unavailable — showing deterministic engine signals only.",
+      retryAttempted: true,
+      computedStrategy: {
+        operationalSurplus: 0,
+        requiredTransfer: 0,
+        debtStrategy: { target: "Blue Cash Everyday", amount: 150 },
+        auditSignals: {
+          nativeScore: { score: 74, grade: "C" },
+          debt: { total: 2418.96 },
+          riskFlags: ["floor-breach-risk"],
+        },
+      },
+      financialConfig: {
+        weeklySpendAllowance: 200,
+        emergencyFloor: 0,
+      },
+      formData: {
+        date: "2026-03-31",
+        checking: 300,
+        savings: 2155.39,
+      },
+      renewals: [
+        { name: "Dad / EZPass", amount: "52.50", nextDue: "2026-04-01", chargedTo: "Checking" },
+        { name: "San Francisco Trip", amount: "750", nextDue: "2026-04-02", chargedTo: "Checking" },
+      ],
+      cards: [],
+      personalRules: "",
+    });
+
+    expect(degradedParsed.structured.nextAction.title).toBe("Protect near-term obligations");
+    expect(degradedParsed.structured.nextAction.detail).toContain("Assign the current liquid cash in order");
+    expect(degradedParsed.moveItems.map((item) => item.title)).toEqual(
+      expect.arrayContaining(["Dad / EZPass", "San Francisco Trip"])
+    );
+  });
+
+  it("sums multiple earmarked note amounts into one staged payoff context", () => {
+    const parsed = validateParsedAuditConsistency(parseAudit(JSON.stringify({
+      headerCard: { status: "RED", title: "Cash stress", subtitle: "Checking is tight", confidence: "medium" },
+      healthScore: { score: 74, grade: "C", trend: "flat", summary: "Checking is tight." },
+      dashboardCard: [
+        { category: "Checking", amount: "$300.00", status: "tracked" },
+        { category: "Vault", amount: "$2,155.39", status: "tracked" },
+        { category: "Pending", amount: "$0.00", status: "clear" },
+        { category: "Debts", amount: "$2,463.19", status: "tracked" },
+        { category: "Available", amount: "$0.00", status: "protected" },
+      ],
+      weeklyMoves: [{ title: "Review Spending", detail: "Analyze recent spending to identify areas for reduction.", priority: "required" }],
+      alertsCard: [],
+      nextAction: { title: "Review Spending", detail: "Analyze recent spending to identify areas for reduction.", amount: null },
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: { balance: "$6,356.64", asOf: "2026-03-29", gateStatus: "open", netWorth: "$0.00", cryptoValue: null },
+    })), {
+      nativeScore: 74,
+      nativeRiskFlags: ["floor-breach-risk"],
+      operationalSurplus: 0,
+      cards: [{ id: "amex-blue", name: "Blue Cash Everyday", balance: 2450, institution: "American Express" }],
+      formData: {
+        date: "2026-03-29",
+        checking: "300",
+        savings: "2155.39",
+        notes: "$1250 will be paid towards Amex balances based on an item I am selling in 2 days. An additional $600 will be as well.",
+      },
+      renewals: [],
+      computedStrategy: { operationalSurplus: 0, debtStrategy: { target: "Blue Cash Everyday", amount: 0 } },
+      investmentAnchors: { balance: 6356.64, asOf: "2026-03-29", gateStatus: null, netWorth: 0 },
+    });
+
+    expect(parsed.structured.nextAction.amount).toBe("$1,850.00");
+    expect(parsed.structured.nextAction.detail).toContain("$1,850.00");
+  });
+
+  it("uses NY tax funding gap instead of double-counting full liability plus gap", () => {
+    const degradedParsed = buildDegradedParsedAudit({
+      reason: "Full AI narrative unavailable — showing deterministic engine signals only.",
+      retryAttempted: true,
+      computedStrategy: {
+        operationalSurplus: 331.31,
+        requiredTransfer: 0,
+        debtStrategy: { target: "Delta Gold Business Card", amount: 150 },
+        auditSignals: {
+          nativeScore: { score: 76, grade: "C" },
+          debt: { total: 3111.34 },
+          riskFlags: [],
+        },
+      },
+      financialConfig: {
+        weeklySpendAllowance: 200,
+        emergencyFloor: 0,
+      },
+      formData: {
+        date: "2026-03-29",
+        checking: 2189.56,
+        savings: 2155.39,
+      },
+      renewals: [],
+      cards: [],
+      personalRules: `
+1) TAX ESCROW (LOCKED)
+- Total NY Liability: $3,166.00 due 2026-04-14
+- Remaining Net Gap: $1,150.00 (primary cash funding gap)
+7) STRATEGIC SINKING FUNDS (VIRTUAL BUCKET TARGETS)
+- San Francisco Trip: $750.00 due 2026-04-02
+      `,
+    });
+
+    expect(degradedParsed.structured.nextAction.amount).toBe("$1,900.00");
+    expect(degradedParsed.structured.nextAction.detail).toContain("NY Tax Funding Gap");
+    expect(degradedParsed.structured.nextAction.detail).not.toContain("$3,166.00");
+  });
+
+  it("shows enough protected obligations to match the protected-cash amount explanation", () => {
+    const degradedParsed = buildDegradedParsedAudit({
+      reason: "Full AI narrative unavailable — showing deterministic engine signals only.",
+      retryAttempted: true,
+      computedStrategy: {
+        operationalSurplus: 0,
+        requiredTransfer: 0,
+        debtStrategy: { target: "Blue Cash Everyday", amount: 0 },
+        auditSignals: {
+          nativeScore: { score: 55, grade: "D" },
+          debt: { total: 2462.92 },
+          riskFlags: ["transfer-needed", "floor-breach-risk"],
+        },
+      },
+      financialConfig: { weeklySpendAllowance: 200, emergencyFloor: 0 },
+      formData: { date: "2026-03-29", checking: 300, savings: 2155.39 },
+      renewals: [
+        { name: "Dad / EZPass", amount: "52.50", nextDue: "2026-04-01", chargedTo: "Checking" },
+        { name: "Acura Payment", amount: "682", nextDue: "2026-04-08", chargedTo: "Checking" },
+      ],
+      personalRules: `
+1) TAX ESCROW (LOCKED)
+- Total NY Liability: $3,166.00 due 2026-04-14
+- Remaining Net Gap: $1,150.00 (primary cash funding gap)
+7) STRATEGIC SINKING FUNDS (VIRTUAL BUCKET TARGETS)
+- San Francisco Trip: $750.00 due 2026-04-02
+      `,
+    });
+
+    expect(degradedParsed.structured.nextAction.detail).toContain("Dad / EZPass");
+    expect(degradedParsed.structured.nextAction.detail).toContain("Acura Payment");
+    expect(degradedParsed.structured.nextAction.detail).toContain("San Francisco Trip");
+    expect(degradedParsed.structured.nextAction.detail).toContain("NY Tax Funding Gap");
+  });
+
+  it("reanchors to an explicit safety payment when custom rules require it", () => {
+    const parsed = validateParsedAuditConsistency(parseAudit(JSON.stringify({
+      headerCard: { status: "YELLOW", title: "Watch cash flow", subtitle: "Protect deadlines", confidence: "medium" },
+      healthScore: { score: 81, grade: "B-", trend: "flat", summary: "Protect the next week." },
+      dashboardCard: [
+        { category: "Checking", amount: "$550.00", status: "tracked" },
+        { category: "Vault", amount: "$2,998.86", status: "tracked" },
+        { category: "Pending", amount: "$0.00", status: "clear" },
+        { category: "Debts", amount: "$3,991.20", status: "tracked" },
+        { category: "Available", amount: "$197.50", status: "deploy" },
+      ],
+      weeklyMoves: [{ title: "Review bills", detail: "Review bills and obligations.", amount: null, priority: "required" }],
+      alertsCard: [],
+      nextAction: { title: "Review bills", detail: "Review bills and obligations.", amount: null },
+      radar: { next90Days: [], longRange: [] },
+      investments: { balance: "$6,213.19", asOf: "2026-04-12", gateStatus: "Guarded — safety first", netWorth: "$0.00", cryptoValue: null },
+      assumptions: [],
+      spendingAnalysis: null,
+    })), {
+      nativeScore: 81,
+      nativeRiskFlags: [],
+      operationalSurplus: 197.5,
+      formData: {
+        date: "2026-04-12",
+        checking: "550",
+        savings: "2998.86",
+        debts: [
+          { cardId: "delta", name: "Delta Gold Business Card", balance: "1942.20", minPayment: "75" },
+          { cardId: "blue", name: "Blue Cash Everyday", balance: "2049.00", minPayment: "90" },
+        ],
+      },
+      renewals: [],
+      cards: [
+        { id: "delta", name: "Delta Gold Business Card", balance: 1942.2, institution: "American Express" },
+        { id: "blue", name: "Blue Cash Everyday", balance: 2049, institution: "American Express" },
+      ],
+      computedStrategy: {
+        operationalSurplus: 197.5,
+        debtStrategy: { target: "Delta Gold Business Card", amount: 197.5 },
+      },
+      personalRules: `
+2) SUBSCRIPTIONS CARD LOGIC (SAFETY + BONUS CHASE)
+- DefaultSubscriptionsCard = Delta Gold Business Card.
+- While statement close/due date is UNKNOWN: pay this card toward $0.00 weekly (safety payment).
+      `,
+    });
+
+    expect(parsed.moveItems.some((item) => String(item.title || "").includes("safety payment"))).toBe(true);
+    expect(parsed.moveItems.some((item) => String(item.detail || "").includes("weekly safety payment"))).toBe(true);
+  });
+
+  it("forces checking-paid obligations to stay in checking when custom rules say so", () => {
+    const degradedParsed = buildDegradedParsedAudit({
+      reason: "Full AI narrative unavailable — showing deterministic engine signals only.",
+      retryAttempted: true,
+      computedStrategy: {
+        operationalSurplus: 0,
+        requiredTransfer: 0,
+        debtStrategy: { target: "Blue Cash Everyday", amount: 0 },
+        auditSignals: {
+          nativeScore: { score: 74, grade: "C" },
+          debt: { total: 3991.2 },
+          riskFlags: ["floor-breach-risk"],
+        },
+      },
+      financialConfig: { weeklySpendAllowance: 200, emergencyFloor: 0 },
+      formData: { date: "2026-04-12", checking: 550, savings: 2998.86 },
+      renewals: [
+        { name: "Dad / EZPass", amount: "52.50", nextDue: "2026-04-14", chargedTo: "Ally" },
+      ],
+      personalRules: `
+4) CHECKING CASH OBLIGATION SAFETY
+- Dad/EZPass is ALWAYS a checking-paid cash outflow (NOT a card payment).
+      `,
+    });
+
+    expect(degradedParsed.moveItems[0].routeLabel).toContain("Checking");
+    expect(degradedParsed.moveItems[0].detail).toContain("Checking");
   });
 });
 

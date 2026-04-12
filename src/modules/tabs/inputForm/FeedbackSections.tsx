@@ -150,11 +150,11 @@ export function PlaidTransactionsCard({
   return (
     <div
       style={{
-        marginBottom: 12,
+        marginBottom: 0,
         overflow: "hidden",
         border: `1px solid ${T.border.subtle}`,
         borderRadius: T.radius.xl,
-        padding: 16,
+        padding: 14,
         background: T.bg.card,
         boxShadow: T.shadow.soft,
       }}
@@ -162,13 +162,13 @@ export function PlaidTransactionsCard({
       <div
         style={{
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
           justifyContent: "space-between",
-          gap: 8,
+          gap: 12,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <TrendingUp size={15} color={T.accent.primary} />
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, minWidth: 0, flex: 1 }}>
+          <TrendingUp size={15} color={T.accent.primary} style={{ marginTop: 3, flexShrink: 0 }} />
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <span style={{ fontSize: 13, fontWeight: 800, color: T.text.primary }}>Recent Spending</span>
@@ -183,8 +183,8 @@ export function PlaidTransactionsCard({
             </div>
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
-          <span style={{ fontSize: 13, fontWeight: 800, color: T.status.red, fontFamily: T.font.mono }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+          <span style={{ fontSize: 14, fontWeight: 800, color: T.status.red, fontFamily: T.font.mono, lineHeight: 1 }}>
             -$
             {totalSpend.toLocaleString(undefined, {
               minimumFractionDigits: 2,
@@ -198,11 +198,11 @@ export function PlaidTransactionsCard({
       </div>
       <div
         style={{
-          display: "flex",
+          display: "grid",
+          gridTemplateColumns: "minmax(0,1fr) auto",
           alignItems: "center",
-          justifyContent: "space-between",
           gap: 10,
-          marginTop: 12,
+          marginTop: 10,
         }}
       >
         <button
@@ -217,7 +217,8 @@ export function PlaidTransactionsCard({
             display: "inline-flex",
             alignItems: "center",
             gap: 8,
-            minHeight: 34,
+            minHeight: 36,
+            width: "fit-content",
             padding: "0 12px",
             borderRadius: 999,
             border: `1px solid ${
@@ -233,6 +234,7 @@ export function PlaidTransactionsCard({
             fontWeight: 800,
             cursor: proEnabled ? "pointer" : "not-allowed",
             opacity: proEnabled ? 1 : 0.75,
+            justifySelf: "start",
           }}
         >
           <span
@@ -259,7 +261,7 @@ export function PlaidTransactionsCard({
             display: "inline-flex",
             alignItems: "center",
             gap: 8,
-            minHeight: 34,
+            minHeight: 36,
             padding: "0 12px",
             borderRadius: 999,
             border: `1px solid ${T.border.default}`,
@@ -268,6 +270,7 @@ export function PlaidTransactionsCard({
             fontSize: 11,
             fontWeight: 800,
             cursor: "pointer",
+            justifySelf: "end",
           }}
         >
           {showTxns ? "Hide detail" : "Show detail"}

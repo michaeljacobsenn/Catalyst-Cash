@@ -5,6 +5,7 @@ import {
   getNextDateForDayOfMonth,
   getNextPayday,
   generateStrategy,
+  mergeSnapshotDebts,
   projectDebtPayoff,
 } from "./engine.js";
 
@@ -371,6 +372,25 @@ describe("Engine Strategy Logic - generateStrategy", () => {
     expect(strategy.auditSignals.riskFlags).toContain("promo-expiry");
     expect(strategy.auditSignals.riskFlags).not.toContain("critical-promo-expiry");
   });
+
+  it("treats submitted snapshot debts as authoritative when requested", () => {
+    const merged = mergeSnapshotDebts(
+      [
+        { id: "delta", name: "Delta Gold Business Card", balance: 1942.2, apr: 29.99, minPayment: 75 },
+        { id: "blue", name: "Blue Cash Everyday", balance: 2455.27, apr: 29.99, minPayment: 90 },
+        { id: "hidden", name: "Hidden Card", balance: 999.99, apr: 29.99, minPayment: 35 },
+      ],
+      [
+        { cardId: "delta", name: "Delta Gold Business Card", balance: 1942.2, minPayment: 75 },
+        { cardId: "blue", name: "Blue Cash Everyday", balance: 2049.0, minPayment: 90 },
+      ],
+      0,
+      { authoritativeSnapshot: true }
+    );
+
+    expect(merged.map((card) => card.name)).toEqual(["Delta Gold Business Card", "Blue Cash Everyday"]);
+    expect(merged.reduce((sum, card) => sum + Number(card.balance || 0), 0)).toBeCloseTo(3991.2, 2);
+  });
 });
 
 describe("projectDebtPayoff — Compound Interest Amortization", () => {
@@ -504,5 +524,101 @@ describe("projectDebtPayoff — Compound Interest Amortization", () => {
     expect(result.debtFreeDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     const d = new Date(result.debtFreeDate);
     expect(d.getTime()).toBeGreaterThan(new Date("2024-06-15").getTime());
+  });
+});
+
+describe("Savings Rate Signal", () => {
+  const baseConfig = {
+    weeklySpendAllowance: 200,
+    emergencyFloor: 1000,
+    payday: "friday",
+    paycheckStandard: 2000,
+    payFrequency: "bi-weekly",
+  };
+
+  it("computes positive savings rate for salary with surplus", () => {
+    const strategy = generateStrategy(baseConfig, {
+      snapshotDate: "2024-01-01",
+      checkingBalance: 5000,
+      savingsTotal: 3000,
+      cards: [],
+    });
+
+    expect(strategy.auditSignals.savingsRate).toBeDefined();
+    expect(strategy.auditSignals.savingsRate.pct).toBeGreaterThan(0);
+    expect(strategy.auditSignals.savingsRate.weeklyIncome).toBeGreaterThan(0);
+    expect(strategy.auditSignals.savingsRate.weeklySurplus).toBeGreaterThan(0);
+    expect(strategy.auditSignals.riskFlags).not.toContain("negative-savings-rate");
+  });
+
+  it("returns null savings rate when income is not configured", () => {
+    const strategy = generateStrategy(
+      { ...baseConfig, paycheckStandard: 0, paycheckFirstOfMonth: 0 },
+      {
+        snapshotDate: "2024-01-01",
+        checkingBalance: 3000,
+        savingsTotal: 1000,
+      }
+    );
+
+    expect(strategy.auditSignals.savingsRate.pct).toBeNull();
+  });
+
+  it("flags negative-savings-rate when user is outspending their income", () => {
+    const strategy = generateStrategy(
+      { ...baseConfig, paycheckStandard: 500, payFrequency: "monthly" },
+      {
+        snapshotDate: "2024-01-01",
+        checkingBalance: 800,
+        savingsTotal: 0,
+        cards: [{ name: "Card", balance: 3000, minPayment: 200, apr: 24 }],
+        renewals: [{ name: "Rent", amount: 1500, nextDue: "2024-01-03" }],
+      }
+    );
+
+    // With $500/mo income and $1500 rent + $200 debt minimums, surplus should be deeply negative
+    expect(strategy.auditSignals.savingsRate.pct).toBeLessThan(0);
+    expect(strategy.auditSignals.riskFlags).toContain("negative-savings-rate");
+  });
+
+  it("computes savings rate for hourly income", () => {
+    const strategy = generateStrategy(
+      {
+        ...baseConfig,
+        incomeType: "hourly",
+        hourlyRateNet: 25,
+        typicalHours: 40,
+        paycheckStandard: 0,
+        payFrequency: "bi-weekly",
+      },
+      {
+        snapshotDate: "2024-01-01",
+        checkingBalance: 4000,
+        savingsTotal: 2000,
+      }
+    );
+
+    expect(strategy.auditSignals.savingsRate.pct).not.toBeNull();
+    expect(strategy.auditSignals.savingsRate.weeklyIncome).toBeGreaterThan(0);
+  });
+
+  it("computes savings rate for variable income", () => {
+    const strategy = generateStrategy(
+      {
+        ...baseConfig,
+        incomeType: "variable",
+        averagePaycheck: 1800,
+        paycheckStandard: 0,
+        payFrequency: "bi-weekly",
+      },
+      {
+        snapshotDate: "2024-01-01",
+        checkingBalance: 4000,
+        savingsTotal: 2000,
+      }
+    );
+
+    expect(strategy.auditSignals.savingsRate.pct).not.toBeNull();
+    expect(strategy.auditSignals.savingsRate.weeklyIncome).toBeGreaterThan(0);
   });
 });
