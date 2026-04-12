@@ -40,7 +40,7 @@ export const IAP_PRICING = {
     trial: "7-day free trial",
   },
   lifetime: {
-    price: "$249.99",
+    price: "$299.99",
     period: "lifetime",
     savings: "Never pay again",
     perMonth: null,
