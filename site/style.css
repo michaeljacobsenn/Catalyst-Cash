@@ -1259,8 +1259,8 @@ h2 {
   border-radius: 999px;
   background: rgba(16, 185, 129, 0.18);
   border: 1px solid rgba(16, 185, 129, 0.35);
-  color: #34D399 !important;
-  font-size: 11px !important;
+  color: #34D399;
+  font-size: 11px;
   font-weight: 700;
   font-family: var(--font-mono);
   letter-spacing: 0.04em;

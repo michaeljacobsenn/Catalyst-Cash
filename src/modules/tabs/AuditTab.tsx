@@ -89,7 +89,6 @@ const TrendSparkline = ({ history }) => {
   const scores = scoredAudits.map(a => a.parsed.healthScore.score).reverse();
   const latestScore = scoredAudits[0]?.parsed?.healthScore?.score ?? null;
   const previousScore = scoredAudits[1]?.parsed?.healthScore?.score ?? null;
-  const latestGrade = latestScore != null ? getGradeLetter(latestScore) : null;
   const avgScore = Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length);
   const delta = latestScore != null && previousScore != null ? latestScore - previousScore : null;
   const trendColor = delta == null ? T.accent.primary : delta >= 0 ? T.status.green : T.status.red;
@@ -105,7 +104,6 @@ const TrendSparkline = ({ history }) => {
   const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
   const firstPoint = pts[0] ?? null;
   const lastPoint = pts[pts.length - 1] ?? null;
-  const latestAudit = scoredAudits[0];
 
   return (
     <Card
@@ -126,98 +124,56 @@ const TrendSparkline = ({ history }) => {
         }}
       />
       <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-              <TrendingUp size={13} color={trendColor} strokeWidth={2.5} />
-              <span style={{ fontSize: 11, fontWeight: 800, color: T.text.secondary, fontFamily: T.font.mono, letterSpacing: "0.04em" }}>
-                HEALTH TREND
-              </span>
-            </div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.03em" }}>
-              {latestScore != null ? `${latestGrade} · ${latestScore}` : "No score yet"}
-            </div>
-            <div style={{ marginTop: 4, fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>
-              {delta == null
-                ? "Run one more scored audit to unlock movement."
-                : `${delta >= 0 ? "Up" : "Down"} ${Math.abs(delta)} point${Math.abs(delta) === 1 ? "" : "s"} from the prior audit.`}
-            </div>
+        {/* Header: label + delta badge */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <TrendingUp size={13} color={trendColor} strokeWidth={2.5} />
+            <span style={{ fontSize: 11, fontWeight: 800, color: T.text.secondary, fontFamily: T.font.mono, letterSpacing: "0.04em" }}>
+              HEALTH TREND
+            </span>
           </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 4, flexShrink: 0 }}>
-            <span style={{ fontSize: 16, fontWeight: 900, color: trendColor, fontFamily: T.font.mono }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+            <span style={{ fontSize: 13, fontWeight: 900, color: trendColor, fontFamily: T.font.mono }}>
               {delta == null ? "NEW" : `${delta >= 0 ? "+" : ""}${delta}`}
             </span>
             <span style={{ fontSize: 10, color: T.text.dim }}>vs last</span>
           </div>
         </div>
 
-        <div style={{ display: "grid", gap: 10 }}>
-          <div
-            style={{
-              padding: "10px 10px 8px",
-              borderRadius: T.radius.lg,
-              background: `${T.bg.elevated}B8`,
-              border: `1px solid ${T.border.subtle}`,
-              minHeight: 92,
-            }}
-          >
-            {scores.length > 1 && firstPoint && lastPoint ? (
-              <>
-                <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
-                  <defs>
-                    <linearGradient id="auditTrendGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={trendColor} stopOpacity="0.2" />
-                      <stop offset="100%" stopColor={trendColor} stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                  <path d={`${d} L${lastPoint.x},${H} L${firstPoint.x},${H} Z`} fill="url(#auditTrendGrad)" />
-                  <path d={d} fill="none" stroke={trendColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                  {pts.map((p, i) => (
-                    <circle key={i} cx={p.x} cy={p.y} r={i === pts.length - 1 ? 3.5 : 0} fill={trendColor} />
-                  ))}
-                </svg>
-                <div style={{ marginTop: 6, fontSize: 10, color: T.text.dim, fontFamily: T.font.mono }}>
-                  Last {scores.length} scored audits
-                </div>
-              </>
-            ) : (
-              <div style={{ display: "flex", height: "100%", minHeight: 74, alignItems: "center", justifyContent: "center", textAlign: "center", color: T.text.secondary, fontSize: 11, lineHeight: 1.45 }}>
-                One more scored audit will draw the chart.
+        {/* Chart */}
+        <div
+          style={{
+            padding: "10px 10px 8px",
+            borderRadius: T.radius.lg,
+            background: `${T.bg.elevated}B8`,
+            border: `1px solid ${T.border.subtle}`,
+            minHeight: 84,
+          }}
+        >
+          {scores.length > 1 && firstPoint && lastPoint ? (
+            <>
+              <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
+                <defs>
+                  <linearGradient id="auditTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={trendColor} stopOpacity="0.2" />
+                    <stop offset="100%" stopColor={trendColor} stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <path d={`${d} L${lastPoint.x},${H} L${firstPoint.x},${H} Z`} fill="url(#auditTrendGrad)" />
+                <path d={d} fill="none" stroke={trendColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                {pts.map((p, i) => (
+                  <circle key={i} cx={p.x} cy={p.y} r={i === pts.length - 1 ? 3.5 : 0} fill={trendColor} />
+                ))}
+              </svg>
+              <div style={{ marginTop: 4, fontSize: 10, color: T.text.dim, fontFamily: T.font.mono }}>
+                Last {scores.length} scored audits · avg {avgScore}
               </div>
-            )}
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
-            {[
-            { label: "Latest", value: latestScore != null ? `${latestScore}` : "—", note: latestAudit ? relativeTime(latestAudit.date || latestAudit.ts) : "No audit" },
-            { label: "Average", value: `${avgScore}`, note: `${scores.length} scored audits` },
-            { label: "Archive", value: `${history.length}`, note: "total audits" },
-            ].map(stat => (
-              <div
-                key={stat.label}
-                style={{
-                  padding: "10px 10px 9px",
-                  borderRadius: T.radius.lg,
-                  background: `${T.bg.elevated}A8`,
-                  border: `1px solid ${T.border.subtle}`,
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                  minHeight: 82,
-                }}
-              >
-                <span style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, fontFamily: T.font.mono, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                  {stat.label}
-                </span>
-                <span style={{ fontSize: 21, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.03em" }}>
-                  {stat.value}
-                </span>
-                <span style={{ fontSize: 10, color: T.text.secondary, lineHeight: 1.3 }}>
-                  {stat.note}
-                </span>
-              </div>
-            ))}
-          </div>
+            </>
+          ) : (
+            <div style={{ display: "flex", height: "100%", minHeight: 64, alignItems: "center", justifyContent: "center", textAlign: "center", color: T.text.secondary, fontSize: 11, lineHeight: 1.45 }}>
+              One more scored audit will draw the chart.
+            </div>
+          )}
         </div>
       </div>
     </Card>
@@ -297,14 +253,6 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
     <div className="page-body" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
 
-        {shouldShowGating() && !proEnabled && (
-          <ProBanner
-            compact
-            onUpgrade={() => setShowPaywall(true)}
-            label="Upgrade to Pro"
-            sublabel={buildPromoLine(["audits", "history", "rewards"])}
-          />
-        )}
         {showPaywall && (
           <Suspense fallback={null}>
             <LazyProPaywall onClose={() => setShowPaywall(false)} source="audit" />
@@ -314,6 +262,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
           <AuditExportSheet audit={exportAuditRecord} onClose={() => setExportAuditRecord(null)} toast={toast} />
         )}
 
+        {/* demo warning banner */}
         {demoActive && (
           <Card
             style={{
@@ -326,16 +275,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
           >
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
               <div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 800,
-                    color: T.status.amber,
-                    fontFamily: T.font.mono,
-                    letterSpacing: "0.06em",
-                    marginBottom: 4,
-                  }}
-                >
+                <div style={{ fontSize: 10, fontWeight: 800, color: T.status.amber, fontFamily: T.font.mono, letterSpacing: "0.06em", marginBottom: 4 }}>
                   DEMO MODE ACTIVE
                 </div>
                 <p style={{ margin: 0, fontSize: 11, color: T.text.secondary, lineHeight: 1.5 }}>
@@ -349,11 +289,82 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
           </Card>
         )}
 
-        <div style={{ marginBottom: 14 }}>
-          <TrendSparkline history={audits} />
-        </div>
+        {/* ═══ 1. PRIMARY CTA ═══ */}
+        <button
+          onClick={onRunAudit}
+          className="hover-btn"
+          style={{
+            width: "100%",
+            padding: "16px",
+            borderRadius: T.radius.lg,
+            border: `1px solid ${T.accent.primary}40`,
+            background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`,
+            color: "#fff",
+            fontSize: 15,
+            fontWeight: 800,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            boxShadow: `0 6px 24px ${T.accent.primary}40`,
+            transition: "all .2s cubic-bezier(.16,1,.3,1)",
+          }}
+        >
+          <Plus size={18} strokeWidth={2.5} />
+          Run New Audit
+        </button>
 
-        {/* ═══ LATEST AUDIT CARD ═══ */}
+        {/* quota + demo — contextual, directly below CTA */}
+        {(remaining != null && limit != null) || typeof onDemoAudit === "function" ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginTop: 8 }}>
+            {remaining != null && limit != null && (
+              <span style={{ fontSize: 10, fontWeight: 600, color: T.text.dim, fontFamily: T.font.mono }}>
+                {remaining} of {limit} audits remaining
+              </span>
+            )}
+            {typeof onDemoAudit === "function" && (
+              <button
+                onClick={() => { haptic.light(); onDemoAudit(); }}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 999,
+                  border: `1px solid ${T.border.default}`,
+                  background: "transparent",
+                  color: T.text.secondary,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Zap size={12} strokeWidth={2.2} />
+                {demoActive ? "Reload Demo" : "Load Demo"}
+              </button>
+            )}
+          </div>
+        ) : null}
+
+        {/* ═══ 2. PRO UPGRADE NUDGE (gated) ═══ */}
+        {shouldShowGating() && !proEnabled && (
+          <ProBanner
+            compact
+            onUpgrade={() => setShowPaywall(true)}
+            label="Upgrade to Pro"
+            sublabel={buildPromoLine(["audits", "history", "rewards"])}
+          />
+        )}
+
+        {/* ═══ 3. HEALTH TREND (sparkline — summary) ═══ */}
+        {audits.length > 0 && (
+          <div style={{ marginTop: 14, marginBottom: 2 }}>
+            <TrendSparkline history={audits} />
+          </div>
+        )}
+
+        {/* ═══ 4. LATEST AUDIT CARD ═══ */}
         {p ? (
           <Card
             animate
@@ -363,10 +374,10 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
               overflow: "hidden",
               cursor: "pointer",
               padding: "20px",
+              marginTop: 10,
               borderColor: `${cHex}30`,
             }}
           >
-            {/* Left color strip */}
             <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: cHex, opacity: 0.9 }} />
             <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 80, background: `linear-gradient(90deg, ${cHex}12, transparent)`, pointerEvents: "none" }} />
 
@@ -382,67 +393,59 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
               </span>
             </div>
 
-             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-               {/* Score + Grade inline pill */}
-               <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                 {score != null && (
-                   <div style={{
-                     display: "flex", alignItems: "center", gap: 5,
-                     padding: "4px 10px", borderRadius: 99,
-                     background: `${cHex}12`, border: `1px solid ${cHex}30`,
-                   }}>
-                     <div style={{ width: 6, height: 6, borderRadius: "50%", background: cHex }} />
-                     <span style={{ fontSize: 13, fontWeight: 800, color: cHex, fontFamily: T.font.mono }}>
-                       {grade} · {score}
-                     </span>
-                   </div>
-                 )}
-               </div>
-
-               <div style={{ flex: 1, minWidth: 0 }}>
-                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                   <span style={{
-                     fontSize: 10, fontWeight: 700, color: cHex,
-                     background: `${cHex}10`, border: `1px solid ${cHex}25`,
-                     padding: "2px 8px", borderRadius: 99, fontFamily: T.font.mono,
-                     letterSpacing: "0.04em",
-                   }}>
-                     {statusColor}
-                   </span>
-                   <span style={{ fontSize: 10, color: T.text.dim }}>
-                     {fmtDate(current?.date)}
-                   </span>
-                 </div>
-
-                 {p?.netWorth != null && (
-                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                     <Mono size={14} weight={700} color={T.text.primary}>{fmt(p.netWorth)}</Mono>
-                     <span style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em" }}>NET WORTH</span>
-                   </div>
-                 )}
-
-                 {movesTotal > 0 && (
-                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-                     <div style={{ flex: 1, height: 3, background: T.bg.elevated, borderRadius: 99, overflow: "hidden" }}>
-                       <div style={{
-                         width: `${(movesDone / movesTotal) * 100}%`,
-                         height: "100%",
-                         background: cHex,
-                         borderRadius: 99,
-                         transition: "width 0.4s ease",
-                       }} />
-                     </div>
-                     <span style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, fontFamily: T.font.mono, whiteSpace: "nowrap" }}>
-                       {movesDone}/{movesTotal} moves
-                     </span>
-                   </div>
-                 )}
-               </div>
-             </div>
-           </Card>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              {score != null && (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  padding: "4px 10px", borderRadius: 99,
+                  background: `${cHex}12`, border: `1px solid ${cHex}30`,
+                  flexShrink: 0,
+                }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: cHex }} />
+                  <span style={{ fontSize: 13, fontWeight: 800, color: cHex, fontFamily: T.font.mono }}>
+                    {grade} · {score}
+                  </span>
+                </div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, color: cHex,
+                    background: `${cHex}10`, border: `1px solid ${cHex}25`,
+                    padding: "2px 8px", borderRadius: 99, fontFamily: T.font.mono,
+                    letterSpacing: "0.04em",
+                  }}>
+                    {statusColor}
+                  </span>
+                  <span style={{ fontSize: 10, color: T.text.dim }}>{fmtDate(current?.date)}</span>
+                </div>
+                {p?.netWorth != null && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                    <Mono size={14} weight={700} color={T.text.primary}>{fmt(p.netWorth)}</Mono>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em" }}>NET WORTH</span>
+                  </div>
+                )}
+                {movesTotal > 0 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                    <div style={{ flex: 1, height: 3, background: T.bg.elevated, borderRadius: 99, overflow: "hidden" }}>
+                      <div style={{
+                        width: `${(movesDone / movesTotal) * 100}%`,
+                        height: "100%",
+                        background: cHex,
+                        borderRadius: 99,
+                        transition: "width 0.4s ease",
+                      }} />
+                    </div>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, fontFamily: T.font.mono, whiteSpace: "nowrap" }}>
+                      {movesDone}/{movesTotal} moves
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
         ) : (
-          /* Empty state when no audits */
-          <Card style={{ padding: "32px 20px", textAlign: "center" }}>
+          <Card style={{ padding: "32px 20px", textAlign: "center", marginTop: 10 }}>
             <div style={{
               width: 48, height: 48, borderRadius: 16,
               background: `${T.accent.primary}15`, border: `1px solid ${T.accent.primary}25`,
@@ -458,7 +461,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
           </Card>
         )}
 
-        {/* Proactive upgrade nudge for free users with a scored audit */}
+        {/* inline upgrade nudge for free users who have a score */}
         {shouldShowGating() && !proEnabled && score != null && !demoActive && (
           <button
             onClick={() => { haptic.light(); setShowPaywall(true); }}
@@ -497,66 +500,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
           </button>
         )}
 
-        {/* ═══ HERO CTA — RUN NEW AUDIT ═══ */}
-        <button
-          onClick={onRunAudit}
-          className="hover-btn"
-          style={{
-            width: "100%",
-            padding: "16px",
-            marginTop: 12,
-            borderRadius: T.radius.lg,
-            border: `1px solid ${T.accent.primary}40`,
-            background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`,
-            color: "#fff",
-            fontSize: 15,
-            fontWeight: 800,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 10,
-            boxShadow: `0 6px 24px ${T.accent.primary}40`,
-            transition: "all .2s cubic-bezier(.16,1,.3,1)",
-          }}
-        >
-          <Plus size={18} strokeWidth={2.5} />
-          Run New Audit
-        </button>
-
-        {remaining != null && limit != null && (
-          <div style={{ textAlign: "center", marginTop: 12, fontSize: 10, fontWeight: 600, color: T.text.dim, fontFamily: T.font.mono }}>
-            {remaining} of {limit} weekly audits remaining
-          </div>
-        )}
-        {typeof onDemoAudit === "function" && (
-          <div style={{ display: "flex", justifyContent: "center", marginTop: 8 }}>
-            <button
-              onClick={() => {
-                haptic.light();
-                onDemoAudit();
-              }}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 999,
-                border: `1px solid ${T.border.default}`,
-                background: "transparent",
-                color: T.text.secondary,
-                fontSize: 11,
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <Zap size={12} strokeWidth={2.2} />
-              {demoActive ? "Reload Demo Data" : "Load Demo Data"}
-            </button>
-          </div>
-        )}
-
-        {/* ═══ HISTORY SECTION ═══ */}
+        {/* ═══ 5. HISTORY ARCHIVE ═══ */}
         {audits.length > 0 && (
         <div style={{ marginTop: 26, display: "grid", gap: 12 }}>
           <Card
@@ -800,9 +744,6 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                   const gradeLabel = scoreValue != null ? getGradeLetter(scoreValue) : null;
                   const debtTotal = (a.form?.debts ?? []).reduce((sum, debt) => sum + (Number(debt.balance) || 0), 0);
                   const checkingVal = a.form?.checking != null ? Number(a.form.checking) || 0 : null;
-                  const subtitle = String(a.parsed?.status || "")
-                    .replace(/^(GREEN|YELLOW|RED)[\s:;-]*/i, "")
-                    .trim();
 
                   return (
                     <div key={a.ts || i}>
@@ -1036,23 +977,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                               </div>
                             )}
 
-                            {/* Row 3: Status subtitle */}
-                            {subtitle && (
-                              <div
-                                style={{
-                                  fontSize: 11,
-                                  color: T.text.secondary,
-                                  lineHeight: 1.5,
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  display: "-webkit-box",
-                                  WebkitLineClamp: 2,
-                                  WebkitBoxOrient: "vertical",
-                                }}
-                              >
-                                {subtitle}
-                              </div>
-                            )}
+                            {/* subtitle omitted — noisy at list density */}
                           </div>
                         )}
                       </Card>
