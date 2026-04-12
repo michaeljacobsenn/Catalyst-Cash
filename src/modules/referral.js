@@ -149,7 +149,7 @@ export async function shareReferralLink() {
   if (!code) return false;
 
   const url = `https://catalystcash.app/ref/${code}`;
-  const text = `I use Catalyst Cash to track my financial health every week. Use my referral link and we both get a free month of Pro after your first purchase: ${url}`;
+  const text = `I use Catalyst Cash to track my financial health every week. Use my referral link and we both get a free month of Pro: ${url}`;
 
   try {
     if (Capacitor.isNativePlatform()) {
@@ -272,7 +272,7 @@ export async function redeemReferralCode(code) {
       return {
         ok: true,
         status: result.status || "pending",
-        message: result.message || "Referral recorded — complete your first Pro purchase to unlock the bonus.",
+        message: result.message || "Referral saved! Your bonus will activate when your friend subscribes.",
       };
     }
 

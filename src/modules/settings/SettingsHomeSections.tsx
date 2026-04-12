@@ -23,7 +23,7 @@ function ReferralCard() {
       if (pendingCode) {
         const result = await mod.redeemReferralCode(pendingCode);
         if (result.ok) {
-          window.toast?.success?.(result.message || "Referral recorded! Purchase Pro to unlock the bonus.");
+          window.toast?.success?.(result.message || "Referral saved! Your bonus will activate when your friend subscribes.");
         } else if (result.error) {
           window.toast?.error?.(result.error);
         }
@@ -115,7 +115,7 @@ function ReferralCard() {
               Give a month, get a month
             </div>
             <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.4, marginTop: 2 }}>
-              Share your code — you both get 1 free month of Pro after their first purchase
+              Share your code — you both earn a free month of Pro
             </div>
           </div>
         </div>

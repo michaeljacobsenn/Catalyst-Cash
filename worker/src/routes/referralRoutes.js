@@ -162,7 +162,7 @@ async function handleRedeem(request, env, cors) {
       status: existing.status,
       alreadyRedeemed: true,
       message: existing.status === "pending"
-        ? "Referral recorded — complete your first Pro purchase to unlock the bonus for both of you."
+        ? "Referral saved! Your bonus will activate when your friend subscribes."
         : "Referral already confirmed.",
     }, 200, cors);
   }
@@ -177,7 +177,7 @@ async function handleRedeem(request, env, cors) {
   return json({
     ok: true,
     status: "pending",
-    message: "Referral recorded — complete your first Pro purchase to unlock a free bonus month for both of you.",
+    message: "Referral saved! Your bonus month will activate when your friend joins Pro.",
     referrerDeviceId: referral.owner_device_id,
   }, 200, cors);
 }
@@ -220,7 +220,7 @@ async function handleConfirm(request, env, cors) {
     return json({
       ok: false,
       status: "pending",
-      message: "No verified purchase found yet. Complete your first Pro subscription to unlock referral benefits.",
+      message: "Your referral bonus is pending — it will activate once you subscribe to Pro.",
     }, 200, cors);
   }
 
