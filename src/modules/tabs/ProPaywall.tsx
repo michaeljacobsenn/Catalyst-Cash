@@ -408,7 +408,7 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
         >
           <div style={{ fontSize: 20, flexShrink: 0, lineHeight: 1 }}>⭐</div>
           {(() => {
-            const proof = SOCIAL_PROOF[Math.floor(Date.now() / 86400000) % SOCIAL_PROOF.length]!;
+            const proof = SOCIAL_PROOF[Math.floor(Date.now() / 86400000) % SOCIAL_PROOF.length] ?? SOCIAL_PROOF[0];
             return (
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 11.5, color: T.text.primary, fontWeight: 600, lineHeight: 1.5, fontStyle: "italic" }}>

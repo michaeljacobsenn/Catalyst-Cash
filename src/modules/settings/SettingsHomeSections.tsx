@@ -54,7 +54,7 @@ function ReferralCard() {
     try {
       const mod = await loadReferral();
       await mod.shareReferralLink();
-    } catch {}
+    } catch { /* share not supported on this platform */ }
   }, []);
 
   const handleCopy = useCallback(async () => {
@@ -64,7 +64,7 @@ function ReferralCard() {
       await navigator.clipboard.writeText(`https://catalystcash.app/ref/${code}`);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {}
+    } catch { /* clipboard not available */ }
   }, [code]);
 
   const hasActivity = stats.totalReferred > 0 || stats.pendingReferred > 0;

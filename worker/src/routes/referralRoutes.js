@@ -35,7 +35,7 @@ async function ensureTables(db) {
   try {
     await db.exec(REFERRAL_TABLE_INIT);
     _tableInitialized = true;
-  } catch (err) {
+  } catch {
     // Tables likely already exist — try adding status column for migration
     try {
       await db.exec("ALTER TABLE referral_redemptions ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'");
