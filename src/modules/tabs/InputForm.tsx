@@ -1506,42 +1506,81 @@ export default function InputForm({
           <div
             style={{
               position: "absolute",
-              left: -20,
-              bottom: -20,
-              width: 70,
-              height: 70,
-              background: T.accent.primary,
-              filter: "blur(45px)",
-              opacity: 0.06,
+              right: -18,
+              top: -18,
+              width: 60,
+              height: 60,
+              background: T.status.red,
+              filter: "blur(40px)",
+              opacity: 0.07,
               borderRadius: "50%",
               pointerEvents: "none",
             }}
           />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
-            <Label style={{ fontWeight: 800, marginBottom: 0, lineHeight: 1.15 }}>Credit Card Balances</Label>
-            <button
-              className="hover-btn"
-              onClick={addD}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "7px 12px",
-                borderRadius: T.radius.sm,
-                border: `1px solid ${T.accent.primary}40`,
-                background: `${T.accent.primary}15`,
-                color: T.accent.primary,
-                fontSize: 10,
-                fontWeight: 800,
-                cursor: "pointer",
-                fontFamily: T.font.mono,
-                transition: "all .2s ease",
-                boxShadow: `0 2px 8px ${T.accent.primary}18`,
-                flexShrink: 0,
-              }}
-            >
-              <Plus size={12} strokeWidth={3} /> ADD
-            </button>
+          {/* Header: accent bar + title + count + total + ADD */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: form.debts.length > 0 ? 10 : 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <div
+                style={{
+                  width: 4,
+                  height: 24,
+                  borderRadius: 2,
+                  background: T.status.red,
+                  flexShrink: 0,
+                }}
+              />
+              <div style={{ minWidth: 0 }}>
+                <Label style={{ fontWeight: 800, marginBottom: 0, fontSize: 11, lineHeight: 1.15 }}>Credit Card Balances</Label>
+                {form.debts.length > 1 && (
+                  <div
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: T.text.dim,
+                      fontFamily: T.font.mono,
+                      letterSpacing: "0.04em",
+                      marginTop: 1,
+                    }}
+                  >
+                    {form.debts.length} CARDS
+                  </div>
+                )}
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              {form.debts.length > 0 && (
+                <Mono size={14} weight={800} color={T.text.primary}>
+                  {fmt(form.debts.reduce((sum, d) => {
+                    const plaidDebt = d.cardId ? plaidData.debts?.find(pd => pd.cardId === d.cardId) : null;
+                    const isOverridden = !!(d.cardId && overridePlaid.debts[d.cardId]);
+                    if (plaidDebt && plaidDebt.balance !== null && !isOverridden) return sum + (plaidDebt.balance as number);
+                    return sum + toNumber(d.balance);
+                  }, 0))}
+                </Mono>
+              )}
+              <button
+                className="hover-btn"
+                onClick={addD}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "5px 10px",
+                  borderRadius: T.radius.sm,
+                  border: `1px solid ${T.status.red}40`,
+                  background: `${T.status.red}15`,
+                  color: T.status.red,
+                  fontSize: 9,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  fontFamily: T.font.mono,
+                  transition: "all .2s ease",
+                  flexShrink: 0,
+                }}
+              >
+                <Plus size={10} strokeWidth={3} /> ADD
+              </button>
+            </div>
           </div>
           {form.debts.length === 0 && (
             <div
@@ -1560,84 +1599,112 @@ export default function InputForm({
                 : "No debt balances included yet. Tap ADD to include only the card balances you want considered in this briefing."}
             </div>
           )}
-          {form.debts.map((d, i) => {
-            const plaidDebt = d.cardId ? plaidData.debts?.find(pd => pd.cardId === d.cardId) : null;
-            const hasPlaid = plaidDebt && plaidDebt.balance !== null;
-            const isOverridden = !!(d.cardId && overridePlaid.debts[d.cardId]);
+          {/* Per-card rows */}
+          {form.debts.length > 0 && (
+            <div style={{ display: "grid", gap: 6 }}>
+              {form.debts.map((d, i) => {
+                const plaidDebt = d.cardId ? plaidData.debts?.find(pd => pd.cardId === d.cardId) : null;
+                const hasPlaid = plaidDebt && plaidDebt.balance !== null;
+                const isOverridden = !!(d.cardId && overridePlaid.debts[d.cardId]);
+                const displayName = d.name || (d.cardId ? d.cardId : `Card ${i + 1}`);
 
-            return (
-              <div 
-                key={i} 
-                className="slide-up"
-                style={{ marginBottom: 6, animationDelay: `${i * 0.06}s` }}
-              >
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      form.debts.length > 1
-                        ? "minmax(0, 1fr) minmax(152px, 0.68fr) 44px"
-                        : "minmax(0, 1fr) minmax(152px, 0.68fr)",
-                    gap: 8,
-                    alignItems: "center",
-                  }}
-                >
-                  <CustomSelect
-                    ariaLabel={`Debt card ${i + 1}`}
-                    value={d.cardId || d.name || ""}
-                    onChange={val => {
-                      const card = (cards || []).find(c => c.id === val || c.name === val);
-                      const newCardId = card?.id || "";
-                      const newName = card ? resolveCardLabel(cards || [], card.id, card.name) : "";
-                      const previousCardId = d.cardId || "";
-
-                      setForm(p => ({
-                        ...p,
-                        debts: p.debts.map((debt, j) =>
-                          j === i ? { ...debt, cardId: newCardId, name: newName } : debt
-                        ),
-                      }));
-                      if (newCardId) {
-                        setDeletedDebtCardIds(p => {
-                          if (!p[newCardId] && !p[previousCardId]) return p;
-                          const next = { ...p };
-                          delete next[newCardId];
-                          if (previousCardId && previousCardId !== newCardId && !form.debts.some((debt, j) => j !== i && debt.cardId === previousCardId)) {
-                            delete next[previousCardId];
-                          }
-                          return next;
-                        });
-                      }
+                return (
+                  <div
+                    key={i}
+                    className="slide-up"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "8px 10px",
+                      borderRadius: T.radius.md,
+                      background: isOverridden ? `${T.status.red}08` : `${T.bg.elevated}C0`,
+                      border: `1px solid ${isOverridden ? `${T.status.red}35` : T.border.subtle}`,
+                      transition: "all 0.2s ease",
+                      animationDelay: `${i * 0.06}s`,
                     }}
-                    placeholder="Card..."
-                    options={cardOptions}
-                  />
-                  <div style={{ minWidth: 0 }}>
-                    {hasPlaid && !isOverridden ? (
-                      <button
-                        onClick={() => {
-                          setOverridePlaid(p => ({ ...p, debts: { ...p.debts, [d.cardId]: true } }));
-                        }}
-                        style={{
-                          width: "100%",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 4,
-                          height: 38,
-                          background: T.status.redDim,
-                          border: `1px solid ${T.status.red}40`,
-                          borderRadius: T.radius.md,
-                          padding: "0 12px",
-                          cursor: "pointer",
-                        }}
-                      >
+                  >
+                    {/* Card name + subtitle */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {d.cardId ? (
+                        <>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: T.text.primary,
+                              lineHeight: 1.25,
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {displayName}
+                          </div>
+                          <div style={{ fontSize: 9.5, color: T.text.dim, marginTop: 1 }}>
+                            {isOverridden ? "Manual override" : hasPlaid ? "Live balance" : "Manual entry"}
+                          </div>
+                        </>
+                      ) : (
+                        <CustomSelect
+                          ariaLabel={`Debt card ${i + 1}`}
+                          value={d.cardId || d.name || ""}
+                          onChange={val => {
+                            const card = (cards || []).find(c => c.id === val || c.name === val);
+                            const newCardId = card?.id || "";
+                            const newName = card ? resolveCardLabel(cards || [], card.id, card.name) : "";
+                            const previousCardId = d.cardId || "";
+
+                            setForm(p => ({
+                              ...p,
+                              debts: p.debts.map((debt, j) =>
+                                j === i ? { ...debt, cardId: newCardId, name: newName } : debt
+                              ),
+                            }));
+                            if (newCardId) {
+                              setDeletedDebtCardIds(p => {
+                                if (!p[newCardId] && !p[previousCardId]) return p;
+                                const next = { ...p };
+                                delete next[newCardId];
+                                if (previousCardId && previousCardId !== newCardId && !form.debts.some((debt, j) => j !== i && debt.cardId === previousCardId)) {
+                                  delete next[previousCardId];
+                                }
+                                return next;
+                              });
+                            }
+                          }}
+                          placeholder="Select card..."
+                          options={cardOptions}
+                        />
+                      )}
+                    </div>
+
+                    {/* Balance bubble / override */}
+                    <div style={{ flexShrink: 0 }}>
+                      {hasPlaid && !isOverridden ? (
+                        <button
+                          onClick={() => {
+                            setOverridePlaid(p => ({ ...p, debts: { ...p.debts, [d.cardId]: true } }));
+                          }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            minWidth: 80,
+                            height: 32,
+                            background: `${T.status.red}0C`,
+                            border: `1px solid ${T.status.red}30`,
+                            borderRadius: T.radius.md,
+                            cursor: "pointer",
+                            padding: "0 10px",
+                            transition: "all 0.2s ease",
+                          }}
+                        >
                           <Mono size={12} weight={800} color={T.status.red}>
                             {fmt(plaidDebt.balance)}
                           </Mono>
                         </button>
-                    ) : (
-                      isOverridden && hasPlaid ? (
+                      ) : isOverridden && hasPlaid ? (
                         <InlineOverrideMoneyInput
                           label={`Debt balance ${i + 1}`}
                           value={d.balance}
@@ -1655,33 +1722,35 @@ export default function InputForm({
                           onChange={e => sD(i, "balance", sanitizeDollar(e.target.value))}
                           placeholder={hasPlaid ? `${fmt(plaidDebt.balance)}` : "0.00"}
                         />
-                      )
+                      )}
+                    </div>
+
+                    {/* Delete button */}
+                    {form.debts.length > 1 && (
+                      <button
+                        onClick={() => rmD(i)}
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: T.radius.sm,
+                          border: "none",
+                          background: T.status.redDim,
+                          color: T.status.red,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Trash2 size={11} />
+                      </button>
                     )}
                   </div>
-                  {form.debts.length > 1 && (
-                    <button
-                      onClick={() => rmD(i)}
-                      style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: T.radius.sm,
-                        border: "none",
-                        background: T.status.redDim,
-                        color: T.status.red,
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
         </Card>
       </div>
 
