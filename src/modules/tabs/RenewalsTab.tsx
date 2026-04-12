@@ -1192,7 +1192,7 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
                   {cat.items.length}
                 </Mono>
               </div>
-              <div style={{ background: T.bg.card, borderRadius: T.radius.lg, overflow: "hidden" }}>
+              <div style={{ background: T.bg.card, borderRadius: T.radius.lg, overflow: "hidden", borderLeft: `3px solid ${cat.color}30` }}>
                 {cat.items.map((item, i) => {
                   const renewalIndex = item.originalIndex;
                   const isUserRenewal = renewalIndex != null && renewalIndex >= 0;
