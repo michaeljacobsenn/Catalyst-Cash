@@ -10,16 +10,41 @@ const loadReferral = () => import("../referral.js");
 
 function ReferralCard() {
   const [code, setCode] = useState<string | null>(null);
-  const [stats, setStats] = useState({ totalReferred: 0, bonusMonthsEarned: 0 });
+  const [stats, setStats] = useState({ totalReferred: 0, pendingReferred: 0, bonusMonthsEarned: 0 });
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let active = true;
     loadReferral().then(async (mod) => {
       if (!active) return;
-      const result = await mod.getReferralStats();
-      setCode(result.code);
-      setStats({ totalReferred: result.totalReferred, bonusMonthsEarned: result.bonusMonthsEarned });
+
+      // Auto-redeem pending referral from deep link (if any)
+      const pendingCode = await mod.getPendingReferral();
+      if (pendingCode) {
+        const result = await mod.redeemReferralCode(pendingCode);
+        if (result.ok) {
+          window.toast?.success?.(result.message || "Referral recorded! Purchase Pro to unlock the bonus.");
+        } else if (result.error) {
+          window.toast?.error?.(result.error);
+        }
+      }
+
+      const stats = await mod.getReferralStats();
+      setCode(stats.code);
+      setStats({
+        totalReferred: stats.totalReferred,
+        pendingReferred: stats.pendingReferred || 0,
+        bonusMonthsEarned: stats.bonusMonthsEarned,
+      });
+      // Sync from server in background for fresh counts
+      mod.syncReferralStats().then((serverStats) => {
+        if (!active || !serverStats) return;
+        setStats({
+          totalReferred: serverStats.totalReferred,
+          pendingReferred: serverStats.pendingReferred || 0,
+          bonusMonthsEarned: serverStats.bonusMonthsEarned,
+        });
+      }).catch(() => {});
     }).catch(() => {});
     return () => { active = false; };
   }, []);
@@ -41,6 +66,8 @@ function ReferralCard() {
       setTimeout(() => setCopied(false), 2000);
     } catch {}
   }, [code]);
+
+  const hasActivity = stats.totalReferred > 0 || stats.pendingReferred > 0;
 
   return (
     <div>
@@ -88,7 +115,7 @@ function ReferralCard() {
               Give a month, get a month
             </div>
             <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.4, marginTop: 2 }}>
-              Share your code — you both get 1 free month of Pro
+              Share your code — you both get 1 free month of Pro after their first purchase
             </div>
           </div>
         </div>
@@ -145,11 +172,11 @@ function ReferralCard() {
         </div>
 
         {/* Stats */}
-        {stats.totalReferred > 0 && (
+        {hasActivity && (
           <div
             style={{
               display: "flex",
-              gap: 16,
+              gap: 12,
               padding: "8px 12px",
               background: `${T.status.green}0A`,
               borderRadius: T.radius.md,
@@ -161,16 +188,29 @@ function ReferralCard() {
                 {stats.totalReferred}
               </div>
               <div style={{ fontSize: 9, color: T.text.muted, fontWeight: 700, textTransform: "uppercase" }}>
-                Friends referred
+                Confirmed
               </div>
             </div>
+            {stats.pendingReferred > 0 && (
+              <>
+                <div style={{ width: 1, background: `${T.status.green}15` }} />
+                <div style={{ textAlign: "center", flex: 1 }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: T.status.amber, fontFamily: T.font.mono }}>
+                    {stats.pendingReferred}
+                  </div>
+                  <div style={{ fontSize: 9, color: T.text.muted, fontWeight: 700, textTransform: "uppercase" }}>
+                    Pending
+                  </div>
+                </div>
+              </>
+            )}
             <div style={{ width: 1, background: `${T.status.green}15` }} />
             <div style={{ textAlign: "center", flex: 1 }}>
               <div style={{ fontSize: 18, fontWeight: 800, color: T.status.green, fontFamily: T.font.mono }}>
                 {stats.bonusMonthsEarned}
               </div>
               <div style={{ fontSize: 9, color: T.text.muted, fontWeight: 700, textTransform: "uppercase" }}>
-                Bonus months
+                Bonus mo.
               </div>
             </div>
           </div>

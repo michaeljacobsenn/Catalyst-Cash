@@ -61,6 +61,13 @@ async function applyCustomerInfo(customerInfo) {
       isLifetime ? 36500 : 3650,
       { isLifetime },
     );
+
+    // Confirm any pending referral now that we have a verified purchase
+    try {
+      const { confirmReferral } = await import("./referral.js");
+      await confirmReferral();
+    } catch { /* referral confirmation is best-effort */ }
+
     return true;
   }
 

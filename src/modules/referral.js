@@ -2,8 +2,16 @@
 // REFERRAL PROGRAM — Catalyst Cash
 //
 // Give-one-get-one: both referrer and referee earn 1 free month
-// of Pro. Referral codes are device-bound and persisted in both
-// local DB and Keychain for durability.
+// of Pro. Benefits are only granted AFTER the referred user
+// completes their first Pro purchase (verified via RevenueCat).
+//
+// Flow:
+//   1. User A shares their code (CC-XXXXXX)
+//   2. User B clicks the link → code stored as pending
+//   3. User B redeems the code → server stores as "pending"
+//   4. User B purchases Pro → client calls confirmReferral()
+//   5. Server verifies purchase → promotes to "confirmed"
+//   6. Both parties get credited
 //
 // Referral deep links: https://catalystcash.app/ref/{CODE}
 // ═══════════════════════════════════════════════════════════════
@@ -17,6 +25,7 @@ const REFERRAL_CODE_KEY = "referral-code";
 const REFERRAL_STATS_KEY = "referral-stats";
 const PENDING_REFERRAL_KEY = "pending-referral-code";
 const REFERRAL_REDEEMED_KEY = "referral-redeemed"; // has this device redeemed a referral?
+const REFERRAL_CONFIRMED_KEY = "referral-confirmed"; // has the referral been purchase-confirmed?
 const CODE_PREFIX = "CC";
 const CODE_LENGTH = 6; // CC-XXXXXX (8 total chars with prefix + dash)
 const MAX_REFERRAL_BONUS_MONTHS = 12; // Cap: 12 free months (1 year)
@@ -59,23 +68,53 @@ export async function getReferralCode() {
 
 /**
  * Get referral statistics for the current user.
- * @returns {{ code: string|null, totalReferred: number, bonusMonthsEarned: number }}
+ * @returns {{ code: string|null, totalReferred: number, pendingReferred: number, bonusMonthsEarned: number, ownRedemptionStatus: string|null }}
  */
 export async function getReferralStats() {
   try {
     const code = await getReferralCode();
     const stats = (await db.get(REFERRAL_STATS_KEY)) || {
       totalReferred: 0,
+      pendingReferred: 0,
       bonusMonthsEarned: 0,
+      ownRedemptionStatus: null,
     };
     return {
       code,
       totalReferred: stats.totalReferred || 0,
+      pendingReferred: stats.pendingReferred || 0,
       bonusMonthsEarned: stats.bonusMonthsEarned || 0,
+      ownRedemptionStatus: stats.ownRedemptionStatus || null,
     };
   } catch {
-    return { code: null, totalReferred: 0, bonusMonthsEarned: 0 };
+    return { code: null, totalReferred: 0, pendingReferred: 0, bonusMonthsEarned: 0, ownRedemptionStatus: null };
   }
+}
+
+/**
+ * Sync referral stats from the server.
+ * Updates local cache with the latest confirmed/pending counts.
+ */
+export async function syncReferralStats() {
+  try {
+    const deviceId = await getOrCreateDeviceId();
+    const { fetchJson } = await import("./api.js");
+    const result = await fetchJson(`/referral/stats?deviceId=${encodeURIComponent(deviceId)}`);
+
+    if (result?.ok) {
+      const stats = {
+        totalReferred: result.totalReferred || 0,
+        pendingReferred: result.pendingReferred || 0,
+        bonusMonthsEarned: result.bonusMonthsEarned || 0,
+        ownRedemptionStatus: result.ownRedemptionStatus || null,
+      };
+      await db.set(REFERRAL_STATS_KEY, stats);
+      return stats;
+    }
+  } catch (err) {
+    void log.warn("referral", "Failed to sync referral stats", { error: err?.message });
+  }
+  return null;
 }
 
 /**
@@ -85,6 +124,7 @@ export async function recordReferralCredit() {
   try {
     const stats = (await db.get(REFERRAL_STATS_KEY)) || {
       totalReferred: 0,
+      pendingReferred: 0,
       bonusMonthsEarned: 0,
     };
     stats.totalReferred = (stats.totalReferred || 0) + 1;
@@ -109,7 +149,7 @@ export async function shareReferralLink() {
   if (!code) return false;
 
   const url = `https://catalystcash.app/ref/${code}`;
-  const text = `I use Catalyst Cash to track my financial health every week. Use my referral link and we both get a free month of Pro: ${url}`;
+  const text = `I use Catalyst Cash to track my financial health every week. Use my referral link and we both get a free month of Pro after your first purchase: ${url}`;
 
   try {
     if (Capacitor.isNativePlatform()) {
@@ -168,18 +208,38 @@ export async function hasRedeemedReferral() {
 }
 
 /**
- * Mark this device as having redeemed a referral.
+ * Check if this device's referral has been purchase-confirmed.
+ */
+export async function isReferralConfirmed() {
+  return Boolean(await db.get(REFERRAL_CONFIRMED_KEY));
+}
+
+/**
+ * Mark this device as having redeemed a referral (pending state).
  */
 export async function markReferralRedeemed(code) {
-  await db.set(REFERRAL_REDEEMED_KEY, { code, ts: new Date().toISOString() });
+  await db.set(REFERRAL_REDEEMED_KEY, { code, ts: new Date().toISOString(), status: "pending" });
+}
+
+/**
+ * Mark this device's referral as purchase-confirmed.
+ */
+export async function markReferralConfirmed() {
+  const redeemed = await db.get(REFERRAL_REDEEMED_KEY);
+  if (redeemed && typeof redeemed === "object") {
+    redeemed.status = "confirmed";
+    redeemed.confirmedAt = new Date().toISOString();
+    await db.set(REFERRAL_REDEEMED_KEY, redeemed);
+  }
+  await db.set(REFERRAL_CONFIRMED_KEY, true);
 }
 
 /**
  * Redeem a referral code via the worker API.
- * Returns { ok, error? } — the worker validates the code and credits both parties.
+ * This stores the redemption as PENDING — no benefits until purchase is confirmed.
  *
  * @param {string} code - The referral code to redeem (e.g. "CC-XXXXXX")
- * @returns {Promise<{ ok: boolean, error?: string }>}
+ * @returns {Promise<{ ok: boolean, status?: string, error?: string, message?: string }>}
  */
 export async function redeemReferralCode(code) {
   if (!code || typeof code !== "string") return { ok: false, error: "Invalid code" };
@@ -209,13 +269,52 @@ export async function redeemReferralCode(code) {
     if (result?.ok) {
       await markReferralRedeemed(normalized);
       await clearPendingReferral();
-      return { ok: true };
+      return {
+        ok: true,
+        status: result.status || "pending",
+        message: result.message || "Referral recorded — complete your first Pro purchase to unlock the bonus.",
+      };
     }
 
     return { ok: false, error: result?.error || "Redemption failed" };
   } catch (err) {
     void log.warn("referral", "Referral redemption failed", { error: err?.message });
     return { ok: false, error: "Network error — try again later" };
+  }
+}
+
+/**
+ * Confirm a pending referral after the user makes their first purchase.
+ * Should be called whenever a successful RevenueCat purchase is detected.
+ *
+ * @returns {Promise<{ ok: boolean, status?: string, message?: string }>}
+ */
+export async function confirmReferral() {
+  // Skip if no pending referral or already confirmed
+  const redeemed = await db.get(REFERRAL_REDEEMED_KEY);
+  if (!redeemed) return { ok: true, status: "no_referral" };
+  if (await isReferralConfirmed()) return { ok: true, status: "already_confirmed" };
+
+  try {
+    const deviceId = await getOrCreateDeviceId();
+    const { fetchJson } = await import("./api.js");
+    const result = await fetchJson("/referral/confirm", {
+      method: "POST",
+      body: JSON.stringify({ deviceId }),
+    });
+
+    if (result?.status === "confirmed" || result?.status === "already_confirmed") {
+      await markReferralConfirmed();
+      await recordReferralCredit();
+      void log.info("referral", "Referral confirmed after purchase", { status: result.status });
+      return { ok: true, status: "confirmed", message: result.message };
+    }
+
+    // Still pending — purchase not verified yet on server side
+    return { ok: true, status: result?.status || "pending", message: result?.message };
+  } catch (err) {
+    void log.warn("referral", "Referral confirmation failed", { error: err?.message });
+    return { ok: false, status: "error" };
   }
 }
 
