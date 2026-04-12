@@ -348,6 +348,70 @@ export function buildSnapshotMessage({
         .join("\n");
       return `Tracked Obligations (Next 12 Months): ~${normalized.length} items | annualized ~$${totalAnnualized.toFixed(2)}\n${detail}`;
     })(),
+    fundingDrainSummary: (() => {
+      if (allRecurringItems.length === 0) return null;
+      const today = new Date(`${form.date || new Date().toISOString().slice(0, 10)}T12:00:00`);
+      const day30 = new Date(today.getTime() + 30 * 86400000);
+      const day60 = new Date(today.getTime() + 60 * 86400000);
+      const sourceMap = new Map(); // source -> { drain30, drain60, items30: [], items60: [] }
+      const activeItems = allRecurringItems.filter(
+        (item) => item && !item.isCancelled && !item.archivedAt && Number(item.amount) > 0
+      );
+      for (const item of activeItems) {
+        const source = item.chargedTo || "Unassigned";
+        const amount = Number(item.amount) || 0;
+        const nextDue = item.nextDue ? new Date(`${item.nextDue}T12:00:00`) : null;
+        if (!nextDue || !Number.isFinite(nextDue.getTime())) continue;
+        const interval = Number(item.interval) || 1;
+        const unit = String(item.intervalUnit || "months").toLowerCase();
+        // Estimate how many times this fires in 30 and 60 days
+        let periodDays = 30; // default monthly
+        if (unit.startsWith("week")) periodDays = 7 * interval;
+        else if (unit.startsWith("month")) periodDays = 30.44 * interval;
+        else if (unit.startsWith("quarter")) periodDays = 91.31 * interval;
+        else if (unit.startsWith("year") || unit.startsWith("annual")) periodDays = 365.25 * interval;
+        const entry = sourceMap.get(source) || { drain30: 0, drain60: 0, items30: [], items60: [] };
+        // Count occurrences in 30-day and 60-day windows
+        let cursor = new Date(nextDue.getTime());
+        let occ30 = 0;
+        let occ60 = 0;
+        while (cursor <= day60 && occ60 < 10) {
+          if (cursor >= today && cursor <= day30) occ30++;
+          if (cursor >= today && cursor <= day60) occ60++;
+          cursor = new Date(cursor.getTime() + periodDays * 86400000);
+        }
+        if (occ30 > 0) {
+          entry.drain30 += amount * occ30;
+          entry.items30.push(`${item.name || "Unnamed"} $${(amount * occ30).toFixed(2)}`);
+        }
+        if (occ60 > 0) {
+          entry.drain60 += amount * occ60;
+          entry.items60.push(`${item.name || "Unnamed"} $${(amount * occ60).toFixed(2)}`);
+        }
+        sourceMap.set(source, entry);
+      }
+      if (sourceMap.size === 0) return null;
+      // Build summary lines with savings balances for gap detection
+      const savingsBalances = {};
+      linkedCashAccounts.forEach((account) => {
+        const label = `${account.bank ? `${account.bank} · ` : ""}${account.name || account.accountType || "Account"}`;
+        savingsBalances[label] = toNum(account.amount);
+      });
+      const lines = [];
+      for (const [source, data] of sourceMap.entries()) {
+        if (data.drain60 <= 0) continue;
+        // Try to match source to a known savings balance
+        const matchedBalance = Object.entries(savingsBalances).find(
+          ([label]) => source.toLowerCase().includes(label.toLowerCase()) || label.toLowerCase().includes(source.toLowerCase())
+        );
+        const balancePart = matchedBalance
+          ? ` | current balance $${fmt(matchedBalance[1])} | 60-day gap ${matchedBalance[1] >= data.drain60 ? "NONE" : `-$${fmt(data.drain60 - matchedBalance[1])}`}`
+          : "";
+        lines.push(`  ${source}: 30-day $${fmt(data.drain30)} | 60-day $${fmt(data.drain60)}${balancePart}`);
+      }
+      if (lines.length === 0) return null;
+      return `Funding Source Drain Summary (CRITICAL — pre-computed, do not recompute):\n${lines.join("\n")}`;
+    })(),
     transactions: (() => {
       if (cappedTransactions.length === 0) return "Recent Spending (Last 7 Days): none provided";
       return `Recent Spending (Last 7 Days — capped for prompt efficiency):\nSummary: Total $${totalSpend.toFixed(2)} | Daily Avg $${dailyAvg.toFixed(2)} | ${days} days | ${cappedTransactions.length} transactions\nTop Categories:\n${topCats || "  none"}\nDetail:\n${txnLines}`;
@@ -376,10 +440,12 @@ export function buildSnapshotMessage({
       "### Audit Inputs",
       blocks.obligations,
       "",
+      blocks.fundingDrainSummary,
+      "",
       blocks.transactions,
       "",
       blocks.notes,
-    ].join("\n");
+    ].filter(x => x != null).join("\n");
   }
   if (aiProvider === "gemini") {
     return [
@@ -392,10 +458,12 @@ export function buildSnapshotMessage({
       "",
       blocks.obligations,
       "",
+      blocks.fundingDrainSummary,
+      "",
       blocks.transactions,
       "",
       blocks.notes,
-    ].join("\n");
+    ].filter(x => x != null).join("\n");
   }
   // Claude (default)
   return [
@@ -407,8 +475,10 @@ export function buildSnapshotMessage({
     "",
     blocks.obligations,
     "",
+    blocks.fundingDrainSummary,
+    "",
     blocks.transactions,
     "",
     blocks.notes,
-  ].join("\n");
+  ].filter(x => x != null).join("\n");
 }
