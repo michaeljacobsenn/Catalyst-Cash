@@ -2,13 +2,14 @@
   import { useEffect,useMemo,useState } from "react";
   import type { Card as CardRecord } from "../../types/index.js";
   import SearchableSelect from "../SearchableSelect.js";
-  import { Mono } from "../components.js";
   import { INSTITUTIONS,ISSUER_COLORS,T } from "../constants.js";
   import { usePortfolio } from "../contexts/PortfolioContext.js";
   import { haptic } from "../haptics.js";
   import { Check,CheckCircle2,ChevronDown,CreditCard,Edit3 } from "../icons";
   import { getIssuerCards,getPinnedForIssuer } from "../issuerCards.js";
   import { getConnections } from "../plaid.js";
+  import { formatPlaidSyncDateShort } from "../usePlaidSync.js";
+  import UiGlyph from "../UiGlyph.js";
   import { Badge } from "../ui.js";
   import { fmt } from "../utils.js";
   import type { PortfolioCollapsedSections } from "./types.js";
@@ -175,6 +176,14 @@ export default function CreditCardsSection({
             accent: T.text.dim,
         };
 
+    const getInstitutionBadgeLabel = (institution: string) => {
+        const normalized = String(institution || "").trim().toLowerCase();
+        if (normalized === "american express") return "Amex";
+        if (normalized === "citibank online") return "Citi";
+        if (normalized === "capital one") return "Cap One";
+        return institution;
+    };
+
     const getCardDisplayName = (card: CardRecord) => {
         const nickname = (card.nickname || "").trim();
         if (nickname) return nickname;
@@ -187,13 +196,7 @@ export default function CreditCardsSection({
 
         const isGeneric = !stripped || /^(credit card|card)$/i.test(stripped);
         if (!isGeneric) {
-            return stripped
-                .replace(/\bBusiness\b/g, "Biz")
-                .replace(/\bPreferred\b/g, "Pref")
-                .replace(/\bRewards\b/g, "Rew.")
-                .replace(/\bEveryday\b/g, "Everyday")
-                .replace(/\bSignature\b/g, "Sig.")
-                .trim();
+            return stripped.replace(/\s+/g, " ").trim();
         }
 
         const last4 =
@@ -288,32 +291,51 @@ export default function CreditCardsSection({
                                 ? card._plaidBalance
                                 : Number(card.balance || 0);
                             const plannedState = plannedCardBalances[card.id];
-                            const balanceTone =
-                                visibleBalance > 0.009
-                                    ? { fg: T.status.red, bg: `${T.status.red}10`, border: `${T.status.red}22` }
-                                    : visibleBalance < -0.009
-                                        ? { fg: T.accent.emerald, bg: `${T.accent.emerald}12`, border: `${T.accent.emerald}22` }
-                                        : { fg: T.text.secondary, bg: `linear-gradient(180deg, ${T.bg.surface}, ${T.bg.card})`, border: T.border.subtle };
                             const annualFee = typeof card.annualFee === "number" ? card.annualFee : Number(card.annualFee || 0);
                             const apr = card.apr ?? 0;
                             const limit = card.limit ?? 0;
+                            const plaidSyncDate = formatPlaidSyncDateShort((card as CardRecord & { _plaidLastSync?: string | number | null })._plaidLastSync);
                             const utilization = limit > 0 ? Math.max(0, (visibleBalance / limit) * 100) : null;
-                            const detailChips = [
+                            const statusChips = [
                                 needsReconnect ? { label: "Reconnect", tone: "warning" } : null,
                                 usesManualFallback ? { label: "Manual", tone: "muted" } : null,
-                                !usesManualFallback && card._plaidBalance != null ? { label: "Live", tone: "danger" } : null,
-                                utilization != null ? { label: `${Math.round(utilization)}% util`, tone: utilization >= 30 ? "warning" : "good" } : null,
                             ].filter(Boolean) as Array<{ label: string; tone: "warning" | "muted" | "good" | "danger" }>;
-                            const secondaryMeta = [
+                            const metaTokens = [
+                                !usesManualFallback && card._plaidBalance != null ? (plaidSyncDate ? `Sync ${plaidSyncDate}` : "Synced") : null,
                                 card.paymentDueDay ? `Due ${card.paymentDueDay}` : null,
                                 apr > 0 ? `${apr}% APR` : null,
                                 annualFee > 0 ? (card.annualFeeWaived ? "AF waived" : `${fmt(annualFee)} fee`) : null,
                                 !usesManualFallback && card._plaidBalance != null ? `•••${(card.notes || "").match(/···(\d+)/)?.[1] || "Plaid"}` : null,
-                            ].filter(Boolean).join("  ·  ");
+                            ].filter(Boolean) as string[];
                             const isZeroBalance = Math.abs(visibleBalance) < 0.01;
+                            const accentColor = colors.text || T.accent.primary;
+                            const balanceColor = visibleBalance > 0.009 ? T.status.red : visibleBalance < -0.009 ? T.accent.emerald : isZeroBalance ? T.text.muted : T.text.primary;
+                            const utilizationColor =
+                                utilization == null
+                                    ? T.text.dim
+                                    : utilization >= 50
+                                        ? T.status.red
+                                        : utilization >= 30
+                                            ? T.status.amber
+                                            : T.accent.emerald;
+                            const issuerLabel = getInstitutionBadgeLabel(card.institution);
                             return (
-                                <div key={card.id} style={{ borderBottom: `1px solid ${T.border.subtle}40`, opacity: isZeroBalance && !plannedState?.remainingAmount ? 0.72 : 1, transition: "opacity 0.2s" }}>
-                                    <div style={{ padding: "10px 14px" }}>
+                                <div
+                                    key={card.id}
+                                    style={{
+                                        borderBottom: `1px solid ${T.border.subtle}40`,
+                                        transition: "opacity 0.2s",
+                                        position: "relative",
+                                    }}
+                                >
+                                    {/* Left accent strip */}
+                                    <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 2, background: accentColor, opacity: isZeroBalance ? 0.18 : 0.5, borderRadius: "0 0 0 0" }} />
+                                    <div
+                                        style={{
+                                            padding: "8px 10px 7px 16px",
+                                            background: `linear-gradient(90deg, ${accentColor}08 0%, transparent 32%)`,
+                                        }}
+                                    >
                                     {editingCard === card.id ? (
                                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                                             {(() => {
@@ -343,7 +365,10 @@ export default function CreditCardsSection({
                                                         if (hasLivePlaidSync) {
                                                             return (
                                                                 <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.subtle}`, background: T.bg.elevated }}>
-                                                                    <span style={{ fontSize: 11, color: T.text.dim }}>⚡ Live Plaid balance active. Manual balance edits stay locked until the bank is disconnected or reconnect is required.</span>
+                                                                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: T.text.dim }}>
+                                                                        <UiGlyph glyph="⚡" size={11} color={T.accent.primary} />
+                                                                        Plaid-managed balance. Manual edits stay locked unless the connection needs reconnecting or you switch back to manual tracking.
+                                                                    </span>
                                                                 </div>
                                                             );
                                                         }
@@ -377,7 +402,10 @@ export default function CreditCardsSection({
                                                     </div>
                                                     {card._plaidAccountId && (
                                                         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.subtle}`, background: T.bg.elevated }}>
-                                                            <span style={{ fontSize: 11, color: T.text.dim }}>⚡ Synced via Plaid</span>
+                                                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: T.text.dim }}>
+                                                                <UiGlyph glyph="⚡" size={11} color={T.accent.primary} />
+                                                                Synced via Plaid
+                                                            </span>
                                                         </div>
                                                     )}
                                                 </>
@@ -457,130 +485,172 @@ export default function CreditCardsSection({
                                             </div>
                                         </div>
                                     ) : (
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-                                            <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", gap: 10 }}>
-                                                <div
+                                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                            <div
+                                                style={{
+                                                    display: "grid",
+                                                    gridTemplateColumns: "42px minmax(0, 1fr) auto",
+                                                    columnGap: 7,
+                                                    rowGap: 2,
+                                                    alignItems: "start",
+                                                }}
+                                            >
+                                                <span
                                                     style={{
-                                                        width: 28,
-                                                        height: 28,
-                                                        borderRadius: 8,
-                                                        background: T.bg.surface,
-                                                        border: `1px solid ${T.border.subtle}`,
-                                                        display: "flex",
+                                                        display: "inline-flex",
                                                         alignItems: "center",
                                                         justifyContent: "center",
-                                                        flexShrink: 0,
+                                                        minHeight: 17,
+                                                        marginTop: 1,
+                                                        padding: "0 5px",
+                                                        borderRadius: 999,
+                                                        border: `1px solid ${colors.border}`,
+                                                        background: colors.bg,
+                                                        fontSize: 7,
+                                                        fontWeight: 900,
+                                                        color: colors.text,
+                                                        fontFamily: T.font.mono,
+                                                        letterSpacing: "0.08em",
+                                                        textTransform: "uppercase",
+                                                        lineHeight: 1,
+                                                        whiteSpace: "nowrap",
+                                                        boxShadow: `0 0 14px ${colors.accent}1a, inset 0 1px 0 rgba(255,255,255,0.05)`,
+                                                        textShadow: `0 0 8px ${colors.accent}14`,
                                                     }}
                                                 >
-                                                    <CreditCard size={13} color={colors.text} />
+                                                    {issuerLabel}
+                                                </span>
+                                                <div
+                                                    style={{
+                                                        fontSize: 12.25,
+                                                        fontWeight: 750,
+                                                        color: isZeroBalance ? T.text.secondary : T.text.primary,
+                                                        letterSpacing: "-0.01em",
+                                                        lineHeight: 1.12,
+                                                        display: "-webkit-box",
+                                                        WebkitLineClamp: 2,
+                                                        WebkitBoxOrient: "vertical",
+                                                        overflow: "hidden",
+                                                        paddingTop: 1,
+                                                    }}
+                                                >
+                                                    {getCardDisplayName(card)}
                                                 </div>
-                                                <div style={{ flex: 1, minWidth: 0 }}>
-                                                    <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-                                                        <span
-                                                            style={{
-                                                                color: colors.text,
-                                                                fontWeight: 750,
-                                                                fontSize: 8,
-                                                                fontFamily: T.font.mono,
-                                                                letterSpacing: "0.12em",
-                                                                textTransform: "uppercase",
-                                                                opacity: 0.72,
-                                                            }}
-                                                        >
-                                                            {card.institution}
-                                                        </span>
-                                                        <span
-                                                            style={{
-                                                                fontSize: 13.5,
-                                                                fontWeight: 750,
-                                                                color: T.text.primary,
-                                                                minWidth: 0,
-                                                                overflow: "hidden",
-                                                                textOverflow: "ellipsis",
-                                                                whiteSpace: "nowrap",
-                                                                letterSpacing: "-0.01em",
-                                                                lineHeight: 1.2,
-                                                                maxWidth: "100%",
-                                                            }}
-                                                        >
-                                                            {getCardDisplayName(card)}
-                                                        </span>
-                                                    </div>
-                                                    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
-                                                        {detailChips.map((chip) => (
-                                                            <span
-                                                                key={`${card.id}-${chip.label}`}
+                                                <div style={{ display: "flex", alignItems: "flex-start", gap: 6, flexShrink: 0 }}>
+                                                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, minWidth: 90 }}>
+                                                        <div style={{ textAlign: "right", minWidth: 90 }}>
+                                                            <div style={{ fontSize: 13.5, fontWeight: 850, color: balanceColor, fontFamily: T.font.mono, letterSpacing: "-0.01em", lineHeight: 1.08 }}>
+                                                                {fmt(visibleBalance)}
+                                                            </div>
+                                                            {limit > 0 && (
+                                                                <div style={{ fontSize: 8.25, color: T.text.muted, fontFamily: T.font.mono, marginTop: 1, lineHeight: 1.05 }}>
+                                                                    / {fmt(limit)}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        {utilization != null && limit > 0 && (
+                                                            <div
                                                                 style={{
-                                                                    padding: "1px 6px",
-                                                                    borderRadius: 999,
-                                                                    fontSize: 8,
-                                                                    fontWeight: 800,
-                                                                    fontFamily: T.font.mono,
-                                                                    letterSpacing: "0.02em",
-                                                                    border:
-                                                                        chip.tone === "warning" ? `1px solid ${T.status.amber}28`
-                                                                        : chip.tone === "good" ? `1px solid ${T.accent.emerald}22`
-                                                                        : chip.tone === "danger" ? `1px solid ${T.status.red}24`
-                                                                        : `1px solid ${T.border.subtle}`,
-                                                                    background:
-                                                                        chip.tone === "warning" ? `${T.status.amber}12`
-                                                                        : chip.tone === "good" ? `${T.accent.emerald}12`
-                                                                        : chip.tone === "danger" ? `${T.status.red}10`
-                                                                        : T.bg.surface,
-                                                                    color:
-                                                                        chip.tone === "warning" ? T.status.amber
-                                                                        : chip.tone === "good" ? T.accent.emerald
-                                                                        : chip.tone === "danger" ? T.status.red
-                                                                        : T.text.dim,
+                                                                    display: "grid",
+                                                                    gridTemplateColumns: "1fr auto",
+                                                                    gap: 5,
+                                                                    alignItems: "center",
+                                                                    width: "100%",
                                                                 }}
                                                             >
-                                                                {chip.label}
-                                                            </span>
-                                                        ))}
+                                                                <span
+                                                                    style={{
+                                                                        display: "block",
+                                                                        width: "100%",
+                                                                        height: 4,
+                                                                        borderRadius: 99,
+                                                                        background: `${utilizationColor}14`,
+                                                                        overflow: "hidden",
+                                                                        boxShadow: `inset 0 0 0 1px ${T.border.subtle}`,
+                                                                    }}
+                                                                >
+                                                                    <span
+                                                                        style={{
+                                                                            display: "block",
+                                                                            width: `${Math.min(100, utilization)}%`,
+                                                                            height: "100%",
+                                                                            borderRadius: 99,
+                                                                            background: utilizationColor,
+                                                                            transition: "width 0.4s ease",
+                                                                        }}
+                                                                    />
+                                                                </span>
+                                                                <span
+                                                                    style={{
+                                                                        fontSize: 7.75,
+                                                                        fontFamily: T.font.mono,
+                                                                        color: utilizationColor,
+                                                                        fontWeight: 800,
+                                                                        letterSpacing: "-0.01em",
+                                                                    }}
+                                                                >
+                                                                    {Math.round(utilization)}%
+                                                                </span>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    {secondaryMeta ? (
-                                                        <div style={{ marginTop: 3, maxWidth: "100%" }}>
-                                                            <Mono size={9} color={T.text.dim} style={{ lineHeight: 1.3, opacity: 0.8 }}>
-                                                                {secondaryMeta}
-                                                            </Mono>
-                                                        </div>
-                                                    ) : null}
-                                                </div>
-                                            </div>
-                                            <div style={{ display: "flex", alignItems: "flex-start", gap: 5, flexShrink: 0 }}>
-                                                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                                                    <div
-                                                        style={{
-                                                            padding: "6px 9px",
-                                                            borderRadius: 10,
-                                                            border: `1px solid ${balanceTone.border}`,
-                                                            background: balanceTone.bg,
-                                                            minWidth: 80,
-                                                            textAlign: "right",
-                                                        }}
+                                                    <button
+                                                        onClick={() => startEdit(card)}
+                                                        style={{ width: 22, height: 22, borderRadius: 7, border: `1px solid ${T.border.subtle}`, background: "transparent", color: T.text.muted, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}
                                                     >
-                                                        <Mono size={13} weight={850} color={balanceTone.fg}>{fmt(visibleBalance)}</Mono>
-                                                    </div>
-                                                    {plannedState?.remainingAmount ? (
-                                                        <div
+                                                        <Edit3 size={10} />
+                                                    </button>
+                                                </div>
+                                                <div
+                                                    style={{
+                                                        gridColumn: "2 / 4",
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        gap: 4,
+                                                        flexWrap: "wrap",
+                                                        minWidth: 0,
+                                                        marginTop: 1,
+                                                    }}
+                                                >
+                                                    {statusChips.map((chip) => (
+                                                        <span
+                                                            key={`${card.id}-${chip.label}`}
                                                             style={{
-                                                                marginTop: 3,
-                                                                padding: "2px 6px",
+                                                                padding: "1px 6px",
                                                                 borderRadius: 999,
-                                                                background: `${T.accent.emerald}12`,
-                                                                border: `1px solid ${T.accent.emerald}1f`,
-                                                                maxWidth: 120,
-                                                                textAlign: "right",
+                                                                fontSize: 8,
+                                                                fontWeight: 800,
+                                                                fontFamily: T.font.mono,
+                                                                letterSpacing: "0.02em",
+                                                                border: chip.tone === "warning" ? `1px solid ${T.status.amber}28` : chip.tone === "good" ? `1px solid ${T.accent.emerald}22` : chip.tone === "danger" ? `1px solid ${T.status.red}24` : `1px solid ${T.border.subtle}`,
+                                                                background: chip.tone === "warning" ? `${T.status.amber}12` : chip.tone === "good" ? `${T.accent.emerald}12` : chip.tone === "danger" ? `${T.status.red}10` : T.bg.surface,
+                                                                color: chip.tone === "warning" ? T.status.amber : chip.tone === "good" ? T.accent.emerald : chip.tone === "danger" ? T.status.red : T.text.dim,
                                                             }}
                                                         >
-                                                            <Mono size={8} weight={800} color={T.accent.emerald}>
-                                                                Planned {fmt(plannedState.projectedBalance || 0)}
-                                                            </Mono>
-                                                        </div>
-                                                    ) : null}
-                                                    {limit > 0 ? <Mono size={9} weight={700} color={T.text.dim} style={{ marginTop: 3 }}>{`Limit ${fmt(limit)}`}</Mono> : null}
+                                                            {chip.label}
+                                                        </span>
+                                                    ))}
+                                                    {metaTokens.map((token) => (
+                                                        <span
+                                                            key={`${card.id}-${token}`}
+                                                            style={{
+                                                                fontSize: 8.25,
+                                                                color: token.startsWith("Sync ") ? accentColor : T.text.muted,
+                                                                fontFamily: T.font.mono,
+                                                                opacity: token.startsWith("Sync ") ? 0.92 : 0.82,
+                                                                whiteSpace: "nowrap",
+                                                                lineHeight: 1,
+                                                            }}
+                                                        >
+                                                            {token}
+                                                        </span>
+                                                    ))}
+                                                    {plannedState?.remainingAmount && (
+                                                        <span style={{ padding: "1px 6px", borderRadius: 999, background: `${T.accent.emerald}12`, border: `1px solid ${T.accent.emerald}1f`, fontSize: 8, fontWeight: 800, fontFamily: T.font.mono, color: T.accent.emerald }}>
+                                                            Planned {fmt(plannedState.projectedBalance || 0)}
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                <button onClick={() => startEdit(card)} style={{ width: 24, height: 24, borderRadius: 8, border: `1px solid ${T.border.subtle}`, background: T.bg.surface, color: T.text.dim, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 1 }}><Edit3 size={10} /></button>
                                             </div>
                                         </div>
                                     )}

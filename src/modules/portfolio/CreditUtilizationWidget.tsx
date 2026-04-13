@@ -39,9 +39,11 @@ export default function CreditUtilizationWidget() {
     }
     if (totalCreditLimit === 0) utilLabel = "N/A";
 
-    const radius = 24;
+    const gaugeSize = 48;
+    const gaugeCenter = gaugeSize / 2;
+    const gaugeStrokeInset = 3;
     const stroke = 6;
-    const normalizedRadius = radius - stroke * 0.5;
+    const normalizedRadius = gaugeCenter - gaugeStrokeInset - stroke * 0.5;
     const circumference = normalizedRadius * 2 * Math.PI;
     const strokeDashoffset = circumference - (creditUtilization / 100) * circumference;
 
@@ -107,15 +109,20 @@ export default function CreditUtilizationWidget() {
                             </div>
                         )}
                     </div>
-                    <div style={{ position: "relative", width: 44, height: 44, marginLeft: 16 }}>
-                        <svg height="44" width="44">
+                    <div style={{ position: "relative", width: gaugeSize, height: gaugeSize, marginLeft: 16, flexShrink: 0 }}>
+                        <svg
+                            width={gaugeSize}
+                            height={gaugeSize}
+                            viewBox={`0 0 ${gaugeSize} ${gaugeSize}`}
+                            style={{ display: "block", overflow: "visible" }}
+                        >
                             <circle
                                 stroke={T.border.default}
                                 fill="transparent"
                                 strokeWidth={stroke}
                                 r={normalizedRadius}
-                                cx={22}
-                                cy={22}
+                                cx={gaugeCenter}
+                                cy={gaugeCenter}
                             />
                             <circle
                                 stroke={utilColor}
@@ -125,9 +132,9 @@ export default function CreditUtilizationWidget() {
                                 style={{ strokeDashoffset, transition: "stroke-dashoffset 0.5s ease-in-out" }}
                                 strokeLinecap="round"
                                 r={normalizedRadius}
-                                cx={22}
-                                cy={22}
-                                transform="rotate(-90 22 22)"
+                                cx={gaugeCenter}
+                                cy={gaugeCenter}
+                                transform={`rotate(-90 ${gaugeCenter} ${gaugeCenter})`}
                             />
                         </svg>
                         <div

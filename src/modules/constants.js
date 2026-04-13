@@ -125,7 +125,10 @@ export const SHARED_TOKENS = {
   radius: { sm: 10, md: 14, lg: 18, xl: 28 },
   font: {
     mono: "ui-monospace, 'SF Mono', 'JetBrains Mono', monospace",
-    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', sans-serif",
+    // Explicit emoji fallbacks prevent iOS WebView from substituting missing-glyph boxes
+    // when onboarding/paywall copy uses emoji as lightweight visual markers.
+    sans:
+      "-apple-system, BlinkMacSystemFont, system-ui, 'SF Pro Display', 'SF Pro Text', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Inter', sans-serif",
   },
 };
 
@@ -160,12 +163,13 @@ export const INSTITUTIONS = [
 
 // Issuer brand colors
 export const ISSUER_COLORS = {
+  Ally: { bg: "rgba(140,96,255,0.12)", border: "rgba(140,96,255,0.28)", text: "#B59AFF", accent: "#8C60FF" },
   "American Express": { bg: "rgba(0,111,191,0.10)", border: "rgba(0,111,191,0.20)", text: "#4DA3E8", accent: "#006FBF" },
   "Bank of America": { bg: "rgba(220,30,50,0.10)", border: "rgba(220,30,50,0.20)", text: "#E85060", accent: "#DC1E32" },
   Barclays: { bg: "rgba(0,175,215,0.10)", border: "rgba(0,175,215,0.20)", text: "#3CC0E0", accent: "#00AFD7" },
   "Capital One": { bg: "rgba(213,0,50,0.10)", border: "rgba(213,0,50,0.20)", text: "#F05060", accent: "#D50032" },
   Chase: { bg: "rgba(60,80,180,0.10)", border: "rgba(60,80,180,0.20)", text: "#7080D0", accent: "#3C50B4" },
-  Citi: { bg: "rgba(0,82,155,0.10)", border: "rgba(0,82,155,0.20)", text: "#4D8EC4", accent: "#00529B" },
+  Citi: { bg: "rgba(42,184,255,0.14)", border: "rgba(42,184,255,0.30)", text: "#7EDCFF", accent: "#2AB8FF" },
   Discover: { bg: "rgba(255,96,0,0.10)", border: "rgba(255,96,0,0.20)", text: "#FF8040", accent: "#FF6000" },
   FNBO: { bg: "rgba(0,100,60,0.10)", border: "rgba(0,100,60,0.20)", text: "#4DAF80", accent: "#00643C" },
   "Goldman Sachs": {
