@@ -2,6 +2,10 @@ import type {
   AuditConsistencyInfo,
   AuditFlag,
   AuditRecord,
+  DashboardCardRow,
+  DegradedSafetyState,
+  HeaderCard,
+  HealthScore,
   InvestmentsSummary,
   ParsedMoveItem,
   WeeklyMoveCardItem,
@@ -34,10 +38,33 @@ export interface TacticalPlaybookData {
   fallbackSource: "structured-weekly-moves" | "legacy-weekly-moves" | "section-moves" | null;
 }
 
+export interface TacticalPlaybookFallbackCopy {
+  subtitle: string;
+  message: string;
+}
+
 export interface AuditHandlingNotes {
   content: string;
   badgeLabel: string | null;
   accentColor: string | null;
+}
+
+export interface ResultsOverviewMetric {
+  label: string;
+  value: string;
+  tone: "green" | "amber" | "red" | "blue" | "neutral";
+}
+
+export interface ResultsOverviewData {
+  summary: string;
+  score: string;
+  grade: string;
+  scoreTone: ResultsOverviewMetric["tone"];
+  statusLabel: string;
+  statusTone: ResultsOverviewMetric["tone"];
+  confidenceLabel: string | null;
+  modeLabel: string;
+  metrics: ResultsOverviewMetric[];
 }
 
 function formatMoveItemAmount(value: unknown) {
@@ -120,7 +147,12 @@ function buildFallbackMoveFromStructured(item: WeeklyMoveCardItem): ParsedMoveIt
 function buildFallbackMoveFromText(text: string): ParsedMoveItem | null {
   const cleaned = normalizeMoveLine(text);
   if (!cleaned) return null;
-  const amount = parseCurrency(cleaned);
+  const normalized = cleaned.toLowerCase();
+  const amount =
+    /\b(pay|route|transfer|move|contribute|send|reserve|set aside|hold)\b/.test(normalized) &&
+    !/\babove\b|\bat least\b|\bunder\b|\bbelow\b/.test(normalized)
+      ? parseCurrency(cleaned)
+      : null;
   return {
     done: false,
     text: cleaned,
@@ -190,6 +222,33 @@ export function buildTacticalPlaybookData({
   }
 
   return { items: [], fallbackSource: null };
+}
+
+export function describeTacticalPlaybookFallback(
+  fallbackSource: TacticalPlaybookData["fallbackSource"]
+): TacticalPlaybookFallbackCopy {
+  switch (fallbackSource) {
+    case "structured-weekly-moves":
+      return {
+        subtitle: "Recovered from the structured weekly plan",
+        message: "The provider returned a thinner move payload, so Catalyst rebuilt this checklist from the structured weekly plan before rendering it.",
+      };
+    case "legacy-weekly-moves":
+      return {
+        subtitle: "Recovered from the weekly move list",
+        message: "The provider omitted structured move rows, so Catalyst rebuilt this checklist from the legacy weekly move list before rendering it.",
+      };
+    case "section-moves":
+      return {
+        subtitle: "Recovered from the audit narrative",
+        message: "The provider omitted structured move rows, so Catalyst rebuilt this checklist from the move narrative before rendering it.",
+      };
+    default:
+      return {
+        subtitle: "Execute in this order",
+        message: "",
+      };
+  }
 }
 
 export function cleanAllocationLead(detail: string | null | undefined) {
@@ -282,6 +341,148 @@ export function buildResultsInvestmentsSummary(
   return {
     investmentsSummary,
     showInvestmentNetWorthAnchor,
+  };
+}
+
+function humanizeResultsStatus(status: string | null | undefined, safetyState: DegradedSafetyState | null | undefined) {
+  if (safetyState?.level === "urgent") return "Urgent";
+  if (safetyState?.level === "caution") return "Caution";
+  if (safetyState?.level === "stable") return "Stable";
+
+  const normalized = String(status || "").trim().toUpperCase();
+  if (normalized === "GREEN") return "Stable";
+  if (normalized === "YELLOW") return "Watch";
+  if (normalized === "RED") return "Protect";
+  return "Review";
+}
+
+function getResultsToneForStatus(status: string | null | undefined, safetyState: DegradedSafetyState | null | undefined) {
+  if (safetyState?.level === "urgent") return "red" as const;
+  if (safetyState?.level === "caution") return "amber" as const;
+  if (safetyState?.level === "stable") return "green" as const;
+
+  const normalized = String(status || "").trim().toUpperCase();
+  if (normalized === "GREEN") return "green" as const;
+  if (normalized === "YELLOW") return "amber" as const;
+  if (normalized === "RED") return "red" as const;
+  return "neutral" as const;
+}
+
+function getResultsToneForScore(score: number | null | undefined) {
+  if (!Number.isFinite(Number(score))) return "neutral" as const;
+  if (Number(score) >= 80) return "green" as const;
+  if (Number(score) >= 60) return "amber" as const;
+  return "red" as const;
+}
+
+function normalizeOverviewCandidate(text: string | null | undefined) {
+  return String(text || "").replace(/\s+/g, " ").trim();
+}
+
+function formatAuditConfidence(confidence: string | null | undefined) {
+  const normalized = String(confidence || "").trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "high") return "High confidence";
+  if (normalized === "medium") return "Medium confidence";
+  if (normalized === "low") return "Low confidence";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function pickOverviewSummary({
+  headerCard,
+  healthScore,
+  isDegraded,
+  moveCount,
+  safetyState,
+}: {
+  headerCard?: HeaderCard | null | undefined;
+  healthScore?: HealthScore | null | undefined;
+  isDegraded?: boolean;
+  moveCount?: number;
+  safetyState?: DegradedSafetyState | null | undefined;
+}): string {
+  const candidates = [
+    normalizeOverviewCandidate(healthScore?.summary),
+    normalizeOverviewCandidate(headerCard?.subtitle),
+    normalizeOverviewCandidate(Array.isArray(headerCard?.details) ? headerCard.details[0] : ""),
+    normalizeOverviewCandidate(safetyState?.summary),
+  ].filter((value): value is string => value.length >= 8);
+
+  const firstCandidate = candidates[0];
+  if (firstCandidate) return firstCandidate;
+  if ((moveCount || 0) > 0) return `Catalyst queued ${moveCount} weekly move${moveCount === 1 ? "" : "s"} from the current snapshot.`;
+  if (isDegraded) return "Catalyst rebuilt this briefing from native anchors so the weekly operating plan still lands cleanly.";
+  return "Catalyst condensed this audit into the score, status, and money surfaces that matter first.";
+}
+
+function buildDashboardOverviewMetrics(dashboardCard: DashboardCardRow[] = [], moveCount = 0): ResultsOverviewMetric[] {
+  const preferredPrimary = ["Available", "Checking", "Vault"];
+  const preferredSecondary = ["Debts", "Pending"];
+  const rows = (dashboardCard || []).filter((row) => normalizeOverviewCandidate(row?.amount));
+  const rowByCategory = new Map(rows.map((row) => [String(row?.category || "").trim().toLowerCase(), row]));
+
+  const metrics: ResultsOverviewMetric[] = [];
+  const pickMetric = (category: string) => rowByCategory.get(category.toLowerCase()) || null;
+  const primary = preferredPrimary.map(pickMetric).find(Boolean) || null;
+  const secondary = preferredSecondary.map(pickMetric).find(Boolean) || null;
+
+  if (primary) {
+    metrics.push({
+      label: primary.category,
+      value: primary.amount,
+      tone: primary.category === "Available" ? "green" : "blue",
+    });
+  }
+
+  if (secondary) {
+    metrics.push({
+      label: secondary.category,
+      value: secondary.amount,
+      tone: secondary.category === "Debts" ? "red" : "amber",
+    });
+  }
+
+  metrics.push({
+    label: "Moves",
+    value: moveCount > 0 ? `${moveCount} queued` : "No queue",
+    tone: moveCount > 0 ? "blue" : "neutral",
+  });
+
+  return metrics.slice(0, 3);
+}
+
+export function buildResultsOverview({
+  status,
+  healthScore,
+  headerCard,
+  dashboardCard = [],
+  moveCount = 0,
+  isDegraded = false,
+  safetyState = null,
+  handlingBadgeLabel = null,
+}: {
+  status?: string | null | undefined;
+  healthScore?: HealthScore | null | undefined;
+  headerCard?: HeaderCard | null | undefined;
+  dashboardCard?: DashboardCardRow[] | null | undefined;
+  moveCount?: number;
+  isDegraded?: boolean;
+  safetyState?: DegradedSafetyState | null | undefined;
+  handlingBadgeLabel?: string | null | undefined;
+}): ResultsOverviewData {
+  const score = Number.isFinite(Number(healthScore?.score)) ? String(Number(healthScore?.score)) : "—";
+  const modeLabel = isDegraded ? "Native fallback" : handlingBadgeLabel || "Full narrative";
+
+  return {
+    summary: pickOverviewSummary({ headerCard, healthScore, isDegraded, moveCount, safetyState }),
+    score,
+    grade: normalizeOverviewCandidate(healthScore?.grade) || "—",
+    scoreTone: getResultsToneForScore(healthScore?.score),
+    statusLabel: humanizeResultsStatus(status, safetyState),
+    statusTone: getResultsToneForStatus(status, safetyState),
+    confidenceLabel: formatAuditConfidence(headerCard?.confidence),
+    modeLabel,
+    metrics: buildDashboardOverviewMetrics(dashboardCard || [], moveCount),
   };
 }
 

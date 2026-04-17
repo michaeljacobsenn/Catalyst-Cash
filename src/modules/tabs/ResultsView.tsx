@@ -25,9 +25,11 @@ import {
   buildAuditHandlingNotes,
   buildAllocationLedger,
   buildFreedomJourneyMetrics,
+  buildResultsOverview,
   buildResultsInvestmentsSummary,
   buildTacticalPlaybookData,
   cleanAllocationLead,
+  describeTacticalPlaybookFallback,
 } from "./resultsView/model";
 
 import type { AuditRecord, MoveCheckState, ParsedMoveItem } from "../../types/index.js";
@@ -102,6 +104,41 @@ const Mono = UIMono as unknown as (props: MonoProps) => ReactNode;
 const MoveRow = UIMoveRow as unknown as React.ComponentType<MoveRowProps>;
 const Md = UIMd as unknown as (props: MdProps) => ReactNode;
 const InlineTooltip = UIInlineTooltip as unknown as (props: InlineTooltipProps) => ReactNode;
+
+function getOverviewToneStyles(tone: "green" | "amber" | "red" | "blue" | "neutral") {
+  switch (tone) {
+    case "green":
+      return {
+        color: T.status.green,
+        background: `${T.status.green}12`,
+        border: `1px solid ${T.status.green}24`,
+      };
+    case "amber":
+      return {
+        color: T.status.amber,
+        background: `${T.status.amber}12`,
+        border: `1px solid ${T.status.amber}24`,
+      };
+    case "red":
+      return {
+        color: T.status.red,
+        background: `${T.status.red}12`,
+        border: `1px solid ${T.status.red}24`,
+      };
+    case "blue":
+      return {
+        color: T.status.blue,
+        background: `${T.status.blue}12`,
+        border: `1px solid ${T.status.blue}24`,
+      };
+    default:
+      return {
+        color: T.text.secondary,
+        background: `${T.bg.card}90`,
+        border: `1px solid ${T.border.subtle}`,
+      };
+  }
+}
 
 const ReportSection = ({ title, icon: Icon, content, accentColor, badge, isLast = false }: ReportSectionProps) => {
   if (!content || !content.trim()) return null;
@@ -192,11 +229,15 @@ export default memo(function ResultsView({
     );
   const parsed = audit.parsed;
   const sections = parsed.sections;
+  const headerCard =
+    parsed.structured?.headerCard && typeof parsed.structured.headerCard === "object"
+      ? parsed.structured.headerCard
+      : null;
   const nextActionCard =
     parsed.structured?.nextAction && typeof parsed.structured.nextAction === "object"
       ? parsed.structured.nextAction
       : null;
-  const nextActionNarrative = useMemo(() => {
+  const baseNextActionNarrative = useMemo(() => {
     const sectionText = typeof sections?.nextAction === "string" ? sections.nextAction.trim() : "";
     if (sectionText) return sectionText;
     return [nextActionCard?.title, nextActionCard?.detail].filter((value): value is string => Boolean(value && value.trim())).join("\n");
@@ -212,6 +253,18 @@ export default memo(function ResultsView({
     [parsed.moveItems, parsed.structured?.weeklyMoves, parsed.weeklyMoves, sections?.moves]
   );
   const displayMoveItems = tacticalPlaybook.items;
+  const nextActionNarrative = useMemo(() => {
+    if (baseNextActionNarrative) return baseNextActionNarrative;
+    const firstMove = displayMoveItems[0];
+    if (!firstMove) return "";
+    return [firstMove.title || firstMove.text, firstMove.detail]
+      .filter((value): value is string => Boolean(value && value.trim()))
+      .join("\n");
+  }, [baseNextActionNarrative, displayMoveItems]);
+  const tacticalPlaybookFallback = useMemo(
+    () => describeTacticalPlaybookFallback(tacticalPlaybook.fallbackSource),
+    [tacticalPlaybook.fallbackSource]
+  );
   const nextActionAllocationRows = useMemo(() => buildActionPreviewRows(displayMoveItems), [displayMoveItems]);
   const nextActionLead = useMemo(
     () => cleanAllocationLead(nextActionCard?.detail || nextActionNarrative),
@@ -258,6 +311,22 @@ export default memo(function ResultsView({
       }),
     [degradedInfo?.reason, isDegraded, parsed.auditFlags, parsed.consistency, sections]
   );
+  const resultsOverview = useMemo(
+    () =>
+      buildResultsOverview({
+        status: parsed.status,
+        healthScore: parsed.healthScore,
+        headerCard,
+        dashboardCard: parsed.dashboardCard || [],
+        moveCount: displayMoveItems.length,
+        isDegraded: Boolean(isDegraded),
+        safetyState: degradedInfo?.safetyState || null,
+        handlingBadgeLabel: auditHandlingNotes.badgeLabel,
+      }),
+    [auditHandlingNotes.badgeLabel, degradedInfo?.safetyState, displayMoveItems.length, headerCard, isDegraded, parsed.dashboardCard, parsed.healthScore, parsed.status]
+  );
+  const scoreToneStyles = getOverviewToneStyles(resultsOverview.scoreTone);
+  const statusToneStyles = getOverviewToneStyles(resultsOverview.statusTone);
   const freedomJourneyMetrics = useMemo(() => buildFreedomJourneyMetrics(history), [history]);
 
   const handleExitResults = (): void => {
@@ -367,6 +436,136 @@ export default memo(function ResultsView({
       {showExportSheet && audit && (
         <AuditExportSheet audit={audit} onClose={() => setShowExportSheet(false)} />
       )}
+
+      <Card
+        style={{
+          padding: isSmallPhone ? "16px" : "18px 20px",
+          background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
+          border: `1px solid ${T.border.default}`,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isSmallPhone ? "1fr" : "minmax(0, 1.25fr) minmax(260px, 0.95fr)",
+            gap: 16,
+            alignItems: "start",
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.08em", fontFamily: T.font.mono }}>
+              FIRST READ
+            </div>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+              <div style={{ fontSize: "clamp(38px, 10vw, 52px)", lineHeight: 0.92, fontWeight: 900, letterSpacing: "-0.05em", color: scoreToneStyles.color }}>
+                {resultsOverview.score}
+              </div>
+              <div style={{ paddingBottom: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <div
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    background: scoreToneStyles.background,
+                    border: scoreToneStyles.border,
+                    color: scoreToneStyles.color,
+                    fontSize: 11,
+                    fontWeight: 900,
+                    fontFamily: T.font.mono,
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  GRADE {resultsOverview.grade}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+              <div
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  background: statusToneStyles.background,
+                  border: statusToneStyles.border,
+                  color: statusToneStyles.color,
+                  fontSize: 11,
+                  fontWeight: 900,
+                  fontFamily: T.font.mono,
+                  letterSpacing: "0.04em",
+                }}
+              >
+                {resultsOverview.statusLabel}
+              </div>
+              <div
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  background: `${T.accent.primary}12`,
+                  border: `1px solid ${T.accent.primary}18`,
+                  color: T.accent.primary,
+                  fontSize: 11,
+                  fontWeight: 900,
+                  fontFamily: T.font.mono,
+                  letterSpacing: "0.04em",
+                }}
+              >
+                {resultsOverview.modeLabel}
+              </div>
+              {resultsOverview.confidenceLabel ? (
+                <div
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    background: `${T.bg.card}88`,
+                    border: `1px solid ${T.border.subtle}`,
+                    color: T.text.secondary,
+                    fontSize: 11,
+                    fontWeight: 800,
+                    fontFamily: T.font.mono,
+                    letterSpacing: "0.03em",
+                  }}
+                >
+                  {resultsOverview.confidenceLabel}
+                </div>
+              ) : null}
+            </div>
+            <p style={{ margin: "12px 0 0", fontSize: 13, lineHeight: 1.7, color: T.text.secondary, maxWidth: 480 }}>
+              {resultsOverview.summary}
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))",
+              gap: 10,
+              alignSelf: "stretch",
+            }}
+          >
+            {resultsOverview.metrics.map((metric) => {
+              const toneStyles = getOverviewToneStyles(metric.tone);
+              return (
+                <div
+                  key={metric.label}
+                  style={{
+                    padding: "12px 12px 11px",
+                    borderRadius: 16,
+                    background: `${T.bg.card}82`,
+                    border: `1px solid ${T.border.subtle}`,
+                    minWidth: 0,
+                  }}
+                >
+                  <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                    {metric.label}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 16, fontWeight: 800, color: toneStyles.color, lineHeight: 1.2, letterSpacing: "-0.02em" }}>
+                    {metric.value}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </Card>
 
       {isDegraded && (
         <Card
@@ -765,7 +964,7 @@ export default memo(function ResultsView({
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   <h2 id="results-playbook" style={{ fontSize: "clamp(17px, 4.8vw, 20px)", fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>Tactical Playbook</h2>
                   <div style={{ fontSize: 11, color: T.text.dim, fontWeight: 700, letterSpacing: "0.02em" }}>
-                    {tacticalPlaybook.fallbackSource ? "Recovered from the audit narrative" : "Execute in this order"}
+                    {tacticalPlaybookFallback.subtitle}
                   </div>
                 </div>
               </div>
@@ -786,7 +985,7 @@ export default memo(function ResultsView({
                   lineHeight: 1.55,
                 }}
               >
-                The provider returned a thinner move payload, so Catalyst rebuilt this checklist from the structured weekly plan before rendering it.
+                {tacticalPlaybookFallback.message}
               </div>
             )}
             <div style={{ display: "grid", gap: 12 }}>

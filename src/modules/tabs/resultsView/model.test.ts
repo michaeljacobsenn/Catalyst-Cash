@@ -8,9 +8,11 @@ import {
   buildAllocationLedger,
   buildAnalysisNotes,
   buildFreedomJourneyMetrics,
+  buildResultsOverview,
   buildResultsInvestmentsSummary,
   buildTacticalPlaybookData,
   cleanAllocationLead,
+  describeTacticalPlaybookFallback,
 } from "./model";
 
 describe("resultsView model", () => {
@@ -176,7 +178,6 @@ describe("resultsView model", () => {
           text: "Keep checking above $900",
           title: "Keep checking above $900",
           detail: "",
-          amount: 900,
           tag: null,
           semanticKind: null,
           targetLabel: null,
@@ -205,6 +206,56 @@ describe("resultsView model", () => {
         },
       ],
       fallbackSource: "section-moves",
+    });
+  });
+
+  it("describes tactical playbook recovery sources accurately", () => {
+    expect(describeTacticalPlaybookFallback("structured-weekly-moves")).toEqual({
+      subtitle: "Recovered from the structured weekly plan",
+      message: "The provider returned a thinner move payload, so Catalyst rebuilt this checklist from the structured weekly plan before rendering it.",
+    });
+    expect(describeTacticalPlaybookFallback("legacy-weekly-moves")).toEqual({
+      subtitle: "Recovered from the weekly move list",
+      message: "The provider omitted structured move rows, so Catalyst rebuilt this checklist from the legacy weekly move list before rendering it.",
+    });
+    expect(describeTacticalPlaybookFallback("section-moves")).toEqual({
+      subtitle: "Recovered from the audit narrative",
+      message: "The provider omitted structured move rows, so Catalyst rebuilt this checklist from the move narrative before rendering it.",
+    });
+    expect(describeTacticalPlaybookFallback(null)).toEqual({
+      subtitle: "Execute in this order",
+      message: "",
+    });
+  });
+
+  it("builds a stable top-level results overview from sparse native inputs", () => {
+    expect(
+      buildResultsOverview({
+        status: "YELLOW",
+        healthScore: { score: 74, grade: "C", trend: "flat", summary: "Protect near-term cash first." },
+        headerCard: { status: "YELLOW", subtitle: "Reserve obligations before extra debt.", confidence: "medium" },
+        dashboardCard: [
+          { category: "Checking", amount: "$1,240.00", status: "Tight" },
+          { category: "Available", amount: "$260.00", status: "Protected" },
+          { category: "Debts", amount: "$8,800.00", status: "Tracked" },
+        ],
+        moveCount: 3,
+        handlingBadgeLabel: "Normalized",
+      })
+    ).toEqual({
+      summary: "Protect near-term cash first.",
+      score: "74",
+      grade: "C",
+      scoreTone: "amber",
+      statusLabel: "Watch",
+      statusTone: "amber",
+      confidenceLabel: "Medium confidence",
+      modeLabel: "Normalized",
+      metrics: [
+        { label: "Available", value: "$260.00", tone: "green" },
+        { label: "Debts", value: "$8,800.00", tone: "red" },
+        { label: "Moves", value: "3 queued", tone: "blue" },
+      ],
     });
   });
 
