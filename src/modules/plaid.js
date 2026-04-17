@@ -8,6 +8,11 @@ import { getIssuerCards } from "./issuerCards.js";
 import { log } from "./logger.js";
 import { inferMerchantIdentity } from "./merchantIdentity.js";
 import { categorizeBatch, learn } from "./merchantMap.js";
+import {
+  findLikelyBankDuplicates,
+  findLikelyCardDuplicates,
+  reviewPlaidDuplicateCandidates,
+} from "./plaidDuplicateResolution.js";
 import { trackSupportEvent } from "./funnelAnalytics.js";
 import { recordFirstBankConnectionValue } from "./valueMoments.js";
 import {
@@ -35,6 +40,7 @@ export {
   disconnectConnectionPortfolioRecords,
   getConnections,
   getConnectionPlaidAccountIds,
+  reviewPlaidDuplicateCandidates,
   getPlaidAutoFill,
   getPreferredFreeConnectionId,
   getPreferredFreeConnectionSwitchCooldownRemaining,
@@ -1321,13 +1327,17 @@ export function autoMatchAccounts(
   cards = [],
   bankAccounts = [],
   cardCatalog = null,
-  plaidInvestments = []
+  plaidInvestments = [],
+  options = {}
 ) {
+  const allowLikelyDuplicates = options?.allowLikelyDuplicates !== false;
   const matched = [];
   const unmatched = [];
   const newCards = [];
   const newBankAccounts = [];
   const newPlaidInvestments = [];
+  /** @type {Array<{ kind: "card" | "bank", plaidAccountId: string, importedId: string, importedLabel: string, institution: string, existingIds: string[] }>} */
+  const duplicateCandidates = [];
 
   const normalizedInst = normalizeInstitution(connection.institutionName);
 
@@ -1347,24 +1357,22 @@ export function autoMatchAccounts(
           ? cards.find(c => sameInstitution(c.institution, normalizedInst) && extractLast4(c) === acctLast4)
           : null;
 
-      const matchByName =
+      const duplicateMatches =
         !matchByPlaidId && !matchByMask && acctName
-          ? cards.find(
-            c =>
-              sameInstitution(c.institution, normalizedInst) &&
-              (() => {
-                const cardName = normText(c.nickname || c.name);
-                if (!cardName || cardName.length < 4 || acctName.length < 4) return false;
-                return cardName.includes(acctName) || acctName.includes(cardName);
-              })()
-          )
-          : null;
+          ? findLikelyCardDuplicates(cards, {
+              institution: normalizedInst,
+              name: acct.officialName || acct.name,
+              last4: acctLast4,
+            })
+          : [];
 
-      const cardMatch = matchByPlaidId || matchByMask || matchByName;
+      const cardMatch = matchByPlaidId || matchByMask;
       if (cardMatch) {
         linkedId = cardMatch.id;
         linkedType = "card";
         acct.linkedCardId = cardMatch.id;
+      } else if (duplicateMatches.length > 0 && !allowLikelyDuplicates) {
+        // In background hydration paths, avoid silently materializing likely duplicates.
       } else {
         // Prepare a new card record for user to review
         const catCards =
@@ -1400,25 +1408,35 @@ export function autoMatchAccounts(
         linkedId = newCard.id;
         linkedType = "card";
         acct.linkedCardId = newCard.id;
+        if (duplicateMatches.length > 0) {
+          duplicateCandidates.push({
+            kind: /** @type {"card"} */ ("card"),
+            plaidAccountId: acct.plaidAccountId,
+            importedId: newCard.id,
+            importedLabel: bestName,
+            institution: normalizedInst || "Other",
+            existingIds: duplicateMatches.map((match) => match.card?.id).filter(Boolean),
+          });
+        }
       }
     } else if (acct.type === "depository") {
       // Try to match to existing bank account
       const matchByPlaidId = bankAccounts.find(b => b._plaidAccountId === acct.plaidAccountId);
-      const matchByName = !matchByPlaidId
-        ? bankAccounts.find(
-          b =>
-            sameInstitution(b.bank, normalizedInst) &&
-            (normText(b.name).includes(normText(acct.name)) ||
-              normText(acct.officialName).includes(normText(b.name)) ||
-              acct.subtype === b.accountType)
-        )
-        : null;
+      const duplicateMatches = !matchByPlaidId
+        ? findLikelyBankDuplicates(bankAccounts, {
+            bank: normalizedInst,
+            accountType: acct.subtype === "savings" ? "savings" : "checking",
+            name: acct.officialName || acct.name,
+          })
+        : [];
 
-      const bankMatch = matchByPlaidId || matchByName;
+      const bankMatch = matchByPlaidId;
       if (bankMatch) {
         linkedId = bankMatch.id;
         linkedType = "bank";
         acct.linkedBankAccountId = bankMatch.id;
+      } else if (duplicateMatches.length > 0 && !allowLikelyDuplicates) {
+        // In background hydration paths, avoid silently materializing likely duplicates.
       } else {
         // Prepare a new bank account record
         const newBank = {
@@ -1437,6 +1455,16 @@ export function autoMatchAccounts(
         linkedId = newBank.id;
         linkedType = "bank";
         acct.linkedBankAccountId = newBank.id;
+        if (duplicateMatches.length > 0) {
+          duplicateCandidates.push({
+            kind: /** @type {"bank"} */ ("bank"),
+            plaidAccountId: acct.plaidAccountId,
+            importedId: newBank.id,
+            importedLabel: newBank.name,
+            institution: normalizedInst || "Other",
+            existingIds: duplicateMatches.map((match) => match.account?.id).filter(Boolean),
+          });
+        }
       }
     } else if (acct.type === "investment") {
       // Try to match to existing plaid investment
@@ -1477,7 +1505,7 @@ export function autoMatchAccounts(
     }
   }
 
-  return { matched, unmatched, newCards, newBankAccounts, newPlaidInvestments };
+  return { matched, unmatched, newCards, newBankAccounts, newPlaidInvestments, duplicateCandidates };
 }
 
 function mergeUniqueById(existing = [], incoming = []) {
@@ -1494,14 +1522,16 @@ export function ensureConnectionAccountsPresent(
   cards = [],
   bankAccounts = [],
   cardCatalog = null,
-  plaidInvestments = []
+  plaidInvestments = [],
+  options = {}
 ) {
-  const { newCards, newBankAccounts, newPlaidInvestments } = autoMatchAccounts(
+  const { newCards, newBankAccounts, newPlaidInvestments, duplicateCandidates = [] } = autoMatchAccounts(
     connection,
     cards,
     bankAccounts,
     cardCatalog,
-    plaidInvestments
+    plaidInvestments,
+    options
   );
 
   return {
@@ -1511,6 +1541,7 @@ export function ensureConnectionAccountsPresent(
     importedCards: newCards.length,
     importedBankAccounts: newBankAccounts.length,
     importedPlaidInvestments: newPlaidInvestments.length,
+    duplicateCandidates,
   };
 }
 
@@ -1548,6 +1579,44 @@ export async function saveConnectionLinks(connection) {
   });
 
   await saveConnections(conns);
+}
+
+/**
+ * @param {{
+ *   connectionId: string,
+ *   plaidAccountId: string,
+ *   linkedCardId?: string | null,
+ *   linkedBankAccountId?: string | null,
+ * }} params
+ */
+export async function reassignStoredPlaidLink({
+  connectionId,
+  plaidAccountId,
+  linkedCardId = null,
+  linkedBankAccountId = null,
+}) {
+  const normalizedConnectionId = String(connectionId || "").trim();
+  const normalizedPlaidAccountId = String(plaidAccountId || "").trim();
+  if (!normalizedConnectionId || !normalizedPlaidAccountId) return false;
+
+  const conns = await getConnections();
+  const idx = conns.findIndex((connection) => String(connection?.id || "").trim() === normalizedConnectionId);
+  if (idx < 0) return false;
+
+  let changed = false;
+  conns[idx].accounts = (conns[idx].accounts || []).map((account) => {
+    if (String(account?.plaidAccountId || "").trim() !== normalizedPlaidAccountId) return account;
+    changed = true;
+    return {
+      ...account,
+      linkedCardId,
+      linkedBankAccountId,
+    };
+  });
+
+  if (!changed) return false;
+  await saveConnections(conns);
+  return true;
 }
 
 /**

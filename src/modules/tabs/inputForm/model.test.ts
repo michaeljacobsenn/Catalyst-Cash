@@ -6,11 +6,13 @@ import {
   buildAuditCashAccountSnapshot,
   buildCashAccountMeta,
   buildInvestmentAuditFields,
+  buildInvestmentAuditSources,
   buildResolvedInvestmentSnapshot,
   filterCashAccountMeta,
   getEffectiveDebtTotal,
   getEffectiveCashAccountTotal,
   getEffectiveInvestmentFieldValue,
+  splitInvestmentAuditSources,
   splitInvestmentAuditFields,
   type InputFormState,
   type InvestmentAuditField,
@@ -373,24 +375,27 @@ describe("input form model helpers", () => {
         brokerage: "",
         k401Balance: "8000",
       }),
-      visibleInvestmentFields: [
+      visibleInvestmentSources: [
         {
-          key: "roth",
+          id: "plaid:roth-account",
+          bucket: "roth",
           label: "Roth IRA",
-          enabled: true,
           accent: "#8B5CF6",
-          autoValue: 2500,
-          formValue: "1000",
-          override: false,
+          amount: 2500,
+          detail: "Vanguard · linked account",
+          sourceType: "plaid-account",
+          editable: false,
         },
         {
-          key: "k401",
+          id: "manual-balance:k401",
+          bucket: "k401",
           label: "401(k)",
-          enabled: true,
           accent: "#3B82F6",
-          autoValue: 0,
-          formValue: "8000",
-          override: true,
+          amount: 8000,
+          detail: "Manual balance",
+          sourceType: "manual-balance",
+          editable: true,
+          formKey: "k401Balance",
         },
       ],
       effectiveCheckingTotal: 600,
@@ -449,5 +454,42 @@ describe("input form model helpers", () => {
         source: "live",
       },
     ]);
+  });
+
+  it("buildInvestmentAuditSources keeps plaid and manual investment sources distinct within the same bucket", () => {
+    const sources = buildInvestmentAuditSources({
+      trackingConfig: {
+        trackBrokerage: true,
+        enableHoldings: true,
+      },
+      holdingValues: {
+        roth: 0,
+        brokerage: 4200,
+        k401: 0,
+      },
+      form: createForm({
+        brokerage: "",
+      }),
+      holdings: {
+        brokerage: [{ symbol: "VTI" }, { symbol: "VXUS" }],
+      },
+      plaidInvestments: [
+        {
+          id: "brokerage-linked",
+          bucket: "brokerage",
+          institution: "Fidelity",
+          name: "Taxable Brokerage",
+          _plaidBalance: 7600,
+        },
+      ],
+    });
+
+    const { visibleSources, hiddenSources } = splitInvestmentAuditSources(sources, {});
+
+    expect(visibleSources.map((source) => source.id)).toEqual([
+      "manual-holdings:brokerage",
+      "plaid:brokerage-linked",
+    ]);
+    expect(hiddenSources.map((source) => source.id)).toContain("manual-balance:brokerage");
   });
 });

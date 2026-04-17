@@ -26,6 +26,7 @@ import { haptic } from "../haptics.js";
 import { log } from "../logger.js";
 import { addMilestones, extractAuditMilestones, getMemoryBlock, loadMemory } from "../memory.js";
 import { isLikelyAbortError, toUserFacingRequestError } from "../networkErrors.js";
+import { readOnlineStatus } from "../onlineStatus.js";
 import { getProvider } from "../providers.js";
 import { buildScrubber } from "../scrubber.js";
 import { getHistoryLimit, getOrCreateDeviceId, recordAuditUsage } from "../subscription.js";
@@ -365,7 +366,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
         setShowAiConsent(true);
         return;
       }
-      if (!manualResultText && !navigator.onLine) {
+      if (!manualResultText && !readOnlineStatus()) {
         toast.error("You're offline.");
         return;
       }

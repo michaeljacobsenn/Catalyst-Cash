@@ -1,4 +1,11 @@
-import type { AuditFormData, AuditFormDebt, BankAccount } from "../../../types/index.js";
+import type {
+  AuditFormData,
+  AuditFormDebt,
+  BankAccount,
+  InvestmentHoldings,
+  PlaidInvestmentAccount,
+} from "../../../types/index.js";
+import { getManualInvestmentSourceId, getPlaidInvestmentSourceId } from "../../investmentHoldings.js";
 import { toNumber, type MoneyInput } from "./utils.js";
 
 export interface InputDebt extends AuditFormDebt {
@@ -53,6 +60,18 @@ export interface InvestmentAuditField {
   override: boolean;
 }
 
+export interface InvestmentAuditSource {
+  id: string;
+  bucket: "roth" | "brokerage" | "k401";
+  label: string;
+  detail: string;
+  accent: string;
+  amount: number;
+  sourceType: "manual-balance" | "manual-holdings" | "plaid-account";
+  editable: boolean;
+  formKey?: "roth" | "brokerage" | "k401Balance";
+}
+
 export interface InvestmentTrackingConfig {
   trackRoth?: boolean;
   trackRothContributions?: boolean;
@@ -67,6 +86,12 @@ export interface InvestmentAutoValues {
 }
 
 export type InvestmentOverrideState = Record<InvestmentAuditField["key"], boolean>;
+
+const INVESTMENT_BUCKET_META = {
+  roth: { label: "Roth IRA", accent: "#8B5CF6", formKey: "roth" },
+  brokerage: { label: "Brokerage", accent: "#10B981", formKey: "brokerage" },
+  k401: { label: "401(k)", accent: "#3B82F6", formKey: "k401Balance" },
+} as const;
 
 export function buildCashAccountMeta(
   accounts: BankAccount[] = [],
@@ -235,6 +260,128 @@ export function buildInvestmentAuditFields({
   ];
 }
 
+export function buildInvestmentAuditSources({
+  trackingConfig,
+  holdingValues,
+  form,
+  holdings = {},
+  plaidInvestments = [],
+}: {
+  trackingConfig: InvestmentTrackingConfig & {
+    enableHoldings?: boolean;
+    holdings?: InvestmentHoldings;
+    plaidInvestments?: PlaidInvestmentAccount[];
+  };
+  holdingValues: InvestmentAutoValues;
+  form: Pick<InputFormState, "roth" | "brokerage" | "k401Balance">;
+  holdings?: InvestmentHoldings;
+  plaidInvestments?: PlaidInvestmentAccount[];
+}): InvestmentAuditSource[] {
+  const sources: InvestmentAuditSource[] = [];
+
+  (["roth", "brokerage", "k401"] as const).forEach((bucket) => {
+    const meta = INVESTMENT_BUCKET_META[bucket];
+    const enabled =
+      bucket === "roth"
+        ? Boolean(trackingConfig.trackRoth || trackingConfig.trackRothContributions)
+        : bucket === "brokerage"
+          ? Boolean(trackingConfig.trackBrokerage)
+          : Boolean(trackingConfig.track401k);
+    if (!enabled) return;
+
+    const manualInputValue = toNumber(form[meta.formKey]);
+    sources.push({
+      id: `manual-balance:${bucket}`,
+      bucket,
+      label: meta.label,
+      detail: "Manual balance",
+      accent: meta.accent,
+      amount: manualInputValue,
+      sourceType: "manual-balance",
+      editable: true,
+      formKey: meta.formKey,
+    });
+
+    const bucketHoldings = Array.isArray(holdings?.[bucket]) ? holdings[bucket] : [];
+    const holdingsTotal = Number(holdingValues[bucket] || 0);
+    if (trackingConfig.enableHoldings && bucketHoldings.length > 0 && holdingsTotal > 0) {
+      sources.push({
+        id: getManualInvestmentSourceId(bucket),
+        bucket,
+        label: meta.label,
+        detail: `${bucketHoldings.length} manual holding${bucketHoldings.length === 1 ? "" : "s"}`,
+        accent: meta.accent,
+        amount: holdingsTotal,
+        sourceType: "manual-holdings",
+        editable: false,
+      });
+    }
+
+    plaidInvestments
+      .filter((account) => account?.bucket === bucket && Number(account?._plaidBalance || 0) > 0)
+      .forEach((account) => {
+        const institution = String(account?.institution || "").trim();
+        const name = String(account?.name || meta.label).trim();
+        sources.push({
+          id: getPlaidInvestmentSourceId(account),
+          bucket,
+          label: name,
+          detail: institution ? `${institution} · linked account` : "Linked account",
+          accent: meta.accent,
+          amount: Number(account?._plaidBalance || 0),
+          sourceType: "plaid-account",
+          editable: false,
+        });
+      });
+  });
+
+  return sources;
+}
+
+export function splitInvestmentAuditSources(
+  sources: InvestmentAuditSource[] = [],
+  deletedSourceIds: Record<string, boolean> = {}
+) {
+  const visibleSources = sources.filter((source) => {
+    if (deletedSourceIds[source.id]) return false;
+    if (source.editable) return Math.abs(Number(source.amount || 0)) > 0.004;
+    return Math.abs(Number(source.amount || 0)) > 0.004;
+  });
+
+  return {
+    visibleSources,
+    hiddenSources: sources.filter((source) => !visibleSources.includes(source)),
+  };
+}
+
+export function getEffectiveInvestmentSourceValue(
+  source: InvestmentAuditSource,
+  form: InputFormState
+): number {
+  if (!source.editable || !source.formKey) return Number(source.amount || 0);
+  return toNumber(form[source.formKey]);
+}
+
+export function buildResolvedInvestmentSnapshotFromSources({
+  visibleInvestmentSources,
+  form,
+}: {
+  visibleInvestmentSources: InvestmentAuditSource[];
+  form: InputFormState;
+}) {
+  return visibleInvestmentSources.reduce(
+    (snapshot, source) => {
+      const value = getEffectiveInvestmentSourceValue(source, form);
+      if (value <= 0) return snapshot;
+      if (source.bucket === "roth") snapshot.roth += value;
+      if (source.bucket === "brokerage") snapshot.brokerage += value;
+      if (source.bucket === "k401") snapshot.k401Balance += value;
+      return snapshot;
+    },
+    { roth: 0, brokerage: 0, k401Balance: 0 }
+  );
+}
+
 export function splitInvestmentAuditFields(
   fields: InvestmentAuditField[] = [],
   deletedKeys: Partial<Record<InvestmentAuditField["key"], boolean>> = {}
@@ -288,7 +435,7 @@ export function getCurrentAuditTime(): string {
 
 export function buildAuditSubmitFormState({
   form,
-  visibleInvestmentFields,
+  visibleInvestmentSources,
   effectiveCheckingTotal,
   effectiveSavingsTotal,
   checkingAccountMeta,
@@ -303,7 +450,7 @@ export function buildAuditSubmitFormState({
   currentTime = getCurrentAuditTime(),
 }: {
   form: InputFormState;
-  visibleInvestmentFields: InvestmentAuditField[];
+  visibleInvestmentSources: InvestmentAuditSource[];
   effectiveCheckingTotal: number | null;
   effectiveSavingsTotal: number | null;
   checkingAccountMeta: CashAccountMeta;
@@ -317,15 +464,19 @@ export function buildAuditSubmitFormState({
   hiddenSavingsCount: number;
   currentTime?: string;
 }) {
-  const visibleInvestmentKeys = visibleInvestmentFields.map((field) => field.key);
-  const resolvedInvestmentSnapshot = buildResolvedInvestmentSnapshot({
-    visibleInvestmentFields,
+  const resolvedInvestmentSnapshot = buildResolvedInvestmentSnapshotFromSources({
+    visibleInvestmentSources,
     form,
   });
+  const visibleInvestmentKeys = [
+    resolvedInvestmentSnapshot.roth > 0 ? "roth" : null,
+    resolvedInvestmentSnapshot.brokerage > 0 ? "brokerage" : null,
+    resolvedInvestmentSnapshot.k401Balance > 0 ? "k401" : null,
+  ].filter((value): value is "roth" | "brokerage" | "k401" => Boolean(value));
   const sanitizedInvestments = {
-    roth: visibleInvestmentKeys.includes("roth") ? resolvedInvestmentSnapshot.roth : "",
-    brokerage: visibleInvestmentKeys.includes("brokerage") ? resolvedInvestmentSnapshot.brokerage : "",
-    k401Balance: visibleInvestmentKeys.includes("k401") ? resolvedInvestmentSnapshot.k401Balance : "",
+    roth: resolvedInvestmentSnapshot.roth > 0 ? Number(resolvedInvestmentSnapshot.roth.toFixed(2)) : "",
+    brokerage: resolvedInvestmentSnapshot.brokerage > 0 ? Number(resolvedInvestmentSnapshot.brokerage.toFixed(2)) : "",
+    k401Balance: resolvedInvestmentSnapshot.k401Balance > 0 ? Number(resolvedInvestmentSnapshot.k401Balance.toFixed(2)) : "",
   };
   const cashAccounts = buildAuditCashAccountSnapshot(visibleCheckingAccountMeta, visibleSavingsAccountMeta);
   const anyCheckingOverridden = visibleCheckingAccountMeta.accounts.some(
@@ -341,7 +492,21 @@ export function buildAuditSubmitFormState({
     savings: (effectiveSavingsTotal ?? "") as MoneyInput | "",
     ...sanitizedInvestments,
     includedInvestmentKeys: visibleInvestmentKeys,
-    investmentSnapshot: resolvedInvestmentSnapshot,
+    investmentSnapshot: sanitizedInvestments,
+    investments: visibleInvestmentSources
+      .map((source) => {
+        const amount = getEffectiveInvestmentSourceValue(source, form);
+        if (amount <= 0) return null;
+        return {
+          id: source.id,
+          name: source.label,
+          amount: Number(amount.toFixed(2)),
+          bucket: source.bucket,
+          type: source.sourceType,
+          sourceType: source.sourceType,
+        };
+      })
+      .filter((investment): investment is NonNullable<typeof investment> => investment !== null),
     cashAccounts: cashAccounts.map((account) => {
       const override = cashAccountOverrides[account.id];
       return override !== undefined

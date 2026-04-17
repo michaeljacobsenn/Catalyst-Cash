@@ -337,6 +337,8 @@ export interface AuditFormInvestment {
   symbol?: string;
   amount: number | string;
   type?: string;
+  bucket?: "roth" | "brokerage" | "k401" | "hsa" | "crypto";
+  sourceType?: string;
 }
 
 export interface AuditFormCashAccount {
@@ -754,6 +756,9 @@ export interface CatalystCashConfig extends CatalystCashConfigCore {
   checkingBalance?: number;
   vaultBalance?: number;
   holdings?: InvestmentHoldings;
+  deletedHoldingSymbols?: Partial<Record<InvestmentBucket, string[]>>;
+  excludedInvestmentSourceIds?: string[];
+  acknowledgedDuplicateKeys?: string[];
   enableHoldings?: boolean;
   _fromSetupWizard?: boolean;
 }

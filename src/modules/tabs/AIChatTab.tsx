@@ -26,6 +26,7 @@ import { AlertTriangle, ArrowDown, ArrowUpRight, CheckCircle2, MessageCircle, Sp
 import { log } from "../logger.js";
 import { extractMemoryTags, extractUserMemoryFacts } from "../memory.js";
 import { isLikelyNetworkError, toUserFacingRequestError } from "../networkErrors.js";
+import { useOnlineStatus } from "../onlineStatus.js";
 import { buildScrubber } from "../scrubber.js";
 import { checkChatQuota, isGatingEnforced, recordChatUsage, shouldShowGating } from "../subscription.js";
 import UiGlyph from "../UiGlyph.js";
@@ -198,6 +199,7 @@ export default memo(function AIChatTab({
   void _themeTick;
   void onBack;
   const { current, history, trendContext } = useAudit();
+  const online = useOnlineStatus();
   const { apiKey, aiProvider, aiModel, financialConfig, persona, personalRules, setAiModel } = useSettings();
   const { cards, renewals, bankAccounts } = usePortfolio();
   const { privacyMode } = useSecurity() as SecurityApi;
@@ -322,6 +324,11 @@ export default memo(function AIChatTab({
     async (text: string, extraPromptContext: Record<string, unknown> | null = null): Promise<void> => {
       const trimmedText = text?.trim();
       if (!trimmedText || isStreamingRef.current) return;
+      if (!online) {
+        setError("You're offline. Ask AI resumes when you reconnect. Existing chat history is still available.");
+        haptic.medium();
+        return;
+      }
 
       // ── Quota gate — check BEFORE adding message to state ──
       if (isGatingEnforced() && !chatQuota.allowed) {
@@ -633,6 +640,7 @@ export default memo(function AIChatTab({
       chatQuota,
       rememberFacts,
       setAiModel,
+      online,
     ]
   );
 
@@ -1291,6 +1299,34 @@ export default memo(function AIChatTab({
             </div>
           </div>
         )}
+        {!online && !error && (
+          <div
+            style={{
+              marginBottom: 10,
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 8,
+              padding: "10px 12px",
+              borderRadius: T.radius.lg,
+              background: `${T.status.amber}12`,
+              border: `1px solid ${T.status.amber}30`,
+            }}
+          >
+            <AlertTriangle
+              size={14}
+              color={T.status.amber}
+              style={{ flexShrink: 0, marginTop: 1 }}
+            />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: T.text.primary, marginBottom: 3 }}>
+                Ask AI offline
+              </div>
+              <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5 }}>
+                Existing chats still open locally, but new questions need an internet connection.
+              </div>
+            </div>
+          </div>
+        )}
         <form
           onSubmit={handleSubmit}
           style={{
@@ -1330,7 +1366,9 @@ export default memo(function AIChatTab({
                   ? assistantPhase === "replying"
                     ? "Catalyst is replying..."
                     : "Catalyst is thinking..."
-                  : "Ask about your finances..."
+                  : online
+                    ? "Ask about your finances..."
+                    : "Reconnect to ask AI..."
               }
               disabled={isStreaming}
               rows={1}
@@ -1386,27 +1424,27 @@ export default memo(function AIChatTab({
             ) : (
               <button
                 type="submit"
-                disabled={!input.trim()}
+                disabled={!input.trim() || !online}
                 style={{
                   width: 36,
                   height: 36,
                   borderRadius: "50%",
                   flexShrink: 0,
-                  border: `1px solid ${input.trim() ? `${T.accent.primary}24` : T.border.subtle}`,
-                  background: input.trim() ? `${T.accent.primary}14` : T.bg.card,
+                  border: `1px solid ${input.trim() && online ? `${T.accent.primary}24` : T.border.subtle}`,
+                  background: input.trim() && online ? `${T.accent.primary}14` : T.bg.card,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  cursor: input.trim() ? "pointer" : "default",
+                  cursor: input.trim() && online ? "pointer" : "default",
                   transition: "all .4s var(--spring-elastic)",
-                  transform: input.trim() ? "scale(1)" : "scale(0.9)",
-                  opacity: input.trim() ? 1 : 0.5,
+                  transform: input.trim() && online ? "scale(1)" : "scale(0.9)",
+                  opacity: input.trim() && online ? 1 : 0.5,
                 }}
               >
                 <ArrowUpRight
                   size={20}
                   strokeWidth={2.5}
-                  color={input.trim() ? T.accent.primary : T.text.muted}
+                  color={input.trim() && online ? T.accent.primary : T.text.muted}
                 />
               </button>
             )}

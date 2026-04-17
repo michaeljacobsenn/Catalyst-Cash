@@ -30,6 +30,7 @@
   import { useAudit } from "../contexts/AuditContext.js";
   import type { PersonaMode,SetFinancialConfig } from "../contexts/SettingsContext.js";
   import { haptic } from "../haptics.js";
+  import { useOnlineStatus } from "../onlineStatus.js";
   import { getPlaidAutoFill } from "../plaid/autoFill.js";
   import { isGatingEnforced } from "../subscription/gating.js";
   import {
@@ -48,18 +49,17 @@
   import { PendingChargesSection } from "./inputForm/PendingChargesSection";
   import {
     buildAuditSubmitFormState,
+    buildInvestmentAuditSources,
     buildCashAccountMeta,
     buildLiveDebtBalanceLookup,
-    buildInvestmentAuditFields,
     filterCashAccountMeta,
     getEffectiveDebtTotal,
     getEffectiveCashAccountTotal,
-    getEffectiveInvestmentFieldValue,
-    splitInvestmentAuditFields,
+    getEffectiveInvestmentSourceValue,
+    splitInvestmentAuditSources,
     type InputDebt,
     type InputFormState,
-    type InvestmentAuditField,
-    type InvestmentOverrideState,
+    type InvestmentAuditSource,
     type PendingCharge,
   } from "./inputForm/model.js";
   import {
@@ -87,7 +87,6 @@ interface HoldingValues {
   hsa: number;
 }
 
-type InvestmentFieldKey = InvestmentAuditField["key"];
 
 interface OverridePlaidState {
   checking: boolean;
@@ -210,6 +209,7 @@ export default function InputForm({
   setAiModel,
 }: InputFormProps) {
   const { error } = useAudit();
+  const online = useOnlineStatus();
   const initialToday = useMemo(() => new Date(), []);
   const typedFinancialConfig = getTypedFinancialConfig(financialConfig) as InputFormConfig;
   const setTypedFinancialConfig = setFinancialConfig as unknown as (
@@ -247,15 +247,15 @@ export default function InputForm({
 
   const [budgetActuals, setBudgetActuals] = useState<Record<string, string | number>>({});
   const [holdingValues, setHoldingValues] = useState<HoldingValues>({ roth: 0, k401: 0, brokerage: 0, crypto: 0, hsa: 0 });
-  const [overrideInvest, setOverrideInvest] = useState<InvestmentOverrideState>({ roth: false, brokerage: false, k401: false });
   const [overridePlaid, setOverridePlaid] = useState<OverridePlaidState>({ checking: false, vault: false, debts: {}, cashAccounts: {} });
   const [deletedDebtCardIds, setDeletedDebtCardIds] = useState<Record<string, boolean>>({});
   const [deletedCashAccountIds, setDeletedCashAccountIds] = useState<Record<string, boolean>>({});
-  const [deletedInvestmentKeys, setDeletedInvestmentKeys] = useState<Record<InvestmentFieldKey, boolean>>({
-    roth: false,
-    brokerage: false,
-    k401: false,
-  });
+  const [deletedInvestmentSourceIds, setDeletedInvestmentSourceIds] = useState<Record<string, boolean>>(
+    () =>
+      Object.fromEntries(
+        (typedFinancialConfig.excludedInvestmentSourceIds || []).map((sourceId) => [sourceId, true])
+      )
+  );
   const hydratedAuditSeedKeyRef = useRef<string | null>(null);
 
   const [auditQuota, setAuditQuota] = useState<AuditQuota | null>(null);
@@ -328,61 +328,26 @@ export default function InputForm({
   );
   const showCheckingAccount = activeConfig.trackChecking !== false;
   const showSavingsAccount = activeConfig.trackSavings !== false;
-  const plaidInvestmentTotals = useMemo(() => {
-    const plaidInvestments = activeConfig?.plaidInvestments || [];
-    const sumBucket = (bucket: "roth" | "brokerage" | "k401" | "hsa") =>
-      plaidInvestments
-        .filter((account) => account?.bucket === bucket)
-        .reduce((sum, account) => sum + (Number(account?._plaidBalance) || 0), 0);
-    return {
-      roth: sumBucket("roth"),
-      brokerage: sumBucket("brokerage"),
-      k401: sumBucket("k401"),
-      hsa: sumBucket("hsa"),
-    };
-  }, [activeConfig?.plaidInvestments]);
-
-  const investmentAutoValues = useMemo(
-    () => ({
-      roth:
-        activeConfig.enableHoldings && (activeConfig.holdings?.roth || []).length > 0 && holdingValues.roth > 0
-          ? holdingValues.roth
-          : plaidInvestmentTotals.roth,
-      brokerage:
-        activeConfig.enableHoldings && (activeConfig.holdings?.brokerage || []).length > 0 && holdingValues.brokerage > 0
-          ? holdingValues.brokerage
-          : plaidInvestmentTotals.brokerage,
-      k401:
-        activeConfig.enableHoldings && (activeConfig.holdings?.k401 || []).length > 0 && holdingValues.k401 > 0
-          ? holdingValues.k401
-          : plaidInvestmentTotals.k401,
-    }),
-    [
-      activeConfig.enableHoldings,
-      activeConfig.holdings,
-      holdingValues.brokerage,
-      holdingValues.k401,
-      holdingValues.roth,
-      plaidInvestmentTotals.brokerage,
-      plaidInvestmentTotals.k401,
-      plaidInvestmentTotals.roth,
-    ]
-  );
-  const investmentFields = useMemo(
+  const investmentSources = useMemo(
     () =>
-      buildInvestmentAuditFields({
+      buildInvestmentAuditSources({
         trackingConfig: activeConfig,
-        autoValues: investmentAutoValues,
+        holdingValues: {
+          roth: holdingValues.roth,
+          brokerage: holdingValues.brokerage,
+          k401: holdingValues.k401,
+        },
         form,
-        overrides: overrideInvest,
+        holdings: activeConfig.holdings ?? {},
+        plaidInvestments: activeConfig.plaidInvestments ?? [],
       }),
-    [activeConfig, form, investmentAutoValues, overrideInvest]
+    [activeConfig, form.brokerage, form.k401Balance, form.roth, holdingValues.brokerage, holdingValues.k401, holdingValues.roth]
   );
-  const { visibleFields: visibleInvestmentFields, hiddenFields: hiddenInvestmentFields } = useMemo(
-    () => splitInvestmentAuditFields(investmentFields, deletedInvestmentKeys),
-    [deletedInvestmentKeys, investmentFields]
+  const { visibleSources: visibleInvestmentSources, hiddenSources: hiddenInvestmentSources } = useMemo(
+    () => splitInvestmentAuditSources(investmentSources, deletedInvestmentSourceIds),
+    [deletedInvestmentSourceIds, investmentSources]
   );
-  const showInvestmentSection = visibleInvestmentFields.length > 0 || hiddenInvestmentFields.length > 0;
+  const showInvestmentSection = visibleInvestmentSources.length > 0 || hiddenInvestmentSources.length > 0;
   const hasConnectedCashInputs =
     visibleCheckingAccountMeta.count > 0 ||
     hiddenCheckingAccounts.length > 0 ||
@@ -414,8 +379,8 @@ export default function InputForm({
   );
   const visibleInvestmentTotal = useMemo(
     () =>
-      visibleInvestmentFields.reduce((sum, field) => sum + getEffectiveInvestmentFieldValue(field, form), 0),
-    [form.brokerage, form.k401Balance, form.roth, visibleInvestmentFields]
+      visibleInvestmentSources.reduce((sum, source) => sum + getEffectiveInvestmentSourceValue(source, form), 0),
+    [form.brokerage, form.k401Balance, form.roth, visibleInvestmentSources]
   );
   const liveDebtBalanceByCardId = useMemo(
     () => buildLiveDebtBalanceLookup(plaidData.debts),
@@ -594,13 +559,11 @@ export default function InputForm({
   const filledFields = [
     activeConfig.trackChecking !== false && effectiveCheckingTotal,
     activeConfig.trackSavings !== false && effectiveSavingsTotal,
-    visibleInvestmentFields.some((field) => field.key === "roth") && (form.roth || investmentAutoValues.roth),
-    visibleInvestmentFields.some((field) => field.key === "brokerage") && (form.brokerage || investmentAutoValues.brokerage),
-    visibleInvestmentFields.some((field) => field.key === "k401") && (form.k401Balance || activeConfig.k401Balance || investmentAutoValues.k401),
+    visibleInvestmentSources.length > 0 && visibleInvestmentTotal,
     form.debts.some(d => (d.name || d.cardId) && d.balance),
   ].filter(Boolean).length;
   const quotaExhausted = auditQuota && isGatingEnforced() && !auditQuota.allowed;
-  const canSubmit = filledFields >= 1 && !isLoading && !quotaExhausted;
+  const canSubmit = filledFields >= 1 && !isLoading && !quotaExhausted && online;
   const pendingChargeCount = (form.pendingCharges || []).filter(charge => toNumber(charge.amount) > 0).length;
   const activeBudgetCategoryCount = Object.values(budgetActuals || {}).filter(value => toNumber(value) > 0).length;
   const readySummary = `${filledFields} section${filledFields === 1 ? "" : "s"} ready`;
@@ -699,25 +662,20 @@ export default function InputForm({
       debts: [...p.debts, { cardId, name, balance: liveBalance !== undefined ? liveBalance : "" as MoneyInput }],
     }));
   };
-  const changeInvestmentField = (key: InvestmentFieldKey, value: MoneyInput) => {
-    if (key === "roth") s("roth", value);
-    else if (key === "brokerage") s("brokerage", value);
-    else s("k401Balance", value);
+  const changeInvestmentField = (key: "roth" | "brokerage" | "k401Balance", value: MoneyInput) => {
+    s(key, value as InputFormState[typeof key]);
   };
-  const enableInvestmentOverride = (key: InvestmentFieldKey) => {
-    setOverrideInvest((prev) => ({ ...prev, [key]: true }));
-  };
-  const removeInvestmentField = (key: InvestmentFieldKey) => {
+  const removeInvestmentSource = (id: string) => {
     haptic.light();
-    setDeletedInvestmentKeys((prev) => ({ ...prev, [key]: true }));
-    setOverrideInvest((prev) => ({ ...prev, [key]: false }));
+    setDeletedInvestmentSourceIds((prev) => ({ ...prev, [id]: true }));
   };
-  const restoreInvestmentField = (field: InvestmentAuditField) => {
+  const restoreInvestmentSource = (source: InvestmentAuditSource) => {
     haptic.light();
-    setDeletedInvestmentKeys((prev) => ({ ...prev, [field.key]: false }));
-    if (Math.abs(Number(field.autoValue || 0)) <= 0.004) {
-      setOverrideInvest((prev) => ({ ...prev, [field.key]: true }));
-    }
+    setDeletedInvestmentSourceIds((prev) => {
+      const next = { ...prev };
+      delete next[source.id];
+      return next;
+    });
   };
 
   return (
@@ -956,8 +914,8 @@ export default function InputForm({
 
         {showInvestmentSection && (
           <InvestmentBalancesSection
-            visibleFields={visibleInvestmentFields}
-            hiddenFields={hiddenInvestmentFields}
+            visibleSources={visibleInvestmentSources}
+            hiddenSources={hiddenInvestmentSources}
             totalBalance={visibleInvestmentTotal}
             formValues={{
               roth: form.roth,
@@ -965,9 +923,8 @@ export default function InputForm({
               k401Balance: form.k401Balance,
             }}
             onChangeField={changeInvestmentField}
-            onEnableOverride={enableInvestmentOverride}
-            onRemoveField={removeInvestmentField}
-            onRestoreField={restoreInvestmentField}
+            onRemoveSource={removeInvestmentSource}
+            onRestoreSource={restoreInvestmentSource}
           />
         )}
 
@@ -1315,8 +1272,34 @@ export default function InputForm({
         proEnabled={!!proEnabled}
       />
       <AuditQuotaNotice auditQuota={auditQuota} />
+      {!online && (
+        <div
+          style={{
+            marginBottom: 12,
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 10,
+            padding: "12px 14px",
+            borderRadius: T.radius.lg,
+            background: `${T.status.amber}12`,
+            border: `1px solid ${T.status.amber}35`,
+            boxShadow: T.shadow.card,
+          }}
+        >
+          <AlertTriangle size={16} color={T.status.amber} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: T.text.primary, marginBottom: 4, letterSpacing: "0.01em" }}>
+              Offline mode
+            </div>
+            <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5 }}>
+              You can review balances and stage your next audit now. Running the audit, Ask AI, and live sync resume when you reconnect.
+            </div>
+          </div>
+        </div>
+      )}
       <SubmitBar
         canSubmit={canSubmit}
+        offline={!online}
         isLoading={isLoading}
         isTestMode={isTestMode}
         setIsTestMode={setIsTestMode}
@@ -1324,7 +1307,7 @@ export default function InputForm({
           if (!canSubmit) return;
           const formWithAutoTime = buildAuditSubmitFormState({
             form,
-            visibleInvestmentFields,
+            visibleInvestmentSources,
             effectiveCheckingTotal,
             effectiveSavingsTotal,
             checkingAccountMeta,

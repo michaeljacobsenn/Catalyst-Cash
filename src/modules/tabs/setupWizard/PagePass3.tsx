@@ -11,6 +11,7 @@ import {
   getConnections,
   saveConnectionLinks,
 } from "../../plaid.js";
+import { reviewPlaidDuplicateCandidates } from "../../plaidDuplicateResolution.js";
 import { db, FaceId } from "../../utils.js";
 import type { ThemeMode } from "../../contexts/SettingsContext.js";
 import type {
@@ -78,13 +79,26 @@ export function PagePass3({
             const plaidInvestments = existingConfig.plaidInvestments || [];
             const cardCatalog = (await db.get("card-catalog")) || [];
 
-            const { newCards, newBankAccounts, newPlaidInvestments } = autoMatchAccounts(
+            const {
+              newCards,
+              newBankAccounts,
+              newPlaidInvestments,
+              duplicateCandidates = [],
+            } = autoMatchAccounts(
               connection,
               existingCards,
               existingBanks,
               cardCatalog,
               plaidInvestments
             );
+            const duplicateReview = reviewPlaidDuplicateCandidates({
+              connection,
+              newCards,
+              newBankAccounts,
+              duplicateCandidates,
+              cards: existingCards,
+              bankAccounts: existingBanks,
+            });
             await saveConnectionLinks(connection);
 
             function mergeUniqueById<T extends { id?: string | null }>(existing: T[] = [], incoming: T[] = []): T[] {
@@ -92,8 +106,8 @@ export function PagePass3({
               return [...existing, ...incoming.filter((item) => item.id && !ids.has(item.id))];
             }
 
-            const allCards = mergeUniqueById(existingCards, newCards);
-            const allBanks = mergeUniqueById(existingBanks, newBankAccounts);
+            const allCards = mergeUniqueById(existingCards, duplicateReview.newCards);
+            const allBanks = mergeUniqueById(existingBanks, duplicateReview.newBankAccounts);
             const allInvests = mergeUniqueById(plaidInvestments, newPlaidInvestments);
 
             await db.set("cards", allCards);
@@ -121,6 +135,11 @@ export function PagePass3({
               }
             } catch {
               // Non-fatal: account link succeeded, balances can refresh later.
+            }
+            if (duplicateReview.ambiguousCount > 0) {
+              getWindowToast()?.info?.(
+                `${duplicateReview.ambiguousCount} possible duplicate account${duplicateReview.ambiguousCount === 1 ? "" : "s"} were kept separate for review in Portfolio.`
+              );
             }
           } catch {
             // Surface only the top-level error toast below.
@@ -338,8 +357,8 @@ export function PagePass3({
           onChange={v => setThemeMode(v as ThemeMode)}
           options={[
             { value: "system", label: "System Auto" },
-            { value: "dark", label: "Dark Mode" },
             { value: "light", label: "Light Mode" },
+            { value: "dark", label: "Dark Mode" },
           ]}
         />
       </WizField>

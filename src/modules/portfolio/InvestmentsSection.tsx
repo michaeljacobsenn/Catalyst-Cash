@@ -5,6 +5,12 @@
   import { T } from "../constants.js";
   import { usePortfolio } from "../contexts/PortfolioContext.js";
   import { useSettings } from "../contexts/SettingsContext.js";
+  import {
+    getManualInvestmentSourceId,
+    getPlaidInvestmentSourceId,
+    markManualHoldingDeleted,
+    setInvestmentSourceExcluded,
+  } from "../investmentHoldings.js";
   import { ChevronDown,RefreshCw,Trash2,TrendingUp } from "../icons";
   import { Badge } from "../ui.js";
   import { fmt } from "../utils.js";
@@ -29,6 +35,10 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
     const { marketPrices, setMarketPrices } = usePortfolio();
 
     const holdings: InvestmentHoldings = financialConfig?.holdings || { roth: [], k401: [], brokerage: [], crypto: [], hsa: [] };
+    const excludedInvestmentSourceIds = useMemo(
+        () => new Set(financialConfig?.excludedInvestmentSourceIds || []),
+        [financialConfig?.excludedInvestmentSourceIds]
+    );
     const investmentSections: InvestmentSectionMeta[] = [
         { key: "roth", label: "Roth IRA", enabled: !!financialConfig?.trackRothContributions, color: T.accent.primary },
         { key: "k401", label: "401(k)", enabled: !!financialConfig?.track401k, color: T.status.blue },
@@ -132,16 +142,23 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
     }, [manualRefreshStatus.allowed, manualRefreshStatus.remainingMs]);
 
     const investTotalValue = useMemo(() => {
-        let total = 0;
-        (Object.values(holdings).flat().filter(Boolean) as InvestmentHolding[]).forEach((h) => {
-                const p = investPrices[h?.symbol];
-                if (p?.price) total += p.price * (Number(h.shares) || 0);
-        });
-        (financialConfig?.plaidInvestments || []).forEach((pi: PlaidInvestmentAccount) => {
-            if (pi._plaidBalance) total += pi._plaidBalance;
-        });
-        return total;
-    }, [holdings, investPrices, financialConfig?.plaidInvestments]);
+        return enabledInvestments.reduce((sum, section) => {
+            const items = holdings[section.key] || [];
+            const manualSourceExcluded = excludedInvestmentSourceIds.has(getManualInvestmentSourceId(section.key));
+            const manualValue = items.reduce((bucketSum, holding) => {
+                const price = investPrices[holding?.symbol]?.price || 0;
+                return bucketSum + (price * (Number(holding?.shares) || 0));
+            }, 0);
+            const plaidValue = (financialConfig?.plaidInvestments || [])
+                .filter((pi: PlaidInvestmentAccount) => pi.bucket === section.key)
+                .reduce((bucketSum, pi) => {
+                    const sourceId = getPlaidInvestmentSourceId(pi);
+                    if (excludedInvestmentSourceIds.has(sourceId)) return bucketSum;
+                    return bucketSum + (pi._plaidBalance || 0);
+                }, 0);
+            return sum + (manualSourceExcluded ? 0 : manualValue) + plaidValue;
+        }, 0);
+    }, [enabledInvestments, excludedInvestmentSourceIds, holdings, investPrices, financialConfig?.plaidInvestments]);
 
     if (enabledInvestments.length === 0) return null;
 
@@ -237,13 +254,20 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                             .map((holding, originalIndex) => ({ holding, originalIndex }))
                             .sort((left, right) => (left.holding.symbol || "").localeCompare(right.holding.symbol || ""));
                         const plaidItems = (financialConfig?.plaidInvestments || []).filter((pi: PlaidInvestmentAccount) => pi.bucket === key);
+                        const manualSourceId = getManualInvestmentSourceId(key);
+                        const manualExcluded = excludedInvestmentSourceIds.has(manualSourceId);
+                        const excludedPlaidCount = plaidItems.filter((pi) => excludedInvestmentSourceIds.has(getPlaidInvestmentSourceId(pi))).length;
 
                         const manualValue = items.reduce((s, h) => s + (investPrices[h.symbol]?.price || 0) * (Number(h.shares) || 0), 0);
-                        const plaidValue = plaidItems.reduce((s, pi) => s + (pi._plaidBalance || 0), 0);
-                        const sectionValue = manualValue + plaidValue;
+                        const plaidValue = plaidItems.reduce((s, pi) => {
+                            if (excludedInvestmentSourceIds.has(getPlaidInvestmentSourceId(pi))) return s;
+                            return s + (pi._plaidBalance || 0);
+                        }, 0);
+                        const sectionValue = (manualExcluded ? 0 : manualValue) + plaidValue;
 
                         const percentOfTotal = investTotalValue > 0 ? (sectionValue / investTotalValue) * 100 : 0;
                         const totalCount = items.length + plaidItems.length;
+                        const excludedSourceCount = (manualExcluded && items.length > 0 ? 1 : 0) + excludedPlaidCount;
                         const isCollapsed = collapsedInvest[key];
                         return (
                             <div
@@ -285,6 +309,14 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                         >
                                             {totalCount}
                                         </Badge>
+                                        {excludedSourceCount > 0 && (
+                                            <Badge
+                                                variant="outline"
+                                                style={{ fontSize: 8, color: T.status.amber, borderColor: `${T.status.amber}45`, padding: "1px 5px" }}
+                                            >
+                                                {excludedSourceCount} excluded
+                                            </Badge>
+                                        )}
                                     </div>
                                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                         {sectionValue > 0 && (
@@ -329,6 +361,10 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                         ) : (
                                             <>
                                                 {plaidItems.map((pi) => (
+                                                    (() => {
+                                                        const sourceId = getPlaidInvestmentSourceId(pi);
+                                                        const isExcluded = excludedInvestmentSourceIds.has(sourceId);
+                                                        return (
                                                     <div
                                                         key={pi.id}
                                                         style={{
@@ -337,6 +373,7 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                             alignItems: "center",
                                                             padding: "6px 0",
                                                             borderBottom: `1px solid ${T.border.subtle}`,
+                                                            opacity: isExcluded ? 0.58 : 1,
                                                         }}
                                                     >
                                                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -356,7 +393,9 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                                 <span style={{ fontSize: 11, fontWeight: 700, color: T.text.primary }}>
                                                                     {pi.name}
                                                                 </span>
-                                                                <span style={{ fontSize: 9, color: T.text.dim }}>{pi.institution}</span>
+                                                                <span style={{ fontSize: 9, color: T.text.dim }}>
+                                                                    {pi.institution}{isExcluded ? " · excluded from totals" : ""}
+                                                                </span>
                                                             </div>
                                                         </div>
                                                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -373,9 +412,89 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                                 }}
                                                                 title="Synced with Plaid"
                                                             />
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    setFinancialConfig((prev: CatalystCashConfig) =>
+                                                                        setInvestmentSourceExcluded(prev, sourceId, !isExcluded) as CatalystCashConfig
+                                                                    );
+                                                                }}
+                                                                style={{
+                                                                    minWidth: 74,
+                                                                    height: 24,
+                                                                    borderRadius: 999,
+                                                                    border: `1px solid ${isExcluded ? `${T.status.amber}55` : `${color}38`}`,
+                                                                    background: isExcluded ? `${T.status.amber}12` : `${color}10`,
+                                                                    color: isExcluded ? T.status.amber : color,
+                                                                    cursor: "pointer",
+                                                                    fontSize: 9,
+                                                                    fontWeight: 800,
+                                                                    letterSpacing: "0.04em",
+                                                                    textTransform: "uppercase",
+                                                                    padding: "0 8px",
+                                                                }}
+                                                            >
+                                                                {isExcluded ? "Excluded" : "Counted"}
+                                                            </button>
                                                         </div>
                                                     </div>
+                                                        );
+                                                    })()
                                                 ))}
+                                                {sortedManualItems.length > 0 && (
+                                                    <div
+                                                        style={{
+                                                            display: "flex",
+                                                            justifyContent: "space-between",
+                                                            alignItems: "center",
+                                                            padding: "8px 4px",
+                                                            borderBottom: `1px solid ${T.border.subtle}`,
+                                                            opacity: manualExcluded ? 0.58 : 1,
+                                                        }}
+                                                    >
+                                                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                                                            <span style={{ fontSize: 11, fontWeight: 700, color: T.text.primary }}>
+                                                                Manual holdings
+                                                            </span>
+                                                            <span style={{ fontSize: 9, color: T.text.dim }}>
+                                                                {sortedManualItems.length} {sortedManualItems.length === 1 ? "holding" : "holdings"}{manualExcluded ? " · excluded from totals" : ""}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                                            <Mono size={11} weight={800} color={manualExcluded ? T.text.dim : color}>
+                                                                {fmt(manualValue)}
+                                                            </Mono>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    setFinancialConfig((prev: CatalystCashConfig) =>
+                                                                        setInvestmentSourceExcluded(prev, manualSourceId, !manualExcluded) as CatalystCashConfig
+                                                                    );
+                                                                }}
+                                                                style={{
+                                                                    minWidth: 74,
+                                                                    height: 24,
+                                                                    borderRadius: 999,
+                                                                    border: `1px solid ${manualExcluded ? `${T.status.amber}55` : `${color}38`}`,
+                                                                    background: manualExcluded ? `${T.status.amber}12` : `${color}10`,
+                                                                    color: manualExcluded ? T.status.amber : color,
+                                                                    cursor: "pointer",
+                                                                    fontSize: 9,
+                                                                    fontWeight: 800,
+                                                                    letterSpacing: "0.04em",
+                                                                    textTransform: "uppercase",
+                                                                    padding: "0 8px",
+                                                                }}
+                                                            >
+                                                                {manualExcluded ? "Excluded" : "Counted"}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                                 {sortedManualItems.map(({ holding: h, originalIndex }, i) => {
                                                         const price = investPrices[h.symbol];
                                                         return (
@@ -383,6 +502,7 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                                 key={`${h.symbol}-${originalIndex}`}
                                                                 style={{
                                                                     borderBottom: i === sortedManualItems.length - 1 ? "none" : `1px solid ${T.border.subtle}`,
+                                                                    opacity: manualExcluded ? 0.58 : 1,
                                                                 }}
                                                             >
                                                                 <div
@@ -438,10 +558,10 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                                                         setFinancialConfig((prev: CatalystCashConfig) => {
                                                                                             const cur = prev?.holdings || {};
                                                                                             const updated = (cur[key] || []).filter((_, idx) => idx !== originalIndex);
-                                                                                            return {
+                                                                                            return markManualHoldingDeleted({
                                                                                                 ...prev,
                                                                                                 holdings: { ...cur, [key]: updated },
-                                                                                            };
+                                                                                            }, key, h.symbol) as CatalystCashConfig;
                                                                                         });
                                                                                     }
                                                                                 }}

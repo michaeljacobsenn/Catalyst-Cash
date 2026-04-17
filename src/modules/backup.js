@@ -12,6 +12,7 @@ import {
 import { normalizeBudgetLines } from "./budgetBuckets.js";
 import { decrypt, encrypt, isEncrypted } from "./crypto.js";
 import { ensureConnectionAccountsPresent, materializeManualFallbackForConnections } from "./plaid.js";
+import { sanitizeManualInvestmentHoldings } from "./investmentHoldings.js";
 import { FULL_PROFILE_QA_ACTIVE_KEY, shouldRecoverFromFullProfileQaSeed } from "./qaSeed.js";
 import { relinkRenewalPaymentMethods } from "./renewalPaymentLinking.js";
 import { isSafeImportKey, isSecuritySensitiveKey, sanitizePlaidForBackup } from "./securityKeys.js";
@@ -164,7 +165,14 @@ export async function restoreSanitizedPlaidConnections(sanitizedPlaid = []) {
   let placeholderInvestmentCount = 0;
 
   for (const connection of reconnectConnections) {
-    const hydrated = ensureConnectionAccountsPresent(connection, cards, bankAccounts, null, plaidInvestments);
+    const hydrated = ensureConnectionAccountsPresent(
+      connection,
+      cards,
+      bankAccounts,
+      null,
+      plaidInvestments,
+      { allowLikelyDuplicates: false }
+    );
     cards = hydrated.updatedCards;
     bankAccounts = hydrated.updatedBankAccounts;
     plaidInvestments = hydrated.updatedPlaidInvestments;
@@ -188,7 +196,8 @@ export async function restoreSanitizedPlaidConnections(sanitizedPlaid = []) {
   await db.set("card-portfolio", cards);
   await db.set("bank-accounts", bankAccounts);
   if (placeholderInvestmentCount > 0 || Array.isArray(financialConfig.plaidInvestments)) {
-    await db.set("financial-config", { ...financialConfig, plaidInvestments });
+    const latestFinancialConfig = ((await db.get("financial-config")) || financialConfig || {});
+    await db.set("financial-config", sanitizeManualInvestmentHoldings({ ...latestFinancialConfig, plaidInvestments }));
   }
 
   const renewals = (await db.get("renewals")) || [];

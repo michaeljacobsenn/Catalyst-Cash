@@ -4,6 +4,12 @@
 // Pure function: no React hooks or state.
 // ═══════════════════════════════════════════════════════════════
   import { resolveCardLabel } from "./cards.js";
+  import {
+    getManualInvestmentSourceId,
+    getPlaidInvestmentSourceId,
+    getPreferredInvestmentBucketValue,
+    isInvestmentSourceExcluded,
+  } from "./investmentHoldings.js";
 
 /**
  * Build the weekly snapshot message string for the AI.
@@ -37,11 +43,24 @@ export function buildSnapshotMessage({
   computedStrategy,
 }) {
   const plaidInvestments = activeConfig?.plaidInvestments || [];
+  const excludedInvestmentSourceIds = activeConfig?.excludedInvestmentSourceIds || [];
+  const selectedInvestments = Array.isArray(form?.investments) ? form.investments : [];
   const allRecurringItems = [...(Array.isArray(renewals) ? renewals : []), ...(Array.isArray(cardAnnualFees) ? cardAnnualFees : [])];
   const plaidBucketTotal = (bucket) =>
     plaidInvestments
-      .filter((account) => account?.bucket === bucket)
+      .filter((account) => account?.bucket === bucket && !isInvestmentSourceExcluded(excludedInvestmentSourceIds, getPlaidInvestmentSourceId(account)))
       .reduce((sum, account) => sum + (Number(account?._plaidBalance) || 0), 0);
+  const manualBucketValue = (bucket) =>
+    isInvestmentSourceExcluded(excludedInvestmentSourceIds, getManualInvestmentSourceId(bucket))
+      ? 0
+      : Number(holdingValues?.[bucket] || 0);
+  const selectedInvestmentTotal = (bucket) =>
+    selectedInvestments
+      .filter((investment) => investment?.bucket === bucket)
+      .reduce((sum, investment) => sum + (Number(investment?.amount) || 0), 0);
+  const hasSelectedInvestmentSources = selectedInvestments.some((investment) =>
+    investment?.bucket === "roth" || investment?.bucket === "brokerage" || investment?.bucket === "k401"
+  );
   const toNum = v => {
     const n = parseFloat((v || "").toString().replace(/,/g, ""));
     return isNaN(n) ? 0 : n;
@@ -189,53 +208,49 @@ export function buildSnapshotMessage({
   if (activeConfig.trackHabits !== false)
     headerLines.push(`${activeConfig.habitName || "Habit"} Count: ${form.habitCount}`);
   // Investment values: use live holdingValues when auto-tracking and override is OFF
-  const effectiveRoth =
-    activeConfig.enableHoldings &&
-    (activeConfig.holdings?.roth || []).length > 0 &&
-    !activeConfig.overrideRothValue &&
-    holdingValues.roth > 0
-      ? holdingValues.roth.toFixed(2)
-      : plaidBucketTotal("roth") > 0 && !activeConfig.overrideRothValue
-        ? plaidBucketTotal("roth").toFixed(2)
-        : form.roth;
-  const effectiveBrokerage =
-    activeConfig.enableHoldings &&
-    (activeConfig.holdings?.brokerage || []).length > 0 &&
-    !activeConfig.overrideBrokerageValue &&
-    holdingValues.brokerage > 0
-      ? holdingValues.brokerage.toFixed(2)
-      : plaidBucketTotal("brokerage") > 0 && !activeConfig.overrideBrokerageValue
-        ? plaidBucketTotal("brokerage").toFixed(2)
-        : form.brokerage;
-  const effectiveK401 =
-    activeConfig.enableHoldings &&
-    (activeConfig.holdings?.k401 || []).length > 0 &&
-    !activeConfig.override401kValue &&
-    holdingValues.k401 > 0
-      ? holdingValues.k401.toFixed(2)
-      : plaidBucketTotal("k401") > 0 && !activeConfig.override401kValue
-        ? plaidBucketTotal("k401").toFixed(2)
-        : form.k401Balance || activeConfig.k401Balance || 0;
+  const preferredRoth = getPreferredInvestmentBucketValue({ manualValue: manualBucketValue("roth"), plaidValue: plaidBucketTotal("roth") });
+  const preferredBrokerage = getPreferredInvestmentBucketValue({ manualValue: manualBucketValue("brokerage"), plaidValue: plaidBucketTotal("brokerage") });
+  const preferredK401 = getPreferredInvestmentBucketValue({ manualValue: manualBucketValue("k401"), plaidValue: plaidBucketTotal("k401") });
+  const selectedRoth = selectedInvestmentTotal("roth");
+  const selectedBrokerage = selectedInvestmentTotal("brokerage");
+  const selectedK401 = selectedInvestmentTotal("k401");
+  const effectiveRoth = hasSelectedInvestmentSources
+    ? (selectedRoth > 0 ? selectedRoth.toFixed(2) : "")
+    : !activeConfig.overrideRothValue && preferredRoth.value > 0
+      ? preferredRoth.value.toFixed(2)
+      : form.roth;
+  const effectiveBrokerage = hasSelectedInvestmentSources
+    ? (selectedBrokerage > 0 ? selectedBrokerage.toFixed(2) : "")
+    : !activeConfig.overrideBrokerageValue && preferredBrokerage.value > 0
+      ? preferredBrokerage.value.toFixed(2)
+      : form.brokerage;
+  const effectiveK401 = hasSelectedInvestmentSources
+    ? (selectedK401 > 0 ? selectedK401.toFixed(2) : "")
+    : !activeConfig.override401kValue && preferredK401.value > 0
+      ? preferredK401.value.toFixed(2)
+      : form.k401Balance || activeConfig.k401Balance || 0;
   if (effectiveRoth) {
-    const rothIsLive = (activeConfig.enableHoldings && !activeConfig.overrideRothValue && holdingValues.roth > 0) || (plaidBucketTotal("roth") > 0 && !activeConfig.overrideRothValue);
+    const rothIsSelected = hasSelectedInvestmentSources;
+    const rothIsLive = !rothIsSelected && !activeConfig.overrideRothValue && preferredRoth.value > 0;
     const rothFormVal = Number(form.roth) || 0;
     const rothEffVal = Number(effectiveRoth) || 0;
     const rothDivergence = rothIsLive && rothFormVal > 0 && Math.abs(rothEffVal - rothFormVal) > 1
       ? ` [NOTE: live value $${rothEffVal.toFixed(2)} differs from user-entered $${rothFormVal.toFixed(2)} by $${Math.abs(rothEffVal - rothFormVal).toFixed(2)} — use the live value but acknowledge the discrepancy]`
       : "";
     headerLines.push(
-      `Roth IRA: $${effectiveRoth}${rothIsLive ? " (live)" : ""}${rothDivergence}`
+      `Roth IRA: $${effectiveRoth}${rothIsSelected ? " (selected)" : rothIsLive ? " (live)" : ""}${rothDivergence}`
     );
   }
   if (activeConfig.trackBrokerage && effectiveBrokerage) {
-    const brokIsLive = (activeConfig.enableHoldings && !activeConfig.overrideBrokerageValue && holdingValues.brokerage > 0) || (plaidBucketTotal("brokerage") > 0 && !activeConfig.overrideBrokerageValue);
+    const brokIsSelected = hasSelectedInvestmentSources;
+    const brokIsLive = !brokIsSelected && !activeConfig.overrideBrokerageValue && preferredBrokerage.value > 0;
     const brokFormVal = Number(form.brokerage) || 0;
     const brokEffVal = Number(effectiveBrokerage) || 0;
     const brokDivergence = brokIsLive && brokFormVal > 0 && Math.abs(brokEffVal - brokFormVal) > 1
       ? ` [NOTE: live value $${brokEffVal.toFixed(2)} differs from user-entered $${brokFormVal.toFixed(2)} by $${Math.abs(brokEffVal - brokFormVal).toFixed(2)} — use the live value but acknowledge the discrepancy]`
       : "";
     headerLines.push(
-      `Brokerage: $${effectiveBrokerage}${brokIsLive ? " (live)" : ""}${brokDivergence}`
+      `Brokerage: $${effectiveBrokerage}${brokIsSelected ? " (selected)" : brokIsLive ? " (live)" : ""}${brokDivergence}`
     );
   }
   if (activeConfig.trackRothContributions) {
@@ -244,23 +259,19 @@ export function buildSnapshotMessage({
   }
   if (activeConfig.track401k) {
     headerLines.push(
-      `401k Balance: $${effectiveK401}${((activeConfig.enableHoldings && !activeConfig.override401kValue && holdingValues.k401 > 0) || (plaidBucketTotal("k401") > 0 && !activeConfig.override401kValue)) ? " (live)" : ""}`
+      `401k Balance: $${effectiveK401}${hasSelectedInvestmentSources ? " (selected)" : (!activeConfig.override401kValue && preferredK401.value > 0) ? " (live)" : ""}`
     );
     headerLines.push(`401k YTD Contributed: $${activeConfig.k401ContributedYTD || 0}`);
     headerLines.push(`401k Annual Limit: $${activeConfig.k401AnnualLimit || 0}`);
   }
   if (activeConfig.trackHSA) {
+    const preferredHsa = getPreferredInvestmentBucketValue({ manualValue: manualBucketValue("hsa"), plaidValue: plaidBucketTotal("hsa") });
     const effectiveHSA =
-      activeConfig.enableHoldings &&
-      (activeConfig.holdings?.hsa || []).length > 0 &&
-      !activeConfig.overrideHSAValue &&
-      holdingValues.hsa > 0
-        ? holdingValues.hsa.toFixed(2)
-        : plaidBucketTotal("hsa") > 0 && !activeConfig.overrideHSAValue
-          ? plaidBucketTotal("hsa").toFixed(2)
-          : activeConfig.hsaBalance || 0;
+      !activeConfig.overrideHSAValue && preferredHsa.value > 0
+        ? preferredHsa.value.toFixed(2)
+        : activeConfig.hsaBalance || 0;
     headerLines.push(
-      `HSA Balance: $${effectiveHSA}${((activeConfig.enableHoldings && !activeConfig.overrideHSAValue && holdingValues.hsa > 0) || (plaidBucketTotal("hsa") > 0 && !activeConfig.overrideHSAValue)) ? " (live)" : ""}`
+      `HSA Balance: $${effectiveHSA}${(!activeConfig.overrideHSAValue && preferredHsa.value > 0) ? " (live)" : ""}`
     );
     headerLines.push(`HSA YTD Contributed: $${activeConfig.hsaContributedYTD || 0}`);
     headerLines.push(`HSA Annual Limit: $${activeConfig.hsaAnnualLimit || 0}`);

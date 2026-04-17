@@ -13,8 +13,10 @@ import {
   } from "react";
   import type { CatalystCashConfig } from "../../types/index.js";
   import { setActiveCurrencyCode } from "../currency.js";
+  import { sanitizeManualInvestmentHoldings } from "../investmentHoldings.js";
   import { log } from "../logger.js";
   import { cancelPaydayReminder,getNotificationPermission,requestNotificationPermission,schedulePaydayReminder } from "../notifications.js";
+  import { normalizeAcknowledgedDuplicateKeys } from "../plaidDuplicateResolution.js";
   import { DEFAULT_MODEL_ID,DEFAULT_PROVIDER_ID,getProvider } from "../providers.js";
   import { getSecretStorageStatus,migrateToSecureItem } from "../secureStore.js";
   import { getCurrentTier,getPreferredModelForTier,normalizeModelForTier } from "../subscription.js";
@@ -228,6 +230,9 @@ export const DEFAULT_FINANCIAL_CONFIG: CatalystCashConfig = {
   insuranceDeductibles: [],
   bigTicketItems: [],
   plaidInvestments: [],
+  deletedHoldingSymbols: {},
+  excludedInvestmentSourceIds: [],
+  acknowledgedDuplicateKeys: [],
   currencyCode: "USD",
   stateCode: "",
   birthYear: null,
@@ -241,21 +246,25 @@ function financialConfigReducer(
   state: CatalystCashConfig,
   action: FinancialConfigAction | undefined
 ): CatalystCashConfig {
+  const normalizeConfig = (next: CatalystCashConfig) => ({
+    ...sanitizeManualInvestmentHoldings(next),
+    acknowledgedDuplicateKeys: normalizeAcknowledgedDuplicateKeys(next?.acknowledgedDuplicateKeys),
+  }) as CatalystCashConfig;
   if (!action) return state;
   if (action.type === "SET_FIELD") {
-    return { ...state, [action.field]: action.value };
+    return normalizeConfig({ ...state, [action.field]: action.value } as CatalystCashConfig);
   }
   if (action.type === "MERGE") {
-    return { ...state, ...action.payload };
+    return normalizeConfig({ ...state, ...action.payload } as CatalystCashConfig);
   }
   if (action.type === "REPLACE") {
-    return { ...action.payload };
+    return normalizeConfig({ ...action.payload });
   }
   if (action.type === "FUNCTIONAL_UPDATE") {
-    return action.updater(state);
+    return normalizeConfig(action.updater(state));
   }
   if (action.type === "RESET_YTD") {
-    return { ...state, rothContributedYTD: 0, k401ContributedYTD: 0 };
+    return normalizeConfig({ ...state, rothContributedYTD: 0, k401ContributedYTD: 0 });
   }
   return state;
 }

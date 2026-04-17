@@ -9,6 +9,7 @@
   import { normalizeAppError } from "./appErrors.js";
   import { haptic } from "./haptics.js";
   import { log } from "./logger.js";
+  import { readOnlineStatus } from "./onlineStatus.js";
   import {
     PLAID_MANUAL_SYNC_COOLDOWNS,
     applyBalanceSync,
@@ -423,7 +424,7 @@ export function usePlaidSync({
     if (_isSyncing) return;
 
     // Offline guard — avoid cryptic network errors
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
+    if (!readOnlineStatus()) {
       if (!background && window.toast) window.toast.info("You're offline — connect to the internet to sync.");
       return;
     }
@@ -597,7 +598,8 @@ export function usePlaidSync({
             allCards,
             allBanks,
             cardCatalog,
-            allInvests
+            allInvests,
+            { allowLikelyDuplicates: false }
           );
           restoredCount +=
             hydratedState.importedCards +

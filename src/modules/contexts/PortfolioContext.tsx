@@ -17,7 +17,8 @@
   } from "../../types/index.js";
   import { ensureCardIds,getCardLabel } from "../cards.js";
   import { loadCardCatalog } from "../issuerCards.js";
-  import { log } from "../logger.js";
+import { log } from "../logger.js";
+import { sanitizeManualInvestmentHoldings } from "../investmentHoldings.js";
   import { fetchMarketPrices } from "../marketData.js";
   import { relinkRenewalPaymentMethods } from "../renewalPaymentLinking.js";
   import {
@@ -100,7 +101,8 @@ async function rebuildPlaidLinkedPortfolio(
       nextCards,
       nextBankAccounts,
       cardCatalog as unknown as null | undefined,
-      []
+      [],
+      { allowLikelyDuplicates: false }
     );
     if (seedMatch.newCards.length > 0) {
       nextCards = mergeUniqueById(nextCards, seedMatch.newCards);
@@ -119,7 +121,8 @@ async function rebuildPlaidLinkedPortfolio(
         nextCards,
         nextBankAccounts,
         cardCatalog as unknown as null | undefined,
-        []
+        [],
+        { allowLikelyDuplicates: false }
       );
       if (refreshedMatch.newCards.length > 0) {
         nextCards = mergeUniqueById(nextCards, refreshedMatch.newCards);
@@ -294,7 +297,8 @@ export function PortfolioProvider({ children }: PortfolioProviderProps) {
               activeCards,
               activeBankAccounts,
               null,
-              plaidInvestments
+              plaidInvestments,
+              { allowLikelyDuplicates: false }
             );
             activeCards = hydrated.updatedCards;
             activeBankAccounts = hydrated.updatedBankAccounts;
@@ -304,7 +308,8 @@ export function PortfolioProvider({ children }: PortfolioProviderProps) {
           if (activeCards.length !== preReconnectCardCount) cardsChanged = true;
           if (activeBankAccounts.length !== preReconnectBankCount) banksChanged = true;
           if (reconnectConnections.length > 0) {
-            await db.set("financial-config", { ...(financialConfig || {}), plaidInvestments });
+            const latestFinancialConfig = ((await db.get("financial-config")) || financialConfig || {});
+            await db.set("financial-config", sanitizeManualInvestmentHoldings({ ...latestFinancialConfig, plaidInvestments }));
           }
         }
       }

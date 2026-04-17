@@ -82,6 +82,135 @@ describe("Plaid matching", () => {
     expect(matched).toHaveLength(1);
     expect(connection.accounts[0].linkedCardId).toBe("card_existing");
   });
+
+  it("keeps name-only card overlaps separate and flags them for duplicate review", () => {
+    const connection = {
+      id: "item_1",
+      institutionName: "American Express",
+      accounts: [
+        {
+          plaidAccountId: "acct_123",
+          name: "Blue Cash Everyday",
+          officialName: "Blue Cash Everyday",
+          type: "credit",
+          subtype: "credit card",
+          mask: null,
+          linkedCardId: null,
+          linkedBankAccountId: null,
+          balance: null,
+        },
+      ],
+    };
+
+    const cards = [
+      {
+        id: "card_existing",
+        institution: "American Express",
+        name: "Blue Cash Everyday Card",
+        nickname: "",
+        notes: "",
+      },
+    ];
+
+    const { newCards, duplicateCandidates, matched } = autoMatchAccounts(connection, cards, [], null);
+    expect(newCards).toHaveLength(1);
+    expect(matched).toHaveLength(1);
+    expect(connection.accounts[0].linkedCardId).toBe("plaid_acct_123");
+    expect(duplicateCandidates).toEqual([
+      expect.objectContaining({
+        kind: "card",
+        plaidAccountId: "acct_123",
+        importedId: "plaid_acct_123",
+        existingIds: ["card_existing"],
+      }),
+    ]);
+  });
+
+  it("keeps likely bank overlaps separate and flags them for duplicate review", () => {
+    const connection = {
+      id: "item_1",
+      institutionName: "Ally Bank",
+      accounts: [
+        {
+          plaidAccountId: "acct_ally_1",
+          name: "High Yield Savings",
+          officialName: "High Yield Savings",
+          type: "depository",
+          subtype: "savings",
+          mask: "1234",
+          linkedCardId: null,
+          linkedBankAccountId: null,
+          balance: { current: 500 },
+        },
+      ],
+    };
+
+    const bankAccounts = [
+      {
+        id: "bank_existing",
+        bank: "Ally",
+        accountType: "savings",
+        name: "High Yield Savings Account",
+      },
+    ];
+
+    const { newBankAccounts, duplicateCandidates, matched } = autoMatchAccounts(connection, [], bankAccounts, null);
+    expect(newBankAccounts).toHaveLength(1);
+    expect(matched).toHaveLength(1);
+    expect(connection.accounts[0].linkedBankAccountId).toBe("plaid_acct_ally_1");
+    expect(duplicateCandidates).toEqual([
+      expect.objectContaining({
+        kind: "bank",
+        plaidAccountId: "acct_ally_1",
+        importedId: "plaid_acct_ally_1",
+        existingIds: ["bank_existing"],
+      }),
+    ]);
+  });
+
+  it("does not materialize likely duplicates during non-interactive hydration", () => {
+    const connection = {
+      id: "item_1",
+      institutionName: "American Express",
+      accounts: [
+        {
+          plaidAccountId: "acct_123",
+          name: "Blue Cash Everyday",
+          officialName: "Blue Cash Everyday",
+          type: "credit",
+          subtype: "credit card",
+          mask: null,
+          linkedCardId: null,
+          linkedBankAccountId: null,
+          balance: null,
+        },
+      ],
+    };
+
+    const cards = [
+      {
+        id: "card_existing",
+        institution: "American Express",
+        name: "Blue Cash Everyday Card",
+        nickname: "",
+        notes: "",
+      },
+    ];
+
+    const { newCards, matched, unmatched, duplicateCandidates } = autoMatchAccounts(
+      connection,
+      cards,
+      [],
+      null,
+      [],
+      { allowLikelyDuplicates: false }
+    );
+    expect(newCards).toHaveLength(0);
+    expect(matched).toHaveLength(0);
+    expect(unmatched).toHaveLength(1);
+    expect(duplicateCandidates).toHaveLength(0);
+    expect(connection.accounts[0].linkedCardId).toBeNull();
+  });
 });
 
 describe("Plaid free live-connection access", () => {

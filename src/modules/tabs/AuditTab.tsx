@@ -15,6 +15,7 @@
     Trash2,
     Zap
   } from "../icons";
+  import { useOnlineStatus } from "../onlineStatus.js";
   import { buildPromoLine } from "../planCatalog.js";
   import { shouldShowGating } from "../subscription.js";
   import UiGlyph from "../UiGlyph.js";
@@ -97,6 +98,7 @@ const colorFor = c =>
 export default memo(function AuditTab({ proEnabled = false, privacyMode: _privacyModeTick = false, themeTick: _themeTick = 0, toast, onDemoAudit }: AuditTabProps) {
   void _privacyModeTick;
   void _themeTick;
+  const online = useOnlineStatus();
   const { current, history: audits, deleteHistoryItem: onDelete, quota } = useAudit();
   const { navTo, setResultsBackTarget } = useNavigation();
   const [showPaywall, setShowPaywall] = useState(false);
@@ -232,8 +234,14 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
           }}
         >
           <Plus size={18} strokeWidth={2.5} />
-          Run New Audit
+          {online ? "Run New Audit" : "Prepare Next Audit"}
         </button>
+
+        {!online && (
+          <div style={{ marginTop: 8, textAlign: "center", fontSize: 11, color: T.text.secondary, lineHeight: 1.5 }}>
+            You can still review history and stage your next audit offline. Running the audit and Ask AI resume when internet returns.
+          </div>
+        )}
 
         {/* quota + demo — contextual, directly below CTA */}
         {(remaining != null && limit != null) || typeof onDemoAudit === "function" ? (

@@ -4,7 +4,8 @@ import { useEffect,useState } from "react";
   import { T } from "../constants.js";
   import type { SetFinancialConfig } from "../contexts/SettingsContext.js";
   import { Building2,Plus,RefreshCw,Unplug } from "../icons";
-  import { log } from "../logger.js";
+import { log } from "../logger.js";
+import { reviewPlaidDuplicateCandidates } from "../plaidDuplicateResolution.js";
   import {
     applyBalanceSync,
     connectBank,
@@ -175,12 +176,11 @@ export default function PlaidSection({
     try {
       const plaidInvestments = financialConfig?.plaidInvestments || [];
       const {
-        updatedCards: allCards,
-        updatedBankAccounts: allBanks,
+        updatedCards: hydratedCards,
+        updatedBankAccounts: hydratedBanks,
         updatedPlaidInvestments: allInvests,
-        importedCards,
-        importedBankAccounts,
         importedPlaidInvestments,
+        duplicateCandidates = [],
       } = ensureConnectionAccountsPresent(
         connection,
         cards,
@@ -191,10 +191,26 @@ export default function PlaidSection({
         updatedCards: PortfolioCard[];
         updatedBankAccounts: BankAccount[];
         updatedPlaidInvestments: PlaidInvestmentAccount[];
-        importedCards: number;
-        importedBankAccounts: number;
         importedPlaidInvestments: number;
+        duplicateCandidates: Array<{
+          kind: "card" | "bank";
+          plaidAccountId: string;
+          importedId: string;
+          importedLabel: string;
+          institution: string;
+          existingIds: string[];
+        }>;
       };
+      const duplicateReview = reviewPlaidDuplicateCandidates({
+        connection,
+        newCards: hydratedCards.filter((card) => !cards.some((existing) => existing.id === card.id)),
+        newBankAccounts: hydratedBanks.filter((account) => !bankAccounts.some((existing) => existing.id === account.id)),
+        duplicateCandidates,
+        cards,
+        bankAccounts,
+      });
+      const allCards = [...cards, ...duplicateReview.newCards];
+      const allBanks = [...bankAccounts, ...duplicateReview.newBankAccounts];
       await saveConnectionLinks(connection);
 
       setCards(allCards);
@@ -228,7 +244,11 @@ export default function PlaidSection({
       setConnectionStatus(null);
       window.toast?.success?.(successToast);
 
-      const importedCount = importedCards + importedBankAccounts + importedPlaidInvestments;
+      const importedCount =
+        duplicateReview.newCards.length +
+        duplicateReview.newBankAccounts.length +
+        importedPlaidInvestments;
+      const ambiguousDuplicateCount = duplicateReview.ambiguousCount;
       if (importedCount > 0) {
         setTimeout(() => {
           window.alert(
@@ -241,6 +261,13 @@ export default function PlaidSection({
             "• Statement close & payment due days"
           );
         }, 500);
+      }
+      if (ambiguousDuplicateCount > 0) {
+        setTimeout(() => {
+          window.alert(
+            `${ambiguousDuplicateCount} imported account${ambiguousDuplicateCount !== 1 ? "s may" : " may"} overlap existing records, but the match was ambiguous.\n\nCatalyst kept them separate so nothing was merged automatically. Review them in Portfolio and keep or remove the duplicates you want.`
+          );
+        }, importedCount > 0 ? 900 : 500);
       }
     } catch (err) {
       void log.error("plaid", "Post-connect processing failed", err);
@@ -299,14 +326,30 @@ export default function PlaidSection({
             updatedCards: PortfolioCard[];
             updatedBankAccounts: BankAccount[];
             updatedPlaidInvestments: PlaidInvestmentAccount[];
-            importedCards: number;
-            importedBankAccounts: number;
             importedPlaidInvestments: number;
+            duplicateCandidates: Array<{
+              kind: "card" | "bank";
+              plaidAccountId: string;
+              importedId: string;
+              importedLabel: string;
+              institution: string;
+              existingIds: string[];
+            }>;
           };
+          const duplicateReview = reviewPlaidDuplicateCandidates({
+            connection: refreshed,
+            newCards: hydratedState.updatedCards.filter((card) => !baseCards.some((existing) => existing.id === card.id)),
+            newBankAccounts: hydratedState.updatedBankAccounts.filter((account) => !baseBankAccounts.some((existing) => existing.id === account.id)),
+            duplicateCandidates: hydratedState.duplicateCandidates || [],
+            cards: baseCards,
+            bankAccounts: baseBankAccounts,
+          });
+          const mergedCards = [...baseCards, ...duplicateReview.newCards];
+          const mergedBanks = [...baseBankAccounts, ...duplicateReview.newBankAccounts];
           const syncData = applyBalanceSync(
             refreshed,
-            hydratedState.updatedCards,
-            hydratedState.updatedBankAccounts,
+            mergedCards,
+            mergedBanks,
             hydratedState.updatedPlaidInvestments
           ) as BalanceSyncResult;
           setCards(syncData.updatedCards);
@@ -320,12 +363,17 @@ export default function PlaidSection({
           }
           await saveConnectionLinks(refreshed);
           const restoredCount =
-            hydratedState.importedCards +
-            hydratedState.importedBankAccounts +
+            duplicateReview.newCards.length +
+            duplicateReview.newBankAccounts.length +
             hydratedState.importedPlaidInvestments;
           if (restoredCount > 0) {
             window.toast?.info?.(
               `Restored ${restoredCount} ${restoredCount === 1 ? "linked account" : "linked accounts"} from ${conn.institutionName || "this bank"}.`
+            );
+          }
+          if (duplicateReview.ambiguousCount > 0) {
+            window.toast?.info?.(
+              `${duplicateReview.ambiguousCount} possible duplicate account${duplicateReview.ambiguousCount === 1 ? "" : "s"} were kept separate for review in Portfolio.`
             );
           }
         } else if (!forceSyncSucceeded || refreshed?._pendingSync) {

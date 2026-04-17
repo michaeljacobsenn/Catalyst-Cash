@@ -44,6 +44,7 @@
   import BottomNavBar from "./modules/navigation/BottomNavBar.js";
   import ScrollSnapContainer from "./modules/navigation/ScrollSnapContainer.js";
   import TabRenderer from "./modules/navigation/TabRenderer.js";
+  import { useOnlineStatus } from "./modules/onlineStatus.js";
   import { deleteSecureItem } from "./modules/secureStore.js";
   import "./modules/tabs/DashboardTab.css"; // Global animations, skeleton loaders, utility classes
   import { useToast } from "./modules/Toast.js";
@@ -65,21 +66,6 @@ interface AppFinancialConfigExtras {
   valuations?: Record<string, unknown>;
   isDemoConfig?: boolean;
   _preDemoSnapshot?: Record<string, unknown>;
-}
-
-function useOnline() {
-  const [o, setO] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
-  useEffect(() => {
-    const on = () => setO(true),
-      off = () => setO(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => {
-      window.removeEventListener("online", on);
-      window.removeEventListener("offline", off);
-    };
-  }, []);
-  return o;
 }
 
 function CatalystCashShell() {
@@ -105,7 +91,7 @@ function CatalystCashShell() {
       window.clearTimeout(idleId as number);
     };
   }, []);
-  const online = useOnline();
+  const online = useOnlineStatus();
   useGlobalHaptics(); // Auto-haptic on every button tap
 
   const {
@@ -257,23 +243,37 @@ function CatalystCashShell() {
         saveConnectionLinks,
         fetchBalancesAndLiabilities,
         applyBalanceSync,
+        reviewPlaidDuplicateCandidates,
       } = await import("./modules/plaid.js");
 
       await connectBank(
         async connection => {
           try {
             const plaidInvestments = financialConfig?.plaidInvestments || [];
-            const { newCards, newBankAccounts, newPlaidInvestments } = autoMatchAccounts(
+            const {
+              newCards,
+              newBankAccounts,
+              newPlaidInvestments,
+              duplicateCandidates = [],
+            } = autoMatchAccounts(
               connection,
               cards,
               bankAccounts,
               cardCatalog as never,
               plaidInvestments
             );
+            const duplicateReview = reviewPlaidDuplicateCandidates({
+              connection,
+              newCards,
+              newBankAccounts,
+              duplicateCandidates,
+              cards,
+              bankAccounts,
+            });
             await saveConnectionLinks(connection);
 
-            const allCards = mergeUniqueById<CardType>(cards, newCards);
-            const allBanks = mergeUniqueById<BankAccount>(bankAccounts, newBankAccounts);
+            const allCards = mergeUniqueById<CardType>(cards, duplicateReview.newCards);
+            const allBanks = mergeUniqueById<BankAccount>(bankAccounts, duplicateReview.newBankAccounts);
             const allInvests = mergeUniqueById<PlaidInvestmentAccount>(
               plaidInvestments,
               newPlaidInvestments as PlaidInvestmentAccount[]
@@ -309,6 +309,11 @@ function CatalystCashShell() {
             }
 
             window.toast?.success?.("Bank linked successfully!");
+            if (duplicateReview.ambiguousCount > 0) {
+              window.toast?.info?.(
+                `${duplicateReview.ambiguousCount} possible duplicate account${duplicateReview.ambiguousCount === 1 ? "" : "s"} were kept separate for review in Portfolio.`
+              );
+            }
           } catch (err) {
             const failure = normalizeAppError(err, { context: "sync" });
             log.error("plaid", "Post-link processing failed", { error: failure.rawMessage, kind: failure.kind });

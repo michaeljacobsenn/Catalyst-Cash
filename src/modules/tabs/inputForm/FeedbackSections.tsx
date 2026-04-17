@@ -67,6 +67,7 @@ interface ModelChatQuotaWidgetProps {
 
 interface SubmitBarProps {
   canSubmit: boolean;
+  offline?: boolean;
   isLoading: boolean;
   isTestMode: boolean;
   setIsTestMode: (value: boolean | ((prev: boolean) => boolean)) => void;
@@ -450,7 +451,7 @@ export function ModelChatQuotaWidget({ chatQuota, setAiModel, proEnabled }: Mode
   return null;
 }
 
-export function SubmitBar({ canSubmit, isLoading, isTestMode, setIsTestMode, onSubmit }: SubmitBarProps) {
+export function SubmitBar({ canSubmit, offline = false, isLoading, isTestMode, setIsTestMode, onSubmit }: SubmitBarProps) {
   return (
     <div
       style={{
@@ -504,6 +505,11 @@ export function SubmitBar({ canSubmit, isLoading, isTestMode, setIsTestMode, onS
             <>
               <Loader2 size={18} style={{ animation: "spin .8s linear infinite" }} />
               Running...
+            </>
+          ) : offline ? (
+            <>
+              <AlertTriangle size={18} strokeWidth={2.3} />
+              Back online to run
             </>
           ) : (
             <>

@@ -173,4 +173,19 @@ describe("buildSnapshotMessage", () => {
     expect(msg).toContain("18500.75");
     expect(msg).toContain("(live)");
   });
+
+  it("respects excluded investment sources when deriving live bucket balances", () => {
+    const params = baseParams();
+    params.activeConfig.trackBrokerage = true;
+    params.activeConfig.enableHoldings = true;
+    params.activeConfig.overrideBrokerageValue = false;
+    params.activeConfig.excludedInvestmentSourceIds = ["manual-holdings:brokerage"];
+    params.activeConfig.plaidInvestments = [
+      { id: "pi_1", bucket: "brokerage", institution: "Fidelity", name: "Taxable Brokerage", _plaidBalance: 9600 },
+    ];
+    params.holdingValues.brokerage = 4200;
+    const msg = buildSnapshotMessage(params);
+    expect(msg).toContain("Brokerage: $9600.00 (live)");
+    expect(msg).not.toContain("Brokerage: $4200.00");
+  });
 });

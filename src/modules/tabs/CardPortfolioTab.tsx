@@ -1,39 +1,48 @@
-  import { Suspense,lazy,memo,useCallback,useEffect,useMemo,useRef,useState } from "react";
-  import type { BankAccount,CatalystCashConfig,PlaidInvestmentAccount,Card as PortfolioCard } from "../../types/index.js";
-  import { T } from "../constants.js";
-  import { haptic } from "../haptics.js";
-  import { log } from "../logger.js";
+import { Suspense,lazy,memo,useCallback,useEffect,useMemo,useRef,useState } from "react";
+import type { BankAccount,CatalystCashConfig,PlaidInvestmentAccount,Card as PortfolioCard,Renewal } from "../../types/index.js";
+import { T } from "../constants.js";
+import { haptic } from "../haptics.js";
+import { clearDeletedManualHolding } from "../investmentHoldings.js";
+import { log } from "../logger.js";
 import {
-    AlertTriangle,
-    CheckCircle,
-    Link2,
-    Loader2,
-    Plus,
-    ReceiptText,
-    RefreshCw,
-  } from "../icons";
-  import {
-    applyBalanceSync,
-    autoMatchAccounts,
-    connectBank,
-    fetchBalancesAndLiabilities,
-    getConnections,
-    purgeBrokenConnections,
-    saveConnectionLinks,
-  } from "../plaid.js";
-  import BankAccountsSection from "../portfolio/BankAccountsSection.js";
-  import CreditCardsSection from "../portfolio/CreditCardsSection.js";
-  import CreditUtilizationWidget from "../portfolio/CreditUtilizationWidget.js";
-  import {
-    formatPlaidSyncDateTimeLabel,
-    getLatestPlaidSyncDate,
-    getStalePlaidInstitutions,
-    splitPlaidInstitutionsByReconnect,
-    summarizeConnectedButCached,
-    summarizeReconnectRequired,
-  } from "../portfolio/plaidStatus.js";
-  import { formatPlaidSyncDateShort,usePlaidSync } from "../usePlaidSync.js";
-  import { fmt } from "../utils.js";
+  buildPortfolioDuplicateReviewGroups,
+  findLikelyBankDuplicates,
+  findLikelyCardDuplicates,
+  reviewPlaidDuplicateCandidates,
+  setDuplicateGroupAcknowledged,
+} from "../plaidDuplicateResolution.js";
+import {
+  AlertTriangle,
+  CheckCircle,
+  Link2,
+  Loader2,
+  Plus,
+  ReceiptText,
+  RefreshCw,
+} from "../icons";
+import {
+  applyBalanceSync,
+  autoMatchAccounts,
+  connectBank,
+  fetchBalancesAndLiabilities,
+  getConnections,
+  purgeBrokenConnections,
+  reassignStoredPlaidLink,
+  saveConnectionLinks,
+} from "../plaid.js";
+import BankAccountsSection from "../portfolio/BankAccountsSection.js";
+import CreditCardsSection from "../portfolio/CreditCardsSection.js";
+import CreditUtilizationWidget from "../portfolio/CreditUtilizationWidget.js";
+import {
+  formatPlaidSyncDateTimeLabel,
+  getLatestPlaidSyncDate,
+  getStalePlaidInstitutions,
+  splitPlaidInstitutionsByReconnect,
+  summarizeConnectedButCached,
+  summarizeReconnectRequired,
+} from "../portfolio/plaidStatus.js";
+import { formatPlaidSyncDateShort,usePlaidSync } from "../usePlaidSync.js";
+import { fmt } from "../utils.js";
 const InvestmentsSection = lazy(() => import("../portfolio/InvestmentsSection.js"));
 const OtherAssetsSection = lazy(() => import("../portfolio/OtherAssetsSection.js"));
 const TransactionsSection = lazy(() => import("../portfolio/TransactionsSection.js"));
@@ -53,11 +62,61 @@ function mergeUniqueById<T extends { id?: string | null }>(existing: T[] = [], i
   return Array.from(map.values());
 }
 
-  import { useAudit } from "../contexts/AuditContext.js";
-  import { PortfolioContext,usePortfolio } from "../contexts/PortfolioContext.js";
-  import { useSettings } from "../contexts/SettingsContext.js";
-  import useDashboardData from "../dashboard/useDashboardData.js";
-  import type { PortfolioCollapsedSections } from "../portfolio/types.js";
+function reviewManualCardDuplicate(cards: PortfolioCard[], draft: { institution: string; name: string; nickname?: string }) {
+  const matches = findLikelyCardDuplicates(cards, draft);
+  if (matches.length !== 1) return null;
+  const existing = matches[0]?.card;
+  if (!existing?.id) return null;
+  const replace = window.confirm(
+    `This looks similar to your existing card "${existing.nickname || existing.name}".\n\nPress OK to update that card instead of adding a duplicate.\nPress Cancel to keep both.`
+  );
+  return replace ? existing.id : null;
+}
+
+function reviewManualBankDuplicate(bankAccounts: BankAccount[], draft: { bank: string; accountType: string; name: string }) {
+  const matches = findLikelyBankDuplicates(bankAccounts, draft);
+  if (matches.length !== 1) return null;
+  const existing = matches[0]?.account;
+  if (!existing?.id) return null;
+  const replace = window.confirm(
+    `This looks similar to your existing account "${existing.name}".\n\nPress OK to update that account instead of adding a duplicate.\nPress Cancel to keep both.`
+  );
+  return replace ? existing.id : null;
+}
+
+function remapRenewalPaymentIds(
+  renewals: Renewal[] = [],
+  kind: "card" | "bank",
+  fromId: string,
+  toId: string,
+): Renewal[] {
+  return renewals.map((renewal) => {
+    if (kind === "card") {
+      const linkedCardId = String(renewal?.linkedCardId || "").trim();
+      const chargedToId = String(renewal?.chargedToId || "").trim();
+      const chargedToType = String(renewal?.chargedToType || "").trim().toLowerCase();
+      if (linkedCardId !== fromId && !(chargedToType === "card" && chargedToId === fromId)) return renewal;
+      const nextRenewal: Renewal = { ...renewal };
+      if (linkedCardId === fromId) nextRenewal.linkedCardId = toId;
+      if (chargedToType === "card" && chargedToId === fromId) nextRenewal.chargedToId = toId;
+      return nextRenewal;
+    }
+
+    const chargedToId = String(renewal?.chargedToId || "").trim();
+    const chargedToType = String(renewal?.chargedToType || "").trim().toLowerCase();
+    if (!(chargedToType === "bank" && chargedToId === fromId)) return renewal;
+    return {
+      ...renewal,
+      chargedToId: toId,
+    };
+  });
+}
+
+import { useAudit } from "../contexts/AuditContext.js";
+import { PortfolioContext,usePortfolio } from "../contexts/PortfolioContext.js";
+import { useSettings } from "../contexts/SettingsContext.js";
+import useDashboardData from "../dashboard/useDashboardData.js";
+import type { PortfolioCollapsedSections } from "../portfolio/types.js";
 
 type AddSheetStep = "goal" | "asset" | "debt" | null;
 type PlaidConnectResult = "success" | "error" | null;
@@ -113,6 +172,15 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
   const reconnectRequiredSummary = useMemo(() => {
     return summarizeReconnectRequired(stalePlaidBreakdown.reconnectRequired);
   }, [stalePlaidBreakdown]);
+  const duplicateReviewGroups = useMemo(
+    () =>
+      buildPortfolioDuplicateReviewGroups({
+        cards,
+        bankAccounts,
+        acknowledgedKeys: financialConfig?.acknowledgedDuplicateKeys || [],
+      }),
+    [cards, bankAccounts, financialConfig?.acknowledgedDuplicateKeys]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -184,18 +252,43 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
       await connectBank(
         async connection => {
           const plaidInvestments = financialConfig.plaidInvestments || [];
-          const { newCards, newBankAccounts, newPlaidInvestments } = autoMatchAccounts(
+          const {
+            newCards,
+            newBankAccounts,
+            newPlaidInvestments,
+            duplicateCandidates = [],
+          } = autoMatchAccounts(
             connection,
             cards,
             bankAccounts,
             cardCatalog as null | undefined,
             plaidInvestments
-          ) as { newCards: PortfolioCard[]; newBankAccounts: BankAccount[]; newPlaidInvestments: PlaidInvestmentAccount[] };
+          ) as {
+            newCards: PortfolioCard[];
+            newBankAccounts: BankAccount[];
+            newPlaidInvestments: PlaidInvestmentAccount[];
+            duplicateCandidates: Array<{
+              kind: "card" | "bank";
+              plaidAccountId: string;
+              importedId: string;
+              importedLabel: string;
+              institution: string;
+              existingIds: string[];
+            }>;
+          };
+          const duplicateReview = reviewPlaidDuplicateCandidates({
+            connection,
+            newCards,
+            newBankAccounts,
+            duplicateCandidates,
+            cards,
+            bankAccounts,
+          });
           await saveConnectionLinks(connection);
 
           // Build deterministic local snapshot so we do not drop new Plaid records.
-          const allCards = mergeUniqueById<PortfolioCard>(cards, newCards);
-          const allBanks = mergeUniqueById<BankAccount>(bankAccounts, newBankAccounts);
+          const allCards = mergeUniqueById<PortfolioCard>(cards, duplicateReview.newCards);
+          const allBanks = mergeUniqueById<BankAccount>(bankAccounts, duplicateReview.newBankAccounts);
           const allInvests = mergeUniqueById<PlaidInvestmentAccount>(plaidInvestments, newPlaidInvestments);
           setCards(allCards);
           setBankAccounts(allBanks);
@@ -230,7 +323,8 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
           setCollapsedSections(p => ({ ...p, creditCards: false, bankAccounts: false }));
 
           // Count what was imported for the review alert
-          const importedCount = newCards.length + newBankAccounts.length + newPlaidInvestments.length;
+          const importedCount = duplicateReview.newCards.length + duplicateReview.newBankAccounts.length + newPlaidInvestments.length;
+          const ambiguousDuplicateCount = duplicateReview.ambiguousCount;
 
           setTimeout(() => {
             closeSheet();
@@ -247,6 +341,13 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
                   "• Statement close & payment due days"
                 );
               }, 400);
+            }
+            if (ambiguousDuplicateCount > 0) {
+              setTimeout(() => {
+                window.alert(
+                  `${ambiguousDuplicateCount} imported account${ambiguousDuplicateCount !== 1 ? "s may" : " may"} overlap existing records, but the match was ambiguous.\n\nCatalyst kept them separate so nothing was merged automatically. Review them in Portfolio and keep or remove the duplicates you want.`
+                );
+              }, importedCount > 0 ? 850 : 400);
             }
           }, 2200);
         },
@@ -331,6 +432,107 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
     setPullProgress(0);
     hapticFiredRef.current = false;
   }, [pullProgress, plaidRefreshing, handleRefreshPlaid]);
+
+  const dismissDuplicateGroup = useCallback((groupKey: string) => {
+    setFinancialConfig((prev: CatalystCashConfig) =>
+      setDuplicateGroupAcknowledged(prev, groupKey, true) as CatalystCashConfig
+    );
+  }, [setFinancialConfig]);
+
+  const mergeDuplicateGroup = useCallback(async (group: {
+    key: string;
+    kind: "card" | "bank";
+    preferredKeepId?: string;
+    preferredRemoveId?: string;
+    left: PortfolioCard | BankAccount;
+    right: PortfolioCard | BankAccount;
+  }) => {
+    const keepId = String(group?.preferredKeepId || "").trim();
+    const removeId = String(group?.preferredRemoveId || "").trim();
+    if (!keepId || !removeId) return;
+
+    if (group.kind === "card") {
+      const keepCard = cards.find((card) => card.id === keepId);
+      const removeCard = cards.find((card) => card.id === removeId);
+      if (!keepCard || !removeCard || !removeCard._plaidAccountId || !removeCard._plaidConnectionId) return;
+
+      const mergedCard: PortfolioCard = {
+        ...removeCard,
+        ...keepCard,
+        id: keepCard.id,
+        institution: keepCard.institution || removeCard.institution,
+        name: keepCard.name || removeCard.name,
+        nickname: keepCard.nickname || removeCard.nickname || "",
+        notes: keepCard.notes || removeCard.notes || "",
+        last4: keepCard.last4 || removeCard.last4 || removeCard.mask || null,
+        mask: keepCard.mask || removeCard.mask || null,
+        limit: keepCard.limit ?? removeCard.limit ?? removeCard._plaidLimit ?? null,
+        _plaidAccountId: removeCard._plaidAccountId,
+        _plaidConnectionId: removeCard._plaidConnectionId,
+        _plaidBalance: removeCard._plaidBalance ?? null,
+        _plaidAvailable: removeCard._plaidAvailable ?? null,
+        _plaidLimit: removeCard._plaidLimit ?? null,
+        ...(typeof removeCard._plaidManualFallback === "boolean"
+          ? { _plaidManualFallback: removeCard._plaidManualFallback }
+          : {}),
+      };
+
+      const reassigned = await reassignStoredPlaidLink({
+        connectionId: removeCard._plaidConnectionId,
+        plaidAccountId: removeCard._plaidAccountId,
+        linkedCardId: keepId,
+      }).catch(() => false);
+      if (!reassigned) {
+        window.toast?.error?.("Could not safely merge that duplicate card right now. Try again after reconnecting Plaid.");
+        return;
+      }
+
+      setCards(cards.filter((card) => card.id !== removeId).map((card) => (card.id === keepId ? mergedCard : card)));
+      setRenewals(remapRenewalPaymentIds(renewals, "card", removeId, keepId));
+      setFinancialConfig((prev: CatalystCashConfig) =>
+        setDuplicateGroupAcknowledged(prev, group.key, true) as CatalystCashConfig
+      );
+      window.toast?.success?.(`Merged duplicate card into "${mergedCard.nickname || mergedCard.name}".`);
+      return;
+    }
+
+    const keepBank = bankAccounts.find((account) => account.id === keepId);
+    const removeBank = bankAccounts.find((account) => account.id === removeId);
+    if (!keepBank || !removeBank || !removeBank._plaidAccountId || !removeBank._plaidConnectionId) return;
+
+    const mergedBank: BankAccount = {
+      ...removeBank,
+      ...keepBank,
+      id: keepBank.id,
+      bank: keepBank.bank || removeBank.bank,
+      name: keepBank.name || removeBank.name,
+      notes: keepBank.notes || removeBank.notes || "",
+      _plaidAccountId: removeBank._plaidAccountId,
+      _plaidConnectionId: removeBank._plaidConnectionId,
+      _plaidBalance: removeBank._plaidBalance ?? null,
+      _plaidAvailable: removeBank._plaidAvailable ?? null,
+      ...(typeof removeBank._plaidManualFallback === "boolean"
+        ? { _plaidManualFallback: removeBank._plaidManualFallback }
+        : {}),
+    };
+
+    const reassigned = await reassignStoredPlaidLink({
+      connectionId: removeBank._plaidConnectionId,
+      plaidAccountId: removeBank._plaidAccountId,
+      linkedBankAccountId: keepId,
+    }).catch(() => false);
+    if (!reassigned) {
+      window.toast?.error?.("Could not safely merge that duplicate account right now. Try again after reconnecting Plaid.");
+      return;
+    }
+
+    setBankAccounts(bankAccounts.filter((account) => account.id !== removeId).map((account) => (account.id === keepId ? mergedBank : account)));
+    setRenewals(remapRenewalPaymentIds(renewals, "bank", removeId, keepId));
+    setFinancialConfig((prev: CatalystCashConfig) =>
+      setDuplicateGroupAcknowledged(prev, group.key, true) as CatalystCashConfig
+    );
+    window.toast?.success?.(`Merged duplicate account into "${mergedBank.name}".`);
+  }, [bankAccounts, cards, renewals, setBankAccounts, setCards, setFinancialConfig, setRenewals]);
 
 
 
@@ -612,6 +814,135 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
         </div>
       )}
 
+      {duplicateReviewGroups.length > 0 && (
+        <div
+          style={{
+            marginTop: 4,
+            padding: "12px 14px",
+            borderRadius: T.radius.lg,
+            border: `1px solid ${T.status.amber}24`,
+            background: T.bg.card,
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 8,
+                background: `${T.status.amber}18`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Link2 size={13} color={T.status.amber} strokeWidth={2.5} />
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: T.text.primary }}>
+              Review possible duplicate accounts
+            </div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: T.text.dim }}>
+              {duplicateReviewGroups.length} to review
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5 }}>
+            Catalyst kept these overlaps separate so nothing was merged automatically. If one is your original manual record and the other is the later Plaid-linked version, you can merge them safely here.
+          </div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {duplicateReviewGroups.slice(0, 4).map((group) => {
+              const leftLabel = group.kind === "card"
+                ? ((group.left as PortfolioCard).nickname || (group.left as PortfolioCard).name)
+                : (group.left as BankAccount).name;
+              const rightLabel = group.kind === "card"
+                ? ((group.right as PortfolioCard).nickname || (group.right as PortfolioCard).name)
+                : (group.right as BankAccount).name;
+              const leftMeta = group.kind === "card"
+                ? `${(group.left as PortfolioCard).institution}${(group.left as PortfolioCard)._plaidAccountId ? " · linked" : " · manual"}`
+                : `${(group.left as BankAccount).bank}${(group.left as BankAccount)._plaidAccountId ? " · linked" : " · manual"}`;
+              const rightMeta = group.kind === "card"
+                ? `${(group.right as PortfolioCard).institution}${(group.right as PortfolioCard)._plaidAccountId ? " · linked" : " · manual"}`
+                : `${(group.right as BankAccount).bank}${(group.right as BankAccount)._plaidAccountId ? " · linked" : " · manual"}`;
+
+              return (
+                <div
+                  key={group.key}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: T.radius.md,
+                    border: `1px solid ${T.border.subtle}`,
+                    background: T.bg.elevated,
+                    display: "grid",
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: T.text.primary }}>
+                      {group.kind === "card" ? "Card overlap" : "Account overlap"}
+                    </div>
+                    <div style={{ fontSize: 10, color: T.status.amber, fontWeight: 700 }}>
+                      {group.reason}
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 8, alignItems: "center" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: T.text.primary }}>{leftLabel}</div>
+                      <div style={{ fontSize: 10, color: T.text.dim }}>{leftMeta}</div>
+                    </div>
+                    <div style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono }}>vs</div>
+                    <div style={{ minWidth: 0, textAlign: "right" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: T.text.primary }}>{rightLabel}</div>
+                      <div style={{ fontSize: 10, color: T.text.dim }}>{rightMeta}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {group.actionable && (
+                      <button
+                        onClick={() => { void mergeDuplicateGroup(group); }}
+                        style={{
+                          padding: "7px 10px",
+                          borderRadius: 999,
+                          border: `1px solid ${T.accent.emerald}30`,
+                          background: `${T.accent.emerald}12`,
+                          color: T.accent.emerald,
+                          cursor: "pointer",
+                          fontSize: 10,
+                          fontWeight: 800,
+                        }}
+                      >
+                        Link + keep existing
+                      </button>
+                    )}
+                    <button
+                      onClick={() => dismissDuplicateGroup(group.key)}
+                      style={{
+                        padding: "7px 10px",
+                        borderRadius: 999,
+                        border: `1px solid ${T.border.default}`,
+                        background: T.bg.card,
+                        color: T.text.secondary,
+                        cursor: "pointer",
+                        fontSize: 10,
+                        fontWeight: 700,
+                      }}
+                    >
+                      Keep both
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            {duplicateReviewGroups.length > 4 && (
+              <div style={{ fontSize: 10, color: T.text.dim }}>
+                {duplicateReviewGroups.length - 4} more possible overlap{duplicateReviewGroups.length - 4 === 1 ? "" : "s"} remain after these.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {movePlan.activeCount > 0 && (
         <div
           style={{
@@ -828,43 +1159,49 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
             onSetStep={setAddSheetStep}
             onAddCard={data => {
               haptic.success();
-              setCards([
-                ...cards,
-                {
-                  id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `card_${Date.now()}`,
-                  ...data,
-                  annualFeeDue: "",
-                  annualFeeWaived: false,
-                  notes: "",
-                  apr: null,
-                  hasPromoApr: false,
-                  promoAprAmount: null,
-                  promoAprExp: "",
-                  statementCloseDay: null,
-                  paymentDueDay: null,
-                  minPayment: null,
-                },
-              ]);
+              const nextCard = {
+                id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `card_${Date.now()}`,
+                ...data,
+                annualFeeDue: "",
+                annualFeeWaived: false,
+                notes: "",
+                apr: null,
+                hasPromoApr: false,
+                promoAprAmount: null,
+                promoAprExp: "",
+                statementCloseDay: null,
+                paymentDueDay: null,
+                minPayment: null,
+              };
+              const duplicateId = reviewManualCardDuplicate(cards, nextCard);
+              if (duplicateId) {
+                setCards(cards.map((card) => (card.id === duplicateId ? { ...card, ...nextCard, id: card.id } : card)));
+              } else {
+                setCards([...cards, nextCard]);
+              }
               setCollapsedSections(p => ({ ...p, creditCards: false }));
             }}
             onAddBank={data => {
               haptic.success();
-              setBankAccounts([
-                ...bankAccounts,
-                {
-                  id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `bank_${Date.now()}`,
-                  ...data,
-                },
-              ]);
+              const nextBank = {
+                id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `bank_${Date.now()}`,
+                ...data,
+              };
+              const duplicateId = reviewManualBankDuplicate(bankAccounts, nextBank);
+              if (duplicateId) {
+                setBankAccounts(bankAccounts.map((account) => (account.id === duplicateId ? { ...account, ...nextBank, id: account.id } : account)));
+              } else {
+                setBankAccounts([...bankAccounts, nextBank]);
+              }
               setCollapsedSections(p => ({ ...p, bankAccounts: false }));
             }}
             onAddInvestment={(key, symbol, shares) => {
               setFinancialConfig((prev: CatalystCashConfig) => {
                 const cur = prev?.holdings || {};
-                return {
+                return clearDeletedManualHolding({
                   ...prev,
                   holdings: { ...cur, [key]: [...(cur[key] || []), { symbol, shares }] },
-                };
+                }, key, symbol) as CatalystCashConfig;
               });
               setCollapsedSections(p => ({ ...p, investments: false }));
             }}

@@ -5,7 +5,7 @@ import { Trash2 } from "../../icons";
 import { Badge, Card, Label } from "../../ui.js";
 import { fmt } from "../../utils.js";
 import { SectionAddControl } from "./SectionAddControl";
-import type { InputFormState, InvestmentAuditField } from "./model.js";
+import type { InputFormState, InvestmentAuditSource } from "./model.js";
 import { sanitizeDollar, toNumber, type MoneyInput } from "./utils.js";
 
 interface MonoProps {
@@ -24,42 +24,41 @@ interface DollarInputProps {
 }
 
 interface InvestmentBalancesSectionProps {
-  visibleFields: InvestmentAuditField[];
-  hiddenFields: InvestmentAuditField[];
+  visibleSources: InvestmentAuditSource[];
+  hiddenSources: InvestmentAuditSource[];
   totalBalance: number;
   formValues: Pick<InputFormState, "roth" | "brokerage" | "k401Balance">;
-  onChangeField: (key: InvestmentAuditField["key"], value: MoneyInput) => void;
-  onEnableOverride: (key: InvestmentAuditField["key"]) => void;
-  onRemoveField: (key: InvestmentAuditField["key"]) => void;
-  onRestoreField: (field: InvestmentAuditField) => void;
+  onChangeField: (key: "roth" | "brokerage" | "k401Balance", value: MoneyInput) => void;
+  onRemoveSource: (id: string) => void;
+  onRestoreSource: (source: InvestmentAuditSource) => void;
 }
 
 const Mono = UIMono as unknown as (props: MonoProps) => ReactNode;
 const DI = UIDI as unknown as (props: DollarInputProps) => ReactNode;
 
 export function InvestmentBalancesSection({
-  visibleFields,
-  hiddenFields,
+  visibleSources,
+  hiddenSources,
   totalBalance,
   formValues,
   onChangeField,
-  onEnableOverride,
-  onRemoveField,
-  onRestoreField,
+  onRemoveSource,
+  onRestoreSource,
 }: InvestmentBalancesSectionProps) {
   const addableFields = useMemo(
     () =>
-      hiddenFields.map((field) => ({
-        id: field.key,
-        label: field.label,
+      hiddenSources.map((source) => ({
+        id: source.id,
+        label: source.label,
+        detail: source.detail,
       })),
-    [hiddenFields]
+    [hiddenSources]
   );
 
-  const handleAddField = (fieldKey: string) => {
-    const field = hiddenFields.find((entry) => entry.key === fieldKey);
-    if (!field) return;
-    onRestoreField(field);
+  const handleAddField = (sourceId: string) => {
+    const source = hiddenSources.find((entry) => entry.id === sourceId);
+    if (!source) return;
+    onRestoreSource(source);
   };
 
   return (
@@ -67,7 +66,7 @@ export function InvestmentBalancesSection({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           <Label style={{ marginBottom: 0, fontWeight: 800 }}>Investment Balances</Label>
-          {visibleFields.length > 0 && (
+          {visibleSources.length > 0 && (
             <Badge
               variant="outline"
               style={{
@@ -77,12 +76,12 @@ export function InvestmentBalancesSection({
                 background: `${T.accent.emerald}10`,
               }}
             >
-              {visibleFields.length} {visibleFields.length === 1 ? "ACCOUNT" : "ACCOUNTS"}
+              {visibleSources.length} {visibleSources.length === 1 ? "SOURCE" : "SOURCES"}
             </Badge>
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          {visibleFields.length > 0 && (
+          {visibleSources.length > 0 && (
             <Mono size={14} weight={800} color={T.text.primary}>
               {fmt(totalBalance)}
             </Mono>
@@ -91,14 +90,14 @@ export function InvestmentBalancesSection({
             accent={T.accent.emerald}
             buttonAriaLabel="Add investment balance to audit"
             options={addableFields}
-            pickerLabel="Choose investment balance"
+            pickerLabel="Choose investment source"
             placeholder="Select balance..."
             onSelect={handleAddField}
           />
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {visibleFields.length === 0 && (
+        {visibleSources.length === 0 && (
           <div
             style={{
               padding: "14px 14px 12px",
@@ -115,42 +114,38 @@ export function InvestmentBalancesSection({
             </div>
           </div>
         )}
-        {visibleFields.map((field) => {
-          const hasAutoValue = Math.abs(Number(field.autoValue || 0)) > 0.004;
-          const showManualInput = !hasAutoValue || field.override;
-          const resolvedDisplayValue = hasAutoValue ? Number(field.autoValue || 0) : toNumber(field.formValue);
-          const inputValue =
-            field.key === "roth"
-              ? formValues.roth
-              : field.key === "brokerage"
-                ? formValues.brokerage
-                : formValues.k401Balance || "";
+        {visibleSources.map((source) => {
+          const showManualInput = Boolean(source.editable && source.formKey);
+          const resolvedDisplayValue = showManualInput
+            ? toNumber(formValues[source.formKey as "roth" | "brokerage" | "k401Balance"])
+            : Number(source.amount || 0);
+          const inputValue = showManualInput ? formValues[source.formKey as "roth" | "brokerage" | "k401Balance"] || "" : "";
 
           return (
             <div
-              key={field.key}
+              key={source.id}
               className="slide-up"
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: 10,
                 padding: "10px 12px",
-                background: field.override ? `${field.accent}08` : T.bg.elevated,
+                background: T.bg.elevated,
                 borderRadius: T.radius.md,
-                border: `1px solid ${field.override ? `${field.accent}35` : T.border.subtle}`,
+                border: `1px solid ${T.border.subtle}`,
                 boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
                 transition: "all 0.2s ease",
               }}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 7, minWidth: 0 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: 3, background: field.accent, flexShrink: 0, marginTop: 4 }} />
+                  <div style={{ width: 6, height: 6, borderRadius: 3, background: source.accent, flexShrink: 0, marginTop: 4 }} />
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: T.text.primary, lineHeight: 1.3 }}>
-                      {field.label}
+                      {source.label}
                     </div>
                     <div style={{ fontSize: 10, color: T.text.dim, marginTop: 2 }}>
-                      {field.override ? "Manual override" : hasAutoValue ? "Auto-tracked balance" : "Manual entry"}
+                      {source.detail}
                     </div>
                   </div>
                 </div>
@@ -159,44 +154,41 @@ export function InvestmentBalancesSection({
                 <div style={{ flexShrink: 0, maxWidth: 180 }}>
                   <DI
                     value={inputValue}
-                    onChange={(event) => onChangeField(field.key, sanitizeDollar(event.target.value))}
-                    placeholder={hasAutoValue ? `Auto: ${fmt(field.autoValue)}` : "Enter value"}
+                    onChange={(event) => onChangeField(source.formKey as "roth" | "brokerage" | "k401Balance", sanitizeDollar(event.target.value))}
+                    placeholder="Enter value"
                   />
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => onEnableOverride(field.key)}
+                <div
                   style={{
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     minWidth: 96,
                     height: 36,
-                    background: `${field.accent}0C`,
-                    border: `1px solid ${field.accent}30`,
+                    background: `${source.accent}0C`,
+                    border: `1px solid ${source.accent}30`,
                     borderRadius: T.radius.md,
-                    cursor: "pointer",
                     padding: "0 12px",
                     transition: "all 0.2s ease",
                     flexShrink: 0,
                   }}
                 >
-                  <Mono size={12.5} weight={800} color={field.accent}>
+                  <Mono size={12.5} weight={800} color={source.accent}>
                     {fmt(resolvedDisplayValue)}
                   </Mono>
-                </button>
+                </div>
               )}
               <button
                 type="button"
-                onClick={() => onRemoveField(field.key)}
+                onClick={() => onRemoveSource(source.id)}
                 style={{
                   width: 34,
                   height: 34,
                   borderRadius: T.radius.sm,
                   border: "none",
-                  background: `${field.accent}14`,
-                  color: field.accent,
+                  background: `${source.accent}14`,
+                  color: source.accent,
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",

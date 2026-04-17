@@ -36,19 +36,21 @@ export function OfflineBanner() {
       style={{
         background: T.status.amberDim,
         borderBottom: `1px solid ${T.status.amber}30`,
-        padding: "6px 16px",
+        padding: "8px 16px",
         textAlign: "center",
-        fontSize: 11,
         color: T.status.amber,
-        fontWeight: 600,
-        fontFamily: T.font.mono,
         flexShrink: 0,
       }}
     >
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-        <UiGlyph glyph="⚡" size={12} color={T.status.amber} />
-        No internet — audits unavailable
-      </span>
+      <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 2, maxWidth: 720 }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 700, fontFamily: T.font.mono }}>
+          <UiGlyph glyph="⚡" size={12} color={T.status.amber} />
+          Offline mode
+        </span>
+        <span style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>
+          Your local records still open. Audits, Ask AI, live sync, and cloud restore resume when you reconnect.
+        </span>
+      </div>
     </div>
   );
 }

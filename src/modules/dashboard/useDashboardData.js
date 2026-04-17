@@ -5,6 +5,11 @@ import { useAudit } from "../contexts/AuditContext.js";
 import { usePortfolio } from "../contexts/PortfolioContext.js";
 import { useSettings } from "../contexts/SettingsContext.js";
 import { computeFireProjection } from "../fire.js";
+import {
+  getManualInvestmentSourceId,
+  getPlaidInvestmentSourceId,
+  isInvestmentSourceExcluded,
+} from "../investmentHoldings.js";
 import { extractDashboardMetrics, fmt } from "../utils.js";
 import { buildDashboardSafetyModel } from "./safetyModel.js";
 
@@ -48,29 +53,43 @@ export default function useDashboardData() {
   // Investment snapshot computation
   const investmentSnapshot = useMemo(() => {
     const holdings = financialConfig?.holdings || {};
+    const excludedSourceIds = financialConfig?.excludedInvestmentSourceIds || [];
+    const plaidBucketTotals = (financialConfig?.plaidInvestments || []).reduce((totals, account) => {
+      const bucket = account?.bucket;
+      if (!bucket || !(bucket in totals)) return totals;
+      if (isInvestmentSourceExcluded(excludedSourceIds, getPlaidInvestmentSourceId(account))) return totals;
+      totals[bucket] += Number(account?._plaidBalance || 0);
+      return totals;
+    }, {
+      k401: 0,
+      roth: 0,
+      brokerage: 0,
+      hsa: 0,
+      crypto: 0,
+    });
     const sections = [
       {
         key: "k401",
         label: "401(k)",
-        enabled: !!financialConfig?.track401k && holdings.k401?.length > 0,
+        enabled: !!financialConfig?.track401k && ((holdings.k401?.length || 0) > 0 || plaidBucketTotals.k401 > 0),
         color: T.status.blue,
       },
       {
         key: "roth",
         label: "Roth IRA",
-        enabled: !!financialConfig?.trackRothContributions && holdings.roth?.length > 0,
+        enabled: !!financialConfig?.trackRothContributions && ((holdings.roth?.length || 0) > 0 || plaidBucketTotals.roth > 0),
         color: T.status.purple,
       },
       {
         key: "brokerage",
         label: "Brokerage",
-        enabled: !!financialConfig?.trackBrokerage && holdings.brokerage?.length > 0,
+        enabled: !!financialConfig?.trackBrokerage && ((holdings.brokerage?.length || 0) > 0 || plaidBucketTotals.brokerage > 0),
         color: T.accent.emerald,
       },
       {
         key: "hsa",
         label: "HSA",
-        enabled: !!financialConfig?.trackHSA && holdings.hsa?.length > 0,
+        enabled: !!financialConfig?.trackHSA && ((holdings.hsa?.length || 0) > 0 || plaidBucketTotals.hsa > 0),
         color: T.accent.emerald,
       },
       {
@@ -85,18 +104,25 @@ export default function useDashboardData() {
     for (const s of sections) {
       const items = holdings[s.key] || [];
       if (items.length === 0 && !s.enabled) continue;
+      const manualSourceExcluded = isInvestmentSourceExcluded(excludedSourceIds, getManualInvestmentSourceId(s.key));
       let total = 0;
-      for (const h of items) {
-        const price = marketPrices?.[h.symbol]?.price ?? h.lastKnownPrice ?? 0;
-        total += (parseFloat(h.shares) || 0) * price;
+      if (!manualSourceExcluded) {
+        for (const h of items) {
+          const price = marketPrices?.[h.symbol]?.price ?? h.lastKnownPrice ?? 0;
+          total += (parseFloat(h.shares) || 0) * price;
+        }
       }
-      if (total > 0 || s.enabled) result.push({ ...s, total, count: items.length });
-      grandTotal += total;
+      const combinedTotal = total + (plaidBucketTotals[s.key] || 0);
+      const combinedCount =
+        (manualSourceExcluded || items.length === 0 ? 0 : 1) +
+        ((financialConfig?.plaidInvestments || []).filter((pi) =>
+          pi?.bucket === s.key && !isInvestmentSourceExcluded(excludedSourceIds, getPlaidInvestmentSourceId(pi))
+        ).length);
+      if (combinedTotal > 0 || s.enabled) {
+        result.push({ ...s, total: combinedTotal, count: combinedCount });
+      }
+      grandTotal += combinedTotal;
     }
-    // Also add Plaid Investments to the total
-    (financialConfig?.plaidInvestments || []).forEach(pi => {
-      if (pi._plaidBalance) grandTotal += pi._plaidBalance;
-    });
     return { accounts: result, total: grandTotal };
   }, [financialConfig, marketPrices]);
 
