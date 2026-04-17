@@ -223,7 +223,7 @@ function StepHeader({
         }}
       >
         <div style={{ fontSize: 22, fontWeight: 900, color: T.text.primary, lineHeight: 1.1, letterSpacing: "-0.03em" }}>{page.title}</div>
-        {page.subtitle && <div style={{ fontSize: 13, color: T.text.dim, lineHeight: 1.55, maxWidth: 360 }}>{page.subtitle}</div>}
+        {page.subtitle && <div style={{ fontSize: 13, color: T.text.dim, lineHeight: 1.55, maxWidth: 400 }}>{page.subtitle}</div>}
       </div>
     </div>
   );
@@ -681,7 +681,7 @@ export default function SetupWizard() {
             }
           }
         `}</style>
-        <div style={{ maxWidth: 420, margin: "0 auto" }}>
+        <div style={{ maxWidth: fastTrack ? 456 : 420, margin: "0 auto" }}>
           <div
             style={{
               marginBottom: 18,

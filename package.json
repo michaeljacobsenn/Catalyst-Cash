@@ -35,7 +35,7 @@
     "ios:native": "npm run sync:native && node ./node_modules/@capacitor/cli/bin/capacitor open ios",
     "sync:site": "node scripts/sync-site.cjs",
     "deploy:site": "npx wrangler pages deploy site --project-name=catalystcash",
-    "deploy": "npm run build && npx cap copy"
+    "deploy": "npm run sync"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",

@@ -499,7 +499,7 @@ npm run ios
 ### Deploy (Build + Sync, no Xcode open)
 ```bash
 npm run deploy
-# = npm run build → npx cap copy
+# = npm run build → clean iOS web copy → inject-local-plugins
 ```
 
 ### Vite Code Splitting

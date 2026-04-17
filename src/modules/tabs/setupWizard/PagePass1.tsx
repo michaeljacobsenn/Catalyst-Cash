@@ -19,6 +19,7 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip, nextLabel, q
   const [showAdvancedIncome, setShowAdvancedIncome] = useState(
     !quickStart || data.incomeType === "hourly" || data.incomeType === "variable" || Boolean(data.typicalHours || data.averagePaycheck)
   );
+  const showQuickStartDepositNote = quickStart && !showAdvancedIncome;
 
   useEffect(() => {
     if (data.paycheckFirstOfMonth) setShowUnevenPaycheck(true);
@@ -66,7 +67,7 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip, nextLabel, q
         />
       </WizField>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: showQuickStartDepositNote ? "1fr" : "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
         <WizField label="Payday" hint="Typical day of arrival">
           <WizSelect
             value={data.payday}
@@ -74,19 +75,43 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip, nextLabel, q
             options={["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]}
           />
         </WizField>
-        {quickStart && !showAdvancedIncome ? (
+        {showQuickStartDepositNote ? (
           <div
             style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              marginBottom: 18,
               padding: "12px 14px",
               borderRadius: T.radius.md,
-              background: T.bg.elevated,
-              border: `1px solid ${T.border.default}`,
+              background: `${T.accent.primary}08`,
+              border: `1px solid ${T.accent.primary}18`,
             }}
           >
-            <div style={{ fontSize: 11, color: T.text.dim, marginBottom: 4 }}>Deposit Into</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>Checking</div>
-            <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45, marginTop: 4 }}>
-              Quick Start assumes your paycheck lands in checking. You can change that later.
+            <div
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: 999,
+                display: "grid",
+                placeItems: "center",
+                background: `${T.accent.primary}14`,
+                color: T.accent.primary,
+                fontSize: 14,
+                fontWeight: 800,
+                flexShrink: 0,
+              }}
+            >
+              $
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: T.text.dim, marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Deposit Target
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>Checking</div>
+              <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45, marginTop: 3 }}>
+                Quick Start assumes your paycheck lands in checking. You can change that later in advanced setup.
+              </div>
             </div>
           </div>
         ) : (

@@ -614,7 +614,7 @@ export default function PageImport({
             Linked Recovery Vault ID found for this protected device identity. Enter only your Recovery Key to continue restoring.
           </div>
         ) : null}
-        {hasContinuityEscrow ? (
+        {hasContinuityEscrow && !hasTrustedContinuityEscrow ? (
           <div
             style={{
               marginBottom: 12,
@@ -643,7 +643,7 @@ export default function PageImport({
               lineHeight: 1.5,
             }}
           >
-            Seamless account restore is available for this identity. After protected sign-in, you can restore without the Recovery Key or an account sync passphrase.
+            Seamless account restore is available for this identity. After protected sign-in, use that first. Manual Recovery Vault restore remains available below if you prefer recovery material.
           </div>
         ) : null}
         <div style={{ display: "grid", gap: 10 }}>
@@ -711,7 +711,7 @@ export default function PageImport({
               {loadingLinkedRecoveryId ? "Checking linked identity…" : detectedLinkedRecoveryId ? "Refresh Linked Recovery ID" : "Use Linked Recovery ID"}
             </button>
           )}
-          {hasContinuityEscrow ? (
+          {hasContinuityEscrow && !hasTrustedContinuityEscrow ? (
             <>
               <WizField label="Account Sync Passphrase" hint="Optional encrypted account-backed restore for linked Recovery Vaults.">
                 <WizInput
