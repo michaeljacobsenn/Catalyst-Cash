@@ -27,38 +27,62 @@ const stateFile = path.join(cwd, ".git", "catalyst-discord-announce.json");
 const CATEGORY_DEFS = [
   {
     key: "audit",
-    title: "Audit engine & results",
-    summary: "Audit outputs are more resilient and more readable, with stronger fallback handling, tighter normalization, and clearer weekly action planning.",
+    headline: "Weekly briefings are clearer and easier to trust.",
+    highlights: [
+      "**Results open cleaner.** The first screen now does a better job surfacing the score, status, and what matters most right away.",
+      "**Fallbacks feel more trustworthy.** When the model returns a thinner response, Catalyst rebuilds the important pieces more gracefully.",
+      "**Weekly actions are easier to follow.** Next steps and move planning are labeled more clearly and stay easier to read.",
+    ],
     match: (entry) => /worker\/src\/index\.js|audit|resultsview|resultsview\/|auditcontext|auditoutputcontract|evaluate-audit-models|buildsnapshotmessage|utils\.js/i.test(entry),
   },
   {
     key: "portfolio",
-    title: "Accounts, Plaid & portfolio",
-    summary: "Portfolio logic is safer around duplicates, manual-versus-linked overlaps, deleted entries, and mixed account-source setups.",
+    headline: "Accounts and balances behave more cleanly.",
+    highlights: [
+      "**Linked and manual records play nicer.** Duplicate handling and overlap logic are more deliberate.",
+      "**Portfolio setup feels safer.** Mixed source accounts are less likely to create confusing balance states.",
+      "**Audit inputs stay cleaner.** Included accounts and balances behave more consistently across account types.",
+    ],
     match: (entry) => /plaid|portfolio|investmentholdings|cardportfoliotab|inputform|duplicate/i.test(entry),
   },
   {
     key: "trust",
-    title: "Recovery, sync & trust",
-    summary: "Recovery and sync flows are more deliberate, with clearer continuity handling and safer state reconciliation across devices.",
+    headline: "Recovery and continuity are easier to trust.",
+    highlights: [
+      "**Restore paths are clearer.** Backup, restore, and continuity flows are easier to understand.",
+      "**Cross-device recovery is safer.** State reconciliation behaves more deliberately when devices reconnect.",
+      "**Trust surfaces feel tighter.** Security and continuity messaging is more aligned with how the product actually works.",
+    ],
     match: (entry) => /recovery|backup|icloud|identity|security|trust|sync/i.test(entry),
   },
   {
     key: "ux",
-    title: "Setup, shell & UX polish",
-    summary: "Core product surfaces feel calmer and more complete, especially around setup, shell states, offline handling, and navigation clarity.",
+    headline: "Core flows feel smoother and more complete.",
+    highlights: [
+      "**Navigation feels calmer.** The app shell is more polished and easier to scan.",
+      "**Empty and edge states feel less rough.** Setup, history, and transition moments land more cleanly.",
+      "**The product feels more finished.** A number of small friction points were tightened across core flows.",
+    ],
     match: (entry) => /setupwizard|pagepass|pageimport|appshell|offline|historytab|bottomnavbar|dashboard|aichat|settings|ui\.tsx/i.test(entry),
   },
   {
     key: "site",
-    title: "Website, guides & messaging",
-    summary: "The public-facing product story is tighter and more consistent across the site, guides, pricing language, and trust copy.",
+    headline: "The product story is tighter across the site and guides.",
+    highlights: [
+      "**Website copy is clearer.** Messaging now reflects the product more accurately.",
+      "**Guides feel more consistent.** Key onboarding and help surfaces are easier to follow.",
+      "**Pricing and trust language are cleaner.** The public-facing story is more focused and less noisy.",
+    ],
     match: (entry) => /site\/|guide|faq|security\.html|privacy\.html|compare\.html|index\.html|style\.css/i.test(entry),
   },
   {
     key: "ops",
-    title: "Release tooling & operations",
-    summary: "Release tooling is cleaner and more production-friendly, with better operational checks, summaries, and launch workflows.",
+    headline: "Smaller stability and polish improvements shipped behind the scenes.",
+    highlights: [
+      "**General polish improved.** Internal release work reduced rough edges without changing your workflow.",
+      "**Stability is tighter.** Supporting systems were cleaned up to make the product feel more dependable.",
+      "**Delivery got cleaner.** Release notes and launch tooling now communicate updates more clearly.",
+    ],
     match: (entry) => /scripts\/|workflow|telemetry|package\.json|readme|deploy|wrangler/i.test(entry),
   },
 ];
@@ -97,20 +121,6 @@ function cleanSubject(subject) {
     .trim();
 }
 
-function humanizePath(file) {
-  const cleaned = String(file || "").replace(/^src\/modules\//, "").replace(/^worker\/src\//, "worker/");
-  const tail = cleaned.split("/").slice(-2).join("/");
-  return tail.replace(/\.(tsx?|jsx?|mjs|cjs|js|html|css)$/i, "").replace(/[-_]/g, " ");
-}
-
-function formatCompareLabel(fromSubject, toSubject) {
-  if (fromSubject && toSubject) {
-    return `Compared with “${fromSubject},” this update centers on ${toSubject.toLowerCase()}.`;
-  }
-  if (toSubject) return `Latest update: ${toSubject}.`;
-  return "Latest Catalyst Cash update.";
-}
-
 function collectCategories(commits, files) {
   const seeded = new Map();
   const combinedInputs = [
@@ -124,16 +134,11 @@ function collectCategories(commits, files) {
       if (!seeded.has(category.key)) {
         seeded.set(category.key, {
           ...category,
-          files: new Set(),
-          subjects: new Set(),
+          score: 0,
         });
       }
       const bucket = seeded.get(category.key);
-      if (entry.type === "file") bucket.files.add(entry.value);
-      if (entry.type === "text") {
-        const subject = cleanSubject(entry.value);
-        if (subject) bucket.subjects.add(subject);
-      }
+      bucket.score += entry.type === "file" ? 2 : 1;
     }
   }
 
@@ -142,32 +147,51 @@ function collectCategories(commits, files) {
     if (fallback) {
       seeded.set(fallback.key, {
         ...fallback,
-        files: new Set(files),
-        subjects: new Set(commits.map((commit) => cleanSubject(commit.subject)).filter(Boolean)),
+        score: 1,
       });
     }
   }
 
-  return Array.from(seeded.values()).map((category) => {
-    const fileList = Array.from(category.files).slice(0, 3).map(humanizePath);
-    const subjectList = Array.from(category.subjects).slice(0, 2);
-    const evidenceBits = [];
-    if (fileList.length > 0) evidenceBits.push(`Scope: ${fileList.join(", ")}`);
-    if (subjectList.length > 0) evidenceBits.push(`Recent work: ${subjectList.join(" • ")}`);
-    return {
-      title: category.title,
-      value: [category.summary, ...evidenceBits].join("\n"),
-    };
+  const order = new Map(CATEGORY_DEFS.map((entry, index) => [entry.key, index]));
+  return Array.from(seeded.values()).sort((left, right) => {
+    if (right.score !== left.score) return right.score - left.score;
+    return (order.get(left.key) || 0) - (order.get(right.key) || 0);
   });
 }
 
-function summarizeDiff(commits, files, shortStat) {
-  const commitCount = commits.length;
-  const fileCount = files.length;
-  const fileLabel = fileCount === 1 ? "file" : "files";
-  const commitLabel = commitCount === 1 ? "commit" : "commits";
-  const statLine = shortStat ? shortStat.replace(/\s+/g, " ").trim() : "No file-level diff summary available.";
-  return `${commitCount} ${commitLabel} across ${fileCount} ${fileLabel}. ${statLine}`;
+function buildDescription(categories) {
+  if (categories.length === 0) return "A smaller polish update shipped.";
+  return categories[0].headline;
+}
+
+function buildHighlights(categories) {
+  if (categories.length === 0) {
+    return ["• **General polish.** Smaller reliability and presentation improvements shipped across the product."];
+  }
+
+  const [primary, ...rest] = categories;
+  const bullets = [];
+
+  const pushUnique = (value) => {
+    const cleaned = cleanSubject(String(value || ""));
+    if (!cleaned) return;
+    if (bullets.includes(`• ${cleaned}`)) return;
+    bullets.push(`• ${cleaned}`);
+  };
+
+  if (categories.length === 1) {
+    primary.highlights.slice(0, 3).forEach(pushUnique);
+    return bullets.slice(0, 3);
+  }
+
+  pushUnique(primary.highlights[0]);
+  rest.slice(0, 2).forEach((category) => pushUnique(category.highlights[0]));
+
+  if (bullets.length < 4) {
+    pushUnique(primary.highlights[1]);
+  }
+
+  return bullets.slice(0, 4);
 }
 
 async function writeState(lastAnnouncedCommit, fromCommit) {
@@ -186,22 +210,16 @@ async function writeState(lastAnnouncedCommit, fromCommit) {
   );
 }
 
-function buildPayload({ fromCommit, toCommit, fromSubject, toSubject, commitDate, commits, files, shortStat }) {
-  const shortFrom = fromCommit.slice(0, 7);
-  const shortTo = toCommit.slice(0, 7);
-  const title = versionLabel || `Catalyst Cash update • ${shortTo}`;
-  const description = formatCompareLabel(fromSubject, toSubject);
+function buildPayload({ commitDate, commits, files }) {
+  const categories = collectCategories(commits, files);
+  const title = versionLabel || "Catalyst Cash update";
+  const description = buildDescription(categories);
   const fields = [
     {
-      name: "Update delta",
-      value: summarizeDiff(commits, files, shortStat),
+      name: "What changed",
+      value: buildHighlights(categories).join("\n"),
       inline: false,
     },
-    ...collectCategories(commits, files).slice(0, 4).map((entry) => ({
-      name: entry.title,
-      value: entry.value.slice(0, 1024),
-      inline: false,
-    })),
   ];
 
   return {
@@ -210,11 +228,8 @@ function buildPayload({ fromCommit, toCommit, fromSubject, toSubject, commitDate
       {
         title,
         description,
-        color: 0x00ff88,
+        color: 0x6d8ed9,
         fields,
-        footer: {
-          text: `Compared ${shortFrom} → ${shortTo}`,
-        },
         timestamp: commitDate,
       },
     ],
@@ -260,20 +275,12 @@ async function main() {
     .split("\n")
     .map((entry) => entry.trim())
     .filter(Boolean);
-  const shortStat = git(["diff", "--shortstat", `${fromCommit}..${toCommit}`]);
-  const fromSubject = cleanSubject(git(["log", "--format=%s", "-1", fromCommit]));
-  const toSubject = cleanSubject(git(["log", "--format=%s", "-1", toCommit]));
   const commitDate = commits[commits.length - 1]?.date || new Date().toISOString();
 
   const payload = buildPayload({
-    fromCommit,
-    toCommit,
-    fromSubject,
-    toSubject,
     commitDate,
     commits,
     files,
-    shortStat,
   });
 
   if (dryRun) {
