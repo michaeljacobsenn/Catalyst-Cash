@@ -6,12 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#0C121B" />
-    <title>Catalyst Cash | Weekly money decisions for iPhone</title>
+    <title>Catalyst Cash | The private operating system for your money week</title>
     <meta name="description"
-        content="Catalyst Cash is a privacy-first iPhone app that turns balances, debts, renewals, and transactions into a weekly money audit with clear next moves." />
-    <meta property="og:title" content="Catalyst Cash | Weekly money decisions for iPhone" />
+        content="Catalyst Cash is a local-first iPhone app for weekly audits, live cash pressure, debt decisions, renewals, AskAI follow-up, and secure recovery through encrypted exports, iCloud, and Recovery Vault." />
+    <meta property="og:title" content="Catalyst Cash | The private operating system for your money week" />
     <meta property="og:description"
-        content="Run a weekly money audit, ask follow-up questions, track debt and cash flow, and keep your financial data local-first." />
+        content="Run the weekly audit, work the command center, ask follow-up questions, and keep your financial record local-first." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://catalystcash.app" />
     <meta property="og:image" content="https://catalystcash.app/icon-512.png" />
@@ -34,7 +34,7 @@
       "name": "Catalyst Cash",
       "operatingSystem": "iOS",
       "applicationCategory": "FinanceApplication",
-      "description": "A privacy-first iPhone app that turns balances, debts, renewals, and transactions into a weekly money audit with clear next moves.",
+      "description": "A local-first iPhone app that turns balances, debts, renewals, and transactions into a weekly money operating system with clear next moves.",
       "url": "https://catalystcash.app",
       "image": "https://catalystcash.app/icon-512.png",
       "offers": [
@@ -46,19 +46,19 @@
         },
         {
           "@type": "Offer",
-          "price": "9.99",
+          "price": "12.99",
           "priceCurrency": "USD",
           "description": "Pro monthly"
         },
         {
           "@type": "Offer",
-          "price": "99.99",
+          "price": "109.99",
           "priceCurrency": "USD",
           "description": "Pro yearly"
         },
         {
           "@type": "Offer",
-          "price": "299.99",
+          "price": "199.99",
           "priceCurrency": "USD",
           "description": "Pro lifetime — one-time purchase"
         }
@@ -67,7 +67,7 @@
     </script>
 </head>
 
-<body>
+<body class="home-page">
     <a href="#main-content" class="skip-link"
         style="position:absolute;top:-100%;left:16px;padding:12px 20px;background:var(--green);color:#0C121B;font-weight:700;border-radius:8px;z-index:200;font-size:14px;transition:top 0.2s;"
         onfocus="this.style.top='12px'" onblur="this.style.top='-100%'">Skip to content</a>
@@ -85,8 +85,9 @@
                     <span></span><span></span><span></span>
                 </button>
                 <div class="nav-links" id="nav-links">
-                    <a href="#difference">What It Does</a>
-                    <a href="#workflow">How It Works</a>
+                    <a href="#system">System</a>
+                    <a href="#workflow">Workflow</a>
+                    <a href="#trust">Trust</a>
                     <a href="#pricing">Pricing</a>
                     <a href="/compare.html">Compare</a>
                     <a href="/guide.html">Guide</a>
@@ -99,300 +100,251 @@
         </nav>
 
         <main id="main-content" class="shell">
-            <section class="hero" aria-label="Hero">
-                <div class="hero-grid">
-                    <div class="hero-copy fade-up">
-                        <img src="/icon-512.png?v=4" alt="Catalyst Cash App Icon" class="splash-logo" width="160"
-                            height="160" fetchpriority="high" />
-                        <div class="eyebrow">iPhone app | weekly audit | local-first</div>
-                        <h1>Your weekly money briefing, not another finance dashboard.</h1>
+            <section class="home-hero" aria-label="Hero">
+                <div class="home-hero-glow"></div>
+                <div class="home-hero-inner">
+                    <div class="home-hero-copy fade-up">
+                        <div class="eyebrow">iPhone beta | local-first record | weekly operating system</div>
+                        <h1>The private operating system for your money week.</h1>
                         <p class="hero-sub">
-                            Catalyst Cash turns your balances, debt, renewals, and transaction pressure into a weekly
-                            decision packet: what is safe, what needs attention, and what move should happen first.
+                            Catalyst Cash is not a passive dashboard. It is a command center: load the week, run the
+                            audit, see what is actually safe, work the next move, and recover the system through
+                            encrypted export, iCloud, or Recovery Vault when life gets messy.
                         </p>
                         <div class="button-stack">
-                            <a href="https://testflight.apple.com/join/3rpWQq49" class="button-primary">Join the Beta</a>
-                            <a href="/guide.html" class="button-secondary">Read the Guide</a>
+                            <a href="https://testflight.apple.com/join/3rpWQq49" class="button-primary">Join TestFlight</a>
+                            <a href="/guide.html" class="button-secondary">See the Full Guide</a>
                         </div>
                         <div class="hero-note">
-                            <span>2 audits per week on Free</span>
-                            <span>5 AskAI chats per day on Free</span>
-                            <span>Manual entry or optional Plaid sync</span>
+                            <span>Command Center dashboard</span>
+                            <span>Scored weekly audits</span>
+                            <span>AskAI follow-up with your real context</span>
+                            <span>Manual first, optional Plaid sync</span>
                         </div>
                     </div>
 
-                    <div class="hero-preview fade-up delay-1" id="sample-audit">
-                        <div class="audit-frame">
-                            <div class="audit-top">
-                                <div class="status-pill green">Green week</div>
-                                <div class="audit-title">Weekly money audit</div>
+                    <div class="home-hero-visual fade-up delay-1">
+                        <div class="hero-stack">
+                            <figure class="hero-device hero-device-main">
+                                <img src="/img/app-dashboard.png" alt="Catalyst Cash dashboard command center" width="525"
+                                    height="758" fetchpriority="high" />
+                            </figure>
+                            <figure class="hero-device hero-device-side hero-device-audit">
+                                <img src="/img/app-audit.png" alt="Catalyst Cash weekly money audit" width="640"
+                                    height="640" loading="eager" />
+                            </figure>
+                            <figure class="hero-device hero-device-side hero-device-chat">
+                                <img src="/img/app-chat.png" alt="Catalyst AI follow-up chat" width="525"
+                                    height="794" loading="eager" />
+                            </figure>
+                        </div>
+                        <aside class="hero-command-card">
+                            <div class="micro-label">What the app actually does</div>
+                            <div class="command-lines">
+                                <div>
+                                    <strong>Weekly Snapshot</strong>
+                                    <p>Input the week’s truth: balances, debt pressure, due dates, and notes the audit must respect.</p>
+                                </div>
+                                <div>
+                                    <strong>Audit + Command Center</strong>
+                                    <p>Score the week, classify risk, surface debt focus, and show what is safe to spend.</p>
+                                </div>
+                                <div>
+                                    <strong>Recovery + Continuity</strong>
+                                    <p>Encrypted export, iCloud restore, Recovery Vault, and account-backed restore on secure devices.</p>
+                                </div>
                             </div>
-                            <h2>$1,120 looks safe before your next payday.</h2>
-                            <p class="audit-summary">
-                                You are above your emergency floor, your minimum debt stack is covered, and one credit
-                                card balance is still the clear highest-cost target. This week is about tightening one
-                                renewal and clearing one expensive balance.
+                        </aside>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section home-strip">
+                <div class="home-strip-grid">
+                    <div class="home-strip-item fade-up">
+                        <span>Weekly pressure</span>
+                        <strong>Runway, bills, debt cost, checking floor</strong>
+                    </div>
+                    <div class="home-strip-item fade-up delay-1">
+                        <span>Working surfaces</span>
+                        <strong>Audit, AskAI, Portfolio, Cashflow, Renewals, Ledger</strong>
+                    </div>
+                    <div class="home-strip-item fade-up delay-2">
+                        <span>Trust model</span>
+                        <strong>Local-first records with optional Plaid and layered recovery</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section" id="system">
+                <div class="section-head">
+                    <div class="micro-label">System</div>
+                    <h2>This is a weekly command loop, not a prettier ledger.</h2>
+                    <p>
+                        The app now works as a connected operating system. The audit is the center, but the surrounding
+                        surfaces are what make the decision credible, actionable, and recoverable.
+                    </p>
+                </div>
+
+                <div class="system-grid">
+                    <article class="system-row fade-up">
+                        <div class="system-copy">
+                            <span class="system-index">01</span>
+                            <h3>Load the real week</h3>
+                            <p>
+                                The input flow is designed around the current snapshot: checking, savings, debt balances,
+                                pending charges, due dates, and any note the audit must respect this week.
                             </p>
-
-                            <div class="signal-grid">
-                                <div class="signal-card signal-safe">
-                                    <span>Runway</span>
-                                    <strong>12 days</strong>
-                                    <small>Cash stays above floor through the next paycheck.</small>
-                                </div>
-                                <div class="signal-card signal-risk">
-                                    <span>Next Pressure</span>
-                                    <strong>$79 renewal</strong>
-                                    <small>Streaming bundle renews in 4 days.</small>
-                                </div>
-                                <div class="signal-card signal-focus">
-                                    <span>Debt Focus</span>
-                                    <strong>Visa balance</strong>
-                                    <small>Highest active APR in the stack.</small>
-                                </div>
-                            </div>
-
-                            <div class="action-list">
-                                <div class="action-row">
-                                    <div class="action-step">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                                            stroke-linejoin="round" aria-hidden="true">
-                                            <path
-                                                d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-                                        </svg>
-                                    </div>
-                                    <div class="action-copy">
-                                        <strong>Pay down the highest APR card</strong>
-                                        <div class="action-pill-row" style="margin-bottom: 8px;">
-                                            <span class="action-pill pill-strategy">Debt priority</span>
-                                            <span class="action-pill pill-savings">Interest first</span>
-                                        </div>
-                                        <p>Use this week’s extra room to reduce the balance that is compounding the
-                                            fastest instead of spreading payments evenly.</p>
-                                    </div>
-                                </div>
-                                <div class="action-row">
-                                    <div class="action-step">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                                            stroke-linejoin="round" aria-hidden="true">
-                                            <path
-                                                d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-                                        </svg>
-                                    </div>
-                                    <div class="action-copy">
-                                        <strong>Review the renewal before it bills</strong>
-                                        <div class="action-pill-row" style="margin-bottom: 8px;">
-                                            <span class="action-pill pill-strategy">Renewal control</span>
-                                            <span class="action-pill pill-savings">Cost pressure</span>
-                                        </div>
-                                        <p>Use the renewals surface to decide whether to keep it, downgrade it, or use
-                                            the app’s negotiation prompts and cancellation links.</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="audit-foot">
-                                <span>Native money math first. AI reasoning second.</span>
-                                <div class="mini-proof">
-                                    <span>Core data stays local</span>
-                                    <span>Plaid is optional</span>
-                                </div>
-                            </div>
+                            <ul class="system-points">
+                                <li>Fast path for a first credible audit</li>
+                                <li>Manual entry works fully on its own</li>
+                                <li>Add only the cards and accounts that matter right now</li>
+                            </ul>
                         </div>
-                    </div>
-                </div>
+                        <div class="system-shot">
+                            <img src="/img/app-input.png" alt="Catalyst Cash weekly snapshot input screen" width="384"
+                                height="683" loading="lazy" />
+                        </div>
+                    </article>
 
-                <div class="proof-rail">
-                    <div class="proof-card glass-card fade-up delay-1">
-                        <strong>Weekly decision support</strong>
-                        <p>The primary output is a ranked action list, not just categories and charts.</p>
-                    </div>
-                    <div class="proof-card glass-card fade-up delay-2">
-                        <strong>Local-first financial records</strong>
-                        <p>Your core balances, debts, renewals, and history stay on your device by default.</p>
-                    </div>
-                    <div class="proof-card glass-card fade-up delay-3">
-                        <strong>More than one tool</strong>
-                        <p>Audit, AskAI, debt simulation, budget planning, renewals, and card rewards live in one app.</p>
-                    </div>
-                    <div class="proof-card glass-card fade-up delay-4">
-                        <strong>Built for messy reality</strong>
-                        <p>Multiple cards, uneven cash flow, subscription creep, debt payoff, and too many accounts.</p>
-                    </div>
+                    <article class="system-row system-row-reverse fade-up delay-1" id="workflow">
+                        <div class="system-copy">
+                            <span class="system-index">02</span>
+                            <h3>Run the audit and work the dashboard</h3>
+                            <p>
+                                Native money math handles the safety boundaries first. The app then turns those signals
+                                into a health score, a status, and the specific move that should happen before the week drifts.
+                            </p>
+                            <ul class="system-points">
+                                <li>See safe-to-spend, checking floor, debt priority, and trend direction</li>
+                                <li>Use audit history and the command center to keep the system honest</li>
+                                <li>Designed for repeated weekly use, not occasional cleanup</li>
+                            </ul>
+                        </div>
+                        <div class="system-shot system-shot-split">
+                            <img src="/img/app-dashboard.png" alt="Catalyst Cash dashboard command center" width="525"
+                                height="758" loading="lazy" />
+                            <img src="/img/app-audit-tab.png" alt="Catalyst Cash audit history and run screen" width="525"
+                                height="896" loading="lazy" />
+                        </div>
+                    </article>
+
+                    <article class="system-row fade-up delay-2">
+                        <div class="system-copy">
+                            <span class="system-index">03</span>
+                            <h3>Stress-test the decision, then work the surrounding surfaces</h3>
+                            <p>
+                                AskAI is useful because it sits next to the audit, not away from it. Cashflow and renewals
+                                are there to clear the pressure the audit just surfaced.
+                            </p>
+                            <ul class="system-points">
+                                <li>Ask if you can afford the purchase, whether to pay a card first, or how a move changes runway</li>
+                                <li>Use cashflow and renewals to reduce what is about to hit checking</li>
+                                <li>Portfolio and ledger help when you need more detail than the weekly summary</li>
+                            </ul>
+                        </div>
+                        <div class="system-shot system-shot-wide">
+                            <img src="/img/app-chat.png" alt="Catalyst AI asking follow-up questions about your finances" width="525"
+                                height="794" loading="lazy" />
+                            <img src="/img/app-cashflow.png" alt="Catalyst Cash cashflow and renewals screen" width="525"
+                                height="758" loading="lazy" />
+                        </div>
+                    </article>
                 </div>
             </section>
 
-            <section class="section" id="difference">
-                <div class="section-head">
-                    <div class="micro-label">What You Get</div>
-                    <h2>The app answers four questions every week.</h2>
-                    <p>
-                        Catalyst Cash is strongest when you need clarity fast: how safe your cash is, what debt matters
-                        most, what upcoming items can hurt you, and what your next move should be.
-                    </p>
-                </div>
-
-                <div class="difference-grid">
-                    <div class="panel">
-                        <div class="outcome-stack">
-                            <div class="outcome-card">
-                                <div class="tone green">Status</div>
-                                <strong>Is this week green, yellow, or red?</strong>
-                                <p>The audit classifies the week so you know whether to push forward, stay disciplined,
-                                    or protect cash immediately.</p>
-                            </div>
-                            <div class="outcome-card">
-                                <div class="tone yellow">Priority</div>
-                                <strong>What should happen first?</strong>
-                                <p>Debt focus, renewal pressure, checking-floor risk, and spending tradeoffs are turned
-                                    into a concrete action list.</p>
-                            </div>
-                            <div class="outcome-card">
-                                <div class="tone blue">Follow-up</div>
-                                <strong>What if the decision is not obvious?</strong>
-                                <p>AskAI lets you stress test a purchase, debt sequence, savings move, or timing choice
-                                    against your current numbers.</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="tracker-table">
-                        <h3>What each product area is responsible for</h3>
-                        <p>The app is not one screen pretending to do everything.</p>
-                        <div class="compare-grid">
-                            <div class="compare-row">
-                                <div class="compare-head">Surface</div>
-                                <div class="compare-bad">Passive tracker output</div>
-                                <div class="compare-good">Catalyst output</div>
-                            </div>
-                            <div class="compare-row">
-                                <strong>Audit</strong>
-                                <div class="compare-bad">Historical recap</div>
-                                <div class="compare-good">Weekly action packet</div>
-                            </div>
-                            <div class="compare-row">
-                                <strong>AskAI</strong>
-                                <div class="compare-bad">Generic advice</div>
-                                <div class="compare-good">Context-aware follow-up</div>
-                            </div>
-                            <div class="compare-row">
-                                <strong>Portfolio + Ledger</strong>
-                                <div class="compare-bad">Scattered accounts</div>
-                                <div class="compare-good">One working view of assets, debts, and transactions</div>
-                            </div>
-                            <div class="compare-row">
-                                <strong>Cashflow + Renewals</strong>
-                                <div class="compare-bad">Bills you remember manually</div>
-                                <div class="compare-good">Upcoming claims on cash with timing context</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section class="section" id="workflow">
-                <div class="section-head">
-                    <div class="micro-label">How It Works</div>
-                    <h2>Three steps to a better money week.</h2>
-                    <p>
-                        Manual entry is supported. Plaid is optional. The weekly operating loop stays the same either
-                        way.
-                    </p>
-                </div>
-
-                <div class="steps">
-                    <div class="step-card fade-up">
-                        <div class="step-index">01</div>
-                        <h3>Bring your numbers current</h3>
-                        <p>Update checking, savings, cards, renewals, and major balances manually or sync supported
-                            institutions through Plaid.</p>
-                    </div>
-                    <div class="step-card fade-up delay-1">
-                        <div class="step-index">02</div>
-                        <h3>Run the audit</h3>
-                        <p>Native math evaluates cash pressure, due dates, balances, and debt order before the AI turns
-                            the result into readable next moves.</p>
-                    </div>
-                    <div class="step-card fade-up delay-2">
-                        <div class="step-index">03</div>
-                        <h3>Act and re-check</h3>
-                        <p>Use AskAI, renewals, budgeting, and the transaction ledger to act on the decision and rerun
-                            when reality changes.</p>
-                    </div>
-                </div>
-            </section>
-
-            <section class="section">
+            <section class="section" id="surfaces">
                 <div class="section-head">
                     <div class="micro-label">Inside The App</div>
-                    <h2>The core surfaces and what they are for.</h2>
+                    <h2>The current product is broader, tighter, and more operational than the old homepage showed.</h2>
                     <p>
-                        The product is broader than the audit, but every tool is there to support better weekly
-                        decisions.
+                        These are the surfaces the app actually ships with today and what each one is responsible for.
                     </p>
                 </div>
 
-                <div class="bento-grid">
-                    <div class="bento-item glass-card fade-up">
-                        <div class="bento-icon" style="background: var(--green-deep); color: var(--green);">AUD</div>
-                        <h3>Audit</h3>
-                        <p>The weekly money review that ranks pressure points, debt priority, runway, and next moves.</p>
+                <div class="surface-layout">
+                    <div class="surface-rail">
+                        <article class="surface-item fade-up">
+                            <span>Command Center</span>
+                            <p>Home base for score, safe-to-spend, checking floor, net worth trend, streaks, and what changed since the last audit.</p>
+                        </article>
+                        <article class="surface-item fade-up delay-1">
+                            <span>Audit + History</span>
+                            <p>Run the next audit, review the archive, export results, and keep a record of how the week was classified.</p>
+                        </article>
+                        <article class="surface-item fade-up delay-2">
+                            <span>AskAI</span>
+                            <p>Context-aware follow-up on the actual numbers already loaded into the app.</p>
+                        </article>
+                        <article class="surface-item fade-up delay-3">
+                            <span>Cashflow + Renewals</span>
+                            <p>Recurring bills, burn rate, negotiation prompts, and upcoming claims on cash.</p>
+                        </article>
+                        <article class="surface-item fade-up delay-4">
+                            <span>Portfolio + Ledger + Power Tools</span>
+                            <p>Cards, bank accounts, investments, debt simulation, rewards ranking, credit utilization, FIRE math, and the searchable transaction workflow.</p>
+                        </article>
                     </div>
-                    <div class="bento-item glass-card fade-up delay-1">
-                        <div class="bento-icon" style="background: var(--purple-deep); color: var(--purple);">AI</div>
-                        <h3>AskAI</h3>
-                        <p>Follow-up reasoning for affordability, debt sequence, timing questions, and scenario testing.</p>
-                    </div>
-                    <div class="bento-item glass-card fade-up delay-2">
-                        <div class="bento-icon" style="background: var(--amber-deep); color: var(--amber);">PORT</div>
-                        <h3>Portfolio Vault</h3>
-                        <p>Track bank accounts, cards, loans, investments, crypto, and other assets in one working view.</p>
-                    </div>
-                    <div class="bento-item glass-card fade-up">
-                        <div class="bento-icon" style="background: var(--blue-deep); color: var(--blue);">FLOW</div>
-                        <h3>Cashflow</h3>
-                        <p>Budget envelopes, spending pace, and a timeline of upcoming money in and money out.</p>
-                    </div>
-                    <div class="bento-item glass-card fade-up delay-1">
-                        <div class="bento-icon" style="background: var(--red-deep); color: var(--red);">RENW</div>
-                        <h3>Renewals</h3>
-                        <p>Track recurring bills, surface likely subscriptions, and use negotiation or cancellation support.</p>
-                    </div>
-                    <div class="bento-item glass-card fade-up delay-2">
-                        <div class="bento-icon" style="background: var(--amber-deep); color: var(--amber);">PRO</div>
-                        <h3>Power tools</h3>
-                        <p>Debt simulator, FIRE math, credit-utilization tools, rewards ranking, and the Pro ledger workflow.</p>
+
+                    <div class="surface-proof fade-up delay-2">
+                        <div class="surface-proof-card">
+                            <div class="micro-label">Built for real messy finance</div>
+                            <h3>Multiple cards. Uneven cash flow. Too many accounts. Subscription drag. Recovery if the phone disappears.</h3>
+                            <p>
+                                The latest app is strongest when your money is complex enough that a passive dashboard
+                                makes you do too much interpretation yourself.
+                            </p>
+                            <div class="surface-proof-tags">
+                                <span>Debt payoff with cash friction</span>
+                                <span>High-income / low-clarity finances</span>
+                                <span>Recurring bill pressure</span>
+                                <span>Manual-first or Plaid-assisted</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
 
-            <section class="section">
+            <section class="section" id="trust">
                 <div class="section-head">
-                    <div class="micro-label">Best Fit</div>
-                    <h2>Who gets the most value from Catalyst Cash.</h2>
+                    <div class="micro-label">Trust + Recovery</div>
+                    <h2>The trust model is part of the product, not a legal footnote.</h2>
                     <p>
-                        The product is strongest when your finances have real moving parts and you want one weekly
-                        operating system instead of six isolated tools.
+                        Catalyst Cash is built for people who do not want their financial life to depend on a cloud
+                        dashboard clone. The working record stays local-first. Networked features are deliberate and bounded.
                     </p>
                 </div>
 
-                <div class="fit-grid">
-                    <div class="fit-card">
-                        <h3>Debt payoff with cash friction</h3>
-                        <p>Good fit if you need to decide what to pay first without accidentally starving checking or
-                            missing bills.</p>
+                <div class="trust-grid">
+                    <article class="trust-card fade-up">
+                        <span>Local-first record</span>
+                        <p>Balances, debts, renewals, settings, and audit history live on-device as the primary record.</p>
+                    </article>
+                    <article class="trust-card fade-up delay-1">
+                        <span>Optional Plaid boundary</span>
+                        <p>Plaid is there to improve freshness. Manual entry still supports the full operating loop.</p>
+                    </article>
+                    <article class="trust-card fade-up delay-2">
+                        <span>Layered recovery</span>
+                        <p>Encrypted export, iCloud backup on iPhone, Recovery Vault, linked vault discovery, and account-backed continuity on secure devices.</p>
+                    </article>
+                    <article class="trust-card fade-up delay-3">
+                        <span>Protected identity on device</span>
+                        <p>Secure iPhone storage, protected identity sessions, and verified restore paths are built into the latest recovery flow.</p>
+                    </article>
+                </div>
+
+                <div class="trust-footer-panel fade-up delay-2">
+                    <div>
+                        <h3>This is the practical difference from most finance-app marketing.</h3>
+                        <p>
+                            The app is not claiming “magic AI.” It is claiming a tighter operating loop, clearer boundaries,
+                            and a more resilient personal record if you actually use it every week.
+                        </p>
                     </div>
-                    <div class="fit-card">
-                        <h3>High-income, low-clarity finances</h3>
-                        <p>Good fit if you earn well but still feel behind because your money is spread across too many
-                            accounts and obligations.</p>
-                    </div>
-                    <div class="fit-card">
-                        <h3>Subscription and renewal leakage</h3>
-                        <p>Good fit if recurring charges keep quietly compounding and you want a structured monthly
-                            cleanup pass.</p>
+                    <div class="button-stack">
+                        <a href="/security.html" class="button-secondary">Read Security Details</a>
+                        <a href="/privacy.html" class="button-secondary">Read Privacy Policy</a>
                     </div>
                 </div>
             </section>
@@ -400,10 +352,10 @@
             <section class="section" id="pricing">
                 <div class="section-head">
                     <div class="micro-label">Pricing</div>
-                    <h2>Free is the full workflow. Pro expands the headroom.</h2>
+                    <h2>Free proves the system. Pro expands the headroom.</h2>
                     <p>
-                        The free tier is meant to prove the operating model. Pro raises usage limits, unlocks premium AI
-                        models, supports up to 8 Plaid institutions with quiet balance and ledger upkeep, and opens the full ledger workflow.
+                        Free is enough to run the weekly loop honestly. Pro is for heavier use, deeper models, more institutions,
+                        more history, and the full ledger workflow.
                     </p>
                 </div>
 
@@ -414,14 +366,14 @@
                             <strong>$0</strong>
                             <span>forever</span>
                         </div>
-                        <p>Enough to build the weekly habit and understand how the system works on your own money.</p>
+                        <p>Enough to prove the command loop on your real money without committing first.</p>
                         <ul>
                             <li>2 audits per week</li>
                             <li>5 AskAI chats per day</li>
                             <li>Catalyst AI model</li>
                             <li>1 Plaid institution or fully manual use</li>
                             <li>Last 12 saved audits</li>
-                            <li>Dashboard, budgeting, debt, FIRE, renewals, and rewards tools included</li>
+                            <li>Dashboard, budgeting, debt, renewals, rewards, and core power tools included</li>
                         </ul>
                         <a href="https://testflight.apple.com/join/3rpWQq49" class="button-secondary">Start Free</a>
                     </div>
@@ -430,10 +382,10 @@
                         <div class="price-badge">Pro</div>
                         <h3>Catalyst Cash Pro</h3>
                         <div class="price-amount">
-                            <strong>$9.99</strong>
+                            <strong>$12.99</strong>
                             <span>per month</span>
                         </div>
-                        <p>For heavier weekly use, deeper model reasoning, quieter multi-institution upkeep, and a more operational workflow.</p>
+                        <p>For heavier weekly use, deeper model reasoning, multi-institution upkeep, full history, and the more serious operational workflow.</p>
                         <ul>
                             <li>20 audits per month and 30 AskAI chats per day</li>
                             <li>Catalyst AI plus Catalyst AI CFO (GPT-4.1) and Boardroom (o3)</li>
@@ -446,11 +398,11 @@
                             <div class="yearly-badge">Annual</div>
                             <div class="yearly-body">
                                 <div class="yearly-price">
-                                    <strong>$99.99</strong>
+                                    <strong>$109.99</strong>
                                     <span>/ year</span>
-                                    <span class="yearly-saving">About 2 months free</span>
+                                    <span class="yearly-saving">Save $46/yr vs monthly</span>
                                 </div>
-                                <p class="yearly-note">$8.33/mo effective &mdash; 7-day free trial included</p>
+                                <p class="yearly-note">$9.17/mo effective &mdash; 7-day free trial included</p>
                             </div>
                         </div>
 
@@ -458,21 +410,21 @@
                             <div class="yearly-badge" style="background: linear-gradient(135deg, #E8A838, #D4873A); color: #fff; border-color: rgba(232,168,56,0.5);">Lifetime</div>
                             <div class="yearly-body">
                                 <div class="yearly-price">
-                                    <strong>$299.99</strong>
+                                    <strong>$199.99</strong>
                                     <span>once</span>
                                     <span class="yearly-saving" style="color: #fff; background: linear-gradient(135deg, #E8A838, #D4873A); border-color: rgba(232,168,56,0.5);">Never pay again</span>
                                 </div>
-                                <p class="yearly-note">One purchase, lifetime access. Every future feature included.</p>
+                                <p class="yearly-note">One purchase, lifetime access. Pays for itself in under 16 months. Every future feature included. Capped at 50 users.</p>
                             </div>
                         </div>
 
                         <a href="https://testflight.apple.com/join/3rpWQq49" class="button-primary">Start 7-Day Free Trial</a>
                         <p class="price-foot">Subscriptions auto-renew until cancelled. Lifetime is a one-time, non-recurring purchase. Billing is managed through your Apple account.</p>
 
-                        <div style="margin-top: 16px; padding: 14px 16px; background: rgba(138,99,210,0.10); border: 1px solid rgba(138,99,210,0.28); border-radius: 12px; text-align: center;">
-                            <div style="font-size: 16px; margin-bottom: 4px;">🎁</div>
-                            <strong style="font-size: 13px; color: #F1F5F9;">Referral program</strong>
-                            <p style="font-size: 12px; color: #B0BEC9; margin: 6px 0 0; line-height: 1.55;">Give a month, get a month. Share your referral code inside the app and you both earn a free month of Pro.</p>
+                        <div class="pricing-note-box">
+                            <div class="pricing-note-icon">↺</div>
+                            <strong>Recovery and export live in both tiers</strong>
+                            <p>Trust features are not paywalled. Pro is about depth, scale, and working history, not locking basic resilience behind a subscription.</p>
                         </div>
                     </div>
                 </div>
@@ -481,31 +433,25 @@
             <section class="section">
                 <div class="section-head">
                     <div class="micro-label">FAQ</div>
-                    <h2>The questions serious users ask first.</h2>
+                    <h2>The questions people ask when the product is doing more than the old homepage implied.</h2>
                 </div>
 
                 <div class="faq">
                     <div class="faq-card fade-up">
-                        <h3>Do I need Plaid to use the app well?</h3>
-                        <p>No. Plaid is optional. Manual entry still supports the core audit, budgeting, debt, and
-                            planning workflow.</p>
+                        <h3>Is this mainly an audit app or a full finance system?</h3>
+                        <p>The audit is the center of gravity, but the product is now a broader operating system: command center, AskAI, portfolio, cashflow, renewals, ledger, and recovery.</p>
                     </div>
                     <div class="faq-card fade-up delay-1">
-                        <h3>Does Pro change the financial math?</h3>
-                        <p>No. The core math stays the same. Pro changes usage limits, model depth, history depth, and
-                            premium tooling.</p>
+                        <h3>Do I need Plaid to use it well?</h3>
+                        <p>No. Plaid is optional. Manual entry still supports the core audit, debt, budgeting, and weekly planning loop.</p>
                     </div>
                     <div class="faq-card fade-up">
-                        <h3>Is the output financial advice?</h3>
-                        <p>No. Catalyst Cash provides educational analysis and decision support, not licensed tax, legal,
-                            investment, or financial advice.</p>
+                        <h3>What happens if I change phones or reinstall?</h3>
+                        <p>You can recover through encrypted export, iCloud backup on secure iPhone devices, or the newer Recovery Vault and continuity flows.</p>
                     </div>
                     <div class="faq-card fade-up delay-1">
-                        <h3>Where does my data live?</h3>
-                        <p>Your core financial data stays local-first on your device. AI requests are scrubbed and
-                            routed through the Catalyst backend. Your raw financial payload is not stored on our servers;
-                            a short scrubbed excerpt of the AI response is logged for service reliability and purged on
-                            a rolling basis. See the <a href="/privacy.html">Privacy Policy</a> for full details.</p>
+                        <h3>Where does the working record live?</h3>
+                        <p>Your core financial record stays local-first on your device. AI requests are scrubbed and routed through the backend only when you use those features. See <a href="/privacy.html">Privacy</a> and <a href="/security.html">Security</a> for the full model.</p>
                     </div>
                 </div>
 
@@ -518,21 +464,21 @@
                 <div class="final-cta">
                     <div>
                         <div class="micro-label">Next Step</div>
-                        <h2>Use the app weekly, not reactively.</h2>
+                        <h2>Run your money like a weekly system, not a reactive cleanup project.</h2>
                         <p>
-                            Catalyst Cash is built for people who want a recurring operating rhythm: update the numbers,
-                            run the audit, act on the top move, and keep the system honest.
+                            The latest version of Catalyst Cash is built for a recurring rhythm: update the week, run the
+                            audit, work the surfaces that matter, and keep the financial record recoverable.
                         </p>
                         <div class="trust-footer">
                             <span>iPhone app</span>
                             <span>Local-first records</span>
                             <span>Optional Plaid</span>
-                            <span>Secure AI proxy</span>
+                            <span>Recovery Vault + encrypted backup</span>
                         </div>
                     </div>
                     <div class="button-stack">
                         <a href="https://testflight.apple.com/join/3rpWQq49" class="button-primary">Join TestFlight</a>
-                        <a href="/compare.html" class="button-secondary">See Compare Page</a>
+                        <a href="/compare.html" class="button-secondary">Compare It to Dashboard-First Apps</a>
                     </div>
                 </div>
             </section>
@@ -551,8 +497,9 @@
                 <div class="footer-links">
                     <div class="footer-col">
                         <h4>Product</h4>
-                        <a href="#difference">What It Does</a>
+                        <a href="#system">What It Does</a>
                         <a href="#workflow">How It Works</a>
+                        <a href="#trust">Trust</a>
                         <a href="#pricing">Pricing</a>
                         <a href="/compare.html">Compare</a>
                     </div>
