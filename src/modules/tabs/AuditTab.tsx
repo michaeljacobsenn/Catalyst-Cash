@@ -13,7 +13,6 @@
     Filter,
     Plus,
     Trash2,
-    TrendingUp,
     Zap
   } from "../icons";
   import { buildPromoLine } from "../planCatalog.js";
@@ -91,107 +90,6 @@ const colorFor = c =>
   : c === "YELLOW" ? T.status.amber
   : c === "RED" ? T.status.red
   : T.text.muted;
-
-// ── Trend Sparkline ──
-const TrendSparkline = ({ history }) => {
-  const scoredAudits = (history || [])
-    .filter(a => a?.parsed?.healthScore?.score != null)
-    .slice(0, 8);
-  if (scoredAudits.length === 0) return null;
-
-  const scores = scoredAudits.map(a => a.parsed.healthScore.score).reverse();
-  const latestScore = scoredAudits[0]?.parsed?.healthScore?.score ?? null;
-  const previousScore = scoredAudits[1]?.parsed?.healthScore?.score ?? null;
-  const avgScore = Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length);
-  const delta = latestScore != null && previousScore != null ? latestScore - previousScore : null;
-  const trendColor = delta == null ? T.accent.primary : delta >= 0 ? T.status.green : T.status.red;
-
-  const W = 280, H = 60, PX = 8, PY = 8;
-  const min = Math.min(...scores) - 5;
-  const max = Math.max(...scores) + 5;
-  const range = max - min || 1;
-  const pts = scores.map((s, i) => ({
-    x: scores.length === 1 ? W / 2 : PX + (i / (scores.length - 1)) * (W - PX * 2),
-    y: PY + (1 - (s - min) / range) * (H - PY * 2),
-  }));
-  const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
-  const firstPoint = pts[0] ?? null;
-  const lastPoint = pts[pts.length - 1] ?? null;
-
-  return (
-    <Card
-      style={{
-        padding: "16px",
-        overflow: "hidden",
-        position: "relative",
-        background: `linear-gradient(180deg, ${T.bg.card}, ${trendColor}08)`,
-        borderColor: `${trendColor}28`,
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: `radial-gradient(circle at top right, ${trendColor}14 0%, transparent 42%)`,
-          pointerEvents: "none",
-        }}
-      />
-      <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 12 }}>
-        {/* Header: label + delta badge */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <TrendingUp size={13} color={trendColor} strokeWidth={2.5} />
-            <span style={{ fontSize: 11, fontWeight: 800, color: T.text.secondary, fontFamily: T.font.mono, letterSpacing: "0.04em" }}>
-              HEALTH TREND
-            </span>
-          </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-            <span style={{ fontSize: 13, fontWeight: 900, color: trendColor, fontFamily: T.font.mono }}>
-              {delta == null ? "NEW" : `${delta >= 0 ? "+" : ""}${delta}`}
-            </span>
-            <span style={{ fontSize: 10, color: T.text.dim }}>vs last</span>
-          </div>
-        </div>
-
-        {/* Chart */}
-        <div
-          style={{
-            padding: "10px 10px 8px",
-            borderRadius: T.radius.lg,
-            background: `${T.bg.elevated}B8`,
-            border: `1px solid ${T.border.subtle}`,
-            minHeight: 84,
-          }}
-        >
-          {scores.length > 1 && firstPoint && lastPoint ? (
-            <>
-              <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
-                <defs>
-                  <linearGradient id="auditTrendGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={trendColor} stopOpacity="0.2" />
-                    <stop offset="100%" stopColor={trendColor} stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                <path d={`${d} L${lastPoint.x},${H} L${firstPoint.x},${H} Z`} fill="url(#auditTrendGrad)" />
-                <path d={d} fill="none" stroke={trendColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                {pts.map((p, i) => (
-                  <circle key={i} cx={p.x} cy={p.y} r={i === pts.length - 1 ? 3.5 : 0} fill={trendColor} />
-                ))}
-              </svg>
-              <div style={{ marginTop: 4, fontSize: 10, color: T.text.dim, fontFamily: T.font.mono }}>
-                Last {scores.length} scored audits · avg {avgScore}
-              </div>
-            </>
-          ) : (
-            <div style={{ display: "flex", height: "100%", minHeight: 64, alignItems: "center", justifyContent: "center", textAlign: "center", color: T.text.secondary, fontSize: 11, lineHeight: 1.45 }}>
-              One more scored audit will draw the chart.
-            </div>
-          )}
-        </div>
-      </div>
-    </Card>
-  );
-};
 
 // ═══════════════════════════════════════════════════════════════
 // AuditTab
@@ -379,14 +277,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
           />
         )}
 
-        {/* ═══ 3. HEALTH TREND (sparkline — summary) ═══ */}
-        {audits.length > 0 && (
-          <div style={{ marginTop: 14, marginBottom: 2 }}>
-            <TrendSparkline history={audits} />
-          </div>
-        )}
-
-        {/* ═══ 4. LATEST AUDIT CARD ═══ */}
+        {/* ═══ 3. LATEST AUDIT CARD ═══ */}
         {p ? (
           <Card
             animate

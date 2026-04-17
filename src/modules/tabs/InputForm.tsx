@@ -425,12 +425,14 @@ export default function InputForm({
     return buildAddableDebtCards(cards || [], form.debts).map((card) => {
         const cardId = String(card.cardId || "");
         const hasLiveBalance = liveDebtBalanceByCardId.has(cardId);
-        const wasRemoved = deletedDebtCardIds[cardId] === true;
-
-        let detail = card.institution ? `${card.institution} · add manual balance` : "Add manual balance";
-        if (hasLiveBalance && wasRemoved) detail = "Previously removed · linked balance available";
-        else if (hasLiveBalance) detail = "Linked balance available";
-        else if (wasRemoved) detail = "Previously removed · add manual balance";
+        const institution = card.institution ? `${card.institution}` : "";
+        const detail = hasLiveBalance
+          ? institution
+            ? `${institution} · linked balance available`
+            : "Linked balance available"
+          : institution
+            ? `${institution} · manual balance`
+            : "Manual balance";
 
         return {
           cardId,
@@ -510,6 +512,9 @@ export default function InputForm({
     const card = (cards || []).find((entry) => entry.id === value || entry.name === value);
     const newCardId = card?.id || "";
     const newName = card ? resolveCardLabel(cards || [], card.id, card.name) : "";
+    const nextBalance = newCardId && liveDebtBalanceByCardId.has(newCardId)
+      ? Number(liveDebtBalanceByCardId.get(newCardId) || 0)
+      : form.debts[index]?.balance || "";
     const previousCardId = form.debts[index]?.cardId || "";
     const previousCardStillVisible = form.debts.some(
       (debt, currentIndex) => currentIndex !== index && debt.cardId === previousCardId
@@ -518,11 +523,12 @@ export default function InputForm({
     setForm((prev) => ({
       ...prev,
       debts: prev.debts.map((debt, currentIndex) =>
-        currentIndex === index ? { ...debt, cardId: newCardId, name: newName } : debt
+        currentIndex === index ? { ...debt, cardId: newCardId, name: newName, balance: nextBalance } : debt
       ),
     }));
 
     if (newCardId) {
+      setOverridePlaid((prev) => ({ ...prev, debts: { ...prev.debts, [newCardId]: false } }));
       setDeletedDebtCardIds((prev) => {
         if (!prev[newCardId] && (!previousCardId || previousCardStillVisible || !prev[previousCardId])) return prev;
         const next = { ...prev };
@@ -677,22 +683,21 @@ export default function InputForm({
   const addDebtCard = (cardId: string) => {
     if (!cardId || form.debts.some((debt) => debt.cardId === cardId)) return;
     haptic.light();
+    const card = (cards || []).find(c => c.id === cardId);
+    if (!card) return;
+    const liveBalance = liveDebtBalanceByCardId.get(cardId);
+    const name = resolveCardLabel(cards || [], card.id, card.name);
     setDeletedDebtCardIds(prev => {
       if (!prev[cardId]) return prev;
       const next = { ...prev };
       delete next[cardId];
       return next;
     });
-    if (!liveDebtBalanceByCardId.has(cardId)) {
-      const card = (cards || []).find(c => c.id === cardId);
-      if (card) {
-        const name = resolveCardLabel(cards || [], card.id, card.name);
-        setForm(p => ({
-          ...p,
-          debts: [...p.debts, { cardId, name, balance: "" as MoneyInput }],
-        }));
-      }
-    }
+    setOverridePlaid((prev) => ({ ...prev, debts: { ...prev.debts, [cardId]: false } }));
+    setForm(p => ({
+      ...p,
+      debts: [...p.debts, { cardId, name, balance: liveBalance !== undefined ? liveBalance : "" as MoneyInput }],
+    }));
   };
   const changeInvestmentField = (key: InvestmentFieldKey, value: MoneyInput) => {
     if (key === "roth") s("roth", value);

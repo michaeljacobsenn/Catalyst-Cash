@@ -1,11 +1,11 @@
-import { useMemo, useState, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
+import { useMemo, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
 import { DI as UIDI, Mono as UIMono } from "../../components.js";
 import { T } from "../../constants.js";
-import { Plus, Trash2 } from "../../icons";
+import { Trash2 } from "../../icons";
 import { Badge, Card, Label } from "../../ui.js";
 import { fmt } from "../../utils.js";
+import { SectionAddControl } from "./SectionAddControl";
 import type { InputFormState, InvestmentAuditField } from "./model.js";
-import { SectionAddSheet } from "./SectionAddSheet";
 import { sanitizeDollar, toNumber, type MoneyInput } from "./utils.js";
 
 interface MonoProps {
@@ -47,14 +47,11 @@ export function InvestmentBalancesSection({
   onRemoveField,
   onRestoreField,
 }: InvestmentBalancesSectionProps) {
-  const [showAddSheet, setShowAddSheet] = useState(false);
   const addableFields = useMemo(
     () =>
       hiddenFields.map((field) => ({
         id: field.key,
         label: field.label,
-        color: field.accent,
-        detail: Math.abs(Number(field.autoValue || 0)) > 0.004 ? "Auto-tracked balance available" : "Available for manual entry",
       })),
     [hiddenFields]
   );
@@ -62,19 +59,7 @@ export function InvestmentBalancesSection({
   const handleAddField = (fieldKey: string) => {
     const field = hiddenFields.find((entry) => entry.key === fieldKey);
     if (!field) return;
-    setShowAddSheet(false);
     onRestoreField(field);
-  };
-
-  const handleOpenAdd = () => {
-    const firstField = addableFields[0];
-    if (addableFields.length === 1 && firstField) {
-      handleAddField(firstField.id);
-      return;
-    }
-    if (addableFields.length > 1) {
-      setShowAddSheet(true);
-    }
   };
 
   return (
@@ -102,30 +87,14 @@ export function InvestmentBalancesSection({
               {fmt(totalBalance)}
             </Mono>
           )}
-          {addableFields.length > 0 && (
-            <button
-              type="button"
-              onClick={handleOpenAdd}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "5px 10px",
-                borderRadius: T.radius.sm,
-                border: `1px solid ${T.accent.emerald}40`,
-                background: `${T.accent.emerald}12`,
-                color: T.accent.emerald,
-                fontSize: 9,
-                fontWeight: 800,
-                cursor: "pointer",
-                fontFamily: T.font.mono,
-                transition: "all .2s ease",
-                flexShrink: 0,
-              }}
-            >
-              <Plus size={10} strokeWidth={3} /> ADD
-            </button>
-          )}
+          <SectionAddControl
+            accent={T.accent.emerald}
+            buttonAriaLabel="Add investment balance to audit"
+            options={addableFields}
+            pickerLabel="Choose investment balance"
+            placeholder="Select balance..."
+            onSelect={handleAddField}
+          />
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -241,16 +210,6 @@ export function InvestmentBalancesSection({
           );
         })}
       </div>
-      {showAddSheet && addableFields.length > 1 ? (
-        <SectionAddSheet
-          accent={T.accent.emerald}
-          description="Add back only the investment balances you want this audit to evaluate."
-          onClose={() => setShowAddSheet(false)}
-          onSelect={handleAddField}
-          options={addableFields}
-          title="Choose investment balance"
-        />
-      ) : null}
     </Card>
   );
 }

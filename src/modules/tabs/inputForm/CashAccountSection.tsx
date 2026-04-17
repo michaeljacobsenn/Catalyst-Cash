@@ -4,8 +4,8 @@ import { T } from "../../constants.js";
 import { Trash2 } from "../../icons";
 import { Badge, Card, Label } from "../../ui.js";
 import { fmt } from "../../utils.js";
-import { HiddenItemChips } from "./HiddenItemChips";
 import { InlineOverrideMoneyInput } from "./InlineOverrideMoneyInput";
+import { SectionAddControl } from "./SectionAddControl";
 import { getEffectiveCashAccountTotal, type CashAccountMeta } from "./model.js";
 import { sanitizeDollar, type MoneyInput } from "./utils.js";
 
@@ -59,6 +59,10 @@ export function CashAccountSection({
   const visibleCount = meta.accounts.length;
   const effectiveTotal = getEffectiveCashAccountTotal(meta, accountOverrides);
   const anyAccountOverridden = hasAccounts && meta.accounts.some((account) => accountOverrides[account.id] !== undefined);
+  const addableOptions = hiddenAccounts.map((account) => ({
+    id: account.id,
+    label: account.displayLabel,
+  }));
 
   return (
     <Card
@@ -103,6 +107,14 @@ export function CashAccountSection({
               {fmt(effectiveTotal)}
             </Mono>
           )}
+          <SectionAddControl
+            accent={toneColor}
+            buttonAriaLabel={`Add ${title.toLowerCase()} to audit`}
+            options={addableOptions}
+            pickerLabel="Choose account to add"
+            placeholder="Select account..."
+            onSelect={onRestoreAccount}
+          />
         </div>
       </div>
 
@@ -265,14 +277,6 @@ export function CashAccountSection({
           onReset={onResetAggregate}
         />
       )}
-      <HiddenItemChips
-        title="Choose account to add"
-        items={hiddenAccounts}
-        getKey={(account) => account.id}
-        getLabel={(account) => account.displayLabel}
-        getColor={() => toneColor}
-        onSelect={(account) => onRestoreAccount(account.id)}
-      />
     </Card>
   );
 }

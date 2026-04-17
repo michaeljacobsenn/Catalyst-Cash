@@ -113,4 +113,49 @@ describe("transaction feed derived state", () => {
     expect(summary.totalTxns).toBe(2);
     expect(summary.badTxns + summary.optimalTxns).toBe(2);
   });
+
+  it("ignores tiny matched reward deltas so the ledger does not overstate noise", () => {
+    const { summary } = analyzeTransactionRewards(
+      [
+        {
+          id: "txn-1",
+          date: "2026-04-12",
+          amount: 10,
+          category: "shopping",
+          accountName: "Quicksilver",
+          institution: "Capital One",
+        },
+      ] as never[],
+      [
+        { id: "used", name: "Quicksilver Cash Rewards" },
+        { id: "best", name: "Apple Card" },
+      ] as never[],
+      undefined
+    );
+
+    expect(summary.totalTxns).toBe(1);
+    expect(summary.badTxns).toBe(0);
+    expect(summary.totalMissedValue).toBe(0);
+  });
+
+  it("requires a higher delta when the used payment method is only a baseline estimate", () => {
+    const { summary } = analyzeTransactionRewards(
+      [
+        {
+          id: "txn-1",
+          date: "2026-04-12",
+          amount: 10,
+          category: "shopping",
+          accountName: "Checking",
+          linkedBankAccountId: "bank_1",
+        },
+      ] as never[],
+      [{ id: "best", name: "Apple Card" }] as never[],
+      undefined
+    );
+
+    expect(summary.totalTxns).toBe(1);
+    expect(summary.badTxns).toBe(0);
+    expect(summary.totalMissedValue).toBe(0);
+  });
 });

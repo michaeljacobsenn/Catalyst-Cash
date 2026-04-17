@@ -1,11 +1,11 @@
-import { useMemo, useState, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
+import { useMemo, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
 import { CustomSelect as UICustomSelect, DI as UIDI, Mono as UIMono } from "../../components.js";
 import { T } from "../../constants.js";
-import { Plus, Trash2 } from "../../icons";
+import { Trash2 } from "../../icons";
 import { Badge, Card, Label } from "../../ui.js";
 import { fmt } from "../../utils.js";
 import { InlineOverrideMoneyInput } from "./InlineOverrideMoneyInput";
-import { SectionAddSheet } from "./SectionAddSheet";
+import { SectionAddControl } from "./SectionAddControl";
 import type { InputDebt } from "./model.js";
 import { sanitizeDollar, type MoneyInput } from "./utils.js";
 
@@ -78,32 +78,17 @@ export function DebtBalancesSection({
   onResetDebtOverride,
   onChangeDebtBalance,
 }: DebtBalancesSectionProps) {
-  const [showAddSheet, setShowAddSheet] = useState(false);
   const addableOptions = useMemo(
     () =>
       addableDebtCards.map((card) => ({
         id: card.cardId,
         label: card.name,
-        color: T.status.red,
-        ...(card.detail ? { detail: card.detail } : {}),
       })),
     [addableDebtCards]
   );
 
   const handleAddCard = (cardId: string) => {
-    setShowAddSheet(false);
     onAddDebtCard(cardId);
-  };
-
-  const handleOpenAdd = () => {
-    const firstOption = addableOptions[0];
-    if (addableOptions.length === 1 && firstOption) {
-      handleAddCard(firstOption.id);
-      return;
-    }
-    if (addableOptions.length > 1) {
-      setShowAddSheet(true);
-    }
   };
 
   return (
@@ -149,32 +134,14 @@ export function DebtBalancesSection({
               {fmt(totalBalance)}
             </Mono>
           )}
-          {addableOptions.length > 0 && (
-            <button
-              type="button"
-              aria-label="Add card balance to audit"
-              className="hover-btn"
-              onClick={handleOpenAdd}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "5px 10px",
-                borderRadius: T.radius.sm,
-                border: `1px solid ${T.status.red}40`,
-                background: `${T.status.red}12`,
-                color: T.status.red,
-                fontSize: 9,
-                fontWeight: 800,
-                cursor: "pointer",
-                fontFamily: T.font.mono,
-                transition: "all .2s ease",
-                flexShrink: 0,
-              }}
-            >
-              <Plus size={10} strokeWidth={3} /> ADD
-            </button>
-          )}
+          <SectionAddControl
+            accent={T.status.red}
+            buttonAriaLabel="Add card balance to audit"
+            options={addableOptions}
+            pickerLabel="Choose card to add"
+            placeholder="Select card..."
+            onSelect={handleAddCard}
+          />
         </div>
       </div>
       {debts.length === 0 && (
@@ -335,16 +302,6 @@ export function DebtBalancesSection({
           })}
         </div>
       )}
-      {showAddSheet && addableOptions.length > 1 ? (
-        <SectionAddSheet
-          accent={T.status.red}
-          description="Add back only the card balances you want this audit to consider."
-          onClose={() => setShowAddSheet(false)}
-          onSelect={handleAddCard}
-          options={addableOptions}
-          title="Choose card balance"
-        />
-      ) : null}
     </Card>
   );
 }

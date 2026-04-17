@@ -238,8 +238,8 @@ export default function BankAccountsSection({
                                 display: "grid",
                                 gridTemplateColumns: "42px minmax(0, 1fr) auto",
                                 columnGap: 7,
-                                rowGap: 2,
-                                alignItems: "start",
+                                rowGap: 3,
+                                alignItems: "center",
                             }}
                         >
                             <span
@@ -248,7 +248,6 @@ export default function BankAccountsSection({
                                     alignItems: "center",
                                     justifyContent: "center",
                                     minHeight: 17,
-                                    marginTop: 1,
                                     padding: "0 5px",
                                     borderRadius: 999,
                                     border: `1px solid ${colors.border}`,
@@ -278,12 +277,11 @@ export default function BankAccountsSection({
                                     WebkitLineClamp: 2,
                                     WebkitBoxOrient: "vertical",
                                     overflow: "hidden",
-                                    paddingTop: 1,
                                 }}
                             >
                                 {getAccountDisplayName(acct)}
                             </div>
-                            <div style={{ display: "flex", alignItems: "flex-start", gap: 6, flexShrink: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                                 <div style={{ textAlign: "right", minWidth: 96 }}>
                                     <div style={{ fontSize: 13.5, fontWeight: 850, color: !usesManualFallback && acct._plaidBalance != null ? sectionColor : isHighBalance ? T.text.primary : T.text.muted, fontFamily: T.font.mono, letterSpacing: "-0.01em", lineHeight: 1.08 }}>
                                         {fmt(liveBalance)}
@@ -292,7 +290,7 @@ export default function BankAccountsSection({
                                         {balanceMeta}
                                     </div>
                                 </div>
-                                <button onClick={() => startEditBank(acct)} style={{ width: 22, height: 22, borderRadius: 7, border: `1px solid ${T.border.subtle}`, background: "transparent", color: T.text.muted, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 1 }} className="hover-btn"><Edit3 size={10} /></button>
+                                <button onClick={() => startEditBank(acct)} style={{ width: 22, height: 22, borderRadius: 7, border: `1px solid ${T.border.subtle}`, background: "transparent", color: T.text.muted, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} className="hover-btn"><Edit3 size={10} /></button>
                             </div>
                             <div
                                 style={{

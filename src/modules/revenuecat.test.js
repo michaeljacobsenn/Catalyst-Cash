@@ -15,7 +15,8 @@ async function loadRevenueCatModule() {
     purchasePackage: vi.fn(async () => ({ customerInfo: { entitlements: { active: {} } } })),
     setLogLevel: vi.fn(async () => undefined),
     configure: vi.fn(async () => undefined),
-    addCustomerInfoUpdateListener: vi.fn(),
+    addCustomerInfoUpdateListener: vi.fn(async () => "listener_1"),
+    removeCustomerInfoUpdateListener: vi.fn(async () => ({ wasRemoved: true })),
     restorePurchases: vi.fn(async () => ({ entitlements: { active: {} } })),
   };
   const activatePro = vi.fn(async () => true);
@@ -79,7 +80,19 @@ describe("revenuecat", () => {
     expect(purchases.configure).toHaveBeenCalledTimes(1);
     expect(purchases.getAppUserID).toHaveBeenCalled();
     expect(purchases.getCustomerInfo).toHaveBeenCalled();
+    expect(purchases.addCustomerInfoUpdateListener).toHaveBeenCalledTimes(1);
     expect(deactivatePro).toHaveBeenCalled();
+  });
+
+  it("does not reconfigure or register duplicate listeners after initialization", async () => {
+    const { mod, purchases } = await loadRevenueCatModule();
+
+    await mod.initRevenueCat();
+    await mod.initRevenueCat();
+
+    expect(purchases.configure).toHaveBeenCalledTimes(1);
+    expect(purchases.addCustomerInfoUpdateListener).toHaveBeenCalledTimes(1);
+    expect(purchases.removeCustomerInfoUpdateListener).not.toHaveBeenCalled();
   });
 
   it("purchases the selected yearly package when requested", async () => {

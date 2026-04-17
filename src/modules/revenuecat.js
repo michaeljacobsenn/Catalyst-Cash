@@ -17,6 +17,8 @@ const isNative = Capacitor.isNativePlatform() && Capacitor.getPlatform() === "io
 let cachedRevenueCatAppUserId = null;
 let revenueCatUiPromise = null;
 let revenueCatConfigured = false;
+let revenueCatInitPromise = null;
+let customerInfoListenerId = null;
 
 function withRevenueCatTimeout(promiseFactory, label) {
   let timer = null;
@@ -124,8 +126,14 @@ export async function syncProStatus() {
  */
 export async function initRevenueCat() {
   if (!isNative) return;
+  if (revenueCatConfigured) return;
+  if (revenueCatInitPromise) {
+    await revenueCatInitPromise;
+    return;
+  }
 
-  try {
+  revenueCatInitPromise = (async () => {
+    try {
     const apiKey = getRevenueCatApiKey();
     if (!apiKey) {
       log.info("revenuecat", "RevenueCat not configured; skipping initialization");
@@ -147,7 +155,11 @@ export async function initRevenueCat() {
     await getRevenueCatAppUserId();
 
     // Listen for real-time changes to the customer's purchase status
-    Purchases.addCustomerInfoUpdateListener(async customerInfo => {
+    if (customerInfoListenerId) {
+      await Purchases.removeCustomerInfoUpdateListener({ listenerToRemove: customerInfoListenerId }).catch(() => {});
+      customerInfoListenerId = null;
+    }
+    customerInfoListenerId = await Purchases.addCustomerInfoUpdateListener(async customerInfo => {
       await applyCustomerInfo(customerInfo);
     });
 
@@ -155,10 +167,16 @@ export async function initRevenueCat() {
     await syncProStatus();
   } catch (error) {
     revenueCatConfigured = false;
+    customerInfoListenerId = null;
     log.error("revenuecat", "Failed to initialize RevenueCat", {
       error: error instanceof Error ? error.message : "unknown",
     });
+  } finally {
+    revenueCatInitPromise = null;
   }
+  })();
+
+  await revenueCatInitPromise;
 }
 
 /**

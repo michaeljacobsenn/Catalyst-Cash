@@ -29,6 +29,11 @@ const REFERRAL_CONFIRMED_KEY = "referral-confirmed"; // has the referral been pu
 const CODE_PREFIX = "CC";
 const CODE_LENGTH = 6; // CC-XXXXXX (8 total chars with prefix + dash)
 const MAX_REFERRAL_BONUS_MONTHS = 12; // Cap: 12 free months (1 year)
+const REFERRAL_SYNC_COOLDOWN_MS = 5 * 60 * 1000;
+
+let referralStatsSyncPromise = null;
+let lastReferralStatsSyncAt = 0;
+let lastReferralStatsSyncError = "";
 
 /**
  * Generate a random alphanumeric code of given length.
@@ -96,12 +101,23 @@ export async function getReferralStats() {
  * Updates local cache with the latest confirmed/pending counts.
  */
 export async function syncReferralStats() {
+  const now = Date.now();
+  if (referralStatsSyncPromise) {
+    return referralStatsSyncPromise;
+  }
+  if (now - lastReferralStatsSyncAt < REFERRAL_SYNC_COOLDOWN_MS) {
+    return null;
+  }
+
+  lastReferralStatsSyncAt = now;
+  referralStatsSyncPromise = (async () => {
   try {
     const deviceId = await getOrCreateDeviceId();
     const { fetchJson } = await import("./api.js");
     const result = await fetchJson(`/referral/stats?deviceId=${encodeURIComponent(deviceId)}`);
 
     if (result?.ok) {
+      lastReferralStatsSyncError = "";
       const stats = {
         totalReferred: result.totalReferred || 0,
         pendingReferred: result.pendingReferred || 0,
@@ -112,9 +128,20 @@ export async function syncReferralStats() {
       return stats;
     }
   } catch (err) {
-    void log.warn("referral", "Failed to sync referral stats", { error: err?.message });
+    const errorMessage = String(err?.message || "unknown");
+    if (errorMessage !== lastReferralStatsSyncError) {
+      lastReferralStatsSyncError = errorMessage;
+      void log.warn("referral", "Failed to sync referral stats", { error: errorMessage });
+    }
   }
   return null;
+  })();
+
+  try {
+    return await referralStatsSyncPromise;
+  } finally {
+    referralStatsSyncPromise = null;
+  }
 }
 
 /**

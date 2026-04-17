@@ -7,6 +7,7 @@ import {
   getCategoryMeta,
   getNormalizedCategoryKey,
   isTransactionInSameMonth,
+  shouldHighlightRewardMiss,
 } from "./helpers";
 import type {
   CategoryBreakdownItem,
@@ -203,7 +204,7 @@ export function analyzeTransactionRewards(
     transaction.usedOptimal = comparison.usedOptimal;
 
     if (comparison.usedOptimal) optimalTxns += 1;
-    else {
+    else if (shouldHighlightRewardMiss(comparison)) {
       totalMissedValue += comparison.incrementalRewardValue;
       badTxns += 1;
     }

@@ -47,6 +47,8 @@ interface CsvTransaction {
 }
 
 type MatchConfidence = "high" | "medium" | "low" | "none";
+const MIN_REWARD_MISS_INCREMENTAL_VALUE = 0.1;
+const MIN_REWARD_MISS_INCREMENTAL_VALUE_UNCERTAIN = 0.25;
 
 type UsedCardMatch = {
   card: PortfolioCard | null;
@@ -360,6 +362,24 @@ export function buildRewardComparison(
     usedCardMatchSource: usedCardMatch.source,
     merchantIdentity,
   };
+}
+
+export function shouldHighlightRewardMiss(comparison: {
+  usedOptimal?: boolean;
+  incrementalRewardValue?: number;
+  usedCardMatched?: boolean;
+  usedCardMatchConfidence?: MatchConfidence;
+} | null | undefined) {
+  if (!comparison || comparison.usedOptimal) return false;
+  const incrementalValue = Number(comparison.incrementalRewardValue || 0);
+  if (incrementalValue <= 0) return false;
+  if (comparison.usedCardMatched) {
+    return incrementalValue >= MIN_REWARD_MISS_INCREMENTAL_VALUE;
+  }
+  if (comparison.usedCardMatchConfidence === "high" || comparison.usedCardMatchConfidence === "medium") {
+    return incrementalValue >= MIN_REWARD_MISS_INCREMENTAL_VALUE;
+  }
+  return incrementalValue >= MIN_REWARD_MISS_INCREMENTAL_VALUE_UNCERTAIN;
 }
 
 function padDay(value: number) {

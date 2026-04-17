@@ -8,6 +8,7 @@ import {
   formatTransactionTime,
   getCategoryLabel,
   getCategoryMeta,
+  shouldHighlightRewardMiss,
 } from "./helpers";
 import type { IconComponent, TransactionRecord, TransactionRewardComparison } from "./types";
 
@@ -66,24 +67,28 @@ export function TransactionRow({
   const categoryLabel = getCategoryLabel(txn.category, txn.description);
   const matchTone = getMatchBadgeTone(txn.rewardComparison?.usedCardMatchConfidence);
   const title = txn.description || txn.name || "Transaction";
+  const shouldShowRewardCallout = !txn.isCredit && shouldHighlightRewardMiss(txn.rewardComparison);
+  const usedRewardText = txn.rewardComparison?.actualRewardValue.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  const bestRewardText = txn.rewardComparison?.optimalRewardValue.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  const deltaRewardText = txn.rewardComparison?.incrementalRewardValue.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
   return (
     <div
       className="txn-row"
       style={{
         display: "flex",
-        alignItems: "flex-start",
+        alignItems: "center",
         gap: 12,
-        padding: "12px 16px",
+        padding: "10px 16px",
         borderBottom: `1px solid ${T.border.subtle}`,
         animationDelay,
       }}
     >
       <div
         style={{
-          width: 40,
-          height: 40,
-          borderRadius: 12,
+          width: 36,
+          height: 36,
+          borderRadius: 11,
           background: meta.bg,
           display: "flex",
           alignItems: "center",
@@ -162,106 +167,88 @@ export function TransactionRow({
           )}
         </div>
         {txn.optimalCard && txn.rewardComparison && !txn.isCredit && (
-          <div style={{ marginTop: 4, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
-            <span
-              style={{
-                fontSize: 9,
-                fontWeight: 800,
-                color: txn.usedOptimal ? T.status.green : T.accent.primary,
-                background: txn.usedOptimal ? T.status.greenDim : T.accent.primaryDim,
-                border: `1px solid ${txn.usedOptimal ? T.status.green : T.accent.primary}30`,
-                padding: "2px 6px",
-                borderRadius: 4,
-                letterSpacing: "0.02em",
-                textTransform: "uppercase",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 3,
-                maxWidth: "100%",
-              }}
-            >
-              <Sparkles size={10} />
-              {txn.usedOptimal ? "Used Best Card" : "Should've Used"}: {truncateCardName(txn.optimalCard.name)}
-              {!txn.usedOptimal &&
-                ` (+${txn.rewardComparison.incrementalRewardValue.toLocaleString("en-US", {
-                  style: "currency",
-                  currency: "USD",
-                })})`}
-            </span>
-            <span
-              style={{
-                fontSize: 10,
-                color: T.text.dim,
-                lineHeight: 1.35,
-                display: "block",
-                maxWidth: "100%",
-              }}
-            >
-              {txn.rewardComparison.usedCardMatched ? "Earned" : "Estimated earned"}{" "}
-              <span style={{ color: T.text.secondary, fontWeight: 700 }}>
-                {txn.rewardComparison.actualRewardValue.toLocaleString("en-US", { style: "currency", currency: "USD" })}
-              </span>{" "}
-              with {txn.rewardComparison.usedDisplayName}
-              {!txn.rewardComparison.usedCardMatched && " (baseline estimate)"}
-              {!txn.usedOptimal && (
-                <>
-                  {" "}• Best would be{" "}
-                  <span style={{ color: T.accent.primary, fontWeight: 700 }}>
-                    {txn.rewardComparison.optimalRewardValue.toLocaleString("en-US", {
-                      style: "currency",
-                      currency: "USD",
-                    })}
-                  </span>{" "}
-                  at {formatRewardRate(txn.rewardComparison.optimalYield)}
-                </>
-              )}
-              {txn.usedOptimal && <> • {formatRewardRate(txn.rewardComparison.actualYield)}</>}
-            </span>
-            {txn.rewardComparison.bestCardNotes && (
-              <span
-                style={{
-                  fontSize: 10,
-                  color: T.text.dim,
-                  lineHeight: 1.35,
-                  display: "block",
-                  maxWidth: "100%",
-                }}
-              >
-                Card caveat: {txn.rewardComparison.bestCardNotes}
-              </span>
-            )}
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-              <span
-                style={{
-                  fontSize: 9,
-                  fontWeight: 700,
-                  color: matchTone.color,
-                  background: matchTone.background,
-                  border: `1px solid ${matchTone.borderColor}30`,
-                  padding: "2px 6px",
-                  borderRadius: 999,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.03em",
-                }}
-              >
-                Match {txn.rewardComparison.usedCardMatchConfidence || "none"}
-              </span>
-              <button
-                onClick={onToggleReview}
-                style={{
-                  padding: "4px 8px",
-                  borderRadius: 8,
-                  border: `1px solid ${T.border.default}`,
-                  background: T.bg.surface,
-                  color: T.text.secondary,
-                  fontSize: 10,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                Review link
-              </button>
-            </div>
+          <div style={{ marginTop: shouldShowRewardCallout ? 4 : 2, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+            {shouldShowRewardCallout ? (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 800,
+                      color: T.accent.primary,
+                      background: T.accent.primaryDim,
+                      border: `1px solid ${T.accent.primary}26`,
+                      padding: "2px 7px",
+                      borderRadius: 999,
+                      letterSpacing: "0.02em",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      maxWidth: "100%",
+                    }}
+                  >
+                    <Sparkles size={10} />
+                    Best swap: {truncateCardName(txn.optimalCard.name)} ({deltaRewardText})
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: matchTone.color,
+                      background: matchTone.background,
+                      border: `1px solid ${matchTone.borderColor}26`,
+                      padding: "2px 6px",
+                      borderRadius: 999,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.03em",
+                    }}
+                  >
+                    Match {txn.rewardComparison.usedCardMatchConfidence || "none"}
+                  </span>
+                  <button
+                    onClick={onToggleReview}
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: 8,
+                      border: `1px solid ${T.border.default}`,
+                      background: T.bg.surface,
+                      color: T.text.secondary,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Review
+                  </button>
+                </div>
+                <span
+                  style={{
+                    fontSize: 10,
+                    color: T.text.dim,
+                    lineHeight: 1.3,
+                    display: "block",
+                    maxWidth: "100%",
+                  }}
+                >
+                  {txn.rewardComparison.usedCardMatched
+                    ? `Likely earned ${usedRewardText} with ${txn.rewardComparison.usedDisplayName}; best was ${bestRewardText} at ${formatRewardRate(txn.rewardComparison.optimalYield)}.`
+                    : `Baseline estimate ${usedRewardText} with ${txn.rewardComparison.usedDisplayName}; best was ${bestRewardText} at ${formatRewardRate(txn.rewardComparison.optimalYield)}.`}
+                </span>
+                {txn.rewardComparison.bestCardNotes ? (
+                  <span
+                    style={{
+                      fontSize: 10,
+                      color: T.text.dim,
+                      lineHeight: 1.3,
+                      display: "block",
+                      maxWidth: "100%",
+                    }}
+                  >
+                    {txn.rewardComparison.bestCardNotes}
+                  </span>
+                ) : null}
+              </>
+            ) : null}
             {isReviewing && (
               <div
                 style={{
@@ -350,7 +337,7 @@ export function TransactionRow({
       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0, minWidth: 84 }}>
         <span
           style={{
-            fontSize: 14,
+            fontSize: 13.5,
             fontWeight: 800,
             fontVariantNumeric: "tabular-nums",
             color: txn.isCredit ? T.status.green : T.text.primary,

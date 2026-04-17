@@ -497,8 +497,8 @@ export default function CreditCardsSection({
                                                     display: "grid",
                                                     gridTemplateColumns: "42px minmax(0, 1fr) auto",
                                                     columnGap: 7,
-                                                    rowGap: 2,
-                                                    alignItems: "start",
+                                                    rowGap: 3,
+                                                    alignItems: "center",
                                                 }}
                                             >
                                                 <span
@@ -507,7 +507,6 @@ export default function CreditCardsSection({
                                                         alignItems: "center",
                                                         justifyContent: "center",
                                                         minHeight: 17,
-                                                        marginTop: 1,
                                                         padding: "0 5px",
                                                         borderRadius: 999,
                                                         border: `1px solid ${colors.border}`,
@@ -537,12 +536,11 @@ export default function CreditCardsSection({
                                                         WebkitLineClamp: 2,
                                                         WebkitBoxOrient: "vertical",
                                                         overflow: "hidden",
-                                                        paddingTop: 1,
                                                     }}
                                                 >
                                                     {getCardDisplayName(card)}
                                                 </div>
-                                                <div style={{ display: "flex", alignItems: "flex-start", gap: 6, flexShrink: 0 }}>
+                                                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                                                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, minWidth: 90 }}>
                                                         <div style={{ textAlign: "right", minWidth: 90 }}>
                                                             <div style={{ fontSize: 13.5, fontWeight: 850, color: balanceColor, fontFamily: T.font.mono, letterSpacing: "-0.01em", lineHeight: 1.08 }}>
@@ -602,7 +600,7 @@ export default function CreditCardsSection({
                                                     </div>
                                                     <button
                                                         onClick={() => startEdit(card)}
-                                                        style={{ width: 22, height: 22, borderRadius: 7, border: `1px solid ${T.border.subtle}`, background: "transparent", color: T.text.muted, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}
+                                                        style={{ width: 22, height: 22, borderRadius: 7, border: `1px solid ${T.border.subtle}`, background: "transparent", color: T.text.muted, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
                                                     >
                                                         <Edit3 size={10} />
                                                     </button>

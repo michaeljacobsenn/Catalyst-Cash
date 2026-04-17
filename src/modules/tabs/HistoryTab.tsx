@@ -370,7 +370,17 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
   };
 
   return (
-    <div className="page-body" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+    <div
+      className="safe-scroll-body safe-bottom page-body"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        width: "100%",
+        paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
+        ["--page-bottom-clearance" as string]: "calc(env(safe-area-inset-bottom, 0px) + 112px)",
+      }}
+    >
       <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
         {shouldShowGating() && !proEnabled && (
           <ProBanner
