@@ -15,6 +15,8 @@ interface AppShellHeaderProps {
   navTo: (tab: AppTab) => void;
 }
 
+const HEADER_SIDE_WIDTH = 96;
+
 export function SkipToContentLink() {
   return (
     <a
@@ -41,20 +43,20 @@ export function SkipToContentLink() {
 }
 
 function getHeaderTitle(tab: AppTab) {
-  if (tab === "dashboard") return "Command Center";
-  if (tab === "audit") return "Audit";
-  if (tab === "chat") return "Catalyst AI";
-  if (tab === "cashflow") return "Cashflow";
+  if (tab === "dashboard") return "Money Snapshot";
+  if (tab === "audit") return "Weekly Briefing";
+  if (tab === "chat") return "Ask AI";
+  if (tab === "cashflow") return "Cash Flow";
   if (tab === "portfolio") return "Portfolio";
   return "";
 }
 
 function getHeaderEyebrow(tab: AppTab) {
-  if (tab === "dashboard") return "Weekly clarity";
-  if (tab === "audit") return "Operator mode";
-  if (tab === "chat") return "Private finance copilot";
-  if (tab === "cashflow") return "Bills and budget";
-  if (tab === "portfolio") return "Assets, vault, rewards";
+  if (tab === "dashboard") return "Weekly overview";
+  if (tab === "audit") return "Financial check-in";
+  if (tab === "chat") return "Private finance assistant";
+  if (tab === "cashflow") return "Bills, budget, renewals";
+  if (tab === "portfolio") return "Accounts, cards, rewards";
   return "";
 }
 
@@ -103,8 +105,8 @@ export default function AppShellHeader({
       />
       <div
         style={{
-          width: 96,
-          minWidth: 96,
+          width: HEADER_SIDE_WIDTH,
+          minWidth: HEADER_SIDE_WIDTH,
           display: "flex",
           alignItems: "center",
           gap: 8,
@@ -162,19 +164,24 @@ export default function AppShellHeader({
       <div
         style={{
           flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
           minWidth: 0,
           textAlign: "center",
           pointerEvents: "none",
-          padding: "0 8px",
+          padding: "0 12px",
         }}
       >
         <div
           style={{
-            fontSize: 17,
-            fontWeight: 850,
-            color: T.text.primary,
-            letterSpacing: getTracking(16, "bold"),
-            textShadow: `0 2px 10px ${T.accent.primaryGlow}`,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 2,
+            minWidth: 0,
           }}
         >
           <div
@@ -185,17 +192,43 @@ export default function AppShellHeader({
               letterSpacing: "0.12em",
               textTransform: "uppercase",
               fontFamily: T.font.mono,
-              marginBottom: 2,
               opacity: 0.9,
+              lineHeight: 1.1,
+              maxWidth: "100%",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
             }}
           >
             {getHeaderEyebrow(tab)}
           </div>
-          {getHeaderTitle(tab)}
+          <div
+            style={{
+              fontSize: 17,
+              fontWeight: 850,
+              color: T.text.primary,
+              letterSpacing: getTracking(16, "bold"),
+              textShadow: `0 2px 10px ${T.accent.primaryGlow}`,
+              lineHeight: 1.1,
+              maxWidth: "100%",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {getHeaderTitle(tab)}
+          </div>
         </div>
       </div>
 
-      <div style={{ width: 44, minWidth: 44, display: "flex", justifyContent: "flex-end" }}>
+      <div
+        style={{
+          width: HEADER_SIDE_WIDTH,
+          minWidth: HEADER_SIDE_WIDTH,
+          display: "flex",
+          justifyContent: "flex-end",
+        }}
+      >
         <button
           onClick={() => navTo("settings")}
           className="gesture-glass"

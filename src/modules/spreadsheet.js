@@ -1,3 +1,4 @@
+import { markPortableBackup } from "./backupMetadata.js";
 import { encrypt } from "./crypto.js";
 import { db } from "./utils.js";
 
@@ -189,6 +190,7 @@ export async function generateBackupSpreadsheet(passphrase = null) {
       "application/octet-stream",
       false
     );
+    await markPortableBackup("spreadsheet-export");
     return;
   }
 

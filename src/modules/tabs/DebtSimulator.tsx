@@ -9,6 +9,7 @@
   import { haptic } from "../haptics.js";
   import { Sparkles } from "../icons";
   import { cmpString,fromCents,monthlyInterestCents,toBps,toCents } from "../moneyMath.js";
+  import UiGlyph from "../UiGlyph.js";
   import { Card,Label } from "../ui.js";
 
 interface SimDebt {
@@ -194,7 +195,7 @@ export default function DebtSimulator({ cards = [], financialConfig }: DebtSimul
       <Card animate delay={400} style={{ cursor: "pointer" }} onClick={() => setShowSim(true)}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 18 }}>⚡</span>
+            <UiGlyph glyph="⚡" size={18} color={T.accent.primary} />
             <div>
               <div style={{ fontSize: 13, fontWeight: 700 }}>Debt Payoff Simulator</div>
               <div style={{ fontSize: 11, color: T.text.dim }}>See how fast you can be debt-free</div>
@@ -218,7 +219,7 @@ export default function DebtSimulator({ cards = [], financialConfig }: DebtSimul
       )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 18 }}>⚡</span>
+          <UiGlyph glyph="⚡" size={18} color={T.accent.primary} />
           <span style={{ fontSize: 14, fontWeight: 800 }}>Debt Payoff Simulator</span>
         </div>
         <button
@@ -413,8 +414,9 @@ export default function DebtSimulator({ cards = [], financialConfig }: DebtSimul
           }}
         >
           <div style={{ position: "absolute", top: 0, left: 0, width: 4, height: "100%", background: T.status.blue }} />
-          <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, marginBottom: 4 }}>
-            💡 Optimizer Alert
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 800, color: T.text.primary, marginBottom: 4 }}>
+            <UiGlyph glyph="💡" size={14} color={T.status.blue} />
+            Optimizer Alert
           </div>
           <p style={{ fontSize: 12, color: T.text.secondary, margin: 0, lineHeight: 1.4 }}>
             Switching to <strong>Avalanche</strong> right now saves you <span style={{ color: T.status.green, fontWeight: 800 }}>${diffInterest.toLocaleString()}</span> in total interest
@@ -435,8 +437,9 @@ export default function DebtSimulator({ cards = [], financialConfig }: DebtSimul
           }}
         >
           <div style={{ position: "absolute", top: 0, left: 0, width: 4, height: "100%", background: T.status.green }} />
-          <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, marginBottom: 4 }}>
-            ✅ Optimal Strategy Active
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 800, color: T.text.primary, marginBottom: 4 }}>
+            <UiGlyph glyph="✅" size={14} color={T.status.green} />
+            Optimal Strategy Active
           </div>
           <p style={{ fontSize: 12, color: T.text.secondary, margin: 0, lineHeight: 1.4 }}>
             By prioritizing high-interest debt first, you are paying <span style={{ color: T.status.green, fontWeight: 800 }}>${diffInterest.toLocaleString()} less</span> to the banks compared to Snowball.

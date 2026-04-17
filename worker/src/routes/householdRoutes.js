@@ -8,6 +8,7 @@ export async function handleHouseholdRoute({
   sha256Hex,
   buildHouseholdIntegrityTag,
   verifyHouseholdIntegrity,
+  workerLog,
 }) {
   if (!url.pathname.startsWith("/api/household/")) return null;
 
@@ -31,6 +32,7 @@ export async function handleHouseholdRoute({
       const action = body?.action;
       const householdId = String(body?.householdId || "").trim();
       const authToken = String(body?.authToken || "").trim();
+      const legacyAuthToken = String(body?.legacyAuthToken || "").trim();
 
       if (!householdId || !authToken || !action) {
         return new Response(
@@ -43,11 +45,22 @@ export async function handleHouseholdRoute({
       }
 
       const authTokenHash = await sha256Hex(authToken);
+      const legacyAuthTokenHash = legacyAuthToken ? await sha256Hex(legacyAuthToken) : "";
       const { results } = await env.DB.prepare(
         `SELECT household_id, encrypted_blob, auth_token_hash, integrity_tag, version, last_request_id, last_updated_at
            FROM household_sync WHERE household_id = ?`
       ).bind(householdId).all();
       const existing = results?.[0] || null;
+      const matchedLegacyCredential = Boolean(
+        existing?.auth_token_hash &&
+        legacyAuthTokenHash &&
+        existing.auth_token_hash === legacyAuthTokenHash &&
+        existing.auth_token_hash !== authTokenHash
+      );
+      const householdCredentialMatches = !existing?.auth_token_hash ||
+        existing.auth_token_hash === authTokenHash ||
+        matchedLegacyCredential;
+      const shouldRefreshStoredCredential = Boolean(!existing?.auth_token_hash || matchedLegacyCredential);
 
       if (action === "fetch") {
         if (!existing) {
@@ -57,35 +70,29 @@ export async function handleHouseholdRoute({
           });
         }
 
-        if (existing.auth_token_hash && existing.auth_token_hash !== authTokenHash) {
+        if (!householdCredentialMatches) {
           return new Response(JSON.stringify({ hasData: false }), {
             status: 404,
             headers: buildHeaders(cors, { "Content-Type": "application/json" }),
           });
         }
 
-        if (!existing.auth_token_hash) {
-          await env.DB.prepare(
-            "UPDATE household_sync SET auth_token_hash = ?, last_updated_at = CURRENT_TIMESTAMP WHERE household_id = ?"
-          ).bind(authTokenHash, householdId).run();
-        }
-
         const resolvedVersion = Number(existing.version || 0);
         const resolvedRequestId = existing.last_request_id || "";
-        const resolvedIntegrityTag =
-          existing.integrity_tag ||
-          (await buildHouseholdIntegrityTag({
+        const resolvedIntegrityTag = shouldRefreshStoredCredential || !existing.integrity_tag
+          ? await buildHouseholdIntegrityTag({
             householdId,
             authToken,
             encryptedBlob: existing.encrypted_blob,
             version: resolvedVersion,
             requestId: resolvedRequestId,
-          }));
+          })
+          : existing.integrity_tag;
 
-        if (!existing.integrity_tag) {
+        if (shouldRefreshStoredCredential || !existing.integrity_tag) {
           await env.DB.prepare(
-            "UPDATE household_sync SET integrity_tag = ?, last_updated_at = CURRENT_TIMESTAMP WHERE household_id = ?"
-          ).bind(resolvedIntegrityTag, householdId).run();
+            "UPDATE household_sync SET auth_token_hash = ?, integrity_tag = ?, last_updated_at = CURRENT_TIMESTAMP WHERE household_id = ?"
+          ).bind(authTokenHash, resolvedIntegrityTag, householdId).run();
         }
 
         return new Response(
@@ -138,7 +145,10 @@ export async function handleHouseholdRoute({
           );
         }
 
-        if (existing?.auth_token_hash && existing.auth_token_hash !== authTokenHash) {
+        if (!householdCredentialMatches && existing?.auth_token_hash) {
+          workerLog?.(env, "warn", "household-sync", "Unauthorized household push attempt", {
+            householdIdHash: (await sha256Hex(householdId)).slice(0, 12),
+          });
           return new Response(
             JSON.stringify({
               error: "unauthorized_household_access",
@@ -183,7 +193,7 @@ export async function handleHouseholdRoute({
            ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
            ON CONFLICT(household_id) DO UPDATE SET
              encrypted_blob = excluded.encrypted_blob,
-             auth_token_hash = COALESCE(household_sync.auth_token_hash, excluded.auth_token_hash),
+             auth_token_hash = excluded.auth_token_hash,
              integrity_tag = excluded.integrity_tag,
              version = excluded.version,
              last_request_id = excluded.last_request_id,

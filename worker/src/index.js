@@ -51,10 +51,15 @@ import { getSafeClientError, redactForWorkerLogs, workerLog } from "./lib/observ
 import { handleHouseholdRoute } from "./routes/householdRoutes.js";
 import { handleMarketRoute } from "./routes/marketRoutes.js";
 import { handleSystemRoute } from "./routes/systemRoutes.js";
-import { handleTelemetryRoute } from "./routes/telemetryRoutes.js";
+import { handleTelemetryRoute, loadTelemetrySummary } from "./routes/telemetryRoutes.js";
 import { handleReferralRoute } from "./routes/referralRoutes.js";
 
-export { buildHouseholdIntegrityTag, sha256Hex } from "./lib/householdSecurity.js";
+export {
+  buildHouseholdIntegrityTag,
+  deriveHouseholdAuthToken,
+  deriveLegacyHouseholdAuthToken,
+  sha256Hex,
+} from "./lib/householdSecurity.js";
 export {
   createIdentityChallenge,
   completeIdentityChallenge,
@@ -90,19 +95,28 @@ const PLAID_MANUAL_SYNC_COOLDOWNS = {
   pro: 24 * 60 * 60 * 1000,
 };
 const PLAID_BALANCE_REFRESH_COOLDOWNS = {
-  free: 0,
+  // Defensive non-zero value; free users skip maintain entirely (line ~1671) but
+  // if gating ever lapses this prevents unbounded Plaid calls.
+  free: 7 * 24 * 60 * 60 * 1000,
+  // Background auto-refresh: daily. Balances are the cheapest call ($0.10) and
+  // users expect recent data when they open the app. Manual force-sync overrides.
   pro: 24 * 60 * 60 * 1000,
 };
 const PLAID_TRANSACTION_REFRESH_COOLDOWNS = {
-  free: 0,
-  pro: 24 * 60 * 60 * 1000,
+  free: 7 * 24 * 60 * 60 * 1000,
+  // 72h saves ~60% on transaction-sync call volume vs 24h with minimal UX impact.
+  // Transactions rarely change multiple times per day, and manual force-sync
+  // always refreshes transactions immediately regardless of this cooldown.
+  pro: 72 * 60 * 60 * 1000,
 };
 const PLAID_LIABILITY_REFRESH_COOLDOWNS = {
-  free: 0,
-  pro: 4 * 24 * 60 * 60 * 1000,
+  free: 30 * 24 * 60 * 60 * 1000,
+  // Weekly liability refresh matches the audit cadence. Manual force-sync now
+  // always refreshes liabilities on demand regardless of this cooldown.
+  pro: 7 * 24 * 60 * 60 * 1000,
 };
 const PLAID_DEEP_SYNC_COOLDOWNS = {
-  free: 0,
+  free: 30 * 24 * 60 * 60 * 1000,
   pro: 7 * 24 * 60 * 60 * 1000,
 };
 const MODEL_ALLOWLIST = {
@@ -1151,6 +1165,7 @@ export default {
       rotateIdentityDeviceKey,
       updateAuditLogRow,
       loadPlaidRoiSummary,
+      loadTelemetrySummary,
       workerLog,
     });
     if (systemResponse) return systemResponse;
@@ -1818,6 +1833,7 @@ export default {
                 existingRow: await getStoredSyncRow(env.DB, plaidActor.userId, syncItemId || "default"),
                 refreshBalances: true,
                 refreshTransactions: true,
+                refreshLiabilities: true,
                 ignoreTransactionErrors: true,
               });
               await recordPlaidUsageDaily(env.DB, {
@@ -2035,6 +2051,7 @@ export default {
       sha256Hex,
       buildHouseholdIntegrityTag,
       verifyHouseholdIntegrity,
+      workerLog,
     });
     if (householdResponse) return householdResponse;
 

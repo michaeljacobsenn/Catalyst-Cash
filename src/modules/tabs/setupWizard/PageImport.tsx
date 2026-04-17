@@ -1,16 +1,28 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import type {
   SetupWizardSecurityState,
   SetupWizardUpdate,
 } from "../SetupWizard.js";
 import { normalizeAppError } from "../../appErrors.js";
+import { restoreBackupPayload } from "../../backup.js";
 import { downloadFromICloud } from "../../cloudSync.js";
 import { T } from "../../constants.js";
 import { decrypt, isEncrypted } from "../../crypto.js";
+import { refreshIdentitySessionWithAppleIdentityToken } from "../../identitySession.js";
 import { log } from "../../logger.js";
+import {
+  fetchRecoveryVaultBackup,
+  getRecoveryVaultContinuityState,
+  getLinkedRecoveryVaultId,
+  parseRecoveryVaultKit,
+  recordRecoveryVaultFailure,
+  rememberRecoveryVaultRestore,
+  restoreRecoveryVaultFromContinuity,
+  restoreRecoveryVaultFromTrustedContinuity,
+} from "../../recoveryVault.js";
 import { restoreSanitizedPlaidConnections } from "../../backup.js";
-import { isSecuritySensitiveKey } from "../../securityKeys.js";
+import UiGlyph from "../../UiGlyph.js";
 import { db } from "../../utils.js";
 import { NavRow, WizBtn, WizField, WizInput } from "./primitives.js";
 import type {
@@ -49,8 +61,50 @@ export default function PageImport({
   const [needsPass, setNeedsPass] = useState<boolean>(false);
   const [pendingParsed, setPendingParsed] = useState<BackupPayload | null>(null);
   const [imported, setImported] = useState<boolean>(false);
+  const [loadingLinkedRecoveryId, setLoadingLinkedRecoveryId] = useState<boolean>(false);
+  const [detectedLinkedRecoveryId, setDetectedLinkedRecoveryId] = useState<string>("");
+  const [hasContinuityEscrow, setHasContinuityEscrow] = useState<boolean>(false);
+  const [hasTrustedContinuityEscrow, setHasTrustedContinuityEscrow] = useState<boolean>(false);
+  const [continuityPassphrase, setContinuityPassphrase] = useState<string>("");
+  const [recoveryKit, setRecoveryKit] = useState<string>("");
+  const [recoveryVaultId, setRecoveryVaultId] = useState<string>("");
+  const [recoveryVaultKey, setRecoveryVaultKey] = useState<string>("");
   const fileRef = useRef<HTMLInputElement | null>(null);
   const csvRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (Capacitor.getPlatform() === "web") {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setLoadingLinkedRecoveryId(true);
+    void Promise.all([
+      getLinkedRecoveryVaultId().catch(() => null),
+      getRecoveryVaultContinuityState().catch(() => ({ recoveryId: null, hasEscrow: false, hasTrustedEscrow: false })),
+    ])
+      .then(([linkedRecoveryId, continuityState]) => {
+        if (cancelled) return;
+        if (linkedRecoveryId) {
+          setRecoveryVaultId((current) => current || linkedRecoveryId);
+          setDetectedLinkedRecoveryId(linkedRecoveryId);
+        }
+        setHasContinuityEscrow(Boolean(continuityState?.hasEscrow));
+        setHasTrustedContinuityEscrow(Boolean(continuityState?.hasTrustedEscrow));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingLinkedRecoveryId(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const applyBackup = async (backup: BackupPayload): Promise<boolean> => {
     if (backup && backup.type === "spreadsheet-backup") {
@@ -81,7 +135,7 @@ export default function PageImport({
       }
       const existing = ((await db.get("financial-config")) || {}) as Record<string, unknown>;
       await db.set("financial-config", { ...existing, ...config, _fromSetupWizard: true });
-      toast?.success?.(`✅ Imported ${Object.keys(config).length} fields from spreadsheet backup`);
+      toast?.success?.(`Imported ${Object.keys(config).length} fields from spreadsheet backup`);
       await onImported?.();
       setImported(true);
       return true;
@@ -91,36 +145,14 @@ export default function PageImport({
       toast?.error?.("Not a valid Catalyst Cash backup");
       return false;
     }
-    let count = 0;
-    for (const [key, value] of Object.entries(backup.data)) {
-      if (isSecuritySensitiveKey(key)) continue;
-      if (key === "auto-backup-interval" || key === "last-backup-ts") continue;
-      await db.set(key, value);
-      count++;
+    const { count, plaidReconnectCount } = await restoreBackupPayload(backup);
+    if (plaidReconnectCount > 0) {
+      toast?.info?.(
+        `${plaidReconnectCount} bank connection${plaidReconnectCount > 1 ? "s" : ""} need re-linking — go to Settings → Plaid after setup`,
+        { duration: 6000 }
+      );
     }
-    await db.set("auto-backup-interval", "off");
-    await db.del("last-backup-ts");
-
-    const sanitizedPlaid = backup.data["plaid-connections-sanitized"];
-    if (Array.isArray(sanitizedPlaid) && sanitizedPlaid.length > 0) {
-      const restoredPlaid = await restoreSanitizedPlaidConnections(sanitizedPlaid);
-      const reconnectCount = restoredPlaid.reconnectCount;
-      if (reconnectCount > 0) {
-        toast?.info?.(
-          `🏦 ${reconnectCount} bank connection${reconnectCount > 1 ? "s" : ""} need re-linking — go to Settings → Plaid after setup`,
-          { duration: 6000 }
-        );
-      }
-      const placeholderCount = restoredPlaid.placeholderCardCount + restoredPlaid.placeholderBankAccountCount;
-      if (placeholderCount > 0) {
-        toast?.info?.(
-          `Recovered ${placeholderCount} reconnect-ready account${placeholderCount > 1 ? "s" : ""} so your portfolio stays intact while you relink.`,
-          { duration: 6000 }
-        );
-      }
-    }
-
-    toast?.success?.(`✅ Restored ${count} settings — existing data overwritten`);
+    toast?.success?.(`Restored ${count} settings — existing data overwritten`);
     setImported(true);
     return true;
   };
@@ -155,6 +187,112 @@ export default function PageImport({
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Import failed";
       toast?.error?.(message);
+    }
+    setImporting(false);
+  };
+
+  const handleRecoveryVaultRestore = async (): Promise<void> => {
+    if (!recoveryVaultId || !recoveryVaultKey) {
+      toast?.error?.("Enter both your Recovery Vault ID and Recovery Key.");
+      return;
+    }
+    setImporting(true);
+    try {
+      const backup = await fetchRecoveryVaultBackup(recoveryVaultId, recoveryVaultKey);
+      const success = await applyBackup(backup);
+      if (success) {
+        await rememberRecoveryVaultRestore(recoveryVaultId);
+        await onImported?.();
+      }
+    } catch (error) {
+      const failure = await recordRecoveryVaultFailure(error, { eventName: "recovery_restore_failed" });
+      toast?.error?.(failure.userMessage);
+    }
+    setImporting(false);
+  };
+
+  const handleRecoveryKitChange = (value: string): void => {
+    setRecoveryKit(value);
+    const parsed = parseRecoveryVaultKit(value);
+    if (!parsed) return;
+    if (parsed.recoveryId) setRecoveryVaultId(parsed.recoveryId);
+    if (parsed.recoveryKey) setRecoveryVaultKey(parsed.recoveryKey);
+  };
+
+  const handlePasteRecoveryKit = async (): Promise<void> => {
+    if (!navigator?.clipboard?.readText) {
+      toast?.error?.("Clipboard access is unavailable on this device.");
+      return;
+    }
+    try {
+      const text = await navigator.clipboard.readText();
+      handleRecoveryKitChange(text);
+      toast?.success?.("Recovery Kit pasted.");
+    } catch {
+      toast?.error?.("Could not read from the clipboard.");
+    }
+  };
+
+  const handleUseLinkedRecoveryId = async (): Promise<void> => {
+    setLoadingLinkedRecoveryId(true);
+    try {
+      const [linkedRecoveryId, continuityState] = await Promise.all([
+        getLinkedRecoveryVaultId(),
+        getRecoveryVaultContinuityState().catch(() => ({ hasEscrow: false, hasTrustedEscrow: false })),
+      ]);
+      if (!linkedRecoveryId) {
+        toast?.info?.("No linked Recovery Vault was found for this device identity yet.");
+        return;
+      }
+      setRecoveryVaultId(linkedRecoveryId);
+      setDetectedLinkedRecoveryId(linkedRecoveryId);
+      setHasContinuityEscrow(Boolean(continuityState?.hasEscrow));
+      setHasTrustedContinuityEscrow(Boolean(continuityState?.hasTrustedEscrow));
+      toast?.success?.("Linked Recovery Vault ID loaded. Enter your Recovery Key to restore.");
+    } catch (error) {
+      const failure = normalizeAppError(error, { context: "restore" });
+      toast?.error?.(failure.userMessage);
+    } finally {
+      setLoadingLinkedRecoveryId(false);
+    }
+  };
+
+  const handleRecoveryVaultContinuityRestore = async (): Promise<void> => {
+    if (!continuityPassphrase) {
+      toast?.error?.("Enter your account sync passphrase.");
+      return;
+    }
+    setImporting(true);
+    try {
+      const result = await restoreRecoveryVaultFromContinuity(continuityPassphrase);
+      const success = await applyBackup(result.backup);
+      if (success) {
+        setRecoveryVaultId(result.recoveryId);
+        setRecoveryVaultKey(result.recoveryKey);
+        await rememberRecoveryVaultRestore(result.recoveryId);
+        await onImported?.();
+      }
+    } catch (error) {
+      const failure = await recordRecoveryVaultFailure(error, { eventName: "recovery_restore_failed" });
+      toast?.error?.(failure.userMessage);
+    }
+    setImporting(false);
+  };
+
+  const handleTrustedRecoveryVaultRestore = async (): Promise<void> => {
+    setImporting(true);
+    try {
+      const result = await restoreRecoveryVaultFromTrustedContinuity();
+      const success = await applyBackup(result.backup);
+      if (success) {
+        setRecoveryVaultId(result.recoveryId);
+        setRecoveryVaultKey(result.recoveryKey);
+        await rememberRecoveryVaultRestore(result.recoveryId);
+        await onImported?.();
+      }
+    } catch (error) {
+      const failure = await recordRecoveryVaultFailure(error, { eventName: "recovery_restore_failed" });
+      toast?.error?.(failure.userMessage);
     }
     setImporting(false);
   };
@@ -278,7 +416,7 @@ export default function PageImport({
       if (Object.keys(config).length > 0) {
         const existing = ((await db.get("financial-config")) || {}) as Record<string, unknown>;
         await db.set("financial-config", { ...existing, ...config, _fromSetupWizard: true });
-        toast?.success?.(`✅ Imported ${Object.keys(config).length} fields — existing values overwritten`);
+        toast?.success?.(`Imported ${Object.keys(config).length} fields — existing values overwritten`);
         await onImported?.();
         setImported(true);
       } else {
@@ -320,7 +458,9 @@ export default function PageImport({
   if (needsPass) {
     return (
       <div>
-        <div style={{ fontSize: 40, textAlign: "center", marginBottom: 14 }}>🔑</div>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+          <UiGlyph glyph="🔑" size={28} color={T.accent.primary} />
+        </div>
         <p style={{ fontSize: 14, color: T.text.secondary, textAlign: "center", marginBottom: 20 }}>
           This backup is encrypted. Enter your passphrase to unlock it.
         </p>
@@ -395,7 +535,7 @@ export default function PageImport({
           marginBottom: 14,
         }}
       >
-        <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>ℹ️</span>
+        <UiGlyph glyph="ℹ️" size={14} color={T.accent.primary} style={{ flexShrink: 0, marginTop: 1 }} />
         <p style={{ fontSize: 12, color: T.text.secondary, margin: 0, lineHeight: 1.5 }}>
           Importing <strong style={{ color: T.text.primary }}>overwrites</strong> any existing data for the same fields.
           Your PIN and encrypted chats are never touched.
@@ -434,13 +574,191 @@ export default function PageImport({
               opacity: importing ? 0.5 : 1,
             }}
           >
-            <span style={{ fontSize: 24 }}>{item.icon}</span>
+            <UiGlyph glyph={item.icon} size={22} color={T.accent.primary} style={{ flexShrink: 0 }} />
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: T.text.primary }}>{item.title}</div>
               <div style={{ fontSize: 12, color: T.text.dim, marginTop: 2 }}>{item.sub}</div>
             </div>
           </button>
         ))}
+      </div>
+
+      <div
+        style={{
+          marginBottom: 14,
+          padding: "14px 16px",
+          background: T.bg.elevated,
+          borderRadius: T.radius.md,
+          border: `1px solid ${T.border.default}`,
+        }}
+      >
+        <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 4 }}>
+          Restore from Recovery Vault
+        </div>
+        <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 12px 0" }}>
+          Paste your Recovery Kit or enter the Recovery ID and Recovery Key you saved when you enabled encrypted cross-device recovery.
+        </p>
+        {detectedLinkedRecoveryId && recoveryVaultId === detectedLinkedRecoveryId ? (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: "10px 12px",
+              borderRadius: T.radius.md,
+              border: `1px solid ${T.status.green}30`,
+              background: `${T.status.green}10`,
+              fontSize: 11,
+              color: T.status.green,
+              lineHeight: 1.5,
+            }}
+          >
+            Linked Recovery Vault ID found for this protected device identity. Enter only your Recovery Key to continue restoring.
+          </div>
+        ) : null}
+        {hasContinuityEscrow ? (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: "10px 12px",
+              borderRadius: T.radius.md,
+              border: `1px solid ${T.accent.emerald}30`,
+              background: `${T.accent.emerald}10`,
+              fontSize: 11,
+              color: T.accent.emerald,
+              lineHeight: 1.5,
+            }}
+          >
+            Account-backed continuity is available for this identity. Enter your account sync passphrase to restore without the Recovery Key.
+          </div>
+        ) : null}
+        {hasTrustedContinuityEscrow ? (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: "10px 12px",
+              borderRadius: T.radius.md,
+              border: `1px solid ${T.status.amber}30`,
+              background: `${T.status.amber}10`,
+              fontSize: 11,
+              color: T.status.amber,
+              lineHeight: 1.5,
+            }}
+          >
+            Seamless account restore is available for this identity. After protected sign-in, you can restore without the Recovery Key or an account sync passphrase.
+          </div>
+        ) : null}
+        <div style={{ display: "grid", gap: 10 }}>
+          <WizField label="Recovery Kit" hint="Paste the full Recovery Kit to fill both fields automatically.">
+            <textarea
+              value={recoveryKit}
+              onChange={(event) => handleRecoveryKitChange(event.target.value)}
+              placeholder={"Catalyst Cash Recovery Kit\nRecovery Vault ID: ...\nRecovery Key: ..."}
+              aria-label="Recovery Kit"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              className="wiz-input"
+              style={{
+                width: "100%",
+                minHeight: 76,
+                padding: "12px 14px",
+                borderRadius: T.radius.md,
+                background: T.bg.elevated,
+                border: `1px solid ${T.border.default}`,
+                color: T.text.primary,
+                fontSize: 13,
+                outline: "none",
+                fontFamily: T.font.sans,
+                boxSizing: "border-box",
+                resize: "vertical",
+                lineHeight: 1.4,
+              }}
+            />
+          </WizField>
+          <button
+            onClick={() => void handlePasteRecoveryKit()}
+            disabled={importing}
+            style={{
+              width: "100%",
+              padding: "11px 14px",
+              borderRadius: T.radius.md,
+              border: `1px solid ${T.border.default}`,
+              background: T.bg.surface,
+              color: T.text.primary,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+              opacity: importing ? 0.55 : 1,
+            }}
+          >
+            Paste Recovery Kit
+          </button>
+          {Capacitor.getPlatform() !== "web" && (
+            <button
+              onClick={() => void handleUseLinkedRecoveryId()}
+              disabled={importing || loadingLinkedRecoveryId}
+              style={{
+                width: "100%",
+                padding: "11px 14px",
+                borderRadius: T.radius.md,
+                border: `1px solid ${T.border.default}`,
+                background: T.bg.surface,
+                color: T.text.primary,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                opacity: importing || loadingLinkedRecoveryId ? 0.55 : 1,
+              }}
+            >
+              {loadingLinkedRecoveryId ? "Checking linked identity…" : detectedLinkedRecoveryId ? "Refresh Linked Recovery ID" : "Use Linked Recovery ID"}
+            </button>
+          )}
+          {hasContinuityEscrow ? (
+            <>
+              <WizField label="Account Sync Passphrase" hint="Optional encrypted account-backed restore for linked Recovery Vaults.">
+                <WizInput
+                  type="password"
+                  value={continuityPassphrase}
+                  onChange={setContinuityPassphrase}
+                  placeholder="Enter account sync passphrase"
+                  aria-label="Account Sync Passphrase"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                />
+              </WizField>
+              <WizBtn onClick={() => void handleRecoveryVaultContinuityRestore()} disabled={importing || continuityPassphrase.length < 10}>
+                {importing ? "Restoring…" : "Restore with Account Sync"}
+              </WizBtn>
+            </>
+          ) : null}
+          {hasTrustedContinuityEscrow ? (
+            <WizBtn onClick={() => void handleTrustedRecoveryVaultRestore()} disabled={importing}>
+              {importing ? "Restoring…" : "Restore with Seamless Account Sync"}
+            </WizBtn>
+          ) : null}
+          <WizField label="Recovery Vault ID">
+            <WizInput
+              value={recoveryVaultId}
+              onChange={(value) => setRecoveryVaultId(value.toUpperCase())}
+              placeholder="CC-ABCDE-FGHIJ"
+              aria-label="Recovery Vault ID"
+              autoCapitalize="characters"
+              autoCorrect="off"
+            />
+          </WizField>
+          <WizField label="Recovery Key">
+            <WizInput
+              type="password"
+              value={recoveryVaultKey}
+              onChange={(value) => setRecoveryVaultKey(value.toUpperCase())}
+              placeholder="ABCD-EFGH-IJKL-MNOP"
+              aria-label="Recovery Key"
+              autoCapitalize="characters"
+              autoCorrect="off"
+            />
+          </WizField>
+          <WizBtn onClick={() => void handleRecoveryVaultRestore()} disabled={importing || !recoveryVaultId || !recoveryVaultKey}>
+            {importing ? "Checking Vault…" : "Restore from Vault"}
+          </WizBtn>
+        </div>
       </div>
 
       {Capacitor.getPlatform() !== "web" && !appleLinkedId && (
@@ -452,9 +770,9 @@ export default function PageImport({
             borderRadius: T.radius.md,
             border: `1px solid ${T.border.default}`,
           }}
-        >
-          <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 4 }}>
-            ☁️ Restore from iCloud
+          >
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 4 }}>
+            Restore from iCloud
           </div>
           <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 10px 0" }}>
             Link your Apple ID to instantly restore your latest backup and enable continuous auto-sync.
@@ -473,12 +791,39 @@ export default function PageImport({
                   scopes: "email name",
                 })) as AppleSignInResult;
                 const userId = result.response.user;
+                const identityToken = String(result.response.identityToken || "").trim();
                 if (setAppleLinkedId) setAppleLinkedId(userId ?? null);
+                if (identityToken) {
+                  await refreshIdentitySessionWithAppleIdentityToken(identityToken)
+                    .then(async () => {
+                      const [linkedRecoveryId, continuityState] = await Promise.all([
+                        getLinkedRecoveryVaultId().catch(() => null),
+                        getRecoveryVaultContinuityState().catch(() => ({
+                          recoveryId: null,
+                          hasEscrow: false,
+                          hasTrustedEscrow: false,
+                        })),
+                      ]);
+                      if (linkedRecoveryId) {
+                        setRecoveryVaultId((current) => current || linkedRecoveryId);
+                        setDetectedLinkedRecoveryId(linkedRecoveryId);
+                      }
+                      setHasContinuityEscrow(Boolean(continuityState?.hasEscrow));
+                      setHasTrustedContinuityEscrow(Boolean(continuityState?.hasTrustedEscrow));
+                    })
+                    .catch((error) => {
+                      log.warn("restore", "Verified Apple actor binding failed during setup restore", {
+                        error: error instanceof Error ? error.message : String(error),
+                      });
+                    });
+                }
 
                 toast?.success?.(
                   imported
                     ? "Apple ID linked for future backups."
-                    : "Apple ID linked for iCloud backup. Checking for previous data..."
+                    : identityToken
+                      ? "Apple ID linked. Checking for previous data and verified restore paths..."
+                      : "Apple ID linked for iCloud backup. Checking for previous data..."
                 );
 
                 if (!imported) {
@@ -557,7 +902,7 @@ export default function PageImport({
               cursor: "pointer",
             }}
           >
-             Sign in with Apple
+            Sign in with Apple
           </button>
         </div>
       )}
@@ -657,7 +1002,7 @@ export default function PageImport({
               opacity: importing ? 0.5 : 1,
             }}
           >
-            <span style={{ fontSize: 20 }}>📗</span>
+            <UiGlyph glyph="📗" size={20} color={T.accent.primary} />
             <div style={{ textAlign: "left" }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>Excel (.xlsx)</div>
               <div style={{ fontSize: 11, color: T.text.dim }}>Dropdowns included</div>
@@ -681,7 +1026,7 @@ export default function PageImport({
               opacity: importing ? 0.5 : 1,
             }}
           >
-            <span style={{ fontSize: 20 }}>📄</span>
+            <UiGlyph glyph="📄" size={20} color={T.accent.primary} />
             <div style={{ textAlign: "left" }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>CSV (.csv)</div>
               <div style={{ fontSize: 11, color: T.text.dim }}>Any spreadsheet app</div>

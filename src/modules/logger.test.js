@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Preferences } from "@capacitor/preferences";
 
 const memory = new Map();
 
@@ -18,6 +19,7 @@ describe("logger redaction", () => {
   beforeEach(async () => {
     memory.clear();
     vi.resetModules();
+    vi.clearAllMocks();
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.spyOn(console, "info").mockImplementation(() => {});
@@ -59,5 +61,15 @@ describe("logger redaction", () => {
     expect(getSafeErrorMessage(error)).toContain("[REDACTED]");
     expect(getSafeErrorMessage(error)).toContain("[API_KEY]");
     expect(redactForLog("Account 4111111111111111")).toContain("[NUMBER]");
+  });
+
+  it("persists warning and error entries immediately", async () => {
+    const { clearLogs, log } = await import("./logger.js");
+    await clearLogs();
+
+    await log.error("sync", "Failed once", { status: 500 });
+
+    expect(Preferences.set).toHaveBeenCalledTimes(2);
+    expect(memory.get("catalyst-debug-log")).toContain("Failed once");
   });
 });

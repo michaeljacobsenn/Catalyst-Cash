@@ -20,6 +20,11 @@ export interface BackupPayload {
 export interface AppleSignInResult {
   response: {
     user?: string | null;
+    email?: string | null;
+    givenName?: string | null;
+    familyName?: string | null;
+    identityToken?: string | null;
+    authorizationCode?: string | null;
   };
 }
 

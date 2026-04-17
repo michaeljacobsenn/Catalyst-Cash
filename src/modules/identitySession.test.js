@@ -189,4 +189,33 @@ describe("identitySession", () => {
     expect(firstChallengeBody.legacyDeviceId).toBe("legacy-device-123");
     expect(retryChallengeBody.legacyDeviceId).toBe("");
   });
+
+  it("forwards a verified Apple identity token when refreshing the protected identity session", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(okJson({
+        challengeId: "ich_apple",
+        nonce: "nonce_apple",
+        signingPayload: "payload_apple",
+      }))
+      .mockResolvedValueOnce(okJson({
+        token: "ccid.apple.token",
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }));
+
+    const { mod } = await loadIdentitySession({
+      dbGet: vi.fn(async () => "legacy-device-123"),
+      fetchImpl,
+    });
+
+    await expect(mod.refreshIdentitySessionWithAppleIdentityToken("apple.jwt.token")).resolves.toMatchObject({
+      token: "ccid.apple.token",
+    });
+
+    const challengeBody = JSON.parse(fetchImpl.mock.calls[0][1]?.body || "{}");
+    const sessionBody = JSON.parse(fetchImpl.mock.calls[1][1]?.body || "{}");
+
+    expect(challengeBody.appleIdentityToken).toBe("apple.jwt.token");
+    expect(sessionBody.appleIdentityToken).toBe("apple.jwt.token");
+  });
 });

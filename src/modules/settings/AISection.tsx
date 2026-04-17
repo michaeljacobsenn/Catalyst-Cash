@@ -3,6 +3,7 @@
   import { T } from "../constants.js";
   import { getAiUsageDisplayLabel } from "../aiUsageProfile.js";
   import { haptic } from "../haptics.js";
+  import UiGlyph from "../UiGlyph.js";
   import { Card,Label } from "../ui.js";
 
 type ProviderModel = {
@@ -93,7 +94,10 @@ export default function AISection({
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-          <span style={{ fontSize: 14, fontWeight: 800, color: T.accent.emerald }}>✨ Catalyst AI</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 800, color: T.accent.emerald }}>
+            <UiGlyph glyph="✨" size={14} color={T.accent.emerald} />
+            Catalyst AI
+          </span>
           <span
             style={{
               fontSize: 10,
@@ -251,17 +255,29 @@ export default function AISection({
       ) : (
         <div
           style={{
-            padding: "14px 16px",
-            background: T.bg.elevated,
+            padding: "16px",
+            background: `linear-gradient(180deg, ${T.accent.primary}10, ${T.bg.elevated})`,
             border: `1px solid ${T.border.default}`,
             borderRadius: T.radius.md,
-            marginBottom: 4,
+            marginBottom: 14,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <div>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  color: T.text.dim,
+                  fontFamily: T.font.mono,
+                  marginBottom: 7,
+                }}
+              >
+                CURRENT ENGINE
+              </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: T.text.primary }}>{selectedModel.name}</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary }}>{selectedModel.name}</div>
                 <span
                   style={{
                     fontSize: 8,
@@ -275,7 +291,7 @@ export default function AISection({
                   {selectedModelTierLabel}
                 </span>
               </div>
-              <div style={{ fontSize: 11, color: T.text.dim, marginTop: 4 }}>
+              <div style={{ fontSize: 11, color: T.text.dim, marginTop: 6, lineHeight: 1.45 }}>
                 {showUpgradeCta
                   ? "Free includes Catalyst AI automatically. Upgrade to unlock Catalyst AI CFO and Boardroom reasoning."
                   : "Pro includes three curated engines: Free-speed Flash, default CFO, and deep-reasoning Boardroom."}
@@ -292,48 +308,85 @@ export default function AISection({
                   background: `${T.accent.primary}12`,
                   color: T.accent.primary,
                   borderRadius: 999,
-                  padding: "8px 12px",
+                  padding: "8px 13px",
                   fontSize: 11,
                   fontWeight: 800,
                   cursor: "pointer",
                   whiteSpace: "nowrap",
+                  flexShrink: 0,
                 }}
               >
                 Upgrade
               </button>
             ) : null}
           </div>
+          <div
+            style={{
+              marginTop: 12,
+              paddingTop: 10,
+              borderTop: `1px solid ${T.border.subtle}`,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
+            {["Catalyst backend", "JSON output", "Streaming"].map(item => (
+              <span
+                key={item}
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  fontFamily: T.font.mono,
+                  color: T.text.dim,
+                  padding: "4px 8px",
+                  borderRadius: 999,
+                  border: `1px solid ${T.border.subtle}`,
+                  background: `${T.bg.base}55`,
+                }}
+              >
+                {item}
+              </span>
+            ))}
+          </div>
         </div>
       )}
       
 
 
-      <div style={{ paddingTop: 16 }}>
+      <div style={{ paddingTop: 10 }}>
         <Label>System Info</Label>
-        {[
-          ["Version", "v1"],
-          ["Provider", currentProvider.name],
-          ["Model", `${selectedModel.name} · ${selectedModelTierLabel}`],
-          ["Tokens", getAiUsageDisplayLabel()],
-          ["Output", "JSON · Streaming"],
-        ].map(([label, value]) => (
-          <div
-            key={label}
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "6px 0",
-              borderBottom: `1px solid ${T.border.subtle}`,
-            }}
-          >
-            <span style={{ fontSize: 12, fontWeight: 600 }}>{label}</span>
-            <Mono size={11} color={T.text.dim}>
-              {value}
-            </Mono>
-          </div>
-        ))}
-        <div style={{ paddingTop: 12 }}>
+        <div
+          style={{
+            padding: "10px 14px 14px",
+            borderRadius: T.radius.md,
+            border: `1px solid ${T.border.default}`,
+            background: `${T.bg.elevated}d9`,
+          }}
+        >
+          {[
+            ["Version", "v1"],
+            ["Provider", currentProvider.name],
+            ["Model", `${selectedModel.name} · ${selectedModelTierLabel}`],
+            ["Tokens", getAiUsageDisplayLabel()],
+            ["Output", "JSON · Streaming"],
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "8px 0",
+                borderBottom: `1px solid ${T.border.subtle}`,
+              }}
+            >
+              <span style={{ fontSize: 12, fontWeight: 600 }}>{label}</span>
+              <Mono size={11} color={T.text.dim}>
+                {value}
+              </Mono>
+            </div>
+          ))}
+          <div style={{ paddingTop: 14 }}>
           <button
             onClick={() => window.open(PRIVACY_URL, "_blank")}
             style={{
@@ -350,6 +403,7 @@ export default function AISection({
           >
             Privacy Policy
           </button>
+          </div>
         </div>
       </div>
     </Card>

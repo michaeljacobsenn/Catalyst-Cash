@@ -3,6 +3,7 @@
   import { T } from "../constants.js";
   import { usePortfolio } from "../contexts/PortfolioContext.js";
   import { HelpCircle } from "../icons";
+  import { computeCreditUtilizationSummary } from "./creditUtilization.js";
   import { InlineTooltip } from "../ui.js";
   import { fmt } from "../utils.js";
 
@@ -11,17 +12,10 @@ export default function CreditUtilizationWidget() {
 
     const creditCards = useMemo(() => cards.filter(c => c.cardType !== "charge"), [cards]);
 
-    const { totalCreditBalance, totalCreditLimit } = useMemo(() => {
-        let bal = 0;
-        let lim = 0;
-        creditCards.forEach(c => {
-            bal += c._plaidBalance != null ? c._plaidBalance : Number(c.balance || 0);
-            lim += c._plaidLimit != null ? c._plaidLimit : Number(c.limit || 0);
-        });
-        return { totalCreditBalance: bal, totalCreditLimit: lim };
-    }, [creditCards]);
-
-    const creditUtilization = totalCreditLimit > 0 ? (totalCreditBalance / totalCreditLimit) * 100 : 0;
+    const { totalCreditBalance, totalCreditLimit, creditUtilization, gaugeUtilization } = useMemo(
+        () => computeCreditUtilizationSummary(creditCards),
+        [creditCards]
+    );
 
     let utilColor = T.accent.emerald;
     let utilLabel = "Excellent";
@@ -45,7 +39,7 @@ export default function CreditUtilizationWidget() {
     const stroke = 6;
     const normalizedRadius = gaugeCenter - gaugeStrokeInset - stroke * 0.5;
     const circumference = normalizedRadius * 2 * Math.PI;
-    const strokeDashoffset = circumference - (creditUtilization / 100) * circumference;
+    const strokeDashoffset = circumference - (gaugeUtilization / 100) * circumference;
 
     if (creditCards.length === 0) return null;
 
@@ -99,7 +93,7 @@ export default function CreditUtilizationWidget() {
                             >
                                 <div
                                     style={{
-                                        width: `${Math.max(4, Math.min(creditUtilization, 100))}%`,
+                                        width: `${Math.max(4, gaugeUtilization)}%`,
                                         height: "100%",
                                         background: `linear-gradient(90deg, ${utilColor}, ${T.accent.primary})`,
                                         borderRadius: 999,

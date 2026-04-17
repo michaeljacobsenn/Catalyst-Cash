@@ -1,4 +1,4 @@
-  import { useCallback,useEffect,useRef,useState } from "react";
+  import { Suspense,lazy,useCallback,useEffect,useRef,useState } from "react";
   import type {
     BankAccount,
     Card,
@@ -21,12 +21,6 @@
   import { useToast } from "../Toast.js";
   import { db } from "../utils.js";
   import { PageWelcome } from "./setupWizard/PageWelcome.js";
-  import PageImport from "./setupWizard/PageImport.js";
-  import { PageProfile } from "./setupWizard/PageProfile.js";
-  import { PagePass1 } from "./setupWizard/PagePass1.js";
-  import { PagePass2 } from "./setupWizard/PagePass2.js";
-  import { PagePass3 } from "./setupWizard/PagePass3.js";
-  import { PageDone } from "./setupWizard/PageDone.js";
 
 interface ToastApi {
   success?: (message: string) => void;
@@ -58,12 +52,27 @@ interface ProviderModel {
 }
 
 const typedProviders = AI_PROVIDERS as ProviderModel[];
+const LazyPageImport = lazy(() => import("./setupWizard/PageImport.js"));
+const LazyPageProfile = lazy(() =>
+  import("./setupWizard/PageProfile.js").then((mod) => ({ default: mod.PageProfile }))
+);
+const LazyPagePass1 = lazy(() =>
+  import("./setupWizard/PagePass1.js").then((mod) => ({ default: mod.PagePass1 }))
+);
+const LazyPagePass2 = lazy(() =>
+  import("./setupWizard/PagePass2.js").then((mod) => ({ default: mod.PagePass2 }))
+);
+const LazyPagePass3 = lazy(() =>
+  import("./setupWizard/PagePass3.js").then((mod) => ({ default: mod.PagePass3 }))
+);
+const LazyPageDone = lazy(() =>
+  import("./setupWizard/PageDone.js").then((mod) => ({ default: mod.PageDone }))
+);
 
 type WizardPageId = "welcome" | "import" | "profile" | "pass1" | "pass2" | "pass3" | "done";
 
 interface WizardPageMeta {
   id: WizardPageId;
-  emoji: string;
   title: string;
   subtitle: string;
   effort?: string;
@@ -126,20 +135,20 @@ export type SetupWizardCombinedData = SetupWizardIncomeState & SetupWizardSpendi
 export type SetupWizardUpdate<T extends object> = <K extends keyof T>(key: K, value: T[K]) => void;
 
 const PAGES: WizardPageMeta[] = [
-  { id: "welcome", emoji: "👋", title: "Welcome", subtitle: "A quick setup for cleaner audits and calmer money decisions.", effort: "30 sec" },
-  { id: "import", emoji: "📥", title: "Import Data", subtitle: "Restore a backup first if you already have one.", effort: "Optional", optional: true },
-  { id: "profile", emoji: "🧑‍💻", title: "Your Profile", subtitle: "Region and household context that shape your plan.", effort: "1 min" },
-  { id: "pass1", emoji: "⚡️", title: "Cash Flow", subtitle: "Pay rhythm and weekly spending guardrails.", effort: "Required" },
-  { id: "pass2", emoji: "🎯", title: "Safety Targets", subtitle: "Reserve targets and tax context for safer recommendations.", effort: "Optional", optional: true },
-  { id: "pass3", emoji: "⚙️", title: "Connections & Security", subtitle: "Link accounts, choose your setup, and lock the app down.", effort: "Optional", optional: true },
-  { id: "done", emoji: "🎉", title: "All Set!", subtitle: "" },
+  { id: "welcome", title: "Welcome", subtitle: "A quick setup for cleaner audits and calmer money decisions.", effort: "30 sec" },
+  { id: "import", title: "Import Data", subtitle: "Restore a backup first if you already have one.", effort: "Optional", optional: true },
+  { id: "profile", title: "Your Profile", subtitle: "Region and household context that shape your plan.", effort: "1 min" },
+  { id: "pass1", title: "Cash Flow", subtitle: "Pay rhythm and weekly spending guardrails.", effort: "Required" },
+  { id: "pass2", title: "Safety Targets", subtitle: "Reserve targets and tax context for safer recommendations.", effort: "Optional", optional: true },
+  { id: "pass3", title: "Connections & Security", subtitle: "Link accounts, choose your setup, and lock the app down.", effort: "Optional", optional: true },
+  { id: "done", title: "All Set!", subtitle: "" },
 ];
 const TOTAL = PAGES.length;
 
-function ProgressBar({ step }: { step: number }) {
+function ProgressBar({ step, total = TOTAL }: { step: number; total?: number }) {
   return (
     <div style={{ display: "flex", gap: 5, marginBottom: 10 }} aria-hidden="true">
-      {PAGES.map((_, i) => (
+      {Array.from({ length: total }, (_, i) => (
         <div
           key={i}
           style={{
@@ -155,17 +164,33 @@ function ProgressBar({ step }: { step: number }) {
   );
 }
 
-function StepHeader({ step }: { step: number }) {
-  const page = PAGES[step];
+function StepHeader({
+  step,
+  total = TOTAL,
+  pageOverride = null,
+}: {
+  step: number;
+  total?: number;
+  pageOverride?: WizardPageMeta | null;
+}) {
+  const page = pageOverride || PAGES[step];
   if (!page || step === TOTAL - 1) return null;
   return (
     <div style={{ marginBottom: 22 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-          <span style={{ fontSize: 22, lineHeight: 1 }}>{page.emoji}</span>
+          <div
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: 999,
+              background: T.accent.primary,
+              flexShrink: 0,
+            }}
+          />
           <div>
-            <div style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono }}>
-              Step {step + 1} of {TOTAL}
+            <div style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              Step {step + 1} of {total}
             </div>
             {page.optional && <div style={{ fontSize: 11, color: T.text.dim, marginTop: 2 }}>Optional now. Easy to refine later.</div>}
           </div>
@@ -176,8 +201,8 @@ function StepHeader({ step }: { step: number }) {
               flexShrink: 0,
               padding: "6px 10px",
               borderRadius: 999,
-              background: page.optional ? T.accent.primaryDim : `${T.accent.emerald}12`,
-              border: `1px solid ${page.optional ? T.accent.primarySoft : `${T.accent.emerald}26`}`,
+              background: page.optional ? T.bg.elevated : `${T.accent.emerald}10`,
+              border: `1px solid ${page.optional ? T.border.subtle : `${T.accent.emerald}22`}`,
               color: page.optional ? T.accent.primary : T.accent.emerald,
               fontSize: 10,
               fontWeight: 800,
@@ -204,6 +229,8 @@ function StepHeader({ step }: { step: number }) {
   );
 }
 
+import { trackFunnel } from "../funnelAnalytics.js";
+
 export default function SetupWizard() {
   const { setAppleLinkedId, appleLinkedId, setRequireAuth, setAppPasscode, setUseFaceId, setIsLocked, setLockTimeout } =
     useSecurity() as SecurityContextValue;
@@ -211,6 +238,11 @@ export default function SetupWizard() {
   const { themeMode, setThemeMode, setFinancialConfig } = useSettings();
   const [userHasUnlockedProAccess, setUserHasUnlockedProAccess] = useState<boolean>(false);
   const toast = useToast() as ToastApi;
+
+  // Track setup start once when component mounts
+  useEffect(() => {
+    void trackFunnel("setup_started");
+  }, []);
 
   const {
     isPortfolioReady,
@@ -220,6 +252,7 @@ export default function SetupWizard() {
   } = usePortfolio();
 
   const [step, setStep] = useState<number>(0);
+  const [fastTrack, setFastTrack] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
@@ -284,6 +317,7 @@ export default function SetupWizard() {
         config,
         prov,
         mod,
+        storedThemeMode,
         storedBankAccounts,
         storedCards,
         storedRenewals,
@@ -292,6 +326,7 @@ export default function SetupWizard() {
         db.get("financial-config"),
         db.get("ai-provider"),
         db.get("ai-model"),
+        db.get("theme-mode"),
         db.get("bank-accounts"),
         db.get("card-portfolio"),
         db.get("renewals"),
@@ -364,6 +399,12 @@ export default function SetupWizard() {
         setContextRenewals(nextRenewals);
       }
 
+      // Make "System Auto" the explicit first-run default instead of
+      // relying on the implicit SettingsContext fallback alone.
+      if (storedThemeMode == null) {
+        setThemeMode("system");
+      }
+
       const tierId = userHasUnlockedProAccess ? "pro" : "free";
       setAi((prev) => ({
         ...prev,
@@ -407,6 +448,15 @@ export default function SetupWizard() {
   const next = (): void => setStep((current) => Math.min(current + 1, TOTAL - 1));
   const back = (): void => setStep((current) => Math.max(current - 1, 0));
   const skip = (): void => next();
+  const startFast = (): void => {
+    setIncome((prev) => ({
+      ...prev,
+      incomeType: prev.incomeType || "salary",
+      paycheckDepositAccount: prev.paycheckDepositAccount || "checking",
+    }));
+    setFastTrack(true);
+    setStep(PAGES.findIndex((page) => page.id === "pass1"));
+  };
 
   const skipToDashboard = async (): Promise<void> => {
     setSaving(true);
@@ -416,6 +466,7 @@ export default function SetupWizard() {
       await db.set("onboarding-complete", true);
       setOnboardingComplete(true);
       setIsLocked?.(false);
+      void trackFunnel("setup_completed");
       navTo?.("dashboard");
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "unknown error";
@@ -424,7 +475,7 @@ export default function SetupWizard() {
     setSaving(false);
   };
 
-  const saveAndFinish = async (): Promise<void> => {
+  const saveAndFinish = async ({ goToDashboard = false }: { goToDashboard?: boolean } = {}): Promise<void> => {
     setSaving(true);
     try {
       const existing = ((await db.get("financial-config")) || {}) as Partial<CatalystCashConfig> & Record<string, unknown>;
@@ -514,7 +565,12 @@ export default function SetupWizard() {
       await db.set("onboarding-complete", true);
       setOnboardingComplete(true);
       setIsLocked?.(false);
-      next();
+      void trackFunnel("setup_completed");
+      if (goToDashboard) {
+        navTo?.("dashboard");
+      } else {
+        next();
+      }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "unknown error";
       toast.error?.("Save failed: " + message);
@@ -535,6 +591,7 @@ export default function SetupWizard() {
       await db.set("onboarding-complete", true);
       setOnboardingComplete(true);
       setIsLocked?.(false);
+      void trackFunnel("setup_completed");
       next();
     } catch {
       // ignore
@@ -546,11 +603,36 @@ export default function SetupWizard() {
     void db.set("onboarding-complete", true);
     setOnboardingComplete(true);
     setIsLocked?.(false);
+    void trackFunnel("setup_completed");
     navTo?.("dashboard");
   };
 
   const pageId = PAGES[step]?.id;
   if (!pageId) return null;
+  const fastTrackMeta: WizardPageMeta = {
+    id: "pass1",
+    title: "Quick Start",
+    subtitle: "Capture the minimum inputs for a trustworthy first audit. Everything else can wait.",
+    effort: "1 step",
+  };
+  const headerStep = fastTrack ? 0 : step;
+  const headerTotal = fastTrack ? 1 : TOTAL;
+  const headerPage = fastTrack ? fastTrackMeta : null;
+  const handlePass1Next = (): void => {
+    if (fastTrack) {
+      void saveAndFinish({ goToDashboard: true });
+      return;
+    }
+    next();
+  };
+  const handlePass1Back = (): void => {
+    if (fastTrack) {
+      setFastTrack(false);
+      setStep(0);
+      return;
+    }
+    back();
+  };
 
   const combinedData: SetupWizardCombinedData = { ...income, ...spending };
   const handleCombinedChange = <K extends keyof SetupWizardCombinedData>(key: K, value: SetupWizardCombinedData[K]): void => {
@@ -605,61 +687,75 @@ export default function SetupWizard() {
               marginBottom: 18,
               padding: "12px 14px",
               borderRadius: T.radius.lg,
-              background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
+              background: T.bg.card,
               border: `1px solid ${T.border.subtle}`,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
               <div style={{ display: "inline-flex", alignItems: "center", gap: 8, color: T.text.secondary, fontSize: 11, fontWeight: 700 }}>
                 <span style={{ color: T.accent.emerald }}>●</span>
-                About 2 minutes
+                {fastTrack ? "About 45 seconds" : "About 2 minutes"}
               </div>
               <div style={{ fontSize: 11, color: T.text.dim, fontFamily: T.font.mono }}>
-                Clear setup. Better first audit.
+                {fastTrack ? "Minimum setup. Faster first audit." : "Clear setup. Better first audit."}
               </div>
             </div>
-            <ProgressBar step={step} />
+            <ProgressBar step={headerStep} total={headerTotal} />
           </div>
-          <StepHeader step={step} />
+          <StepHeader step={headerStep} total={headerTotal} pageOverride={headerPage} />
           <div
             key={pageId}
             className="wiz-page-enter"
             style={{ animation: prefersReducedMotion ? "none" : "slideFadeIn 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) forwards" }}
           >
-            {pageId === "welcome" && <PageWelcome onNext={next} />}
-            {pageId === "import" && (
-              <PageImport
-                onNext={next}
-                toast={toast}
-                onComplete={skipToDashboard}
-                onImported={() => hydrateWizardFromStorage({ syncContexts: true })}
-                appleLinkedId={appleLinkedId ?? null}
-                setAppleLinkedId={setAppleLinkedId}
-                security={security}
-                updateSecurity={updateSecurity}
-              />
+            {pageId === "welcome" && <PageWelcome onNext={next} onStartFast={startFast} />}
+            {pageId !== "welcome" && (
+              <Suspense fallback={<div style={{ padding: "32px 0", textAlign: "center", color: T.text.muted }}>Loading…</div>}>
+                {pageId === "import" && (
+                  <LazyPageImport
+                    onNext={next}
+                    toast={toast}
+                    onComplete={skipToDashboard}
+                    onImported={() => hydrateWizardFromStorage({ syncContexts: true })}
+                    appleLinkedId={appleLinkedId ?? null}
+                    setAppleLinkedId={setAppleLinkedId}
+                    security={security}
+                    updateSecurity={updateSecurity}
+                  />
+                )}
+                {pageId === "profile" && <LazyPageProfile data={combinedData} onChange={handleCombinedChange} onNext={next} onBack={back} />}
+                {pageId === "pass1" && (
+                  <LazyPagePass1
+                    data={combinedData}
+                    onChange={handleCombinedChange}
+                    onNext={handlePass1Next}
+                    onBack={handlePass1Back}
+                    onSkip={skip}
+                    quickStart={fastTrack}
+                    nextLabel={fastTrack ? "Save & Go to Dashboard" : "Next →"}
+                  />
+                )}
+                {pageId === "pass2" && <LazyPagePass2 data={combinedData} onChange={handleCombinedChange} onNext={next} onBack={back} onSkip={skip} />}
+                {pageId === "pass3" && (
+                  <LazyPagePass3
+                    ai={ai}
+                    security={security}
+                    spending={spending}
+                    updateAi={updateAi}
+                    updateSecurity={updateSecurity}
+                    updateSpending={updateSpending}
+                    themeMode={themeMode as ThemeMode}
+                    setThemeMode={setThemeMode}
+                    onNext={handleSecurityNext}
+                    onBack={back}
+                    onSkip={handleSecuritySkip}
+                    saving={saving}
+                    isPro={hasPremiumAiAccess}
+                  />
+                )}
+                {pageId === "done" && <LazyPageDone onFinish={handleFinish} />}
+              </Suspense>
             )}
-            {pageId === "profile" && <PageProfile data={combinedData} onChange={handleCombinedChange} onNext={next} onBack={back} />}
-            {pageId === "pass1" && <PagePass1 data={combinedData} onChange={handleCombinedChange} onNext={next} onBack={back} onSkip={skip} />}
-            {pageId === "pass2" && <PagePass2 data={combinedData} onChange={handleCombinedChange} onNext={next} onBack={back} onSkip={skip} />}
-            {pageId === "pass3" && (
-              <PagePass3
-                ai={ai}
-                security={security}
-                spending={spending}
-                updateAi={updateAi}
-                updateSecurity={updateSecurity}
-                updateSpending={updateSpending}
-                themeMode={themeMode as ThemeMode}
-                setThemeMode={setThemeMode}
-                onNext={handleSecurityNext}
-                onBack={back}
-                onSkip={handleSecuritySkip}
-                saving={saving}
-                isPro={hasPremiumAiAccess}
-              />
-            )}
-            {pageId === "done" && <PageDone onFinish={handleFinish} />}
           </div>
         </div>
       </div>

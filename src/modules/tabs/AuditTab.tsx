@@ -18,6 +18,7 @@
   } from "../icons";
   import { buildPromoLine } from "../planCatalog.js";
   import { shouldShowGating } from "../subscription.js";
+  import UiGlyph from "../UiGlyph.js";
   import { Badge,Card } from "../ui.js";
   import { fmt,fmtDate } from "../utils.js";
   import "./DashboardTab.css";
@@ -43,7 +44,9 @@ interface AuditTabProps {
 // ── Helpers ──
 const relativeTime = d => {
   if (!d) return "";
-  const diff = Date.now() - new Date(d).getTime();
+  const timestamp = new Date(d).getTime();
+  if (!Number.isFinite(timestamp)) return "";
+  const diff = Math.max(0, Date.now() - timestamp);
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "Just now";
   if (mins < 60) return `${mins}m ago`;
@@ -57,7 +60,17 @@ const relativeTime = d => {
 
 const getMonthKey = d => {
   if (!d) return "Unknown";
-  return new Date(d).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const parsed = new Date(d);
+  if (Number.isNaN(parsed.getTime())) return "Unknown";
+  return parsed.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+};
+
+const getAuditKey = (audit: AuditRecord | null | undefined, index = 0) => {
+  const ts = String(audit?.ts || "").trim();
+  if (ts) return ts;
+  const date = String(audit?.date || "").trim();
+  if (date) return `${date}-${index}`;
+  return `audit-${index}`;
 };
 
 const getAuditColor = a => {
@@ -191,22 +204,27 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
   const [showPaywall, setShowPaywall] = useState(false);
 
   // History management state
-  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [sel, setSel] = useState<Set<string>>(new Set());
   const [selMode, setSelMode] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [exportAuditRecord, setExportAuditRecord] = useState<AuditRecord | null>(null);
 
   const filteredAudits = statusFilter ? audits.filter(a => getAuditColor(a) === statusFilter) : audits;
-  const allSel = sel.size === filteredAudits.length && filteredAudits.length > 0;
-  const toggle = i => { const s = new Set(sel); s.has(i) ? s.delete(i) : s.add(i); setSel(s); };
-  const toggleAll = () => setSel(allSel ? new Set() : new Set(filteredAudits.map((_, i) => i)));
-  const exitSel = () => { setSelMode(false); setSel(new Set()); };
+  const filteredAuditKeys = filteredAudits.map((audit, index) => getAuditKey(audit, index));
+  const allSel = filteredAuditKeys.length > 0 && filteredAuditKeys.every((key) => sel.has(key));
+  const toggle = (auditKey: string) => {
+    const next = new Set(sel);
+    next.has(auditKey) ? next.delete(auditKey) : next.add(auditKey);
+    setSel(next);
+  };
+  const toggleAll = () => setSel(allSel ? new Set() : new Set(filteredAuditKeys));
+  const exitSel = () => { setSelMode(false); setSel(new Set()); setConfirmDelete(null); };
   const doExportSel = async () => {
     try {
       const { exportSelectedAudits } = await import("../auditExports.js");
-      await exportSelectedAudits(filteredAudits.filter((_, i) => sel.has(i)));
+      await exportSelectedAudits(filteredAudits.filter((audit, index) => sel.has(getAuditKey(audit, index))));
       exitSel();
     } catch (error) {
       toast?.error?.(error instanceof Error ? error.message : "Export failed");
@@ -230,6 +248,10 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
   };
 
   const onRunAudit = () => { haptic.medium(); navTo("input"); };
+  const onOpenHistory = () => {
+    haptic.light();
+    navTo("history");
+  };
   const onViewResult = (a: AuditRecord | null | undefined) => {
     if (setResultsBackTarget) setResultsBackTarget("audit");
     navTo("results", a || current);
@@ -317,7 +339,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
 
         {/* quota + demo — contextual, directly below CTA */}
         {(remaining != null && limit != null) || typeof onDemoAudit === "function" ? (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginTop: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginTop: 8, marginBottom: -4 }}>
             {remaining != null && limit != null && (
               <span style={{ fontSize: 10, fontWeight: 600, color: T.text.dim, fontFamily: T.font.mono }}>
                 {remaining} of {limit} audits remaining
@@ -341,7 +363,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                 }}
               >
                 <Zap size={12} strokeWidth={2.2} />
-                {demoActive ? "Reload Demo" : "Load Demo"}
+                Load Demo Data
               </button>
             )}
           </div>
@@ -461,6 +483,29 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
           </Card>
         )}
 
+        <button
+          onClick={onOpenHistory}
+          style={{
+            width: "100%",
+            marginTop: 10,
+            padding: "12px 14px",
+            borderRadius: T.radius.md,
+            border: `1px solid ${T.border.default}`,
+            background: T.bg.card,
+            color: T.text.primary,
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+          }}
+        >
+          <Activity size={15} strokeWidth={2.2} />
+          Audit History
+        </button>
+
         {/* inline upgrade nudge for free users who have a score */}
         {shouldShowGating() && !proEnabled && score != null && !demoActive && (
           <button
@@ -485,7 +530,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
               background: `${T.accent.primary}14`, border: `1px solid ${T.accent.primary}20`,
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 14, flexShrink: 0,
-            }}>⚡</div>
+            }}><UiGlyph glyph="⚡" size={14} color={T.accent.primary} /></div>
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ fontSize: 11.5, fontWeight: 700, color: T.text.primary, lineHeight: 1.4 }}>
                 {score >= 75 ? "Keep this momentum going" : "Unlock deeper financial insights"}
@@ -579,7 +624,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                   </button>
                 )}
                 <button
-                  onClick={() => { setSelMode(!selMode); setSel(new Set()); }}
+                  onClick={() => { setSelMode(!selMode); setSel(new Set()); setConfirmDelete(null); }}
                   title="Select audits"
                   style={{
                     width: 30,
@@ -597,7 +642,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                     fontFamily: T.font.mono,
                   }}
                 >
-                  {selMode ? "✕" : <CheckCircle size={12} />}
+                  {selMode ? <UiGlyph glyph="✕" size={12} color={T.accent.primary} /> : <CheckCircle size={12} />}
                 </button>
                 <button
                   onClick={() => void handleExportCsv()}
@@ -699,6 +744,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                     onClick={() => {
                       setStatusFilter(f);
                       setSel(new Set());
+                      setConfirmDelete(null);
                     }}
                     style={{
                       flex: 1,
@@ -737,7 +783,8 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                   const monthKey = getMonthKey(a.date || a.ts);
                   const showMonthHeader = monthKey !== lastMonth;
                   lastMonth = monthKey;
-                  const isConfirming = confirmDelete === i;
+                  const auditKey = getAuditKey(a, i);
+                  const isConfirming = confirmDelete === auditKey;
                   const auditColor = getAuditColor(a);
                   const cardHex = colorFor(auditColor);
                   const scoreValue = a.parsed?.healthScore?.score;
@@ -746,7 +793,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                   const checkingVal = a.form?.checking != null ? Number(a.form.checking) || 0 : null;
 
                   return (
-                    <div key={a.ts || i}>
+                    <div key={auditKey}>
                       {showMonthHeader && (
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: i > 0 ? 8 : 0, marginBottom: 6 }}>
                           <span
@@ -767,16 +814,16 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                       <Card
                         {...(isConfirming
                           ? {}
-                          : { onClick: selMode ? () => toggle(i) : () => onViewResult(a) })}
+                          : { onClick: selMode ? () => toggle(auditKey) : () => onViewResult(a) })}
                         style={{
                           padding: "14px 16px",
                           position: "relative",
                           overflow: "hidden",
                           cursor: isConfirming ? "default" : "pointer",
-                          borderColor: sel.has(i) ? `${T.accent.primary}35` : `${cardHex}20`,
+                          borderColor: sel.has(auditKey) ? `${T.accent.primary}35` : `${cardHex}20`,
                           background: isConfirming
                             ? `${T.status.red}06`
-                            : sel.has(i)
+                            : sel.has(auditKey)
                               ? `${T.accent.primary}08`
                               : T.bg.card,
                           transition: "all 0.2s ease",
@@ -885,14 +932,14 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                                       width: 18,
                                       height: 18,
                                       borderRadius: 5,
-                                      border: `2px solid ${sel.has(i) ? "transparent" : T.text.dim}`,
-                                      background: sel.has(i) ? T.accent.primary : "transparent",
+                                      border: `2px solid ${sel.has(auditKey) ? "transparent" : T.text.dim}`,
+                                      background: sel.has(auditKey) ? T.accent.primary : "transparent",
                                       display: "flex",
                                       alignItems: "center",
                                       justifyContent: "center",
                                     }}
                                   >
-                                    {sel.has(i) && <CheckCircle size={11} color={T.bg.base} strokeWidth={3} />}
+                                    {sel.has(auditKey) && <CheckCircle size={11} color={T.bg.base} strokeWidth={3} />}
                                   </div>
                                 ) : (
                                   <>
@@ -919,7 +966,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        setConfirmDelete(i);
+                                        setConfirmDelete(auditKey);
                                         haptic.warning();
                                       }}
                                       style={{

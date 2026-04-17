@@ -3,6 +3,7 @@
   import { T } from "../constants.js";
   import { addDays,daysBetween,getNextDateForDayOfMonth,getNextPayday } from "../engine.js";
   import { Lock } from "../icons";
+  import UiGlyph from "../UiGlyph.js";
   import { Card,Label } from "../ui.js";
 
 interface CashFlowEvent {
@@ -270,9 +271,11 @@ export default function CashFlowCalendar({ config, cards = [], renewals = [], ch
           gap: 10,
         }}
       >
-        <div style={{ fontSize: 20 }}>
-          {timeline.minBalance < 0 ? "⚠️" : timeline.minBalance < (config.emergencyFloor || 0) ? "⚠️" : "⚖️"}
-        </div>
+        <UiGlyph
+          glyph={timeline.minBalance < 0 ? "⚠️" : timeline.minBalance < (config.emergencyFloor || 0) ? "⚠️" : "⚖️"}
+          size={20}
+          color={timeline.minBalance < 0 ? T.status.red : timeline.minBalance < (config.emergencyFloor || 0) ? T.status.amber : T.status.green}
+        />
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 2 }}>
             Projected Low Point: ${timeline.minBalance.toFixed(2)}

@@ -148,7 +148,7 @@ export const getSystemPromptCore = (config, cards = [], renewals = [], personalR
     bc?.lines?.length > 0
       ? [
           `  Paycheck: ${cSym}${(bc.cycleIncome || 0).toFixed(2)} (${bc.payFrequency || "bi-weekly"})`,
-          ...bc.lines.map(l => `  - [${(l.bucket || "flex").toUpperCase()}] ${l.name}: ${cSym}${(l.perCycleTarget || 0).toFixed(2)}/cycle`),
+          ...bc.lines.map(l => `  - [${(l.bucket || "needs").toUpperCase()}] ${l.name}: ${cSym}${(l.perCycleTarget || 0).toFixed(2)}/cycle`),
         ].join("\n")
       : null;
 

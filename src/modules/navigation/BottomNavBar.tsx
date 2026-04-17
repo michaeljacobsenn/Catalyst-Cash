@@ -66,23 +66,23 @@ export default function BottomNavBar({
             onTouchStart={() => setShowQuickMenu(false)}
           />
           <div
-            className="gesture-glass gesture-shadow-heavy"
+            className="gesture-glass gesture-shadow-soft"
             style={{
               position: "absolute",
               bottom: "calc(env(safe-area-inset-bottom, 16px) + 84px)",
               left: "50%",
               transform: "translateX(-50%)",
               background: T.bg.glass,
-              backdropFilter: "blur(24px)",
-              WebkitBackdropFilter: "blur(24px)",
-              border: `1px solid ${T.border.focus}`,
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              border: `1px solid ${T.border.default}`,
               borderRadius: T.radius.lg,
               padding: 8,
               display: "flex",
               flexDirection: "column",
               gap: 4,
               zIndex: 100,
-              boxShadow: T.shadow.elevated,
+              boxShadow: T.shadow.card,
               width: 220,
               animation: "slideUpMenu .2s ease",
             }}
@@ -128,25 +128,21 @@ export default function BottomNavBar({
             left: 16,
             right: 16,
             height: 2,
-            background: `linear-gradient(90deg, transparent, ${T.accent.primary}, ${T.accent.emerald}, transparent)`,
-            animation: "shimmer 1.8s ease-in-out infinite",
-            backgroundSize: "200% 100%",
+            borderRadius: 999,
+            background: T.border.subtle,
+            overflow: "hidden",
           }}
-        />
+        >
+          <div
+            style={{
+              width: "36%",
+              height: "100%",
+              borderRadius: 999,
+              background: T.accent.primarySoft,
+            }}
+          />
+        </div>
       )}
-
-      <div
-        style={{
-          position: "absolute",
-          top: 7,
-          left: "10%",
-          right: "10%",
-          height: 1,
-          background: loading
-            ? "none"
-            : `linear-gradient(90deg,transparent,${T.accent.primary}25,${T.accent.emerald}20,transparent)`,
-        }}
-      />
 
       <div
         role="tablist"
@@ -159,11 +155,11 @@ export default function BottomNavBar({
           alignItems: "center",
           padding: "8px 6px",
           background: T.bg.navGlass,
-          backdropFilter: "blur(30px) saturate(160%)",
-          WebkitBackdropFilter: "blur(30px) saturate(160%)",
+          backdropFilter: "blur(22px) saturate(150%)",
+          WebkitBackdropFilter: "blur(22px) saturate(150%)",
           border: `1px solid ${T.border.default}`,
-          borderRadius: 36,
-          boxShadow: `0 18px 36px -14px rgba(0,0,0,0.52), 0 0 0 1px ${T.border.subtle}`,
+          borderRadius: 30,
+          boxShadow: `0 14px 30px -16px rgba(0,0,0,0.48), 0 0 0 1px ${T.border.subtle}`,
           overflow: "hidden",
         }}
       >
@@ -175,10 +171,10 @@ export default function BottomNavBar({
             top: 8,
             bottom: 8,
             width: `calc((100% - 12px) / ${navItems.length})`,
-            borderRadius: 28,
-            background: `radial-gradient(circle at top, ${T.accent.primary}12, transparent 70%), linear-gradient(180deg, ${T.bg.surface}, rgba(255,255,255,0.01))`,
+            borderRadius: 24,
+            background: T.bg.surface,
             border: `1px solid ${T.border.subtle}`,
-            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 18px rgba(0,0,0,0.12)`,
+            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04)`,
             transform: `translateX(${activeIndex * 100}%)`,
             transition: "transform .42s cubic-bezier(0.16, 1, 0.3, 1), width .3s ease, opacity .25s ease",
             opacity: tab === "audit" ? 0 : 1,
@@ -270,15 +266,14 @@ export default function BottomNavBar({
                     width: 48,
                     height: 48,
                     borderRadius: 24,
-                    background: active ? T.accent.gradient : T.bg.elevated,
+                    background: active ? T.accent.primary : T.bg.elevated,
                     border: `1px solid ${active ? "transparent" : T.border.default}`,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    boxShadow: active ? `0 4px 20px ${T.accent.primary}60, 0 0 24px ${T.accent.emerald}40` : T.shadow.card,
+                    boxShadow: active ? `0 10px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.10)` : "none",
                     transition: "all .3s cubic-bezier(0.16, 1, 0.3, 1)",
-                    animation: active ? "glowPulse 3s ease-in-out infinite" : "none",
-                    transform: active ? "scale(1.05)" : "scale(1)",
+                    transform: active ? "scale(1.02)" : "scale(1)",
                   }}
                 >
                   <Icon size={20} strokeWidth={2.4} color={active ? "#fff" : T.text.primary} />
@@ -294,7 +289,7 @@ export default function BottomNavBar({
                     background: "transparent",
                     border: "1px solid transparent",
                     transform: active ? "translateY(-1px)" : "translateY(1px)",
-                    opacity: active ? 1 : 0.76,
+                    opacity: active ? 1 : 0.7,
                     transition: "transform .3s cubic-bezier(0.16, 1, 0.3, 1), opacity .25s ease",
                   }}
                 >
@@ -335,12 +330,11 @@ export default function BottomNavBar({
                   style={{
                     position: "absolute",
                     bottom: -2,
-                    width: 4,
-                    height: 4,
-                    borderRadius: 2,
+                    width: 14,
+                    height: 3,
+                    borderRadius: 999,
                     background: T.accent.emerald,
-                    boxShadow: `0 0 8px ${T.accent.emerald}CC`,
-                    animation: "glowPulse 2s ease-in-out infinite",
+                    opacity: 0.92,
                   }}
                 />
               )}

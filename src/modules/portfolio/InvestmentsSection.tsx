@@ -6,7 +6,7 @@
   import { usePortfolio } from "../contexts/PortfolioContext.js";
   import { useSettings } from "../contexts/SettingsContext.js";
   import { ChevronDown,RefreshCw,Trash2,TrendingUp } from "../icons";
-  import { Badge,Card } from "../ui.js";
+  import { Badge } from "../ui.js";
   import { fmt } from "../utils.js";
   import type { PortfolioCollapsedSections } from "./types.js";
 
@@ -146,10 +146,15 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
     if (enabledInvestments.length === 0) return null;
 
     return (
-        <Card
-            animate
-            variant="glass"
-            style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}
+        <div
+            style={{
+                marginBottom: 16,
+                padding: 0,
+                overflow: "hidden",
+                border: `1px solid ${T.border.subtle}`,
+                borderRadius: 16,
+                background: "transparent",
+            }}
         >
             <div
                 onClick={() => setCollapsedSections(p => ({ ...p, investments: !p.investments }))}
@@ -228,6 +233,9 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                 <div style={{ display: "flex", flexDirection: "column" }}>
                     {enabledInvestments.map(({ key, label, color }, iGroup) => {
                         const items = holdings[key] || [];
+                        const sortedManualItems = items
+                            .map((holding, originalIndex) => ({ holding, originalIndex }))
+                            .sort((left, right) => (left.holding.symbol || "").localeCompare(right.holding.symbol || ""));
                         const plaidItems = (financialConfig?.plaidInvestments || []).filter((pi: PlaidInvestmentAccount) => pi.bucket === key);
 
                         const manualValue = items.reduce((s, h) => s + (investPrices[h.symbol]?.price || 0) * (Number(h.shares) || 0), 0);
@@ -368,15 +376,13 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                         </div>
                                                     </div>
                                                 ))}
-                                                {items
-                                                    .sort((a, b) => (a.symbol || "").localeCompare(b.symbol || ""))
-                                                    .map((h, i) => {
+                                                {sortedManualItems.map(({ holding: h, originalIndex }, i) => {
                                                         const price = investPrices[h.symbol];
                                                         return (
                                                             <div
-                                                                key={`${h.symbol}-${i}`}
+                                                                key={`${h.symbol}-${originalIndex}`}
                                                                 style={{
-                                                                    borderBottom: i === items.length - 1 ? "none" : `1px solid ${T.border.subtle}`,
+                                                                    borderBottom: i === sortedManualItems.length - 1 ? "none" : `1px solid ${T.border.subtle}`,
                                                                 }}
                                                             >
                                                                 <div
@@ -429,11 +435,13 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                                                     e.preventDefault();
                                                                                     e.stopPropagation();
                                                                                     if (window.confirm(`Delete ${h.symbol}?`)) {
-                                                                                        const cur = financialConfig?.holdings || {};
-                                                                                        const updated = (cur[key] || []).filter((_, idx) => idx !== i);
-                                                                                        setFinancialConfig({
-                                                                                            ...(financialConfig as CatalystCashConfig),
-                                                                                            holdings: { ...cur, [key]: updated },
+                                                                                        setFinancialConfig((prev: CatalystCashConfig) => {
+                                                                                            const cur = prev?.holdings || {};
+                                                                                            const updated = (cur[key] || []).filter((_, idx) => idx !== originalIndex);
+                                                                                            return {
+                                                                                                ...prev,
+                                                                                                holdings: { ...cur, [key]: updated },
+                                                                                            };
                                                                                         });
                                                                                     }
                                                                                 }}
@@ -467,6 +475,6 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                     })}
                 </div>
             )}
-        </Card>
+        </div>
     );
 }

@@ -1,15 +1,204 @@
+import type {
+  AuditFormData,
+  AuditFormDebt,
+  AuditRecord,
+  BankAccount,
+  Card,
+  CatalystCashConfig,
+} from "../../../types/index.js";
+import { resolveCardLabel } from "../../cards.js";
 import { buildSnapshotMessage } from "../../buildSnapshotMessage.js";
 import { DEFAULT_FINANCIAL_CONFIG } from "../../contexts/SettingsContext.js";
-import { calcPortfolioValue, fetchMarketPrices } from "../../marketData.js";
-import { getPlaidAutoFill } from "../../plaid.js";
-import { getHydratedStoredTransactions } from "../../storedTransactions.js";
-import { checkAuditQuota } from "../../subscription.js";
-import { toMoneyInput } from "./utils.js";
+import { getPlaidAutoFill } from "../../plaid/autoFill.js";
+import type { InputDebt, InputFormState } from "./model.js";
+import { toMoneyInput, toNumber } from "./utils.js";
 
-export function createInitialInputFormState({ today, plaidData, config }) {
+interface PlaidAutoFillData {
+  checking: number | null;
+  vault: number | null;
+  debts: InputDebt[];
+  lastSync?: string | null;
+}
+
+interface OverridePlaidState {
+  checking?: boolean;
+  vault?: boolean;
+  debts?: Record<string, boolean | undefined>;
+}
+
+interface CardSelectGroup {
+  label: string;
+  options: Array<{
+    value: string;
+    label: string;
+  }>;
+}
+
+type SelectableCard = Pick<Card, "institution" | "id" | "name" | "nickname">;
+
+export interface AddableDebtCard {
+  cardId: string;
+  institution: string;
+  name: string;
+}
+
+interface MergeLastAuditParams {
+  previousForm: InputFormState;
+  lastAudit: AuditRecord | null | undefined;
+  cards: Card[];
+  bankAccounts: BankAccount[];
+  today: Date;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
+function formatFormDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function formatFormTime(date: Date) {
+  return date.toTimeString().slice(0, 5);
+}
+
+function normalizeLookupKey(value: unknown) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function normalizeCardId(value: unknown) {
+  return String(value || "").trim();
+}
+
+function buildCardIdByName(cards: Card[] = []) {
+  const lookup = new Map<string, string>();
+  for (const card of cards) {
+    const cardId = normalizeCardId(card?.id);
+    if (!cardId) continue;
+    for (const candidate of [card?.nickname, card?.name]) {
+      const key = normalizeLookupKey(candidate);
+      if (key && !lookup.has(key)) {
+        lookup.set(key, cardId);
+      }
+    }
+  }
+  return lookup;
+}
+
+function normalizeDebtRow(
+  debt: AuditFormDebt | InputDebt | null | undefined,
+  cardIdByName: Map<string, string> = new Map()
+) {
+  if (!debt) return null;
+  const rawName = String(debt.name || "").trim();
+  const matchedCardId = rawName ? cardIdByName.get(normalizeLookupKey(rawName)) || "" : "";
+  const cardId = normalizeCardId(debt.cardId) || matchedCardId;
+  const name = rawName || (cardId ? "Linked debt" : "");
+  if (!name && !cardId) return null;
+
+  const rawBalance = debt.balance ?? debt.amount;
+  const balance =
+    typeof rawBalance === "number" || typeof rawBalance === "string"
+      ? rawBalance
+      : toMoneyInput(toNumber(rawBalance));
+
   return {
-    date: today.toISOString().split("T")[0] ?? today.toISOString().slice(0, 10),
-    time: (today.toTimeString().split(" ")[0] ?? "00:00:00").slice(0, 5),
+    ...debt,
+    cardId,
+    name,
+    balance,
+  } satisfies InputDebt;
+}
+
+function normalizeDebtRows(
+  debts: Array<AuditFormDebt | InputDebt> = [],
+  cards: Card[] = [],
+  options: { positiveOnly?: boolean } = {}
+) {
+  const cardIdByName = buildCardIdByName(cards);
+  return debts.reduce<InputDebt[]>((rows, debt) => {
+    const normalized = normalizeDebtRow(debt, cardIdByName);
+    if (!normalized) return rows;
+    if (options.positiveOnly && toNumber(normalized.balance) <= 0) return rows;
+    rows.push(normalized);
+    return rows;
+  }, []);
+}
+
+function mergeDebtSnapshots({
+  previousDebts = [],
+  freshDebts = [],
+  overriddenDebtIds = {},
+  deletedDebtCardIds = {},
+}: {
+  previousDebts?: InputDebt[];
+  freshDebts?: InputDebt[];
+  overriddenDebtIds?: Record<string, boolean | undefined>;
+  deletedDebtCardIds?: Record<string, boolean>;
+}) {
+  const freshByCardId = new Map<string, InputDebt>();
+  for (const debt of freshDebts) {
+    const cardId = normalizeCardId(debt.cardId);
+    if (!cardId || deletedDebtCardIds[cardId]) continue;
+    freshByCardId.set(cardId, debt);
+  }
+
+  const merged: InputDebt[] = [];
+  const seenCardIds = new Set<string>();
+
+  for (const debt of previousDebts) {
+    const cardId = normalizeCardId(debt.cardId);
+    if (cardId && freshByCardId.has(cardId) && overriddenDebtIds[cardId] !== true) {
+      merged.push(freshByCardId.get(cardId) as InputDebt);
+      seenCardIds.add(cardId);
+      continue;
+    }
+
+    if (cardId) {
+      seenCardIds.add(cardId);
+    }
+    merged.push(debt);
+  }
+
+  for (const debt of freshDebts) {
+    const cardId = normalizeCardId(debt.cardId);
+    if (!cardId || seenCardIds.has(cardId) || deletedDebtCardIds[cardId]) continue;
+    merged.push(debt);
+  }
+
+  return merged;
+}
+
+function readAuditForm(lastAudit: AuditRecord | null | undefined): AuditFormData | null {
+  if (!isPlainObject(lastAudit?.form)) return null;
+  return lastAudit.form as AuditFormData;
+}
+
+function readPlaidAutoFill(cards: Card[] = [], bankAccounts: BankAccount[] = []) {
+  const raw = getPlaidAutoFill(cards, bankAccounts) as PlaidAutoFillData | null | undefined;
+  return {
+    checking: Number.isFinite(Number(raw?.checking)) ? Number(raw?.checking) : null,
+    vault: Number.isFinite(Number(raw?.vault)) ? Number(raw?.vault) : null,
+    debts: normalizeDebtRows(Array.isArray(raw?.debts) ? raw.debts : [], cards),
+    lastSync: typeof raw?.lastSync === "string" ? raw.lastSync : null,
+  } satisfies PlaidAutoFillData;
+}
+
+export function createInitialInputFormState({
+  today,
+  plaidData,
+  config,
+}: {
+  today: Date;
+  plaidData: PlaidAutoFillData;
+  config: Partial<CatalystCashConfig> | null | undefined;
+}): InputFormState {
+  return {
+    date: formatFormDate(today),
+    time: formatFormTime(today),
     checking: plaidData.checking !== null ? plaidData.checking : "",
     savings: plaidData.vault !== null ? plaidData.vault : "",
     roth: config?.investmentRoth || "",
@@ -21,138 +210,133 @@ export function createInitialInputFormState({ today, plaidData, config }) {
     notes: "",
     autoPaycheckAdd: false,
     paycheckAddOverride: "",
-  };
+  } as InputFormState;
 }
 
-export function buildCardSelectGroups(cards, getShortCardLabel) {
-  const groupedCards = (cards || []).reduce((groups: Record<string, any[]>, card: any) => {
-    (groups[card.institution] = groups[card.institution] || []).push(card);
-    return groups;
-  }, {});
-  return Object.entries(groupedCards).map(([inst, instCards]) => ({
-    label: inst,
-    options: (instCards as any[]).map((card: any) => ({
-      value: card.id || card.name,
-      label: getShortCardLabel(cards || [], card).replace(`${inst} `, ""),
+export function buildCardSelectGroups(
+  cards: SelectableCard[] = [],
+  getShortCardLabel: (cards: SelectableCard[], card: SelectableCard) => string
+): CardSelectGroup[] {
+  const groupedCards = new Map<string, typeof cards>();
+  for (const card of cards) {
+    const institution = String(card?.institution || "").trim() || "Other";
+    const bucket = groupedCards.get(institution) || [];
+    bucket.push(card);
+    groupedCards.set(institution, bucket);
+  }
+
+  return Array.from(groupedCards.entries()).map(([institution, institutionCards]) => ({
+    label: institution,
+    options: institutionCards.map((card) => ({
+      value: String(card.id || card.name || institution),
+      label: getShortCardLabel(cards, card).replace(`${institution} `, ""),
     })),
   }));
 }
 
-export function mergePlaidAutoFillIntoForm(previousForm: any, freshPlaid: any, overridePlaid: any, deletedDebtCardIds: Record<string, boolean> = {}) {
-  const updates: Record<string, unknown> = {};
-  if (freshPlaid.checking !== null && !overridePlaid.checking) updates.checking = freshPlaid.checking;
-  if (freshPlaid.vault !== null && !overridePlaid.vault) updates.savings = freshPlaid.vault;
-  if (freshPlaid.debts?.length > 0) {
-    const newDebts = (previousForm.debts || []).map(d => {
-      if (!d.cardId) return d;
-      if (overridePlaid.debts[d.cardId]) return d;
-      const pd = freshPlaid.debts.find(fd => fd.cardId === d.cardId);
-      return pd ? { ...d, balance: pd.balance } : d;
+export function buildAddableDebtCards(
+  cards: SelectableCard[] = [],
+  debts: Array<Pick<InputDebt, "cardId">> = []
+): AddableDebtCard[] {
+  const selectedCardIds = new Set(debts.map((debt) => normalizeCardId(debt?.cardId)).filter(Boolean));
+  return cards.reduce<AddableDebtCard[]>((items, card) => {
+    const cardId = normalizeCardId(card?.id);
+    if (!cardId || selectedCardIds.has(cardId)) return items;
+    items.push({
+      cardId,
+      institution: String(card?.institution || "").trim(),
+      name: resolveCardLabel(cards, cardId, String(card?.name || "").trim()),
     });
-    const existingIds = new Set(newDebts.map(d => d.cardId).filter(Boolean));
-    const additions = freshPlaid.debts.filter(
-      pd => pd.cardId && !existingIds.has(pd.cardId) && !deletedDebtCardIds[pd.cardId]
-    );
-    if (additions.length > 0 || newDebts.some((d, i) => d !== (previousForm.debts || [])[i])) {
-      updates.debts = [...newDebts, ...additions];
-    }
+    return items;
+  }, []);
+}
+
+export function mergePlaidAutoFillIntoForm(
+  previousForm: InputFormState,
+  freshPlaid: PlaidAutoFillData,
+  overridePlaid: OverridePlaidState,
+  deletedDebtCardIds: Record<string, boolean> = {}
+): InputFormState {
+  const updates: Partial<InputFormState> = {};
+
+  if (freshPlaid.checking !== null && !overridePlaid.checking) {
+    updates.checking = freshPlaid.checking;
   }
+
+  if (freshPlaid.vault !== null && !overridePlaid.vault) {
+    updates.savings = freshPlaid.vault;
+  }
+
+  const mergedDebts = mergeDebtSnapshots({
+    previousDebts: normalizeDebtRows(previousForm.debts || []),
+    freshDebts: normalizeDebtRows(Array.isArray(freshPlaid?.debts) ? freshPlaid.debts : []),
+    overriddenDebtIds: overridePlaid?.debts || {},
+    deletedDebtCardIds,
+  });
+
+  if (mergedDebts.length > 0 || (previousForm.debts || []).length > 0) {
+    updates.debts = mergedDebts;
+  }
+
   return Object.keys(updates).length === 0 ? previousForm : { ...previousForm, ...updates };
 }
 
-export function hasReusableAuditSeed(lastAudit: any) {
-  const form = lastAudit?.form;
+export function hasReusableAuditSeed(lastAudit: AuditRecord | null | undefined) {
+  const form = readAuditForm(lastAudit);
   if (!form || lastAudit?.isTest) return false;
-  const debts = Array.isArray(form.debts) ? form.debts : [];
+  const debts = normalizeDebtRows(Array.isArray(form.debts) ? form.debts : [], [], { positiveOnly: true });
   return Boolean(
-    form.checking ||
-      form.checkingBalance ||
-      form.savings ||
-      form.ally ||
-      form.roth ||
-      form.brokerage ||
-      form.k401Balance ||
-      form.notes ||
-      debts.some((debt: any) => debt?.name || debt?.cardId || debt?.balance)
+    form.checking
+      || form.checkingBalance
+      || form.savings
+      || form.ally
+      || form.roth
+      || form.brokerage
+      || form.k401Balance
+      || form.notes
+      || debts.length > 0
   );
 }
 
-export function mergeLastAuditIntoForm({ previousForm, lastAudit, cards, bankAccounts, today }: any) {
+export function mergeLastAuditIntoForm({
+  previousForm,
+  lastAudit,
+  cards,
+  bankAccounts,
+  today,
+}: MergeLastAuditParams): InputFormState {
   if (!hasReusableAuditSeed(lastAudit)) return previousForm;
-  const prevDebts = Array.isArray(lastAudit.form.debts) ? lastAudit.form.debts : [];
-  const debtWithBalance = prevDebts
-    .filter(d => d?.name && parseFloat(String(d?.balance || "0")) > 0)
-    .map(d => {
-      if (d.cardId) return d;
-      const match = (cards || []).find(c => c.name === d.name);
-      return match ? { ...d, cardId: match.id } : d;
-    });
-  const plaidNow = getPlaidAutoFill(cards || [], bankAccounts || []) as any;
-  const priorForm = lastAudit.form || {};
+
+  const priorForm = (readAuditForm(lastAudit) || {}) as AuditFormData;
+  const priorDebts = normalizeDebtRows(Array.isArray(priorForm.debts) ? priorForm.debts : [], cards, {
+    positiveOnly: true,
+  });
+  const plaidNow = readPlaidAutoFill(cards, bankAccounts);
+
   return {
     ...previousForm,
-    ...lastAudit.form,
-    debts: plaidNow.debts?.length > 0 ? plaidNow.debts : debtWithBalance.length ? debtWithBalance : [],
-    date: today.toISOString().split("T")[0] ?? today.toISOString().slice(0, 10),
-    time: (today.toTimeString().split(" ")[0] ?? "00:00:00").slice(0, 5),
-    checking: plaidNow.checking !== null ? plaidNow.checking : toMoneyInput(lastAudit?.form?.checking),
-    savings: plaidNow.vault !== null ? plaidNow.vault : toMoneyInput(lastAudit?.form?.savings ?? lastAudit?.form?.ally),
+    ...priorForm,
+    debts: mergeDebtSnapshots({
+      previousDebts: priorDebts,
+      freshDebts: plaidNow.debts,
+    }),
+    date: formatFormDate(today),
+    time: formatFormTime(today),
+    checking: plaidNow.checking !== null ? plaidNow.checking : toMoneyInput(priorForm.checking),
+    savings: plaidNow.vault !== null ? plaidNow.vault : toMoneyInput(priorForm.savings ?? priorForm.ally),
     pendingCharges: [],
     roth: toMoneyInput(priorForm.roth ?? previousForm.roth),
     brokerage: toMoneyInput(priorForm.brokerage ?? previousForm.brokerage),
     k401Balance: toMoneyInput(priorForm.k401Balance ?? previousForm.k401Balance),
     autoPaycheckAdd: typeof priorForm.autoPaycheckAdd === "boolean" ? priorForm.autoPaycheckAdd : false,
-    // The audit form now uses the profile income input as the single source of truth.
-    // Never hydrate a stale hidden paycheck override back into the form.
     paycheckAddOverride: "",
-  };
+  } as InputFormState;
 }
 
-export async function loadRecentPlaidTransactions(setPlaidTransactions, setTxnFetchedAt) {
-  try {
-    const typedStored = await getHydratedStoredTransactions();
-    if (typedStored?.data?.length) {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - 7);
-      const cutoffStr = cutoff.toISOString().split("T")[0] ?? cutoff.toISOString().slice(0, 10);
-      const recent = typedStored.data.filter(transaction => transaction.date >= cutoffStr && !transaction.pending && !transaction.isCredit);
-      setPlaidTransactions(recent);
-      setTxnFetchedAt(typedStored.fetchedAt ?? null);
-    }
-  } catch {
-    // ignore transaction cache read failures
-  }
-}
-
-export async function loadAuditQuota(setAuditQuota) {
-  const quota = await checkAuditQuota();
-  setAuditQuota(quota ?? null);
-}
-
-export async function loadHoldingValues(financialConfig, setHoldingValues) {
-  if (!financialConfig?.enableHoldings) return;
-  const holdings = financialConfig?.holdings || {};
-  const allSymbols = [...new Set([...(holdings.roth || []), ...(holdings.k401 || []), ...(holdings.brokerage || []), ...(holdings.crypto || []), ...(holdings.hsa || [])].map(h => h.symbol))];
-  if (allSymbols.length === 0) return;
-  try {
-    const prices = await fetchMarketPrices(allSymbols);
-    const calc = (key: string) => calcPortfolioValue(holdings[key] || [], prices).total;
-    setHoldingValues({
-      roth: calc("roth"),
-      k401: calc("k401"),
-      brokerage: calc("brokerage"),
-      crypto: calc("crypto"),
-      hsa: calc("hsa"),
-    });
-  } catch {
-    // Ignore transient market-data failures in form hydration.
-  }
-}
-
-export function getTypedFinancialConfig(financialConfig) {
+export function getTypedFinancialConfig(financialConfig: CatalystCashConfig | null | undefined) {
   return financialConfig ?? DEFAULT_FINANCIAL_CONFIG;
 }
 
-export function buildInputSnapshotMessage(args) {
+export function buildInputSnapshotMessage(args: Parameters<typeof buildSnapshotMessage>[0]) {
   return buildSnapshotMessage(args);
 }

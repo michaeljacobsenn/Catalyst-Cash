@@ -6,18 +6,29 @@ const path = require("path");
 const distAssetsDir = path.join(process.cwd(), "dist", "assets");
 
 const budgets = {
-  mainEntry: 540000,
+  mainEntry: 200000,
+  appChunk: 160000,
   portfolioShell: 5000,
   cardPortfolio: 70000,
   cardWizard: 50000,
-  settingsTab: 100000,
-  setupWizard: 70000,
+  inputForm: 96000,
+  settingsTab: 60000,
+  setupWizard: 45000,
   marketData: 45000,
   spreadsheet: 7000,
   workbookWorker: 75000,
   auditExports: 15000,
   auditHtmlFallback: 6000,
-  shellBootJs: 610000,
+  shellBootJs: 510000,
+  negotiation: 45000,
+  decisionRules: 30000,
+  rewardsCatalog: 50000,
+  merchantDatabase: 40000,
+  tickerCatalog: 25000,
+  fireCalc: 10000,
+  bankCatalog: 12000,
+  vendorMotion: 140000,
+  vendorIcons: 50000,
 };
 
 function formatKb(bytes) {
@@ -52,11 +63,13 @@ function main() {
 
   const selected = {
     mainEntry: findByPrefix(assets, "index-"),
+    appChunk: findByPrefix(assets, "App-"),
     vendorReact: findByPrefix(assets, "vendor-react-"),
     vendorCapacitor: findByPrefix(assets, "vendor-capacitor-"),
     portfolioShell: findByPrefix(assets, "PortfolioTab-"),
     cardPortfolio: findByPrefix(assets, "CardPortfolioTab-"),
     cardWizard: findByPrefix(assets, "CardWizardTab-"),
+    inputForm: findByPrefix(assets, "InputForm-"),
     settingsTab: findByPrefix(assets, "SettingsTab-"),
     setupWizard: findByPrefix(assets, "SetupWizard-"),
     marketData: findByPrefix(assets, "market-data-"),
@@ -64,15 +77,26 @@ function main() {
     workbookWorker: findByPrefix(assets, "excelWorkbook.worker-"),
     auditExports: findByPrefix(assets, "audit-exports-"),
     auditHtmlFallback: findByPrefix(assets, "auditHtmlDocument-"),
+    negotiation: findByPrefix(assets, "negotiation-"),
+    decisionRules: findByPrefix(assets, "decision-rules-"),
+    rewardsCatalog: findByPrefix(assets, "rewards-catalog-"),
+    merchantDatabase: findByPrefix(assets, "merchant-database-"),
+    tickerCatalog: findByPrefix(assets, "ticker-catalog-"),
+    fireCalc: findByPrefix(assets, "fire-calc-"),
+    bankCatalog: findByPrefix(assets, "bank-catalog-"),
+    vendorMotion: findByPrefix(assets, "vendor-motion-"),
+    vendorIcons: findByPrefix(assets, "vendor-icons-"),
   };
 
-  const shellBootJs = selected.mainEntry.bytes + selected.vendorReact.bytes + selected.vendorCapacitor.bytes;
+  const shellBootJs = selected.mainEntry.bytes + selected.appChunk.bytes + selected.vendorReact.bytes + selected.vendorCapacitor.bytes;
 
   const rows = [
     { metric: "mainEntry", file: selected.mainEntry.name, size: formatKb(selected.mainEntry.bytes), budget: formatKb(budgets.mainEntry) },
+    { metric: "appChunk", file: selected.appChunk.name, size: formatKb(selected.appChunk.bytes), budget: formatKb(budgets.appChunk) },
     { metric: "portfolioShell", file: selected.portfolioShell.name, size: formatKb(selected.portfolioShell.bytes), budget: formatKb(budgets.portfolioShell) },
     { metric: "cardPortfolio", file: selected.cardPortfolio.name, size: formatKb(selected.cardPortfolio.bytes), budget: formatKb(budgets.cardPortfolio) },
     { metric: "cardWizard", file: selected.cardWizard.name, size: formatKb(selected.cardWizard.bytes), budget: formatKb(budgets.cardWizard) },
+    { metric: "inputForm", file: selected.inputForm.name, size: formatKb(selected.inputForm.bytes), budget: formatKb(budgets.inputForm) },
     { metric: "settingsTab", file: selected.settingsTab.name, size: formatKb(selected.settingsTab.bytes), budget: formatKb(budgets.settingsTab) },
     { metric: "setupWizard", file: selected.setupWizard.name, size: formatKb(selected.setupWizard.bytes), budget: formatKb(budgets.setupWizard) },
     { metric: "marketData", file: selected.marketData.name, size: formatKb(selected.marketData.bytes), budget: formatKb(budgets.marketData) },
@@ -80,7 +104,16 @@ function main() {
     { metric: "workbookWorker", file: selected.workbookWorker.name, size: formatKb(selected.workbookWorker.bytes), budget: formatKb(budgets.workbookWorker) },
     { metric: "auditExports", file: selected.auditExports.name, size: formatKb(selected.auditExports.bytes), budget: formatKb(budgets.auditExports) },
     { metric: "auditHtmlFallback", file: selected.auditHtmlFallback.name, size: formatKb(selected.auditHtmlFallback.bytes), budget: formatKb(budgets.auditHtmlFallback) },
-    { metric: "shellBootJs", file: "mainEntry + vendorReact + vendorCapacitor", size: formatKb(shellBootJs), budget: formatKb(budgets.shellBootJs) },
+    { metric: "negotiation", file: selected.negotiation.name, size: formatKb(selected.negotiation.bytes), budget: formatKb(budgets.negotiation) },
+    { metric: "decisionRules", file: selected.decisionRules.name, size: formatKb(selected.decisionRules.bytes), budget: formatKb(budgets.decisionRules) },
+    { metric: "rewardsCatalog", file: selected.rewardsCatalog.name, size: formatKb(selected.rewardsCatalog.bytes), budget: formatKb(budgets.rewardsCatalog) },
+    { metric: "merchantDatabase", file: selected.merchantDatabase.name, size: formatKb(selected.merchantDatabase.bytes), budget: formatKb(budgets.merchantDatabase) },
+    { metric: "tickerCatalog", file: selected.tickerCatalog.name, size: formatKb(selected.tickerCatalog.bytes), budget: formatKb(budgets.tickerCatalog) },
+    { metric: "fireCalc", file: selected.fireCalc.name, size: formatKb(selected.fireCalc.bytes), budget: formatKb(budgets.fireCalc) },
+    { metric: "bankCatalog", file: selected.bankCatalog.name, size: formatKb(selected.bankCatalog.bytes), budget: formatKb(budgets.bankCatalog) },
+    { metric: "vendorMotion", file: selected.vendorMotion.name, size: formatKb(selected.vendorMotion.bytes), budget: formatKb(budgets.vendorMotion) },
+    { metric: "vendorIcons", file: selected.vendorIcons.name, size: formatKb(selected.vendorIcons.bytes), budget: formatKb(budgets.vendorIcons) },
+    { metric: "shellBootJs", file: "mainEntry + appChunk + vendorReact + vendorCapacitor", size: formatKb(shellBootJs), budget: formatKb(budgets.shellBootJs) },
   ];
 
   console.table(rows);
@@ -90,9 +123,11 @@ function main() {
   const failures = [];
   const metricSizes = {
     mainEntry: selected.mainEntry.bytes,
+    appChunk: selected.appChunk.bytes,
     portfolioShell: selected.portfolioShell.bytes,
     cardPortfolio: selected.cardPortfolio.bytes,
     cardWizard: selected.cardWizard.bytes,
+    inputForm: selected.inputForm.bytes,
     settingsTab: selected.settingsTab.bytes,
     setupWizard: selected.setupWizard.bytes,
     marketData: selected.marketData.bytes,
@@ -100,6 +135,15 @@ function main() {
     workbookWorker: selected.workbookWorker.bytes,
     auditExports: selected.auditExports.bytes,
     auditHtmlFallback: selected.auditHtmlFallback.bytes,
+    negotiation: selected.negotiation.bytes,
+    decisionRules: selected.decisionRules.bytes,
+    rewardsCatalog: selected.rewardsCatalog.bytes,
+    merchantDatabase: selected.merchantDatabase.bytes,
+    tickerCatalog: selected.tickerCatalog.bytes,
+    fireCalc: selected.fireCalc.bytes,
+    bankCatalog: selected.bankCatalog.bytes,
+    vendorMotion: selected.vendorMotion.bytes,
+    vendorIcons: selected.vendorIcons.bytes,
     shellBootJs,
   };
 

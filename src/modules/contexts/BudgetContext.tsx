@@ -1,16 +1,20 @@
-  import type { ReactNode } from "react";
-  import { createContext, useCallback, useContext, useEffect, useState } from "react";
-  import { useSettings } from "./SettingsContext.js";
-  import { computeBudgetStatus, computeCycleIncome, suggestLinesFromAudit } from "../budgetEngine.js";
-  import { db } from "../utils.js";
+import type { ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { useSettings } from "./SettingsContext.js";
+import { computeBudgetStatus, computeCycleIncome, suggestLinesFromAudit } from "../budgetEngine.js";
+import { normalizeBudgetLines } from "../budgetBuckets.js";
+import { db } from "../utils.js";
+
+type BudgetBucket = "bills" | "needs" | "wants" | "savings";
 
 export interface BudgetLine {
   id: string;
   name: string;
   amount: number;
-  bucket: "fixed" | "flex" | "invest";
+  bucket: BudgetBucket;
   icon: string;
   isAuto?: boolean;
+  needsReview?: boolean;
 }
 
 interface BudgetContextValue {
@@ -20,9 +24,10 @@ interface BudgetContextValue {
   updateLine: (id: string, patch: Partial<BudgetLine>) => Promise<void>;
   deleteLine: (id: string) => Promise<void>;
   suggestFromAudit: (auditCategories: Record<string, { total?: number }>) => Promise<void>;
-  totalFixed: number;
-  totalFlex: number;
-  totalInvest: number;
+  totalBills: number;
+  totalNeeds: number;
+  totalWants: number;
+  totalSavings: number;
   totalAssigned: number;
   readyToAssign: number;
   isBudgetReady: boolean;
@@ -40,22 +45,29 @@ export function BudgetProvider({ children }: BudgetProviderProps) {
 
   const cycleIncome = computeCycleIncome(financialConfig) as number;
   const status = computeBudgetStatus(lines, cycleIncome) as {
-    totalFixed: number; totalFlex: number; totalInvest: number;
+    totalBills: number; totalNeeds: number; totalWants: number; totalSavings: number;
     totalAssigned: number; readyToAssign: number;
   };
 
-  // Boot: load persisted lines
   useEffect(() => {
     (async () => {
-      const saved = (await db.get(DB_KEY)) as BudgetLine[] | null;
-      if (Array.isArray(saved)) setLines(saved);
-      setIsBudgetReady(true);
+      try {
+        const saved = (await db.get(DB_KEY)) as BudgetLine[] | null;
+        const normalized = normalizeBudgetLines(saved);
+        setLines(normalized.lines as BudgetLine[]);
+        if (normalized.changed) {
+          await db.set(DB_KEY, normalized.lines);
+        }
+      } finally {
+        setIsBudgetReady(true);
+      }
     })();
   }, []);
 
   const persist = useCallback(async (next: BudgetLine[]) => {
-    setLines(next);
-    await db.set(DB_KEY, next);
+    const normalized = normalizeBudgetLines(next);
+    setLines(normalized.lines as BudgetLine[]);
+    await db.set(DB_KEY, normalized.lines);
   }, []);
 
   const addLine = useCallback(async (line: Omit<BudgetLine, "id">) => {
@@ -72,10 +84,6 @@ export function BudgetProvider({ children }: BudgetProviderProps) {
     await persist(lines.filter(l => l.id !== id));
   }, [lines, persist]);
 
-  /**
-   * Auto-suggest budget lines from audit categories.
-   * Only adds lines that don't already have a matching name.
-   */
   const suggestFromAudit = useCallback(async (auditCategories: Record<string, { total?: number }>) => {
     const suggestions = suggestLinesFromAudit(auditCategories, financialConfig.payFrequency) as BudgetLine[];
     const existingNames = new Set(lines.map(l => l.name.toLowerCase()));

@@ -4,10 +4,27 @@
 // Only visible when shouldShowGating() returns true.
 // ═══════════════════════════════════════════════════════════════
   import type { TouchEvent } from "react";
-  import { useCallback,useRef,useState } from "react";
+  import { useCallback,useEffect,useRef,useState } from "react";
   import { createPortal } from "react-dom";
-  import { Mono } from "../components.js";
   import { T } from "../constants.js";
+import {
+  Activity,
+  Calendar,
+  Check,
+  Cpu,
+  CreditCard,
+  Database,
+  DollarSign,
+  Download,
+  Landmark,
+  MessageCircle,
+  RefreshCw,
+  Search,
+  Shield,
+  Sparkles,
+  TrendingUp,
+  Wallet,
+} from "../icons.js";
 import { PAYWALL_FEATURES, PRICING_FACTS } from "../guides/guideData.js";
 import { haptic } from "../haptics.js";
 import { IAP_PRICING } from "../subscription.js";
@@ -15,6 +32,7 @@ import { log } from "../logger.js";
 import { Card } from "../ui.js";
 
 const loadRevenueCat = () => import("../revenuecat.js");
+import { trackFunnel } from "../funnelAnalytics.js";
 
 interface ProPaywallProps {
   onClose: () => void;
@@ -31,25 +49,41 @@ const VALUE_PILLARS = [
   {
     title: "Deeper weekly decisions",
     detail: "More audits, stronger models, and the history needed to see whether your moves are actually working.",
-    icon: "📊",
+    icon: Activity,
   },
   {
     title: "Cleaner daily operations",
     detail: "More linked institutions, full ledger search, and less manual cleanup across cards, cash, and renewals.",
-    icon: "🏦",
+    icon: Landmark,
   },
   {
     title: "Faster answers when it matters",
     detail: "More AskAI capacity plus CFO and Boardroom reasoning when the choice is expensive, urgent, or unclear.",
-    icon: "🧠",
+    icon: Cpu,
   },
 ];
 
-const SOCIAL_PROOF = [
-  { quote: "I found $340/yr in subscriptions I forgot about. Pro paid for itself in the first week.", name: "Sarah K.", detail: "Pro member since 2025" },
-  { quote: "The CFO model caught a promo APR cliff I would have missed. Saved me $1,200 in interest.", name: "Marcus T.", detail: "Pro member since 2025" },
-  { quote: "Finally, an app that actually tells me what to do with my money each week instead of just showing charts.", name: "Jamie L.", detail: "Pro member since 2026" },
+const VALUE_FACTS = [
+  "Private local-first planning record",
+  "Apple billing with restore support",
+  "Upgrade only if the extra depth changes your weekly workflow",
 ];
+
+const PAYWALL_FEATURE_ICON_MAP = {
+  "AI Audits": Activity,
+  "AskAI Chat": MessageCircle,
+  "AI Models": Cpu,
+  "Audit History": Database,
+  "Dashboard & Charts": TrendingUp,
+  "Debt / Budget / FIRE": Sparkles,
+  "Plaid Connections": Landmark,
+  "Transaction Ledger": Search,
+  "Rewards Ranking": CreditCard,
+  "Renewals AI Assist": RefreshCw,
+  "Cash Flow Heatmap": Calendar,
+  "Exports & Sharing": Download,
+  "Security & Backup": Shield,
+} as const;
 
 const PAYWALL_CONTEXT = {
   default: {
@@ -127,6 +161,10 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
   const appWindow = window as Window & { toast?: LocalToastApi };
   const context = PAYWALL_CONTEXT[source as keyof typeof PAYWALL_CONTEXT] || PAYWALL_CONTEXT.default;
 
+  useEffect(() => {
+    void trackFunnel("paywall_viewed");
+  }, []);
+
   const handleClose = useCallback(() => {
     setClosing(true);
     setTimeout(onClose, 250);
@@ -171,6 +209,12 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
       const result = await purchaseProPlan(plan);
       if (result === true) {
         appWindow.toast?.success?.("Welcome to Catalyst Cash Pro!");
+        if (plan === "yearly") {
+          void trackFunnel("trial_started");
+        } else {
+          void trackFunnel("converted");
+        }
+        void trackFunnel("pro_unlocked");
         onClose();
       } else if (result === null) {
         appWindow.toast?.info?.("In-App Purchases are only available in the iOS app.");
@@ -188,6 +232,7 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
     const success = await restorePurchases();
     if (success === true) {
       appWindow.toast?.success?.("Purchases restored successfully. Welcome to Pro!");
+      void trackFunnel("pro_unlocked");
       handleClose();
     } else if (success === null) {
       appWindow.toast?.info?.("In-App Purchases are only available in the iOS app.");
@@ -215,8 +260,6 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
     >
       <style>{`
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes ctaPulse { 0%, 100% { box-shadow: 0 4px 20px ${T.accent.primary}40; } 50% { box-shadow: 0 6px 28px ${T.accent.primary}60; } }
-@keyframes planGlow { 0%, 100% { box-shadow: 0 0 0 0 ${T.accent.primary}00, 0 0 12px ${T.accent.primary}20; } 50% { box-shadow: 0 0 0 3px ${T.accent.primary}18, 0 0 18px ${T.accent.primary}30; } }
 @keyframes fadeOut { to { opacity: 0; } }
 @keyframes slideDown { to { transform: translateY(100%); } }
         `}</style>
@@ -291,16 +334,14 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
               height: 56,
               margin: "0 auto 12px",
               borderRadius: 18,
-              background: `linear-gradient(135deg, ${T.accent.primary}22, #6C60FF22)`,
-              border: `1px solid ${T.accent.primary}26`,
+              background: `${T.accent.primary}14`,
+              border: `1px solid ${T.accent.primary}20`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: 28,
-              boxShadow: `0 16px 36px ${T.accent.primary}18`,
             }}
           >
-            ⚡
+            <Sparkles size={24} color={T.accent.primary} />
           </div>
           <div
             style={{
@@ -314,7 +355,7 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
           >
             {context.eyebrow}
           </div>
-          <h2 style={{ fontSize: 24, fontWeight: 900, letterSpacing: "-0.03em", margin: "0 0 8px", color: T.text.primary }}>
+          <h2 style={{ fontSize: 24, fontWeight: 850, letterSpacing: "-0.04em", margin: "0 0 8px", color: T.text.primary }}>
             {context.title}
           </h2>
           <p style={{ fontSize: 13, color: T.text.dim, margin: "0 0 12px", lineHeight: 1.55, maxWidth: 340, marginInline: "auto" }}>
@@ -335,7 +376,8 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
               fontFamily: T.font.mono,
             }}
           >
-            🛡️ Privacy-first · Apple billing · cancel anytime
+            <Shield size={13} color={T.accent.primary} />
+            Private by default · Apple billing · restore support
           </div>
           <div
             style={{
@@ -357,12 +399,15 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
               key={pillar.title}
               style={{
                 padding: "14px 14px 13px",
-                background: `linear-gradient(160deg, ${T.bg.elevated}, ${T.bg.card})`,
+                background: T.bg.card,
                 border: `1px solid ${T.border.subtle}`,
                 animation: `fadeInUp .28s ease-out ${index * 0.04}s both`,
               }}
             >
               <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                {(() => {
+                  const Icon = pillar.icon;
+                  return (
                 <div
                   style={{
                     width: 34,
@@ -373,12 +418,13 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: 16,
                     flexShrink: 0,
                   }}
                 >
-                  {pillar.icon}
+                  <Icon size={16} color={T.accent.primary} />
                 </div>
+                  );
+                })()}
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, marginBottom: 4 }}>
                     {pillar.title}
@@ -392,42 +438,42 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
           ))}
         </div>
 
-        {/* ── Social Proof ── */}
         <div
           style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 10,
+            display: "grid",
+            gap: 8,
             padding: "12px 14px",
-            background: `linear-gradient(160deg, ${T.bg.card}, ${T.accent.primary}08)`,
+            background: T.bg.card,
             border: `1px solid ${T.border.subtle}`,
             borderRadius: T.radius.md,
             marginBottom: 14,
             animation: "fadeInUp .32s ease-out",
           }}
         >
-          <div style={{ fontSize: 20, flexShrink: 0, lineHeight: 1 }}>⭐</div>
-          {(() => {
-            const proof = (SOCIAL_PROOF[Math.floor(Date.now() / 86400000) % SOCIAL_PROOF.length] ?? SOCIAL_PROOF[0]) as typeof SOCIAL_PROOF[0];
-            return (
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 11.5, color: T.text.primary, fontWeight: 600, lineHeight: 1.5, fontStyle: "italic" }}>
-                  &ldquo;{proof.quote}&rdquo;
-                </div>
-                <div style={{ fontSize: 10, color: T.text.dim, marginTop: 4, fontWeight: 700, fontFamily: T.font.mono }}>
-                  {proof.name} &middot; {proof.detail}
-                </div>
+          <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: T.font.mono }}>
+            What stays true
+          </div>
+          <div style={{ display: "grid", gap: 6 }}>
+            {VALUE_FACTS.map((fact) => (
+              <div key={fact} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, color: T.text.secondary, lineHeight: 1.45 }}>
+                <div style={{ width: 5, height: 5, borderRadius: 999, background: T.accent.primary, flexShrink: 0 }} />
+                <span>{fact}</span>
               </div>
-            );
-          })()}
+            ))}
+          </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 14, alignItems: "stretch" }}>
           {(["monthly", "yearly", "lifetime"] as const).map(p => {
             const pricing = IAP_PRICING[p];
             const active = plan === p;
             const isYearly = p === "yearly";
             const isLifetime = p === "lifetime";
+            const planBadge = isYearly
+              ? `Most popular · ${pricing.savings}`
+              : isLifetime
+                ? "Best value · Own forever"
+                : null;
             return (
               <button
                 key={p}
@@ -436,69 +482,55 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
                   haptic.light();
                 }}
                 style={{
-                  padding: "18px 10px 14px",
+                  padding: "12px 10px 14px",
                   borderRadius: T.radius.lg,
                   cursor: "pointer",
                   border: `2px solid ${active ? T.accent.primary : T.border.default}`,
                   background: active
-                    ? `linear-gradient(160deg, ${T.accent.primary}12, ${T.accent.primary}06)`
-                    : T.bg.elevated,
+                    ? `${T.accent.primary}10`
+                    : T.bg.card,
                   textAlign: "center",
                   position: "relative",
-                  overflow: "visible",
+                  overflow: "hidden",
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  gap: 2,
-                  animation: active ? "planGlow 2.5s ease-in-out infinite" : "none",
+                  justifyContent: "flex-start",
+                  gap: 4,
+                  minHeight: 128,
                   transition: "all 0.25s ease",
                 }}
               >
-                {/* Savings badge for yearly */}
-                {isYearly && (
+                {planBadge ? (
                   <div
                     style={{
-                      position: "absolute",
-                      top: -9,
-                      left: "50%",
-                      transform: "translateX(-50%)",
-                      fontSize: 9,
+                      width: "100%",
+                      minHeight: 28,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 8,
                       fontWeight: 800,
-                      whiteSpace: "nowrap",
-                      background: `linear-gradient(135deg, ${T.accent.primary}, ${T.status.green})`,
-                      color: "#fff",
-                      padding: "3px 10px",
-                      borderRadius: 99,
+                      lineHeight: 1.15,
+                      textAlign: "center",
+                      padding: "4px 6px",
+                      background: isLifetime ? `${T.status.amber}16` : `${T.accent.primary}14`,
+                      color: isLifetime ? T.status.amber : T.accent.primary,
+                      borderRadius: 10,
                       fontFamily: T.font.mono,
-                      boxShadow: `0 2px 8px ${T.accent.primary}40`,
-                      zIndex: 2,
+                      marginBottom: 8,
                     }}
                   >
-                    Most popular · {pricing.savings}
+                    {planBadge}
                   </div>
-                )}
-                {/* Best value badge for lifetime */}
-                {isLifetime && (
+                ) : (
                   <div
                     style={{
-                      position: "absolute",
-                      top: -9,
-                      left: "50%",
-                      transform: "translateX(-50%)",
-                      fontSize: 9,
-                      fontWeight: 800,
-                      whiteSpace: "nowrap",
-                      background: `linear-gradient(135deg, #E8A838, #D4873A)`,
-                      color: "#fff",
-                      padding: "3px 10px",
-                      borderRadius: 99,
-                      fontFamily: T.font.mono,
-                      boxShadow: `0 2px 8px rgba(232, 168, 56, 0.4)`,
-                      zIndex: 2,
+                      height: 36,
+                      width: "100%",
+                      marginBottom: 8,
                     }}
-                  >
-                    Best value · Own forever
-                  </div>
+                  />
                 )}
                 {/* Active indicator dot */}
                 {active && (
@@ -514,26 +546,35 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      boxShadow: `0 0 8px ${T.status.green}50`,
                     }}
                   >
-                    <span style={{ fontSize: 10, color: "#fff", fontWeight: 800, lineHeight: 1 }}>✓</span>
+                    <Check size={10} color="#fff" />
                   </div>
                 )}
-                <Mono size={18} weight={800} color={active ? T.accent.primary : T.text.primary}>
+                <div
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 800,
+                    color: active ? T.accent.primary : T.text.primary,
+                    fontFamily: T.font.mono,
+                    lineHeight: 1.05,
+                    letterSpacing: "-0.03em",
+                  }}
+                >
                   {pricing.price}
-                </Mono>
-                <div style={{ fontSize: 10, color: T.text.dim, fontWeight: 500 }}>
+                </div>
+                <div style={{ fontSize: 9, color: T.text.dim, fontWeight: 600, lineHeight: 1.2 }}>
                   {isLifetime ? "one-time" : `per ${pricing.period}`}
                 </div>
                 {pricing.perMonth && (
                   <div
                     style={{
-                      fontSize: 10,
+                      fontSize: 9,
                       color: active ? T.accent.primary : T.text.secondary,
                       marginTop: 4,
                       fontWeight: 700,
                       fontFamily: T.font.mono,
+                      lineHeight: 1.15,
                     }}
                   >
                     ({pricing.perMonth}/mo)
@@ -548,7 +589,7 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
                       fontWeight: 700,
                       padding: "2px 8px",
                       borderRadius: 99,
-                      background: `${T.status.green}10`,
+                      background: `${T.status.green}12`,
                     }}
                   >
                     {pricing.trial}
@@ -574,7 +615,7 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
               animation: "fadeInUp .3s ease-out",
             }}
           >
-            <span style={{ fontSize: 14, flexShrink: 0 }}>💡</span>
+            <DollarSign size={14} color={T.accent.emerald} />
             <span style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>
               Annual plan includes {PRICING_FACTS.yearlySavings} and works out to {PRICING_FACTS.yearlyPerMonth} for professional-grade
               financial intelligence.
@@ -597,9 +638,9 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
               animation: "fadeInUp .3s ease-out",
             }}
           >
-            <span style={{ fontSize: 14, flexShrink: 0 }}>👑</span>
+            <Shield size={14} color="#E8A838" />
             <span style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>
-              One purchase, lifetime access. Pays for itself in under 2.5 years — then it&apos;s free forever. Every future feature included.
+              One purchase, lifetime access. Pays for itself in under 16 months — then it&apos;s free forever. Every future feature included. Capped at 50 users.
             </span>
           </div>
         )}
@@ -608,9 +649,8 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
           style={{
             marginBottom: 16,
             padding: "16px 16px 14px",
-            background: `linear-gradient(160deg, ${T.bg.card}, ${T.accent.primary}0C)`,
-            border: `1px solid ${T.accent.primary}16`,
-            boxShadow: `0 18px 36px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04)`,
+            background: T.bg.card,
+            border: `1px solid ${T.border.subtle}`,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
@@ -639,18 +679,15 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
               width: "100%",
               padding: "16px 20px",
               borderRadius: T.radius.lg,
-              border: "none",
-              background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF, ${T.accent.primary})`,
-              backgroundSize: "200% 100%",
-              color: "#fff",
+              border: `1px solid ${T.accent.primary}24`,
+              background: `${T.accent.primary}14`,
+              color: T.accent.primary,
               fontSize: 15,
               fontWeight: 800,
               letterSpacing: "0.02em",
               cursor: purchasing ? "wait" : "pointer",
               opacity: purchasing ? 0.6 : 1,
               marginBottom: 10,
-              boxShadow: `0 4px 24px ${T.accent.primary}45, 0 2px 8px rgba(0,0,0,0.2)`,
-              animation: purchasing ? "none" : "ctaPulse 3s ease-in-out infinite",
               transition: "opacity 0.2s, transform 0.15s",
               fontFamily: T.font.mono,
             }}
@@ -747,6 +784,9 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
             </div>
             {PAYWALL_FEATURES.map((f, i) => (
               <div key={i} style={{ display: "contents", animation: `fadeInUp .3s ease-out ${i * 0.04}s both` }}>
+                {(() => {
+                  const Icon = PAYWALL_FEATURE_ICON_MAP[f.label as keyof typeof PAYWALL_FEATURE_ICON_MAP] || Wallet;
+                  return (
                 <div
                   style={{
                     padding: "10px 14px",
@@ -758,8 +798,11 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
                     gap: 8,
                   }}
                 >
-                  <span style={{ fontSize: 13, flexShrink: 0 }}>{f.icon}</span> {f.label}
+                  <Icon size={13} color={T.text.dim} />
+                  {f.label}
                 </div>
+                  );
+                })()}
                 <div
                   style={{
                     padding: "10px 14px",

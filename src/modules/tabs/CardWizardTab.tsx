@@ -547,7 +547,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
           </div>
           <h2 style={{ fontSize: 20, fontWeight: 800, color: T.text.primary, marginBottom: 12 }}>Empty Wallet</h2>
           <p style={{ fontSize: 14, color: T.text.secondary, lineHeight: 1.5 }}>
-            The Card Wizard needs to know what cards you have to mathematically deduce the best one. Add your credit cards in the Portfolio tab to unlock intelligent AI sorting.
+            Add your cards in Portfolio to see which one earns the most for each purchase.
           </p>
         </div>
       </div>
@@ -575,8 +575,8 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
           <div style={{ display: "inline-flex", padding: headerIconPadding, borderRadius: 16, background: T.bg.elevated, border: `1px solid ${T.border.default}`, boxShadow: T.shadow.sm, marginBottom: denseEmbedded ? 8 : 12 }}>
             <Sparkles color={T.accent.primary} size={headerIconSize} />
           </div>
-          <h1 style={{ fontSize: headerTitleSize, fontWeight: 800, color: T.text.primary, marginBottom: denseEmbedded ? 4 : 6 }}>Card Wizard</h1>
-          <p style={{ fontSize: headerCopySize, color: T.text.secondary, maxWidth: denseEmbedded ? 280 : 320, lineHeight: 1.45, margin: "0 auto" }}>Enter a merchant to find your best card for maximum rewards.</p>
+          <h1 style={{ fontSize: headerTitleSize, fontWeight: 800, color: T.text.primary, marginBottom: denseEmbedded ? 4 : 6 }}>Best Card</h1>
+          <p style={{ fontSize: headerCopySize, color: T.text.secondary, maxWidth: denseEmbedded ? 280 : 320, lineHeight: 1.45, margin: "0 auto" }}>Search a merchant to see which card earns the most on your next purchase.</p>
         </div>
 
         {/* Search Bar */}

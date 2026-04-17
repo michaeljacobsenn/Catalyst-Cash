@@ -3,6 +3,7 @@ import { T } from "../constants.js";
 import { Badge, Card, Label, NoticeBanner } from "../ui.js";
 import { ChevronDown, Layers, RefreshCw, Save } from "../icons";
 import { haptic } from "../haptics.js";
+import { db } from "../utils.js";
 
 interface FinanceSummaryItem {
   label: string;
@@ -10,7 +11,7 @@ interface FinanceSummaryItem {
 }
 
 interface FinanceProfileSectionProps {
-  activeMenu: "finance" | "profile" | "ai" | "backup" | "dev" | "security" | "plaid" | null;
+  activeMenu: "finance" | "profile" | "ai" | "backup" | "dev" | "security" | "plaid" | "trust" | null;
   financialConfig: Record<string, any>;
   financeSummaryItems: FinanceSummaryItem[];
   proEnabled: boolean;
@@ -19,6 +20,7 @@ interface FinanceProfileSectionProps {
 }
 
 const SECTION_MARGIN = "0 16px";
+const BASELINE_CONFIG_KEY = "financial-config-baseline";
 const fieldCardStyle = {
   borderRadius: T.radius.lg,
   border: `1px solid ${T.border.subtle}`,
@@ -119,11 +121,13 @@ function SelectShell({
   onChange,
   options,
   accent = T.accent.primary,
+  ariaLabel,
 }: {
   value: string;
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
   accent?: string;
+  ariaLabel?: string;
 }) {
   return (
     <div
@@ -137,6 +141,7 @@ function SelectShell({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        aria-label={ariaLabel}
         style={{
           width: "100%",
           minHeight: 46,
@@ -185,6 +190,7 @@ function TextField({
   width,
   textAlign = "right",
   fullWidth = false,
+  ariaLabel,
 }: {
   value: string | number;
   onChange: (value: string) => void;
@@ -195,6 +201,7 @@ function TextField({
   width?: number;
   textAlign?: "left" | "right";
   fullWidth?: boolean;
+  ariaLabel?: string;
 }) {
   return (
     <div
@@ -215,6 +222,7 @@ function TextField({
         inputMode={inputMode}
         value={value || ""}
         onChange={(e) => onChange(e.target.value)}
+        aria-label={ariaLabel}
         placeholder={placeholder}
         autoComplete="off"
         style={{
@@ -517,6 +525,7 @@ export function FinanceProfileSection({
               <SelectShell
                 value={financialConfig?.payFrequency || "bi-weekly"}
                 onChange={(value) => setReducerField("payFrequency", value as PayFrequency)}
+                ariaLabel="Pay Frequency"
                 options={[
                   { value: "weekly", label: "Weekly" },
                   { value: "bi-weekly", label: "Bi-Weekly" },
@@ -529,6 +538,7 @@ export function FinanceProfileSection({
               <SelectShell
                 value={financialConfig?.payday || "Friday"}
                 onChange={(value) => setReducerField("payday", value as Payday)}
+                ariaLabel="Typical Payday"
                 options={[
                   { value: "Monday", label: "Monday" },
                   { value: "Tuesday", label: "Tuesday" },
@@ -548,6 +558,7 @@ export function FinanceProfileSection({
                 <TextField
                   value={financialConfig?.paycheckStandard || ""}
                   onChange={(value) => setNumericField("paycheckStandard", value)}
+                  ariaLabel="Standard Paycheck"
                   placeholder="0"
                   prefix="$"
                   fullWidth
@@ -557,6 +568,7 @@ export function FinanceProfileSection({
                 <TextField
                   value={financialConfig?.paycheckFirstOfMonth || ""}
                   onChange={(value) => setNumericField("paycheckFirstOfMonth", value)}
+                  ariaLabel="1st of Month Paycheck"
                   placeholder="Optional"
                   prefix="$"
                   fullWidth
@@ -604,7 +616,7 @@ export function FinanceProfileSection({
 
       <SectionCard
         eyebrow="Living Costs"
-        title="Housing situation"
+        title="Housing Situation"
         description="Only set this if housing meaningfully affects your baseline obligations or regional planning."
       >
         <div style={{ display: "grid", gap: 14 }}>
@@ -622,12 +634,13 @@ export function FinanceProfileSection({
           </div>
           {housingType === "rent" ? (
             <ControlRow
-              title="Monthly rent"
+              title="Monthly Rent"
               detail="Use the all-in recurring rent amount that materially impacts your plan."
               control={
                 <TextField
                   value={financialConfig?.monthlyRent || ""}
                   onChange={(value) => setNumericField("monthlyRent", value)}
+                  ariaLabel="Monthly Rent"
                   placeholder="0"
                   prefix="$"
                   fullWidth
@@ -643,6 +656,7 @@ export function FinanceProfileSection({
                 <TextField
                   value={financialConfig?.mortgagePayment || ""}
                   onChange={(value) => setNumericField("mortgagePayment", value)}
+                  ariaLabel="Mortgage (PITI)"
                   placeholder="0"
                   prefix="$"
                   fullWidth
@@ -692,8 +706,15 @@ export function FinanceProfileSection({
                 type="button"
                 onClick={() => {
                   haptic.medium();
-                  localStorage.setItem("catalyst_baseline_config", JSON.stringify(financialConfig));
-                  window.toast?.success?.("Baseline snapshot saved.");
+                  void (async () => {
+                    await db.set(BASELINE_CONFIG_KEY, financialConfig);
+                    try {
+                      localStorage.removeItem("catalyst_baseline_config");
+                    } catch {
+                      void 0;
+                    }
+                    window.toast?.success?.("Baseline snapshot saved.");
+                  })();
                 }}
                 disabled={!proEnabled}
                 className="hover-btn"
@@ -718,17 +739,29 @@ export function FinanceProfileSection({
                 type="button"
                 onClick={() => {
                   haptic.light();
-                  const saved = localStorage.getItem("catalyst_baseline_config");
-                  if (!saved) {
-                    window.toast?.error?.("No baseline saved.");
-                    return;
-                  }
-                  try {
-                    setFinancialConfig(JSON.parse(saved));
-                    window.toast?.success?.("Baseline restored.");
-                  } catch {
-                    window.toast?.error?.("Saved baseline is corrupted.");
-                  }
+                  void (async () => {
+                    const savedBaseline = await db.get(BASELINE_CONFIG_KEY);
+                    if (savedBaseline && typeof savedBaseline === "object") {
+                      setFinancialConfig(savedBaseline);
+                      window.toast?.success?.("Baseline restored.");
+                      return;
+                    }
+
+                    try {
+                      const legacyBaseline = localStorage.getItem("catalyst_baseline_config");
+                      if (!legacyBaseline) {
+                        window.toast?.error?.("No baseline saved.");
+                        return;
+                      }
+                      const parsedBaseline = JSON.parse(legacyBaseline);
+                      await db.set(BASELINE_CONFIG_KEY, parsedBaseline);
+                      localStorage.removeItem("catalyst_baseline_config");
+                      setFinancialConfig(parsedBaseline);
+                      window.toast?.success?.("Baseline restored.");
+                    } catch {
+                      window.toast?.error?.("Saved baseline is corrupted.");
+                    }
+                  })();
                 }}
                 disabled={!proEnabled}
                 className="hover-btn"

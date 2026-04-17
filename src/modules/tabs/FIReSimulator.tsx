@@ -4,6 +4,7 @@
   import ScenarioSandbox from "../dashboard/ScenarioSandbox.js";
   import { haptic } from "../haptics.js";
   import { Sparkles } from "../icons";
+  import UiGlyph from "../UiGlyph.js";
   import { Badge,Card,Label } from "../ui.js";
 
 interface FireTimelinePoint {
@@ -103,7 +104,7 @@ export default function FIReSimulator({ currentNetWorth = 0, annualIncome = 0, a
             <Card animate delay={400} style={{ cursor: "pointer", marginBottom: 16 }} onClick={() => setShowSim(true)}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 18 }}>🏖️</span>
+                        <UiGlyph glyph="🏖️" size={18} color={T.accent.emerald} />
                         <div>
                             <div style={{ fontSize: 13, fontWeight: 700 }}>FIRE Simulator</div>
                             <div style={{ fontSize: 11, color: T.text.dim }}>Project your Financial Independence date</div>
@@ -128,7 +129,7 @@ export default function FIReSimulator({ currentNetWorth = 0, annualIncome = 0, a
 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 18 }}>🏖️</span>
+                    <UiGlyph glyph="🏖️" size={18} color={T.accent.emerald} />
                     <span style={{ fontSize: 14, fontWeight: 800 }}>FIRE Simulator</span>
                     <Badge variant="success" size="sm">FREE TOOL</Badge>
                 </div>

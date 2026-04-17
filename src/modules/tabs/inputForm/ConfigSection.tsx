@@ -1,6 +1,5 @@
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { T } from "../../constants.js";
-import { Zap } from "../../icons";
 import { haptic } from "../../haptics.js";
 import { Card, Label } from "../../ui.js";
 
@@ -18,8 +17,12 @@ interface ConfigSectionProps<TConfig extends InputFormConfigSectionState> {
   configSummary: string;
   typedFinancialConfig: TConfig;
   setTypedFinancialConfig: (value: TConfig | ((prev: TConfig) => TConfig)) => void;
+  notes: string;
+  setNotes: (value: string) => void;
   personalRules: string;
   setPersonalRules: (value: string) => void;
+  showAuditNotes?: boolean;
+  children?: ReactNode;
 }
 
 export function ConfigSection<TConfig extends InputFormConfigSectionState>({
@@ -28,8 +31,12 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
   configSummary,
   typedFinancialConfig,
   setTypedFinancialConfig,
+  notes,
+  setNotes,
   personalRules,
   setPersonalRules,
+  showAuditNotes = true,
+  children,
 }: ConfigSectionProps<TConfig>) {
   return (
     <div style={{ margin: 0 }}>
@@ -38,6 +45,7 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
           haptic.medium();
           setShowConfig((prev) => !prev);
         }}
+        aria-expanded={showConfig}
         style={{
           width: "100%",
           display: "flex",
@@ -45,35 +53,35 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
           justifyContent: "space-between",
           padding: "15px 18px",
           borderRadius: T.radius.lg,
-          border: `1px solid ${showConfig ? `${T.accent.primary}42` : T.border.subtle}`,
-          background: showConfig ? `${T.accent.primary}0F` : T.bg.card,
-          backdropFilter: "blur(10px)",
-          WebkitBackdropFilter: "blur(10px)",
+          border: `1px solid ${showConfig ? T.border.default : T.border.subtle}`,
+          background: showConfig ? T.bg.elevated : T.bg.card,
           color: showConfig ? T.text.primary : T.text.secondary,
           cursor: "pointer",
-          transition: "all 0.24s ease",
-          boxShadow: showConfig ? `0 6px 20px ${T.accent.primary}12, inset 0 1px 0 ${T.accent.primary}12` : T.shadow.soft,
+          transition: "border-color 0.24s ease, background 0.24s ease, color 0.24s ease",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
           <div
             style={{
-              width: 30,
-              height: 30,
-              borderRadius: 10,
-              background: showConfig ? `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)` : T.bg.card,
+              minWidth: 54,
+              height: 24,
+              padding: "0 10px",
+              borderRadius: 999,
+              background: showConfig ? `${T.accent.primary}14` : T.bg.elevated,
+              border: `1px solid ${showConfig ? `${T.accent.primary}24` : T.border.subtle}`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: showConfig ? `0 2px 12px ${T.accent.primary}50` : "none",
-              transition: "all .3s",
+              transition: "background .24s ease, border-color .24s ease",
             }}
           >
-            <Zap size={14} color={showConfig ? "#fff" : T.text.muted} strokeWidth={2.5} />
+            <span style={{ fontSize: 10, fontWeight: 800, color: showConfig ? T.accent.primary : T.text.dim, fontFamily: T.font.mono, letterSpacing: "0.06em" }}>
+              PROFILE
+            </span>
           </div>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: "-0.01em", color: T.text.primary }}>
-              Financial Profile & AI Rules
+              Audit profile, notes, and AI rules
             </div>
             <div
               style={{
@@ -307,10 +315,41 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
             )}
           </Card>
 
-          <Card style={{ marginBottom: 0, background: T.bg.card }}>
+          {showAuditNotes && (
+            <Card style={{ marginBottom: 10, background: T.bg.card }}>
+              <Label>Notes for this week</Label>
+              <p style={{ fontSize: 11, color: T.text.muted, marginBottom: 10, lineHeight: 1.4 }}>
+                Use this for week-specific facts the audit must respect, like bills already paid or reimbursements on the way.
+              </p>
+              <textarea
+                aria-label="Notes for this week"
+                value={notes || ""}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="e.g. Rent already paid, $200 reimbursement coming, skip gas this paycheck."
+                style={{
+                  width: "100%",
+                  minHeight: 84,
+                  padding: "12px",
+                  borderRadius: T.radius.md,
+                  border: `1.5px solid ${T.border.default}`,
+                  background: T.bg.elevated,
+                  color: T.text.primary,
+                  fontSize: 13,
+                  fontFamily: T.font.sans,
+                  resize: "vertical",
+                  boxSizing: "border-box",
+                  outline: "none",
+                  lineHeight: 1.5,
+                }}
+                className="app-input"
+              />
+            </Card>
+          )}
+
+          <Card style={{ marginBottom: children ? 10 : 0, background: T.bg.card }}>
             <Label>Custom AI Rules & Persona</Label>
             <p style={{ fontSize: 11, color: T.text.muted, marginBottom: 10, lineHeight: 1.4 }}>
-              Define strict rules or change how the AI speaks to you.
+              Use this for durable preferences and tone. Keep week-specific facts in Audit Notes above.
             </p>
             <textarea
               aria-label="Custom AI rules and persona"
@@ -334,6 +373,8 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
               className="app-input"
             />
           </Card>
+
+          {children}
         </div>
       )}
     </div>

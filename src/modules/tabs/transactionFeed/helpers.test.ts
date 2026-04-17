@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCSV, buildRewardComparison, estimateRewardCapUsage, estimateStatementCycleSpend, formatRewardRate, formatTransactionTime, isTransactionInSameMonth, normalizeTransactionResult } from "./helpers";
+import {
+  buildCSV,
+  buildRewardComparison,
+  estimateRewardCapUsage,
+  estimateStatementCycleSpend,
+  formatRewardRate,
+  formatTransactionTime,
+  getCategoryLabel,
+  getNormalizedCategoryKey,
+  isTransactionInSameMonth,
+  normalizeTransactionResult,
+} from "./helpers";
 
 describe("transaction feed helpers", () => {
   it("normalizes legacy transaction payloads", () => {
@@ -44,6 +55,27 @@ describe("transaction feed helpers", () => {
     expect(csv).toContain("1200");
     expect(csv).toContain("Credit");
     expect(csv).toContain("Debit");
+  });
+
+  it("normalizes inconsistent ledger categories into canonical labels", () => {
+    expect(getNormalizedCategoryKey("Dining", "Chick-fil-A")).toBe("food and drink");
+    expect(getCategoryLabel("Dining", "Chick-fil-A")).toBe("Food & Drink");
+
+    expect(getNormalizedCategoryKey("food and drink", "Skolniks")).toBe("food and drink");
+    expect(getCategoryLabel("food and drink", "Skolniks")).toBe("Food & Drink");
+
+    expect(getNormalizedCategoryKey("general merchandise", "Legalzoom")).toBe("shopping");
+    expect(getCategoryLabel("general merchandise", "Legalzoom")).toBe("Shopping");
+
+    expect(getNormalizedCategoryKey("loan payments", "Acura")).toBe("payments");
+    expect(getCategoryLabel("loan disbursements", "Payment Thank You-Mobile")).toBe("Payments");
+    expect(getCategoryLabel("transfer in", "Zelle payment from Michael")).toBe("Transfer");
+  });
+
+  it("normalizes payment-thank-you descriptors even when the source category is noisy", () => {
+    expect(getNormalizedCategoryKey("other", "MOBILE PAYMENT - THANK YOU")).toBe("payments");
+    expect(getCategoryLabel("other", "ONLINE PAYMENT, THANK YOU")).toBe("Payments");
+    expect(getCategoryLabel("", "Autopay confirmation")).toBe("Payments");
   });
 
   it("matches only transactions in the same calendar month as the reference date", () => {

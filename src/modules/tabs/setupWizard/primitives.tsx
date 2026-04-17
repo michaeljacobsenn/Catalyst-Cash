@@ -94,6 +94,8 @@ export const WizInput = ({
   inputMode,
   pattern,
   autoComplete,
+  autoCapitalize,
+  autoCorrect,
 }: {
   value: string | number;
   onChange: (value: string) => void;
@@ -104,6 +106,8 @@ export const WizInput = ({
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
   pattern?: string;
   autoComplete?: string;
+  autoCapitalize?: string;
+  autoCorrect?: string;
 }) => (
   <input
     className="wiz-input"
@@ -115,6 +119,8 @@ export const WizInput = ({
     placeholder={placeholder}
     aria-label={ariaLabel || placeholder}
     autoComplete={autoComplete}
+    autoCapitalize={autoCapitalize}
+    autoCorrect={autoCorrect}
     style={{
       width: "100%",
       height: 48,

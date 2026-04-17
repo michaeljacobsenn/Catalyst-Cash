@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import worker, {
   buildHouseholdIntegrityTag,
+  deriveHouseholdAuthToken,
+  deriveLegacyHouseholdAuthToken,
   getIsoWeekKey,
   getQuotaWindow,
   RateLimiter,
@@ -46,13 +48,72 @@ async function signIdentityPayload(privateKeyJwk, payload) {
   return toBase64Url(new Uint8Array(signature));
 }
 
+async function generateAppleIdentityTestKeyPair() {
+  const keyPair = await crypto.subtle.generateKey(
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      modulusLength: 2048,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: "SHA-256",
+    },
+    true,
+    ["sign", "verify"]
+  );
+  const [privateKeyJwk, publicKeyJwk] = await Promise.all([
+    crypto.subtle.exportKey("jwk", keyPair.privateKey),
+    crypto.subtle.exportKey("jwk", keyPair.publicKey),
+  ]);
+  return {
+    privateKeyJwk,
+    publicKeyJwk: {
+      kty: publicKeyJwk.kty,
+      kid: "apple-test-kid",
+      use: "sig",
+      alg: "RS256",
+      n: publicKeyJwk.n,
+      e: publicKeyJwk.e,
+    },
+  };
+}
+
+async function signAppleIdentityToken(privateKeyJwk, payload) {
+  const header = {
+    alg: "RS256",
+    kid: "apple-test-kid",
+    typ: "JWT",
+  };
+  const encodedHeader = toBase64Url(new TextEncoder().encode(JSON.stringify(header)));
+  const encodedPayload = toBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
+  const privateKey = await crypto.subtle.importKey(
+    "jwk",
+    privateKeyJwk,
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      hash: "SHA-256",
+    },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    privateKey,
+    new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`)
+  );
+  return `${encodedHeader}.${encodedPayload}.${toBase64Url(new Uint8Array(signature))}`;
+}
+
 class FakeD1 {
   constructor(seed = {}) {
     this.plaidItems = [...(seed.plaidItems || [])];
     this.syncData = [...(seed.syncData || [])];
     this.plaidUsageDaily = [...(seed.plaidUsageDaily || [])];
+    this.telemetryEvents = [...(seed.telemetryEvents || [])];
     this.auditLog = [...(seed.auditLog || [])];
     this.householdSync = [...(seed.householdSync || [])];
+    this.recoveryVault = [...(seed.recoveryVault || [])];
+    this.recoveryVaultLinks = [...(seed.recoveryVaultLinks || [])];
+    this.recoveryVaultContinuity = [...(seed.recoveryVaultContinuity || [])];
+    this.recoveryVaultTrustedContinuity = [...(seed.recoveryVaultTrustedContinuity || [])];
     this.identityActors = [...(seed.identityActors || [])];
     this.identityActorAliases = [...(seed.identityActorAliases || [])];
     this.identityDeviceKeys = [...(seed.identityDeviceKeys || [])];
@@ -77,6 +138,26 @@ class FakeD1 {
   }
 
   #executeSelect(sql, params) {
+    if (sql.includes("FROM telemetry_events")) {
+      const sinceValue = params[0];
+      const sinceMatch = String(sinceValue || "").match(/-([0-9]+)\s+days/);
+      const sinceDays = sinceMatch ? Number(sinceMatch[1]) : 14;
+      const cutoff = Date.now() - sinceDays * 24 * 60 * 60 * 1000;
+      return this.telemetryEvents
+        .filter((entry) => {
+          const timestamp = new Date(entry.created_at || entry.timestamp || 0).getTime();
+          return Number.isFinite(timestamp) && timestamp >= cutoff;
+        })
+        .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+        .map((entry) => ({
+          event_name: entry.event_name,
+          event_type: entry.event_type,
+          device_id: entry.device_id,
+          created_at: entry.created_at,
+          context_json: entry.context_json ?? null,
+        }));
+    }
+
     if (sql.includes("SELECT transactions_cursor FROM plaid_items WHERE item_id = ?")) {
       const item = this.plaidItems.find(entry => entry.item_id === params[0]);
       return item ? [{ transactions_cursor: item.transactions_cursor ?? null }] : [];
@@ -136,6 +217,15 @@ class FakeD1 {
             active_device_key_fingerprint: actor.active_device_key_fingerprint ?? null,
           }]
         : [];
+    }
+
+    if (sql.includes("SELECT alias_type, alias_hash") && sql.includes("FROM identity_actor_aliases")) {
+      return this.identityActorAliases
+        .filter(entry => entry.actor_id === params[0])
+        .map(entry => ({
+          alias_type: entry.alias_type,
+          alias_hash: entry.alias_hash,
+        }));
     }
 
     if (sql.includes("FROM identity_device_keys")) {
@@ -246,10 +336,72 @@ class FakeD1 {
       return row ? [row] : [];
     }
 
+    if (sql.includes("FROM recovery_vault") && sql.includes("WHERE recovery_id = ?")) {
+      const row = this.recoveryVault.find(entry => entry.recovery_id === params[0]);
+      return row ? [row] : [];
+    }
+
+    if (sql.includes("FROM recovery_vault_links links") && sql.includes("JOIN recovery_vault vault")) {
+      const link = this.recoveryVaultLinks.find(entry => entry.actor_id === params[0]);
+      if (!link) return [];
+      const vault = this.recoveryVault.find(entry => entry.recovery_id === link.recovery_id);
+      return vault ? [{ recovery_id: link.recovery_id }] : [];
+    }
+
+    if (sql.includes("SELECT actor_id FROM recovery_vault_links WHERE actor_id = ?")) {
+      const row = this.recoveryVaultLinks.find(entry => entry.actor_id === params[0]);
+      return row ? [{ actor_id: row.actor_id }] : [];
+    }
+
+    if (sql.includes("FROM recovery_vault_continuity continuity") && sql.includes("JOIN recovery_vault vault")) {
+      const continuity = this.recoveryVaultContinuity.find(entry => entry.actor_id === params[0]);
+      if (!continuity) return [];
+      const vault = this.recoveryVault.find(entry => entry.recovery_id === continuity.recovery_id);
+      return vault
+        ? [{
+            recovery_id: continuity.recovery_id,
+            encrypted_recovery_key: continuity.encrypted_recovery_key,
+          }]
+        : [];
+    }
+
+    if (sql.includes("SELECT actor_id FROM recovery_vault_continuity WHERE actor_id = ?")) {
+      const row = this.recoveryVaultContinuity.find(entry => entry.actor_id === params[0]);
+      return row ? [{ actor_id: row.actor_id }] : [];
+    }
+
+    if (sql.includes("FROM recovery_vault_trusted_continuity continuity") && sql.includes("JOIN recovery_vault vault")) {
+      const continuity = this.recoveryVaultTrustedContinuity.find(entry => entry.actor_id === params[0]);
+      if (!continuity) return [];
+      const vault = this.recoveryVault.find(entry => entry.recovery_id === continuity.recovery_id);
+      return vault
+        ? [{
+            recovery_id: continuity.recovery_id,
+            encrypted_recovery_key: continuity.encrypted_recovery_key,
+          }]
+        : [];
+    }
+
+    if (sql.includes("SELECT actor_id FROM recovery_vault_trusted_continuity WHERE actor_id = ?")) {
+      const row = this.recoveryVaultTrustedContinuity.find(entry => entry.actor_id === params[0]);
+      return row ? [{ actor_id: row.actor_id }] : [];
+    }
+
     return [];
   }
 
   #executeWrite(sql, params) {
+    if (sql.includes("INSERT INTO telemetry_events")) {
+      this.telemetryEvents.push({
+        event_name: params[0],
+        event_type: params[1],
+        device_id: params[2],
+        created_at: params[3],
+        context_json: params[4] ?? null,
+      });
+      return;
+    }
+
     if (sql.includes("UPDATE plaid_items SET transactions_cursor = ?")) {
       const [cursor, itemId] = params;
       const item = this.plaidItems.find(entry => entry.item_id === itemId);
@@ -319,6 +471,36 @@ class FakeD1 {
       const next = { alias_type: aliasType, alias_hash: aliasHash, actor_id: actorId };
       if (index >= 0) this.identityActorAliases[index] = next;
       else this.identityActorAliases.push(next);
+      return;
+    }
+
+    if (sql.includes("UPDATE recovery_vault_links SET actor_id = ? WHERE actor_id = ?")) {
+      const [toActorId, fromActorId] = params;
+      this.recoveryVaultLinks = this.recoveryVaultLinks.map(entry =>
+        entry.actor_id === fromActorId
+          ? { ...entry, actor_id: toActorId, updated_at: "2026-03-13 12:00:00" }
+          : entry
+      );
+      return;
+    }
+
+    if (sql.includes("UPDATE recovery_vault_continuity SET actor_id = ? WHERE actor_id = ?")) {
+      const [toActorId, fromActorId] = params;
+      this.recoveryVaultContinuity = this.recoveryVaultContinuity.map(entry =>
+        entry.actor_id === fromActorId
+          ? { ...entry, actor_id: toActorId, updated_at: "2026-03-13 12:00:00" }
+          : entry
+      );
+      return;
+    }
+
+    if (sql.includes("UPDATE recovery_vault_trusted_continuity SET actor_id = ? WHERE actor_id = ?")) {
+      const [toActorId, fromActorId] = params;
+      this.recoveryVaultTrustedContinuity = this.recoveryVaultTrustedContinuity.map(entry =>
+        entry.actor_id === fromActorId
+          ? { ...entry, actor_id: toActorId, updated_at: "2026-03-13 12:00:00" }
+          : entry
+      );
       return;
     }
 
@@ -576,6 +758,17 @@ class FakeD1 {
       return;
     }
 
+    if (sql.includes("UPDATE household_sync SET auth_token_hash = ?, integrity_tag = ?, last_updated_at = CURRENT_TIMESTAMP WHERE household_id = ?")) {
+      const [authTokenHash, integrityTag, householdId] = params;
+      const row = this.householdSync.find(entry => entry.household_id === householdId);
+      if (row) {
+        row.auth_token_hash = authTokenHash;
+        row.integrity_tag = integrityTag;
+        row.last_updated_at = "2026-03-13 12:00:00";
+      }
+      return;
+    }
+
     if (sql.includes("UPDATE household_sync SET integrity_tag = ?, last_updated_at = CURRENT_TIMESTAMP WHERE household_id = ?")) {
       const [integrityTag, householdId] = params;
       const row = this.householdSync.find(entry => entry.household_id === householdId);
@@ -611,6 +804,122 @@ class FakeD1 {
       } else {
         this.householdSync.push(next);
       }
+      return;
+    }
+
+    if (sql.includes("INSERT INTO recovery_vault_links")) {
+      const [actorId, recoveryId] = params;
+      const next = {
+        actor_id: actorId,
+        recovery_id: recoveryId,
+        linked_at: "2026-03-13 12:00:00",
+        updated_at: "2026-03-13 12:00:00",
+      };
+      const index = this.recoveryVaultLinks.findIndex(entry => entry.actor_id === actorId);
+      if (index >= 0) {
+        this.recoveryVaultLinks[index] = {
+          ...this.recoveryVaultLinks[index],
+          recovery_id: recoveryId,
+          updated_at: "2026-03-13 12:00:00",
+        };
+      } else {
+        this.recoveryVaultLinks.push(next);
+      }
+      return;
+    }
+
+    if (sql.includes("INSERT INTO recovery_vault_continuity")) {
+      const [actorId, recoveryId, encryptedRecoveryKey] = params;
+      const next = {
+        actor_id: actorId,
+        recovery_id: recoveryId,
+        encrypted_recovery_key: encryptedRecoveryKey,
+        linked_at: "2026-03-13 12:00:00",
+        updated_at: "2026-03-13 12:00:00",
+      };
+      const index = this.recoveryVaultContinuity.findIndex(entry => entry.actor_id === actorId);
+      if (index >= 0) {
+        this.recoveryVaultContinuity[index] = {
+          ...this.recoveryVaultContinuity[index],
+          recovery_id: recoveryId,
+          encrypted_recovery_key: encryptedRecoveryKey,
+          updated_at: "2026-03-13 12:00:00",
+        };
+      } else {
+        this.recoveryVaultContinuity.push(next);
+      }
+      return;
+    }
+
+    if (sql.includes("INSERT INTO recovery_vault_trusted_continuity")) {
+      const [actorId, recoveryId, encryptedRecoveryKey] = params;
+      const next = {
+        actor_id: actorId,
+        recovery_id: recoveryId,
+        encrypted_recovery_key: encryptedRecoveryKey,
+        linked_at: "2026-03-13 12:00:00",
+        updated_at: "2026-03-13 12:00:00",
+      };
+      const index = this.recoveryVaultTrustedContinuity.findIndex(entry => entry.actor_id === actorId);
+      if (index >= 0) {
+        this.recoveryVaultTrustedContinuity[index] = {
+          ...this.recoveryVaultTrustedContinuity[index],
+          recovery_id: recoveryId,
+          encrypted_recovery_key: encryptedRecoveryKey,
+          updated_at: "2026-03-13 12:00:00",
+        };
+      } else {
+        this.recoveryVaultTrustedContinuity.push(next);
+      }
+      return;
+    }
+
+    if (sql.includes("INSERT INTO recovery_vault")) {
+      const [recoveryId, encryptedBlob, authTokenHash, backupKind, exportedAt] = params;
+      const next = {
+        recovery_id: recoveryId,
+        encrypted_blob: encryptedBlob,
+        auth_token_hash: authTokenHash,
+        backup_kind: backupKind,
+        exported_at: exportedAt,
+        last_updated_at: "2026-03-13 12:00:00",
+      };
+      const index = this.recoveryVault.findIndex(entry => entry.recovery_id === recoveryId);
+      if (index >= 0) this.recoveryVault[index] = next;
+      else this.recoveryVault.push(next);
+      return;
+    }
+
+    if (sql.includes("DELETE FROM recovery_vault WHERE recovery_id = ?")) {
+      const [recoveryId] = params;
+      this.recoveryVault = this.recoveryVault.filter(entry => entry.recovery_id !== recoveryId);
+      this.recoveryVaultLinks = this.recoveryVaultLinks.filter(entry => entry.recovery_id !== recoveryId);
+      this.recoveryVaultContinuity = this.recoveryVaultContinuity.filter(entry => entry.recovery_id !== recoveryId);
+      this.recoveryVaultTrustedContinuity = this.recoveryVaultTrustedContinuity.filter(entry => entry.recovery_id !== recoveryId);
+      return;
+    }
+
+    if (sql.includes("DELETE FROM recovery_vault_links WHERE actor_id = ?")) {
+      const [actorId] = params;
+      this.recoveryVaultLinks = this.recoveryVaultLinks.filter(entry => entry.actor_id !== actorId);
+      return;
+    }
+
+    if (sql.includes("DELETE FROM recovery_vault_continuity WHERE actor_id = ?")) {
+      const [actorId] = params;
+      this.recoveryVaultContinuity = this.recoveryVaultContinuity.filter(entry => entry.actor_id !== actorId);
+      return;
+    }
+
+    if (sql.includes("DELETE FROM recovery_vault_trusted_continuity WHERE actor_id = ?")) {
+      const [actorId] = params;
+      this.recoveryVaultTrustedContinuity = this.recoveryVaultTrustedContinuity.filter(entry => entry.actor_id !== actorId);
+      return;
+    }
+
+    if (sql.includes("DELETE FROM recovery_vault_trusted_continuity WHERE recovery_id = ?")) {
+      const [recoveryId] = params;
+      this.recoveryVaultTrustedContinuity = this.recoveryVaultTrustedContinuity.filter(entry => entry.recovery_id !== recoveryId);
       return;
     }
 
@@ -721,6 +1030,7 @@ async function issueSessionFor(env, headers = {}, options = {}) {
         intent: "bootstrap",
         publicKeyJwk: keyPair.publicKeyJwk,
         legacyDeviceId: headers["X-Device-ID"] || options.legacyDeviceId || "",
+        ...(options.appleIdentityToken ? { appleIdentityToken: options.appleIdentityToken } : {}),
       }),
     }),
     env,
@@ -747,6 +1057,7 @@ async function issueSessionFor(env, headers = {}, options = {}) {
         publicKeyJwk: keyPair.publicKeyJwk,
         signature,
         legacyDeviceId: headers["X-Device-ID"] || options.legacyDeviceId || "",
+        ...(options.appleIdentityToken ? { appleIdentityToken: options.appleIdentityToken } : {}),
       }),
     }),
     env,
@@ -1121,6 +1432,81 @@ describe("Plaid actor identity", () => {
     });
   });
 
+  it("binds a verified Apple identity to the actor and keeps seamless continuity deterministic across devices", async () => {
+    const env = makeEnv({
+      DB: new FakeD1({
+        recoveryVault: [
+          {
+            recovery_id: "CC-APPLE-VAULT",
+            encrypted_blob: JSON.stringify({ __ciphertext: "{\"app\":\"Catalyst Cash\",\"data\":{}}" }),
+            auth_token_hash: "hash",
+            backup_kind: "encrypted-vault",
+            exported_at: "2026-03-13T12:00:00.000Z",
+            last_updated_at: "2026-03-13 12:00:00",
+          },
+        ],
+      }),
+    });
+    const appleKeyPair = await generateAppleIdentityTestKeyPair();
+    const appleIdentityToken = await signAppleIdentityToken(appleKeyPair.privateKeyJwk, {
+      iss: "https://appleid.apple.com",
+      aud: "com.jacobsen.portfoliopro",
+      sub: "apple-user-123",
+      exp: Math.floor(Date.now() / 1000) + 60 * 10,
+      iat: Math.floor(Date.now() / 1000),
+    });
+
+    vi.stubGlobal("fetch", vi.fn(async (input) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url === "https://appleid.apple.com/auth/keys") {
+        return new Response(JSON.stringify({ keys: [appleKeyPair.publicKeyJwk] }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    }));
+
+    const originalKeyPair = await generateIdentityTestKeyPair();
+    const originalSession = await issueSessionFor(env, {}, {
+      keyPair: originalKeyPair,
+      appleIdentityToken,
+    });
+    expect(originalSession.response.status).toBe(200);
+
+    const storeTrustedContinuityResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/recovery-vault/continuity/trusted", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...originalSession.authorization,
+        },
+        body: JSON.stringify({
+          recoveryId: "CC-APPLE-VAULT",
+          recoveryKey: "ABCD-EFGH-IJKL-MNOP",
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+    expect(storeTrustedContinuityResponse.status).toBe(200);
+
+    const replacementKeyPair = await generateIdentityTestKeyPair();
+    const accidentalFreshSession = await issueSessionFor(env, {}, {
+      keyPair: replacementKeyPair,
+    });
+    expect(accidentalFreshSession.response.status).toBe(200);
+    expect(accidentalFreshSession.payload.actorId).not.toBe(originalSession.payload.actorId);
+
+    const reboundSession = await issueSessionFor(env, {}, {
+      keyPair: replacementKeyPair,
+      appleIdentityToken,
+    });
+    expect(reboundSession.response.status).toBe(200);
+    expect(reboundSession.payload.actorId).toBe(accidentalFreshSession.payload.actorId);
+
+    const appleAlias = env.DB.identityActorAliases.find((entry) => entry.alias_type === "apple");
+    expect(appleAlias?.actor_id).toBe(reboundSession.payload.actorId);
+    expect(env.DB.recoveryVaultTrustedContinuity[0]?.actor_id).toBe(reboundSession.payload.actorId);
+  });
+
   it("rejects forged identity session tokens", async () => {
     const env = makeEnv();
     const response = await worker.fetch(
@@ -1478,6 +1864,108 @@ describe("AI provider routing and gating", () => {
     expect(env.DB.auditLog.map((row) => row.id)).toEqual(["fresh-log"]);
   });
 
+  it("persists telemetry events and exposes a founder-only summary", async () => {
+    const env = makeEnv({
+      ADMIN_TOKEN: "admin-secret",
+      DB: new FakeD1(),
+    });
+
+    const telemetryResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/v1/telemetry/funnel", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Device-ID": "device-telemetry-1",
+        },
+        body: JSON.stringify({
+          event: "setup_completed",
+          type: "funnel",
+          timestamp: new Date().toISOString(),
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+    expect(telemetryResponse.status).toBe(204);
+    expect(env.DB.telemetryEvents).toHaveLength(1);
+    expect(env.DB.telemetryEvents[0]).toMatchObject({
+      event_name: "setup_completed",
+      event_type: "funnel",
+      device_id: "device-telemetry-1",
+    });
+
+    await worker.fetch(
+      new Request("https://api.catalystcash.app/api/v1/telemetry/funnel", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Device-ID": "device-telemetry-1",
+        },
+        body: JSON.stringify({
+          event: "export_used",
+          type: "support",
+          timestamp: new Date().toISOString(),
+          context: { kind: "spreadsheet" },
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    const summaryResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/admin/telemetry-summary?days=14", {
+        method: "GET",
+        headers: { Authorization: "Bearer admin-secret" },
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(summaryResponse.status).toBe(200);
+    const payload = await summaryResponse.json();
+    expect(payload.totals).toMatchObject({
+      funnelEvents: 1,
+      supportEvents: 1,
+      uniqueDevices: 1,
+    });
+    expect(payload.funnel).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "setup_completed",
+          uniqueDevices: 1,
+          totalEvents: 1,
+        }),
+      ])
+    );
+    expect(payload.support).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "export_used",
+          uniqueDevices: 1,
+          totalEvents: 1,
+        }),
+      ])
+    );
+    expect(payload.progression.find((row) => row.event === "setup_completed")).toMatchObject({
+      event: "setup_completed",
+      uniqueDevices: 1,
+      rateFromPrevious: null,
+      retainedFromPrevious: 0,
+    });
+    expect(payload.progression.find((row) => row.event === "first_audit_completed")).toMatchObject({
+      event: "first_audit_completed",
+      uniqueDevices: 0,
+      previousDevices: 1,
+      retainedFromPrevious: 0,
+      rateFromPrevious: 0,
+    });
+    expect(payload.insights).toMatchObject({
+      recommendations: expect.arrayContaining([
+        expect.stringContaining("Top support risk"),
+      ]),
+    });
+  });
+
   it("tracks plaid usage and exposes a 30-day ROI summary through the admin endpoint", async () => {
     const env = makeEnv({
       ADMIN_TOKEN: "admin-secret",
@@ -1532,6 +2020,25 @@ describe("AI provider routing and gating", () => {
           { status: 200 }
         );
       }
+      if (url.includes("/liabilities/get")) {
+        return new Response(
+          JSON.stringify({
+            accounts: [
+              { account_id: "acct-amex", type: "credit", balances: { current: 1704.4 } },
+            ],
+            liabilities: {
+              credit: [
+                {
+                  account_id: "acct-amex",
+                  aprs: [{ apr_type: "purchase_apr", apr_percentage: 24.99 }],
+                  minimum_payment_amount: 35,
+                },
+              ],
+            },
+          }),
+          { status: 200 }
+        );
+      }
       throw new Error(`Unexpected fetch ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -1555,7 +2062,7 @@ describe("AI provider routing and gating", () => {
           source: "manual",
           balance_calls: 1,
           transaction_refresh_calls: 1,
-          liability_calls: 0,
+          liability_calls: 1,
         }),
       ])
     );
@@ -1584,13 +2091,13 @@ describe("AI provider routing and gating", () => {
       usageWindow: {
         balanceCalls: 1,
         transactionRefreshCalls: 1,
-        liabilityCalls: 0,
+        liabilityCalls: 1,
         sources: [
           {
             source: "manual",
             balanceCalls: 1,
             transactionRefreshCalls: 1,
-            liabilityCalls: 0,
+            liabilityCalls: 1,
           },
         ],
       },
@@ -3273,7 +3780,8 @@ describe("Plaid transaction sync migration", () => {
 describe("Household sync hardening", () => {
   async function buildHouseholdRequest(overrides = {}) {
     const householdId = overrides.householdId || "family-1";
-    const authToken = overrides.authToken || await sha256Hex(`household-auth-v1:${householdId}:shared-passcode`);
+    const authToken = overrides.authToken || await deriveHouseholdAuthToken(householdId, "shared-passcode");
+    const legacyAuthToken = overrides.legacyAuthToken || await deriveLegacyHouseholdAuthToken(householdId, "shared-passcode");
     const version = overrides.version ?? 1;
     const requestId = overrides.requestId || "req-1";
     const encryptedBlob = overrides.encryptedBlob || {
@@ -3293,6 +3801,7 @@ describe("Household sync hardening", () => {
     return {
       householdId,
       authToken,
+      legacyAuthToken,
       version,
       requestId,
       encryptedBlob,
@@ -3334,6 +3843,7 @@ describe("Household sync hardening", () => {
           action: "fetch",
           householdId: requestBody.householdId,
           authToken: requestBody.authToken,
+          legacyAuthToken: requestBody.legacyAuthToken,
         }),
       }),
       env,
@@ -3387,6 +3897,59 @@ describe("Household sync hardening", () => {
     await expect(fetchResponse.json()).resolves.toMatchObject({ hasData: false });
   });
 
+  it("upgrades legacy household credentials on fetch without breaking existing data", async () => {
+    const requestBody = await buildHouseholdRequest();
+    const legacyIntegrityTag = await buildHouseholdIntegrityTag({
+      householdId: requestBody.householdId,
+      authToken: requestBody.legacyAuthToken,
+      encryptedBlob: requestBody.encryptedBlob,
+      version: requestBody.version,
+      requestId: requestBody.requestId,
+    });
+    const env = makeEnv({
+      DB: new FakeD1({
+        householdSync: [
+          {
+            household_id: requestBody.householdId,
+            encrypted_blob: requestBody.encryptedBlob,
+            auth_token_hash: await sha256Hex(requestBody.legacyAuthToken),
+            integrity_tag: legacyIntegrityTag,
+            version: requestBody.version,
+            last_request_id: requestBody.requestId,
+            last_updated_at: "2026-03-13 12:00:00",
+          },
+        ],
+      }),
+    });
+    const session = await issueSessionFor(env, { "X-Device-ID": "household-upgrade" });
+
+    const fetchResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/household/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...session.authorization },
+        body: JSON.stringify({
+          action: "fetch",
+          householdId: requestBody.householdId,
+          authToken: requestBody.authToken,
+          legacyAuthToken: requestBody.legacyAuthToken,
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(fetchResponse.status).toBe(200);
+    await expect(fetchResponse.json()).resolves.toMatchObject({
+      hasData: true,
+      integrityTag: requestBody.integrityTag,
+      encryptedBlob: requestBody.encryptedBlob,
+    });
+    expect(env.DB.householdSync[0]).toMatchObject({
+      auth_token_hash: await sha256Hex(requestBody.authToken),
+      integrity_tag: requestBody.integrityTag,
+    });
+  });
+
   it("blocks unauthorized overwrite attempts from a different household credential", async () => {
     const requestBody = await buildHouseholdRequest();
     const env = makeEnv({
@@ -3406,9 +3969,11 @@ describe("Household sync hardening", () => {
     });
     const session = await issueSessionFor(env, { "X-Device-ID": "household-writer" });
 
-    const attackerAuthToken = await sha256Hex("household-auth-v1:family-1:attacker-passcode");
+    const attackerAuthToken = await deriveHouseholdAuthToken("family-1", "attacker-passcode");
+    const attackerLegacyAuthToken = await deriveLegacyHouseholdAuthToken("family-1", "attacker-passcode");
     const forgedEnvelope = await buildHouseholdRequest({
       authToken: attackerAuthToken,
+      legacyAuthToken: attackerLegacyAuthToken,
       version: 3,
       requestId: "req-3",
       encryptedBlob: {
@@ -3510,6 +4075,316 @@ describe("Household sync hardening", () => {
     );
     expect(staleResponse.status).toBe(409);
     await expect(staleResponse.json()).resolves.toMatchObject({ error: "stale_version", currentVersion: 2 });
+  });
+});
+
+describe("Recovery Vault", () => {
+  async function deriveRecoveryVaultAuthToken(recoveryId, recoveryKey) {
+    const material = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(recoveryKey),
+      "PBKDF2",
+      false,
+      ["deriveBits"]
+    );
+    const bits = await crypto.subtle.deriveBits(
+      {
+        name: "PBKDF2",
+        hash: "SHA-256",
+        salt: new TextEncoder().encode(`recovery-vault:${recoveryId}`),
+        iterations: 200000,
+      },
+      material,
+      256
+    );
+    return Array.from(new Uint8Array(bits))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
+  it("stores and fetches an encrypted recovery vault payload", async () => {
+    const env = makeEnv({ DB: new FakeD1() });
+    const recoveryId = "CC-ABCDE-FGHIJ";
+    const recoveryKey = "ABCD-EFGH-IJKL-MNOP";
+    const authToken = await deriveRecoveryVaultAuthToken(recoveryId, recoveryKey);
+
+    const pushResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/recovery-vault", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "push",
+          recoveryId,
+          authToken,
+          encryptedBlob: { v: 1, salt: "salt", iv: "iv", ct: "ciphertext" },
+          exportedAt: "2026-03-13T12:00:00.000Z",
+          backupKind: "encrypted-vault",
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(pushResponse.status).toBe(200);
+    expect(env.DB.recoveryVault[0]).toMatchObject({
+      recovery_id: recoveryId,
+      auth_token_hash: await sha256Hex(authToken),
+      backup_kind: "encrypted-vault",
+    });
+
+    const fetchResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/recovery-vault", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "fetch",
+          recoveryId,
+          authToken,
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(fetchResponse.status).toBe(200);
+    await expect(fetchResponse.json()).resolves.toMatchObject({
+      hasData: true,
+      encryptedBlob: JSON.stringify({ v: 1, salt: "salt", iv: "iv", ct: "ciphertext" }),
+    });
+  });
+
+  it("rejects mismatched recovery keys and allows delete with the correct one", async () => {
+    const recoveryId = "CC-ABCDE-FGHIJ";
+    const recoveryKey = "ABCD-EFGH-IJKL-MNOP";
+    const authToken = await deriveRecoveryVaultAuthToken(recoveryId, recoveryKey);
+    const env = makeEnv({
+      DB: new FakeD1({
+        recoveryVault: [
+          {
+            recovery_id: recoveryId,
+            encrypted_blob: JSON.stringify({ v: 1, salt: "salt", iv: "iv", ct: "ciphertext" }),
+            auth_token_hash: await sha256Hex(authToken),
+            backup_kind: "encrypted-vault",
+            exported_at: "2026-03-13T12:00:00.000Z",
+            last_updated_at: "2026-03-13 12:00:00",
+          },
+        ],
+      }),
+    });
+
+    const wrongResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/recovery-vault", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "fetch",
+          recoveryId,
+          authToken: "wrong-token",
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+    expect(wrongResponse.status).toBe(404);
+
+    const deleteResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/recovery-vault", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete",
+          recoveryId,
+          authToken,
+        }),
+      }),
+      env,
+      makeCtx()
+    );
+    expect(deleteResponse.status).toBe(200);
+    expect(env.DB.recoveryVault).toHaveLength(0);
+  });
+
+  it("links a recovery vault to the authenticated actor for later restore discovery", async () => {
+    const recoveryId = "CC-ABCDE-FGHIJ";
+    const env = makeEnv({
+      DB: new FakeD1({
+        recoveryVault: [
+          {
+            recovery_id: recoveryId,
+            encrypted_blob: JSON.stringify({ v: 1, salt: "salt", iv: "iv", ct: "ciphertext" }),
+            auth_token_hash: "hash",
+            backup_kind: "encrypted-vault",
+            exported_at: "2026-03-13T12:00:00.000Z",
+            last_updated_at: "2026-03-13 12:00:00",
+          },
+        ],
+      }),
+    });
+    const session = await issueSessionFor(env, { "X-RC-App-User-ID": "rc-user-1" });
+
+    const linkResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/recovery-vault/linked", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...session.authorization },
+        body: JSON.stringify({ recoveryId }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(linkResponse.status).toBe(200);
+    await expect(linkResponse.json()).resolves.toMatchObject({ success: true, recoveryId });
+    expect(env.DB.recoveryVaultLinks).toEqual([
+      expect.objectContaining({
+        actor_id: session.payload.actorId,
+        recovery_id: recoveryId,
+      }),
+    ]);
+
+    const fetchResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/recovery-vault/linked", {
+        method: "GET",
+        headers: session.authorization,
+      }),
+      env,
+      makeCtx()
+    );
+    expect(fetchResponse.status).toBe(200);
+    await expect(fetchResponse.json()).resolves.toEqual({ recoveryId });
+
+    const deleteResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/recovery-vault/linked", {
+        method: "DELETE",
+        headers: session.authorization,
+      }),
+      env,
+      makeCtx()
+    );
+    expect(deleteResponse.status).toBe(200);
+    expect(env.DB.recoveryVaultLinks).toHaveLength(0);
+  });
+
+  it("requires an authenticated identity session for linked recovery vault discovery", async () => {
+    const env = makeEnv({ DB: new FakeD1() });
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/recovery-vault/linked", {
+        method: "GET",
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: "identity_session_required" });
+  });
+
+  it("stores and fetches encrypted continuity recovery key material for the authenticated actor", async () => {
+    const recoveryId = "CC-ABCDE-FGHIJ";
+    const encryptedRecoveryKey = { v: 1, salt: "salt", iv: "iv", ct: "ciphertext" };
+    const env = makeEnv({
+      DB: new FakeD1({
+        recoveryVault: [
+          {
+            recovery_id: recoveryId,
+            encrypted_blob: JSON.stringify({ v: 1, salt: "blob-salt", iv: "blob-iv", ct: "blob" }),
+            auth_token_hash: "hash",
+            backup_kind: "encrypted-vault",
+            exported_at: "2026-03-13T12:00:00.000Z",
+            last_updated_at: "2026-03-13 12:00:00",
+          },
+        ],
+      }),
+    });
+    const session = await issueSessionFor(env, { "X-RC-App-User-ID": "rc-user-escrow" });
+
+    const storeResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/recovery-vault/continuity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...session.authorization },
+        body: JSON.stringify({ recoveryId, encryptedRecoveryKey }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(storeResponse.status).toBe(200);
+    await expect(storeResponse.json()).resolves.toMatchObject({ success: true, recoveryId, hasEscrow: true });
+    expect(env.DB.recoveryVaultContinuity).toEqual([
+      expect.objectContaining({
+        actor_id: session.payload.actorId,
+        recovery_id: recoveryId,
+        encrypted_recovery_key: JSON.stringify(encryptedRecoveryKey),
+      }),
+    ]);
+
+    const fetchResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/recovery-vault/continuity", {
+        method: "GET",
+        headers: session.authorization,
+      }),
+      env,
+      makeCtx()
+    );
+    expect(fetchResponse.status).toBe(200);
+    await expect(fetchResponse.json()).resolves.toEqual({
+      recoveryId,
+      hasEscrow: true,
+      encryptedRecoveryKey: JSON.stringify(encryptedRecoveryKey),
+    });
+  });
+
+  it("stores and fetches seamless trusted recovery key material for the authenticated actor", async () => {
+    const recoveryId = "CC-ABCDE-FGHIJ";
+    const recoveryKey = "ABCD-EFGH-IJKL-MNOP";
+    const env = makeEnv({
+      DB: new FakeD1({
+        recoveryVault: [
+          {
+            recovery_id: recoveryId,
+            encrypted_blob: JSON.stringify({ v: 1, salt: "blob-salt", iv: "blob-iv", ct: "blob" }),
+            auth_token_hash: "hash",
+            backup_kind: "encrypted-vault",
+            exported_at: "2026-03-13T12:00:00.000Z",
+            last_updated_at: "2026-03-13 12:00:00",
+          },
+        ],
+      }),
+    });
+    const session = await issueSessionFor(env, { "X-RC-App-User-ID": "rc-user-seamless" });
+
+    const storeResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/recovery-vault/continuity/trusted", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...session.authorization },
+        body: JSON.stringify({ recoveryId, recoveryKey }),
+      }),
+      env,
+      makeCtx()
+    );
+
+    expect(storeResponse.status).toBe(200);
+    await expect(storeResponse.json()).resolves.toMatchObject({ success: true, recoveryId, hasTrustedEscrow: true });
+    expect(env.DB.recoveryVaultTrustedContinuity).toHaveLength(1);
+    expect(env.DB.recoveryVaultTrustedContinuity[0]).toMatchObject({
+      actor_id: session.payload.actorId,
+      recovery_id: recoveryId,
+    });
+    expect(String(env.DB.recoveryVaultTrustedContinuity[0].encrypted_recovery_key)).not.toContain(recoveryKey);
+
+    const fetchResponse = await worker.fetch(
+      new Request("https://api.catalystcash.app/api/recovery-vault/continuity/trusted", {
+        method: "GET",
+        headers: session.authorization,
+      }),
+      env,
+      makeCtx()
+    );
+    expect(fetchResponse.status).toBe(200);
+    await expect(fetchResponse.json()).resolves.toEqual({
+      recoveryId,
+      hasTrustedEscrow: true,
+      trustedRecoveryKey: recoveryKey,
+    });
   });
 });
 

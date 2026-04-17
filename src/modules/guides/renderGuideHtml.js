@@ -108,7 +108,7 @@ function renderCallout(pageTier) {
           <span class="section-kicker">Why People Upgrade</span>
           <h2>Pro turns the audit into a full operating system</h2>
         </div>
-        <button class="cta-button" type="button" data-upgrade="true">Start ${escapeHtml(PRICING_FACTS.trial)}</button>
+        <button class="cta-button" type="button" data-upgrade="true">See Pro options</button>
       </div>
       <div class="card-grid">
         ${FREE_UPGRADE_CARDS.map(card => renderCard({ ...card, status: "pro" }, pageTier)).join("")}
@@ -116,6 +116,7 @@ function renderCallout(pageTier) {
       <div class="price-strip">
         <span>${escapeHtml(PRICING_FACTS.monthly)}</span>
         <span>${escapeHtml(PRICING_FACTS.yearly)}</span>
+        <span>${escapeHtml(PRICING_FACTS.lifetime)}</span>
         <span>${escapeHtml(PRICING_FACTS.yearlyPerMonth)}</span>
       </div>
     </section>

@@ -1,12 +1,8 @@
-// ═══════════════════════════════════════════════════════════════
-// DEBT FREEDOM COUNTDOWN — Prominent dashboard card
-// Shows total debt, weekly paydown rate, projected debt-free date,
-// and an animated progress bar.
-// ═══════════════════════════════════════════════════════════════
   import type { Card as PortfolioCard } from "../../types/index.js";
   import { Mono } from "../components.js";
   import { T } from "../constants.js";
   import { Target } from "../icons";
+  import UiGlyph from "../UiGlyph.js";
   import { Card } from "../ui.js";
   import { fmt } from "../utils.js";
 
@@ -20,13 +16,6 @@ interface DebtFreedomCardProps {
   freedomStats?: DebtFreedomStats | null;
 }
 
-/**
- * DebtFreedomCard — Renders a motivational debt freedom countdown.
- *
- * Props:
- *   cards        — array of credit card objects (to compute total debt)
- *   freedomStats — { freeDateStr, weeklyPaydown } from useDashboardData
- */
 export default function DebtFreedomCard({ cards = [], freedomStats }: DebtFreedomCardProps) {
   const totalDebt = cards.reduce((s, c) => s + (Number(c?.balance) || 0), 0);
   if (totalDebt < 100) return null; // No meaningful debt
@@ -57,29 +46,10 @@ export default function DebtFreedomCard({ cards = [], freedomStats }: DebtFreedo
       delay={175}
       style={{
         padding: "20px 18px",
-        background: `linear-gradient(160deg, ${T.bg.card}, ${T.status.amber}06)`,
-        borderColor: `${T.status.amber}18`,
-        borderLeft: `3px solid ${T.status.amber}`,
-        overflow: "hidden",
-        position: "relative",
+        background: T.bg.card,
+        border: `1px solid ${T.border.subtle}`,
       }}
     >
-      {/* Ambient glow */}
-      <div
-        style={{
-          position: "absolute",
-          top: -40,
-          right: -40,
-          width: 120,
-          height: 120,
-          borderRadius: "50%",
-          background: `${T.status.amber}06`,
-          filter: "blur(40px)",
-          pointerEvents: "none",
-        }}
-      />
-
-      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
         <div
           style={{
@@ -101,7 +71,6 @@ export default function DebtFreedomCard({ cards = [], freedomStats }: DebtFreedo
         </div>
       </div>
 
-      {/* Main stats row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 14 }}>
         <div>
           <div
@@ -141,7 +110,6 @@ export default function DebtFreedomCard({ cards = [], freedomStats }: DebtFreedo
         )}
       </div>
 
-      {/* Progress bar */}
       {hasProjection && weeksToFree && (
         <div style={{ marginBottom: 14 }}>
           <div
@@ -161,14 +129,12 @@ export default function DebtFreedomCard({ cards = [], freedomStats }: DebtFreedo
                 // Show at least 8% so the bar is visible, max 92% (never "done" while debt > 0)
                 width: `${Math.min(92, Math.max(8, 100 - (weeksToFree / (weeksToFree + 12)) * 100))}%`,
                 transition: "width 1.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
-                boxShadow: `0 0 8px ${T.status.amber}40`,
               }}
             />
           </div>
         </div>
       )}
 
-      {/* Stats pills */}
       {hasProjection && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
           <div
@@ -182,7 +148,7 @@ export default function DebtFreedomCard({ cards = [], freedomStats }: DebtFreedo
               gap: 5,
             }}
           >
-            <span style={{ fontSize: 11 }}>📉</span>
+            <UiGlyph glyph="📉" size={11} color={T.text.secondary} />
             <Mono size={10} weight={700} color={T.text.secondary}>
               {fmt(weeklyPaydown)}/wk paydown
             </Mono>
@@ -199,7 +165,7 @@ export default function DebtFreedomCard({ cards = [], freedomStats }: DebtFreedo
                 gap: 5,
               }}
             >
-              <span style={{ fontSize: 11 }}>⏳</span>
+              <UiGlyph glyph="⏳" size={11} color={T.text.secondary} />
               <Mono size={10} weight={700} color={T.text.secondary}>
                 {monthsToFree} {monthsToFree === 1 ? "month" : "months"} to go
               </Mono>
@@ -217,7 +183,7 @@ export default function DebtFreedomCard({ cards = [], freedomStats }: DebtFreedo
                 gap: 5,
               }}
             >
-              <span style={{ fontSize: 11 }}>💰</span>
+              <UiGlyph glyph="💰" size={11} color={T.status.green} />
               <Mono size={10} weight={700} color={T.status.green}>
                 ~{fmt(interestSaved)}/yr interest avoided
               </Mono>
@@ -226,7 +192,6 @@ export default function DebtFreedomCard({ cards = [], freedomStats }: DebtFreedo
         </div>
       )}
 
-      {/* Motivational message */}
       <p
         style={{
           fontSize: 11,

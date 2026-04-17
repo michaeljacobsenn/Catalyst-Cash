@@ -2,7 +2,6 @@
     lazy,
     memo,
     Suspense,
-    useEffect,
     useState,
     type ChangeEvent,
     type CSSProperties,
@@ -12,7 +11,7 @@
   import { EmptyState as UIEmptyState,Mono as UIMono } from "../components.js";
   import { T } from "../constants.js";
   import { haptic } from "../haptics.js";
-  import { Calendar,CheckCircle,Download,Edit3,Filter,Plus,Trash2,TrendingUp,type LucideIcon } from "../icons";
+  import { ArrowLeft,Calendar,CheckCircle,Download,Edit3,Filter,Plus,Trash2,TrendingUp,type LucideIcon } from "../icons";
   import { shouldShowGating } from "../subscription.js";
   import { Badge as UIBadge,Card as UICard } from "../ui.js";
   import { fmt,fmtDate } from "../utils.js";
@@ -91,9 +90,9 @@ const TypedLazyProPaywall = LazyProPaywall as unknown as (props: ProPaywallProps
 
 const relativeTime = (dateValue: string | null | undefined): string => {
   if (!dateValue) return "";
-  const now = Date.now();
-  const then = new Date(dateValue).getTime();
-  const diff = now - then;
+  const timestamp = new Date(dateValue).getTime();
+  if (!Number.isFinite(timestamp)) return "";
+  const diff = Math.max(0, Date.now() - timestamp);
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "Just now";
   if (mins < 60) return `${mins}m ago`;
@@ -108,8 +107,17 @@ const relativeTime = (dateValue: string | null | undefined): string => {
 
 const getMonthKey = (dateValue: string | null | undefined): string => {
   if (!dateValue) return "Unknown";
-  const dt = new Date(dateValue);
-  return dt.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const parsed = new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return "Unknown";
+  return parsed.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+};
+
+const getAuditKey = (audit: AuditRecord | null | undefined, index = 0): string => {
+  const ts = String(audit?.ts || "").trim();
+  if (ts) return ts;
+  const date = String(audit?.date || "").trim();
+  if (date) return `${date}-${index}`;
+  return `audit-${index}`;
 };
 
 const getAuditColor = (audit: AuditRecord): Exclude<AuditStatusFilter, null> | "UNKNOWN" => {
@@ -172,15 +180,15 @@ const HistoryOverviewCard = ({ audits }: { audits: AuditRecord[] }) => {
         padding: "16px",
         position: "relative",
         overflow: "hidden",
-        background: `linear-gradient(180deg, ${T.bg.card}, ${trendColor}08)`,
-        borderColor: `${trendColor}28`,
+        background: T.bg.card,
+        borderColor: T.border.subtle,
       }}
     >
       <div
         style={{
           position: "absolute",
           inset: 0,
-          background: `radial-gradient(circle at top right, ${trendColor}14 0%, transparent 42%)`,
+          background: `radial-gradient(circle at top right, ${trendColor}08 0%, transparent 42%)`,
           pointerEvents: "none",
         }}
       />
@@ -298,22 +306,16 @@ const HistoryOverviewCard = ({ audits }: { audits: AuditRecord[] }) => {
 export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: _themeTick = 0 }: HistoryTabProps) {
   void _themeTick;
   const { history: audits, deleteHistoryItem: onDelete, handleManualImport } = useAudit();
-  const { tab, navTo, setResultsBackTarget } = useNavigation() as NavigationApi;
-
-  useEffect(() => {
-    if (tab === "history" && audits.length === 0) {
-      navTo("audit");
-    }
-  }, [audits.length, navTo, tab]);
+  const { navTo, setResultsBackTarget } = useNavigation() as NavigationApi;
 
   const onSelect = (audit: AuditRecord): void => {
     if (setResultsBackTarget) setResultsBackTarget("history");
     navTo("results", audit);
   };
 
-  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [sel, setSel] = useState<Set<string>>(new Set());
   const [selMode, setSelMode] = useState<boolean>(false);
-  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [showManualPaste, setShowManualPaste] = useState<boolean>(false);
   const [manualPasteText, setManualPasteText] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<AuditStatusFilter>(null);
@@ -321,28 +323,30 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
   const [exportAuditRecord, setExportAuditRecord] = useState<AuditRecord | null>(null);
 
   const filteredAudits = statusFilter ? audits.filter((audit) => getAuditColor(audit) === statusFilter) : audits;
-  const allSel = sel.size === filteredAudits.length && filteredAudits.length > 0;
+  const filteredAuditKeys = filteredAudits.map((audit, index) => getAuditKey(audit, index));
+  const allSel = filteredAuditKeys.length > 0 && filteredAuditKeys.every((auditKey) => sel.has(auditKey));
 
-  const toggle = (index: number): void => {
+  const toggle = (auditKey: string): void => {
     const next = new Set(sel);
-    if (next.has(index)) next.delete(index);
-    else next.add(index);
+    if (next.has(auditKey)) next.delete(auditKey);
+    else next.add(auditKey);
     setSel(next);
   };
 
   const toggleAll = (): void => {
-    setSel(allSel ? new Set<number>() : new Set(filteredAudits.map((_, index) => index)));
+    setSel(allSel ? new Set() : new Set(filteredAuditKeys));
   };
 
   const exitSel = (): void => {
     setSelMode(false);
-    setSel(new Set<number>());
+    setSel(new Set());
+    setConfirmDelete(null);
   };
 
   const doExportSel = async (): Promise<void> => {
     try {
       const { exportSelectedAudits } = await import("../auditExports.js");
-      await exportSelectedAudits(filteredAudits.filter((_, index) => sel.has(index)));
+      await exportSelectedAudits(filteredAudits.filter((audit, index) => sel.has(getAuditKey(audit, index))));
       exitSel();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Export failed");
@@ -383,39 +387,45 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
         {exportAuditRecord && (
           <AuditExportSheet audit={exportAuditRecord} onClose={() => setExportAuditRecord(null)} toast={toast} />
         )}
-        <div style={{ paddingTop: 6, paddingBottom: 10 }}>
-          <button
-            onClick={() => navTo("dashboard")}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "6px 14px",
-              marginBottom: 12,
-              background: T.bg.elevated,
-              border: `1px solid ${T.border.default}`,
-              borderRadius: 99,
-              color: T.accent.primary,
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: "pointer",
-              transition: "all .2s ease",
-            }}
-          >
-            ← Back
-          </button>
-          <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>Audit History</h1>
-          <p style={{ margin: "6px 0 0", fontSize: 12, color: T.text.secondary, lineHeight: 1.55, maxWidth: 460 }}>
-            Track how your financial health is changing over time, keep the useful reports, and prune the noise.
-          </p>
-          <Mono size={11} color={T.text.dim} style={{ display: "block", marginTop: 6 }}>
-            {audits.length} audits stored
+        <div style={{ paddingTop: 6, paddingBottom: 12, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12, minWidth: 0 }}>
+            <button
+              onClick={() => navTo("dashboard")}
+              aria-label="Back"
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 16,
+                background: T.bg.elevated,
+                border: `1px solid ${T.border.subtle}`,
+                color: T.text.primary,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            >
+              <ArrowLeft size={18} strokeWidth={2.4} />
+            </button>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: T.accent.primary, fontFamily: T.font.mono, letterSpacing: "0.08em", marginBottom: 4 }}>
+                AUDIT HISTORY
+              </div>
+              <h1 style={{ fontSize: 28, fontWeight: 850, margin: 0, letterSpacing: "-0.04em", lineHeight: 1.02 }}>Briefing Archive</h1>
+              <p style={{ margin: "8px 0 0", fontSize: 13, color: T.text.secondary, lineHeight: 1.55, maxWidth: 500 }}>
+                Review how the system has changed over time, keep the useful briefings, and export or clean the archive when needed.
+              </p>
+            </div>
+          </div>
+          <Mono size={11} color={T.text.dim} style={{ display: "block", marginTop: 4, flexShrink: 0 }}>
+            {audits.length} stored
           </Mono>
         </div>
 
         <HistoryOverviewCard audits={audits} />
 
-        <Card style={{ marginBottom: 16, padding: "16px", background: T.bg.elevated }}>
+        <Card style={{ marginBottom: 16, padding: "16px", background: T.bg.card, border: `1px solid ${T.border.subtle}` }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 800, color: T.text.secondary, fontFamily: T.font.mono, letterSpacing: "0.04em" }}>
@@ -453,7 +463,8 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                 <button
                   onClick={() => {
                     setSelMode(!selMode);
-                    setSel(new Set<number>());
+                    setSel(new Set());
+                    setConfirmDelete(null);
                   }}
                   style={{
                     padding: "7px 12px",
@@ -530,8 +541,8 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                 flex: 1,
                 padding: "14px",
                 borderRadius: T.radius.lg,
-                border: `1px dashed ${T.accent.emerald}60`,
-                background: `${T.accent.emerald}08`,
+                border: `1px solid ${T.accent.emerald}24`,
+                background: T.bg.elevated,
                 color: T.accent.emerald,
                 fontSize: 13,
                 fontWeight: 700,
@@ -684,15 +695,16 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                     key={label}
                     onClick={() => {
                       setStatusFilter(filterValue);
-                      setSel(new Set<number>());
+                      setSel(new Set());
+                      setConfirmDelete(null);
                     }}
                     style={{
                       padding: "6px 14px",
                       borderRadius: 99,
-                      fontSize: 11,
+                      fontSize: 10.5,
                       fontWeight: 700,
-                      border: `1px solid ${active ? color : T.border.default}`,
-                      background: active ? `${color}18` : T.bg.card,
+                      border: `1px solid ${active ? color : T.border.subtle}`,
+                      background: active ? `${color}14` : T.bg.elevated,
                       color: active ? color : T.text.dim,
                       cursor: "pointer",
                       fontFamily: T.font.mono,
@@ -717,8 +729,8 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
         ) : audits.length === 0 ? (
           <EmptyState
             icon={Calendar}
-            title="No History Yet"
-            message="Perform a financial audit to see your history and trends right here."
+            title="No Audits Yet"
+            message="Import an AI result or run a new audit to start the archive."
           />
         ) : (
           (() => {
@@ -727,7 +739,8 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
               const monthKey = getMonthKey(audit.date || audit.ts);
               const showMonthHeader = monthKey !== lastMonth;
               lastMonth = monthKey;
-              const isConfirming = confirmDelete === index;
+              const auditKey = getAuditKey(audit, index);
+              const isConfirming = confirmDelete === auditKey;
               const rawStatus = audit.parsed?.status || "UNKNOWN";
               let statusColor: "GREEN" | "YELLOW" | "RED" | "UNKNOWN" = "UNKNOWN";
               let statusText = rawStatus;
@@ -758,7 +771,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                       : T.text.muted;
 
               return (
-                <div key={audit.ts || index}>
+                <div key={auditKey}>
                   {showMonthHeader && (
                     <div
                       style={{
@@ -788,12 +801,12 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                   <Card
                     animate
                     delay={Math.min(index * 40, 400)}
-                    onClick={selMode ? () => toggle(index) : isConfirming ? undefined : () => onSelect(audit)}
+                    onClick={selMode ? () => toggle(auditKey) : isConfirming ? undefined : () => onSelect(audit)}
                     style={{
                       padding: "16px",
                       position: "relative",
                       overflow: "hidden",
-                      ...(sel.has(index)
+                      ...(sel.has(auditKey)
                         ? { borderColor: `${T.accent.primary}35`, background: `${T.accent.primary}08` }
                         : {}),
                       ...(isConfirming ? { borderColor: `${T.status.red}30`, background: `${T.status.red}06` } : {}),
@@ -824,7 +837,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                     {isConfirming ? (
                       <div>
                         <p style={{ fontSize: 12, color: T.status.red, fontWeight: 600, marginBottom: 10 }}>
-                          Delete audit from {fmtDate(audit.date)}?
+                          Delete audit from {fmtDate(audit.date || audit.ts)}?
                         </p>
                         <div style={{ display: "flex", gap: 8 }}>
                           <button
@@ -870,15 +883,15 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                                   height: 20,
                                   borderRadius: 6,
                                   flexShrink: 0,
-                                  border: `2px solid ${sel.has(index) ? "transparent" : T.text.dim}`,
-                                  background: sel.has(index) ? T.accent.primary : "transparent",
+                                  border: `2px solid ${sel.has(auditKey) ? "transparent" : T.text.dim}`,
+                                  background: sel.has(auditKey) ? T.accent.primary : "transparent",
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
                                   transition: "all .2s",
                                 }}
                               >
-                                {sel.has(index) && <CheckCircle size={12} color={T.bg.base} strokeWidth={3} />}
+                                {sel.has(auditKey) && <CheckCircle size={12} color={T.bg.base} strokeWidth={3} />}
                               </div>
                             )}
                             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -891,7 +904,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                                     letterSpacing: "-0.01em",
                                   }}
                                 >
-                                  {fmtDate(audit.date)}
+                                  {fmtDate(audit.date || audit.ts)}
                                 </span>
                                 <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono }}>
                                   {relativeTime(audit.date || audit.ts)}
@@ -943,7 +956,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                               <button
                                 onClick={(event: MouseEvent<HTMLButtonElement>) => {
                                   event.stopPropagation();
-                                  setConfirmDelete(index);
+                                  setConfirmDelete(auditKey);
                                   haptic.warning();
                                 }}
                                 style={{

@@ -3,6 +3,7 @@
   import { T } from "../constants.js";
   import { haptic } from "../haptics.js";
   import { X } from "../icons";
+  import UiGlyph from "../UiGlyph.js";
   import { Card,Label } from "../ui.js";
 
 interface FireTimelinePoint {
@@ -104,7 +105,7 @@ export default function ScenarioSandbox({ currentNetWorth = 0, currentAnnualInco
                 </button>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
-                    <span style={{ fontSize: 24 }}>🧭</span>
+                    <UiGlyph glyph="🧭" size={24} color={T.accent.emerald} />
                     <div>
                         <div style={{ fontSize: 18, fontWeight: 800 }}>"What If?" Sandbox</div>
                         <div style={{ fontSize: 12, color: T.text.secondary }}>Simulate major life changes safely</div>

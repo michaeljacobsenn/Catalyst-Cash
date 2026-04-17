@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import { T } from "../constants.js";
 import { CloudUpload, Shield } from "../icons";
+import UiGlyph from "../UiGlyph.js";
 import { getTracking } from "../ui.js";
 
 interface DashboardTopChromeProps {
@@ -26,10 +27,10 @@ function BackupNudgeCard({
   return (
     <div
       style={{
-        border: `1px solid ${T.status.amber}35`,
-        background: `linear-gradient(180deg, ${T.status.amberDim}, ${T.bg.card})`,
-        padding: "12px 14px",
-        marginBottom: 10,
+        border: `1px solid ${T.status.amber}30`,
+        background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
+        padding: "14px 16px",
+        marginBottom: 12,
         animation: "fadeInUp .4s ease-out",
         borderRadius: T.radius.lg,
         boxShadow: T.shadow.card,
@@ -47,7 +48,7 @@ function BackupNudgeCard({
           ×
         </button>
       </div>
-      <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.4, margin: "0 0 8px" }}>
+      <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 10px" }}>
         Your data hasn't been backed up recently. Protect your financial data.
       </p>
       <div style={{ display: "flex", gap: 8 }}>
@@ -61,15 +62,18 @@ function BackupNudgeCard({
             alignItems: "center",
             justifyContent: "center",
             gap: 5,
-            padding: "8px 12px",
+            padding: "10px 12px",
             borderRadius: T.radius.md,
             border: "none",
-            background: `linear-gradient(135deg, ${T.status.amber}, #D97706)`,
-            color: "#fff",
+            background: `${T.status.amber}16`,
+            color: T.status.amber,
             fontSize: 11,
             fontWeight: 800,
             cursor: "pointer",
             opacity: backingUp ? 0.6 : 1,
+            borderWidth: 1,
+            borderStyle: "solid",
+            borderColor: `${T.status.amber}28`,
           }}
         >
           <CloudUpload size={13} />
@@ -84,10 +88,10 @@ function BackupNudgeCard({
             alignItems: "center",
             justifyContent: "center",
             gap: 5,
-            padding: "8px 12px",
+            padding: "10px 12px",
             borderRadius: T.radius.md,
-            border: `1px solid ${T.status.amber}40`,
-            background: `${T.status.amber}10`,
+            border: `1px solid ${T.border.default}`,
+            background: T.bg.surface,
             color: T.status.amber,
             fontSize: 11,
             fontWeight: 700,
@@ -124,15 +128,15 @@ export function DashboardTopChrome(props: DashboardTopChromeProps) {
           </Suspense>
         </div>
       )}
-      <div style={{ paddingTop: 18, paddingBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+      <div style={{ paddingTop: 18, paddingBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <div>
-          <h1 style={{ fontSize: 23, fontWeight: 900, letterSpacing: getTracking(22, "bold"), margin: 0, textShadow: `0 2px 10px ${T.accent.primaryGlow}` }}>Dashboard</h1>
-          <p style={{ fontSize: 11, color: T.text.secondary, margin: "3px 0 0", fontWeight: 600, letterSpacing: "0.01em" }}>{greeting}</p>
+          <h1 style={{ fontSize: 24, fontWeight: 850, letterSpacing: getTracking(22, "bold"), margin: 0 }}>Dashboard</h1>
+          <p style={{ fontSize: 12, color: T.text.secondary, margin: "4px 0 0", fontWeight: 600, letterSpacing: "0.01em" }}>{greeting}</p>
         </div>
         {streak > 1 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 999, background: `${T.accent.emerald}12`, border: `1px solid ${T.status.green}28`, boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04)`, flexShrink: 0 }}>
-            <span style={{ fontSize: 12 }}>🔥</span>
-            <span style={{ fontSize: 10, fontWeight: 800, color: T.status.green, fontFamily: T.font.mono }}>W{streak}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 999, background: `${T.accent.emerald}10`, border: `1px solid ${T.status.green}24`, flexShrink: 0 }}>
+            <UiGlyph glyph="🔥" size={12} color={T.status.green} />
+            <span style={{ fontSize: 10, fontWeight: 800, color: T.status.green, fontFamily: T.font.mono, letterSpacing: "0.06em" }}>W{streak}</span>
           </div>
         )}
       </div>

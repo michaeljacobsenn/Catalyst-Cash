@@ -40,6 +40,27 @@ async function sha256Hex(value) {
   return toHex(await crypto.subtle.digest("SHA-256", encoded));
 }
 
+async function derivePbkdf2Hex({ secret, salt, iterations }) {
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(String(secret || "")),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const derivedBits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: new TextEncoder().encode(String(salt || "")),
+      iterations,
+    },
+    keyMaterial,
+    256
+  );
+  return toHex(derivedBits);
+}
+
 function serializeSignedEnvelope({ householdId, encryptedBlob, version, requestId }) {
   return JSON.stringify({
     householdId,
@@ -50,6 +71,14 @@ function serializeSignedEnvelope({ householdId, encryptedBlob, version, requestI
 }
 
 async function deriveHouseholdAuthToken(householdId, passcode) {
+  return derivePbkdf2Hex({
+    secret: String(passcode || "").trim(),
+    salt: `household-auth-v2:${String(householdId || "").trim()}`,
+    iterations: 200000,
+  });
+}
+
+async function deriveLegacyHouseholdAuthToken(householdId, passcode) {
   return sha256Hex(`household-auth-v1:${String(householdId || "").trim()}:${String(passcode || "").trim()}`);
 }
 
@@ -145,7 +174,10 @@ export async function pushHouseholdSync(householdId, passcode) {
 
     const encryptedBlob = await encrypt(JSON.stringify(payload), normalizedPasscode);
     const requestId = crypto.randomUUID();
-    const authToken = await deriveHouseholdAuthToken(normalizedId, normalizedPasscode);
+    const [authToken, legacyAuthToken] = await Promise.all([
+      deriveHouseholdAuthToken(normalizedId, normalizedPasscode),
+      deriveLegacyHouseholdAuthToken(normalizedId, normalizedPasscode),
+    ]);
     const integrityTag = await buildIntegrityTag(authToken, {
       householdId: normalizedId,
       encryptedBlob,
@@ -157,6 +189,7 @@ export async function pushHouseholdSync(householdId, passcode) {
       action: "push",
       householdId: normalizedId,
       authToken,
+      legacyAuthToken,
       encryptedBlob,
       integrityTag,
       version,
@@ -199,11 +232,15 @@ export async function pullHouseholdSync(householdId, passcode) {
   }
 
   try {
-    const authToken = await deriveHouseholdAuthToken(normalizedId, normalizedPasscode);
+    const [authToken, legacyAuthToken] = await Promise.all([
+      deriveHouseholdAuthToken(normalizedId, normalizedPasscode),
+      deriveLegacyHouseholdAuthToken(normalizedId, normalizedPasscode),
+    ]);
     const result = await postHouseholdRequest({
       action: "fetch",
       householdId: normalizedId,
       authToken,
+      legacyAuthToken,
     });
 
     if (!result.ok) return result;

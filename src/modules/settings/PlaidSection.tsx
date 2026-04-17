@@ -31,6 +31,9 @@ interface PlaidConnection {
   institutionLogo?: string;
   _needsReconnect?: boolean;
   _freeTierPaused?: boolean;
+  _pendingSync?: boolean;
+  _error?: string;
+  _syncStatus?: string;
   accounts?: PlaidConnectionAccount[];
 }
 
@@ -231,7 +234,7 @@ export default function PlaidSection({
           window.alert(
             `${importedCount} account${importedCount !== 1 ? "s" : ""} imported!\n\n` +
             'Plaid may assign generic names like "Credit Card" instead of the actual product name.\n\n' +
-            "Please go to the Accounts tab and tap the ✏️ edit button on each imported account to verify and update:\n" +
+            "Please go to the Accounts tab and tap the Edit button on each imported account to verify and update:\n" +
             "• Card name (e.g. Sapphire Preferred)\n" +
             "• APR\n" +
             "• Annual fee & due date\n" +
@@ -284,7 +287,7 @@ export default function PlaidSection({
       try {
         const forceSyncResult = await forceBackendSync({ connectionId: conn.id });
         const forceSyncSucceeded = Boolean(forceSyncResult?.success);
-        const refreshed = await fetchBalancesAndLiabilities(conn.id);
+        const refreshed = await fetchBalancesAndLiabilities(conn.id) as PlaidConnection | null;
         if (refreshed && !refreshed._error && !refreshed._pendingSync) {
           const hydratedState = ensureConnectionAccountsPresent(
             refreshed,
@@ -450,190 +453,221 @@ export default function PlaidSection({
         {plaidConnections.length === 0 ? (
           <NoticeBanner
             tone="info"
-            title="No Linked Institutions"
-            message="Link a bank once and Catalyst will keep your balances, cards, and transactions in sync without cluttering the rest of the app."
+            title="No linked accounts yet."
+            message="Link a bank once and Catalyst will keep balances, cards, and transactions synced without manual re-entry."
           />
         ) : (
           <ListSection>
             {[...plaidConnections]
               .sort((a, b) => (a.institutionName || "").localeCompare(b.institutionName || ""))
-              .map((conn, index, arr) => (
-              <ListRow
-                key={conn.id}
-                isLast={index === arr.length - 1}
-                icon={
+              .map((conn, index, arr) => {
+                const isDisconnectPromptOpen = confirmingDisconnect?.id === conn.id;
+                const isLast = index === arr.length - 1;
+
+                return (
                   <div
+                    key={conn.id}
                     style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 12,
-                      background: "#fff",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                      boxShadow: "0 8px 14px rgba(0,0,0,0.08)",
+                      borderBottom: isLast ? "none" : `1px solid ${T.border.subtle}`,
                     }}
                   >
-                    {conn.institutionLogo ? (
-                      <img
-                        src={`data:image/png;base64,${conn.institutionLogo}`}
-                        alt=""
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                      />
-                    ) : (
-                      <Building2 size={16} color="#000" />
+                    <ListRow
+                      isLast
+                      icon={
+                        <div
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 12,
+                            background: "#fff",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            overflow: "hidden",
+                            boxShadow: "0 8px 14px rgba(0,0,0,0.08)",
+                          }}
+                        >
+                          {conn.institutionLogo ? (
+                            <img
+                              src={`data:image/png;base64,${conn.institutionLogo}`}
+                              alt=""
+                              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            />
+                          ) : (
+                            <Building2 size={16} color="#000" />
+                          )}
+                        </div>
+                      }
+                      title={conn.institutionName || "Unknown Bank"}
+                      description={
+                        conn._freeTierPaused
+                          ? "Paused on Free plan"
+                          : hasFreeTierPausedConnections && activeFreeConnectionId === conn.id
+                            ? "Active live sync on Free plan"
+                            : conn._needsReconnect
+                              ? "Reconnect required"
+                              : `${conn.accounts?.length || 0} linked account${(conn.accounts?.length || 0) === 1 ? "" : "s"}`
+                      }
+                      action={
+                        isDisconnectPromptOpen ? null : (
+                          <div style={{ display: "flex", gap: 8 }}>
+                            {conn._freeTierPaused && (
+                              <button
+                                onClick={() => handleKeepLive(conn)}
+                                disabled={switchingActiveId === conn.id}
+                                aria-label={`Keep ${conn.institutionName || "bank"} as your active live sync institution`}
+                                style={{
+                                  padding: "0 12px",
+                                  height: 36,
+                                  borderRadius: T.radius.sm,
+                                  border: `1px solid ${T.accent.emerald}35`,
+                                  background: `${T.accent.emerald}12`,
+                                  color: T.accent.emerald,
+                                  cursor: switchingActiveId === conn.id ? "not-allowed" : "pointer",
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  opacity: switchingActiveId === conn.id ? 0.7 : 1,
+                                }}
+                              >
+                                {switchingActiveId === conn.id ? <RefreshCw size={14} style={spinningIconStyle} /> : null}
+                                {switchingActiveId === conn.id ? "Applying..." : "Keep Live"}
+                              </button>
+                            )}
+                            {conn._needsReconnect && (
+                              <button
+                                onClick={() => handleReconnect(conn)}
+                                disabled={reconnectingId === conn.id || conn._freeTierPaused}
+                                aria-label={`Reconnect ${conn.institutionName || "bank"}`}
+                                style={{
+                                  padding: "0 12px",
+                                  height: 36,
+                                  borderRadius: T.radius.sm,
+                                  border: `1px solid ${T.accent.primary}35`,
+                                  background: `${T.accent.primary}14`,
+                                  color: T.accent.primary,
+                                  cursor: reconnectingId === conn.id || conn._freeTierPaused ? "not-allowed" : "pointer",
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  opacity: reconnectingId === conn.id || conn._freeTierPaused ? 0.7 : 1,
+                                }}
+                              >
+                                {reconnectingId === conn.id ? (
+                                  <RefreshCw size={14} style={spinningIconStyle} />
+                                ) : (
+                                  <RefreshCw size={14} />
+                                )}
+                                {reconnectingId === conn.id ? "Reconnecting..." : "Reconnect"}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setConfirmingDisconnect({ id: conn.id })}
+                              aria-label={`Disconnect ${conn.institutionName || "bank"}`}
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: T.radius.sm,
+                                border: "none",
+                                background: T.status.redDim,
+                                color: T.status.red,
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <Unplug size={16} />
+                            </button>
+                          </div>
+                        )
+                      }
+                    />
+
+                    {isDisconnectPromptOpen && (
+                      <div
+                        style={{
+                          margin: "0 12px 12px",
+                          padding: "14px 14px 12px",
+                          borderRadius: 14,
+                          border: `1px solid ${T.status.red}22`,
+                          background: `linear-gradient(180deg, ${T.bg.card} 0%, ${T.bg.elevated} 100%)`,
+                          boxShadow: "0 10px 24px rgba(0,0,0,0.18)",
+                        }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 800, color: T.text.primary, marginBottom: 4 }}>
+                          Disconnect {conn.institutionName || "this bank"}?
+                        </div>
+                        <div style={{ fontSize: 11, lineHeight: 1.5, color: T.text.secondary, marginBottom: 12 }}>
+                          Keep Manual preserves the linked cards and cash accounts as editable manual records. Remove Accounts deletes the linked portfolio records for this bank.
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                            <button
+                              onClick={() => setConfirmingDisconnect(null)}
+                              disabled={disconnectingId === conn.id}
+                              style={{
+                                minHeight: 38,
+                                padding: "0 12px",
+                                borderRadius: T.radius.sm,
+                                border: `1px solid ${T.border.default}`,
+                                background: T.bg.card,
+                                color: T.text.secondary,
+                                cursor: disconnectingId === conn.id ? "not-allowed" : "pointer",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                opacity: disconnectingId === conn.id ? 0.6 : 1,
+                              }}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => handleDisconnect(conn, { keepManual: true })}
+                              disabled={disconnectingId === conn.id}
+                              style={{
+                                minHeight: 38,
+                                padding: "0 12px",
+                                borderRadius: T.radius.sm,
+                                border: `1px solid ${T.accent.primary}30`,
+                                background: `${T.accent.primary}12`,
+                                color: T.accent.primary,
+                                cursor: disconnectingId === conn.id ? "not-allowed" : "pointer",
+                                fontSize: 12,
+                                fontWeight: 700,
+                                opacity: disconnectingId === conn.id ? 0.6 : 1,
+                              }}
+                            >
+                              {disconnectingId === conn.id ? "Disconnecting..." : "Keep Manual"}
+                            </button>
+                          </div>
+                          <button
+                            onClick={() => handleDisconnect(conn, { keepManual: false })}
+                            disabled={disconnectingId === conn.id}
+                            style={{
+                              minHeight: 40,
+                              padding: "0 14px",
+                              borderRadius: T.radius.sm,
+                              border: "none",
+                              background: T.status.red,
+                              color: "white",
+                              cursor: disconnectingId === conn.id ? "not-allowed" : "pointer",
+                              fontSize: 12,
+                              fontWeight: 800,
+                              opacity: disconnectingId === conn.id ? 0.6 : 1,
+                            }}
+                          >
+                            {disconnectingId === conn.id ? "Disconnecting..." : "Remove Accounts"}
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
-                }
-                title={conn.institutionName || "Unknown Bank"}
-                description={
-                  conn._freeTierPaused
-                    ? "Paused on Free plan"
-                    : hasFreeTierPausedConnections && activeFreeConnectionId === conn.id
-                      ? "Active live sync on Free plan"
-                      : conn._needsReconnect
-                        ? "Reconnect required"
-                        : `${conn.accounts?.length || 0} linked account${(conn.accounts?.length || 0) === 1 ? "" : "s"}`
-                }
-                action={
-                  <div style={{ display: "flex", gap: 8 }}>
-                  {conn._freeTierPaused && confirmingDisconnect?.id !== conn.id && (
-                    <button
-                      onClick={() => handleKeepLive(conn)}
-                      disabled={switchingActiveId === conn.id}
-                      aria-label={`Keep ${conn.institutionName || "bank"} as your active live sync institution`}
-                      style={{
-                        padding: "0 12px",
-                        height: 36,
-                        borderRadius: T.radius.sm,
-                        border: `1px solid ${T.accent.emerald}35`,
-                        background: `${T.accent.emerald}12`,
-                        color: T.accent.emerald,
-                        cursor: switchingActiveId === conn.id ? "not-allowed" : "pointer",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        opacity: switchingActiveId === conn.id ? 0.7 : 1,
-                      }}
-                    >
-                      {switchingActiveId === conn.id ? <RefreshCw size={14} style={spinningIconStyle} /> : null}
-                      {switchingActiveId === conn.id ? "Applying..." : "Keep Live"}
-                    </button>
-                  )}
-                  {conn._needsReconnect && confirmingDisconnect?.id !== conn.id && (
-                    <button
-                      onClick={() => handleReconnect(conn)}
-                      disabled={reconnectingId === conn.id || conn._freeTierPaused}
-                      aria-label={`Reconnect ${conn.institutionName || "bank"}`}
-                      style={{
-                        padding: "0 12px",
-                        height: 36,
-                        borderRadius: T.radius.sm,
-                        border: `1px solid ${T.accent.primary}35`,
-                        background: `${T.accent.primary}14`,
-                        color: T.accent.primary,
-                        cursor: reconnectingId === conn.id || conn._freeTierPaused ? "not-allowed" : "pointer",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        opacity: reconnectingId === conn.id || conn._freeTierPaused ? 0.7 : 1,
-                      }}
-                    >
-                      {reconnectingId === conn.id ? (
-                        <RefreshCw size={14} style={spinningIconStyle} />
-                      ) : (
-                        <RefreshCw size={14} />
-                      )}
-                      {reconnectingId === conn.id ? "Reconnecting..." : "Reconnect"}
-                    </button>
-                  )}
-                  {confirmingDisconnect?.id === conn.id ? (
-                    <>
-                      <button
-                        onClick={() => setConfirmingDisconnect(null)}
-                        disabled={disconnectingId === conn.id}
-                        style={{
-                          padding: "0 12px",
-                          height: 36,
-                          borderRadius: T.radius.sm,
-                          border: `1px solid ${T.border.default}`,
-                          background: T.bg.card,
-                          color: T.text.secondary,
-                          cursor: disconnectingId === conn.id ? "not-allowed" : "pointer",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          opacity: disconnectingId === conn.id ? 0.6 : 1,
-                        }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => handleDisconnect(conn, { keepManual: true })}
-                        disabled={disconnectingId === conn.id}
-                        style={{
-                          padding: "0 12px",
-                          height: 36,
-                          borderRadius: T.radius.sm,
-                          border: `1px solid ${T.accent.primary}30`,
-                          background: `${T.accent.primary}12`,
-                          color: T.accent.primary,
-                          cursor: disconnectingId === conn.id ? "not-allowed" : "pointer",
-                          fontSize: 11,
-                          fontWeight: 700,
-                          opacity: disconnectingId === conn.id ? 0.6 : 1,
-                        }}
-                      >
-                        {disconnectingId === conn.id ? "Disconnecting..." : "Keep Manual"}
-                      </button>
-                      <button
-                        onClick={() => handleDisconnect(conn, { keepManual: false })}
-                        disabled={disconnectingId === conn.id}
-                        style={{
-                          padding: "0 12px",
-                          height: 36,
-                          borderRadius: T.radius.sm,
-                          border: "none",
-                          background: T.status.red,
-                          color: "white",
-                          cursor: disconnectingId === conn.id ? "not-allowed" : "pointer",
-                          fontSize: 11,
-                          fontWeight: 700,
-                          opacity: disconnectingId === conn.id ? 0.6 : 1,
-                        }}
-                      >
-                        {disconnectingId === conn.id ? "Disconnecting..." : "Remove Accounts"}
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => setConfirmingDisconnect({ id: conn.id })}
-                      aria-label={`Disconnect ${conn.institutionName || "bank"}`}
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: T.radius.sm,
-                        border: "none",
-                        background: T.status.redDim,
-                        color: T.status.red,
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Unplug size={16} />
-                    </button>
-                  )}
-                </div>
-                }
-              />
-            ))
-            }
+                );
+              })}
           </ListSection>
         )}
       </div>

@@ -1,41 +1,70 @@
-  import React,{ memo,Suspense,useCallback,useEffect,useMemo,useState,type ChangeEvent,type CSSProperties,type ReactNode } from "react";
-  import { createPortal } from "react-dom";
-  import { EmptyState as UIEmptyState,Mono as UIMono } from "../components.js";
-  import { T } from "../constants.js";
-  import { formatInterval } from "../constants.js";
-  import { haptic } from "../haptics.js";
-  import { AlertTriangle,Calendar,Check,CheckCircle2,ChevronDown,CreditCard,Plus,X } from "../icons";
-  import SearchableSelectBase from "../SearchableSelect.js";
-  import { shouldShowGating } from "../subscription.js";
-  import { Badge as UIBadge,Card as UICard,FormGroup as UIFormGroup,FormRow as UIFormRow } from "../ui.js";
-  import { fmt } from "../utils.js";
-  import ProBanner from "./ProBanner.js";
-const LazyProPaywall = React.lazy(() => import("./ProPaywall.js"));
+import React, {
+  memo,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 
-  import type { Card as PortfolioCard,CatalystCashConfig,Renewal } from "../../types/index.js";
-  import { useAudit } from "../contexts/AuditContext.js";
-  import { useNavigation } from "../contexts/NavigationContext.js";
-  import { usePortfolio } from "../contexts/PortfolioContext.js";
-  import { Bot,Zap } from "../icons";
-  import { getNegotiableMerchant } from "../negotiation.js";
-  import {
-    getBankAccountLabel,
-    getRenewalPaymentOptionValue,
-    parseRenewalPaymentOptionValue,
-    resolveRenewalPaymentState,
-    RENEWAL_PAYMENT_TYPES,
-  } from "../renewalPaymentSources.js";
-  import { useSubscriptions } from "../useSubscriptions.js";
-  import {
-    DAY_OPTIONS,
-    MONTH_OPTIONS,
-    WEEK_OPTIONS,
-    YEAR_OPTIONS,
-    buildNewRenewal,
-    buildRenewalDraft,
-    getCancelUrl,
-    toGroupedRenewalItem,
-  } from "./renewals/helpers";
+import type { CatalystCashConfig, Renewal } from "../../types/index.js";
+
+import { EmptyState as UIEmptyState, Mono as UIMono } from "../components.js";
+import { formatInterval, T } from "../constants.js";
+import { useAudit } from "../contexts/AuditContext.js";
+import { useNavigation } from "../contexts/NavigationContext.js";
+import { usePortfolio } from "../contexts/PortfolioContext.js";
+import { haptic } from "../haptics.js";
+import {
+  AlertTriangle,
+  Bot,
+  Calendar,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  CreditCard,
+  Plus,
+  X,
+  Zap,
+} from "../icons";
+import { getNegotiableMerchant } from "../negotiation.js";
+import {
+  resolveRenewalPaymentState,
+} from "../renewalPaymentSources.js";
+import { shouldShowGating } from "../subscription.js";
+import UiGlyph from "../UiGlyph.js";
+import { Badge as UIBadge, Card as UICard } from "../ui.js";
+import { useSubscriptions } from "../useSubscriptions.js";
+import { fmt } from "../utils.js";
+import ProBanner from "./ProBanner.js";
+import {
+  buildNewRenewal,
+  buildRenewalDraft,
+  getCancelUrl,
+} from "./renewals/helpers";
+import {
+  buildGroupedRenewalItems,
+  buildRenewalGroups,
+  calculateMonthlyRenewalTotal,
+  countActiveRenewalItems,
+  countInactiveRenewalItems,
+  createEmptyRenewalFormState,
+  RENEWAL_CATEGORY_OPTIONS,
+  RENEWAL_SORT_LABELS,
+  type GroupedRenewalItem,
+  type RenewalDraftState,
+  type SortMode,
+} from "./renewals/model";
+import {
+  RenewalDetailsFields,
+  RenewalPaymentFields,
+  RenewalScheduleFields,
+} from "./renewals/editorSections";
+
+const LazyProPaywall = React.lazy(() => import("./ProPaywall.js"));
 
 interface RenewalsTabProps {
   proEnabled?: boolean;
@@ -59,25 +88,8 @@ interface NegotiationFlowPayload {
   financialContext?: Partial<CatalystCashConfig> | null;
 }
 
-interface EditRenewalState {
-  name: string;
-  amount: string;
-  interval: number;
-  intervalUnit: string;
-  source: string;
-  chargedTo: string;
-  chargedToId: string;
-  chargedToType: string;
-  nextDue: string;
-  category: string;
-}
-
-interface AddRenewalState extends EditRenewalState {}
-
-interface GroupedRenewalItem extends Renewal {
-  originalIndex?: number;
-  isExpired?: boolean;
-}
+type EditRenewalState = RenewalDraftState;
+type AddRenewalState = RenewalDraftState;
 
 interface SubscriptionSuggestion {
   id: string;
@@ -96,24 +108,6 @@ interface SubscriptionSuggestion {
   confidence: number;
 }
 
-interface GroupedCategory {
-  id: string;
-  label: string;
-  color: string;
-  items: GroupedRenewalItem[];
-}
-
-interface SearchableOption {
-  value: string;
-  label: string;
-  group?: string;
-}
-
-interface IntervalDropdownProps {
-  interval: number;
-  unit: string;
-  onChange: (value: { interval: number; unit: string }) => void;
-}
 function ScrollLock() {
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -122,23 +116,6 @@ function ScrollLock() {
     };
   }, []);
   return null;
-}
-
-interface CardSelectorProps {
-  value: string;
-  onChange: (value: string) => void;
-}
-
-type SortMode = "type" | "date" | "amount" | "name";
-
-interface SearchableSelectProps {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  options?: SearchableOption[];
-  style?: CSSProperties;
-  maxHeight?: number;
-  displayValue?: string;
 }
 
 interface CardProps {
@@ -158,17 +135,6 @@ interface BadgeProps {
   style?: CSSProperties;
 }
 
-interface FormGroupProps {
-  children?: ReactNode;
-  label?: ReactNode;
-}
-
-interface FormRowProps {
-  children?: ReactNode;
-  label?: ReactNode;
-  isLast?: boolean;
-}
-
 interface MonoProps {
   children?: ReactNode;
   size?: number;
@@ -185,8 +151,6 @@ interface EmptyStateProps {
 
 const Card = UICard as unknown as (props: CardProps) => ReactNode;
 const Badge = UIBadge as unknown as (props: BadgeProps) => ReactNode;
-const FormGroup = UIFormGroup as unknown as (props: FormGroupProps) => ReactNode;
-const FormRow = UIFormRow as unknown as (props: FormRowProps) => ReactNode;
 const Mono = UIMono as unknown as (props: MonoProps) => ReactNode;
 const EmptyState = UIEmptyState as unknown as (props: EmptyStateProps) => ReactNode;
 
@@ -196,11 +160,14 @@ function formatRenewalDueDate(dateValue?: string) {
   if (Number.isNaN(parsed.getTime())) return dateValue;
   return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
-const SearchableSelect = SearchableSelectBase as unknown as (props: SearchableSelectProps) => ReactNode;
 
-export default memo(function RenewalsTab({ proEnabled = false, embedded = false, privacyMode: _privacyModeTick = false, themeTick: _themeTick = 0 }: RenewalsTabProps) {
+export default memo(function RenewalsTab({
+  proEnabled = false,
+  embedded = false,
+  privacyMode: _privacyModeTick = false,
+  themeTick = 0,
+}: RenewalsTabProps) {
   void _privacyModeTick;
-  void _themeTick;
   const { current } = useAudit();
   const portfolioContext = usePortfolio();
   const { navTo } = useNavigation();
@@ -222,34 +189,11 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
   const bankAccounts = isDemo ? current.demoPortfolio?.bankAccounts || [] : portfolioContext.bankAccounts;
   const { cardAnnualFees } = portfolioContext;
   const [editing, setEditing] = useState<number | null>(null); // index within user renewals
-  const [editVal, setEditVal] = useState<EditRenewalState>({
-    name: "",
-    amount: "",
-    interval: 1,
-    intervalUnit: "months",
-    source: "",
-    chargedTo: "",
-    chargedToId: "",
-    chargedToType: "",
-    nextDue: "",
-    category: "subs",
-  });
+  const [editVal, setEditVal] = useState<EditRenewalState>(() => createEmptyRenewalFormState());
   const [showAdd, setShowAdd] = useState<boolean>(false);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
   const [showInactive, setShowInactive] = useState<boolean>(false);
-
-  const [addForm, setAddForm] = useState<AddRenewalState>({
-    name: "",
-    amount: "",
-    interval: 1,
-    intervalUnit: "months",
-    source: "",
-    chargedTo: "",
-    chargedToId: "",
-    chargedToType: "",
-    category: "subs",
-    nextDue: "",
-  });
+  const [addForm, setAddForm] = useState<AddRenewalState>(() => createEmptyRenewalFormState());
   const [sortBy, setSortBy] = useState<SortMode>("type");
   const [editStep, setEditStep] = useState<number>(0);
 
@@ -300,39 +244,24 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
   // Auto-archive expired one-time items (runs as effect, not during render)
   useEffect(() => {
     if (!renewals?.length) return;
-    const now = new Date().toISOString().split("T")[0] ?? new Date().toISOString().slice(0, 10);
-    let changed = false;
-    const updated = renewals.map((r) => {
-      const isExpired = r.intervalUnit === "one-time" && r.nextDue && r.nextDue < now && !r.isCancelled;
-      if (isExpired && !r.archivedAt) {
-        changed = true;
-        return { ...r, archivedAt: now };
-      }
-      return r;
+    const today = new Date().toISOString().slice(0, 10);
+    setRenewals((prev) => {
+      if (!prev?.length) return prev;
+      let changed = false;
+      const next = prev.map((renewal) => {
+        const isExpired = renewal.intervalUnit === "one-time" && renewal.nextDue && renewal.nextDue < today && !renewal.isCancelled;
+        if (isExpired && !renewal.archivedAt) {
+          changed = true;
+          return { ...renewal, archivedAt: today };
+        }
+        return renewal;
+      });
+      return changed ? next : prev;
     });
-    if (changed) setRenewals(updated);
   }, [renewals, setRenewals]);
 
-  // Merge user renewals + auto-generated card annual fees
-  const allItems = useMemo<GroupedRenewalItem[]>(() => {
-    const now = new Date().toISOString().split("T")[0] ?? new Date().toISOString().slice(0, 10);
-    const items = [...(renewals || [])].map((r, idx) => toGroupedRenewalItem(r, idx, now));
-    (cardAnnualFees || []).forEach(af => {
-      const exists = items.some(
-        r =>
-          (r.linkedCardId && af.linkedCardId && r.linkedCardId === af.linkedCardId) ||
-          r.name === af.name ||
-          r.linkedCardAF === af.cardName
-      );
-      if (!exists) items.push(toGroupedRenewalItem(af, items.length, now));
-    });
-    return items;
-  }, [renewals, cardAnnualFees]);
-
-  // Group by category
-  const grouped = useMemo<GroupedCategory[]>(() => {
-    const cats: Record<string, GroupedCategory> = {};
-    const catMeta = {
+  const renewalCategoryMeta = useMemo(
+    () => ({
       housing: { label: "Housing & Utilities", color: T.status.red },
       subs: { label: "Subscriptions", color: T.accent.primary },
       insurance: { label: "Insurance", color: T.status.amber },
@@ -348,88 +277,29 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
       cadence: { label: "Subscriptions", color: T.accent.primary },
       periodic: { label: "Subscriptions", color: T.accent.primary },
       af: { label: "Annual Fees", color: T.accent.copper || T.status.amber },
-    };
-
-    if (sortBy !== "type") {
-      const flat = [...allItems];
-      if (sortBy === "name") flat.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-      else if (sortBy === "date") flat.sort((a, b) => (a.nextDue || "9999").localeCompare(b.nextDue || "9999"));
-      else if (sortBy === "amount") flat.sort((a, b) => (b.amount || 0) - (a.amount || 0));
-      return [{ id: "sorted", label: "All Tracked Renewals", color: T.accent.primary, items: flat }];
-    }
-
-    allItems.forEach(item => {
-      if (item.isCancelled || item.isExpired) {
-        if (!cats["inactive"]) cats["inactive"] = { ...catMeta.inactive, id: "inactive", items: [] };
-        cats["inactive"].items.push(item);
-        return;
-      }
-      const rawCat = item.isCardAF ? "af" : item.category || "subs";
-      // Legacy category normalization
-      const legacyMap = { ss: "subs", fixed: "housing", monthly: "housing", cadence: "subs", periodic: "subs" };
-      const catId = legacyMap[rawCat] || rawCat;
-      if (!cats[catId]) cats[catId] = { ...(catMeta[catId] || catMeta.subs), id: catId, items: [] };
-      const category = cats[catId];
-      if (category) category.items.push(item);
-    });
-
-    // Sort items within each category: frequency (most frequent first) → next due (soonest first) → amount (highest first)
-    const toMonths = (interval, unit) => {
-      const i = interval || 1;
-      if (unit === "days") return i / 30.44;
-      if (unit === "weeks") return i / 4.33;
-      if (unit === "years") return i * 12;
-      if (unit === "one-time") return 999;
-      return i;
-    };
-    Object.values(cats).forEach((cat) => {
-      cat.items.sort((a, b) => {
-        // 1. Frequency: shortest interval first
-        const freqA = toMonths(a.interval, a.intervalUnit);
-        const freqB = toMonths(b.interval, b.intervalUnit);
-        if (freqA !== freqB) return freqA - freqB;
-        // 2. Next due date: soonest first (items without a date go to the end)
-        const dueA = a.nextDue || "9999";
-        const dueB = b.nextDue || "9999";
-        if (dueA !== dueB) return dueA.localeCompare(dueB);
-        // 3. Amount: highest first
-        return (b.amount || 0) - (a.amount || 0);
-      });
-    });
-
-    const order = [
-      "housing",
-      "fixed",
-      "monthly",
-      "medical",
-      "essentials",
-      "insurance",
-      "transport",
-      "subs",
-      "ss",
-      "cadence",
-      "periodic",
-      "sinking",
-      "onetime",
-      "af",
-      "inactive",
-    ];
-    return order.filter((id) => cats[id]).map((id) => cats[id] as GroupedCategory);
-  }, [allItems, sortBy]);
-
-  const monthlyTotal = useMemo<number>(() => {
-    let t = 0;
-    allItems.forEach((i) => {
-      if (i.isCancelled || i.isExpired) return;
-      const int = i.interval || 1;
-      const unit = i.intervalUnit || "months";
-      if (unit === "days") t += (i.amount / int) * 30.44;
-      else if (unit === "weeks") t += (i.amount / int) * 4.33;
-      else if (unit === "months") t += i.amount / int;
-      else if (unit === "years") t += i.amount / (int * 12);
-    });
-    return t;
-  }, [allItems]);
+    }),
+    [themeTick]
+  );
+  const categorySelectOptions = useMemo(
+    () => RENEWAL_CATEGORY_OPTIONS.map((category) => ({ value: category.id, label: category.label })),
+    []
+  );
+  const allItems = useMemo<GroupedRenewalItem[]>(
+    () => buildGroupedRenewalItems(renewals || [], cardAnnualFees || []),
+    [renewals, cardAnnualFees]
+  );
+  const activeItemCount = useMemo(() => countActiveRenewalItems(allItems), [allItems]);
+  const inactiveItemCount = useMemo(() => countInactiveRenewalItems(allItems), [allItems]);
+  const grouped = useMemo(
+    () =>
+      buildRenewalGroups(allItems, {
+        sortBy,
+        showInactive,
+        categoryMeta: renewalCategoryMeta,
+      }),
+    [allItems, renewalCategoryMeta, showInactive, sortBy]
+  );
+  const monthlyTotal = useMemo(() => calculateMonthlyRenewalTotal(allItems), [allItems]);
 
   const startEdit = useCallback(
     (item: GroupedRenewalItem, renewalIndex: number | null | undefined) => {
@@ -480,134 +350,10 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
     const paymentState = resolveRenewalPaymentState(addForm, cards || [], bankAccounts || []);
     const label = paymentState.chargedTo;
     const newItem = buildNewRenewal({ ...addForm, ...paymentState }, label);
-    setRenewals([...(renewals || []), newItem]);
-    setAddForm({
-      name: "",
-      amount: "",
-      interval: 1,
-      intervalUnit: "months",
-      source: "",
-      chargedTo: "",
-      chargedToId: "",
-      chargedToType: "",
-      category: "subs",
-      nextDue: "",
-    });
+    setRenewals((prev) => [...(prev || []), newItem]);
+    setAddForm(createEmptyRenewalFormState());
     setShowAdd(false);
   };
-
-  const IntervalDropdown = ({ interval, unit, onChange }: IntervalDropdownProps) => (
-    <div style={{ display: "flex", gap: 6, flex: 1 }}>
-      <select
-        value={interval}
-        onChange={(e: ChangeEvent<HTMLSelectElement>) => onChange({ interval: parseInt(e.target.value, 10), unit })}
-        aria-label="Interval count"
-        style={{
-          flex: 0.4,
-          padding: "10px 10px",
-          borderRadius: T.radius.md,
-          border: `1px solid ${T.border.default}`,
-          background: T.bg.elevated,
-          color: T.text.primary,
-          fontSize: 13,
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-        }}
-      >
-        {(unit === "days"
-          ? DAY_OPTIONS
-          : unit === "weeks"
-            ? WEEK_OPTIONS
-            : unit === "months"
-              ? MONTH_OPTIONS
-              : YEAR_OPTIONS
-        ).map(n => (
-          <option key={n} value={n}>
-            {n}
-          </option>
-        ))}
-      </select>
-      <select
-        value={unit}
-        onChange={(e: ChangeEvent<HTMLSelectElement>) => onChange({ interval, unit: e.target.value })}
-        aria-label="Interval unit"
-        style={{
-          flex: 0.6,
-          padding: "10px 10px",
-          borderRadius: T.radius.md,
-          border: `1px solid ${T.border.default}`,
-          background: T.bg.elevated,
-          color: T.text.primary,
-          fontSize: 13,
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-        }}
-      >
-        <option value="days">{interval === 1 ? "day" : "days"}</option>
-        <option value="weeks">{interval === 1 ? "week" : "weeks"}</option>
-        <option value="months">{interval === 1 ? "month" : "months"}</option>
-        <option value="years">{interval === 1 ? "year" : "years"}</option>
-        <option value="one-time">one-time</option>
-      </select>
-    </div>
-  );
-
-  const CardSelector = ({ value, onChange }: CardSelectorProps) => {
-    const cardGroups: Record<string, PortfolioCard[]> = {};
-    (cards || []).forEach((card) => {
-      const group = `Cards · ${card.institution || "Linked"}`;
-      (cardGroups[group] = cardGroups[group] || []).push(card);
-    });
-
-    const bankGroups: Record<string, typeof bankAccounts> = {};
-    (bankAccounts || []).forEach((account) => {
-      const group = `Banks · ${account.bank || "Linked"}`;
-      (bankGroups[group] = bankGroups[group] || []).push(account);
-    });
-
-    const opts: SearchableOption[] = [
-      { value: `type:${RENEWAL_PAYMENT_TYPES.checking}`, label: "Checking Account", group: "General" },
-      { value: `type:${RENEWAL_PAYMENT_TYPES.savings}`, label: "Savings Account", group: "General" },
-      { value: `type:${RENEWAL_PAYMENT_TYPES.cash}`, label: "Cash", group: "General" },
-      ...Object.entries(bankGroups).flatMap(([group, accounts]) =>
-        accounts.map((account) => ({
-          value: `bank:${account.id || ""}`,
-          label: getBankAccountLabel(bankAccounts || [], account),
-          group,
-        }))
-      ),
-      ...Object.entries(cardGroups).flatMap(([group, groupedCards]) =>
-        groupedCards.map((card) => ({
-          value: `card:${card.id || ""}`,
-          label: resolveRenewalPaymentState({ chargedToType: "card", chargedToId: card.id }, cards || [], []).chargedTo,
-          group,
-        }))
-      ),
-    ];
-    const displayValue = opts.find((option) => option.value === (value || ""))?.label || "";
-    return (
-      <SearchableSelect
-        value={value || ""}
-        onChange={onChange}
-        placeholder="Payment method…"
-        options={opts}
-        displayValue={displayValue}
-      />
-    );
-  };
-
-  const categoryOptions = [
-    { id: "housing", label: "Housing & Utilities" },
-    { id: "subs", label: "Subscriptions" },
-    { id: "insurance", label: "Insurance" },
-    { id: "transport", label: "Transportation" },
-    { id: "essentials", label: "Groceries & Essentials" },
-    { id: "medical", label: "Medical & Health" },
-    { id: "sinking", label: "Sinking Funds" },
-    { id: "onetime", label: "One-Time Expenses" },
-  ];
 
   const { detected, dismissSuggestion } = useSubscriptions(renewals, cards, bankAccounts, proEnabled) as {
     detected: SubscriptionSuggestion[];
@@ -774,114 +520,105 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
 
   return (
     <>
-    <div className="page-body" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
-      <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
-      <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
-        {/* existing header & monthly total */}
-        <div
-          style={{
-            paddingTop: embedded ? 10 : 16,
-            paddingBottom: embedded ? 12 : 16,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Badge variant="outline" style={{ fontSize: 11, background: T.bg.elevated }}>
-              {allItems.length} Active Items
-            </Badge>
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <div
-              onClick={() => setShowAdd(!showAdd)}
-              style={{
-                margin: 0,
-                padding: 0,
-                borderRadius: 100, // Pill shape
-                background: showAdd ? T.status.amberDim : T.bg.elevated,
-                border: `1px solid ${showAdd ? T.status.amber + '40' : T.border.default}`,
-                color: showAdd ? T.status.amber : T.text.primary,
-                fontSize: 12,
-                fontWeight: 700,
-                fontFamily: T.font.sans,
-                cursor: "pointer",
-                height: 32,
-                width: 105,
-                minWidth: 105,
-                maxWidth: 105,
-                flexShrink: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 4,
-                boxSizing: "border-box",
-                outline: "none",
-                WebkitAppearance: "none",
-                transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
-              }}
-            >
-              {showAdd ? <X size={14} style={{ flexShrink: 0 }} /> : <Plus size={14} style={{ flexShrink: 0 }} />}
-              <span style={{ transform: "translateY(1px)" }}>{showAdd ? "Cancel" : "Add"}</span>
+      <div className="page-body" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+        <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
+          <div
+            style={{
+              paddingTop: embedded ? 10 : 16,
+              paddingBottom: embedded ? 12 : 16,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Badge variant="outline" style={{ fontSize: 11, background: T.bg.elevated }}>
+                {activeItemCount} Active Item{activeItemCount === 1 ? "" : "s"}
+              </Badge>
             </div>
-            <div style={{ position: "relative", width: 105, minWidth: 105, maxWidth: 105, height: 32, flexShrink: 0, margin: 0, padding: 0, boxSizing: "border-box" }}>
-              <select
-                value={sortBy}
-                onChange={e => setSortBy(e.target.value as SortMode)}
-                aria-label="Sort order"
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div
+                onClick={() => setShowAdd(!showAdd)}
                 style={{
-                  position: "absolute",
-                  inset: 0,
-                  opacity: 0,
-                  width: "100%",
-                  height: "100%",
                   margin: 0,
                   padding: 0,
-                  border: "none",
-                  outline: "none",
-                  boxSizing: "border-box",
+                  borderRadius: 100,
+                  background: showAdd ? T.status.amberDim : T.bg.elevated,
+                  border: `1px solid ${showAdd ? T.status.amber + "40" : T.border.default}`,
+                  color: showAdd ? T.status.amber : T.text.primary,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  fontFamily: T.font.sans,
                   cursor: "pointer",
-                  zIndex: 2,
-                  WebkitAppearance: "none",
-                }}
-              >
-                <option value="type">Sort: Type</option>
-                <option value="date">Sort: Date</option>
-                <option value="amount">Sort: Amt</option>
-                <option value="name">Sort: A-Z</option>
-              </select>
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
+                  height: 32,
+                  width: 105,
+                  minWidth: 105,
+                  maxWidth: 105,
+                  flexShrink: 0,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  background: T.bg.elevated,
-                  border: `1px solid ${T.border.default}`,
-                  borderRadius: 100, // Pill shape
+                  gap: 4,
                   boxSizing: "border-box",
-                  pointerEvents: "none",
-                  zIndex: 1,
+                  outline: "none",
+                  WebkitAppearance: "none",
+                  transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", position: "relative" }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, fontFamily: T.font.sans, color: T.text.primary, transform: "translate(-2px, 1px)" }}>
-                    {(() => {
-                      switch (sortBy) {
-                        case "date": return "Sort: Date";
-                        case "amount": return "Sort: Amt";
-                        case "name": return "Sort: A-Z";
-                        default: return "Sort: Type";
-                      }
-                    })()}
-                  </span>
-                  <ChevronDown size={14} color={T.text.muted} style={{ position: "absolute", right: 12 }} />
+                {showAdd ? <X size={14} style={{ flexShrink: 0 }} /> : <Plus size={14} style={{ flexShrink: 0 }} />}
+                <span style={{ transform: "translateY(1px)" }}>{showAdd ? "Cancel" : "Add"}</span>
+              </div>
+              <div style={{ position: "relative", width: 105, minWidth: 105, maxWidth: 105, height: 32, flexShrink: 0, margin: 0, padding: 0, boxSizing: "border-box" }}>
+                <select
+                  value={sortBy}
+                  onChange={e => setSortBy(e.target.value as SortMode)}
+                  aria-label="Sort order"
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    opacity: 0,
+                    width: "100%",
+                    height: "100%",
+                    margin: 0,
+                    padding: 0,
+                    border: "none",
+                    outline: "none",
+                    boxSizing: "border-box",
+                    cursor: "pointer",
+                    zIndex: 2,
+                    WebkitAppearance: "none",
+                  }}
+                >
+                  <option value="type">Sort: Type</option>
+                  <option value="date">Sort: Date</option>
+                  <option value="amount">Sort: Amt</option>
+                  <option value="name">Sort: A-Z</option>
+                </select>
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: T.bg.elevated,
+                    border: `1px solid ${T.border.default}`,
+                    borderRadius: 100,
+                    boxSizing: "border-box",
+                    pointerEvents: "none",
+                    zIndex: 1,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", position: "relative" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: T.font.sans, color: T.text.primary, transform: "translate(-2px, 1px)" }}>
+                      {RENEWAL_SORT_LABELS[sortBy]}
+                    </span>
+                    <ChevronDown size={14} color={T.text.muted} style={{ position: "absolute", right: 12 }} />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
         {/* Monthly total */}
         <Card
@@ -921,7 +658,7 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
           <div style={{ marginBottom: 16 }}>
             <ProBanner
               onUpgrade={() => setShowPaywall(true)}
-              label="⚡ Export & Auto-Detect"
+              label="Export & Auto-Detect"
               sublabel="Pro unlocks CSV/PDF export and AI subscription detection"
             />
           </div>
@@ -1061,76 +798,26 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
         {/* Add Subscription Form */}
         {showAdd && (
           <div style={{ marginBottom: 16 }}>
-            <FormGroup label="New Bill / Subscription">
-              <FormRow label="Name">
-                <input
-                  value={addForm.name}
-                  onChange={e => setAddForm(p => ({ ...p, name: e.target.value }))}
-                  placeholder="e.g. Netflix, Rent"
-                  style={formInputStyle}
-                />
-              </FormRow>
-              <FormRow label="Amount / Cycle $">
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  pattern="[0-9]*"
-                  value={addForm.amount}
-                  onChange={e => setAddForm(p => ({ ...p, amount: e.target.value }))}
-                  placeholder="0.00"
-                  style={formInputStyle}
-                />
-              </FormRow>
-              <FormRow label="Cycle">
-                <div style={{ display: "flex", justifyContent: "flex-end", flex: 1 }}>
-                  <IntervalDropdown
-                    interval={addForm.interval}
-                    unit={addForm.intervalUnit}
-                    onChange={({ interval, unit }) => setAddForm(p => ({ ...p, interval, intervalUnit: unit }))}
-                  />
-                </div>
-              </FormRow>
-              <FormRow label="Category">
-                <div style={{ width: "100%", maxWidth: 160 }}>
-                  <SearchableSelect
-                    value={addForm.category}
-                    onChange={v => setAddForm(p => ({ ...p, category: v }))}
-                    placeholder="Category"
-                    options={categoryOptions.map(c => ({ value: c.id, label: c.label }))}
-                    displayValue={categoryOptions.find((c) => c.id === addForm.category)?.label || ""}
-                  />
-                </div>
-              </FormRow>
-              <FormRow label="Payment Method">
-                <div style={{ width: "100%", maxWidth: 160 }}>
-                  <CardSelector
-                    value={getRenewalPaymentOptionValue(addForm)}
-                    onChange={v => {
-                      setAddForm(p => ({
-                        ...p,
-                        ...parseRenewalPaymentOptionValue(v, cards || [], bankAccounts || []),
-                      }));
-                    }}
-                  />
-                </div>
-              </FormRow>
-              <FormRow label="Next Due Date">
-                <input
-                  type="date"
-                  value={addForm.nextDue}
-                  onChange={e => setAddForm(p => ({ ...p, nextDue: e.target.value }))}
-                  style={{ ...formInputStyle, fontFamily: T.font.sans, color: addForm.nextDue ? T.text.primary : T.text.muted }}
-                />
-              </FormRow>
-              <FormRow label="Notes" isLast>
-                <input
-                  value={addForm.source}
-                  onChange={e => setAddForm(p => ({ ...p, source: e.target.value }))}
-                  placeholder="Optional"
-                  style={formInputStyle}
-                />
-              </FormRow>
-            </FormGroup>
+            <RenewalDetailsFields
+              value={addForm}
+              onChange={(patch) => setAddForm((currentValue) => ({ ...currentValue, ...patch }))}
+              formInputStyle={formInputStyle}
+              categorySelectOptions={categorySelectOptions}
+            />
+            <div style={{ height: 12 }} />
+            <RenewalScheduleFields
+              value={addForm}
+              onChange={(patch) => setAddForm((currentValue) => ({ ...currentValue, ...patch }))}
+              formInputStyle={formInputStyle}
+            />
+            <div style={{ height: 12 }} />
+            <RenewalPaymentFields
+              value={addForm}
+              onChange={(patch) => setAddForm((currentValue) => ({ ...currentValue, ...patch }))}
+              cards={cards || []}
+              bankAccounts={bankAccounts || []}
+              formInputStyle={formInputStyle}
+            />
             <button
               onClick={addItem}
               disabled={!addForm.name.trim() || !addForm.amount}
@@ -1160,8 +847,12 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
         {grouped.length === 0 ? (
           <EmptyState
             icon={AlertTriangle}
-            title="Track Every Dollar"
-            message="Add your recurring bills and subscriptions to see a clear monthly forecast across all accounts."
+            title={inactiveItemCount > 0 && !showInactive ? "No Active Renewals" : "Track Every Dollar"}
+            message={
+              inactiveItemCount > 0 && !showInactive
+                ? "All tracked renewals are inactive or archived right now. Show inactive items to review the history."
+                : "Add your recurring bills and subscriptions to see a clear monthly forecast across all accounts."
+            }
           />
         ) : (
           grouped.map((cat) => (
@@ -1288,94 +979,32 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
 
                           {/* ── Page 0: Details ── */}
                           {editStep === 0 && (
-                            <FormGroup>
-                              <FormRow label="Name">
-                                <input
-                                  value={editVal.name}
-                                  onChange={e => setEditVal(p => ({ ...p, name: e.target.value }))}
-                                  placeholder="Name"
-                                  aria-label="Expense name"
-                                  style={formInputStyle}
-                                />
-                              </FormRow>
-                              <FormRow label="Amount $">
-                                <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  pattern="[0-9]*"
-                                  value={editVal.amount}
-                                  onChange={e => setEditVal(p => ({ ...p, amount: e.target.value }))}
-                                  placeholder="0.00"
-                                  aria-label="Amount"
-                                  style={formInputStyle}
-                                />
-                              </FormRow>
-                              <FormRow label="Category" isLast>
-                                <div style={{ width: "100%", maxWidth: 160 }}>
-                                  <SearchableSelect
-                                    value={editVal.category || "subs"}
-                                    onChange={v => setEditVal(p => ({ ...p, category: v }))}
-                                    placeholder="Category"
-                                    options={categoryOptions.map(c => ({ value: c.id, label: c.label }))}
-                                    displayValue={categoryOptions.find((c) => c.id === (editVal.category || "subs"))?.label || ""}
-                                  />
-                                </div>
-                              </FormRow>
-                            </FormGroup>
+                            <RenewalDetailsFields
+                              value={editVal}
+                              onChange={(patch) => setEditVal((currentValue) => ({ ...currentValue, ...patch }))}
+                              formInputStyle={formInputStyle}
+                              categorySelectOptions={categorySelectOptions}
+                            />
                           )}
 
                           {/* ── Page 1: Schedule ── */}
                           {editStep === 1 && (
-                            <FormGroup>
-                              <FormRow label="Cycle">
-                                <div style={{ display: "flex", justifyContent: "flex-end", flex: 1 }}>
-                                  <IntervalDropdown
-                                    interval={editVal.interval}
-                                    unit={editVal.intervalUnit}
-                                    onChange={({ interval, unit }) =>
-                                      setEditVal(p => ({ ...p, interval, intervalUnit: unit }))
-                                    }
-                                  />
-                                </div>
-                              </FormRow>
-                              <FormRow label="Next Due Date" isLast>
-                                <input
-                                  type="date"
-                                  value={editVal.nextDue}
-                                  onChange={e => setEditVal(p => ({ ...p, nextDue: e.target.value }))}
-                                  aria-label="Next due date"
-                                  style={{ ...formInputStyle, fontFamily: T.font.sans, color: editVal.nextDue ? T.text.primary : T.text.muted }}
-                                />
-                              </FormRow>
-                            </FormGroup>
+                            <RenewalScheduleFields
+                              value={editVal}
+                              onChange={(patch) => setEditVal((currentValue) => ({ ...currentValue, ...patch }))}
+                              formInputStyle={formInputStyle}
+                            />
                           )}
 
                           {/* ── Page 2: Payment ── */}
                           {editStep === 2 && (
-                            <FormGroup>
-                              <FormRow label="Method">
-                                <div style={{ width: "100%", maxWidth: 160 }}>
-                                  <CardSelector
-                                    value={getRenewalPaymentOptionValue(editVal)}
-                                    onChange={v => {
-                                      setEditVal(p => ({
-                                        ...p,
-                                        ...parseRenewalPaymentOptionValue(v, cards || [], bankAccounts || []),
-                                      }));
-                                    }}
-                                  />
-                                </div>
-                              </FormRow>
-                              <FormRow label="Notes" isLast>
-                                <input
-                                  value={editVal.source || ""}
-                                  onChange={e => setEditVal(p => ({ ...p, source: e.target.value }))}
-                                  placeholder="Optional"
-                                  aria-label="Notes"
-                                  style={formInputStyle}
-                                />
-                              </FormRow>
-                            </FormGroup>
+                            <RenewalPaymentFields
+                              value={editVal}
+                              onChange={(patch) => setEditVal((currentValue) => ({ ...currentValue, ...patch }))}
+                              cards={cards || []}
+                              bankAccounts={bankAccounts || []}
+                              formInputStyle={formInputStyle}
+                            />
                           )}
 
                           {/* ── Actions — always visible ── */}
@@ -1655,7 +1284,7 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
                                     display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 12,
                                   }}
                                 >
-                                  ✎
+                                  <UiGlyph glyph="✎" size={12} color={T.text.secondary} />
                                 </button>
                                 <button
                                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeItem(renewalIndex, item.name); }}
@@ -1682,7 +1311,7 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
         )}
 
         {/* Show/Hide Inactive Button below the entire list if there are inactive items */}
-        {renewals.some(item => item.isCancelled || item.isExpired || item.interval === 0) && (
+        {inactiveItemCount > 0 && (
           <div style={{ display: "flex", justifyContent: "center", marginTop: 24, marginBottom: 40 }}>
             <button
               onClick={() => setShowInactive(prev => !prev)}
@@ -1701,15 +1330,14 @@ export default memo(function RenewalsTab({ proEnabled = false, embedded = false,
               }}
             >
               {showInactive
-                ? "Hide Inactive Subscriptions"
-                : `Show ${renewals.filter(i => i.isCancelled || i.isExpired || i.interval === 0).length} Inactive Subscriptions`}
+                ? "Hide Inactive Items"
+                : `Show ${inactiveItemCount} Inactive Item${inactiveItemCount === 1 ? "" : "s"}`}
             </button>
           </div>
         )}
 
         </div>
-    </div>
-    </div>
+      </div>
 
       {negotiateSheetOverlay}
     </>

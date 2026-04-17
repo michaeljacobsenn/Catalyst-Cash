@@ -11,6 +11,7 @@ const PLAID_LINK_TOKEN_ROUTE = new RegExp(`https://${BACKEND_HOST_PATTERN}/plaid
 const PLAID_EXCHANGE_ROUTE = new RegExp(`https://${BACKEND_HOST_PATTERN}/plaid/exchange$`);
 const PLAID_SYNC_ROUTE = new RegExp(`https://${BACKEND_HOST_PATTERN}/api/sync/(status|force|deep)$`);
 const HOUSEHOLD_SYNC_ROUTE = new RegExp(`https://${BACKEND_HOST_PATTERN}/api/household/sync$`);
+const RECOVERY_VAULT_ROUTE = new RegExp(`https://${BACKEND_HOST_PATTERN}/api/recovery-vault$`);
 
 function bytesToHex(bytes: Uint8Array) {
   return Array.from(bytes)
@@ -628,10 +629,16 @@ export async function openSettingsMenu(page: Page, menuName: RegExp | string) {
   await page.getByRole("button", { name: menuName }).click();
 }
 
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function getSettingsRowInput(page: Page, label: string) {
+  const labelPattern = new RegExp(`^${escapeRegex(label)}$`, "i");
   return page
-    .getByText(label, { exact: true })
-    .locator("xpath=ancestor::div[1]")
+    .getByText(labelPattern)
+    .first()
+    .locator("xpath=ancestor::*[.//input][1]")
     .locator("input:visible")
     .first();
 }
@@ -647,9 +654,9 @@ export function getWizardFieldInput(page: Page, label: RegExp | string) {
 export async function completeOnboarding(page: Page) {
   await page.goto("/");
 
-  await expect(page.getByRole("button", { name: "Start Setup →" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Full Setup →" })).toBeVisible();
   await page.getByRole("checkbox", { name: "Accept legal disclaimer" }).click();
-  await page.getByRole("button", { name: "Start Setup →" }).click();
+  await page.getByRole("button", { name: "Full Setup →" }).click();
   await expect(page.getByText("Import Data")).toBeVisible();
   await page.getByRole("button", { name: "Skip for Now →" }).click();
   await expect(page.getByText("Your Profile", { exact: true })).toBeVisible();
@@ -677,6 +684,35 @@ export async function completeOnboarding(page: Page) {
   await expect(page.getByRole("button", { name: "Open Settings" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Home" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
+}
+
+export async function completeOnboardingFast(page: Page) {
+  await page.goto("/");
+
+  await expect(page.getByRole("button", { name: "Quick Start →" })).toBeVisible();
+  await page.getByRole("checkbox", { name: "Accept legal disclaimer" }).click();
+  await page.getByRole("button", { name: "Quick Start →" }).click();
+  await expect(page.getByText("Cash Flow", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Next →" }).click();
+  await expect(page.getByText("Safety Targets", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Next →" }).click();
+  await expect(page.getByText("Connections & Security", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Save & Finish →" }).click();
+
+  await expect.poll(
+    async () => {
+      if (await page.getByText("You're All Set").isVisible().catch(() => false)) return "done";
+      if (await page.getByRole("button", { name: "Open Settings" }).isVisible().catch(() => false)) return "shell";
+      return "pending";
+    },
+    { timeout: 10000 },
+  ).not.toBe("pending");
+
+  if (await page.getByText("You're All Set").isVisible().catch(() => false)) {
+    await page.getByRole("button", { name: "🚀 Go to Dashboard" }).click();
+  }
+
+  await expect(page.getByRole("button", { name: "Open Settings" })).toBeVisible();
 }
 
 export async function installMockNativeSecureStorage(
@@ -867,6 +903,43 @@ export function mockHouseholdSyncApi(page: Page) {
       remoteRecord = nextRecord;
     },
   };
+}
+
+export function mockRecoveryVaultApi(page: Page, backupPayload = SETUP_WIZARD_BACKUP) {
+  page.route(RECOVERY_VAULT_ROUTE, async route => {
+    const body = route.request().postDataJSON() as {
+      action?: string;
+      recoveryId?: string;
+      authToken?: string;
+    };
+
+    if (body?.action === "fetch" && body?.recoveryId === "CC-ABCDE-FGHIJ" && body?.authToken) {
+      const encryptedBlob = await encrypt(JSON.stringify(backupPayload), "ABCD-EFGH-IJKL-MNOP");
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          hasData: true,
+          encryptedBlob: JSON.stringify(encryptedBlob),
+        }),
+        headers: {
+          "access-control-allow-origin": "*",
+          "content-type": "application/json",
+        },
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 404,
+      contentType: "application/json",
+      body: JSON.stringify({ hasData: false }),
+      headers: {
+        "access-control-allow-origin": "*",
+        "content-type": "application/json",
+      },
+    });
+  });
 }
 
 export async function seedHouseholdRemoteRecord(

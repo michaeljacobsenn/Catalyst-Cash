@@ -6,6 +6,45 @@ export async function sha256Hex(value) {
     .join("");
 }
 
+function toHex(bytes) {
+  return Array.from(new Uint8Array(bytes))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function derivePbkdf2Hex({ secret, salt, iterations }) {
+  const material = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(String(secret || "")),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const derivedBits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: new TextEncoder().encode(String(salt || "")),
+      iterations,
+    },
+    material,
+    256
+  );
+  return toHex(derivedBits);
+}
+
+export async function deriveLegacyHouseholdAuthToken(householdId, passcode) {
+  return sha256Hex(`household-auth-v1:${String(householdId || "").trim()}:${String(passcode || "").trim()}`);
+}
+
+export async function deriveHouseholdAuthToken(householdId, passcode) {
+  return derivePbkdf2Hex({
+    secret: String(passcode || "").trim(),
+    salt: `household-auth-v2:${String(householdId || "").trim()}`,
+    iterations: 200000,
+  });
+}
+
 function householdEnvelopeMessage({ householdId, encryptedBlob, version, requestId }) {
   return JSON.stringify({
     householdId,

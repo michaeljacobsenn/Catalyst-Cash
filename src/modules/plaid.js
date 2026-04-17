@@ -1,50 +1,56 @@
-// ═══════════════════════════════════════════════════════════════
-// PLAID INTEGRATION — Catalyst Cash
-//
-// Complete scaffolding for Plaid Link bank connection.
-// When activated, this module:
-//   1. Opens Plaid Link to connect the user's bank
-//   2. Exchanges the public token for a Worker-side item/token record
-//   3. Fetches balances and auto-maps them to existing cards/accounts
-//   4. Stores non-sensitive connection metadata locally
-//
-// ACTIVATION CHECKLIST (for the developer):
-//   □ Create a Plaid account at https://dashboard.plaid.com
-//   □ Get your client_id and secret for Sandbox → Development → Production
-//   □ Add PLAID_CLIENT_ID and PLAID_SECRET to Cloudflare Worker secrets
-//   □ Deploy the Worker Plaid endpoints (see worker-plaid-routes.md)
-//   □ Uncomment the Plaid section in SettingsTab.jsx
-//
-// PRIVACY: Plaid access tokens are stored only in the Cloudflare Worker D1 database.
-//          The client stores non-sensitive metadata only: item ID, institution details,
-//          account masks, linkage state, and last-sync timestamps.
-// ═══════════════════════════════════════════════════════════════
+// Plaid link, sync, and cached connection state.
 
-  import { getBackendUrl } from "./backendUrl.js";
-  import { batchCategorizeTransactions } from "./api.js";
-  import { fetchWithRetry } from "./fetchWithRetry.js";
-  import { buildIdentityHeaders,clearIdentitySession } from "./identitySession.js";
-  import { getIssuerCards } from "./issuerCards.js";
-  import { log } from "./logger.js";
-  import { inferMerchantIdentity } from "./merchantIdentity.js";
-  import { categorizeBatch,learn } from "./merchantMap.js";
-  import { getSubscriptionState,INSTITUTION_LIMITS,isGatingEnforced } from "./subscription.js";
-  import { db } from "./utils.js";
+import { batchCategorizeTransactions } from "./api.js";
+import { getBackendUrl } from "./backendUrl.js";
+import { fetchWithRetry } from "./fetchWithRetry.js";
+import { buildIdentityHeaders, clearIdentitySession } from "./identitySession.js";
+import { getIssuerCards } from "./issuerCards.js";
+import { log } from "./logger.js";
+import { inferMerchantIdentity } from "./merchantIdentity.js";
+import { categorizeBatch, learn } from "./merchantMap.js";
+import { trackSupportEvent } from "./funnelAnalytics.js";
+import { recordFirstBankConnectionValue } from "./valueMoments.js";
+import {
+  FREE_PLAID_CONNECTION_SWITCH_COOLDOWN_MS,
+  getConnections,
+  getPreferredFreeConnectionId,
+  getPreferredFreeConnectionSwitchCooldownRemaining,
+  PLAID_MANUAL_SYNC_COOLDOWNS,
+  resolvePlaidConnectionAccessState,
+  saveConnections,
+  setPreferredFreeConnectionId,
+  shouldEnforcePreferredFreeConnectionSwitchCooldown,
+} from "./plaid/connectionState.js";
+import {
+  disconnectConnectionPortfolioRecords,
+  getConnectionPlaidAccountIds,
+  materializeManualFallbackForConnections,
+} from "./plaid/connectionPortfolio.js";
+import { getPlaidAutoFill } from "./plaid/autoFill.js";
+import { getSubscriptionState, INSTITUTION_LIMITS, isGatingEnforced } from "./subscription.js";
+import { db } from "./utils.js";
 
-const PLAID_STORAGE_KEY = "plaid-connections";
-const PLAID_FREE_ACTIVE_CONNECTION_KEY = "plaid-free-active-connection-id";
-const PLAID_FREE_ACTIVE_CONNECTION_CHANGED_AT_KEY = "plaid-free-active-connection-changed-at";
+export {
+  FREE_PLAID_CONNECTION_SWITCH_COOLDOWN_MS,
+  disconnectConnectionPortfolioRecords,
+  getConnections,
+  getConnectionPlaidAccountIds,
+  getPlaidAutoFill,
+  getPreferredFreeConnectionId,
+  getPreferredFreeConnectionSwitchCooldownRemaining,
+  materializeManualFallbackForConnections,
+  PLAID_MANUAL_SYNC_COOLDOWNS,
+  setPreferredFreeConnectionId,
+  shouldEnforcePreferredFreeConnectionSwitchCooldown,
+};
+
+const PLAID_CREDIT_LIMIT_CACHE_KEY = "plaid-credit-limit-cache";
 const API_BASE = getBackendUrl();
 const LINK_TOKEN_TIMEOUT_MS = 20_000;
 const EXCHANGE_TIMEOUT_MS = 20_000;
 const SYNC_FORCE_TIMEOUT_MS = 120_000;
 const SYNC_STATUS_TIMEOUT_MS = 30_000;
 const PLAID_LINK_UI_TIMEOUT_MS = 600_000; // 10 minutes
-export const PLAID_MANUAL_SYNC_COOLDOWNS = {
-  free: 7 * 24 * 60 * 60 * 1000,
-  pro: 24 * 60 * 60 * 1000,
-};
-export const FREE_PLAID_CONNECTION_SWITCH_COOLDOWN_MS = PLAID_MANUAL_SYNC_COOLDOWNS.free;
 let activePlaidLinkPromise = null;
 
 function createAbortTimeout(ms, label = "Plaid request") {
@@ -111,212 +117,37 @@ async function fetchPlaidBackend(url, init = {}, options = {}) {
   }
 }
 
-// ─── Connection State Management ──────────────────────────────
-
-/**
- * Get all stored Plaid connections.
- * Each connection: { id, institutionName, institutionId, accounts[], lastSync }
- * @returns {Promise<any[]>}
- */
-export async function getConnections() {
-  const stored = (await db.get(PLAID_STORAGE_KEY)) || [];
-  if (!Array.isArray(stored) || stored.length === 0) return [];
-
-  const sanitized = stored.map(sanitizeConnectionForStorage);
-  
-  const uniqueConns = [];
-  const seenIds = new Set();
-  let deduplicated = false;
-
-  for (let i = sanitized.length - 1; i >= 0; i--) {
-    const conn = sanitized[i];
-    if (conn.id && seenIds.has(conn.id)) {
-      deduplicated = true;
-      continue;
-    }
-    if (conn.id) seenIds.add(conn.id);
-    uniqueConns.unshift(conn);
-  }
-
-  const hasLegacyTokens = stored.some(connection => connection && "accessToken" in connection);
-  
-  if (deduplicated || hasLegacyTokens) {
-    if (deduplicated) void log.warn("plaid", "Cleaned up duplicate connections from local storage.");
-    if (hasLegacyTokens) void log.warn("plaid", "Removed legacy access tokens from local connection storage.");
-    await db.set(PLAID_STORAGE_KEY, uniqueConns);
-  }
-  
-  return uniqueConns;
-}
-
-/**
- * Save connections array.
- * @param {any[]} conns
- */
-async function saveConnections(conns) {
-  await db.set(PLAID_STORAGE_KEY, (conns || []).map(sanitizeConnectionForStorage));
-}
-
-function sortConnectionsForPriority(connections = []) {
-  return [...connections].sort((a, b) => {
-    const aReconnect = a?._needsReconnect ? 1 : 0;
-    const bReconnect = b?._needsReconnect ? 1 : 0;
-    if (aReconnect !== bReconnect) return aReconnect - bReconnect;
-
-    const aLastSync = a?.lastSync ? new Date(a.lastSync).getTime() : 0;
-    const bLastSync = b?.lastSync ? new Date(b.lastSync).getTime() : 0;
-    if (aLastSync !== bLastSync) return bLastSync - aLastSync;
-
-    return String(a?.institutionName || "").localeCompare(String(b?.institutionName || ""));
-  });
-}
-
-function choosePreferredFreeConnectionId(connections = [], preferredId = null) {
-  const viableConnections = sortConnectionsForPriority(
-    (connections || []).filter(connection => connection?.id)
-  );
-  if (viableConnections.length === 0) return null;
-
-  if (preferredId && viableConnections.some(connection => connection.id === preferredId)) {
-    return preferredId;
-  }
-
-  return viableConnections[0]?.id || null;
-}
-
-export function getPreferredFreeConnectionSwitchCooldownRemaining(lastChangedAt, now = Date.now()) {
-  if (!lastChangedAt) return 0;
-  const changedAtMs = new Date(lastChangedAt).getTime();
-  if (!Number.isFinite(changedAtMs)) return 0;
-  return Math.max(0, FREE_PLAID_CONNECTION_SWITCH_COOLDOWN_MS - (now - changedAtMs));
-}
-
-export function shouldEnforcePreferredFreeConnectionSwitchCooldown({
-  gatingEnforced = false,
-  tier = "free",
-  connectionCount = 0,
-  limit = INSTITUTION_LIMITS.free,
-} = {}) {
-  return Boolean(
-    gatingEnforced &&
-    tier === "free" &&
-    Number.isFinite(limit) &&
-    connectionCount > limit
-  );
-}
-
-function formatPlaidCooldownDuration(ms) {
-  const minsLeft = Math.max(1, Math.ceil(ms / 60000));
-  const hoursLeft = Math.floor(minsLeft / 60);
-  const daysLeft = Math.floor(hoursLeft / 24);
-
-  if (daysLeft > 0) {
-    return `${daysLeft} day${daysLeft > 1 ? "s" : ""} ${hoursLeft % 24}h`;
-  }
-  if (hoursLeft > 0) {
-    return `${hoursLeft}h ${minsLeft % 60}m`;
-  }
-  return `${minsLeft} min`;
-}
-
-async function getPreferredFreeConnectionChangedAt() {
-  return (await db.get(PLAID_FREE_ACTIVE_CONNECTION_CHANGED_AT_KEY)) || null;
-}
-
-export async function getPreferredFreeConnectionId() {
-  return (await db.get(PLAID_FREE_ACTIVE_CONNECTION_KEY)) || null;
-}
-
-export async function setPreferredFreeConnectionId(connectionId, options = {}) {
-  const force = options.force === true;
-  const normalizedId = String(connectionId || "").trim() || null;
-  const currentId = await getPreferredFreeConnectionId();
-
-  if (!force && normalizedId && currentId && normalizedId !== currentId) {
-    const subscriptionState = await getSubscriptionState();
-    const conns = await getConnections();
-    const shouldEnforceCooldown = shouldEnforcePreferredFreeConnectionSwitchCooldown({
-      gatingEnforced: isGatingEnforced(),
-      tier: subscriptionState?.tier || "free",
-      connectionCount: conns.length,
-      limit: INSTITUTION_LIMITS[subscriptionState?.tier] || INSTITUTION_LIMITS.free,
-    });
-
-    if (shouldEnforceCooldown) {
-      const lastChangedAt = await getPreferredFreeConnectionChangedAt();
-      const remainingMs = getPreferredFreeConnectionSwitchCooldownRemaining(lastChangedAt);
-      if (remainingMs > 0) {
-        throw new Error(`You can switch your active live bank again in ${formatPlaidCooldownDuration(remainingMs)}.`);
-      }
-    }
-  }
-
-  await db.set(PLAID_FREE_ACTIVE_CONNECTION_KEY, normalizedId);
-
-  if (!normalizedId) {
-    await db.del(PLAID_FREE_ACTIVE_CONNECTION_CHANGED_AT_KEY);
-  } else if (!force && normalizedId !== currentId) {
-    await db.set(PLAID_FREE_ACTIVE_CONNECTION_CHANGED_AT_KEY, new Date().toISOString());
-  }
-
-  return normalizedId;
-}
-
 export async function reconcilePlaidConnectionAccess(cards = [], bankAccounts = []) {
-  const conns = await getConnections();
+  const connections = await getConnections();
   const subscriptionState = await getSubscriptionState();
   const gatingEnforced = isGatingEnforced();
   const limit = gatingEnforced ? (INSTITUTION_LIMITS[subscriptionState?.tier] || INSTITUTION_LIMITS.free) : Infinity;
-
   const preferredId = await getPreferredFreeConnectionId();
-  const activeConnectionId =
-    gatingEnforced && subscriptionState?.tier === "free"
-      ? choosePreferredFreeConnectionId(conns, preferredId)
-      : null;
-
-  const nextConnections = conns.map(connection => {
-    const shouldPause =
-      gatingEnforced &&
-      subscriptionState?.tier === "free" &&
-      limit !== Infinity &&
-      conns.length > limit &&
-      connection?.id &&
-      connection.id !== activeConnectionId;
-
-    return {
-      ...connection,
-      _freeTierPaused: shouldPause,
-    };
+  const {
+    activeFreeConnectionId,
+    connectionsChanged,
+    nextConnections,
+    pausedConnectionIds,
+    syncableConnectionIds,
+    syncableConnections,
+  } = resolvePlaidConnectionAccessState(connections, {
+    gatingEnforced,
+    tier: subscriptionState?.tier || "free",
+    limit,
+    preferredId,
   });
-
-  const pausedIds = nextConnections
-    .filter(connection => connection?._freeTierPaused)
-    .map(connection => String(connection.id || "").trim())
-    .filter(Boolean);
-  const syncableConnections = nextConnections.filter(connection => !connection?._freeTierPaused);
-  const syncableConnectionIds = syncableConnections
-    .map(connection => String(connection.id || "").trim())
-    .filter(Boolean);
-
-  const connectionsChanged =
-    nextConnections.length !== conns.length ||
-    nextConnections.some((connection, index) => Boolean(connection?._freeTierPaused) !== Boolean(conns[index]?._freeTierPaused));
 
   if (connectionsChanged) {
     await saveConnections(nextConnections);
   }
 
-  const resolvedPreferredId =
-    gatingEnforced && subscriptionState?.tier === "free" && activeConnectionId
-      ? activeConnectionId
-      : null;
-  if (resolvedPreferredId !== preferredId) {
-    await setPreferredFreeConnectionId(resolvedPreferredId, { force: true });
+  if (activeFreeConnectionId !== preferredId) {
+    await setPreferredFreeConnectionId(activeFreeConnectionId, { force: true });
   }
 
   const fallbackState =
-    pausedIds.length > 0
-      ? materializeManualFallbackForConnections(cards, bankAccounts, pausedIds, {
+    pausedConnectionIds.length > 0
+      ? materializeManualFallbackForConnections(cards, bankAccounts, pausedConnectionIds, {
           keepLinkMetadata: true,
         })
       : { updatedCards: cards, updatedBankAccounts: bankAccounts, changed: false };
@@ -325,8 +156,8 @@ export async function reconcilePlaidConnectionAccess(cards = [], bankAccounts = 
     connections: nextConnections,
     syncableConnections,
     syncableConnectionIds,
-    pausedConnectionIds: pausedIds,
-    activeFreeConnectionId: resolvedPreferredId,
+    pausedConnectionIds,
+    activeFreeConnectionId,
     updatedCards: fallbackState.updatedCards,
     updatedBankAccounts: fallbackState.updatedBankAccounts,
     cardsChanged: fallbackState.changed,
@@ -338,221 +169,6 @@ function toFiniteMoney(value) {
   if (value == null || value === "") return null;
   const num = typeof value === "number" ? value : parseFloat(String(value));
   return Number.isFinite(num) ? num : null;
-}
-
-/**
- * Remove any legacy token field before persisting metadata locally.
- * @param {any} connection
- * @returns {any}
- */
-function sanitizeConnectionForStorage(connection = {}) {
-  const { accessToken: _accessToken, ...rest } = connection;
-  return {
-    ...rest,
-    accounts: (connection.accounts || []).map(account => ({ ...account })),
-  };
-}
-
-/**
- * Convert Plaid-managed balances for lost connections into editable manual values.
- * Keeps link IDs by default so reconnect can still repair the account in place.
- */
-export function materializeManualFallbackForConnections(
-  cards = [],
-  bankAccounts = [],
-  connectionIds = [],
-  options = {}
-) {
-  const keepLinkMetadata = options.keepLinkMetadata !== false;
-  const targetConnectionIds = new Set(
-    Array.from(connectionIds || []).map(id => String(id || "").trim()).filter(Boolean)
-  );
-
-  if (targetConnectionIds.size === 0) {
-    return { updatedCards: cards, updatedBankAccounts: bankAccounts, changed: false };
-  }
-
-  let changed = false;
-
-  const updatedCards = cards.map(card => {
-    const connectionId = String(card?._plaidConnectionId || "").trim();
-    if (!connectionId || !targetConnectionIds.has(connectionId)) return card;
-
-    const nextBalance = toFiniteMoney(card._plaidBalance ?? card.balance);
-    const nextLimit = toFiniteMoney(card._plaidLimit ?? card.limit ?? card.creditLimit);
-
-    const nextCard = {
-      ...card,
-      balance: nextBalance ?? card.balance ?? null,
-      limit: nextLimit ?? card.limit ?? null,
-      _plaidBalance: null,
-      _plaidAvailable: null,
-      _plaidLimit: null,
-      _plaidManualFallback: true,
-      _plaidLiability: null,
-      _plaidLastSync: null,
-    };
-
-    if (!keepLinkMetadata) {
-      nextCard._plaidAccountId = undefined;
-      nextCard._plaidConnectionId = undefined;
-    }
-
-    if (
-      nextCard.balance !== card.balance ||
-      nextCard.limit !== card.limit ||
-      card._plaidBalance != null ||
-      card._plaidAvailable != null ||
-      card._plaidLimit != null ||
-      card._plaidManualFallback !== true ||
-      (!keepLinkMetadata && (card._plaidAccountId || card._plaidConnectionId))
-    ) {
-      changed = true;
-    }
-
-    return nextCard;
-  });
-
-  const updatedBankAccounts = bankAccounts.map(account => {
-    const connectionId = String(account?._plaidConnectionId || "").trim();
-    if (!connectionId || !targetConnectionIds.has(connectionId)) return account;
-
-    const nextBalance = toFiniteMoney(account._plaidAvailable ?? account._plaidBalance ?? account.balance);
-    const nextAccount = {
-      ...account,
-      balance: nextBalance ?? account.balance ?? null,
-      _plaidBalance: null,
-      _plaidAvailable: null,
-      _plaidManualFallback: true,
-      _plaidLastSync: null,
-    };
-
-    if (!keepLinkMetadata) {
-      nextAccount._plaidAccountId = undefined;
-      nextAccount._plaidConnectionId = undefined;
-    }
-
-    if (
-      nextAccount.balance !== account.balance ||
-      account._plaidBalance != null ||
-      account._plaidAvailable != null ||
-      account._plaidManualFallback !== true ||
-      (!keepLinkMetadata && (account._plaidAccountId || account._plaidConnectionId))
-    ) {
-      changed = true;
-    }
-
-    return nextAccount;
-  });
-
-  return { updatedCards, updatedBankAccounts, changed };
-}
-
-function getConnectionPlaidAccountIds(connection = {}) {
-  return new Set(
-    Array.from(connection?.accounts || [])
-      .map((account) => String(account?.plaidAccountId || "").trim())
-      .filter(Boolean)
-  );
-}
-
-function recordBelongsToConnection(record, connectionId, plaidAccountIds) {
-  const recordConnectionId = String(record?._plaidConnectionId || "").trim();
-  const recordPlaidAccountId = String(record?._plaidAccountId || "").trim();
-  if (connectionId && recordConnectionId === connectionId) return true;
-  if (recordPlaidAccountId && plaidAccountIds.has(recordPlaidAccountId)) return true;
-  return false;
-}
-
-export function disconnectConnectionPortfolioRecords(
-  connection,
-  cards = [],
-  bankAccounts = [],
-  plaidInvestments = [],
-  options = {}
-) {
-  const connectionId = String(connection?.id || "").trim();
-  const plaidAccountIds = getConnectionPlaidAccountIds(connection);
-  const removeLinkedRecords = options.removeLinkedRecords === true;
-
-  let cardsChanged = false;
-  let bankAccountsChanged = false;
-  let plaidInvestmentsChanged = false;
-  let removedCards = 0;
-  let removedBankAccounts = 0;
-  let removedPlaidInvestments = 0;
-
-  const updatedCards = removeLinkedRecords
-    ? cards.filter((card) => {
-        const shouldRemove = recordBelongsToConnection(card, connectionId, plaidAccountIds);
-        if (shouldRemove) {
-          removedCards += 1;
-          cardsChanged = true;
-        }
-        return !shouldRemove;
-      })
-    : cards.map((card) => {
-        if (!recordBelongsToConnection(card, connectionId, plaidAccountIds)) return card;
-        cardsChanged = true;
-        return {
-          ...card,
-          balance: toFiniteMoney(card._plaidBalance ?? card.balance) ?? card.balance ?? null,
-          limit: toFiniteMoney(card._plaidLimit ?? card.limit ?? card.creditLimit) ?? card.limit ?? null,
-          _plaidBalance: null,
-          _plaidAvailable: null,
-          _plaidLimit: null,
-          _plaidManualFallback: true,
-          _plaidLiability: null,
-          _plaidLastSync: null,
-          _plaidAccountId: undefined,
-          _plaidConnectionId: undefined,
-        };
-      });
-
-  const updatedBankAccounts = removeLinkedRecords
-    ? bankAccounts.filter((account) => {
-        const shouldRemove = recordBelongsToConnection(account, connectionId, plaidAccountIds);
-        if (shouldRemove) {
-          removedBankAccounts += 1;
-          bankAccountsChanged = true;
-        }
-        return !shouldRemove;
-      })
-    : bankAccounts.map((account) => {
-        if (!recordBelongsToConnection(account, connectionId, plaidAccountIds)) return account;
-        bankAccountsChanged = true;
-        return {
-          ...account,
-          balance: toFiniteMoney(account._plaidAvailable ?? account._plaidBalance ?? account.balance) ?? account.balance ?? null,
-          _plaidBalance: null,
-          _plaidAvailable: null,
-          _plaidManualFallback: true,
-          _plaidLastSync: null,
-          _plaidAccountId: undefined,
-          _plaidConnectionId: undefined,
-        };
-      });
-
-  const updatedPlaidInvestments = plaidInvestments.filter((investment) => {
-    const shouldRemove = recordBelongsToConnection(investment, connectionId, plaidAccountIds);
-    if (shouldRemove) {
-      removedPlaidInvestments += 1;
-      plaidInvestmentsChanged = true;
-    }
-    return !shouldRemove;
-  });
-
-  return {
-    updatedCards,
-    updatedBankAccounts,
-    updatedPlaidInvestments,
-    cardsChanged,
-    bankAccountsChanged,
-    plaidInvestmentsChanged,
-    removedCards,
-    removedBankAccounts,
-    removedPlaidInvestments,
-  };
 }
 
 export async function purgeStoredTransactionsForConnection(connection) {
@@ -879,7 +495,13 @@ async function runLinkFlow({ onSuccess, onError, skipLimit = false, replaceItemI
 }
 
 export async function connectBank(onSuccess, onError) {
-  return runLinkFlow({ onSuccess, onError });
+  return runLinkFlow({
+    onSuccess: async (connection) => {
+      void recordFirstBankConnectionValue();
+      if (onSuccess) await onSuccess(connection);
+    },
+    onError,
+  });
 }
 
 export async function reconnectBank(connection, onSuccess, onError) {
@@ -898,7 +520,11 @@ export async function reconnectBank(connection, onSuccess, onError) {
       await saveConnections(merged);
       if (onSuccess) await onSuccess(nextConnection);
     },
-    onError,
+    onError: (err) => {
+      void trackSupportEvent("plaid_reconnect_failed", { error: err?.message || "unknown" });
+      if (onError) onError(err);
+      else throw err;
+    },
   });
 }
 
@@ -924,6 +550,11 @@ export async function forceBackendSync(options = {}) {
   } catch {
     payload = null;
   }
+  const reconnectRequired =
+    payload?.error === "reconnect_required" ||
+    (Array.isArray(payload?.reconnectRequiredItemIds) && payload.reconnectRequiredItemIds.length > 0) ||
+    (Array.isArray(payload?.failedItems) && payload.failedItems.some(item => item?.reconnectRequired));
+
   if (!res.ok) {
     if (res.status === 429) {
       void log.warn("plaid", `Force sync throttled by backend cooldown. Using cached D1 data.`);
@@ -936,9 +567,6 @@ export async function forceBackendSync(options = {}) {
         failedItems: [],
       };
     }
-    const reconnectRequired =
-      payload?.error === "reconnect_required" ||
-      (Array.isArray(payload?.reconnectRequiredItemIds) && payload.reconnectRequiredItemIds.length > 0);
     const message = payload?.message || `Force sync failed: HTTP ${res.status}`;
     void log.error("plaid", `Force sync failed: HTTP ${res.status}`, {
       reconnectRequired,
@@ -959,8 +587,8 @@ export async function forceBackendSync(options = {}) {
     throttled: false,
     status: res.status,
     message: payload?.message || "Live sync completed.",
-    reconnectRequired: false,
-    failedItems: [],
+    reconnectRequired,
+    failedItems: payload?.failedItems || [],
   };
 }
 
@@ -1004,6 +632,84 @@ async function fetchCachedSyncStatus() {
   return res.json();
 }
 
+function getPlaidCreditLimitCacheKey(institutionName, mask) {
+  const normalizedInstitution = normText(normalizeInstitution(institutionName) || institutionName);
+  const last4 = normDigits(mask).slice(-4);
+  if (!normalizedInstitution || !last4) return null;
+  return `${normalizedInstitution}::${last4}`;
+}
+
+export function normalizePlaidBalanceSnapshot(balance = null, fallback = null, options = {}) {
+  const deriveLimit = options.deriveLimit === true;
+  const current = toFiniteMoney(balance?.current ?? fallback?.current);
+  const available = toFiniteMoney(balance?.available ?? fallback?.available);
+  const explicitLimit = toFiniteMoney(balance?.limit ?? (deriveLimit ? fallback?.limit : null));
+  const derivedLimit =
+    explicitLimit != null
+      ? explicitLimit
+      : deriveLimit && current != null && available != null
+        ? Math.max(0, current + available)
+        : null;
+
+  return {
+    available,
+    current,
+    limit: derivedLimit,
+    currency: balance?.iso_currency_code || fallback?.currency || "USD",
+  };
+}
+
+export function hydrateConnectionWithCachedCreditLimits(connection, cache = {}) {
+  if (!connection || !Array.isArray(connection.accounts)) return connection;
+  for (const acct of connection.accounts) {
+    if (acct?.type !== "credit") continue;
+    const key = getPlaidCreditLimitCacheKey(connection.institutionName, acct.mask);
+    if (!key) continue;
+    const cachedLimit = toFiniteMoney(cache[key]);
+    if (cachedLimit == null || cachedLimit <= 0) continue;
+    acct.balance = normalizePlaidBalanceSnapshot(acct.balance, { limit: cachedLimit }, { deriveLimit: true });
+  }
+  return connection;
+}
+
+export function collectConnectionCreditLimits(connection, existingCache = {}) {
+  const nextCache = { ...(existingCache || {}) };
+  if (!connection || !Array.isArray(connection.accounts)) return nextCache;
+  for (const acct of connection.accounts) {
+    if (acct?.type !== "credit") continue;
+    const key = getPlaidCreditLimitCacheKey(connection.institutionName, acct.mask);
+    const limit = toFiniteMoney(acct?.balance?.limit);
+    if (!key || limit == null || limit <= 0) continue;
+    nextCache[key] = limit;
+  }
+  return nextCache;
+}
+
+async function reconcileConnectionCreditLimitCache(connection) {
+  const currentCache = ((await db.get(PLAID_CREDIT_LIMIT_CACHE_KEY)) || {});
+  hydrateConnectionWithCachedCreditLimits(connection, currentCache);
+  const nextCache = collectConnectionCreditLimits(connection, currentCache);
+  if (JSON.stringify(nextCache) !== JSON.stringify(currentCache)) {
+    await db.set(PLAID_CREDIT_LIMIT_CACHE_KEY, nextCache);
+  }
+}
+
+function persistCreditLimitCacheEntry(institutionName, mask, limit) {
+  const key = getPlaidCreditLimitCacheKey(institutionName, mask);
+  const normalizedLimit = toFiniteMoney(limit);
+  if (!key || normalizedLimit == null || normalizedLimit <= 0) return;
+  void db.get(PLAID_CREDIT_LIMIT_CACHE_KEY)
+    .then((cache) => {
+      const currentCache = cache && typeof cache === "object" ? cache : {};
+      if (currentCache[key] === normalizedLimit) return null;
+      return db.set(PLAID_CREDIT_LIMIT_CACHE_KEY, {
+        ...currentCache,
+        [key]: normalizedLimit,
+      });
+    })
+    .catch(() => {});
+}
+
 /**
  * Fetch fresh balances for a connection from Plaid.
  * Our backend calls Plaid's /accounts/balance/get.
@@ -1031,17 +737,15 @@ export async function fetchBalances(connectionId, retryCount = 0) {
   for (const acct of conn.accounts) {
     const fresh = accounts.find(a => a.account_id === acct.plaidAccountId);
     if (fresh) {
-      acct.balance = {
-        available: fresh.balances?.available,
-        current: fresh.balances?.current,
-        limit: fresh.balances?.limit,
-        currency: fresh.balances?.iso_currency_code || "USD",
-      };
+      acct.balance = normalizePlaidBalanceSnapshot(fresh.balances, acct.balance, {
+        deriveLimit: acct.type === "credit",
+      });
       void log.warn("plaid", 
-        `  → ${acct.name}: bal=${fresh.balances?.current}, limit=${fresh.balances?.limit}, avail=${fresh.balances?.available}`
+        `  → ${acct.name}: bal=${acct.balance?.current}, limit=${acct.balance?.limit}, avail=${acct.balance?.available}`
       );
     }
   }
+  await reconcileConnectionCreditLimitCache(conn);
   const balanceFreshness = data.sync_freshness?.[connectionId]?.balances || null;
   conn.lastSync = balanceFreshness || conn.lastSync || data.last_synced_at || new Date().toISOString();
   await saveConnections(conns);
@@ -1103,10 +807,18 @@ export async function fetchLiabilities(connectionId, retryCount = 0) {
 
   // Plaid returns { liabilities: { credit: [...] }, accounts: [...] } inside data.liabilities
   const creditLiabilities = data.liabilities?.liabilities?.credit || [];
+  const liabilityAccounts = data.liabilities?.accounts || [];
 
   // Store liabilities data on matching connection accounts
   for (const acct of conn.accounts) {
     if (acct.type !== "credit") continue;
+    const liabilityAccount = liabilityAccounts.find(a => a.account_id === acct.plaidAccountId);
+    if (liabilityAccount?.balances) {
+      acct.balance = normalizePlaidBalanceSnapshot(liabilityAccount.balances, acct.balance, { deriveLimit: true });
+      void log.warn("plaid",
+        `  → liability account ${acct.name}: bal=${acct.balance?.current}, limit=${acct.balance?.limit}, avail=${acct.balance?.available}`
+      );
+    }
     const liability = creditLiabilities.find(l => l.account_id === acct.plaidAccountId);
     if (liability) {
       acct.liability = {
@@ -1126,6 +838,7 @@ export async function fetchLiabilities(connectionId, retryCount = 0) {
       };
     }
   }
+  await reconcileConnectionCreditLimitCache(conn);
 
   const liabilityFreshness = data.sync_freshness?.[connectionId]?.liabilities || null;
   conn.lastLiabilitySync = liabilityFreshness || conn.lastLiabilitySync || data.last_synced_at || new Date().toISOString();
@@ -1625,6 +1338,7 @@ export function autoMatchAccounts(
     if (acct.type === "credit") {
       const acctLast4 = normDigits(acct.mask).slice(-4) || null;
       const acctName = normText(acct.officialName || acct.name);
+      const plaidBalance = normalizePlaidBalanceSnapshot(acct.balance, null, { deriveLimit: true });
 
       // Try to match to existing card
       const matchByPlaidId = cards.find(c => c._plaidAccountId === acct.plaidAccountId);
@@ -1662,7 +1376,7 @@ export function autoMatchAccounts(
           name: bestName,
           institution: normalizedInst || "Other",
           nickname: "",
-          limit: acct.balance?.limit || null,
+          limit: plaidBalance.limit,
           mask: acct.mask || null,
           last4: acctLast4,
           annualFee: null,
@@ -1678,8 +1392,9 @@ export function autoMatchAccounts(
           minPayment: null,
           _plaidAccountId: acct.plaidAccountId,
           _plaidConnectionId: connection.id,
-          _plaidBalance: acct.balance?.current ?? null,
-          _plaidAvailable: acct.balance?.available ?? null,
+          _plaidBalance: plaidBalance.current,
+          _plaidAvailable: plaidBalance.available,
+          _plaidLimit: plaidBalance.limit,
         };
         newCards.push(newCard);
         linkedId = newCard.id;
@@ -1879,6 +1594,11 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
         const oldBal = updatedCards[idx]._plaidBalance;
         const card = updatedCards[idx];
         const liab = acct.liability || {};
+        const plaidBalance = normalizePlaidBalanceSnapshot(acct.balance, {
+          current: card._plaidBalance ?? card.balance,
+          available: card._plaidAvailable,
+          limit: card._plaidLimit ?? card.limit ?? card.creditLimit,
+        }, { deriveLimit: true });
 
         // Extract payment due day from Plaid's next_payment_due_date (ISO string → day-of-month)
         const plaidDueDay = liab.nextPaymentDueDate ? new Date(liab.nextPaymentDueDate).getUTCDate() : null;
@@ -1890,9 +1610,9 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
         updatedCards[idx] = {
           ...card,
           // ── Balance data (always overwrite with latest) ──
-          _plaidBalance: acct.balance?.current ?? card._plaidBalance,
-          _plaidAvailable: acct.balance?.available ?? card._plaidAvailable,
-          _plaidLimit: acct.balance?.limit ?? card._plaidLimit,
+          _plaidBalance: plaidBalance.current ?? card._plaidBalance,
+          _plaidAvailable: plaidBalance.available ?? card._plaidAvailable,
+          _plaidLimit: plaidBalance.limit ?? card._plaidLimit,
           _plaidLastSync: connection.lastSync || connection.lastLiabilitySync,
           _plaidAccountId: acct.plaidAccountId,
           _plaidConnectionId: connection.id,
@@ -1900,19 +1620,20 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
           // ── Liability metadata (store raw for reference) ──
           _plaidLiability: liab,
           // ── Plaid-wins: authoritative data overwrites local when Plaid provides it ──
-          limit: acct.balance?.limit ?? card.limit ?? null,
+          limit: plaidBalance.limit ?? card.limit ?? null,
           apr: liab.purchaseApr != null ? liab.purchaseApr : (card.apr ?? null),
           statementCloseDay: plaidStmtDay != null ? plaidStmtDay : (card.statementCloseDay ?? null),
           paymentDueDay: plaidDueDay != null ? plaidDueDay : (card.paymentDueDay ?? null),
           minPayment: liab.minimumPayment != null ? liab.minimumPayment : (card.minPayment ?? null),
         };
+        persistCreditLimitCacheEntry(connection.institutionName, acct.mask, updatedCards[idx].limit);
         void log.warn("plaid", 
-          `synced card "${updatedCards[idx].nickname || updatedCards[idx].name}": bal=${acct.balance?.current}, limit=${updatedCards[idx].limit}`
+          `synced card "${updatedCards[idx].nickname || updatedCards[idx].name}": bal=${plaidBalance.current}, limit=${updatedCards[idx].limit}`
         );
         balanceSummary.push({
           name: updatedCards[idx].nickname || updatedCards[idx].name,
           type: "credit",
-          balance: acct.balance.current,
+          balance: plaidBalance.current,
           previous: oldBal,
         });
       }
@@ -2008,39 +1729,3 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
  * @param {Array} bankAccounts - Bank accounts with _plaidBalance fields
  * @returns {{ checking, vault, debts[] }}
  */
-export function getPlaidAutoFill(cards = [], bankAccounts = []) {
-  // Sum checking accounts
-  const checkingAccounts = bankAccounts.filter(b => b.accountType === "checking");
-  const checking = checkingAccounts.reduce(
-    (sum, b) => sum + Number(b._plaidAvailable ?? b._plaidBalance ?? b.balance ?? 0),
-    0
-  );
-
-  // Sum savings/vault accounts
-  const savingsAccounts = bankAccounts.filter(b => b.accountType === "savings");
-  const vault = savingsAccounts.reduce(
-    (sum, b) => sum + Number(b._plaidAvailable ?? b._plaidBalance ?? b.balance ?? 0),
-    0
-  );
-
-  // Credit card balances (debts)
-  const debts = cards
-    .filter(c => c._plaidBalance != null && c._plaidBalance > 0)
-    .map(c => ({
-      cardId: c.id,
-      name: c.nickname || c.name,
-      institution: c.institution,
-      balance: c._plaidBalance,
-      limit: c._plaidLimit || c.limit,
-    }));
-
-  return {
-    checking: checking || null,
-    vault: vault || null,
-    debts,
-    lastSync:
-      bankAccounts.find(b => b._plaidLastSync)?._plaidLastSync ||
-      cards.find(c => c._plaidLastSync)?._plaidLastSync ||
-      null,
-  };
-}

@@ -84,7 +84,9 @@ describe("secureStore", () => {
 
     await expect(mod.setSecureItem("app-passcode", "1234")).resolves.toBe(false);
     await expect(mod.getSecureItem("app-passcode")).resolves.toBeNull();
-    expect(preferences.api.set).not.toHaveBeenCalled();
+    expect(preferences.api.set).not.toHaveBeenCalledWith(
+      expect.objectContaining({ key: "secure:app-passcode" })
+    );
     expect(await mod.migrateToSecureItem("app-passcode", "1234", removeLegacy)).toBeNull();
     expect(removeLegacy).toHaveBeenCalledTimes(1);
     expect(consoleError).toHaveBeenCalledTimes(1);

@@ -24,7 +24,15 @@ import {
   import BankAccountsSection from "../portfolio/BankAccountsSection.js";
   import CreditCardsSection from "../portfolio/CreditCardsSection.js";
   import CreditUtilizationWidget from "../portfolio/CreditUtilizationWidget.js";
-  import { parsePlaidSyncTimestamp,usePlaidSync } from "../usePlaidSync.js";
+  import {
+    formatPlaidSyncDateTimeLabel,
+    getLatestPlaidSyncDate,
+    getStalePlaidInstitutions,
+    splitPlaidInstitutionsByReconnect,
+    summarizeConnectedButCached,
+    summarizeReconnectRequired,
+  } from "../portfolio/plaidStatus.js";
+  import { formatPlaidSyncDateShort,usePlaidSync } from "../usePlaidSync.js";
   import { fmt } from "../utils.js";
 const InvestmentsSection = lazy(() => import("../portfolio/InvestmentsSection.js"));
 const OtherAssetsSection = lazy(() => import("../portfolio/OtherAssetsSection.js"));
@@ -62,6 +70,11 @@ interface CardPortfolioTabProps {
   themeTick?: number;
 }
 
+interface PlaidConnectionLike {
+  id?: string;
+  _needsReconnect?: boolean;
+}
+
 export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled = false, embedded = false, privacyMode: _privacyModeTick = false, themeTick: _themeTick = 0 }: CardPortfolioTabProps) {
   void _privacyModeTick;
   void _themeTick;
@@ -79,103 +92,35 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
   const { cardCatalog } = portfolioContext;
   const { financialConfig = {} as CatalystCashConfig, setFinancialConfig } = useSettings();
   const [plaidReconnectStatus, setPlaidReconnectStatus] = useState<Map<string, boolean>>(new Map());
+  const linkedPlaidItems = useMemo(() => [...cards, ...bankAccounts], [cards, bankAccounts]);
 
   // Bring in unified master metrics globally calculated
   const { portfolioMetrics, movePlan } = useDashboardData();
-  const lastPlaidSyncAt = useMemo(() => {
-    const timestamps = [...cards, ...bankAccounts]
-      .map((item) => {
-        const raw = (item && typeof item === "object" ? (item as { _plaidLastSync?: string | null })._plaidLastSync : null) || null;
-        if (!raw) return 0;
-        const timestamp = parsePlaidSyncTimestamp(raw);
-        return Number.isFinite(timestamp) ? timestamp : 0;
-      })
-      .filter((timestamp) => timestamp > 0);
-    if (!timestamps.length) return null;
-    return new Date(Math.max(...timestamps));
-  }, [cards, bankAccounts]);
-  const lastPlaidSyncLabel = useMemo(() => {
-    if (!lastPlaidSyncAt) return null;
-    try {
-      return new Intl.DateTimeFormat(undefined, {
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      }).format(lastPlaidSyncAt);
-    } catch {
-      return lastPlaidSyncAt.toLocaleString();
-    }
-  }, [lastPlaidSyncAt]);
-  const stalePlaidInstitutions = useMemo(() => {
-    if (!lastPlaidSyncAt) return [];
-    const STALE_THRESHOLD_MS = 10 * 60 * 1000;
-    const byConnection = new Map<string, { connectionId: string; name: string; lastSyncAt: number }>();
-    const linkedItems = [...cards, ...bankAccounts];
-
-    for (const item of linkedItems) {
-      const connectionId = String(item?._plaidConnectionId || "").trim();
-      if (!connectionId) continue;
-      const syncAt = parsePlaidSyncTimestamp((item as { _plaidLastSync?: string | null })._plaidLastSync);
-      if (!syncAt) continue;
-      const existing = byConnection.get(connectionId);
-      const name =
-        String((item as { institution?: string; bank?: string; name?: string }).institution || (item as { bank?: string }).bank || (item as { name?: string }).name || "Linked institution").trim();
-      if (!existing || syncAt > existing.lastSyncAt) {
-        byConnection.set(connectionId, { connectionId, name, lastSyncAt: syncAt });
-      }
-    }
-
-    return Array.from(byConnection.values())
-      .filter((entry) => (lastPlaidSyncAt.getTime() - entry.lastSyncAt) > STALE_THRESHOLD_MS)
-      .sort((a, b) => a.lastSyncAt - b.lastSyncAt);
-  }, [cards, bankAccounts, lastPlaidSyncAt]);
-  const stalePlaidBreakdown = useMemo(() => {
-    const reconnectRequired: Array<{ connectionId: string; name: string; lastSyncAt: number }> = [];
-    const connectedButCached: Array<{ connectionId: string; name: string; lastSyncAt: number }> = [];
-    for (const entry of stalePlaidInstitutions) {
-      const needsReconnect = plaidReconnectStatus.get(String(entry.connectionId || "").trim()) === true;
-      if (needsReconnect) reconnectRequired.push(entry);
-      else connectedButCached.push(entry);
-    }
-    return { reconnectRequired, connectedButCached };
-  }, [stalePlaidInstitutions, plaidReconnectStatus]);
+  const lastPlaidSyncAt = useMemo(() => getLatestPlaidSyncDate(linkedPlaidItems), [linkedPlaidItems]);
+  const lastPlaidSyncLabel = useMemo(() => formatPlaidSyncDateTimeLabel(lastPlaidSyncAt), [lastPlaidSyncAt]);
+  const lastPlaidSyncDateShort = useMemo(
+    () => formatPlaidSyncDateShort(lastPlaidSyncAt),
+    [lastPlaidSyncAt]
+  );
+  const stalePlaidInstitutions = useMemo(() => getStalePlaidInstitutions(linkedPlaidItems), [linkedPlaidItems]);
+  const stalePlaidBreakdown = useMemo(
+    () => splitPlaidInstitutionsByReconnect(stalePlaidInstitutions, plaidReconnectStatus),
+    [stalePlaidInstitutions, plaidReconnectStatus]
+  );
   const staleConnectedSummary = useMemo(() => {
-    if (!stalePlaidBreakdown.connectedButCached.length) return null;
-    const formatTime = (timestamp: number) => {
-      try {
-        return new Intl.DateTimeFormat(undefined, {
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        }).format(new Date(timestamp));
-      } catch {
-        return new Date(timestamp).toLocaleString();
-      }
-    };
-    const preview = stalePlaidBreakdown.connectedButCached
-      .slice(0, 2)
-      .map((entry) => `${entry.name} (${formatTime(entry.lastSyncAt)})`)
-      .join(", ");
-    return stalePlaidBreakdown.connectedButCached.length > 2 ? `${preview}, and others` : preview;
+    return summarizeConnectedButCached(stalePlaidBreakdown.connectedButCached);
   }, [stalePlaidBreakdown]);
   const reconnectRequiredSummary = useMemo(() => {
-    if (!stalePlaidBreakdown.reconnectRequired.length) return null;
-    const preview = stalePlaidBreakdown.reconnectRequired
-      .slice(0, 2)
-      .map((entry) => entry.name)
-      .join(", ");
-    return stalePlaidBreakdown.reconnectRequired.length > 2 ? `${preview}, and others` : preview;
+    return summarizeReconnectRequired(stalePlaidBreakdown.reconnectRequired);
   }, [stalePlaidBreakdown]);
 
   useEffect(() => {
     let cancelled = false;
     void getConnections()
-      .then((connections) => {
+      .then((connections = []) => {
         if (cancelled) return;
         const next = new Map();
-        for (const connection of connections || []) {
+        for (const connection of connections as Array<PlaidConnectionLike | undefined>) {
           const connectionId = String(connection?.id || "").trim();
           if (!connectionId) continue;
           next.set(connectionId, Boolean(connection?._needsReconnect));
@@ -188,7 +133,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
     return () => {
       cancelled = true;
     };
-  }, [cards, bankAccounts]);
+  }, [linkedPlaidItems]);
 
   const demoOverrideContext = useMemo(() => {
     if (!isTest) return portfolioContext;
@@ -295,7 +240,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
                 window.alert(
                   `${importedCount} account${importedCount !== 1 ? "s" : ""} imported!\n\n` +
                   'Plaid may assign generic names like "Credit Card" instead of the actual product name.\n\n' +
-                  "Please tap the ✏️ edit button on each imported account to verify and update:\n" +
+                  "Please tap the Edit button on each imported account to verify and update:\n" +
                   "• Card name (e.g. Sapphire Preferred)\n" +
                   "• APR\n" +
                   "• Annual fee & due date\n" +
@@ -415,18 +360,18 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
       {/* ─── Premium Wealth Dashboard Hero ─── */}
       <div style={{
         display: "flex", flexDirection: "column", gap: embedded ? 10 : 12,
-        background: `linear-gradient(180deg, ${T.bg.card} 0%, transparent 100%)`,
-        border: `1px solid ${T.border.subtle}`,
+        background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
+        border: `1px solid ${T.border.default}`,
         borderRadius: T.radius.lg,
         padding: embedded ? "12px 12px 14px" : "16px 14px 18px",
-        boxShadow: `0 16px 48px rgba(16,185,129,0.06), 0 8px 24px rgba(138,99,210,0.1), inset 0 1px 0 rgba(255,255,255,0.05)`,
+        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04)`,
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <h1 style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>
-              Total Net Worth
+            <h1 style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.font.mono, marginBottom: 6 }}>
+              Portfolio Snapshot
             </h1>
-            <div style={{ fontSize: embedded ? 28 : 32, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.02em", textShadow: `0 0 15px ${T.text.primary}80, 0 2px 10px ${T.text.primary}20` }}>
+            <div style={{ fontSize: embedded ? 28 : 32, fontWeight: 850, color: T.text.primary, letterSpacing: "-0.04em", lineHeight: 1.02 }}>
               {fmt(netWorth)}
             </div>
           </div>
@@ -442,10 +387,9 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
                 width: 36,
                 height: 36,
                 borderRadius: 18,
-                background: `linear-gradient(135deg, ${T.accent.primaryDim}, ${T.bg.elevated})`,
+                background: T.bg.elevated,
                 color: T.accent.primary,
-                border: `1px solid ${T.accent.primary}40`,
-                boxShadow: `0 2px 10px ${T.accent.primary}15`,
+                border: `1px solid ${T.border.subtle}`,
                 cursor: "pointer",
                 transition: "all .2s cubic-bezier(0.16, 1, 0.3, 1)",
               }}
@@ -460,16 +404,16 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
                 className="hover-btn card-press"
                 style={{
                   display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  background: T.bg.glass,
-                  border: `1px solid ${T.border.subtle}`,
-                  color: T.text.primary,
-                  cursor: plaidLoading ? "wait" : "pointer",
-                  opacity: plaidLoading ? 0.6 : 1,
+                alignItems: "center",
+                justifyContent: "center",
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                background: T.bg.elevated,
+                border: `1px solid ${T.border.subtle}`,
+                color: T.text.primary,
+                cursor: plaidLoading ? "wait" : "pointer",
+                opacity: plaidLoading ? 0.6 : 1,
                   transition: "all .2s cubic-bezier(0.16, 1, 0.3, 1)",
                 }}
                 title="Plaid Sync"
@@ -482,15 +426,15 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
 
         {/* Wealth Breakdown */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: embedded ? 5 : 6 }}>
-          <div style={{ background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: embedded ? "8px 6px" : "10px 8px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
+          <div style={{ background: T.bg.card, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: embedded ? "8px 6px" : "10px 8px", textAlign: "center" }}>
             <div style={{ fontSize: 8, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 3 }}>Liquid Cash</div>
             <span style={{ ...breakdownValueStyle, color: T.accent.emerald }}>{fmt(totalCash)}</span>
           </div>
-          <div style={{ background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: embedded ? "8px 6px" : "10px 8px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
+          <div style={{ background: T.bg.card, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: embedded ? "8px 6px" : "10px 8px", textAlign: "center" }}>
             <div style={{ fontSize: 8, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 3 }}>Investments</div>
             <span style={{ ...breakdownValueStyle, color: T.status.blue }}>{fmt(investTotalValue + totalOtherAssets)}</span>
           </div>
-          <div style={{ background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: embedded ? "8px 6px" : "10px 8px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
+          <div style={{ background: T.bg.card, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: embedded ? "8px 6px" : "10px 8px", textAlign: "center" }}>
             <div style={{ fontSize: 8, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 3 }}>Liabilities</div>
             <span style={{ ...breakdownValueStyle, color: T.status.red }}>{fmt(Math.abs(totalDebtBalance))}</span>
           </div>
@@ -515,7 +459,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
             <button
               onClick={() => { haptic.light(); onViewTransactions(); }}
               className="hover-btn"
-              style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 16, border: `1px solid ${T.accent.emerald}25`, background: `${T.accent.emerald}08`, color: T.accent.emerald, fontSize: 10, fontWeight: 700, cursor: "pointer", transition: "all .2s", position: "relative" }}
+              style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 10px", borderRadius: 16, border: `1px solid ${T.border.subtle}`, background: T.bg.elevated, color: T.text.primary, fontSize: 10, fontWeight: 700, cursor: "pointer", transition: "all .2s", position: "relative" }}
             >
               <ReceiptText size={10} /> Ledger
               {!proEnabled && <div style={{ position: "absolute", top: -4, right: -4, fontSize: 7, fontWeight: 800, background: T.accent.primary, color: "#fff", padding: "1px 4px", borderRadius: 4, fontFamily: T.font.mono }}>PRO</div>}
@@ -526,24 +470,21 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
               onClick={handleRefreshPlaid}
               disabled={plaidRefreshing}
               className="hover-btn"
-              style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 16, border: `1px solid ${T.status.blue}25`, background: `${T.status.blue}08`, color: T.status.blue, fontSize: 10, fontWeight: 700, cursor: plaidRefreshing ? "wait" : "pointer", transition: "all .2s" }}
+              style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 10px", borderRadius: 16, border: `1px solid ${T.border.subtle}`, background: T.bg.elevated, color: T.text.primary, fontSize: 10, fontWeight: 700, cursor: plaidRefreshing ? "wait" : "pointer", transition: "all .2s" }}
             >
               <RefreshCw
                 size={10}
                 style={plaidRefreshing ? { animation: "spin .8s linear infinite", transformOrigin: "center" } : undefined}
               />
-              {plaidRefreshing ? "Refreshing..." : "Refresh Live"}
+              {plaidRefreshing ? "Refreshing..." : "Refresh Balances"}
             </button>
           )}
         </div>
 
         <button
-          onClick={() => {
-            const allCol = Object.values(collapsedSections).every(Boolean);
-            setCollapsedSections({ creditCards: !allCol, bankAccounts: !allCol, savingsAccounts: !allCol, investments: !allCol, debts: !allCol, savingsGoals: !allCol, otherAssets: !allCol });
-          }}
+          onClick={toggleAllSections}
           className="hover-btn"
-          style={{ border: "none", background: "transparent", color: T.text.muted, fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+          style={{ border: "none", background: "transparent", color: T.text.dim, fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontFamily: T.font.mono, letterSpacing: "0.04em" }}
         >
           {Object.values(collapsedSections).every(Boolean) ? "Expand All" : "Collapse All"}
         </button>
@@ -564,8 +505,8 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
             border: `1px solid ${syncState.phase === "warning" ? `${T.status.amber}35` : `${T.status.blue}28`}`,
             background:
               syncState.phase === "warning"
-                ? `linear-gradient(180deg, ${T.status.amber}12, ${T.bg.card})`
-                : `linear-gradient(180deg, ${T.status.blue}10, ${T.bg.card})`,
+                ? T.bg.card
+                : T.bg.card,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -650,16 +591,16 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
             padding: "10px 12px",
             borderRadius: T.radius.md,
             border: `1px solid ${T.border.subtle}`,
-            background: `linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card})`,
+            background: T.bg.card,
             fontSize: 11,
             color: T.text.secondary,
             lineHeight: 1.55,
           }}
         >
-          Live-linked balances can update at different times by institution. Latest verified Plaid refresh: <span style={{ color: T.text.primary, fontWeight: 700 }}>{lastPlaidSyncLabel}</span>.
+          Plaid-linked balances are shown from the last verified sync. Latest Plaid refresh: <span style={{ color: T.text.primary, fontWeight: 700 }}>{lastPlaidSyncDateShort || lastPlaidSyncLabel}</span>.
           {staleConnectedSummary ? (
             <div style={{ marginTop: 6, color: T.status.amber }}>
-              Still connected, but Plaid returned older cached balances for: <span style={{ color: T.text.primary, fontWeight: 700 }}>{staleConnectedSummary}</span>.
+              Some institutions are still showing cached balances because Plaid returned older saved data or fresh balances have not landed yet: <span style={{ color: T.text.primary, fontWeight: 700 }}>{staleConnectedSummary}</span>.
               <span style={{ color: T.text.secondary }}> Reconnect is not currently required for these institutions.</span>
             </div>
           ) : null}
@@ -678,7 +619,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
             padding: "12px 14px",
             borderRadius: T.radius.lg,
             border: `1px solid ${T.accent.emerald}24`,
-            background: `linear-gradient(180deg, ${T.accent.emerald}08, ${T.bg.elevated})`,
+            background: T.bg.card,
             display: "flex",
             flexDirection: "column",
             gap: 8,
@@ -777,6 +718,23 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
       />
     </Suspense>
   );
+
+  function toggleAllSections() {
+    setCollapsedSections((previous) => {
+      const nextCollapsed = !Object.values(previous).every(Boolean);
+      return {
+        ...previous,
+        creditCards: nextCollapsed,
+        bankAccounts: nextCollapsed,
+        savingsAccounts: nextCollapsed,
+        investments: nextCollapsed,
+        savingsGoals: nextCollapsed,
+        otherAssets: nextCollapsed,
+        debts: nextCollapsed,
+        transactions: nextCollapsed,
+      };
+    });
+  }
 
   const combinedOtherAssetsSection = (
     <Suspense fallback={null}>
@@ -901,26 +859,34 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
               setCollapsedSections(p => ({ ...p, bankAccounts: false }));
             }}
             onAddInvestment={(key, symbol, shares) => {
-              const cur = financialConfig?.holdings || {};
-              setFinancialConfig({
-                ...financialConfig,
-                holdings: { ...cur, [key]: [...(cur[key] || []), { symbol, shares }] },
+              setFinancialConfig((prev: CatalystCashConfig) => {
+                const cur = prev?.holdings || {};
+                return {
+                  ...prev,
+                  holdings: { ...cur, [key]: [...(cur[key] || []), { symbol, shares }] },
+                };
               });
               setCollapsedSections(p => ({ ...p, investments: false }));
             }}
             onAddGoal={goal => {
-              setFinancialConfig({ ...financialConfig, savingsGoals: [...(financialConfig?.savingsGoals || []), goal] });
+              setFinancialConfig((prev: CatalystCashConfig) => ({
+                ...prev,
+                savingsGoals: [...(prev?.savingsGoals || []), goal],
+              }));
               setCollapsedSections(p => ({ ...p, savingsGoals: false }));
             }}
             onAddDebt={debt => {
-              setFinancialConfig({
-                ...financialConfig,
-                nonCardDebts: [...(financialConfig?.nonCardDebts || []), { id: "debt_" + Date.now(), ...debt }],
-              });
+              setFinancialConfig((prev: CatalystCashConfig) => ({
+                ...prev,
+                nonCardDebts: [...(prev?.nonCardDebts || []), { id: "debt_" + Date.now(), ...debt }],
+              }));
               setCollapsedSections(p => ({ ...p, debts: false }));
             }}
             onAddAsset={asset => {
-              setFinancialConfig({ ...financialConfig, otherAssets: [...(financialConfig?.otherAssets || []), asset] });
+              setFinancialConfig((prev: CatalystCashConfig) => ({
+                ...prev,
+                otherAssets: [...(prev?.otherAssets || []), asset],
+              }));
               setCollapsedSections(p => ({ ...p, otherAssets: false }));
             }}
             onPlaidConnect={() => {

@@ -3,10 +3,11 @@ export const PRO_AUDITS_PER_MONTH = 20;
 export const FREE_CHATS_PER_DAY = 5;
 export const PRO_CHATS_PER_DAY = 30;
 
-// Per-model daily caps for Pro chat (must sum to PRO_CHATS_PER_DAY)
+// Per-model daily caps for Pro. GPT-4.1 and Gemini Flash share the 30-chat global budget
+// freely with no per-model wall between them. o3 (Boardroom) is sub-capped at 5/day —
+// those 5 count toward the 30 total, leaving up to 25 for GPT-4.1 + Gemini combined.
 export const PRO_MODEL_CAPS = {
-  "gpt-4.1": 15,
-  "gemini-2.5-flash": 15,
+  "o3": 5,
 };
 
 // Per-model monthly caps for Pro audits (must sum to PRO_AUDITS_PER_MONTH)

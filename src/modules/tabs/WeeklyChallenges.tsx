@@ -4,6 +4,7 @@
   import { useEffect,useState } from "react";
   import { unlockBadge } from "../badges.js";
   import { T } from "../constants.js";
+  import UiGlyph from "../UiGlyph.js";
   import { Card } from "../ui.js";
   import { db } from "../utils.js";
 
@@ -237,7 +238,7 @@ export default function WeeklyChallenges() {
     <Card animate delay={450}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 16 }}>⚡</span>
+          <UiGlyph glyph="⚡" size={16} color={T.accent.primary} />
           <span style={{ fontSize: 13, fontWeight: 700 }}>Weekly Challenge</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -253,7 +254,7 @@ export default function WeeklyChallenges() {
                 gap: 3,
               }}
             >
-              🔥 {stats.streak}
+              <UiGlyph glyph="🔥" size={10} color="#FF8C00" /> {stats.streak}
             </span>
           )}
           <span
@@ -283,7 +284,7 @@ export default function WeeklyChallenges() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 28, flexShrink: 0 }}>{challenge.emoji}</span>
+          <UiGlyph glyph={challenge.emoji} size={28} color={completed ? T.status.green : T.accent.primary} style={{ flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <div
               style={{
@@ -323,11 +324,14 @@ export default function WeeklyChallenges() {
             boxShadow: `0 4px 16px ${T.accent.primary}40`,
           }}
         >
-          ✅ Mark Complete
+          Mark Complete
         </button>
       ) : (
         <div style={{ textAlign: "center", padding: "8px 0" }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: T.status.green }}>✅ Completed this week!</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: T.status.green, display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <UiGlyph glyph="✅" size={12} color={T.status.green} />
+            Completed this week!
+          </span>
         </div>
       )}
 

@@ -29,10 +29,11 @@ import { isLikelyAbortError, toUserFacingRequestError } from "../networkErrors.j
 import { getProvider } from "../providers.js";
 import { buildScrubber } from "../scrubber.js";
 import { getHistoryLimit, getOrCreateDeviceId, recordAuditUsage } from "../subscription.js";
-import { useToast } from "../Toast.js";
 import { buildDegradedParsedAudit, cyrb53, db, detectAuditDrift, parseAudit, parseCurrency, validateParsedAuditConsistency } from "../utils.js";
 import { maybeRequestReview } from "../ratePrompt.js";
 import { scheduleOverrunNotification } from "../notifications.js";
+import { trackFunnel } from "../funnelAnalytics.js";
+import { useToast, type ToastApi } from "../Toast.js";
 import { useNavigation } from "./NavigationContext.js";
 import { usePortfolio } from "./PortfolioContext.js";
 import { useBudget } from "./BudgetContext.js";
@@ -41,17 +42,14 @@ import {
   buildContributionAutoUpdates,
   hasCompletedAuditForSession,
   migrateHistory,
+  matchesAuditRecord,
+  removeAuditRecord,
   scrubPromptContext,
   type AuditDraftRecord,
 } from "./auditHelpers.js";
 
 interface AuditProviderProps {
   children: ReactNode;
-}
-
-interface ToastApi {
-  success: (message: string) => void;
-  error: (message: string) => void;
 }
 
 interface PromptChatContext {
@@ -124,6 +122,7 @@ interface AuditContextValue {
 }
 
 const AuditContext = createContext<AuditContextValue | null>(null);
+const REFERRAL_SHARE_NUDGE_KEY = "referral-share-nudge-ts";
 
 export function AuditProvider({ children }: AuditProviderProps) {
   const {
@@ -332,6 +331,25 @@ export function AuditProvider({ children }: AuditProviderProps) {
   const dismissRecoverableAuditDraft = useCallback(async (): Promise<void> => {
     await clearAuditDraft();
   }, [clearAuditDraft]);
+
+  const maybeShowReferralShareNudge = useCallback(async (realAuditCount: number): Promise<void> => {
+    if (realAuditCount !== 3) return;
+    const alreadyNudged = await db.get(REFERRAL_SHARE_NUDGE_KEY);
+    if (alreadyNudged) return;
+
+    await db.set(REFERRAL_SHARE_NUDGE_KEY, new Date().toISOString());
+    toast.info("Three audits in. If Catalyst is helping, share your referral link for a free month of Pro.", {
+      duration: 7000,
+      action: {
+        label: "Share",
+        fn: () => {
+          void import("../referral.js")
+            .then((mod) => mod.shareReferralLink())
+            .catch(() => {});
+        },
+      },
+    });
+  }, [toast]);
 
   const handleSubmit = useCallback<AuditContextValue["handleSubmit"]>(
     async (msg, formData, testMode = false, manualResultText = null) => {
@@ -780,7 +798,11 @@ export function AuditProvider({ children }: AuditProviderProps) {
           // Fire App Store rating prompt after 3rd real audit (ratePrompt handles cooldown)
           if (!manualResultText) {
             const realAuditCount = nextHistory.filter((a) => !a.isTest).length;
+            if (realAuditCount === 1) {
+              void trackFunnel("first_audit_completed");
+            }
             maybeRequestReview(realAuditCount).catch(() => {});
+            maybeShowReferralShareNudge(realAuditCount).catch(() => {});
 
             // Budget overrun notification — fires ~2s after audit saves
             // Only triggers if user has budget lines and OS permission is granted
@@ -852,7 +874,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
               const names = newlyUnlocked
                 .map((id) => BADGE_DEFINITIONS.find((badge: { id: string; name: string }) => badge.id === id)?.name)
                 .filter((name): name is string => Boolean(name));
-              if (names.length) toast.success(`🏆 Badge unlocked: ${names.join(", ")}!`);
+              if (names.length) toast.success(`Badge unlocked: ${names.join(", ")}!`);
             }
           } catch (badgeError: unknown) {
             log.error("audit", "Badge evaluation failed", { error: badgeError });
@@ -917,7 +939,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
         } else if (isAbort) {
           setError("Audit was interrupted before completion. Your inputs are still here.");
         } else {
-          if (!manualResultText && computedStrategy) {
+          if (!manualResultText && computedStrategy && partialRaw) {
             try {
               const pendingChargesTotal = Array.isArray(formData?.pendingCharges)
                 ? formData.pendingCharges.reduce((sum, charge) => sum + (parseCurrency(charge?.amount) || 0), 0)
@@ -1113,12 +1135,11 @@ export function AuditProvider({ children }: AuditProviderProps) {
   }, [clearAll]);
 
   const deleteHistoryItem = useCallback((auditToDelete: AuditRecord): void => {
-    const isMatch = (left: AuditRecord, right: AuditRecord): boolean => left.ts === right.ts;
     setHistory((prev) => {
-      const next = prev.filter((item) => !isMatch(item, auditToDelete));
+      const next = removeAuditRecord(prev, auditToDelete);
       db.set("audit-history", next);
 
-      if (current && isMatch(current, auditToDelete)) {
+      if (current && matchesAuditRecord(current, auditToDelete)) {
         const nextCurrent = next.length > 0 ? next[0] || null : null;
         setCurrent(nextCurrent);
         db.set("current-audit", nextCurrent);
@@ -1126,17 +1147,15 @@ export function AuditProvider({ children }: AuditProviderProps) {
       return next;
     });
     setViewing(null);
-    const remainingHistory = history.filter((item) => !isMatch(item, auditToDelete));
+    const remainingHistory = removeAuditRecord(history, auditToDelete);
     navTo(remainingHistory.length > 0 ? "history" : "audit");
-  }, [current, navTo]);
+  }, [current, history, navTo]);
 
   const handleManualImport = useCallback(async (resultText: string): Promise<void> => {
     if (!resultText) return;
     setResultsBackTarget("history");
     setLoading(true);
     setError(null);
-    navTo("results");
-    setStreamText(resultText);
     setAuditLoadingPhase("finalize");
     try {
       const parsedAudit = parseAudit(resultText) as ParsedAudit | null;
@@ -1167,6 +1186,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
       });
       await Promise.all([db.set("current-audit", audit), db.set("move-states", {})]);
       await clearAuditDraft();
+      navTo("results", audit);
       haptic.success();
       toast.success("Audit imported successfully");
     } catch (importError: unknown) {

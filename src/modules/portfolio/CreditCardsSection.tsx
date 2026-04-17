@@ -43,6 +43,11 @@ interface CreditCardsSectionProps {
     }>;
 }
 
+interface PlaidConnectionLike {
+    id?: string;
+    _needsReconnect?: boolean;
+}
+
 export default function CreditCardsSection({
     collapsedSections: propCollapsed,
     setCollapsedSections: propSetCollapsed,
@@ -85,12 +90,13 @@ export default function CreditCardsSection({
     useEffect(() => {
         let active = true;
         getConnections()
-            .then(connections => {
+            .then((connections = []) => {
                 if (!active) return;
                 const nextReconnectIds = new Set(
-                    (connections || [])
+                    connections
+                        .map(connection => connection as PlaidConnectionLike | undefined)
                         .filter(connection => connection?._needsReconnect)
-                        .map(connection => connection.id)
+                        .map(connection => connection?.id)
                         .filter(Boolean)
                 );
                 setReconnectConnectionIds(new Set<string>(Array.from(nextReconnectIds) as string[]));
@@ -297,7 +303,7 @@ export default function CreditCardsSection({
                             const plaidSyncDate = formatPlaidSyncDateShort((card as CardRecord & { _plaidLastSync?: string | number | null })._plaidLastSync);
                             const utilization = limit > 0 ? Math.max(0, (visibleBalance / limit) * 100) : null;
                             const statusChips = [
-                                needsReconnect ? { label: "Reconnect", tone: "warning" } : null,
+                                needsReconnect ? { label: "Reconnect required", tone: "warning" } : null,
                                 usesManualFallback ? { label: "Manual", tone: "muted" } : null,
                             ].filter(Boolean) as Array<{ label: string; tone: "warning" | "muted" | "good" | "danger" }>;
                             const metaTokens = [

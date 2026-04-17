@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { LAST_PORTABLE_BACKUP_TS_KEY } from "../backupMetadata.js";
 import { db } from "../utils.js";
 
 export function useDashboardChrome({ current, streak, autoBackupInterval, appPasscode, onNativeBackup }) {
@@ -31,11 +32,11 @@ export function useDashboardChrome({ current, streak, autoBackupInterval, appPas
     if (streakMilestoneChecked.current || !streak) return;
     streakMilestoneChecked.current = true;
     const milestones = {
-      4: { emoji: "🔥", label: "1 Month Strong!" },
-      8: { emoji: "💪", label: "2 Months of Consistency!" },
-      12: { emoji: "🏆", label: "Quarter Master!" },
-      26: { emoji: "⚡", label: "Half-Year Hero!" },
-      52: { emoji: "👑", label: "Full Year. Legend." },
+      4: { label: "1 Month Strong!" },
+      8: { label: "2 Months of Consistency!" },
+      12: { label: "Quarter Master!" },
+      26: { label: "Half-Year Hero!" },
+      52: { label: "Full Year. Legend." },
     };
     const milestone = milestones[streak];
     if (!milestone) return;
@@ -46,7 +47,7 @@ export function useDashboardChrome({ current, streak, autoBackupInterval, appPas
         await db.set(key, true);
         setRunConfetti(true);
         setTimeout(() => setRunConfetti(false), 6000);
-        window.toast?.success?.(`${milestone.emoji} W${streak}: ${milestone.label}`);
+        window.toast?.success?.(`W${streak}: ${milestone.label}`);
       }
     })();
   }, [streak]);
@@ -56,7 +57,7 @@ export function useDashboardChrome({ current, streak, autoBackupInterval, appPas
     void (async () => {
       const dismissed = (await db.get("backup-nudge-dismissed")) as number | null;
       if (dismissed && Date.now() - dismissed < 7 * 86400000) return;
-      const lastTs = (await db.get("last-backup-ts")) as number | null;
+      const lastTs = (await db.get(LAST_PORTABLE_BACKUP_TS_KEY)) as number | null;
       if (!lastTs || Date.now() - lastTs > 7 * 86400000) {
         setShowBackupNudge(true);
       }
@@ -72,9 +73,8 @@ export function useDashboardChrome({ current, streak, autoBackupInterval, appPas
     setBackingUp(true);
     try {
       await onNativeBackup(appPasscode || null);
-      await db.set("last-backup-ts", Date.now());
       setShowBackupNudge(false);
-      window.toast?.success?.("✅ Backup saved to iCloud Drive");
+      window.toast?.success?.("Backup saved to iCloud Drive");
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Unknown error";
       window.toast?.error?.("Backup failed: " + message);
@@ -89,7 +89,7 @@ export function useDashboardChrome({ current, streak, autoBackupInterval, appPas
       const daysSince = Math.floor((Date.now() - new Date(current.date).getTime()) / 86400000);
       if (daysSince >= 7) return `Welcome back! It's been ${daysSince} days — let's catch up.`;
     }
-    if (streak > 1) return `${timeGreet}. W${streak} streak going strong 🔥`;
+    if (streak > 1) return `${timeGreet}. W${streak} streak going strong.`;
     return `${timeGreet}. Let's check your numbers.`;
   })();
 

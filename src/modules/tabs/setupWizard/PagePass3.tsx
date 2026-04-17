@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { T } from "../../constants.js";
 import { haptic } from "../../haptics.js";
+import { AlertTriangle, CheckCircle2, Landmark, Sparkles } from "../../icons.js";
 import {
   applyBalanceSync,
   autoMatchAccounts,
@@ -213,10 +214,9 @@ export function PagePass3({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 18,
                 }}
               >
-                🏦
+                <Landmark size={18} color="#0A85D1" />
               </div>
               <div>
                 <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: T.text.primary }}>Connect Your Bank</h4>
@@ -236,7 +236,7 @@ export function PagePass3({
                   marginBottom: 8,
                 }}
               >
-                <span style={{ fontSize: 14 }}>✅</span>
+                <CheckCircle2 size={14} color={T.status.green} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: T.status.green }}>
                   {plaidCount} bank{plaidCount > 1 ? "s" : ""} connected
                 </span>
@@ -269,7 +269,7 @@ export function PagePass3({
                   transition: "all 0.2s",
                 }}
               >
-                {plaidConnecting ? "Connecting…" : plaidCount > 0 ? "+ Link Another Bank" : "🔗 Link via Plaid"}
+                {plaidConnecting ? "Connecting…" : plaidCount > 0 ? "+ Link Another Bank" : "Link via Plaid"}
               </button>
             </div>
             <p style={{ fontSize: 10, color: T.text.dim, marginTop: 8, textAlign: "center", margin: "8px 0 0 0" }}>
@@ -337,9 +337,9 @@ export function PagePass3({
           value={themeMode || "system"}
           onChange={v => setThemeMode(v as ThemeMode)}
           options={[
-            { value: "system", label: "⚙️ System Auto" },
-            { value: "dark", label: "🌙 Dark Mode" },
-            { value: "light", label: "☀️ Light Mode" },
+            { value: "system", label: "System Auto" },
+            { value: "dark", label: "Dark Mode" },
+            { value: "light", label: "Light Mode" },
           ]}
         />
       </WizField>
@@ -362,7 +362,10 @@ export function PagePass3({
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <span style={{ fontSize: 14, fontWeight: 800, color: T.accent.emerald }}>✨ Catalyst AI</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 800, color: T.accent.emerald }}>
+              <Sparkles size={14} color={T.accent.emerald} />
+              Catalyst AI
+            </span>
             <span
               style={{
                 fontSize: 10,
@@ -511,7 +514,12 @@ export function PagePass3({
               placeholder="Re-enter PIN"
               style={{ borderColor: pinMismatch ? T.status.red : undefined }}
             />
-            {pinMismatch && <div style={{ fontSize: 12, color: T.status.red, marginTop: 4 }}>⚠️ PINs don't match</div>}
+            {pinMismatch && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.status.red, marginTop: 4 }}>
+                <AlertTriangle size={12} color={T.status.red} />
+                PINs don't match
+              </div>
+            )}
           </WizField>
           {isNative && (
             <div style={{ marginTop: 8, marginBottom: 16 }}>
@@ -534,12 +542,12 @@ export function PagePass3({
           }}
           disabled={!isNative}
           options={[
-            { value: 0, label: "⚡ Immediately" },
-            { value: 30, label: "⏱ 30 seconds" },
-            { value: 60, label: "⏱ 1 minute" },
-            { value: 300, label: "⏱ 5 minutes" },
-            { value: 900, label: "⏱ 15 minutes" },
-            { value: -1, label: "🔓 Never" },
+            { value: 0, label: "Immediately" },
+            { value: 30, label: "30 seconds" },
+            { value: 60, label: "1 minute" },
+            { value: 300, label: "5 minutes" },
+            { value: 900, label: "15 minutes" },
+            { value: -1, label: "Never" },
           ]}
         />
       </WizField>

@@ -1,30 +1,17 @@
-// ═══════════════════════════════════════════════════════════════
-// LOGGER — Catalyst Cash
-//
-// Lightweight ring-buffer logger. Stores the last 200 entries in
-// Capacitor Preferences so they survive app restarts. Users can
-// export logs from Settings → Support → Export Debug Log.
-//
-// Usage:
-//   import { log } from "./logger.js";
-//   log.info("audit", "Audit started", { provider: "gemini" });
-//   log.error("api", "Request failed", { status: 502 });
-//   log.warn("subscription", "Quota nearing limit", { remaining: 1 });
-// ═══════════════════════════════════════════════════════════════
-
-  import { Preferences } from "@capacitor/preferences";
+import { Preferences } from "@capacitor/preferences";
 
 const LOG_KEY = "catalyst-debug-log";
 const MAX_ENTRIES = 200;
+const MAX_DEPTH = 3;
+const MAX_STRING_LENGTH = 240;
+const PERSIST_INTERVAL = 5;
 
 let buffer = [];
 let loaded = false;
 
-// ── Level Enum ────────────────────────────────────────────────
 const LEVELS = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
 const LEVEL_NAMES = ["DEBUG", "INFO", "WARN", "ERROR"];
 
-// Fields that MUST NEVER appear in logs
 const REDACTED_KEYS = [
   "key",
   "secret",
@@ -47,15 +34,19 @@ const REDACTED_KEYS = [
   "messages",
   "rules",
   "personal",
-  // Financial PII additions
-  "networth",   // catches netWorth, net_worth, networth_today, etc.
-  "spending",   // catches spendingTotal, monthlySpending, etc.
-  "ssn",        // social security number fields
-  "routing",    // bank routing numbers
-  "account",    // catches accountNumber, accountId, etc.
-  "credit",     // catches creditScore, creditLimit, etc.
-  "investment", // catches investmentBalance, investmentTotal, etc.
-  "holding",    // catches holdings, holdingBalance, etc.
+  "networth",
+  "spending",
+  "ssn",
+  "routing",
+  "account",
+  "credit",
+  "investment",
+  "holding",
+  "recoveryid",
+  "recoverykey",
+  "authtoken",
+  "encryptedblob",
+  "integritytag",
 ];
 
 const SECRET_PATTERNS = [
@@ -68,7 +59,7 @@ const SECRET_PATTERNS = [
 
 function shouldRedactKey(key) {
   const normalizedKey = String(key || "").toLowerCase();
-  return REDACTED_KEYS.some(redacted => normalizedKey.includes(redacted));
+  return REDACTED_KEYS.some((redacted) => normalizedKey.includes(redacted));
 }
 
 function sanitizeString(value) {
@@ -76,38 +67,46 @@ function sanitizeString(value) {
   for (const rule of SECRET_PATTERNS) {
     sanitized = sanitized.replace(rule.pattern, rule.replacement);
   }
-  if (sanitized.length > 240) {
-    sanitized = `${sanitized.slice(0, 240)}…`;
+  if (sanitized.length > MAX_STRING_LENGTH) {
+    return `${sanitized.slice(0, MAX_STRING_LENGTH)}…`;
   }
   return sanitized;
 }
 
 function sanitizeValue(value, depth = 0) {
   if (value == null) return value;
-  if (depth > 3) return "[Truncated]";
+  if (depth > MAX_DEPTH) return "[Truncated]";
+
   if (value instanceof Error) {
     return {
       name: value.name || "Error",
       message: sanitizeString(value.message || "Unknown error"),
     };
   }
+
   if (typeof value === "string") return sanitizeString(value);
   if (typeof value === "number" || typeof value === "boolean") return value;
+
   if (Array.isArray(value)) {
     return value.slice(0, 8).map((item) => sanitizeValue(item, depth + 1));
   }
+
   if (typeof value === "object") {
     const safe = {};
-    for (const [k, v] of Object.entries(value)) {
-      if (shouldRedactKey(k)) {
-        safe[k] = "[REDACTED]";
-        continue;
-      }
-      safe[k] = sanitizeValue(v, depth + 1);
+    for (const [key, nestedValue] of Object.entries(value)) {
+      safe[key] = shouldRedactKey(key) ? "[REDACTED]" : sanitizeValue(nestedValue, depth + 1);
     }
     return safe;
   }
+
   return sanitizeString(value);
+}
+
+function hasPayload(value) {
+  if (value == null) return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value).length > 0;
+  return true;
 }
 
 function getConsoleMethod(level) {
@@ -121,28 +120,29 @@ function shouldEmitToConsole(level) {
   return Boolean(import.meta.env.DEV) || level >= LEVELS.WARN;
 }
 
-// ── Internal: persist buffer ──────────────────────────────────
+function shouldPersist(level) {
+  return level >= LEVELS.WARN || buffer.length % PERSIST_INTERVAL === 0;
+}
+
 async function persist() {
   try {
     await Preferences.set({ key: LOG_KEY, value: JSON.stringify(buffer) });
-  } catch {
-    /* silent — logging should never crash the app */
+  } catch (error) {
+    void error;
   }
 }
 
-// ── Internal: load buffer from storage ────────────────────────
 async function loadBuffer() {
   if (loaded) return;
   try {
     const { value } = await Preferences.get({ key: LOG_KEY });
     if (value) buffer = JSON.parse(value);
-  } catch {
-    /* start fresh */
+  } catch (error) {
+    void error;
   }
   loaded = true;
 }
 
-// ── Core: append log entry ────────────────────────────────────
 async function append(level, tag, message, data) {
   await loadBuffer();
 
@@ -153,27 +153,20 @@ async function append(level, tag, message, data) {
     msg: message,
   };
 
-  // Only include data if present and non-empty
   if (data !== undefined && data !== null) {
     const safe = sanitizeValue(data);
-    if (
-      (typeof safe === "object" && safe !== null && Object.keys(safe).length > 0) ||
-      typeof safe !== "object"
-    ) {
+    if (hasPayload(safe)) {
       entry.data = safe;
     }
   }
 
   buffer.push(entry);
-
-  // Ring buffer — keep last MAX_ENTRIES
   if (buffer.length > MAX_ENTRIES) {
     buffer = buffer.slice(-MAX_ENTRIES);
   }
 
-  // Persist every 5 entries to reduce I/O
-  if (buffer.length % 5 === 0) {
-    persist();
+  if (shouldPersist(level)) {
+    void persist();
   }
 
   if (shouldEmitToConsole(level)) {
@@ -186,7 +179,6 @@ async function append(level, tag, message, data) {
   }
 }
 
-// ── Public API ────────────────────────────────────────────────
 export const log = {
   debug: (tag, msg, data) => append(LEVELS.DEBUG, tag, msg, data),
   info: (tag, msg, data) => append(LEVELS.INFO, tag, msg, data),
@@ -194,38 +186,26 @@ export const log = {
   error: (tag, msg, data) => append(LEVELS.ERROR, tag, msg, data),
 };
 
-/**
- * Get all stored log entries as an array.
- */
 export async function getLogs() {
   await loadBuffer();
   return [...buffer];
 }
 
-/**
- * Get logs formatted as a plain-text string for export.
- */
 export async function getLogsAsText() {
   const entries = await getLogs();
   return entries
-    .map(e => {
-      const data = e.data ? ` | ${JSON.stringify(e.data)}` : "";
-      return `[${e.t}] [${e.l}] [${e.tag}] ${e.msg}${data}`;
+    .map((entry) => {
+      const data = entry.data ? ` | ${JSON.stringify(entry.data)}` : "";
+      return `[${entry.t}] [${entry.l}] [${entry.tag}] ${entry.msg}${data}`;
     })
     .join("\n");
 }
 
-/**
- * Clear all stored logs.
- */
 export async function clearLogs() {
   buffer = [];
   await persist();
 }
 
-/**
- * Flush any buffered entries to storage immediately.
- */
 export async function flushLogs() {
   await persist();
 }

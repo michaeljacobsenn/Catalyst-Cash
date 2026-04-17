@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { MapPin } from "../icons";
 import { APP_VERSION, T } from "../constants.js";
+import UiGlyph from "../UiGlyph.js";
 import { GlobalStyles } from "../ui.js";
 
 interface SimulatedNotification {
@@ -44,7 +45,10 @@ export function OfflineBanner() {
         flexShrink: 0,
       }}
     >
-      ⚡ NO INTERNET — Audits unavailable
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <UiGlyph glyph="⚡" size={12} color={T.status.amber} />
+        No internet — audits unavailable
+      </span>
     </div>
   );
 }
@@ -57,9 +61,9 @@ export function AiConsentModal({ open, onCancel, onConfirm }: ConsentModalProps)
         position: "fixed",
         inset: 0,
         zIndex: 100,
-        background: "rgba(0,0,0,0.75)",
-        backdropFilter: "blur(24px) saturate(1.8)",
-        WebkitBackdropFilter: "blur(24px) saturate(1.8)",
+        background: "rgba(4, 7, 12, 0.78)",
+        backdropFilter: "blur(14px) saturate(1.15)",
+        WebkitBackdropFilter: "blur(14px) saturate(1.15)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -74,7 +78,7 @@ export function AiConsentModal({ open, onCancel, onConfirm }: ConsentModalProps)
           borderRadius: T.radius.xl,
           border: `1px solid ${T.border.subtle}`,
           padding: 24,
-          boxShadow: `0 24px 48px rgba(0,0,0,0.6), 0 0 0 1px ${T.border.subtle}`,
+          boxShadow: T.shadow.elevated,
         }}
       >
         <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 10, color: T.text.primary }}>AI Data Consent</div>
@@ -105,13 +109,12 @@ export function AiConsentModal({ open, onCancel, onConfirm }: ConsentModalProps)
               flex: 1,
               padding: 14,
               borderRadius: T.radius.lg,
-              border: "none",
-              background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`,
-              color: "white",
+              border: `1px solid ${T.accent.primary}24`,
+              background: `${T.accent.primary}14`,
+              color: T.accent.primary,
               fontWeight: 800,
               cursor: "pointer",
               fontSize: 14,
-              boxShadow: `0 4px 12px ${T.accent.primary}40`,
             }}
           >
             I Agree
@@ -188,15 +191,16 @@ export function SimulatedNotificationBanner({
           left: 12,
           right: 12,
           zIndex: 9999,
-          background: `linear-gradient(135deg, ${T.bg.card} 0%, ${T.bg.elevated} 100%)`,
+          background: T.bg.card,
           borderRadius: 20,
           padding: "14px 16px",
           display: "flex",
           alignItems: "center",
           gap: 12,
-          boxShadow: `0 16px 48px rgba(0,0,0,0.85), 0 0 0 1px ${T.border.default}`,
-          backdropFilter: "blur(32px)",
-          WebkitBackdropFilter: "blur(32px)",
+          boxShadow: T.shadow.elevated,
+          border: `1px solid ${T.border.subtle}`,
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
           animation: "slideDownNotif 0.38s cubic-bezier(0.16,1,0.3,1) both",
           cursor: "pointer",
         }}
@@ -210,15 +214,15 @@ export function SimulatedNotificationBanner({
             width: 44,
             height: 44,
             borderRadius: 13,
-            background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`,
+            background: T.bg.elevated,
+            border: `1px solid ${T.border.default}`,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0,
-            boxShadow: `0 4px 12px ${T.accent.primary}50`,
           }}
         >
-          <MapPin size={22} color="white" strokeWidth={2.5} />
+          <MapPin size={22} color={T.accent.primary} strokeWidth={2.3} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
@@ -252,189 +256,85 @@ export function LoadingScreen() {
     >
       <GlobalStyles />
       <style>{`
-@keyframes loadFloat1 { 0%, 100% { transform: translate(0, 0) scale(1); } 33% { transform: translate(30px, -20px) scale(1.1); } 66% { transform: translate(-20px, 10px) scale(0.95); } }
-@keyframes loadFloat2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-35px, -25px) scale(1.15); } }
-@keyframes loadFloat3 { 0%, 100% { transform: translate(0, 0) scale(0.9); } 40% { transform: translate(25px, 15px) scale(1.05); } 80% { transform: translate(-15px, -10px) scale(1); } }
-@keyframes ringSweep { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-@keyframes iconBloom { 0% { transform: scale(0.7); opacity: 0; filter: blur(8px); } 100% { transform: scale(1); opacity: 1; filter: blur(0); } }
-@keyframes iconPulse { 0%, 100% { box-shadow: 0 12px 48px rgba(0,0,0,0.4), 0 0 30px ${T.accent.primary}15; } 50% { box-shadow: 0 16px 56px rgba(0,0,0,0.5), 0 0 60px ${T.accent.primary}30, 0 0 100px ${T.accent.emerald}10; } }
-@keyframes glowPulse { 0%, 100% { opacity: 0.15; transform: scale(1); } 50% { opacity: 0.35; transform: scale(1.08); } }
-@keyframes particleDrift1 { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 0.6; } 90% { opacity: 0.6; } 100% { transform: translate(40px, -80px); opacity: 0; } }
-@keyframes particleDrift2 { 0% { transform: translate(0, 0); opacity: 0; } 15% { opacity: 0.5; } 85% { opacity: 0.5; } 100% { transform: translate(-50px, -70px); opacity: 0; } }
-@keyframes particleDrift3 { 0% { transform: translate(0, 0); opacity: 0; } 20% { opacity: 0.4; } 80% { opacity: 0.4; } 100% { transform: translate(30px, -90px); opacity: 0; } }
-@keyframes particleDrift4 { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 0.5; } 90% { opacity: 0.3; } 100% { transform: translate(-35px, -60px); opacity: 0; } }
-@keyframes loadBarFill { 0% { width: 0%; } 20% { width: 25%; } 50% { width: 55%; } 80% { width: 80%; } 100% { width: 95%; } }
-@keyframes textReveal { 0% { opacity: 0; transform: translateY(16px); filter: blur(6px); } 100% { opacity: 1; transform: translateY(0); filter: blur(0); } }
-@keyframes subtitlePulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
-    `}</style>
+@keyframes loadBarFill { 0% { width: 18%; } 50% { width: 62%; } 100% { width: 88%; } }
+@keyframes textReveal { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes softDrift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+      `}</style>
       <div
         style={{
-          position: "absolute",
-          top: "12%",
-          left: "5%",
-          width: 240,
-          height: 240,
-          background: `radial-gradient(circle, ${T.accent.primary}20, transparent 70%)`,
-          filter: "blur(60px)",
-          borderRadius: "50%",
-          pointerEvents: "none",
-          animation: "loadFloat1 8s ease-in-out infinite",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          bottom: "15%",
-          right: "5%",
-          width: 200,
-          height: 200,
-          background: `radial-gradient(circle, ${T.accent.emerald}18, transparent 70%)`,
-          filter: "blur(50px)",
-          borderRadius: "50%",
-          pointerEvents: "none",
-          animation: "loadFloat2 10s ease-in-out infinite",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          top: "50%",
-          left: "55%",
-          width: 180,
-          height: 180,
-          background: "radial-gradient(circle, #6C60FF12, transparent 70%)",
-          filter: "blur(55px)",
-          borderRadius: "50%",
-          pointerEvents: "none",
-          animation: "loadFloat3 12s ease-in-out infinite",
-        }}
-      />
-      <div
-        style={{
-          position: "relative",
-          width: 120,
-          height: 120,
-          marginBottom: 36,
-          animation: "iconBloom .8s cubic-bezier(0.16,1,0.3,1) both",
+          width: "min(320px, calc(100vw - 40px))",
+          padding: "28px 24px 24px",
+          borderRadius: 28,
+          border: `1px solid ${T.border.subtle}`,
+          background: T.bg.card,
+          boxShadow: T.shadow.elevated,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          textAlign: "center",
+          animation: "textReveal .45s ease-out both",
         }}
       >
         <div
           style={{
-            position: "absolute",
-            inset: -20,
-            borderRadius: "50%",
-            background: `radial-gradient(circle, ${T.accent.primary}30, ${T.accent.emerald}10, transparent 70%)`,
-            animation: "glowPulse 3s ease-in-out .6s infinite",
-            pointerEvents: "none",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            inset: -8,
-            borderRadius: "50%",
-            animation: "ringSweep 2.5s linear .4s infinite",
-            opacity: 0,
-            animationFillMode: "forwards",
+            width: 88,
+            height: 88,
+            marginBottom: 22,
+            padding: 10,
+            borderRadius: 28,
+            background: T.bg.elevated,
+            border: `1px solid ${T.border.default}`,
+            animation: "softDrift 3.2s ease-in-out infinite",
           }}
         >
-          <div
+          <img
+            src="/icon-512.png"
+            alt=""
             style={{
-              position: "absolute",
-              inset: 0,
-              borderRadius: "50%",
-              background: `conic-gradient(from 0deg, transparent 0%, ${T.accent.primary}60 15%, ${T.accent.emerald}50 30%, transparent 45%)`,
-              mask: "radial-gradient(farthest-side, transparent calc(100% - 2.5px), #fff calc(100% - 2px))",
-              WebkitMask:
-                "radial-gradient(farthest-side, transparent calc(100% - 2.5px), #fff calc(100% - 2px))",
+              width: "100%",
+              height: "100%",
+              borderRadius: 20,
+              display: "block",
             }}
           />
         </div>
-        <div
-          style={{
-            position: "absolute",
-            inset: -8,
-            borderRadius: "50%",
-            border: `1px solid ${T.border.subtle}`,
-            pointerEvents: "none",
-            animation: "textReveal .5s ease-out .3s both",
-          }}
-        />
-        {[
-          { left: "15%", bottom: "10%", size: 4, background: T.accent.primary, animation: "particleDrift1 3s ease-out .8s infinite" },
-          { right: "10%", bottom: "20%", size: 3, background: T.accent.emerald, animation: "particleDrift2 3.5s ease-out 1.2s infinite" },
-          { left: "45%", bottom: "5%", size: 3, background: "#6C60FF", animation: "particleDrift3 4s ease-out 1.5s infinite" },
-          { right: "30%", bottom: "15%", size: 2, background: T.accent.primary, animation: "particleDrift4 3.2s ease-out 2s infinite" },
-        ].map((particle, index) => (
-          <div
-            key={index}
-            style={{
-              position: "absolute",
-              ...particle,
-              width: particle.size,
-              height: particle.size,
-              borderRadius: "50%",
-            }}
-          />
-        ))}
-        <img
-          src="/icon-512.png"
-          alt=""
-          style={{
-            position: "relative",
-            width: "100%",
-            height: "100%",
-            borderRadius: 28,
-            zIndex: 2,
-            background: T.bg.base,
-            animation: "iconPulse 3s ease-in-out .8s infinite",
-          }}
-        />
-      </div>
-      <h1 style={{ fontSize: 30, fontWeight: 900, letterSpacing: "0", marginBottom: 6, animation: "textReveal .6s ease-out .4s both" }}>
-        <span
-          style={{
-            background: `linear-gradient(135deg, ${T.text.primary}, ${T.accent.primary}90)`,
-            WebkitBackgroundClip: "text",
-            backgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-          }}
-        >
-          Catalyst Cash
-        </span>
+      <h1 style={{ fontSize: 30, fontWeight: 900, letterSpacing: "-0.03em", marginBottom: 6, animation: "textReveal .6s ease-out .12s both" }}>
+        Catalyst Cash
       </h1>
       <p
         style={{
-          fontSize: 10,
+          fontSize: 11,
           color: T.text.dim,
           fontFamily: T.font.mono,
-          letterSpacing: "2px",
-          fontWeight: 600,
+          letterSpacing: "0.08em",
+          fontWeight: 700,
           textTransform: "uppercase",
-          marginBottom: 36,
-          animation: "textReveal .6s ease-out .6s both",
+          marginBottom: 10,
+          animation: "textReveal .6s ease-out .18s both",
         }}
       >
-        <span style={{ animation: "subtitlePulse 2.5s ease-in-out infinite" }}>Preparing your dashboard</span>
+        Preparing your dashboard
+      </p>
+      <p style={{ margin: "0 0 20px", fontSize: 13, lineHeight: 1.55, color: T.text.secondary, animation: "textReveal .6s ease-out .24s both" }}>
+        Loading your local record, weekly summary, and restore state.
       </p>
       <div
         style={{
-          width: 160,
-          height: 3,
-          borderRadius: 3,
-          background: T.border.default,
+          width: "100%",
+          height: 6,
+          borderRadius: 999,
+          background: T.bg.elevated,
           overflow: "hidden",
-          animation: "textReveal .6s ease-out .8s both",
+          animation: "textReveal .6s ease-out .3s both",
           position: "relative",
         }}
       >
         <div
           style={{
             height: "100%",
-            borderRadius: 3,
-            background: T.accent.gradient,
+            borderRadius: 999,
+            background: `linear-gradient(90deg, ${T.accent.primary}, ${T.accent.emerald})`,
             animation: "loadBarFill 3s ease-out forwards",
-            boxShadow: `0 0 8px ${T.accent.primary}40`,
           }}
         />
       </div>
@@ -443,13 +343,14 @@ export function LoadingScreen() {
           fontSize: 9,
           color: T.text.muted,
           fontFamily: T.font.mono,
-          marginTop: 20,
-          animation: "textReveal .6s ease-out 1s both",
-          opacity: 0.4,
+          marginTop: 16,
+          animation: "textReveal .6s ease-out .36s both",
+          opacity: 0.55,
         }}
       >
         v{APP_VERSION}
       </p>
+      </div>
     </div>
   );
 }

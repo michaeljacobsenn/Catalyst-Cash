@@ -7,7 +7,7 @@ export function AppearanceSection({
   themeMode,
   setThemeMode,
 }: {
-  activeMenu: "finance" | "profile" | "ai" | "backup" | "dev" | "security" | "plaid" | null;
+  activeMenu: "finance" | "profile" | "ai" | "backup" | "dev" | "security" | "plaid" | "trust" | null;
   themeMode: ThemeMode;
   setThemeMode: (mode: ThemeMode) => void;
 }) {

@@ -1,28 +1,37 @@
 import React, { memo, useMemo, useState, type ReactNode } from "react";
 import { buildAuditMovePlan } from "../auditMovePlan.js";
 import { getMoveAssignmentOptions } from "../moveSemantics.js";
-  import { Md as UIMd,Mono as UIMono,MoveRow as UIMoveRow } from "../components.js";
-  import { T } from "../constants.js";
-  import {
-    Activity,
-    AlertTriangle,
-    ArrowLeft,
-    CheckCircle,
-    CheckSquare,
-    Clock,
-    Share2,
-    Target,
-    TrendingUp,
-    Zap,
-    type LucideIcon,
-  } from "../icons";
-  import { Badge as UIBadge,Card as UICard,InlineTooltip as UIInlineTooltip } from "../ui.js";
-  import { fmtDate,parseCurrency,stripPaycheckParens } from "../utils.js";
-  import AuditExportSheet from "./AuditExportSheet.js";
+import { Md as UIMd, Mono as UIMono, MoveRow as UIMoveRow } from "../components.js";
+import { T } from "../constants.js";
+import {
+  Activity,
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle,
+  CheckSquare,
+  Clock,
+  Share2,
+  Target,
+  TrendingUp,
+  Zap,
+  type LucideIcon,
+} from "../icons";
+import UiGlyph from "../UiGlyph.js";
+import { Badge as UIBadge, Card as UICard, InlineTooltip as UIInlineTooltip } from "../ui.js";
+import { fmtDate, stripPaycheckParens } from "../utils.js";
+import AuditExportSheet from "./AuditExportSheet.js";
+import {
+  buildActionPreviewRows,
+  buildAllocationLedger,
+  buildAnalysisNotes,
+  buildFreedomJourneyMetrics,
+  buildResultsInvestmentsSummary,
+  cleanAllocationLead,
+} from "./resultsView/model";
 
-  import type { AuditRecord,MoveCheckState,ParsedMoveItem } from "../../types/index.js";
-  import { useAudit } from "../contexts/AuditContext.js";
-  import { useNavigation } from "../contexts/NavigationContext.js";
+import type { AuditRecord, MoveCheckState, ParsedMoveItem } from "../../types/index.js";
+import { useAudit } from "../contexts/AuditContext.js";
+import { useNavigation } from "../contexts/NavigationContext.js";
 import { usePortfolio } from "../contexts/PortfolioContext.js";
 import { useSettings } from "../contexts/SettingsContext.js";
 
@@ -129,50 +138,6 @@ const ReportSection = ({ title, icon: Icon, content, accentColor, badge, isLast 
   );
 };
 
-function formatMoveItemAmount(value: unknown) {
-  if (typeof value === "number" && Number.isFinite(value)) return `$${value.toFixed(2)}`;
-  const text = String(value || "").trim();
-  if (!text) return "";
-  return text.startsWith("$") ? text : `$${text}`;
-}
-
-function extractDueDate(text: string | null | undefined) {
-  const match = String(text || "").match(/\b(\d{4}-\d{2}-\d{2})\b/);
-  return match ? match[1] : "";
-}
-
-function buildActionPreviewRows(moveItems: ParsedMoveItem[] = []) {
-  return moveItems
-    .filter((item) => {
-      const amount = typeof item?.amount === "number" ? item.amount : null;
-      return Number.isFinite(amount) && Math.abs(amount || 0) > 0;
-    })
-    .slice(0, 4)
-    .map((item) => ({
-      label: String(item?.targetLabel || item?.title || item?.text || "Action").trim(),
-      amount: formatMoveItemAmount(item?.amount),
-      date: extractDueDate(String(item?.detail || item?.text || "")),
-      detail: String(item?.detail || item?.text || "").trim(),
-      route: String(item?.fundingLabel || item?.routeLabel || "").trim(),
-    }));
-}
-
-function cleanAllocationLead(detail: string | null | undefined) {
-  const text = String(detail || "");
-  if (!text) return "";
-  const withoutFiller = text.replace(/[^.]*only dollars left after those allocations can go to debt payoff or savings\.?/i, "");
-  const withoutRows = withoutFiller.replace(/([^,.;]+?)\s*\(\$[\d,]+(?:\.\d{2})?\s+by\s+\d{4}-\d{2}-\d{2}\)/g, "").replace(/\s+,/g, ",");
-  const cleaned = withoutRows
-    .replace(/\s{2,}/g, " ")
-    .replace(/,\s*,/g, ",")
-    .replace(/,\s*\./g, ".")
-    .replace(/^[^a-z0-9$]+/i, "")
-    .replace(/^["'`]+|["'`]+$/g, "")
-    .replace(/[,:;]\s*$/, "")
-    .trim();
-  return /[a-z0-9]/i.test(cleaned) ? cleaned : "";
-}
-
 export default memo(function ResultsView({
   audit,
   moveChecks,
@@ -214,7 +179,9 @@ export default memo(function ResultsView({
             background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
           }}
         >
-          <div style={{ fontSize: 30, marginBottom: 10 }}>⚡</div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+            <UiGlyph glyph="⚡" size={26} color={T.accent.primary} />
+          </div>
           <p style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, margin: "0 0 6px" }}>No audit results yet</p>
           <p style={{ fontSize: 13, lineHeight: 1.55, color: T.text.secondary, margin: 0 }}>
             Run an audit first and this screen will turn into your readable weekly game plan.
@@ -228,70 +195,19 @@ export default memo(function ResultsView({
     parsed.structured?.nextAction && typeof parsed.structured.nextAction === "object"
       ? parsed.structured.nextAction
       : null;
-  const nextActionAllocationRows = buildActionPreviewRows(parsed.moveItems || []);
-  const nextActionLead = cleanAllocationLead(nextActionCard?.detail || sections.nextAction);
-  const allocationLedger = useMemo(() => {
-    const consistency = parsed?.consistency || {};
-    const rows: Array<{ label: string; value: string }> = [];
-    if (Number.isFinite(Number(consistency.currentLiquidCash))) {
-      rows.push({ label: "Liquid now", value: formatMoveItemAmount(Number(consistency.currentLiquidCash)) });
-    }
-    if (Number.isFinite(Number(consistency.protectedAllocatedNow)) && Number(consistency.protectedAllocatedNow) > 0) {
-      rows.push({ label: "Protected now", value: formatMoveItemAmount(Number(consistency.protectedAllocatedNow)) });
-    }
-    if (Number.isFinite(Number(consistency.optionalAllocatedNow)) && Number(consistency.optionalAllocatedNow) > 0) {
-      rows.push({ label: "Optional deploy", value: formatMoveItemAmount(Number(consistency.optionalAllocatedNow)) });
-    }
-    const parkedCash =
-      (Number.isFinite(Number(consistency.remainingCheckingPool)) ? Number(consistency.remainingCheckingPool) : 0) +
-      (Number.isFinite(Number(consistency.remainingVaultPool)) ? Number(consistency.remainingVaultPool) : 0);
-    if (parkedCash > 0) {
-      rows.push({ label: "Still parked", value: formatMoveItemAmount(parkedCash) });
-    }
-    if (Number.isFinite(Number(consistency.protectedGapNow)) && Number(consistency.protectedGapNow) > 0) {
-      rows.push({ label: "Protected gap", value: formatMoveItemAmount(Number(consistency.protectedGapNow)) });
-    }
-    return rows.slice(0, 5);
-  }, [parsed?.consistency]);
-  const submittedInvestmentSnapshot = audit?.form?.investmentSnapshot || {};
-  const explicitInvestmentValues = {
-    roth: parseCurrency(submittedInvestmentSnapshot?.roth ?? audit?.form?.roth),
-    brokerage: parseCurrency(submittedInvestmentSnapshot?.brokerage ?? audit?.form?.brokerage),
-    k401: parseCurrency(submittedInvestmentSnapshot?.k401Balance ?? audit?.form?.k401Balance),
-  };
-  const submittedInvestmentKeyList = Array.isArray(audit?.form?.includedInvestmentKeys)
-    ? audit.form.includedInvestmentKeys.map((key) => String(key || ""))
-    : [];
-  const visibleInvestmentKeys = new Set(
-    submittedInvestmentKeyList.length > 0
-      ? submittedInvestmentKeyList
-      : Object.entries(explicitInvestmentValues)
-          .filter(([, value]) => value != null && Math.abs(value) > 0)
-          .map(([key]) => key)
+  const nextActionAllocationRows = useMemo(() => buildActionPreviewRows(parsed.moveItems || []), [parsed.moveItems]);
+  const nextActionLead = useMemo(
+    () => cleanAllocationLead(nextActionCard?.detail || sections.nextAction),
+    [nextActionCard?.detail, sections.nextAction]
   );
-  const hasSubmittedInvestmentSnapshot =
-    submittedInvestmentKeyList.length > 0 ||
-    Object.values(explicitInvestmentValues).some((value) => value != null);
-  const visibleInvestmentTotal =
-    (visibleInvestmentKeys.has("roth") ? explicitInvestmentValues.roth || 0 : 0) +
-    (visibleInvestmentKeys.has("brokerage") ? explicitInvestmentValues.brokerage || 0 : 0) +
-    (visibleInvestmentKeys.has("k401") ? explicitInvestmentValues.k401 || 0 : 0);
-  const parsedInvestmentBalance = parseCurrency(parsed?.investments?.balance) || 0;
-  const investmentsSummary =
-    parsed?.investments && hasSubmittedInvestmentSnapshot
-      ? {
-          ...parsed.investments,
-          balance: `$${visibleInvestmentTotal.toFixed(2)}`,
-          asOf: audit?.form?.date || parsed.investments?.asOf || "N/A",
-          netWorth:
-            visibleInvestmentTotal > 0 && Math.abs(parsedInvestmentBalance - visibleInvestmentTotal) > 1
-              ? undefined
-              : parsed.investments?.netWorth,
-        }
-      : parsed.investments || null;
-  const showInvestmentNetWorthAnchor =
-    Boolean(investmentsSummary?.netWorth) &&
-    !/^-?\$?0(?:\.00)?$/i.test(String(investmentsSummary?.netWorth || "").replace(/\s+/g, ""));
+  const allocationLedger = useMemo(
+    () => buildAllocationLedger(parsed?.consistency),
+    [parsed?.consistency]
+  );
+  const { investmentsSummary, showInvestmentNetWorthAnchor } = useMemo(
+    () => buildResultsInvestmentsSummary(audit, parsed?.investments),
+    [audit, parsed?.investments]
+  );
   const degradedInfo = parsed.degraded;
   const isDegraded = degradedInfo?.isDegraded;
   const isLiveCurrentAudit = Boolean(current?.ts && current.ts === audit.ts && !audit.isTest);
@@ -314,11 +230,11 @@ export default memo(function ResultsView({
       ),
     [parsed.moveItems, cards, bankAccounts, financialConfig, liveMoveAssignments]
   );
-  const analysisNotes = isDegraded
-    ? [sections.qualityScore, sections.autoUpdates, degradedInfo?.reason].filter(
-        (entry): entry is string => Boolean(entry && entry.trim())
-      ).join("\n\n")
-    : "";
+  const analysisNotes = useMemo(
+    () => buildAnalysisNotes(Boolean(isDegraded), sections, degradedInfo?.reason),
+    [degradedInfo?.reason, isDegraded, sections]
+  );
+  const freedomJourneyMetrics = useMemo(() => buildFreedomJourneyMetrics(history), [history]);
 
   const handleExitResults = (): void => {
     if (onBack) return onBack();
@@ -356,10 +272,9 @@ export default memo(function ResultsView({
               width: 46,
               height: 46,
               borderRadius: 16,
-              border: `1px solid ${T.border.default}`,
-              background: T.bg.glass,
+              border: `1px solid ${T.border.subtle}`,
+              background: T.bg.elevated,
               color: T.text.primary,
-              boxShadow: T.shadow.soft,
               flexShrink: 0,
             }}
           >
@@ -376,7 +291,7 @@ export default memo(function ResultsView({
                 marginBottom: 4,
               }}
             >
-              WEEKLY BRIEFING
+              AUDIT RESULTS
             </div>
             <h1
               style={{
@@ -388,7 +303,7 @@ export default memo(function ResultsView({
                 fontWeight: 900,
               }}
             >
-              Full Briefing
+              Weekly Briefing
             </h1>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
               <Mono size={11} color={T.text.dim}>
@@ -405,15 +320,14 @@ export default memo(function ResultsView({
             height: 46,
             padding: "0 16px",
             borderRadius: 16,
-            border: `1px solid ${T.border.default}`,
-            background: T.bg.glass,
+            border: `1px solid ${T.border.subtle}`,
+            background: T.bg.elevated,
             color: T.text.primary,
             cursor: "pointer",
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
             gap: 8,
-            boxShadow: T.shadow.soft,
             flexShrink: 0,
             fontSize: 12,
             fontWeight: 800,
@@ -434,8 +348,8 @@ export default memo(function ResultsView({
           style={{
             marginBottom: 14,
             padding: 16,
-            border: `1px solid ${T.status.amber}35`,
-            background: `linear-gradient(180deg, ${T.status.amberDim} 0%, ${T.bg.card} 100%)`,
+            border: `1px solid ${T.status.amber}22`,
+            background: T.bg.card,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
@@ -492,56 +406,14 @@ export default memo(function ResultsView({
                 alignItems: "center",
                 gap: 14,
                 padding: isSmallPhone ? "14px 16px" : "15px 18px",
-                background: `linear-gradient(180deg, ${T.bg.card}, ${allDone ? `${T.status.green}10` : `${pctColor}08`})`,
+                background: T.bg.card,
                 border: `1px solid ${allDone ? T.status.green : pctColor}22`,
                 borderRadius: T.radius.xl,
                 marginBottom: 6,
-                animation: allDone ? "glowPulse 2s ease-in-out infinite" : "fadeInUp .4s ease-out both",
                 position: "relative",
                 overflow: "hidden",
-                boxShadow: T.shadow.soft,
               }}
             >
-              {allDone && (
-                <>
-                  <span
-                    style={{
-                      position: "absolute",
-                      top: 4,
-                      right: 14,
-                      fontSize: 16,
-                      animation: "floatUp 2s ease-out infinite",
-                      opacity: 0.8,
-                    }}
-                  >
-                    ✨
-                  </span>
-                  <span
-                    style={{
-                      position: "absolute",
-                      top: 8,
-                      right: 42,
-                      fontSize: 12,
-                      animation: "floatUp 2.4s ease-out 0.3s infinite",
-                      opacity: 0.6,
-                    }}
-                  >
-                    🎉
-                  </span>
-                  <span
-                    style={{
-                      position: "absolute",
-                      bottom: 4,
-                      right: 28,
-                      fontSize: 14,
-                      animation: "floatUp 2.8s ease-out 0.6s infinite",
-                      opacity: 0.7,
-                    }}
-                  >
-                    ⭐
-                  </span>
-                </>
-              )}
               <svg width="44" height="44" viewBox="0 0 40 40" style={{ flexShrink: 0, transform: "rotate(-90deg)" }}>
                 <circle cx="20" cy="20" r="16" fill="none" stroke={T.border.default} strokeWidth="3.5" />
                 <circle
@@ -578,10 +450,10 @@ export default memo(function ResultsView({
                   style={{
                     fontSize: 11,
                     color: allDone ? T.status.green : T.text.dim,
-                    fontWeight: allDone ? 700 : 400,
+                    fontWeight: allDone ? 700 : 500,
                   }}
                 >
-                  {allDone ? "All moves executed! Financial momentum secured 🔥" : `${total - done} remaining — keep crushing it`}
+                  {allDone ? "All moves are logged and ready to reconcile against live balances." : `${total - done} still need attention before the week is fully posted.`}
                 </div>
               </div>
             </div>
@@ -594,8 +466,8 @@ export default memo(function ResultsView({
             padding: isSmallPhone ? "12px 14px" : "14px 16px",
             marginTop: 8,
             marginBottom: 8,
-            background: `linear-gradient(180deg, ${T.accent.emerald}08, ${T.bg.card})`,
-            border: `1px solid ${T.accent.emerald}20`,
+            background: T.bg.card,
+            border: `1px solid ${T.accent.emerald}18`,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
@@ -638,9 +510,8 @@ export default memo(function ResultsView({
         style={{
           padding: isSmallPhone ? "14px 16px 18px" : "18px 22px 22px",
           marginTop: 6,
-          background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.surface})`,
+          background: T.bg.card,
           border: `1px solid ${T.border.default}`,
-          boxShadow: `0 12px 40px ${T.shadow.base}`,
         }}
       >
         {sections.alerts && !/^\s*(no\s*alerts|omit|none|\[\])\s*$/i.test(sections.alerts) && sections.alerts.length > 5 && (
@@ -649,8 +520,8 @@ export default memo(function ResultsView({
               padding: isSmallPhone ? "16px 16px" : "20px 24px",
               margin: isSmallPhone ? "18px -2px" : "24px -4px",
               borderRadius: T.radius.lg,
-              background: T.status.amberDim,
-              borderLeft: `4px solid ${T.status.amber}`,
+              background: T.bg.elevated,
+              border: `1px solid ${T.status.amber}18`,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -667,7 +538,7 @@ export default memo(function ResultsView({
               >
                 <AlertTriangle size={16} color={T.status.amber} strokeWidth={2.5} />
               </div>
-              <span style={{ fontSize: "clamp(15px, 4.5vw, 16px)", fontWeight: 800, color: T.status.amber }}>Critical Alerts</span>
+              <span style={{ fontSize: "clamp(15px, 4.5vw, 16px)", fontWeight: 800, color: T.text.primary }}>Critical Alerts</span>
             </div>
             <Md text={sections.alerts} />
           </div>
@@ -689,15 +560,14 @@ export default memo(function ResultsView({
               >
                 <Zap size={16} color={T.accent.primary} strokeWidth={2.5} />
               </div>
-                <h2 id="results-next-action" style={{ fontSize: "clamp(16px, 4.6vw, 18px)", fontWeight: 800, color: T.accent.primary, margin: 0, letterSpacing: "-0.01em" }}>Immediate Next Action</h2>
+                <h2 id="results-next-action" style={{ fontSize: "clamp(16px, 4.6vw, 18px)", fontWeight: 800, color: T.text.primary, margin: 0, letterSpacing: "-0.01em" }}>Immediate Next Action</h2>
               </div>
             <div
               style={{
                 padding: isSmallPhone ? "16px" : "18px 20px",
                 borderRadius: T.radius.lg,
-                background: `linear-gradient(180deg, ${T.accent.primary}12, ${T.bg.elevated})`,
-                border: `1px solid ${T.accent.primary}18`,
-                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
+                background: T.bg.elevated,
+                border: `1px solid ${T.border.subtle}`,
                 display: "flex",
                 flexDirection: "column",
                 gap: 12,
@@ -728,9 +598,9 @@ export default memo(function ResultsView({
                 </div>
               ) : null}
               {nextActionLead ? (
-                <div style={{ fontSize: 13, lineHeight: 1.65, color: T.text.secondary }}>
+                <p style={{ fontSize: 13, lineHeight: 1.65, color: T.text.secondary, margin: 0 }}>
                   {stripPaycheckParens(nextActionLead)}
-                </div>
+                </p>
               ) : null}
               {allocationLedger.length > 0 ? (
                 <div
@@ -1118,8 +988,8 @@ export default memo(function ResultsView({
         className="slide-up"
         style={{
           animationDelay: "0.35s",
-          background: `linear-gradient(135deg, ${T.status.green}08, ${T.status.blue}06)`,
-          borderColor: `${T.status.green}18`,
+          background: T.bg.card,
+          borderColor: T.border.subtle,
           padding: isSmallPhone ? "14px 14px 12px" : "16px 16px 14px",
         }}
       >
@@ -1140,105 +1010,37 @@ export default memo(function ResultsView({
           <span style={{ fontSize: 12, fontWeight: 800, color: T.text.primary, letterSpacing: "0.03em", textTransform: "uppercase" }}>Freedom Journey</span>
         </div>
 
-        {(() => {
-          const realAudits = history.filter((item: AuditRecord) => !item.isTest && item.form);
-          if (realAudits.length < 2)
-            return (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "12px 0" }}>
-                <div style={{ fontSize: 28 }}>🌱</div>
-                <p style={{ fontSize: 12, color: T.text.dim, textAlign: "center", lineHeight: 1.5 }}>
-                  Complete <strong style={{ color: T.text.secondary }}>2+ weekly audits</strong> to unlock your Freedom Journey — tracking momentum, projected debt-free dates, and net worth trajectory.
-                </p>
-              </div>
-            );
-
-          const latest = realAudits[0];
-          const prev = realAudits[1];
-          const parts: ReactNode[] = [];
-          if (!latest || !prev) {
-            return <p style={{ fontSize: 11, color: T.text.dim }}>Not enough varied data to compute momentum yet.</p>;
-          }
-
-          const debtValues = realAudits
-            .slice(0, 4)
-            .map((item: AuditRecord) => (item.form?.debts || []).reduce((sum, debt) => sum + (parseFloat(String(debt.balance)) || 0), 0))
-            .reverse();
-          const firstDebtValue = debtValues[0];
-          const lastDebtValue = debtValues[debtValues.length - 1];
-          if (debtValues.length >= 2 && firstDebtValue !== undefined && lastDebtValue !== undefined && firstDebtValue > 100) {
-            const weeklyPaydown = (firstDebtValue - lastDebtValue) / (debtValues.length - 1);
-            if (weeklyPaydown > 10) {
-              const freeDate = new Date();
-              freeDate.setDate(freeDate.getDate() + Math.ceil(lastDebtValue / weeklyPaydown) * 7);
-              parts.push(
-                <div key="df" style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ color: T.text.secondary, fontSize: 11 }}>Projected Debt-Free:</span>
-                  <span style={{ color: T.status.green, fontSize: 11, fontWeight: 700 }}>
-                    {freeDate.toLocaleDateString("en-US", { month: "short", year: "numeric" })}
-                  </span>
-                </div>
-              );
-            }
-          }
-
-          const latestNetWorth = latest.parsed?.netWorth;
-          const previousNetWorth = prev.parsed?.netWorth;
-          if (latestNetWorth != null && previousNetWorth != null) {
-            const delta = latestNetWorth - previousNetWorth;
-            const up = delta >= 0;
-            parts.push(
-              <div key="nw" style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                <span style={{ color: T.text.secondary, fontSize: 11 }}>Net Worth vs Last Audit:</span>
-                <span style={{ color: up ? T.status.green : T.status.red, fontSize: 11, fontWeight: 700 }}>
-                  {up ? "+" : "-"}${Math.abs(delta).toLocaleString()}
-                </span>
-              </div>
-            );
-          }
-
-          const latestScore = latest.parsed?.healthScore?.score;
-          const previousScore = prev.parsed?.healthScore?.score;
-          if (latestScore != null && previousScore != null && Math.abs(latestScore - previousScore) >= 2) {
-            const latestForm = latest.form;
-            const previousForm = prev.form;
-            const factors: Array<{ name: string; delta: number }> = [];
-            const latestChecking = parseFloat(String(latestForm.checking)) || 0;
-            const previousChecking = parseFloat(String(previousForm.checking)) || 0;
-            if (Math.abs(latestChecking - previousChecking) > 100) {
-              factors.push({ name: "Cash Flow", delta: latestChecking - previousChecking });
-            }
-            const latestDebt = (latestForm.debts || []).reduce((sum, debt) => sum + (parseFloat(String(debt.balance)) || 0), 0);
-            const previousDebt = (previousForm.debts || []).reduce((sum, debt) => sum + (parseFloat(String(debt.balance)) || 0), 0);
-            if (Math.abs(latestDebt - previousDebt) > 50) {
-              factors.push({ name: "Debt Paydown", delta: previousDebt - latestDebt });
-            }
-            const latestSavings = parseFloat(String(latestForm.ally || latestForm.savings)) || 0;
-            const previousSavings = parseFloat(String(previousForm.ally || previousForm.savings)) || 0;
-            if (Math.abs(latestSavings - previousSavings) > 50) {
-              factors.push({ name: "Savings Growth", delta: latestSavings - previousSavings });
-            }
-
-            if (factors.length > 0) {
-              const biggest = [...factors].sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0];
-              if (biggest) {
-                const diff = latestScore - previousScore;
-                parts.push(
-                  <div key="sf" style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{ color: T.text.secondary, fontSize: 11 }}>
-                      Score Movement ({diff > 0 ? "+" : ""}
-                      {diff}):
-                    </span>
-                    <span style={{ color: diff > 0 ? T.accent.emerald : T.status.amber, fontSize: 11, fontWeight: 700 }}>
-                      Driven by {biggest.name}
-                    </span>
-                  </div>
-                );
-              }
-            }
-          }
-
-          return parts.length > 0 ? parts : <p style={{ fontSize: 11, color: T.text.dim }}>Not enough varied data to compute momentum yet.</p>;
-        })()}
+        {freedomJourneyMetrics.length === 0 ? (
+          history.filter((item: AuditRecord) => !item.isTest && item.form).length < 2 ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "12px 0" }}>
+              <p style={{ fontSize: 12, color: T.text.dim, textAlign: "center", lineHeight: 1.5 }}>
+                Complete <strong style={{ color: T.text.secondary }}>2+ weekly audits</strong> to unlock your Freedom Journey — tracking momentum, projected debt-free dates, and net worth trajectory.
+              </p>
+            </div>
+          ) : (
+            <p style={{ fontSize: 11, color: T.text.dim }}>Not enough varied data to compute momentum yet.</p>
+          )
+        ) : (
+          freedomJourneyMetrics.map((metric) => (
+            <div key={metric.key} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ color: T.text.secondary, fontSize: 11 }}>{metric.label}:</span>
+              <span
+                style={{
+                  color:
+                    metric.tone === "positive"
+                      ? T.status.green
+                      : metric.tone === "negative"
+                        ? T.status.red
+                        : T.text.primary,
+                  fontSize: 11,
+                  fontWeight: 700,
+                }}
+              >
+                {metric.value}
+              </span>
+            </div>
+          ))
+        )}
       </Card>
 
       <Card className="slide-up" style={{ animationDelay: "0.38s", background: T.bg.elevated, padding: isSmallPhone ? "14px" : undefined }}>
@@ -1314,7 +1116,7 @@ export default memo(function ResultsView({
           gap: 10,
         }}
       >
-        <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>⚖️</span>
+        <UiGlyph glyph="⚖️" size={14} color={T.text.muted} style={{ flexShrink: 0, marginTop: 1 }} />
         <p style={{ fontSize: 10, color: T.text.muted, lineHeight: 1.6, margin: 0 }}>
           <strong style={{ color: T.text.dim }}>AI Disclaimer:</strong> This analysis is educational and informational. It is <strong>not</strong> financial, tax, legal, or investment advice. Use it to frame decisions, then confirm major moves with a licensed professional.
         </p>

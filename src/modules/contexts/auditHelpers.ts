@@ -59,6 +59,44 @@ export function hasCompletedAuditForSession(
   return current?.ts === storedDraft.sessionTs || history.some((audit) => audit.ts === storedDraft.sessionTs);
 }
 
+function getAuditRecordFingerprint(audit: AuditRecord | null | undefined): string {
+  if (!audit) return "";
+  const ts = String(audit.ts || "").trim();
+  if (ts) return `ts:${ts}`;
+  return JSON.stringify({
+    date: audit.date || audit.form?.date || "",
+    score: audit.parsed?.healthScore?.score ?? null,
+    grade: audit.parsed?.healthScore?.grade ?? "",
+    netWorth: audit.parsed?.netWorth ?? null,
+    status: audit.parsed?.status ?? "",
+    mode: audit.parsed?.mode ?? "",
+    model: audit.model ?? "",
+    isTest: audit.isTest ?? false,
+  });
+}
+
+export function matchesAuditRecord(left: AuditRecord | null | undefined, right: AuditRecord | null | undefined): boolean {
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const leftTs = String(left.ts || "").trim();
+  const rightTs = String(right.ts || "").trim();
+  if (leftTs && rightTs) return leftTs === rightTs;
+  if (leftTs || rightTs) return false;
+  return getAuditRecordFingerprint(left) === getAuditRecordFingerprint(right);
+}
+
+export function removeAuditRecord(history: AuditRecord[] = [], auditToRemove: AuditRecord | null | undefined): AuditRecord[] {
+  if (!auditToRemove) return history;
+  let removed = false;
+  return history.filter((audit) => {
+    if (!removed && matchesAuditRecord(audit, auditToRemove)) {
+      removed = true;
+      return false;
+    }
+    return true;
+  });
+}
+
 function extractAmount(text: string): number {
   const match = text.match(/\$([\d,]+(?:\.\d{2})?)/);
   const amount = match?.[1];

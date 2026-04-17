@@ -54,29 +54,32 @@
 
 .txn-row:active {
   transform: scale(0.985);
-  background: rgba(123, 94, 167, 0.06) !important;
+  background: rgba(255, 255, 255, 0.035) !important;
 }
 
 .txn-date-header {
   position: sticky;
   top: 0;
   z-index: 5;
-  backdrop-filter: blur(20px) saturate(1.6);
-  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
   animation: txnSlideDown 0.25s ease-out both;
 }
 
 .txn-filter-pill {
-  padding: 6px 14px;
+  padding: 7px 14px;
   border-radius: 20px;
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
   white-space: nowrap;
   flex-shrink: 0;
   letter-spacing: 0.02em;
-  border: 1px solid transparent;
 }
 
 .txn-filter-pill:active {
@@ -95,7 +98,7 @@
 }
 
 .txn-search-input::placeholder {
-  opacity: 0.5;
+  opacity: 0.44;
 }
 
 .txn-empty-shimmer {
@@ -114,7 +117,9 @@
 }
 
 .txn-export-btn {
-  transition: all 0.2s ease;
+  transition:
+    transform 0.16s ease,
+    background 0.16s ease;
 }
 
 .txn-export-btn:active {

@@ -25,6 +25,30 @@ export default function BackupSection({ activeMenu, ...props }) {
     autoBackupInterval,
     setAutoBackupInterval,
     lastBackupTS,
+    lastPortableBackupTS,
+    lastPortableBackupKind,
+    recoveryVaultId,
+    linkedRecoveryVaultId,
+    continuityRecoveryVaultId,
+    recoveryVaultContinuityEnabled,
+    recoveryVaultContinuityHasStoredPassphrase,
+    trustedContinuityRecoveryVaultId,
+    recoveryVaultTrustedContinuityEnabled,
+    recoveryVaultLastSyncTs,
+    recoveryVaultLastError,
+    recoveryVaultRevealKey,
+    setRecoveryVaultRevealKey,
+    isRecoveryVaultSyncing,
+    handleCreateRecoveryVault,
+    handleSyncRecoveryVault,
+    handleRotateRecoveryVault,
+    handleDeleteRecoveryVault,
+    handleRevealRecoveryVaultKey,
+    handleCopyRecoveryVaultKit,
+    handleEnableRecoveryVaultContinuity,
+    handleDisableRecoveryVaultContinuity,
+    handleEnableTrustedRecoveryVaultContinuity,
+    handleDisableTrustedRecoveryVaultContinuity,
     isForceSyncing,
     forceICloudSync,
     onClear,
@@ -37,10 +61,47 @@ export default function BackupSection({ activeMenu, ...props }) {
   } = props;
   const [householdMergeReport, setHouseholdMergeReport] = useState<{ overwrittenKeys?: string[] } | null>(null);
   const [householdConflict, setHouseholdConflict] = useState<{ overwrittenKeys?: string[] } | null>(null);
+  const [showContinuityForm, setShowContinuityForm] = useState(false);
+  const [continuityPassphrase, setContinuityPassphrase] = useState("");
+  const [continuityConfirm, setContinuityConfirm] = useState("");
 
   const isWeb = Capacitor.getPlatform() === "web";
   const householdSupported = Boolean(secretStorageStatus?.canPersistSecrets);
   const cloudBackupSupported = !isWeb;
+  const portableBackupLabel =
+    lastPortableBackupKind === "icloud"
+      ? "iCloud backup"
+      : lastPortableBackupKind === "spreadsheet-export"
+        ? "Encrypted spreadsheet export"
+        : lastPortableBackupKind === "encrypted-export"
+          ? "Encrypted file export"
+        : "Portable backup";
+  const recoveryVaultLinkStatus =
+    !recoveryVaultId
+      ? "No Recovery Vault configured yet."
+      : linkedRecoveryVaultId === recoveryVaultId
+        ? "Linked to this protected device identity for faster restore on another device."
+        : linkedRecoveryVaultId
+        ? "A different Recovery Vault is linked to this protected identity. Sync this vault to replace it."
+          : "Not linked to a protected device identity yet. Syncing on a secure device will link it automatically.";
+  const recoveryVaultContinuityStatus =
+    !recoveryVaultId
+      ? "Create a Recovery Vault before enabling account-backed encrypted continuity."
+      : recoveryVaultContinuityEnabled && continuityRecoveryVaultId === recoveryVaultId
+        ? recoveryVaultContinuityHasStoredPassphrase
+          ? "Account-backed encrypted continuity is enabled and this device can refresh it automatically."
+          : "Account-backed encrypted continuity exists for this vault, but this device does not have the local continuity passphrase stored."
+        : recoveryVaultContinuityEnabled
+          ? "A different Recovery Vault currently has account-backed continuity enabled for this identity."
+          : "Account-backed continuity is not enabled yet. Add a strong passphrase and a new device can restore with identity + that passphrase.";
+  const recoveryVaultTrustedContinuityStatus =
+    !recoveryVaultId
+      ? "Create a Recovery Vault before enabling seamless account restore."
+      : recoveryVaultTrustedContinuityEnabled && trustedContinuityRecoveryVaultId === recoveryVaultId
+        ? "Seamless account restore is enabled. After protected sign-in, this Recovery Vault can restore without the Recovery Key or a passphrase."
+        : recoveryVaultTrustedContinuityEnabled
+          ? "A different Recovery Vault currently has seamless account restore enabled for this identity."
+          : "Seamless account restore is disabled. Enable it only if you want the fastest sign-in-and-restore path and accept the server-trusted security tradeoff.";
   const prettifyKeys = (keys: string[] = []) =>
     keys
       .map((key) => ({
@@ -355,6 +416,455 @@ export default function BackupSection({ activeMenu, ...props }) {
           transaction access stay protected server-side, so restored bank connections may still show
           <span style={{ color: T.text.secondary }}> Reconnect required</span>.
         </p>
+        <div
+          style={{
+            marginTop: 10,
+            padding: "10px 12px",
+            borderRadius: T.radius.md,
+            border: `1px solid ${T.border.subtle}`,
+            background: T.bg.elevated,
+          }}
+        >
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.text.primary, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+            Recovery Status
+          </div>
+          <div style={{ marginTop: 6, fontSize: 11, color: T.text.secondary, lineHeight: 1.55 }}>
+            {lastPortableBackupTS
+              ? `${portableBackupLabel} saved ${new Date(lastPortableBackupTS).toLocaleString()}.`
+              : "No portable backup saved yet. Export an encrypted backup before switching devices or reinstalling."}
+          </div>
+        </div>
+
+        <div
+          style={{
+            marginTop: 14,
+            padding: "14px 14px 12px",
+            borderRadius: T.radius.lg,
+            border: `1px solid ${T.border.subtle}`,
+            background: `linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card})`,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: T.text.primary, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                Recovery Vault
+              </div>
+              <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.55, marginTop: 5 }}>
+                Optional encrypted off-device recovery. No plaintext leaves the app, and restore works with your Recovery Vault ID and Recovery Key.
+              </div>
+            </div>
+            <div
+              style={{
+                padding: "5px 8px",
+                borderRadius: 999,
+                fontSize: 10,
+                fontWeight: 800,
+                border: `1px solid ${secretStorageStatus?.canPersistSecrets ? `${T.status.green}35` : T.border.subtle}`,
+                color: secretStorageStatus?.canPersistSecrets ? T.status.green : T.text.dim,
+                background: secretStorageStatus?.canPersistSecrets ? `${T.status.green}10` : T.bg.surface,
+              }}
+            >
+              {secretStorageStatus?.canPersistSecrets ? "Native secure" : "Native setup only"}
+            </div>
+          </div>
+
+          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+            <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5 }}>
+              {recoveryVaultId
+                ? `Recovery ID: ${recoveryVaultId}${recoveryVaultLastSyncTs ? ` • Last sync ${new Date(recoveryVaultLastSyncTs).toLocaleString()}` : ""}`
+                : "No Recovery Vault configured yet."}
+            </div>
+            <div
+              style={{
+                padding: "10px 12px",
+                borderRadius: T.radius.md,
+                border: `1px solid ${
+                  linkedRecoveryVaultId === recoveryVaultId && recoveryVaultId
+                    ? `${T.status.green}30`
+                    : T.border.subtle
+                }`,
+                background:
+                  linkedRecoveryVaultId === recoveryVaultId && recoveryVaultId
+                    ? `${T.status.green}10`
+                    : T.bg.surface,
+                fontSize: 11,
+                color:
+                  linkedRecoveryVaultId === recoveryVaultId && recoveryVaultId
+                    ? T.status.green
+                    : T.text.secondary,
+                lineHeight: 1.5,
+              }}
+            >
+              {recoveryVaultLinkStatus}
+            </div>
+            <div
+              style={{
+                padding: "10px 12px",
+                borderRadius: T.radius.md,
+                border: `1px solid ${
+                  recoveryVaultContinuityEnabled && continuityRecoveryVaultId === recoveryVaultId
+                    ? `${T.accent.emerald}30`
+                    : T.border.subtle
+                }`,
+                background:
+                  recoveryVaultContinuityEnabled && continuityRecoveryVaultId === recoveryVaultId
+                    ? `${T.accent.emerald}10`
+                    : T.bg.surface,
+                fontSize: 11,
+                color:
+                  recoveryVaultContinuityEnabled && continuityRecoveryVaultId === recoveryVaultId
+                    ? T.accent.emerald
+                    : T.text.secondary,
+                lineHeight: 1.5,
+              }}
+            >
+              {recoveryVaultContinuityStatus}
+            </div>
+            <div
+              style={{
+                padding: "10px 12px",
+                borderRadius: T.radius.md,
+                border: `1px solid ${
+                  recoveryVaultTrustedContinuityEnabled && trustedContinuityRecoveryVaultId === recoveryVaultId
+                    ? `${T.status.amber}30`
+                    : T.border.subtle
+                }`,
+                background:
+                  recoveryVaultTrustedContinuityEnabled && trustedContinuityRecoveryVaultId === recoveryVaultId
+                    ? `${T.status.amber}10`
+                    : T.bg.surface,
+                fontSize: 11,
+                color:
+                  recoveryVaultTrustedContinuityEnabled && trustedContinuityRecoveryVaultId === recoveryVaultId
+                    ? T.status.amber
+                    : T.text.secondary,
+                lineHeight: 1.5,
+              }}
+            >
+              {recoveryVaultTrustedContinuityStatus}
+            </div>
+            {recoveryVaultLastError ? (
+              <NoticeBanner compact tone="warning" title="Recovery Vault issue" message={recoveryVaultLastError} />
+            ) : null}
+            {recoveryVaultRevealKey ? (
+              <div
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: T.radius.md,
+                  border: `1px solid ${T.status.amber}30`,
+                  background: `${T.status.amber}10`,
+                }}
+              >
+                <div style={{ fontSize: 11, fontWeight: 800, color: T.status.amber, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+                  Save this once
+                </div>
+                <div style={{ fontSize: 13, color: T.text.primary, fontWeight: 700, fontFamily: T.font.mono, wordBreak: "break-word" }}>
+                  {recoveryVaultRevealKey}
+                </div>
+                <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5, marginTop: 6 }}>
+                  This key is required to restore on a new device. Store it outside the app.
+                </div>
+              </div>
+            ) : null}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {!recoveryVaultId ? (
+                <button
+                  onClick={handleCreateRecoveryVault}
+                  disabled={!secretStorageStatus?.canPersistSecrets || isRecoveryVaultSyncing}
+                  style={{
+                    flex: 1,
+                    minWidth: "48%",
+                    padding: "12px 14px",
+                    borderRadius: T.radius.md,
+                    border: `1px solid ${T.accent.primary}35`,
+                    background: `${T.accent.primary}12`,
+                    color: T.accent.primary,
+                    fontSize: 12,
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    opacity: !secretStorageStatus?.canPersistSecrets || isRecoveryVaultSyncing ? 0.55 : 1,
+                  }}
+                >
+                  {isRecoveryVaultSyncing ? "Creating…" : "Create Recovery Vault"}
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={handleSyncRecoveryVault}
+                    disabled={isRecoveryVaultSyncing}
+                    style={{
+                      flex: 1,
+                      minWidth: "30%",
+                      padding: "12px 14px",
+                      borderRadius: T.radius.md,
+                      border: `1px solid ${T.accent.primary}35`,
+                      background: `${T.accent.primary}12`,
+                      color: T.accent.primary,
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      opacity: isRecoveryVaultSyncing ? 0.55 : 1,
+                    }}
+                  >
+                    {isRecoveryVaultSyncing ? "Syncing…" : "Sync Now"}
+                  </button>
+                  <button
+                    onClick={handleRotateRecoveryVault}
+                    disabled={isRecoveryVaultSyncing}
+                    style={{
+                      flex: 1,
+                      minWidth: "30%",
+                      padding: "12px 14px",
+                      borderRadius: T.radius.md,
+                      border: `1px solid ${T.border.default}`,
+                      background: T.bg.surface,
+                      color: T.text.primary,
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      opacity: isRecoveryVaultSyncing ? 0.55 : 1,
+                    }}
+                  >
+                    Rotate Key
+                  </button>
+                  <button
+                    onClick={
+                      recoveryVaultRevealKey
+                        ? () => setRecoveryVaultRevealKey(null)
+                        : handleRevealRecoveryVaultKey
+                    }
+                    disabled={isRecoveryVaultSyncing}
+                    style={{
+                      flex: 1,
+                      minWidth: "30%",
+                      padding: "12px 14px",
+                      borderRadius: T.radius.md,
+                      border: `1px solid ${T.border.default}`,
+                      background: T.bg.surface,
+                      color: T.text.primary,
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      opacity: isRecoveryVaultSyncing ? 0.55 : 1,
+                    }}
+                  >
+                    {recoveryVaultRevealKey ? "Hide Key" : "Reveal Key"}
+                  </button>
+                  <button
+                    onClick={handleCopyRecoveryVaultKit}
+                    disabled={isRecoveryVaultSyncing}
+                    style={{
+                      flex: 1,
+                      minWidth: "30%",
+                      padding: "12px 14px",
+                      borderRadius: T.radius.md,
+                      border: `1px solid ${T.accent.emerald}35`,
+                      background: `${T.accent.emerald}10`,
+                      color: T.accent.emerald,
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      opacity: isRecoveryVaultSyncing ? 0.55 : 1,
+                    }}
+                  >
+                    Copy Recovery Kit
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowContinuityForm((current) => !current);
+                      if (showContinuityForm) {
+                        setContinuityPassphrase("");
+                        setContinuityConfirm("");
+                      }
+                    }}
+                    disabled={isRecoveryVaultSyncing}
+                    style={{
+                      flex: 1,
+                      minWidth: "30%",
+                      padding: "12px 14px",
+                      borderRadius: T.radius.md,
+                      border: `1px solid ${T.accent.primary}35`,
+                      background: `${T.accent.primary}10`,
+                      color: T.accent.primary,
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      opacity: isRecoveryVaultSyncing ? 0.55 : 1,
+                    }}
+                  >
+                    {recoveryVaultContinuityEnabled && continuityRecoveryVaultId === recoveryVaultId ? "Manage Passphrase Sync" : "Enable Passphrase Sync"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      void (
+                        recoveryVaultTrustedContinuityEnabled
+                          ? handleDisableTrustedRecoveryVaultContinuity()
+                          : handleEnableTrustedRecoveryVaultContinuity()
+                      );
+                    }}
+                    disabled={isRecoveryVaultSyncing}
+                    style={{
+                      flex: 1,
+                      minWidth: "30%",
+                      padding: "12px 14px",
+                      borderRadius: T.radius.md,
+                      border: `1px solid ${T.status.amber}35`,
+                      background: `${T.status.amber}10`,
+                      color: T.status.amber,
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      opacity: isRecoveryVaultSyncing ? 0.55 : 1,
+                    }}
+                  >
+                    {recoveryVaultTrustedContinuityEnabled && trustedContinuityRecoveryVaultId === recoveryVaultId ? "Disable Seamless Restore" : "Enable Seamless Restore"}
+                  </button>
+                  <button
+                    onClick={handleDeleteRecoveryVault}
+                    disabled={isRecoveryVaultSyncing}
+                    style={{
+                      flex: 1,
+                      minWidth: "30%",
+                      padding: "12px 14px",
+                      borderRadius: T.radius.md,
+                      border: `1px solid ${T.status.red}25`,
+                      background: `${T.status.red}10`,
+                      color: T.status.red,
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      opacity: isRecoveryVaultSyncing ? 0.55 : 1,
+                    }}
+                  >
+                    Delete Vault
+                  </button>
+                </>
+              )}
+            </div>
+            {showContinuityForm && recoveryVaultId ? (
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                  marginTop: 10,
+                  padding: "12px",
+                  borderRadius: T.radius.md,
+                  border: `1px solid ${T.border.default}`,
+                  background: T.bg.surface,
+                }}
+              >
+                <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5 }}>
+                  Use a strong passphrase that is different from your Recovery Key. This encrypts the Recovery Vault key before it is stored server-side for account-backed restore.
+                </div>
+                <div
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: T.radius.md,
+                    border: `1px solid ${T.status.amber}30`,
+                    background: `${T.status.amber}10`,
+                    fontSize: 11,
+                    color: T.text.secondary,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Seamless restore status: {recoveryVaultTrustedContinuityStatus}
+                </div>
+                <input
+                  type="password"
+                  value={continuityPassphrase}
+                  onChange={(event) => setContinuityPassphrase(event.target.value)}
+                  placeholder="Account sync passphrase"
+                  className="app-input"
+                  style={{
+                    width: "100%",
+                    padding: "12px 14px",
+                    borderRadius: T.radius.md,
+                    background: T.bg.elevated,
+                    border: `1px solid ${T.border.default}`,
+                    color: T.text.primary,
+                    fontSize: 13,
+                    boxSizing: "border-box",
+                  }}
+                />
+                <input
+                  type="password"
+                  value={continuityConfirm}
+                  onChange={(event) => setContinuityConfirm(event.target.value)}
+                  placeholder="Confirm passphrase"
+                  className="app-input"
+                  style={{
+                    width: "100%",
+                    padding: "12px 14px",
+                    borderRadius: T.radius.md,
+                    background: T.bg.elevated,
+                    border: `1px solid ${T.border.default}`,
+                    color: T.text.primary,
+                    fontSize: 13,
+                    boxSizing: "border-box",
+                  }}
+                />
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => {
+                      if (continuityPassphrase !== continuityConfirm) {
+                        window.toast?.error?.("Account sync passphrases do not match.");
+                        return;
+                      }
+                      void handleEnableRecoveryVaultContinuity(continuityPassphrase).then(() => {
+                        setContinuityPassphrase("");
+                        setContinuityConfirm("");
+                        setShowContinuityForm(false);
+                      });
+                    }}
+                    disabled={isRecoveryVaultSyncing || continuityPassphrase.length < 10 || continuityConfirm.length < 10}
+                    style={{
+                      flex: 1,
+                      minWidth: "48%",
+                      padding: "12px 14px",
+                      borderRadius: T.radius.md,
+                      border: `1px solid ${T.accent.emerald}35`,
+                      background: `${T.accent.emerald}10`,
+                      color: T.accent.emerald,
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      opacity: isRecoveryVaultSyncing || continuityPassphrase.length < 10 || continuityConfirm.length < 10 ? 0.55 : 1,
+                    }}
+                  >
+                    {recoveryVaultContinuityEnabled ? "Refresh Passphrase Sync" : "Save Passphrase Sync"}
+                  </button>
+                  {recoveryVaultContinuityEnabled ? (
+                    <button
+                      onClick={() => {
+                        void handleDisableRecoveryVaultContinuity().then(() => {
+                          setContinuityPassphrase("");
+                          setContinuityConfirm("");
+                          setShowContinuityForm(false);
+                        });
+                      }}
+                      disabled={isRecoveryVaultSyncing}
+                      style={{
+                        flex: 1,
+                        minWidth: "48%",
+                        padding: "12px 14px",
+                        borderRadius: T.radius.md,
+                        border: `1px solid ${T.border.default}`,
+                        background: T.bg.elevated,
+                        color: T.text.primary,
+                        fontSize: 12,
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        opacity: isRecoveryVaultSyncing ? 0.55 : 1,
+                      }}
+                    >
+                      Disable Passphrase Sync
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
 
         {/* ── Debug Log Export ────────────────────────────── */}
         <div style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid ${T.border.subtle}` }}>
@@ -486,10 +996,15 @@ export default function BackupSection({ activeMenu, ...props }) {
                       <div style={{ fontSize: 13, fontWeight: 600, color: T.text.primary }}>
                         iCloud Backup Enabled
                       </div>
-                      <div style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, marginTop: 2 }}>
-                        {lastBackupTS
-                          ? `Last backup: ${new Date(lastBackupTS).toLocaleString()}`
-                          : "Pending first backup..."}
+                      <div style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, marginTop: 2, display: "grid", gap: 2 }}>
+                        <span>
+                          {lastBackupTS
+                            ? `Last iCloud backup: ${new Date(lastBackupTS).toLocaleString()}`
+                            : "Pending first iCloud backup..."}
+                        </span>
+                        {lastPortableBackupTS ? (
+                          <span>{`${portableBackupLabel}: ${new Date(lastPortableBackupTS).toLocaleString()}`}</span>
+                        ) : null}
                       </div>
                     </div>
                   </div>

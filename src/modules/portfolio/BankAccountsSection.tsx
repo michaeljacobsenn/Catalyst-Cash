@@ -30,6 +30,11 @@ interface BankAccountsSectionProps {
     }>;
 }
 
+interface PlaidConnectionLike {
+    id?: string;
+    _needsReconnect?: boolean;
+}
+
 export default function BankAccountsSection({
     collapsedSections: propCollapsed,
     setCollapsedSections: propSetCollapsed,
@@ -47,12 +52,13 @@ export default function BankAccountsSection({
     useEffect(() => {
         let active = true;
         getConnections()
-            .then(connections => {
+            .then((connections = []) => {
                 if (!active) return;
                 const nextReconnectIds = new Set(
-                    (connections || [])
+                    connections
+                        .map(connection => connection as PlaidConnectionLike | undefined)
                         .filter(connection => connection?._needsReconnect)
-                        .map(connection => connection.id)
+                        .map(connection => connection?.id)
                         .filter(Boolean)
                 );
                 setReconnectConnectionIds(new Set<string>(Array.from(nextReconnectIds) as string[]));
@@ -155,7 +161,7 @@ export default function BankAccountsSection({
         const plaidSyncDate = formatPlaidSyncDateShort((acct as BankAccount & { _plaidLastSync?: string | number | null })._plaidLastSync);
         const plannedState = plannedBankBalances[acct.id];
         const metaChips = [
-            needsReconnect ? { label: "Reconnect", tone: "warning" } : null,
+            needsReconnect ? { label: "Reconnect required", tone: "warning" } : null,
             usesManualFallback ? { label: "Manual", tone: "muted" } : null,
         ].filter(Boolean) as Array<{ label: string; tone: "warning" | "muted" | "good" | "info" }>;
         const accentColor = colors.text || colors.accent || sectionColor;

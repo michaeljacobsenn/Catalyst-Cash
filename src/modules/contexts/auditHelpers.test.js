@@ -3,6 +3,8 @@ import {
   buildContributionAutoUpdates,
   hasCompletedAuditForSession,
   migrateHistory,
+  matchesAuditRecord,
+  removeAuditRecord,
   scrubPromptContext,
 } from "./auditHelpers.ts";
 
@@ -29,6 +31,34 @@ describe("auditHelpers", () => {
     expect(hasCompletedAuditForSession(draft, { ts: "abc" }, [])).toBe(true);
     expect(hasCompletedAuditForSession(draft, null, [{ ts: "abc" }])).toBe(true);
     expect(hasCompletedAuditForSession(draft, null, [{ ts: "other" }])).toBe(false);
+  });
+
+  it("matches legacy audit records without timestamps by fallback fingerprint", () => {
+    const left = {
+      date: "2026-04-16",
+      parsed: { healthScore: { score: 82, grade: "B" }, netWorth: 42000, status: "GREEN: Stable", mode: "NORMAL" },
+      model: "gpt-5.4",
+      isTest: false,
+    };
+    const right = {
+      date: "2026-04-16",
+      parsed: { healthScore: { score: 82, grade: "B" }, netWorth: 42000, status: "GREEN: Stable", mode: "NORMAL" },
+      model: "gpt-5.4",
+      isTest: false,
+    };
+    expect(matchesAuditRecord(left, right)).toBe(true);
+  });
+
+  it("removes only the first matching audit when legacy duplicates exist", () => {
+    const auditA = {
+      date: "2026-04-16",
+      parsed: { healthScore: { score: 82, grade: "B" }, netWorth: 42000, status: "GREEN: Stable", mode: "NORMAL" },
+      model: "gpt-5.4",
+      isTest: false,
+    };
+    const auditB = { ...auditA };
+    const history = [auditA, auditB];
+    expect(removeAuditRecord(history, auditA)).toEqual([auditB]);
   });
 
   it("computes contribution auto-updates from parsed moves", () => {

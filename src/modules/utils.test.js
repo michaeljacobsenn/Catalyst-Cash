@@ -346,7 +346,7 @@ describe("parseAudit", () => {
 
     const parsed = parseAudit(raw);
     expect(parsed).not.toBeNull();
-    expect(parsed.alertsCard).toEqual(["❗ Protect liquidity — Checking is close to the floor."]);
+    expect(parsed.alertsCard).toEqual(["Critical: Protect liquidity — Checking is close to the floor."]);
     expect(parsed.sections.nextAction).toContain("Protect checking");
     expect(parsed.structured.radar.next90Days).toHaveLength(1);
     expect(parsed.structured.nextAction).toEqual({
@@ -458,9 +458,70 @@ describe("parseAudit", () => {
         expect.objectContaining({ code: "weekly-moves-underallocated", severity: "low" }),
       ])
     );
-    expect(parsed.consistency.weeklyMoveDollarTotal).toBe(0);
-    expect(parsed.consistency.operationalAllocationTotal).toBe(0);
+    expect(parsed.consistency.weeklyMoveDollarTotal).toBe(50);
+    expect(parsed.consistency.operationalAllocationTotal).toBe(50);
     expect(parsed.consistency.expectedOperationalSurplus).toBe(175);
+  });
+
+  it("preserves an explicit AI next action when surplus exists without protection pressure", () => {
+    const raw = JSON.stringify({
+      headerCard: { status: "GREEN", details: ["Cash floor protected"] },
+      healthScore: {
+        score: 86,
+        grade: "B",
+        trend: "up",
+        summary: "Strong cash coverage with one clear debt-priority move.",
+        narrative: "Cash protection is intact. Your clearest next step is to route surplus cash to high-interest debt.",
+      },
+      dashboardCard: [
+        { category: "Checking", amount: "$4,600.00", status: "Protected" },
+        { category: "Vault", amount: "$2,100.00", status: "On track" },
+        { category: "Pending", amount: "$225.00", status: "Upcoming" },
+        { category: "Debts", amount: "$1,450.00", status: "Pay down" },
+        { category: "Available", amount: "$1,325.00", status: "SURPLUS" },
+      ],
+      weeklyMoves: [
+        "Route $300 to Chase Freedom this week.",
+        "Hold checking above $900 until next payday.",
+      ],
+      alertsCard: ["Protect your floor before discretionary spending."],
+      nextAction: "Route $300 to Chase Freedom this week and keep checking above $900.",
+      radar: [],
+      longRangeRadar: [],
+      milestones: ["Emergency reserve is over halfway funded."],
+      investments: {
+        balance: "$12,400.00",
+        asOf: "2026-03-13",
+        gateStatus: "Open",
+        cryptoValue: null,
+        netWorth: "$19,200.00",
+      },
+    });
+
+    const parsed = validateParsedAuditConsistency(parseAudit(raw), {
+      nativeScore: 86,
+      nativeRiskFlags: [],
+      operationalSurplus: 1325,
+      formData: {
+        date: "2026-03-13",
+        checking: "4600",
+        savings: "2100",
+        debts: [],
+        notes: "E2E audit coverage",
+      },
+      renewals: [],
+      cards: [],
+      computedStrategy: {
+        operationalSurplus: 1325,
+        debtStrategy: { target: "Chase Freedom", amount: 300 },
+        auditSignals: { debt: { total: 1450 } },
+      },
+      investmentAnchors: { balance: 12400, asOf: "2026-03-13", gateStatus: "Open", netWorth: 19200 },
+    });
+
+    expect(parsed.structured.nextAction.detail).toBe("Route $300 to Chase Freedom this week and keep checking above $900.");
+    expect(parsed.weeklyMoves[0]).toBe("Route $300 to Chase Freedom this week.");
+    expect(parsed.consistency.deterministicPlanReanchored).not.toBe(true);
   });
 
   it("logs non-canonical dashboard categories instead of silently dropping them", () => {

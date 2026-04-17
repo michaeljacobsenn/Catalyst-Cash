@@ -16,6 +16,12 @@ const REDACTED_KEYS = [
   "account",
   "routing",
   "ssn",
+  "recoveryid",
+  "recoverykey",
+  "authtoken",
+  "encryptedblob",
+  "integritytag",
+  "legacyauthtoken",
 ];
 
 const STRING_REDACTIONS = [

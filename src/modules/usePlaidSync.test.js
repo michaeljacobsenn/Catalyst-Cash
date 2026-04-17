@@ -1,8 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  buildPlaidRefreshCadenceCopy,
   getMostRecentPlaidSyncTime,
+  getPlaidRefreshWindowConfig,
   hasCachedPlaidSnapshot,
   parsePlaidSyncTimestamp,
+  refreshTransactionsAfterSync,
   shouldRunBackgroundPlaidMaintenance,
   shouldEnforcePlaidSyncCooldown,
   shouldFetchTransactionsForSync,
@@ -23,6 +26,44 @@ describe("usePlaidSync helpers", () => {
 
   it("treats SQL-style Plaid sync timestamps as UTC before formatting locally", () => {
     expect(parsePlaidSyncTimestamp("2026-04-12 15:00:00")).toBe(new Date("2026-04-12T15:00:00.000Z").getTime());
+  });
+
+  it("describes the live plaid refresh cadence by dataset for pro sync", () => {
+    expect(
+      getPlaidRefreshWindowConfig({
+        effectiveTierId: "pro",
+        gatingEnforced: true,
+      })
+    ).toEqual({
+      balances: 24 * 60 * 60 * 1000,
+      transactions: 3 * 24 * 60 * 60 * 1000,
+      liabilities: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    expect(
+      buildPlaidRefreshCadenceCopy({
+        effectiveTierId: "pro",
+        gatingEnforced: true,
+      })
+    ).toBe(
+      "Balance refreshes reopen every 24 hours. Transactions typically refresh every 72 hours, and liabilities refresh every 7 days."
+    );
+  });
+
+  it("omits refresh cadence copy when gating is not enforcing plaid windows", () => {
+    expect(
+      getPlaidRefreshWindowConfig({
+        effectiveTierId: "pro",
+        gatingEnforced: false,
+      })
+    ).toBeNull();
+
+    expect(
+      buildPlaidRefreshCadenceCopy({
+        effectiveTierId: "pro",
+        gatingEnforced: false,
+      })
+    ).toBe("");
   });
 
   it("fetches transactions only when the current effective tier can actually use them", () => {
@@ -156,6 +197,40 @@ describe("usePlaidSync helpers", () => {
     ).toEqual({
       kind: "info",
       message: "Live sync did not complete, but Catalyst kept showing your most recent saved bank data.",
+    });
+  });
+
+  it("refreshes transactions with the sync connection scope and disabled AI categorization when requested", async () => {
+    const fetchTransactions = vi.fn(async () => ({ ok: true }));
+
+    const result = await refreshTransactionsAfterSync({
+      connectionIds: ["conn-1", "conn-2"],
+      background: true,
+      categorizeWithAi: false,
+      fetchTransactions,
+    });
+
+    expect(result).toEqual({ ok: true, warning: null });
+    expect(fetchTransactions).toHaveBeenCalledWith(30, {
+      connectionIds: ["conn-1", "conn-2"],
+      categorizeWithAi: false,
+    });
+  });
+
+  it("surfaces transaction refresh failures as degraded but non-fatal", async () => {
+    const fetchTransactions = vi.fn(async () => {
+      throw new Error("network unavailable");
+    });
+
+    const result = await refreshTransactionsAfterSync({
+      connectionIds: ["conn-1"],
+      background: false,
+      fetchTransactions,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      warning: "Balances refreshed, but transaction history could not be updated right now. Recent spending may look older until the next refresh.",
     });
   });
 });

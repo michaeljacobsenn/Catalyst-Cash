@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { Building2, ChevronRight, Cpu, Database, Info, Lock, Monitor, Share2, Target } from "../icons";
+import { Building2, ChevronRight, Cpu, Database, Info, Lock, Monitor, Share2, Shield, Target } from "../icons";
 import { buildPromoLine } from "../planCatalog.js";
 import { T } from "../constants.js";
 import { ListRow, ListSection, NoticeBanner } from "../ui.js";
 import ProBanner from "../tabs/ProBanner.js";
 import { haptic } from "../haptics.js";
+import UiGlyph from "../UiGlyph.js";
 
 const loadReferral = () => import("../referral.js");
 
@@ -87,11 +88,10 @@ function ReferralCard() {
       </span>
       <div
         style={{
-          background: `linear-gradient(145deg, ${T.bg.card}, ${T.bg.surface})`,
+          background: T.bg.card,
           borderRadius: T.radius.xl,
           border: `1px solid ${T.border.subtle}`,
           padding: "16px 16px 14px",
-          boxShadow: "0 6px 18px rgba(0,0,0,0.10)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
@@ -99,16 +99,16 @@ function ReferralCard() {
             style={{
               width: 36,
               height: 36,
-              borderRadius: "50%",
-              background: `linear-gradient(135deg, ${T.accent.primary}20, ${T.accent.emerald}20)`,
+              borderRadius: 12,
+              background: `${T.accent.primary}14`,
+              border: `1px solid ${T.accent.primary}16`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: 18,
               flexShrink: 0,
             }}
           >
-            🎁
+            <UiGlyph glyph="🎁" size={18} color={T.accent.primary} />
           </div>
           <div>
             <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary }}>
@@ -135,9 +135,9 @@ function ReferralCard() {
               flex: 1,
               padding: "10px 14px",
               borderRadius: T.radius.md,
-              border: `1px dashed ${T.accent.primary}40`,
-              background: `${T.accent.primary}08`,
-              color: T.accent.primary,
+              border: `1px solid ${T.border.subtle}`,
+              background: T.bg.elevated,
+              color: T.text.primary,
               fontSize: 16,
               fontWeight: 800,
               fontFamily: T.font.mono,
@@ -147,7 +147,7 @@ function ReferralCard() {
               transition: "all 0.2s",
             }}
           >
-            {copied ? "Copied! ✓" : code || "···"}
+            {copied ? "Copied!" : code || "···"}
           </button>
           <button
             onClick={handleShare}
@@ -156,14 +156,13 @@ function ReferralCard() {
               width: 44,
               height: 44,
               borderRadius: T.radius.md,
-              border: "none",
-              background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`,
-              color: "#fff",
+              border: `1px solid ${T.border.subtle}`,
+              background: T.bg.elevated,
+              color: T.text.primary,
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: `0 4px 12px ${T.accent.primary}40`,
               flexShrink: 0,
             }}
           >
@@ -178,9 +177,9 @@ function ReferralCard() {
               display: "flex",
               gap: 12,
               padding: "8px 12px",
-              background: `${T.status.green}0A`,
+              background: T.bg.elevated,
               borderRadius: T.radius.md,
-              border: `1px solid ${T.status.green}15`,
+              border: `1px solid ${T.border.subtle}`,
             }}
           >
             <div style={{ textAlign: "center", flex: 1 }}>
@@ -220,7 +219,7 @@ function ReferralCard() {
   );
 }
 
-type SettingsMenu = "finance" | "profile" | "ai" | "backup" | "dev" | "security" | "plaid" | null;
+type SettingsMenu = "finance" | "profile" | "ai" | "backup" | "dev" | "security" | "plaid" | "trust" | null;
 type SetupStep = {
   label: string;
   done: boolean;
@@ -281,6 +280,7 @@ export function RootSettingsSection({
       items: [
         ...(enablePlaid ? [{ id: "plaid", label: "Bank Connections", icon: Building2, color: T.status.purple || "#8a2be2", desc: "Manage synced accounts" }] : []),
         { id: "backup", label: "Backup & Sync", icon: Database, color: T.status.green, desc: "Backup data, restore, export history" },
+        { id: "trust", label: "Trust Center", icon: Shield, color: T.status.blue, desc: "Data handling, recovery readiness, and privacy posture" },
         { id: "security", label: "App Security", icon: Lock, color: T.status.red, desc: "Passcodes, Face ID" },
         { id: "guide", label: "Help & Guide", icon: Info, color: T.text.secondary, desc: "Learn how Catalyst works" },
       ],
@@ -383,20 +383,19 @@ export function RootSettingsSection({
                 width: "100%",
                 padding: "14px 16px",
                 borderRadius: T.radius.xl,
-                border: `1px solid ${T.accent.primary}40`,
-                background: `${T.accent.primary}10`,
-                color: T.accent.primary,
+                border: `1px solid ${T.border.subtle}`,
+                background: T.bg.card,
+                color: T.text.primary,
                 fontSize: 14,
                 fontWeight: 700,
                 cursor: "pointer",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                boxShadow: `0 4px 12px ${T.accent.primary}10`,
               }}
             >
               <span>Manage Pro Subscription</span>
-              <ChevronRight className="chevron-icon" size={18} color={T.accent.primary} />
+              <ChevronRight className="chevron-icon" size={18} color={T.text.muted} />
             </button>
           ) : (
             <ProBanner onUpgrade={onUpgrade} label="Upgrade to Pro" sublabel={buildPromoLine(["audits", "models", "plaid"])} />
@@ -425,12 +424,10 @@ export function RootSettingsSection({
           </span>
           <div
             style={{
-              background: `linear-gradient(145deg, ${T.bg.card}, ${T.bg.surface})`,
+              background: T.bg.card,
               borderRadius: T.radius.xl,
               border: `1px solid ${T.border.subtle}`,
               padding: "15px 16px",
-              boxShadow: "0 6px 18px rgba(0,0,0,0.10)",
-              backdropFilter: "blur(12px)",
               position: "relative",
             }}
           >
@@ -467,15 +464,15 @@ export function RootSettingsSection({
                   style={{
                     width: 32,
                     height: 32,
-                    borderRadius: "50%",
-                    background: pct === 100 ? `${T.status.green}1A` : `${T.accent.primary}1A`,
+                    borderRadius: 12,
+                    background: pct === 100 ? `${T.status.green}14` : `${T.accent.primary}14`,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    border: `1px solid ${pct === 100 ? T.status.green : T.accent.primary}40`,
+                    border: `1px solid ${pct === 100 ? T.status.green : T.accent.primary}24`,
                   }}
                 >
-                  <span style={{ fontSize: 14 }}>{pct === 100 ? "🚀" : "🎯"}</span>
+                  <UiGlyph glyph={pct === 100 ? "🚀" : "🎯"} size={14} color={pct === 100 ? T.status.green : T.accent.primary} />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column" }}>
                   <span style={{ fontSize: 14, fontWeight: 800, color: pct === 100 ? T.status.green : T.text.primary }}>
@@ -495,9 +492,9 @@ export function RootSettingsSection({
                 style={{
                   height: "100%",
                   borderRadius: 3,
-                  background: pct === 100 ? T.status.green : `linear-gradient(90deg, ${T.accent.primary}, ${T.accent.emerald})`,
+                  background: pct === 100 ? T.status.green : T.accent.primary,
                   width: `${pct}%`,
-                  transition: "width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                  transition: "width 0.3s ease",
                 }}
               />
             </div>
@@ -511,9 +508,9 @@ export function RootSettingsSection({
                     alignItems: "center",
                     justifyContent: "space-between",
                     padding: "9px 12px",
-                    background: step.done ? `${T.bg.surface}80` : T.bg.elevated,
+                    background: step.done ? T.bg.card : T.bg.elevated,
                     borderRadius: T.radius.md,
-                    border: `1px solid ${step.done ? T.border.subtle : T.border.default}`,
+                    border: `1px solid ${step.done ? T.border.subtle : T.border.subtle}`,
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -529,7 +526,7 @@ export function RootSettingsSection({
                         justifyContent: "center",
                       }}
                     >
-                      {step.done && <span style={{ color: "#fff", fontSize: 10, fontWeight: 800 }}>✓</span>}
+                      {step.done && <UiGlyph glyph="✓" size={10} color="#fff" />}
                     </div>
                     <span
                       style={{
@@ -553,9 +550,9 @@ export function RootSettingsSection({
                       style={{
                         fontSize: 11,
                         fontWeight: 800,
-                        color: T.accent.primary,
-                        background: `${T.accent.primary}1A`,
-                        border: "none",
+                        color: T.text.primary,
+                        background: T.bg.card,
+                        border: `1px solid ${T.border.subtle}`,
                         cursor: "pointer",
                         padding: "6px 12px",
                         borderRadius: 999,
@@ -602,6 +599,12 @@ export function DeveloperToolsSection({
       <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.6, marginBottom: 16 }}>
         These controls are only for internal testing. They seed a realistic profile, open the weekly audit flow with that seeded data, and preview local-notification alerts without needing to wait for real-world triggers.
       </p>
+      <NoticeBanner
+        compact
+        tone="info"
+        title="Founder telemetry workflow"
+        message="Run `ADMIN_TOKEN=... npm run telemetry:summary -- --days=14` for console output, or `ADMIN_TOKEN=... npm run telemetry:report -- --days=14` to save a markdown founder report in `docs/`."
+      />
       <button
         onClick={() => void onLoadFullProfileQaSeed()}
         className="hover-btn"
@@ -609,8 +612,8 @@ export function DeveloperToolsSection({
           width: "100%",
           padding: "14px",
           borderRadius: T.radius.md,
-          border: `1px solid ${T.accent.primary}35`,
-          background: `${T.accent.primary}12`,
+          border: `1px solid ${T.border.subtle}`,
+          background: T.bg.card,
           color: T.text.primary,
           fontSize: 13,
           fontWeight: 700,
@@ -627,8 +630,8 @@ export function DeveloperToolsSection({
           width: "100%",
           padding: "14px",
           borderRadius: T.radius.md,
-          border: `1px solid ${T.border.default}`,
-          background: T.bg.elevated,
+          border: `1px solid ${T.border.subtle}`,
+          background: T.bg.card,
           color: T.text.primary,
           fontSize: 13,
           fontWeight: 700,
@@ -649,8 +652,8 @@ export function DeveloperToolsSection({
             width: "100%",
             padding: "14px",
             borderRadius: T.radius.md,
-            border: `1px solid ${T.border.default}`,
-            background: T.bg.elevated,
+            border: `1px solid ${T.border.subtle}`,
+            background: T.bg.card,
             color: T.text.primary,
             fontSize: 13,
             fontWeight: 700,

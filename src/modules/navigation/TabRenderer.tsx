@@ -1,4 +1,4 @@
-  import { Suspense,lazy,useEffect,useState } from "react";
+  import { Suspense,lazy,startTransition,useEffect,useState } from "react";
   import { useReducedMotion } from "framer-motion";
   import { T } from "../constants.js";
   import type { AppTab,NavViewState } from "../contexts/NavigationContext.js";
@@ -63,11 +63,13 @@ export default function TabRenderer({
   const [mountedTabs, setMountedTabs] = useState<Set<AppTab>>(() => new Set(["dashboard", activeTab]));
 
   useEffect(() => {
-    setMountedTabs((prev) => {
-      if (prev.has(activeTab)) return prev;
-      const next = new Set(prev);
-      next.add(activeTab);
-      return next;
+    startTransition(() => {
+      setMountedTabs((prev) => {
+        if (prev.has(activeTab)) return prev;
+        const next = new Set(prev);
+        next.add(activeTab);
+        return next;
+      });
     });
   }, [activeTab]);
 
@@ -76,6 +78,8 @@ export default function TabRenderer({
 
     const warmup = () => {
       void Promise.allSettled([
+        loadCashflowTab(),
+        loadPortfolioTab(),
         loadAIChatTab(),
         loadAuditTab(),
       ]);

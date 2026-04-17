@@ -197,7 +197,7 @@ export async function schedulePaydayReminder(payday, paycheckTime) {
       notifications: [
         {
           id: PAYDAY_REMINDER_ID,
-          title: "💰 Payday Today — Run Your Snapshot",
+          title: "Payday Today — Run Your Snapshot",
           body: `${dayName} paycheck incoming. Open the app to run your financial audit before ${timeLabel}.`,
           schedule: { at: fireAt, allowWhileIdle: true },
           sound: "default",
@@ -250,11 +250,11 @@ export async function scheduleOverrunNotification(overruns) {
     const worst = overruns.reduce((a, b) => (b.actual - b.amount > a.actual - a.amount ? b : a));
     const overCount = overruns.length;
     const title = overCount === 1
-      ? `${worst.icon} Budget overrun: ${worst.name}`
-      : `⚠️ ${overCount} budget lines over this cycle`;
+      ? `Budget overrun: ${worst.name}`
+      : `${overCount} budget lines over this cycle`;
     const body = overCount === 1
       ? `You spent $${worst.actual.toFixed(0)} vs your $${worst.amount.toFixed(0)} target — $${(worst.actual - worst.amount).toFixed(0)} over.`
-      : `${worst.icon} ${worst.name} is the biggest overrun (+$${(worst.actual - worst.amount).toFixed(0)}). Check your Budget tab.`;
+      : `${worst.name} is the biggest overrun (+$${(worst.actual - worst.amount).toFixed(0)}). Check your Budget tab.`;
 
     await LocalNotifications.schedule({
       notifications: [{
@@ -296,21 +296,21 @@ export async function schedulePostAuditCelebration(score, streak) {
 
     const messages = [
       score >= 90
-        ? `🏆 Health score: ${score}! You're in elite territory.`
+        ? `Health score: ${score}! You're in elite territory.`
         : score >= 75
-          ? `📊 Health score: ${score} — solid progress. Keep pushing.`
+          ? `Health score: ${score} — solid progress. Keep pushing.`
           : score >= 50
-            ? `💪 Health score: ${score} — building momentum. Every week counts.`
-            : `📈 Health score: ${score} — you showed up. That's what matters.`,
+            ? `Health score: ${score} — building momentum. Every week counts.`
+            : `Health score: ${score} — you showed up. That's what matters.`,
     ];
     let body = messages[0];
-    if (streak > 1) body += ` W${streak} streak 🔥`;
+    if (streak > 1) body += ` Week ${streak} streak active.`;
 
     await LocalNotifications.schedule({
       notifications: [
         {
           id: POST_AUDIT_CELEBRATION_ID,
-          title: "✅ Audit Complete!",
+          title: "Audit Complete",
           body,
           schedule: { at: fireAt, allowWhileIdle: true },
           sound: "default",
@@ -355,7 +355,7 @@ export async function scheduleMidWeekCheckIn(weeklyAllowance) {
       notifications: [
         {
           id: MID_WEEK_CHECK_IN_ID,
-          title: "📊 Mid-Week Pulse",
+          title: "Mid-Week Pulse",
           body,
           schedule: { at: fireAt, every: "week", allowWhileIdle: true },
           sound: "default",
@@ -396,7 +396,7 @@ export async function scheduleMonthEndSummary() {
       notifications: [
         {
           id: MONTH_END_SUMMARY_ID,
-          title: "📅 Month-End Check",
+          title: "Month-End Check",
           body: "Run a quick audit before the month closes to capture your full financial picture.",
           schedule: { at: fireAt, every: "month", allowWhileIdle: true },
           sound: "default",
@@ -435,7 +435,7 @@ export async function scheduleWeeklyAuditNudge() {
       notifications: [
         {
           id: WEEKLY_AUDIT_NUDGE_ID,
-          title: "📊 Weekly Snapshot Time",
+          title: "Weekly Snapshot Time",
           body: "Take 2 minutes to run your financial audit. Consistent tracking builds wealth.",
           schedule: { at: fireAt, every: "week", allowWhileIdle: true },
           sound: "default",
@@ -502,7 +502,7 @@ export async function scheduleStreakAtRiskNudge(hasAuditThisWeek) {
       notifications: [
         {
           id: STREAK_AT_RISK_ID,
-          title: "🔥 Your Streak Is at Risk!",
+          title: "Your Streak Is at Risk",
           body: "Run a quick 2-minute audit before the weekend ends to keep your streak alive.",
           schedule: { at: fireAt, allowWhileIdle: true },
           sound: "default",
@@ -567,7 +567,7 @@ export async function scheduleBillReminders(renewals = []) {
 
       notifications.push({
         id: BILL_REMINDER_BASE_ID + idx,
-        title: `💳 ${name} Due Tomorrow`,
+        title: `${name} Due Tomorrow`,
         body: amount ? `${name} (${amount}) is due tomorrow. Make sure you're covered.` : `${name} is due tomorrow.`,
         schedule: { at: fireAt, allowWhileIdle: true },
         sound: "default",

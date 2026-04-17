@@ -1,5 +1,6 @@
   import { BADGE_DEFINITIONS,TIER_COLORS } from "../badges.js";
   import { T } from "../constants.js";
+  import UiGlyph from "../UiGlyph.js";
   import { Card } from "../ui.js";
 
 /**
@@ -15,7 +16,7 @@ export default function BadgeStrip({ badges }) {
     <Card animate delay={250}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 14 }}>🏆</span>
+          <UiGlyph glyph="🏆" size={14} color={T.accent.primary} />
           <span style={{ fontSize: 12, fontWeight: 700 }}>Achievements</span>
         </div>
         <span style={{ fontSize: 9, fontWeight: 700, color: T.text.dim, fontFamily: T.font.mono }}>
@@ -53,7 +54,9 @@ export default function BadgeStrip({ badges }) {
                   animation: `fadeInUp .3s ease-out ${i * 0.05}s both`,
                 }}
               >
-                <div style={{ fontSize: 20, marginBottom: 2 }}>{b.emoji}</div>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 2 }}>
+                  <UiGlyph glyph={b.emoji} size={18} color={tc.text} />
+                </div>
                 <div
                   style={{
                     fontSize: 8,
@@ -91,7 +94,9 @@ export default function BadgeStrip({ badges }) {
               justifyContent: "center",
             }}
           >
-            <div style={{ fontSize: 16, marginBottom: 2, opacity: 0.4 }}>🔒</div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 2, opacity: 0.4 }}>
+              <UiGlyph glyph="🔒" size={16} color={T.text.muted} />
+            </div>
             <div style={{ fontSize: 8, fontWeight: 700, color: T.text.muted, fontFamily: T.font.mono }}>
               +{lockedCount}
             </div>

@@ -6,7 +6,7 @@
 // Default is "USD" if not set.
 // ═══════════════════════════════════════════════════════════════
 
-export const CURRENCIES = [
+const RAW_CURRENCIES = [
   { code: "USD", symbol: "$", name: "US Dollar", locale: "en-US", flag: "🇺🇸" },
   { code: "EUR", symbol: "€", name: "Euro", locale: "de-DE", flag: "🇪🇺" },
   { code: "GBP", symbol: "£", name: "British Pound", locale: "en-GB", flag: "🇬🇧" },
@@ -36,6 +36,11 @@ export const CURRENCIES = [
   { code: "COP", symbol: "COL$", name: "Colombian Peso", locale: "es-CO", flag: "🇨🇴", decimals: 0 },
   { code: "NGN", symbol: "₦", name: "Nigerian Naira", locale: "en-NG", flag: "🇳🇬" },
 ];
+
+export const CURRENCIES = RAW_CURRENCIES.map(currency => ({
+  ...currency,
+  label: `${currency.code} (${currency.symbol})`,
+}));
 
 const _currencyMap = {};
 for (const c of CURRENCIES) _currencyMap[c.code] = c;

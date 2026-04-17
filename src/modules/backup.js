@@ -3,6 +3,13 @@
 // Extracted from SettingsTab.jsx for clarity and testability.
 // ═══════════════════════════════════════════════════════════════
 import { APP_VERSION } from "./constants.js";
+import {
+  clearBackupMetadata,
+  LAST_CLOUD_BACKUP_TS_KEY,
+  markCloudBackup,
+  markPortableBackup,
+} from "./backupMetadata.js";
+import { normalizeBudgetLines } from "./budgetBuckets.js";
 import { decrypt, encrypt, isEncrypted } from "./crypto.js";
 import { ensureConnectionAccountsPresent, materializeManualFallbackForConnections } from "./plaid.js";
 import { FULL_PROFILE_QA_ACTIVE_KEY, shouldRecoverFromFullProfileQaSeed } from "./qaSeed.js";
@@ -210,7 +217,9 @@ export async function buildBackupPayload({ personalRules = "", exportedAt = new 
   for (const key of keys) {
     if (isSecuritySensitiveKey(key)) continue;
     const val = await db.get(key);
-    if (val !== null) backup.data[key] = val;
+    if (val !== null) {
+      backup.data[key] = key === "budget-lines-v2" ? normalizeBudgetLines(val).lines : val;
+    }
   }
 
   if (!("personal-rules" in backup.data)) {
@@ -285,7 +294,7 @@ export async function performCloudBackup({
     }
 
     const now = Date.now();
-    const lastBackupTs = await db.get("last-backup-ts");
+    const lastBackupTs = await db.get(LAST_CLOUD_BACKUP_TS_KEY);
     if (!force && interval && !shouldRunAutoBackup(interval, lastBackupTs, now)) {
       return { success: false, skipped: true, reason: "not-due" };
     }
@@ -301,7 +310,7 @@ export async function performCloudBackup({
       return { success: false, skipped: false, reason: "upload-failed" };
     }
 
-    await db.set("last-backup-ts", now);
+    await markCloudBackup(now);
     return { success: true, skipped: false, reason: null, timestamp: now };
   })().finally(() => {
     activeCloudBackupPromise = null;
@@ -329,7 +338,47 @@ export async function exportBackup(passphrase) {
   const filename = `CatalystCash_Backup_${dateStr}.enc`;
   const { nativeExport } = await loadNativeExportModule();
   await nativeExport(filename, JSON.stringify(envelope), "application/octet-stream");
+  await markPortableBackup("encrypted-export", Date.parse(exportedAt) || Date.now());
   return { count: Object.keys(backup.data).length, exportedAt, filename, plaidConnectionCount };
+}
+
+export async function restoreBackupPayload(backup) {
+  if (!backup?.data || (backup.app !== "Catalyst Cash" && backup.app !== "FinAudit Pro")) {
+    throw new Error("Invalid Catalyst Cash backup file");
+  }
+
+  const sanitizedPortfolio = sanitizeBackupPortfolioData({
+    cards: backup.data["card-portfolio"],
+    bankAccounts: backup.data["bank-accounts"],
+    renewals: backup.data["renewals"],
+  });
+  if ("card-portfolio" in backup.data) backup.data["card-portfolio"] = sanitizedPortfolio.cards;
+  if ("bank-accounts" in backup.data) backup.data["bank-accounts"] = sanitizedPortfolio.bankAccounts;
+  if ("renewals" in backup.data) backup.data["renewals"] = sanitizedPortfolio.renewals;
+
+  let count = 0;
+  for (const [key, val] of Object.entries(backup.data)) {
+    if (!isSafeImportKey(key)) continue;
+    if (key === "auto-backup-interval" || key === LAST_CLOUD_BACKUP_TS_KEY) continue;
+    const normalizedValue =
+      key === "budget-lines-v2"
+        ? normalizeBudgetLines(val).lines
+        : val;
+    await db.set(key, normalizedValue);
+    count++;
+  }
+  await db.set("auto-backup-interval", "off");
+  await clearBackupMetadata();
+
+  const sanitizedPlaid = backup.data["plaid-connections-sanitized"];
+  let plaidReconnectCount = 0;
+  if (Array.isArray(sanitizedPlaid) && sanitizedPlaid.length > 0) {
+    const restoredPlaid = await restoreSanitizedPlaidConnections(sanitizedPlaid);
+    plaidReconnectCount = restoredPlaid.reconnectCount;
+    count++;
+  }
+
+  return { count, exportedAt: backup.exportedAt, plaidReconnectCount };
 }
 
 /**
@@ -467,45 +516,7 @@ export async function importBackup(file, getPassphrase) {
           return;
         }
 
-        if (!backup.data || (backup.app !== "Catalyst Cash" && backup.app !== "FinAudit Pro")) {
-          reject(new Error("Invalid Catalyst Cash backup file"));
-          return;
-        }
-
-        const sanitizedPortfolio = sanitizeBackupPortfolioData({
-          cards: backup.data["card-portfolio"],
-          bankAccounts: backup.data["bank-accounts"],
-          renewals: backup.data["renewals"],
-        });
-        if ("card-portfolio" in backup.data) backup.data["card-portfolio"] = sanitizedPortfolio.cards;
-        if ("bank-accounts" in backup.data) backup.data["bank-accounts"] = sanitizedPortfolio.bankAccounts;
-        if ("renewals" in backup.data) backup.data["renewals"] = sanitizedPortfolio.renewals;
-
-        let count = 0;
-        for (const [key, val] of Object.entries(backup.data)) {
-          if (!isSafeImportKey(key)) continue;
-          if (key === "auto-backup-interval" || key === "last-backup-ts") continue;
-          await db.set(key, val);
-          count++;
-        }
-        await db.set("auto-backup-interval", "off");
-        if (typeof db.del === "function") {
-          await db.del("last-backup-ts");
-        } else {
-          await db.set("last-backup-ts", null);
-        }
-
-        // Restore sanitized Plaid connections (metadata only, no access tokens)
-        // so `autoMatchAccounts` can deduplicate when the user reconnects
-        const sanitizedPlaid = backup.data["plaid-connections-sanitized"];
-        let plaidReconnectCount = 0;
-        if (Array.isArray(sanitizedPlaid) && sanitizedPlaid.length > 0) {
-          const restoredPlaid = await restoreSanitizedPlaidConnections(sanitizedPlaid);
-          plaidReconnectCount = restoredPlaid.reconnectCount;
-          count++;
-        }
-
-        resolve({ count, exportedAt: backup.exportedAt, plaidReconnectCount });
+        resolve(await restoreBackupPayload(backup));
       } catch (err) {
         reject(err);
       }

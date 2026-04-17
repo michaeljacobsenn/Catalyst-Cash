@@ -398,7 +398,7 @@ function buildFinancialContext(current, financialConfig, cards, renewals, histor
       parts.push("\nPaycheck-Cycle Budget (use this for per-paycheck coaching):");
       parts.push(`  Paycheck: ${fmt(budgetContext.cycleIncome || 0)} (${budgetContext.payFrequency || "bi-weekly"})`);
       budgetContext.lines.forEach(l => {
-        parts.push(`  - [${(l.bucket || "flex").toUpperCase()}] ${l.name}: ${fmt(l.perCycleTarget || 0)}/cycle`);
+        parts.push(`  - [${(l.bucket || "needs").toUpperCase()}] ${l.name}: ${fmt(l.perCycleTarget || 0)}/cycle`);
       });
     }
 

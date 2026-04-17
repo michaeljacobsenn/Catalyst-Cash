@@ -5,6 +5,7 @@
   import { T } from "../constants.js";
   import { useSettings } from "../contexts/SettingsContext.js";
   import { AlertTriangle,Check,ChevronDown,Edit3,Link2,Plus,Target,Trash2,TrendingDown,TrendingUp,Wallet } from "../icons";
+  import UiGlyph from "../UiGlyph.js";
   import { Badge,Card } from "../ui.js";
   import { fmt } from "../utils.js";
   import type { PortfolioCollapsedSections } from "./types.js";
@@ -45,33 +46,43 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
         });
     };
     const saveEditDebt = (i: number) => {
-        const arr = [...nonCardDebts];
-        arr[i] = {
-            ...arr[i],
-            name: editDebtForm.name,
-            type: editDebtForm.type,
-            balance: parseFloat(editDebtForm.balance) || 0,
-            apr: parseFloat(editDebtForm.apr) || 0,
-            minPayment: parseFloat(editDebtForm.minPayment) || 0,
-            linkedAssetId: editDebtForm.linkedAssetId || null,
-        };
-        setFinancialConfig({ ...financialConfig, nonCardDebts: arr });
+        setFinancialConfig((prev) => {
+            const arr = [...(prev?.nonCardDebts || [])];
+            arr[i] = {
+                ...arr[i],
+                name: editDebtForm.name,
+                type: editDebtForm.type,
+                balance: parseFloat(editDebtForm.balance) || 0,
+                apr: parseFloat(editDebtForm.apr) || 0,
+                minPayment: parseFloat(editDebtForm.minPayment) || 0,
+                linkedAssetId: editDebtForm.linkedAssetId || null,
+            };
+            return { ...prev, nonCardDebts: arr };
+        });
         setEditingDebt(null);
     };
     const removeDebt = (i: number) => {
-        setFinancialConfig({ ...financialConfig, nonCardDebts: nonCardDebts.filter((_, j) => j !== i) });
+        setFinancialConfig((prev) => ({
+            ...prev,
+            nonCardDebts: (prev?.nonCardDebts || []).filter((_, j) => j !== i),
+        }));
     };
 
     // ── SAVINGS GOALS ──
     const savingsGoals: SavingsGoal[] = financialConfig?.savingsGoals || [];
     const [editingGoals, setEditingGoals] = useState(false);
     const updateGoal = <K extends keyof SavingsGoal>(i: number, k: K, v: SavingsGoal[K]) => {
-        const arr = [...savingsGoals];
-        arr[i] = { ...arr[i], [k]: v };
-        setFinancialConfig({ ...financialConfig, savingsGoals: arr });
+        setFinancialConfig((prev) => {
+            const arr = [...(prev?.savingsGoals || [])];
+            arr[i] = { ...arr[i], [k]: v };
+            return { ...prev, savingsGoals: arr };
+        });
     };
     const removeGoal = (i: number) => {
-        setFinancialConfig({ ...financialConfig, savingsGoals: savingsGoals.filter((_, j) => j !== i) });
+        setFinancialConfig((prev) => ({
+            ...prev,
+            savingsGoals: (prev?.savingsGoals || []).filter((_, j) => j !== i),
+        }));
     };
 
     // ── OTHER ASSETS ──
@@ -79,12 +90,17 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
     const totalOtherAssets = otherAssets.reduce((s, a) => s + (a.value || 0), 0);
     const [editingAssets, setEditingAssets] = useState(false);
     const updateAsset = <K extends keyof OtherAsset>(i: number, k: K, v: OtherAsset[K]) => {
-        const arr = [...otherAssets];
-        arr[i] = { ...arr[i], [k]: v };
-        setFinancialConfig({ ...financialConfig, otherAssets: arr });
+        setFinancialConfig((prev) => {
+            const arr = [...(prev?.otherAssets || [])];
+            arr[i] = { ...arr[i], [k]: v };
+            return { ...prev, otherAssets: arr };
+        });
     };
     const removeAsset = (i: number) => {
-        setFinancialConfig({ ...financialConfig, otherAssets: otherAssets.filter((_, j) => j !== i) });
+        setFinancialConfig((prev) => ({
+            ...prev,
+            otherAssets: (prev?.otherAssets || []).filter((_, j) => j !== i),
+        }));
     };
 
     return (
@@ -377,7 +393,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                         fontFamily: T.font.sans,
                                     }}
                                 >
-                                    {editingGoals ? "✓ Done" : "✏️ Edit"}
+                                    {editingGoals ? "Done" : "Edit"}
                                 </button>
                                 <button
                                     onClick={() => openSheet("goal")}
@@ -533,7 +549,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                                                     flexShrink: 0,
                                                                 }}
                                                             >
-                                                                {asset.liquid ? "💧" : "🔒"}
+                                                                <UiGlyph glyph={asset.liquid ? "💧" : "🔒"} size={12} color={asset.liquid ? T.accent.emerald : T.text.muted} />
                                                             </button>
                                                             <button
                                                                 onClick={(e) => {
@@ -661,7 +677,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                         cursor: "pointer",
                                     }}
                                 >
-                                    {editingAssets ? "✓ Done" : "✏️ Edit"}
+                                    {editingAssets ? "Done" : "Edit"}
                                 </button>
                                 <button
                                     onClick={() => openSheet("asset")}

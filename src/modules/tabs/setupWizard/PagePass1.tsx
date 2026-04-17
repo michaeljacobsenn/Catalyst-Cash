@@ -10,10 +10,15 @@ interface PagePassSharedProps {
   onNext: () => void;
   onBack: () => void;
   onSkip: () => void;
+  nextLabel?: string;
+  quickStart?: boolean;
 }
 
-export function PagePass1({ data, onChange, onNext, onBack, onSkip }: PagePassSharedProps) {
+export function PagePass1({ data, onChange, onNext, onBack, onSkip, nextLabel, quickStart = false }: PagePassSharedProps) {
   const [showUnevenPaycheck, setShowUnevenPaycheck] = useState(Boolean(data.paycheckFirstOfMonth));
+  const [showAdvancedIncome, setShowAdvancedIncome] = useState(
+    !quickStart || data.incomeType === "hourly" || data.incomeType === "variable" || Boolean(data.typicalHours || data.averagePaycheck)
+  );
 
   useEffect(() => {
     if (data.paycheckFirstOfMonth) setShowUnevenPaycheck(true);
@@ -32,7 +37,9 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }: PagePassSh
       >
         <div style={{ fontSize: 12, fontWeight: 800, color: T.accent.emerald, marginBottom: 4 }}>Most important step</div>
         <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5 }}>
-          These numbers drive paycheck timing, weekly runway, and whether the app says you are safe or stretched.
+          {quickStart
+            ? "Quick Start only asks for the numbers needed to make the first audit credible. Deposit account, tax detail, and advanced setup can wait."
+            : "These numbers drive paycheck timing, weekly runway, and whether the app says you are safe or stretched."}
         </div>
       </div>
 
@@ -51,10 +58,10 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }: PagePassSh
           value={data.payFrequency}
           onChange={v => onChange("payFrequency", v as PayFrequency)}
           options={[
-            { value: "weekly", label: "📅 Weekly" },
-            { value: "bi-weekly", label: "📅 Bi-Weekly (every 2 weeks)" },
-            { value: "semi-monthly", label: "📅 Semi-Monthly (1st & 15th)" },
-            { value: "monthly", label: "📅 Monthly" },
+            { value: "weekly", label: "Weekly" },
+            { value: "bi-weekly", label: "Bi-Weekly (every 2 weeks)" },
+            { value: "semi-monthly", label: "Semi-Monthly (1st & 15th)" },
+            { value: "monthly", label: "Monthly" },
           ]}
         />
       </WizField>
@@ -67,31 +74,89 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }: PagePassSh
             options={["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]}
           />
         </WizField>
-        <WizField label="Deposit Into" hint="Where the funds land">
+        {quickStart && !showAdvancedIncome ? (
+          <div
+            style={{
+              padding: "12px 14px",
+              borderRadius: T.radius.md,
+              background: T.bg.elevated,
+              border: `1px solid ${T.border.default}`,
+            }}
+          >
+            <div style={{ fontSize: 11, color: T.text.dim, marginBottom: 4 }}>Deposit Into</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>Checking</div>
+            <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45, marginTop: 4 }}>
+              Quick Start assumes your paycheck lands in checking. You can change that later.
+            </div>
+          </div>
+        ) : (
+          <WizField label="Deposit Into" hint="Where the funds land">
+            <WizSelect
+              value={data.paycheckDepositAccount}
+              onChange={v => onChange("paycheckDepositAccount", v as PaycheckDepositAccount)}
+              options={[
+                { value: "checking", label: "Checking" },
+                { value: "savings", label: "Vault/Savings" },
+              ]}
+            />
+          </WizField>
+        )}
+      </div>
+
+      {quickStart && !showAdvancedIncome ? (
+        <>
+          <WizField label="Typical Paycheck ($)" hint="Net take-home for a normal paycheck. Quick Start assumes salary-style paychecks.">
+            <WizInput
+              type="number"
+              inputMode="decimal"
+              pattern="[0-9]*"
+              value={data.paycheckStandard}
+              onChange={v => onChange("paycheckStandard", v)}
+              placeholder="e.g. 2400"
+            />
+          </WizField>
+          <button
+            type="button"
+            onClick={() => {
+              onChange("incomeType", data.incomeType === "hourly" || data.incomeType === "variable" ? data.incomeType : "salary");
+              setShowAdvancedIncome(true);
+            }}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              margin: "-2px 0 14px",
+              padding: "10px 12px",
+              borderRadius: T.radius.md,
+              border: `1px solid ${T.border.subtle}`,
+              background: T.bg.elevated,
+              color: T.text.secondary,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            <span>Paid hourly, variable, or to savings instead?</span>
+            <span style={{ color: T.text.dim, fontSize: 11 }}>Use advanced income setup</span>
+          </button>
+        </>
+      ) : (
+        <WizField label="Income Type" hint="Determines how we calculate your runway">
           <WizSelect
-            value={data.paycheckDepositAccount}
-            onChange={v => onChange("paycheckDepositAccount", v as PaycheckDepositAccount)}
+            value={data.incomeType || "salary"}
+            onChange={v => onChange("incomeType", v as IncomeType)}
             options={[
-              { value: "checking", label: "🏦 Checking" },
-              { value: "savings", label: "🏦 Vault/Savings" },
+              { value: "salary", label: "Salary (Consistent Paychecks)" },
+              { value: "hourly", label: "Hourly Wage" },
+              { value: "variable", label: "Variable (Commission, Gig, Tips)" },
             ]}
           />
         </WizField>
-      </div>
+      )}
 
-      <WizField label="Income Type" hint="Determines how we calculate your runway">
-        <WizSelect
-          value={data.incomeType || "salary"}
-          onChange={v => onChange("incomeType", v as IncomeType)}
-          options={[
-            { value: "salary", label: "💼 Salary (Consistent Paychecks)" },
-            { value: "hourly", label: "⏱️ Hourly Wage" },
-            { value: "variable", label: "📈 Variable (Commission, Gig, Tips)" },
-          ]}
-        />
-      </WizField>
-
-      {(!data.incomeType || data.incomeType === "salary") && (
+      {(!data.incomeType || data.incomeType === "salary") && (!quickStart || showAdvancedIncome) && (
         <>
           <WizField label="Standard Paycheck ($)" hint="Your exact net take-home pay per check (after taxes & deductions)">
             <WizInput
@@ -143,7 +208,7 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }: PagePassSh
         </>
       )}
 
-      {data.incomeType === "hourly" && (
+      {data.incomeType === "hourly" && (!quickStart || showAdvancedIncome) && (
         <>
           <WizField label="Net Hourly Rate ($)" hint="Your approximate hourly take-home pay after taxes">
             <WizInput
@@ -168,7 +233,7 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }: PagePassSh
         </>
       )}
 
-      {data.incomeType === "variable" && (
+      {data.incomeType === "variable" && (!quickStart || showAdvancedIncome) && (
         <WizField label="Average Paycheck ($)" hint="Be conservative here. What is a reliable average net pay per check?">
           <WizInput
             type="number"
@@ -205,7 +270,38 @@ export function PagePass1({ data, onChange, onNext, onBack, onSkip }: PagePassSh
         Use your real number, not your aspirational one. The app can only protect cash flow with honest inputs.
       </p>
 
-      <NavRow onBack={onBack} onNext={onNext} onSkip={onSkip} />
+      {quickStart && showAdvancedIncome ? (
+        <button
+          type="button"
+          onClick={() => setShowAdvancedIncome(false)}
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            margin: "-2px 0 14px",
+            padding: "10px 12px",
+            borderRadius: T.radius.md,
+            border: `1px solid ${T.border.subtle}`,
+            background: T.bg.elevated,
+            color: T.text.secondary,
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          <span>Collapse advanced income setup</span>
+          <span style={{ color: T.text.dim, fontSize: 11 }}>Back to Quick Start</span>
+        </button>
+      ) : null}
+
+      <NavRow
+        onBack={onBack}
+        onNext={onNext}
+        onSkip={onSkip}
+        {...(nextLabel ? { nextLabel } : {})}
+      />
     </div>
   );
 }

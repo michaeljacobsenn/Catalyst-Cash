@@ -1,5 +1,6 @@
 import { T } from "../constants.js";
 import { haptic } from "../haptics.js";
+import UiGlyph from "../UiGlyph.js";
 
 interface NotificationPrePromptProps {
   onAllow: () => void;
@@ -31,9 +32,8 @@ export default function NotificationPrePrompt({ onAllow, onSkip }: NotificationP
           background: `linear-gradient(135deg, ${T.accent.primary}30, ${T.accent.primary}12)`,
           border: `1px solid ${T.accent.primary}40`,
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 36,
         }}>
-          🔔
+          <UiGlyph glyph="🔔" size={28} color={T.accent.primary} />
         </div>
 
         {/* Headline */}
@@ -54,7 +54,7 @@ export default function NotificationPrePrompt({ onAllow, onSkip }: NotificationP
             ["🔔", "Budget overrun warnings before it's too late"],
           ].map(([icon, text]) => (
             <div key={text} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-              <span style={{ fontSize: 18, lineHeight: 1 }}>{icon}</span>
+              <UiGlyph glyph={icon} size={18} color={T.accent.primary} />
               <span style={{ fontSize: 13, fontWeight: 600, color: T.text.secondary, lineHeight: 1.5 }}>{text}</span>
             </div>
           ))}

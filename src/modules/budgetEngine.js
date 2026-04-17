@@ -1,9 +1,4 @@
-/**
- * budgetEngine.js — Paycheck CFO Budgeting Logic
- *
- * Core engine for the paycheck-cycle budget system.
- * All math is per-paycheck-cycle, not monthly.
- */
+import { BUDGET_BUCKET_CONFIG } from "./budgetBuckets.js";
 
 /** @param {import("../../types/index.js").PayFrequency} freq */
 export function paychecksPerMonth(freq) {
@@ -44,25 +39,104 @@ export function computeCycleIncome(financialConfig) {
   return Number(financialConfig?.paycheckStandard) || 0;
 }
 
-/**
- * Maps an audit category name to a budget bucket.
- * @returns {"fixed"|"flex"|"invest"}
- */
+const BILL_KEYWORDS = [
+  "rent",
+  "mortgage",
+  "utility",
+  "utilities",
+  "electric",
+  "power",
+  "water",
+  "sewer",
+  "trash",
+  "internet",
+  "wifi",
+  "phone",
+  "wireless",
+  "insurance",
+  "premium",
+  "loan",
+  "minimum",
+  "tuition",
+  "child support",
+  "daycare",
+];
+
+const NEED_KEYWORDS = [
+  "grocery",
+  "grocer",
+  "food",
+  "gas",
+  "fuel",
+  "transit",
+  "commute",
+  "medical",
+  "doctor",
+  "pharmacy",
+  "health",
+  "dent",
+  "therapy",
+  "pet",
+  "childcare",
+  "household",
+  "essentials",
+];
+
+const WANT_KEYWORDS = [
+  "dining",
+  "restaurant",
+  "coffee",
+  "bar",
+  "entertainment",
+  "shopping",
+  "retail",
+  "amazon",
+  "travel",
+  "hotel",
+  "flight",
+  "airbnb",
+  "subscription",
+  "membership",
+  "gift",
+  "hobby",
+  "fun",
+  "stream",
+  "netflix",
+  "spotify",
+  "hulu",
+  "disney",
+];
+
+const SAVINGS_KEYWORDS = [
+  "save",
+  "savings",
+  "emergency",
+  "goal",
+  "sinking",
+  "vault",
+  "invest",
+  "investment",
+  "roth",
+  "ira",
+  "401k",
+  "brokerage",
+  "retirement",
+  "hsa",
+  "escrow",
+];
+
+function includesAny(value, keywords) {
+  return keywords.some(keyword => value.includes(keyword));
+}
+
+/** @returns {"bills" | "needs" | "wants" | "savings"} */
 export function inferBucket(name) {
   const n = (name || "").toLowerCase();
-  if (
-    n.includes("rent") || n.includes("mortgage") || n.includes("util") ||
-    n.includes("electric") || n.includes("water") || n.includes("internet") ||
-    n.includes("phone") || n.includes("insurance") || n.includes("subscription") ||
-    n.includes("netflix") || n.includes("spotify") || n.includes("hulu") ||
-    n.includes("gym") || n.includes("loan") || n.includes("minimum")
-  ) return "fixed";
-  if (
-    n.includes("invest") || n.includes("roth") || n.includes("401k") ||
-    n.includes("hsa") || n.includes("brokerage") || n.includes("saving") ||
-    n.includes("emergency") || n.includes("goal")
-  ) return "invest";
-  return "flex";
+  if (includesAny(n, SAVINGS_KEYWORDS)) return "savings";
+  if (includesAny(n, BILL_KEYWORDS)) return "bills";
+  if (includesAny(n, WANT_KEYWORDS)) return "wants";
+  if (includesAny(n, NEED_KEYWORDS)) return "needs";
+  return "needs";
 }
 
 /** Emoji icon heuristic for budget category names */
@@ -127,12 +201,30 @@ export function suggestLinesFromAudit(auditCategories, payFrequency) {
  * @param {number} cycleIncome
  */
 export function computeBudgetStatus(lines, cycleIncome) {
-  const totalFixed = lines.filter(l => l.bucket === "fixed").reduce((s, l) => s + (l.amount || 0), 0);
-  const totalFlex = lines.filter(l => l.bucket === "flex").reduce((s, l) => s + (l.amount || 0), 0);
-  const totalInvest = lines.filter(l => l.bucket === "invest").reduce((s, l) => s + (l.amount || 0), 0);
-  const totalAssigned = totalFixed + totalFlex + totalInvest;
+  const totalsByBucket = {
+    bills: 0,
+    needs: 0,
+    wants: 0,
+    savings: 0,
+  };
+
+  for (const line of lines || []) {
+    const bucket = line?.bucket;
+    if (!(bucket in totalsByBucket)) continue;
+    totalsByBucket[bucket] += Number(line?.amount) || 0;
+  }
+
+  const totalAssigned = Object.values(totalsByBucket).reduce((sum, value) => sum + value, 0);
   const readyToAssign = cycleIncome - totalAssigned;
-  return { totalFixed, totalFlex, totalInvest, totalAssigned, readyToAssign };
+  return {
+    totalBills: totalsByBucket.bills,
+    totalNeeds: totalsByBucket.needs,
+    totalWants: totalsByBucket.wants,
+    totalSavings: totalsByBucket.savings,
+    totalsByBucket,
+    totalAssigned,
+    readyToAssign,
+  };
 }
 
 /**
@@ -176,8 +268,4 @@ export function getActualSpendForLine(auditCategories, lineName, payFrequency) {
   return Math.round((bestMonthlySpend / paychecksPerMonth(payFrequency)) * 100) / 100;
 }
 
-export const BUCKET_CONFIG = {
-  fixed: { label: "Fixed", emoji: "🔒", description: "Bills & recurring — same every cycle", color: "#7C6FFF" },
-  flex:  { label: "Flex",  emoji: "🌊", description: "Variable spending — food, gas, fun",  color: "#34D399" },
-  invest:{ label: "Invest", emoji: "📈", description: "Savings, goals, retirement",          color: "#F59E0B" },
-};
+export const BUCKET_CONFIG = BUDGET_BUCKET_CONFIG;

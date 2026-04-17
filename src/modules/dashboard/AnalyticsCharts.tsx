@@ -6,10 +6,6 @@
   import { Card,Label } from "../ui.js";
   import { fmt } from "../utils.js";
 
-/**
- * AnalyticsCharts — Tabbed Recharts section with Net Worth, Health, and Spending charts.
- * Self-contained with its own useState for active tab.
- */
 export default function AnalyticsCharts({ chartData, scoreData, spendData, chartA11y }) {
   const [chartTab, setChartTab] = useState("networth");
   const chartMeta = useMemo(() => {
@@ -54,7 +50,7 @@ export default function AnalyticsCharts({ chartData, scoreData, spendData, chart
 
   return (
     <ErrorBoundary name="Analytics Charts">
-      <Card animate delay={400} style={{ background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`, border: `1px solid ${T.border.subtle}` }}>
+      <Card animate delay={400} style={{ background: T.bg.card, border: `1px solid ${T.border.subtle}` }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <Label style={{ margin: 0 }}>Analytics</Label>
           <div
@@ -132,12 +128,9 @@ export default function AnalyticsCharts({ chartData, scoreData, spendData, chart
               style={{
                 padding: "11px 11px 10px",
                 borderRadius: 16,
-                background: item.active
-                  ? `radial-gradient(circle at top left, ${T.accent.primary}18, transparent 55%), linear-gradient(180deg, ${T.bg.surface}, ${T.bg.card})`
-                  : `linear-gradient(180deg, ${T.bg.surface}, ${T.bg.card})`,
+                background: item.active ? T.bg.elevated : T.bg.surface,
                 border: `1px solid ${item.active ? T.accent.primarySoft : T.border.subtle}`,
-                boxShadow: item.active ? `0 10px 24px ${T.accent.primary}10` : "none",
-                transition: "transform .22s ease, box-shadow .22s ease, border-color .22s ease",
+                transition: "border-color .22s ease, background .22s ease",
               }}
             >
               <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase", fontFamily: T.font.mono }}>
@@ -198,7 +191,7 @@ export default function AnalyticsCharts({ chartData, scoreData, spendData, chart
                 <YAxis hide domain={["dataMin-200", "dataMax+200"]} />
                 <Tooltip
                   contentStyle={{
-                    background: `linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card})`,
+                    background: T.bg.card,
                     border: `1px solid ${T.border.default}`,
                     borderRadius: T.radius.md,
                     fontSize: 11,
@@ -250,7 +243,7 @@ export default function AnalyticsCharts({ chartData, scoreData, spendData, chart
                 <YAxis hide domain={[0, 100]} />
                 <Tooltip
                   contentStyle={{
-                    background: `linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card})`,
+                    background: T.bg.card,
                     border: `1px solid ${T.border.default}`,
                     borderRadius: T.radius.md,
                     fontSize: 11,
@@ -301,7 +294,7 @@ export default function AnalyticsCharts({ chartData, scoreData, spendData, chart
                 <YAxis hide domain={[0, "auto"]} />
                 <Tooltip
                   contentStyle={{
-                    background: `linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card})`,
+                    background: T.bg.card,
                     border: `1px solid ${T.border.default}`,
                     borderRadius: T.radius.md,
                     fontSize: 11,

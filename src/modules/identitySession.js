@@ -192,7 +192,7 @@ async function getStoredLegacyDeviceId() {
   }
 }
 
-async function requestIdentityChallenge(keyPair, legacyDeviceId) {
+async function requestIdentityChallengeWithOptions(keyPair, legacyDeviceId, options = {}) {
   const response = await fetchWithRetry(`${getBackendUrl()}/auth/challenge`, {
     method: "POST",
     headers: await buildBootstrapHeaders(),
@@ -200,6 +200,7 @@ async function requestIdentityChallenge(keyPair, legacyDeviceId) {
       intent: "bootstrap",
       publicKeyJwk: keyPair.publicKeyJwk,
       legacyDeviceId,
+      ...(options.appleIdentityToken ? { appleIdentityToken: String(options.appleIdentityToken).trim() } : {}),
     }),
   });
 
@@ -213,7 +214,7 @@ async function requestIdentityChallenge(keyPair, legacyDeviceId) {
   return payload;
 }
 
-async function exchangeChallengeForSession(keyPair, challenge, legacyDeviceId) {
+async function exchangeChallengeForSessionWithOptions(keyPair, challenge, legacyDeviceId, options = {}) {
   const signature = await signChallengePayload(keyPair.privateKeyJwk, challenge.signingPayload);
   const response = await fetchWithRetry(`${getBackendUrl()}/auth/session`, {
     method: "POST",
@@ -224,6 +225,7 @@ async function exchangeChallengeForSession(keyPair, challenge, legacyDeviceId) {
       publicKeyJwk: keyPair.publicKeyJwk,
       signature,
       legacyDeviceId,
+      ...(options.appleIdentityToken ? { appleIdentityToken: String(options.appleIdentityToken).trim() } : {}),
     }),
   });
   const payload = await response.json().catch(() => ({}));
@@ -236,7 +238,7 @@ async function exchangeChallengeForSession(keyPair, challenge, legacyDeviceId) {
   return payload;
 }
 
-async function fetchIdentitySession() {
+async function fetchIdentitySession(options = {}) {
   await ensureNativeProtectedIdentitySupport();
   const [keyPair, storedLegacyDeviceId] = await Promise.all([
     getOrCreateDeviceKeyPair(),
@@ -244,8 +246,8 @@ async function fetchIdentitySession() {
   ]);
 
   const bootstrapWithLegacyAlias = async legacyDeviceId => {
-    const challenge = await requestIdentityChallenge(keyPair, legacyDeviceId);
-    const session = await exchangeChallengeForSession(keyPair, challenge, legacyDeviceId);
+    const challenge = await requestIdentityChallengeWithOptions(keyPair, legacyDeviceId, options);
+    const session = await exchangeChallengeForSessionWithOptions(keyPair, challenge, legacyDeviceId, options);
     await persistSession(session);
     return session;
   };
@@ -264,27 +266,33 @@ async function fetchIdentitySession() {
   }
 }
 
-export async function getIdentitySession(forceRefresh = false) {
-  if (!forceRefresh) {
+export async function getIdentitySession(forceRefresh = false, options = {}) {
+  const hasVerifiedAliasBootstrap = Boolean(String(options?.appleIdentityToken || "").trim());
+  if (!forceRefresh && !hasVerifiedAliasBootstrap) {
     const stored = await loadStoredSession();
     if (stored) return stored;
   }
 
-  if (inflightSessionPromise) {
+  if (!hasVerifiedAliasBootstrap && inflightSessionPromise) {
     return inflightSessionPromise;
   }
 
-  inflightSessionPromise = fetchIdentitySession()
+  const sessionPromise = fetchIdentitySession(options)
     .catch((error) => {
       log.warn("identity-session", "Identity bootstrap failed", {
         message: error?.message || String(error),
         platform: Capacitor.getPlatform(),
       });
       throw error;
-    })
-    .finally(() => {
-      inflightSessionPromise = null;
     });
+
+  if (hasVerifiedAliasBootstrap) {
+    return sessionPromise;
+  }
+
+  inflightSessionPromise = sessionPromise.finally(() => {
+    inflightSessionPromise = null;
+  });
 
   return inflightSessionPromise;
 }
@@ -351,4 +359,12 @@ export async function rotateDeviceIdentityKey() {
   await persistKeyPair(nextKeyPair);
   await persistSession(session);
   return session;
+}
+
+export async function refreshIdentitySessionWithAppleIdentityToken(identityToken) {
+  const normalizedToken = String(identityToken || "").trim();
+  if (!normalizedToken) {
+    throw new Error("Apple identity proof is required.");
+  }
+  return getIdentitySession(true, { appleIdentityToken: normalizedToken });
 }

@@ -183,6 +183,52 @@ export function useAutoICloudBackup({
   }, [ready, appleLinkedId, autoBackupInterval, history, renewals, cards, financialConfig, personalRules, appPasscode]);
 }
 
+interface RecoveryVaultSyncParams {
+  ready: boolean;
+  online: boolean;
+  history: AuditRecord[];
+  renewals: Renewal[];
+  cards: CardType[];
+  financialConfig: Record<string, unknown> | null | undefined;
+  personalRules: string;
+}
+
+export function useRecoveryVaultSync({
+  ready,
+  online,
+  history,
+  renewals,
+  cards,
+  financialConfig,
+  personalRules,
+}: RecoveryVaultSyncParams) {
+  const recoveryVaultSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!ready || !online) return;
+
+    if (recoveryVaultSyncTimer.current) clearTimeout(recoveryVaultSyncTimer.current);
+    recoveryVaultSyncTimer.current = setTimeout(async () => {
+      try {
+        const { getRecoveryVaultState, syncConfiguredRecoveryVault } = await import("../recoveryVault.js");
+        const state = await getRecoveryVaultState();
+        if (!state.recoveryId) return;
+        await syncConfiguredRecoveryVault(personalRules);
+      } catch (error) {
+        const failure = normalizeAppError(error, { context: "sync" });
+        log.warn("recovery-vault", "Recovery Vault auto-sync failed", {
+          error: failure.rawMessage,
+          kind: failure.kind,
+        });
+      }
+    }, 18000);
+
+    return () => {
+      if (recoveryVaultSyncTimer.current) clearTimeout(recoveryVaultSyncTimer.current);
+    };
+  }, [ready, online, history, renewals, cards, financialConfig, personalRules]);
+}
+
 interface HouseholdSyncParams {
   ready: boolean;
   online: boolean;

@@ -19,11 +19,11 @@
     useNotificationDeepLinks,
     usePrivacyModeMirror,
     useRecoverableAuditLifecycle,
+    useRecoveryVaultSync,
     useSimulatedGeofenceNotification,
     useAppForegroundRefresh,
     useDeepLinkRouting,
   } from "./modules/appShell/useAppShellRuntime.js";
-  import NotificationPrePrompt from "./modules/tabs/NotificationPrePrompt.js";
   import { refreshAppState as refreshAppStateModel,resetAppState } from "./modules/appRefreshModel.js";
   import { applyManualMoveCompletion } from "./modules/manualMoveCompletion.js";
   import { getMoveAssignmentOptions } from "./modules/moveSemantics.js";
@@ -44,7 +44,6 @@
   import BottomNavBar from "./modules/navigation/BottomNavBar.js";
   import ScrollSnapContainer from "./modules/navigation/ScrollSnapContainer.js";
   import TabRenderer from "./modules/navigation/TabRenderer.js";
-  import OverlayManager from "./modules/overlays/OverlayManager.js";
   import { deleteSecureItem } from "./modules/secureStore.js";
   import "./modules/tabs/DashboardTab.css"; // Global animations, skeleton loaders, utility classes
   import { useToast } from "./modules/Toast.js";
@@ -55,6 +54,10 @@
 installGlobalHandlers();
 const LockScreen = lazy(() => import("./modules/LockScreen.js"));
 const SetupWizard = lazy(() => import("./modules/tabs/SetupWizard.js"));
+const loadNotificationPrePrompt = () => import("./modules/tabs/NotificationPrePrompt.js");
+const NotificationPrePrompt = lazy(loadNotificationPrePrompt);
+const loadOverlayManager = () => import("./modules/overlays/OverlayManager.js");
+const OverlayManager = lazy(loadOverlayManager);
 
 type AppToastApi = Window["toast"];
 
@@ -85,6 +88,23 @@ function CatalystCashShell() {
   useEffect(() => {
     if (appToast) window.toast = appToast;
   }, [appToast]);
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const warmup = () => {
+      void Promise.allSettled([loadOverlayManager(), loadNotificationPrePrompt()]);
+    };
+    const idleId =
+      typeof window.requestIdleCallback === "function"
+        ? window.requestIdleCallback(warmup, { timeout: 1800 })
+        : window.setTimeout(warmup, 320);
+    return () => {
+      if (typeof idleId !== "number" && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(idleId);
+        return;
+      }
+      window.clearTimeout(idleId as number);
+    };
+  }, []);
   const online = useOnline();
   useGlobalHaptics(); // Auto-haptic on every button tap
 
@@ -357,6 +377,15 @@ function CatalystCashShell() {
     personalRules,
     refreshAppState,
     toast,
+  });
+  useRecoveryVaultSync({
+    ready,
+    online,
+    history,
+    renewals,
+    cards,
+    financialConfig: financialConfig as unknown as Record<string, unknown>,
+    personalRules,
   });
   usePrivacyModeMirror(privacyMode);
   useHeaderChrome({
@@ -697,10 +726,12 @@ function CatalystCashShell() {
         }}
       />
       {showNotifPrePrompt && (
-        <NotificationPrePrompt
-          onAllow={() => void dismissNotifPrePrompt(true)}
-          onSkip={() => void dismissNotifPrePrompt(false)}
-        />
+        <Suspense fallback={null}>
+          <NotificationPrePrompt
+            onAllow={() => void dismissNotifPrePrompt(true)}
+            onSkip={() => void dismissNotifPrePrompt(false)}
+          />
+        </Suspense>
       )}
       <SkipToContentLink />
       {showShellHeader && (
@@ -782,25 +813,27 @@ function CatalystCashShell() {
         instructionHash={instructionHash}
         setInstructionHash={setInstructionHash}
       >
-        <OverlayManager
-          handleConnectAccount={handleConnectAccount}
-          handleCancelAudit={handleCancelAudit}
-          dismissRecoverableAuditDraft={dismissRecoverableAuditDraft}
-          navTo={navTo}
-          toggleMove={toggleMove}
-          updateMoveAssignment={updateMoveAssignment}
-          toast={toast}
-          clearAll={clearAll}
-          factoryReset={factoryReset}
-          onRestoreComplete={handleRestoreComplete}
-          onHouseholdSyncConfigured={handleHouseholdSyncConfigured}
-          handleRefreshDashboard={handleRefreshDashboard}
-          handleSubmit={handleSubmit}
-          handleManualImport={handleManualImport}
-          setFinancialConfig={setFinancialConfig}
-          inputFormDb={inputFormDb}
-          themeTick={themeTick}
-        />
+        <Suspense fallback={null}>
+          <OverlayManager
+            handleConnectAccount={handleConnectAccount}
+            handleCancelAudit={handleCancelAudit}
+            dismissRecoverableAuditDraft={dismissRecoverableAuditDraft}
+            navTo={navTo}
+            toggleMove={toggleMove}
+            updateMoveAssignment={updateMoveAssignment}
+            toast={toast}
+            clearAll={clearAll}
+            factoryReset={factoryReset}
+            onRestoreComplete={handleRestoreComplete}
+            onHouseholdSyncConfigured={handleHouseholdSyncConfigured}
+            handleRefreshDashboard={handleRefreshDashboard}
+            handleSubmit={handleSubmit}
+            handleManualImport={handleManualImport}
+            setFinancialConfig={setFinancialConfig}
+            inputFormDb={inputFormDb}
+            themeTick={themeTick}
+          />
+        </Suspense>
       </OverlayProvider>
 
       <BottomNavBar

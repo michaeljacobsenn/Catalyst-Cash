@@ -123,17 +123,19 @@ export default function OverlayManager({
   const { setAiModel } = useSettings() as { setAiModel: (m: string) => void };
   const onShowGuide = useCallback(() => setShowGuide(true), [setShowGuide]);
   const [settingsCanDismiss, setSettingsCanDismiss] = useState(true);
+  const [mountedOverlayTabs, setMountedOverlayTabs] = useState<Set<AppTab>>(() => {
+    const next = new Set<AppTab>();
+    if (tab === "input" || tab === "history") next.add(tab);
+    return next;
+  });
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
 
     const warmup = () => {
       void Promise.allSettled([
-        loadInputForm(),
         loadResultsView(),
-        loadHistoryTab(),
         loadTransactionFeed(),
         loadGuideModal(),
-        loadSettingsTab(),
       ]);
     };
 
@@ -151,6 +153,15 @@ export default function OverlayManager({
     };
   }, []);
   useEffect(() => {
+    if (tab !== "input" && tab !== "history") return;
+    setMountedOverlayTabs((prev) => {
+      if (prev.has(tab)) return prev;
+      const next = new Set(prev);
+      next.add(tab);
+      return next;
+    });
+  }, [tab]);
+  useEffect(() => {
     if (tab !== "settings") {
       setSettingsCanDismiss(true);
     }
@@ -159,6 +170,8 @@ export default function OverlayManager({
     onRestoreComplete,
     onHouseholdSyncConfigured,
   };
+  const shouldMountInput = tab === "input" || mountedOverlayTabs.has("input");
+  const shouldMountHistory = tab === "history" || mountedOverlayTabs.has("history");
   const overlaySwipeResults = useSwipeBack(
     useCallback(() => {
       const target = resultsBackTarget === "history" ? "history" : "audit";
@@ -229,42 +242,43 @@ export default function OverlayManager({
         </Suspense>
       )}
 
-      {/* InputForm — always mounted so returning to it is instant (no remount/Suspense re-waterfall) */}
-      <InteractiveStackPane
-        swipe={overlaySwipeInput}
-        scrollable
-        gestureEnabled={tab === "input"}
-        {...(tab !== "input" ? { containerStyle: { zIndex: -1, pointerEvents: "none" as const, visibility: "hidden" as const } } : {})}
-      >
-        <ErrorBoundary name="InputForm">
-          <Suspense fallback={<TabFallback />}>
-            <InputForm
-              onSubmit={handleSubmit}
-              isLoading={loading}
-              lastAudit={current}
-              renewals={renewals}
-              cardAnnualFees={cardAnnualFees}
-              cards={cards}
-              bankAccounts={bankAccounts}
-              onManualImport={handleManualImport}
-              toast={toast}
-              financialConfig={financialConfig}
-              setFinancialConfig={setFinancialConfig}
-              aiProvider={aiProvider}
-              aiModel={aiModel}
-              setAiModel={setAiModel}
-              personalRules={personalRules}
-              setPersonalRules={setPersonalRules}
-              persona={persona}
-              instructionHash={instructionHash}
-              setInstructionHash={(value: string | number | null) => setInstructionHash(value == null ? null : String(value))}
-              db={inputFormDb}
-              proEnabled={proEnabled}
-              onBack={() => navTo(overlaySourceTab ?? "dashboard")}
-            />
-          </Suspense>
-        </ErrorBoundary>
-      </InteractiveStackPane>
+      {shouldMountInput && (
+        <InteractiveStackPane
+          swipe={overlaySwipeInput}
+          scrollable
+          gestureEnabled={tab === "input"}
+          {...(tab !== "input" ? { containerStyle: { zIndex: -1, pointerEvents: "none" as const, visibility: "hidden" as const } } : {})}
+        >
+          <ErrorBoundary name="InputForm">
+            <Suspense fallback={<TabFallback />}>
+              <InputForm
+                onSubmit={handleSubmit}
+                isLoading={loading}
+                lastAudit={current}
+                renewals={renewals}
+                cardAnnualFees={cardAnnualFees}
+                cards={cards}
+                bankAccounts={bankAccounts}
+                onManualImport={handleManualImport}
+                toast={toast}
+                financialConfig={financialConfig}
+                setFinancialConfig={setFinancialConfig}
+                aiProvider={aiProvider}
+                aiModel={aiModel}
+                setAiModel={setAiModel}
+                personalRules={personalRules}
+                setPersonalRules={setPersonalRules}
+                persona={persona}
+                instructionHash={instructionHash}
+                setInstructionHash={(value: string | number | null) => setInstructionHash(value == null ? null : String(value))}
+                db={inputFormDb}
+                proEnabled={proEnabled}
+                onBack={() => navTo(overlaySourceTab ?? "dashboard")}
+              />
+            </Suspense>
+          </ErrorBoundary>
+        </InteractiveStackPane>
+      )}
 
       {tab === "results" && (
         <InteractiveStackPane
@@ -328,19 +342,20 @@ export default function OverlayManager({
         </InteractiveStackPane>
       )}
 
-      {/* HistoryTab — always mounted so navigating back from Results is instant */}
-      <InteractiveStackPane
-        swipe={overlaySwipeHistory}
-        scrollable
-        gestureEnabled={tab === "history"}
-        {...(tab !== "history" ? { containerStyle: { zIndex: -1, pointerEvents: "none" as const, visibility: "hidden" as const } } : {})}
-      >
-        <ErrorBoundary name="History">
-          <Suspense fallback={<TabFallback />}>
-            <HistoryTab toast={toast} proEnabled={proEnabled} themeTick={themeTick} />
-          </Suspense>
-        </ErrorBoundary>
-      </InteractiveStackPane>
+      {shouldMountHistory && (
+        <InteractiveStackPane
+          swipe={overlaySwipeHistory}
+          scrollable
+          gestureEnabled={tab === "history"}
+          {...(tab !== "history" ? { containerStyle: { zIndex: -1, pointerEvents: "none" as const, visibility: "hidden" as const } } : {})}
+        >
+          <ErrorBoundary name="History">
+            <Suspense fallback={<TabFallback />}>
+              <HistoryTab toast={toast} proEnabled={proEnabled} themeTick={themeTick} />
+            </Suspense>
+          </ErrorBoundary>
+        </InteractiveStackPane>
+      )}
 
       {tab === "settings" && (
         <InteractiveStackPane

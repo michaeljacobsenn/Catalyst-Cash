@@ -57,6 +57,42 @@ export default defineConfig({
           if (id.includes("node_modules/recharts") || id.includes("node_modules/d3-")) {
             return "vendor-charts";
           }
+          // Animation library (framer-motion)
+          if (id.includes("node_modules/framer-motion")) {
+            return "vendor-motion";
+          }
+          // Icon library (lucide-react)
+          if (id.includes("node_modules/lucide-react")) {
+            return "vendor-icons";
+          }
+          // Negotiation scripts — large text blob, cold until user opens negotiation
+          if (id.includes("/modules/negotiation.js")) {
+            return "negotiation";
+          }
+          // Decision rules engine — only needed at audit time
+          if (id.includes("/modules/decisionRules.js")) {
+            return "decision-rules";
+          }
+          // Rewards catalog — large static data, cold until card wizard
+          if (id.includes("/modules/rewardsCatalog.js")) {
+            return "rewards-catalog";
+          }
+          // Merchant database — large static data
+          if (id.includes("/modules/merchantDatabase.js")) {
+            return "merchant-database";
+          }
+          // Ticker catalog — only needed in portfolio view
+          if (id.includes("/modules/tickerCatalog.js")) {
+            return "ticker-catalog";
+          }
+          // FIRE calculator — niche feature
+          if (id.includes("/modules/fire.js")) {
+            return "fire-calc";
+          }
+          // Bank catalog — static data, cold until settings
+          if (id.includes("/modules/bankCatalog.js")) {
+            return "bank-catalog";
+          }
         },
       },
     },

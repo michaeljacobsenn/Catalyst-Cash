@@ -6,10 +6,11 @@ export const FREE_MARKET_REFRESH_MS = 60 * 60 * 1000;
 export const PRO_MONTHLY_AUDIT_CAP = 20;
 export const PRO_DAILY_CHAT_CAP = 30;
 
-// Per-model daily caps for Pro (must sum to PRO_DAILY_CHAT_CAP)
+// Per-model daily caps for Pro. GPT-4.1 and Gemini Flash share the 30-chat global budget
+// freely with no per-model wall between them. o3 (Boardroom) is sub-capped at 5/day —
+// those 5 count toward the 30 total, leaving up to 25 for GPT-4.1 + Gemini combined.
 export const PRO_MODEL_CAPS = {
-  "gpt-4.1": 15,
-  "gemini-2.5-flash": 15,
+  "o3": 5,
 };
 export const PRO_MARKET_REFRESH_MS = 5 * 60 * 1000;
 
@@ -26,21 +27,21 @@ export const TIER_MODEL_IDS = {
 export const IAP_PRODUCTS = {
   monthly: "com.catalystcash.pro.monthly.v2",
   yearly: "com.catalystcash.pro.yearly.v2",
-  lifetime: "com.catalystcash.pro.lifetime",
+  lifetime: "com.catalystcash.pro.lifetime.v2",
 };
 
 export const IAP_PRICING = {
-  monthly: { price: "$9.99", period: "month", savings: false },
+  monthly: { price: "$12.99", period: "month", savings: false },
   yearly: {
-    price: "$99.99",
+    price: "$109.99",
     period: "year",
-    savings: "about 2 months free",
-    perMonth: "$8.33",
-    original: "$119.88",
+    savings: "save $46/yr vs monthly",
+    perMonth: "$9.17",
+    original: "$155.88",
     trial: "7-day free trial",
   },
   lifetime: {
-    price: "$299.99",
+    price: "$199.99",
     period: "lifetime",
     savings: "Never pay again",
     perMonth: null,

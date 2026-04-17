@@ -1,4 +1,5 @@
-import { extractDashboardMetrics, fmt } from "./utils.js";
+import { extractDashboardMetrics } from "./auditExportMetrics.js";
+import { fmt } from "./utils/formatting.js";
 
 function normalizeExportValue(value) {
   if (value == null) return "";

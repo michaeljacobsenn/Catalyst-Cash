@@ -1,615 +1,55 @@
-// ═══════════════════════════════════════════════════════════════
-// STORAGE — Capacitor Preferences on iOS (iCloud KV-backed),
-//           localStorage fallback on web / Vite dev server
-// ═══════════════════════════════════════════════════════════════
-  import { Capacitor,registerPlugin } from "@capacitor/core";
-  import { Preferences } from "@capacitor/preferences";
-  import { getShortCardLabel } from "./cards.js";
-  import { buildDashboardSafetyModel } from "./dashboard/safetyModel.js";
-  import { log } from "./logger.js";
-  import { clamp, getGradeLetter } from "./mathHelpers.js";
-  import { normalizeMoveItems } from "./moveSemantics.js";
+import { getShortCardLabel } from "./cards.js";
+import { buildDashboardSafetyModel } from "./dashboard/safetyModel.js";
+import { log } from "./logger.js";
+import { clamp, getGradeLetter } from "./mathHelpers.js";
+import { normalizeMoveItems } from "./moveSemantics.js";
+import {
+  CANONICAL_DASHBOARD_CATEGORIES,
+  formatRiskFlag,
+  normalizeLooseText,
+  sanitizeVisibleAuditCopy,
+} from "./utils/auditText.js";
+import {
+  buildReserveInstruction,
+  buildReserveRouteLabel,
+  DASHBOARD_ROW_ORDER,
+  defaultDashboardStatus,
+  extractDollarAmountTotal,
+  extractOperationalAllocationTotal,
+  inferReserveAccountLabel,
+  normalizeAlertEntries,
+  normalizeAuditStatus,
+  normalizeDashboardCard,
+  normalizeHealthScore,
+  normalizeHeaderCard,
+  normalizeInvestmentsSummary,
+  normalizeNegotiationTargets,
+  normalizeNextAction,
+  normalizeRadar,
+  normalizeSpendingAnalysis,
+  normalizeStringArray,
+  normalizeWeeklyMoveEntries,
+  sanitizeAllocationLabel,
+} from "./utils/auditModel.js";
+import {
+  advanceExpiredDate,
+  fmt,
+  fmtDate,
+  parseCurrency,
+  stripPaycheckParens,
+} from "./utils/formatting.js";
+import { db, FaceId, PdfViewer } from "./utils/platform.js";
 
-const NativeFaceId = registerPlugin("FaceId");
-
-export const FaceId = {
-  isAvailable: async () => {
-    try {
-      if (!Capacitor.isNativePlatform()) return { isAvailable: false };
-      return await NativeFaceId.isAvailable();
-    } catch (e) {
-      void log.warn("biometry", "Biometry check failed", { error: e });
-      return { isAvailable: false };
-    }
-  },
-  authenticate: async opts => {
-    if (!Capacitor.isNativePlatform()) throw new Error("Not supported on web");
-    return await NativeFaceId.authenticate(opts);
-  },
+export {
+  advanceExpiredDate,
+  db,
+  FaceId,
+  fmt,
+  fmtDate,
+  parseCurrency,
+  PdfViewer,
+  stripPaycheckParens,
 };
-export const PdfViewer = registerPlugin("PdfViewer");
-
-const PREFS_TIMEOUT_MS = 2000;
-
-function withPrefsTimeout(promise) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error("Preferences bridge timed out")), PREFS_TIMEOUT_MS)),
-  ]);
-}
-
-export const db = {
-  async get(k) {
-    try {
-      const { value } = await withPrefsTimeout(Preferences.get({ key: k }));
-      return value ? JSON.parse(value) : null;
-    } catch {
-      try {
-        const r = localStorage.getItem(k);
-        return r ? JSON.parse(r) : null;
-      } catch {
-        return null;
-      }
-    }
-  },
-  async set(k, v) {
-    try {
-      await withPrefsTimeout(Preferences.set({ key: k, value: JSON.stringify(v) }));
-      return true;
-    } catch {
-      try {
-        localStorage.setItem(k, JSON.stringify(v));
-        return true;
-      } catch {
-        return false;
-      }
-    }
-  },
-  async del(k) {
-    try {
-      await withPrefsTimeout(Preferences.remove({ key: k }));
-    } catch {
-      try {
-        localStorage.removeItem(k);
-      } catch {
-        // Local cleanup is best-effort only.
-      }
-    }
-  },
-  async keys() {
-    try {
-      const { keys } = await withPrefsTimeout(Preferences.keys());
-      return keys;
-    } catch {
-      try {
-        return Object.keys(localStorage);
-      } catch {
-        return [];
-      }
-    }
-  },
-  async clear() {
-    try {
-      await withPrefsTimeout(Preferences.clear());
-    } catch {
-      try {
-        localStorage.clear();
-      } catch {
-        // Local cleanup is best-effort only.
-      }
-    }
-  },
-};
-
-  import { formatCurrency } from "./currency.js";
-
-export const fmt = n => formatCurrency(n);
-
-export const fmtDate = d => {
-  if (!d) return "—";
-  try {
-    const parts = String(d).split(/[T\s]/)[0].split("-");
-    if (parts.length !== 3) {
-      // Fallback or attempt to parse directly if not YYYY-MM-DD
-      const parsed = new Date(d);
-      if (isNaN(parsed.getTime())) return String(d);
-      return parsed.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-    }
-    const [y, m, day] = parts.map(Number);
-    const date = new Date(y, m - 1, day);
-    if (isNaN(date.getTime())) return String(d);
-    return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  } catch {
-    return String(d);
-  }
-};
-
-// Strip parenthetical clarifiers from paycheck labels in Next Action.
-export const stripPaycheckParens = text => {
-  if (!text) return text;
-  return text
-    .split("\n")
-    .map(line => line.replace(/^(Pre-Paycheck|Post-Paycheck)\s*\([^)]*\)/i, "$1"))
-    .join("\n");
-};
-
-// ═══════════════════════════════════════════════════════════════
-// DATE AUTO-ADVANCE — Rolling expired dates forward
-// ═══════════════════════════════════════════════════════════════
-export function advanceExpiredDate(
-  dateString,
-  intervalAmt,
-  intervalUnit,
-  todayStr = new Date().toISOString().split("T")[0]
-) {
-  if (!dateString) return dateString;
-  if (dateString >= todayStr) return dateString; // not expired
-
-  const d = new Date(dateString + "T12:00:00Z"); // force midday UTC to avoid timezone shift
-  const today = new Date(todayStr + "T12:00:00Z");
-
-  if (isNaN(d.getTime())) return dateString;
-
-  const amt = Number(intervalAmt) || 1;
-
-  if (intervalUnit === "days") {
-    // Math: how many full day-intervals until d >= today?
-    const daysDiff = Math.ceil((today - d) / (1000 * 60 * 60 * 24));
-    const intervals = Math.ceil(daysDiff / amt);
-    d.setUTCDate(d.getUTCDate() + intervals * amt);
-  } else if (intervalUnit === "weeks") {
-    const daysDiff = Math.ceil((today - d) / (1000 * 60 * 60 * 24));
-    const intervals = Math.ceil(daysDiff / (amt * 7));
-    d.setUTCDate(d.getUTCDate() + intervals * amt * 7);
-  } else if (intervalUnit === "years" || intervalUnit === "yearly" || intervalUnit === "annual") {
-    // O(1): calculate how many year-intervals are needed
-    const yearDiff = today.getUTCFullYear() - d.getUTCFullYear();
-    const intervals = Math.max(1, Math.ceil(yearDiff / amt));
-    d.setUTCFullYear(d.getUTCFullYear() + intervals * amt);
-    // If still behind (edge case: same year but earlier month/day), advance one more
-    if (d < today) {
-      d.setUTCFullYear(d.getUTCFullYear() + amt);
-    }
-  } else {
-    // Default to months — tricky because months have variable lengths
-    // Count how many month-intervals are needed
-    const yearDiff = today.getUTCFullYear() - d.getUTCFullYear();
-    const monthDiff = yearDiff * 12 + (today.getUTCMonth() - d.getUTCMonth());
-    const intervals = Math.max(1, Math.ceil(monthDiff / amt));
-    const originalDay = d.getUTCDate();
-    d.setUTCMonth(d.getUTCMonth() + intervals * amt);
-    // JS Date quirk: Jan 31 + 1 month = Mar 2 or 3 — rollback to end of target month.
-    if (d.getUTCDate() < originalDay) {
-      d.setUTCDate(0);
-    }
-    // If still behind today (edge case: monthDiff is 0 but date < today), advance one more
-    if (d < today) {
-      const origDay2 = d.getUTCDate();
-      d.setUTCMonth(d.getUTCMonth() + amt);
-      if (d.getUTCDate() < origDay2) d.setUTCDate(0);
-    }
-  }
-
-  return d.toISOString().split("T")[0];
-}
-
-// ═══════════════════════════════════════════════════════════════
-// PARSER — Strict JSON Translation
-// ═══════════════════════════════════════════════════════════════
-export function parseCurrency(value) {
-  if (value == null || value === "") return null;
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  const str = String(value).trim();
-  // Handle Banker's / Accounting negative notation: ($1,234.56) -> -1234.56
-  const isNegative = str.startsWith("-") || (str.startsWith("(") && str.endsWith(")"));
-  const cleanStr = str.replace(/[^0-9.]+/g, "");
-  if (!cleanStr) return null;
-  let n = parseFloat(cleanStr);
-  if (isNegative) n = -n;
-  // Banker's Rounding (Round half to even for financial precision) is not strictly needed here
-  // since it's just parsing input, but we enforce strict float handling.
-  return Number.isFinite(n) ? n : null;
-}
-
-function sanitizeVisibleAuditCopy(value) {
-  const text = String(value || "");
-  if (!text) return "";
-  return text
-    .replace(/\b[Tt]he user's\b/g, "your")
-    .replace(/\b[Tt]he user has\b/g, "you have")
-    .replace(/\b[Tt]he user is\b/g, "you are")
-    .replace(/\b[Tt]he user\b/g, "you")
-    .replace(/\buser's\b/g, "your")
-    .replace(/\s{2,}/g, " ")
-    .replace(/,\s*,/g, ",")
-    .replace(/,\s*\./g, ".")
-    .replace(/\s+([,.;:!?])/g, "$1")
-    .replace(/^[`"',;\s]+|[`"',;\s]+$/g, "")
-    .trim();
-}
-
-function normalizeLooseText(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-const CANONICAL_DASHBOARD_CATEGORIES = new Map([
-  ["checking", "Checking"],
-  ["vault", "Vault"],
-  ["pending", "Pending"],
-  ["debts", "Debts"],
-  ["available", "Available"],
-]);
-
-function formatRiskFlag(flag) {
-  return String(flag || "")
-    .split("-")
-    .filter(Boolean)
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function extractDollarAmountTotal(lines) {
-  if (!Array.isArray(lines)) return 0;
-  return lines.reduce((sum, line) => {
-    if (typeof line !== "string") return sum;
-    const matches = line.match(/\$[\d,]+(?:\.\d{1,2})?/g) || [];
-    return (
-      sum +
-      matches.reduce((lineSum, match) => {
-        const amount = parseCurrency(match);
-        return lineSum + (amount != null ? Math.max(0, amount) : 0);
-      }, 0)
-    );
-  }, 0);
-}
-
-function extractOperationalAllocationTotal(moveItems) {
-  if (!Array.isArray(moveItems)) return 0;
-  return moveItems.reduce((sum, item) => {
-    if (!item || typeof item !== "object") return sum;
-    const amount = Number(item.amount);
-    if (!Number.isFinite(amount) || amount <= 0) return sum;
-    if (item.transactional === true) return sum + amount;
-    return sum;
-  }, 0);
-}
-
-function normalizeTrend(value) {
-  return value === "up" || value === "down" || value === "flat" ? value : "flat";
-}
-
-function normalizeHealthScore(rawHealthScore) {
-  if (!rawHealthScore || typeof rawHealthScore !== "object") {
-    return { value: null, gradeCorrected: false, originalGrade: null };
-  }
-  const numericScore = Number(rawHealthScore.score);
-  if (!Number.isFinite(numericScore)) {
-    return { value: null, gradeCorrected: false, originalGrade: null };
-  }
-  const score = clamp(Math.round(numericScore), 0, 100);
-  const originalGrade = typeof rawHealthScore.grade === "string" ? rawHealthScore.grade.trim() : null;
-  const normalizedGrade = getGradeLetter(score);
-  return {
-    value: {
-      ...rawHealthScore,
-      score,
-      grade: normalizedGrade,
-      trend: normalizeTrend(rawHealthScore.trend),
-      summary: typeof rawHealthScore.summary === "string" ? rawHealthScore.summary.trim() : "",
-    },
-    gradeCorrected: !!originalGrade && originalGrade !== normalizedGrade,
-    originalGrade,
-  };
-}
-
-function normalizeStringArray(value) {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map(item => (typeof item === "string" ? item.trim() : ""))
-    .filter(Boolean);
-}
-
-function normalizeHeaderCard(value) {
-  if (!value || typeof value !== "object") {
-    return { status: "UNKNOWN", title: "", subtitle: "", confidence: null, details: [], headline: "" };
-  }
-
-  const details = Array.isArray(value.details)
-    ? value.details.map((item) => (typeof item === "string" ? item.trim() : "")).filter(Boolean)
-    : [];
-
-  return {
-    status: normalizeAuditStatus(value.status || value.headline || value.title),
-    title: typeof value.title === "string" ? value.title.trim() : "",
-    subtitle: typeof value.subtitle === "string" ? value.subtitle.trim() : "",
-    confidence:
-      value.confidence === "high" || value.confidence === "medium" || value.confidence === "low"
-        ? value.confidence
-        : null,
-    details,
-    headline: typeof value.headline === "string" ? value.headline.trim() : "",
-  };
-}
-
-function normalizeAlertEntries(value) {
-  if (!Array.isArray(value)) return { lines: [], items: [] };
-
-  const items = value
-    .map((entry) => {
-      if (typeof entry === "string") {
-        const text = entry.trim();
-        return text ? { level: "warn", title: text, detail: text } : null;
-      }
-      if (!entry || typeof entry !== "object") return null;
-      const title = typeof entry.title === "string" ? entry.title.trim() : "";
-      const detail = typeof entry.detail === "string" ? sanitizeVisibleAuditCopy(entry.detail) : title;
-      const level = typeof entry.level === "string" ? entry.level.trim().toLowerCase() : "warn";
-      if (!title && !detail) return null;
-      return {
-        level: level || "warn",
-        title: sanitizeVisibleAuditCopy(title || detail),
-        detail: sanitizeVisibleAuditCopy(detail || title),
-      };
-    })
-    .filter(Boolean);
-
-  return {
-    items,
-    lines: items.map((item) => {
-      const prefix = item.level === "critical" ? "❗" : item.level === "info" ? "ℹ️" : "⚠️";
-      return `${prefix} ${item.title}${item.detail && item.detail !== item.title ? ` — ${item.detail}` : ""}`;
-    }),
-  };
-}
-
-function normalizeWeeklyMoveEntries(value) {
-  if (!Array.isArray(value)) return { weeklyMoves: [], moveItems: [], moveCards: [] };
-
-  const extractCompoundAllocationRows = (text) => {
-    const source = String(text || "");
-    if (!source) return [];
-    const pattern = /([^,.;]+?)\s*\(\$([\d,]+(?:\.\d{2})?)\s+by\s+(\d{4}-\d{2}-\d{2})\)/g;
-    const rows = [];
-    let match;
-    while ((match = pattern.exec(source)) !== null) {
-      rows.push({
-        label: match[1].replace(/\s+/g, " ").trim().replace(/^[-–—]\s*/, ""),
-        amount: `$${match[2]}`,
-        date: match[3],
-      });
-    }
-    return rows;
-  };
-
-  const moveCards = value
-    .flatMap((item) => {
-      if (typeof item === "string") {
-        const text = item.trim();
-        return text
-          ? {
-              title: text,
-              detail: text,
-              amount: null,
-              priority: null,
-              tag: null,
-              semanticKind: null,
-              targetLabel: null,
-              sourceLabel: null,
-              targetKey: null,
-              contributionKey: null,
-              transactional: undefined,
-            }
-          : [];
-      }
-      if (!item || typeof item !== "object") return [];
-      const title = typeof item.title === "string" ? item.title.trim() : "";
-      const detail = typeof item.detail === "string" ? item.detail.trim() : "";
-      const text = detail || title || (typeof item.text === "string" ? item.text.trim() : "");
-      if (!text) return [];
-      const normalizedItem = {
-        title: sanitizeVisibleAuditCopy(title || text),
-        detail: sanitizeVisibleAuditCopy(detail || text),
-        amount: typeof item.amount === "string" ? item.amount : item.amount == null ? null : fmt(parseCurrency(item.amount) || 0),
-        priority: typeof item.priority === "string" ? item.priority.trim().toLowerCase() : null,
-        tag: typeof item.priority === "string" ? item.priority.trim().toUpperCase() : typeof item.tag === "string" ? item.tag.trim().toUpperCase() : null,
-        semanticKind: typeof item.semanticKind === "string" ? item.semanticKind.trim() : null,
-        targetLabel: typeof item.targetLabel === "string" ? sanitizeVisibleAuditCopy(item.targetLabel) : null,
-        sourceLabel: typeof item.sourceLabel === "string" ? sanitizeVisibleAuditCopy(item.sourceLabel) : null,
-        routeLabel: typeof item.routeLabel === "string" ? sanitizeVisibleAuditCopy(item.routeLabel) : null,
-        fundingLabel: typeof item.fundingLabel === "string" ? sanitizeVisibleAuditCopy(item.fundingLabel) : null,
-        targetKey: typeof item.targetKey === "string" ? item.targetKey.trim() : null,
-        contributionKey: typeof item.contributionKey === "string" ? item.contributionKey.trim() : null,
-        transactional: typeof item.transactional === "boolean" ? item.transactional : undefined,
-      };
-      const allocationRows = extractCompoundAllocationRows(normalizedItem.detail);
-      if (allocationRows.length >= 2) {
-        return allocationRows.map((row) => ({
-          ...normalizedItem,
-          title: sanitizeAllocationLabel(row.label),
-          detail: buildReserveInstruction({
-            sourceLabel: inferReserveAccountLabel(sanitizeAllocationLabel(row.label)),
-            targetLabel: sanitizeAllocationLabel(row.label),
-            amount: row.amount,
-            due: row.date,
-          }),
-          amount: row.amount,
-          semanticKind: normalizedItem.semanticKind || "spending-hold",
-          targetLabel: sanitizeAllocationLabel(row.label),
-          sourceLabel: inferReserveAccountLabel(sanitizeAllocationLabel(row.label)),
-          routeLabel: buildReserveRouteLabel(inferReserveAccountLabel(sanitizeAllocationLabel(row.label))),
-          fundingLabel: null,
-          transactional: false,
-        }));
-      }
-      return normalizedItem;
-    })
-    .filter(Boolean);
-
-  const moveItems = moveCards.map((item) => ({
-    text: item.detail || item.title,
-    title: item.title || null,
-    detail: item.detail || null,
-    tag: item.tag,
-    amount: parseCurrency(item.amount),
-    semanticKind: item.semanticKind,
-    targetLabel: item.targetLabel,
-    sourceLabel: item.sourceLabel,
-    routeLabel: item.routeLabel,
-    fundingLabel: item.fundingLabel,
-    targetKey: item.targetKey,
-    contributionKey: item.contributionKey,
-    transactional: item.transactional,
-  }));
-
-  return {
-    weeklyMoves: moveCards.map((item) => item.detail || item.title),
-    moveItems,
-    moveCards,
-  };
-}
-
-function normalizeRadarItems(value) {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((entry) => {
-      if (typeof entry === "string") {
-        const text = entry.trim();
-        return text ? { item: text, amount: "$0.00", date: "" } : null;
-      }
-      if (!entry || typeof entry !== "object") return null;
-      const item = typeof entry.item === "string" ? entry.item.trim() : "";
-      if (!item) return null;
-      return {
-        item,
-        amount:
-          typeof entry.amount === "string"
-            ? entry.amount.trim()
-            : entry.amount != null && parseCurrency(entry.amount) != null
-              ? fmt(parseCurrency(entry.amount))
-              : "$0.00",
-        date: typeof entry.date === "string" ? entry.date.trim() : "",
-      };
-    })
-    .filter(Boolean);
-}
-
-function normalizeRadar(radarValue, longRangeRadarValue) {
-  if (radarValue && typeof radarValue === "object" && !Array.isArray(radarValue)) {
-    return {
-      next90Days: normalizeRadarItems(radarValue.next90Days || radarValue.shortRange || []),
-      longRange: normalizeRadarItems(radarValue.longRange || radarValue.longRangeRadar || longRangeRadarValue || []),
-    };
-  }
-
-  return {
-    next90Days: normalizeRadarItems(radarValue || []),
-    longRange: normalizeRadarItems(longRangeRadarValue || []),
-  };
-}
-
-function normalizeNextAction(value) {
-  if (typeof value === "string") {
-    const detail = sanitizeVisibleAuditCopy(value);
-    return {
-      title: detail ? "Next Action" : "",
-      detail,
-      amount: null,
-    };
-  }
-
-  if (!value || typeof value !== "object") {
-    return {
-      title: "",
-      detail: "",
-      amount: null,
-    };
-  }
-
-  return {
-    title: typeof value.title === "string" ? sanitizeVisibleAuditCopy(value.title) : "Next Action",
-    detail:
-      typeof value.detail === "string"
-        ? sanitizeVisibleAuditCopy(value.detail)
-        : typeof value.summary === "string"
-          ? sanitizeVisibleAuditCopy(value.summary)
-          : "",
-    amount:
-      typeof value.amount === "string"
-        ? value.amount.trim()
-        : value.amount != null && parseCurrency(value.amount) != null
-          ? fmt(parseCurrency(value.amount))
-          : null,
-  };
-}
-
-const DASHBOARD_ROW_ORDER = ["Checking", "Vault", "Pending", "Debts", "Available"];
-
-function normalizeDashboardCard(value) {
-  const rows = Array.isArray(value) ? value : [];
-  const byCategory = new Map();
-  const nonCanonicalCategories = [];
-  const toneToStatus = {
-    good: "Healthy",
-    neutral: "Tracked",
-    warn: "Watch",
-    bad: "Urgent",
-  };
-  for (const row of rows) {
-    const rawCategory = typeof row?.category === "string"
-      ? row.category.trim()
-      : typeof row?.label === "string"
-        ? row.label.trim()
-        : "";
-    if (!rawCategory) continue;
-    const category = CANONICAL_DASHBOARD_CATEGORIES.get(rawCategory.toLowerCase());
-    if (!category) {
-      nonCanonicalCategories.push(rawCategory);
-      continue;
-    }
-    if (byCategory.has(category)) continue;
-    const amount =
-      typeof row?.amount === "string"
-        ? row.amount
-        : typeof row?.value === "string"
-          ? row.value
-          : "$0.00";
-    const status =
-      typeof row?.status === "string"
-        ? row.status
-        : typeof row?.note === "string"
-          ? row.note
-          : typeof row?.tone === "string"
-            ? toneToStatus[String(row.tone).trim().toLowerCase()] || String(row.tone)
-            : "";
-    byCategory.set(category, {
-      category,
-      amount,
-      status,
-    });
-  }
-  const uniqueNonCanonical = [...new Set(nonCanonicalCategories)];
-  if (uniqueNonCanonical.length > 0) {
-    console.warn("[audit] Non-canonical dashboard categories detected:", uniqueNonCanonical.join(", "));
-  }
-  return {
-    rows: DASHBOARD_ROW_ORDER.map(category => byCategory.get(category) || { category, amount: "$0.00", status: "" }),
-    nonCanonicalCategories: uniqueNonCanonical,
-  };
-}
-
-function defaultDashboardStatus(category, amount) {
-  const safeAmount = Number(amount) || 0;
-  if (category === "Checking") return safeAmount > 0 ? "Tracked" : "At risk";
-  if (category === "Vault") return safeAmount > 0 ? "Tracked" : "Empty";
-  if (category === "Pending") return safeAmount > 0 ? "Watch" : "Clear";
-  if (category === "Debts") return safeAmount > 0 ? "Tracked" : "Clear";
-  if (category === "Available") return safeAmount > 0 ? "Deploy" : "Protected";
-  return "";
-}
 
 function daysBetweenIso(startDate, endDate) {
   const start = new Date(`${startDate}T12:00:00Z`);
@@ -982,25 +422,6 @@ function inferPreferredInvestmentDestination({ formData = {}, financialConfig = 
   );
 }
 
-function sanitizeAllocationLabel(value) {
-  return String(value || "")
-    .replace(/^["'`,.\s]+|["'`,.\s]+$/g, "")
-    .replace(/^hold extra debt paydown and reserve cash for\s+/i, "")
-    .replace(/^allocate (?:the )?(?:full )?\$?[\d,]+(?:\.\d{2})?\s+(?:of )?(?:deployable|protected)\s+cash\s+(?:in order:|to)\s*/i, "")
-    .replace(/^(?:protect|reserve|set aside|withhold|keep|hold)\s+(?:extra\s+)?(?:cash\s+)?(?:for\s+)?/i, "")
-    .replace(/\s+(?:by|due)\s+\d{4}-\d{2}-\d{2}\.?$/i, "")
-    .replace(/\s*\(\$[\d,]+(?:\.\d{2})?\s+(?:by|due)\s+\d{4}-\d{2}-\d{2}\)\s*$/i, "")
-    .replace(/\s{2,}/g, " ")
-    .replace(/^[,;:\-–—\s]+|[,;:\-–—\s]+$/g, "")
-    .trim() || "Upcoming obligation";
-}
-
-function inferReserveAccountLabel(label) {
-  const normalized = String(label || "").toLowerCase();
-  if (/\btax\b|\bescrow\b|\btrip\b|\binsurance\b|\bgifts?\b|\bholiday\b/.test(normalized)) return "Vault";
-  return "Checking";
-}
-
 function inferReserveSourceLabel(obligation = null) {
   if (typeof obligation?.preferredSourceLabel === "string" && obligation.preferredSourceLabel.trim()) {
     return obligation.preferredSourceLabel.trim();
@@ -1015,12 +436,6 @@ function inferReserveSourceLabel(obligation = null) {
   if (/\bsavings\b|\bally\b|\bvault\b/.test(normalized)) return "Vault";
   if (/\bchecking\b|\bcash\b/.test(normalized)) return "Checking";
   return chargedTo;
-}
-
-function buildReserveRouteLabel(sourceLabel) {
-  if (sourceLabel === "Vault") return "Checking → Vault";
-  if (sourceLabel) return `Keep in ${sourceLabel}`;
-  return "";
 }
 
 function buildProtectedFundingLabel({ keepInChecking = 0, keepInVault = 0, moveFromChecking = 0, moveFromVault = 0, preferredAccount = "" }) {
@@ -1048,17 +463,6 @@ function buildOptionalFundingLabel({ fromChecking = 0, fromVault = 0, targetLabe
   return "";
 }
 
-function buildReserveInstruction({ sourceLabel, targetLabel, amount, due }) {
-  const label = sanitizeAllocationLabel(targetLabel);
-  const normalizedAmount = typeof amount === "string" ? amount : fmt(parseCurrency(amount) || 0);
-  if (sourceLabel === "Vault") {
-    return `Transfer ${normalizedAmount} from Checking to Vault for ${label}. Leave it reserved there until ${due}.`;
-  }
-  if (sourceLabel === "Checking") {
-    return `Keep ${normalizedAmount} in Checking for ${label}. It is reserved for ${due}.`;
-  }
-  return `Keep ${normalizedAmount} in ${sourceLabel || "cash"} for ${label}. It is reserved for ${due}.`;
-}
 
 function allocateProtectedHold({
   obligation,
@@ -1593,60 +997,6 @@ function normalizeInvestmentAnchors(anchors = {}) {
   return { balance, asOf, gateStatus, netWorth };
 }
 
-function normalizeInvestmentsSummary(value) {
-  if (!value || typeof value !== "object") return undefined;
-  return {
-    balance: typeof value.balance === "string" ? value.balance : "N/A",
-    asOf: typeof value.asOf === "string" ? value.asOf : "N/A",
-    gateStatus: typeof value.gateStatus === "string" ? value.gateStatus : "N/A",
-    cryptoValue:
-      typeof value.cryptoValue === "string" || value.cryptoValue === null ? value.cryptoValue : null,
-    netWorth: typeof value.netWorth === "string" ? value.netWorth : undefined,
-  };
-}
-
-function normalizeNegotiationTargets(value) {
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter(item => item && typeof item === "object")
-    .map(item => ({
-      target: typeof item.target === "string" ? item.target.trim() : "",
-      strategy: typeof item.strategy === "string" ? item.strategy.trim() : "",
-      estimatedAnnualSavings: Number.isFinite(Number(item.estimatedAnnualSavings))
-        ? Number(item.estimatedAnnualSavings)
-        : 0,
-    }))
-    .filter(item => item.target && item.strategy);
-}
-
-function normalizeSpendingAnalysis(value) {
-  if (!value || typeof value !== "object") return null;
-  return {
-    totalSpent: typeof value.totalSpent === "string" ? value.totalSpent : "N/A",
-    dailyAverage: typeof value.dailyAverage === "string" ? value.dailyAverage : "N/A",
-    vsAllowance: typeof value.vsAllowance === "string" ? value.vsAllowance : "N/A",
-    topCategories: Array.isArray(value.topCategories)
-      ? value.topCategories
-          .filter(item => item && typeof item === "object")
-          .map(item => ({
-            category: typeof item.category === "string" ? item.category : "Other",
-            amount: typeof item.amount === "string" ? item.amount : "$0.00",
-            pctOfTotal: typeof item.pctOfTotal === "string" ? item.pctOfTotal : "0%",
-          }))
-      : [],
-    alerts: normalizeStringArray(value.alerts),
-    debtImpact: typeof value.debtImpact === "string" ? value.debtImpact : "",
-  };
-}
-
-function normalizeAuditStatus(value) {
-  const normalized = String(value || "").trim().toUpperCase();
-  if (normalized.includes("GREEN")) return "GREEN";
-  if (normalized.includes("YELLOW")) return "YELLOW";
-  if (normalized.includes("RED")) return "RED";
-  return "UNKNOWN";
-}
-
 export function parseJSON(raw) {
   let j;
   const cleaned = String(raw || "")
@@ -2175,6 +1525,10 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
     snapshotDate,
     horizonDays: 21,
   });
+  const auditRuleHints = parseAuditRuleHints({
+    personalRules,
+    cards: Array.isArray(cards) ? cards : [],
+  });
   const noteBasedDebtFundingIntent = extractDebtFundingIntentFromNotes({
     notes: formData?.notes,
     cards,
@@ -2217,8 +1571,8 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
     deterministicAllocationPlan.weeklyMoves.length > 0 &&
     (
       protectedCashObligations.length > 0 ||
+      Boolean(auditRuleHints.enforceSafetyPayment && auditRuleHints.safetyCardTarget) ||
       noteBasedDebtFundingIntent ||
-      Math.max(0, Number(operationalSurplus || 0)) > 0 ||
       shouldBlockGenericDebtPaydown
     );
 
@@ -2724,7 +2078,7 @@ export function buildDegradedParsedAudit({
     },
     sections: {
       header: `**${dateLabel}** · DEGRADED · ${status}`,
-      alerts: alertsCard.map(item => `⚠️ ${item}`).join("\n"),
+      alerts: alertsCard.map(item => `Alert: ${item}`).join("\n"),
       dashboard: dashboardCard.map(row => `**${row.category}:** ${row.amount} (${row.status})`).join("\n"),
       moves: fallbackMoveTexts.join("\n"),
       radar: "",

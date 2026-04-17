@@ -204,6 +204,17 @@ async function getActorByAlias(db, aliasType, aliasHash) {
   return actor ? normalizeActorRow(actor) : null;
 }
 
+async function getActorAliasRows(db, actorId) {
+  if (!actorId) return [];
+  return selectResults(
+    db,
+    `SELECT alias_type, alias_hash
+       FROM identity_actor_aliases
+      WHERE actor_id = ?`,
+    [actorId]
+  );
+}
+
 async function getActorByRevenueCatUserId(db, revenueCatAppUserId) {
   if (!revenueCatAppUserId) return null;
   const results = await selectResults(
@@ -283,6 +294,18 @@ async function bindActorAlias(db, aliasType, aliasHash, actorId) {
      VALUES (?, ?, ?)
      ON CONFLICT(alias_type, alias_hash) DO UPDATE SET actor_id = excluded.actor_id`
   ).bind(aliasType, aliasHash, actorId).run();
+}
+
+export async function bindIdentityAliasValue(db, env, actorId, aliasType, aliasValue) {
+  if (!db || !actorId || !aliasType || !aliasValue) return;
+  const aliasHash = await hashIdentityAlias(aliasType, aliasValue, env);
+  await bindActorAlias(db, aliasType, aliasHash, actorId);
+}
+
+export async function resolveActorByIdentityAlias(db, env, aliasType, aliasValue) {
+  if (!db || !aliasType || !aliasValue) return null;
+  const aliasHash = await hashIdentityAlias(aliasType, aliasValue, env);
+  return getActorByAlias(db, aliasType, aliasHash);
 }
 
 async function attachRevenueCatUser(db, actorId, revenueCatAppUserId) {
@@ -382,6 +405,68 @@ async function reassignSyncRows(db, fromUserId, toUserId) {
     moved = true;
   }
   return moved;
+}
+
+async function reassignActorAliases(db, fromActorId, toActorId) {
+  if (!fromActorId || !toActorId || fromActorId === toActorId) return false;
+  const aliases = await getActorAliasRows(db, fromActorId);
+  if (aliases.length === 0) return false;
+  for (const alias of aliases) {
+    await db.prepare(
+      `INSERT INTO identity_actor_aliases (alias_type, alias_hash, actor_id)
+       VALUES (?, ?, ?)
+       ON CONFLICT(alias_type, alias_hash) DO UPDATE SET actor_id = excluded.actor_id`
+    ).bind(alias.alias_type, alias.alias_hash, toActorId).run();
+  }
+  return true;
+}
+
+async function reassignRecoveryVaultActorTable(db, tableName, fromActorId, toActorId) {
+  if (!fromActorId || !toActorId || fromActorId === toActorId) return false;
+  const sourceRows = await selectResults(
+    db,
+    `SELECT actor_id FROM ${tableName} WHERE actor_id = ?`,
+    [fromActorId]
+  );
+  if (sourceRows.length === 0) return false;
+  const targetRows = await selectResults(
+    db,
+    `SELECT actor_id FROM ${tableName} WHERE actor_id = ?`,
+    [toActorId]
+  );
+  if (targetRows.length > 0) {
+    await db.prepare(`DELETE FROM ${tableName} WHERE actor_id = ?`).bind(fromActorId).run();
+    return false;
+  }
+  await db.prepare(`UPDATE ${tableName} SET actor_id = ? WHERE actor_id = ?`).bind(toActorId, fromActorId).run();
+  return true;
+}
+
+async function reassignRecoveryVaultActorRows(db, fromActorId, toActorId) {
+  const outcomes = await Promise.all([
+    reassignRecoveryVaultActorTable(db, "recovery_vault_links", fromActorId, toActorId),
+    reassignRecoveryVaultActorTable(db, "recovery_vault_continuity", fromActorId, toActorId),
+    reassignRecoveryVaultActorTable(db, "recovery_vault_trusted_continuity", fromActorId, toActorId),
+  ]);
+  return outcomes.some(Boolean);
+}
+
+async function mergeActorData(db, sourceActor, targetActorId, keyFingerprint, options = {}) {
+  if (!sourceActor?.actorId || !targetActorId || sourceActor.actorId === targetActorId) return false;
+  if (
+    !options.allowKeyMismatch &&
+    sourceActor.activeDeviceKeyFingerprint &&
+    sourceActor.activeDeviceKeyFingerprint !== keyFingerprint
+  ) {
+    throw new Error("identity_proof_required");
+  }
+  const [movedPlaid, movedSync, movedAliases, movedVaultRows] = await Promise.all([
+    reassignPlaidItemRows(db, sourceActor.actorId, targetActorId),
+    reassignSyncRows(db, sourceActor.actorId, targetActorId),
+    reassignActorAliases(db, sourceActor.actorId, targetActorId),
+    reassignRecoveryVaultActorRows(db, sourceActor.actorId, targetActorId),
+  ]);
+  return movedPlaid || movedSync || movedAliases || movedVaultRows;
 }
 
 export async function migrateLegacyPlaidOwnership(db, actorId, { deviceId = "", revenueCatAppUserId = "" } = {}) {
@@ -512,17 +597,21 @@ async function claimActorForVerifiedKey(db, env, {
   keyFingerprint,
   publicKeyJwk,
   verifiedRevenueCatAppUserId = "",
+  verifiedAppleUserId = "",
   legacyDeviceId = "",
 } = {}) {
   const existingKey = await getDeviceKeyBinding(db, keyFingerprint);
   const legacyAliasHash =
     legacyDeviceId ? await hashIdentityAlias("device", legacyDeviceId, env) : "";
+  const appleAliasHash =
+    verifiedAppleUserId ? await hashIdentityAlias("apple", verifiedAppleUserId, env) : "";
   const existingDeviceActor = existingKey?.status === "active"
     ? await getActorById(db, existingKey.actor_id)
     : null;
   const revenueCatActor = verifiedRevenueCatAppUserId
     ? await getActorByRevenueCatUserId(db, verifiedRevenueCatAppUserId)
     : null;
+  const appleActor = appleAliasHash ? await getActorByAlias(db, "apple", appleAliasHash) : null;
   const legacyActor = legacyAliasHash ? await getActorByAlias(db, "device", legacyAliasHash) : null;
 
   let actor = existingDeviceActor;
@@ -535,6 +624,8 @@ async function claimActorForVerifiedKey(db, env, {
         throw new Error("identity_proof_required");
       }
       actor = revenueCatActor;
+    } else if (appleActor) {
+      actor = appleActor;
     } else if (legacyActor) {
       if (legacyActor.activeDeviceKeyFingerprint && legacyActor.activeDeviceKeyFingerprint !== keyFingerprint) {
         throw new Error("identity_proof_required");
@@ -544,25 +635,15 @@ async function claimActorForVerifiedKey(db, env, {
       actor = await createActor(db, verifiedRevenueCatAppUserId || null);
     }
   } else if (revenueCatActor && revenueCatActor.actorId !== actor.actorId) {
-    if (
-      revenueCatActor.activeDeviceKeyFingerprint &&
-      revenueCatActor.activeDeviceKeyFingerprint !== keyFingerprint
-    ) {
-      throw new Error("identity_proof_required");
-    }
-    await reassignPlaidItemRows(db, revenueCatActor.actorId, actor.actorId);
-    await reassignSyncRows(db, revenueCatActor.actorId, actor.actorId);
+    await mergeActorData(db, revenueCatActor, actor.actorId, keyFingerprint);
+  }
+
+  if (appleActor && appleActor.actorId !== actor.actorId) {
+    await mergeActorData(db, appleActor, actor.actorId, keyFingerprint, { allowKeyMismatch: true });
   }
 
   if (legacyActor && legacyActor.actorId !== actor.actorId) {
-    if (
-      legacyActor.activeDeviceKeyFingerprint &&
-      legacyActor.activeDeviceKeyFingerprint !== keyFingerprint
-    ) {
-      throw new Error("identity_proof_required");
-    }
-    await reassignPlaidItemRows(db, legacyActor.actorId, actor.actorId);
-    await reassignSyncRows(db, legacyActor.actorId, actor.actorId);
+    await mergeActorData(db, legacyActor, actor.actorId, keyFingerprint);
   }
 
   await storeDeviceKey(db, actor.actorId, keyFingerprint, publicKeyJwk);
@@ -573,6 +654,9 @@ async function claimActorForVerifiedKey(db, env, {
     const revenueCatAliasHash = await hashIdentityAlias("revenuecat", verifiedRevenueCatAppUserId, env);
     await bindActorAlias(db, "revenuecat", revenueCatAliasHash, actor.actorId);
     await attachRevenueCatUser(db, actor.actorId, verifiedRevenueCatAppUserId);
+  }
+  if (appleAliasHash) {
+    await bindActorAlias(db, "apple", appleAliasHash, actor.actorId);
   }
 
   await migrateLegacyPlaidOwnership(db, actor.actorId, {
@@ -585,7 +669,13 @@ async function claimActorForVerifiedKey(db, env, {
     actorId: refreshedActor?.actorId || actor.actorId,
     userId: refreshedActor?.actorId || actor.actorId,
     revenueCatAppUserId: verifiedRevenueCatAppUserId || refreshedActor?.revenueCatAppUserId || null,
-    source: verifiedRevenueCatAppUserId ? "device-key+revenuecat" : "device-key",
+    source: [
+      "device-key",
+      verifiedRevenueCatAppUserId ? "revenuecat" : null,
+      verifiedAppleUserId ? "apple" : null,
+    ]
+      .filter(Boolean)
+      .join("+"),
     sessionVersion: refreshedActor?.sessionVersion || actor.sessionVersion || 1,
     activeDeviceKeyFingerprint:
       refreshedActor?.activeDeviceKeyFingerprint || keyFingerprint,
@@ -620,6 +710,8 @@ export async function completeIdentityChallenge(db, env, {
   publicKeyJwk,
   signature,
   legacyDeviceId = "",
+  verifiedRevenueCatAppUserId = "",
+  verifiedAppleUserId = "",
 } = {}) {
   const canonicalPublicKey = canonicalizePublicJwk(publicKeyJwk);
   const { challenge, keyFingerprint } = await loadChallengeAndNonce(db, challengeId, nonce, canonicalPublicKey);
@@ -640,7 +732,8 @@ export async function completeIdentityChallenge(db, env, {
   const actor = await claimActorForVerifiedKey(db, env, {
     keyFingerprint,
     publicKeyJwk: canonicalPublicKey,
-    verifiedRevenueCatAppUserId: challenge.verified_revenuecat_app_user_id || "",
+    verifiedRevenueCatAppUserId: verifiedRevenueCatAppUserId || challenge.verified_revenuecat_app_user_id || "",
+    verifiedAppleUserId,
     legacyDeviceId,
   });
   await markChallengeUsed(db, challenge.challenge_id);

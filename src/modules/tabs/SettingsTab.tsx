@@ -1,6 +1,7 @@
   import type { ChangeEvent } from "react";
   import { lazy,Suspense,useCallback,useEffect,useRef,useState } from "react";
   import { normalizeAppError } from "../appErrors.js";
+  import { clearCloudBackupMetadata,clearPortableBackupMetadata,readBackupMetadata } from "../backupMetadata.js";
   import { performCloudBackup } from "../backup.js";
   import { beginBiometricInteraction,endBiometricInteraction } from "../biometricSession.js";
   import { APP_VERSION,T } from "../constants.js";
@@ -35,13 +36,20 @@
     FULL_PROFILE_QA_RENEWALS,
   } from "../qaSeed.js";
   import { deleteSecureItem,setSecureItem } from "../secureStore.js";
-  import AISection from "../settings/AISection.js";
-  import BackupSection from "../settings/BackupSection.js";
-  import { AppearanceSection } from "../settings/AppearanceSection.js";
-  import { FinanceProfileSection } from "../settings/FinanceProfileSection.js";
-  import SecuritySection from "../settings/SecuritySection.js";
   import { getRawTier,shouldShowGating } from "../subscription.js";
 const LazyPlaidSection = lazy(() => import("../settings/PlaidSection.js"));
+const LazyAISection = lazy(() => import("../settings/AISection.js"));
+const LazyBackupSection = lazy(() => import("../settings/BackupSection.js"));
+const LazyAppearanceSection = lazy(() =>
+  import("../settings/AppearanceSection.js").then((mod) => ({ default: mod.AppearanceSection }))
+);
+const LazyFinanceProfileSection = lazy(() =>
+  import("../settings/FinanceProfileSection.js").then((mod) => ({ default: mod.FinanceProfileSection }))
+);
+const LazySecuritySection = lazy(() => import("../settings/SecuritySection.js"));
+const LazyTrustCenterSection = lazy(() =>
+  import("../settings/TrustCenterSection.js").then((mod) => ({ default: mod.TrustCenterSection }))
+);
 
 const ENABLE_PLAID = true; // Toggle to false to hide, true to show Plaid integration
 const LazyProPaywall = lazy(() => import("./ProPaywall.js"));
@@ -49,18 +57,23 @@ const loadBackupModule = () => import("../backup.js");
 const loadSpreadsheetModule = () => import("../spreadsheet.js");
 const loadAppleSignIn = () => import("@capacitor-community/apple-sign-in");
 const loadCloudSync = () => import("../cloudSync.js");
+const loadRecoveryVaultModule = () => import("../recoveryVault.js");
 const loadRevenueCat = () => import("../revenuecat.js");
+const loadSharePlugin = () => import("@capacitor/share");
 
 
   import { useNavigation } from "../contexts/NavigationContext.js";
   import { usePortfolio } from "../contexts/PortfolioContext.js";
   import { useSecurity } from "../contexts/SecurityContext.js";
+  import { trackFunnel, trackSupportEvent } from "../funnelAnalytics.js";
+  import { refreshIdentitySessionWithAppleIdentityToken } from "../identitySession.js";
   import { useSettings } from "../contexts/SettingsContext.js";
+  import { recordFirstExportValue } from "../valueMoments.js";
 
 type ProviderModel = (typeof AI_PROVIDERS)[number]["models"][number];
 type ProviderConfig = (typeof AI_PROVIDERS)[number];
 type SettingsActiveSegment = "app";
-type SettingsMenu = "finance" | "profile" | "ai" | "backup" | "dev" | "security" | "plaid" | null;
+type SettingsMenu = "finance" | "profile" | "ai" | "backup" | "dev" | "security" | "plaid" | "trust" | null;
 
 interface PassphraseModalState {
   open: boolean;
@@ -150,6 +163,19 @@ export default function SettingsTab({
 
   // Auth Plugins state management
   const [lastBackupTS, setLastBackupTS] = useState<number | null>(null);
+  const [lastPortableBackupTS, setLastPortableBackupTS] = useState<number | null>(null);
+  const [lastPortableBackupKind, setLastPortableBackupKind] = useState<string | null>(null);
+  const [recoveryVaultId, setRecoveryVaultId] = useState<string | null>(null);
+  const [recoveryVaultLastSyncTs, setRecoveryVaultLastSyncTs] = useState<number | null>(null);
+  const [recoveryVaultLastError, setRecoveryVaultLastError] = useState<string | null>(null);
+  const [recoveryVaultRevealKey, setRecoveryVaultRevealKey] = useState<string | null>(null);
+  const [linkedRecoveryVaultId, setLinkedRecoveryVaultId] = useState<string | null>(null);
+  const [continuityRecoveryVaultId, setContinuityRecoveryVaultId] = useState<string | null>(null);
+  const [recoveryVaultContinuityEnabled, setRecoveryVaultContinuityEnabled] = useState(false);
+  const [recoveryVaultContinuityHasStoredPassphrase, setRecoveryVaultContinuityHasStoredPassphrase] = useState(false);
+  const [trustedContinuityRecoveryVaultId, setTrustedContinuityRecoveryVaultId] = useState<string | null>(null);
+  const [recoveryVaultTrustedContinuityEnabled, setRecoveryVaultTrustedContinuityEnabled] = useState(false);
+  const [isRecoveryVaultSyncing, setIsRecoveryVaultSyncing] = useState(false);
 
   const [householdId, setHouseholdId] = useState("");
   const [householdPasscode, setHouseholdPasscode] = useState("");
@@ -158,9 +184,52 @@ export default function SettingsTab({
   const [hsInputPasscode, setHsInputPasscode] = useState("");
   const [isUpdatingBiometricPreference, setIsUpdatingBiometricPreference] = useState(false);
 
+  const refreshRecoveryVaultLinkState = useCallback(async (preferredRecoveryId: string | null = null) => {
+    const mod = await loadRecoveryVaultModule();
+    let nextLinkedId: string | null = null;
+
+    if (preferredRecoveryId) {
+      nextLinkedId = await mod.linkRecoveryVaultToIdentity(preferredRecoveryId).catch(() => null);
+    }
+    if (!nextLinkedId) {
+      nextLinkedId = await mod.getLinkedRecoveryVaultId().catch(() => null);
+    }
+
+    const continuityState = await mod.getRecoveryVaultContinuityState().catch(() => ({
+      recoveryId: null,
+      hasEscrow: false,
+      hasStoredPassphrase: false,
+      trustedRecoveryId: null,
+      hasTrustedEscrow: false,
+    }));
+
+    setLinkedRecoveryVaultId(nextLinkedId || null);
+    setContinuityRecoveryVaultId(continuityState.recoveryId || null);
+    setRecoveryVaultContinuityEnabled(Boolean(continuityState.hasEscrow));
+    setRecoveryVaultContinuityHasStoredPassphrase(Boolean(continuityState.hasStoredPassphrase));
+    setTrustedContinuityRecoveryVaultId(continuityState.trustedRecoveryId || null);
+    setRecoveryVaultTrustedContinuityEnabled(Boolean(continuityState.hasTrustedEscrow));
+    return nextLinkedId || null;
+  }, []);
+
   useEffect(() => {
     // Initialization now handled at root level in App.jsx
-    db.get("last-backup-ts").then(ts => setLastBackupTS(ts)).catch(() => { });
+    readBackupMetadata()
+      .then(({ lastCloudBackupTs, lastPortableBackupTs, lastPortableBackupKind }) => {
+        setLastBackupTS(lastCloudBackupTs);
+        setLastPortableBackupTS(lastPortableBackupTs);
+        setLastPortableBackupKind(lastPortableBackupKind);
+      })
+      .catch(() => {});
+    loadRecoveryVaultModule()
+      .then((mod) => mod.getRecoveryVaultState())
+      .then(({ recoveryId, lastSyncedAt, lastError }) => {
+        setRecoveryVaultId(recoveryId || null);
+        setRecoveryVaultLastSyncTs(lastSyncedAt);
+        setRecoveryVaultLastError(lastError || null);
+      })
+      .catch(() => {});
+    void refreshRecoveryVaultLinkState().catch(() => {});
     migrateHouseholdCredentials()
       .then(({ householdId: nextId, passcode }) => {
         setHouseholdId(nextId || "");
@@ -170,7 +239,7 @@ export default function SettingsTab({
       })
       .catch(() => {});
     getRawTier().then(tier => setRawTierId(tier.id === "pro" ? "pro" : "free")).catch(() => setRawTierId("free"));
-  }, []);
+  }, [refreshRecoveryVaultLinkState]);
 
   // ── Auto-backup scheduling ──────────────────────────────────
   // When Apple Sign-In is linked and an auto-backup interval is
@@ -191,6 +260,8 @@ export default function SettingsTab({
         });
         if (result.success && result.timestamp) {
           setLastBackupTS(result.timestamp);
+          setLastPortableBackupTS(result.timestamp);
+          setLastPortableBackupKind("icloud");
           log.info("Auto-backup to iCloud completed successfully.");
         } else if (!result.success && !result.skipped) {
           log.warn("icloud", "Auto-backup returned false");
@@ -230,8 +301,30 @@ export default function SettingsTab({
         scopes: "email name",
       });
       const userIdentifier = result.response.user;
+      const identityToken = String(result.response.identityToken || "").trim();
       setAppleLinkedId(userIdentifier);
-      window.toast?.success?.("Apple ID linked for app unlock and iCloud backup.");
+      let verifiedRestoreReady = false;
+      if (identityToken) {
+        await refreshIdentitySessionWithAppleIdentityToken(identityToken)
+          .then(() => {
+            verifiedRestoreReady = true;
+          })
+          .catch((error) => {
+          log.warn("security", "Verified Apple actor binding failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+          void trackSupportEvent("sync_failed", {
+            action: "bind_verified_apple_alias",
+            message: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
+      void trackFunnel("apple_id_linked");
+      window.toast?.success?.(
+        verifiedRestoreReady
+          ? "Apple ID linked for backup and verified account restore."
+          : "Apple ID linked for app unlock and iCloud backup."
+      );
     } catch (error) {
       const failure = normalizeAppError(error, { context: "security" });
       log.warn("security", "Apple Sign-In failed", { error: failure.rawMessage, kind: failure.kind });
@@ -245,18 +338,23 @@ export default function SettingsTab({
   };
 
   const unlinkApple = () => {
-    db.del("last-backup-ts");
+    void clearCloudBackupMetadata();
+    if (lastPortableBackupKind === "icloud") {
+      void clearPortableBackupMetadata();
+    }
     if (setAutoBackupInterval) {
       setAutoBackupInterval("off");
       db.set("auto-backup-interval", "off");
     }
     setAppleLinkedId(null);
     setLastBackupTS(null);
+    if (lastPortableBackupKind === "icloud") {
+      setLastPortableBackupTS(null);
+      setLastPortableBackupKind(null);
+    }
     window.toast?.success?.("Apple ID unlinked");
   };
 
-
-  useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmFactoryReset, setConfirmFactoryReset] = useState(false);
   const [confirmDataDeletion, setConfirmDataDeletion] = useState(false);
@@ -265,7 +363,6 @@ export default function SettingsTab({
   const [restoreStatus, setRestoreStatus] = useState<string | null>(null);
   const [activeSegment] = useState<SettingsActiveSegment>("app");
   const [activeMenu, setActiveMenu] = useState<SettingsMenu>(null);
-  useState(false);
   const [rawTierId, setRawTierId] = useState<"free" | "pro">("free");
   const [ppModal, setPpModal] = useState<PassphraseModalState>({ open: false, mode: "export", label: "", resolve: null, value: "" });
   const [setupDismissed, setSetupDismissed] = useState(() => !!localStorage.getItem("setup-progress-dismissed"));
@@ -299,6 +396,8 @@ export default function SettingsTab({
       });
       if (result.success && result.timestamp) {
         setLastBackupTS(result.timestamp);
+        setLastPortableBackupTS(result.timestamp);
+        setLastPortableBackupKind("icloud");
         window.toast?.success?.("Backup saved to iCloud Drive");
       } else if (result.reason && result.reason !== "upload-failed") {
         window.toast?.error?.(result.reason);
@@ -307,10 +406,260 @@ export default function SettingsTab({
       }
     } catch (e) {
       const failure = normalizeAppError(e, { context: "restore" });
+      void trackSupportEvent("sync_failed", { context: "icloud_force", reason: failure.kind });
       log.error("icloud", "Manual iCloud backup failed", { error: failure.rawMessage, kind: failure.kind });
       window.toast?.error?.("Catalyst couldn't complete the iCloud backup. Your data is still on this device.");
     } finally {
       setIsForceSyncing(false);
+    }
+  };
+
+  const handleCreateRecoveryVault = async () => {
+    setIsRecoveryVaultSyncing(true);
+    try {
+      const mod = await loadRecoveryVaultModule();
+      const credentials = await mod.createRecoveryVaultCredentials();
+      await mod.pushRecoveryVault({
+        recoveryId: credentials.recoveryId,
+        recoveryKey: credentials.recoveryKey,
+        personalRules,
+      });
+      setRecoveryVaultId(credentials.recoveryId);
+      setRecoveryVaultLastSyncTs(Date.now());
+      setRecoveryVaultRevealKey(credentials.recoveryKey);
+      setRecoveryVaultLastError(null);
+      await refreshRecoveryVaultLinkState(credentials.recoveryId).catch(() => null);
+      void trackFunnel("backup_configured");
+      window.toast?.success?.("Recovery Vault created and synced.");
+    } catch (error) {
+      const mod = await loadRecoveryVaultModule();
+      const failure = await mod.recordRecoveryVaultFailure(error);
+      setRecoveryVaultLastError(failure.userMessage);
+      window.toast?.error?.(failure.userMessage);
+    } finally {
+      setIsRecoveryVaultSyncing(false);
+    }
+  };
+
+  const handleSyncRecoveryVault = async () => {
+    setIsRecoveryVaultSyncing(true);
+    try {
+      const mod = await loadRecoveryVaultModule();
+      const result = await mod.syncConfiguredRecoveryVault(personalRules);
+      setRecoveryVaultLastSyncTs(result.syncedAt);
+      setRecoveryVaultLastError(null);
+      await refreshRecoveryVaultLinkState(recoveryVaultId).catch(() => null);
+      window.toast?.success?.("Recovery Vault synced.");
+    } catch (error) {
+      const mod = await loadRecoveryVaultModule();
+      const failure = await mod.recordRecoveryVaultFailure(error);
+      setRecoveryVaultLastError(failure.userMessage);
+      window.toast?.error?.(failure.userMessage);
+    } finally {
+      setIsRecoveryVaultSyncing(false);
+    }
+  };
+
+  const handleRotateRecoveryVault = async () => {
+    setIsRecoveryVaultSyncing(true);
+    try {
+      const mod = await loadRecoveryVaultModule();
+      const credentials = await mod.rotateRecoveryVaultCredentials(personalRules);
+      setRecoveryVaultId(credentials.recoveryId);
+      setRecoveryVaultLastSyncTs(Date.now());
+      setRecoveryVaultRevealKey(credentials.recoveryKey);
+      setRecoveryVaultLastError(null);
+      await refreshRecoveryVaultLinkState(credentials.recoveryId).catch(() => null);
+      window.toast?.success?.("Recovery Vault credentials rotated.");
+    } catch (error) {
+      const mod = await loadRecoveryVaultModule();
+      const failure = await mod.recordRecoveryVaultFailure(error);
+      setRecoveryVaultLastError(failure.userMessage);
+      window.toast?.error?.(failure.userMessage);
+    } finally {
+      setIsRecoveryVaultSyncing(false);
+    }
+  };
+
+  const handleRevealRecoveryVaultKey = async () => {
+    try {
+      const mod = await loadRecoveryVaultModule();
+      const credentials = await mod.getRecoveryVaultCredentials();
+      if (!credentials.recoveryId || !credentials.recoveryKey) {
+        throw new Error("Recovery Vault credentials are unavailable on this device.");
+      }
+      setRecoveryVaultRevealKey(credentials.recoveryKey);
+      setRecoveryVaultId(credentials.recoveryId);
+      window.toast?.success?.("Recovery key revealed on this device.");
+    } catch (error) {
+      const mod = await loadRecoveryVaultModule();
+      const failure = await mod.recordRecoveryVaultFailure(error, {
+        context: { action: "reveal_key" },
+      });
+      setRecoveryVaultLastError(failure.userMessage);
+      window.toast?.error?.(failure.userMessage);
+    }
+  };
+
+  const handleCopyRecoveryVaultKit = async () => {
+    try {
+      const mod = await loadRecoveryVaultModule();
+      const credentials = await mod.getRecoveryVaultCredentials();
+      const recoveryKit = mod.formatRecoveryVaultKit(credentials);
+      if (!recoveryKit) {
+        throw new Error("Recovery Vault credentials are unavailable on this device.");
+      }
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(recoveryKit);
+        window.toast?.success?.("Recovery Kit copied.");
+      } else if (navigator?.share) {
+        await navigator.share({
+          title: "Catalyst Cash Recovery Kit",
+          text: recoveryKit,
+        });
+        window.toast?.success?.("Recovery Kit ready to share.");
+      } else if (Capacitor.isNativePlatform()) {
+        const { Share } = await loadSharePlugin();
+        await Share.share({
+          title: "Catalyst Cash Recovery Kit",
+          text: recoveryKit,
+          dialogTitle: "Share Recovery Kit",
+        });
+        window.toast?.success?.("Recovery Kit ready to share.");
+      } else {
+        throw new Error("Clipboard access is unavailable on this device.");
+      }
+      setRecoveryVaultRevealKey(credentials.recoveryKey);
+    } catch (error) {
+      const mod = await loadRecoveryVaultModule();
+      const failure = await mod.recordRecoveryVaultFailure(error, {
+        context: { action: "copy_kit" },
+      });
+      setRecoveryVaultLastError(failure.userMessage);
+      window.toast?.error?.(failure.userMessage);
+    }
+  };
+
+  const handleDeleteRecoveryVault = async () => {
+    setIsRecoveryVaultSyncing(true);
+    try {
+      const mod = await loadRecoveryVaultModule();
+      const secret = await mod.getStoredRecoveryVaultSecret();
+      if (!recoveryVaultId || !secret) {
+        throw new Error("Recovery Vault credentials are unavailable on this device.");
+      }
+      await mod.deleteRecoveryVault(recoveryVaultId, secret);
+      await mod.clearRecoveryVaultCredentials();
+      setRecoveryVaultId(null);
+      setLinkedRecoveryVaultId(null);
+      setContinuityRecoveryVaultId(null);
+      setRecoveryVaultContinuityEnabled(false);
+      setRecoveryVaultContinuityHasStoredPassphrase(false);
+      setTrustedContinuityRecoveryVaultId(null);
+      setRecoveryVaultTrustedContinuityEnabled(false);
+      setRecoveryVaultLastSyncTs(null);
+      setRecoveryVaultRevealKey(null);
+      setRecoveryVaultLastError(null);
+      window.toast?.success?.("Recovery Vault removed.");
+    } catch (error) {
+      const mod = await loadRecoveryVaultModule();
+      const failure = await mod.recordRecoveryVaultFailure(error);
+      setRecoveryVaultLastError(failure.userMessage);
+      window.toast?.error?.(failure.userMessage);
+    } finally {
+      setIsRecoveryVaultSyncing(false);
+    }
+  };
+
+  const handleEnableRecoveryVaultContinuity = async (passphrase: string) => {
+    setIsRecoveryVaultSyncing(true);
+    try {
+      const mod = await loadRecoveryVaultModule();
+      const credentials = await mod.getRecoveryVaultCredentials();
+      if (!credentials.recoveryId || !credentials.recoveryKey) {
+        throw new Error("Recovery Vault credentials are unavailable on this device.");
+      }
+      await mod.enableRecoveryVaultContinuity(passphrase, credentials.recoveryId, credentials.recoveryKey);
+      await refreshRecoveryVaultLinkState(credentials.recoveryId).catch(() => null);
+      setRecoveryVaultLastError(null);
+      window.toast?.success?.("Account-backed Recovery Vault sync enabled.");
+    } catch (error) {
+      const mod = await loadRecoveryVaultModule();
+      const failure = await mod.recordRecoveryVaultFailure(error, {
+        eventName: "vault_sync_failed",
+        context: { action: "enable_continuity" },
+      });
+      setRecoveryVaultLastError(failure.userMessage);
+      window.toast?.error?.(failure.userMessage);
+    } finally {
+      setIsRecoveryVaultSyncing(false);
+    }
+  };
+
+  const handleEnableTrustedRecoveryVaultContinuity = async () => {
+    setIsRecoveryVaultSyncing(true);
+    try {
+      const mod = await loadRecoveryVaultModule();
+      const credentials = await mod.getRecoveryVaultCredentials();
+      if (!credentials.recoveryId || !credentials.recoveryKey) {
+        throw new Error("Recovery Vault credentials are unavailable on this device.");
+      }
+      await mod.enableTrustedRecoveryVaultContinuity(credentials.recoveryId, credentials.recoveryKey);
+      await refreshRecoveryVaultLinkState(credentials.recoveryId).catch(() => null);
+      setRecoveryVaultLastError(null);
+      window.toast?.success?.("Seamless Recovery Vault restore enabled.");
+    } catch (error) {
+      const mod = await loadRecoveryVaultModule();
+      const failure = await mod.recordRecoveryVaultFailure(error, {
+        eventName: "vault_sync_failed",
+        context: { action: "enable_trusted_continuity" },
+      });
+      setRecoveryVaultLastError(failure.userMessage);
+      window.toast?.error?.(failure.userMessage);
+    } finally {
+      setIsRecoveryVaultSyncing(false);
+    }
+  };
+
+  const handleDisableRecoveryVaultContinuity = async () => {
+    setIsRecoveryVaultSyncing(true);
+    try {
+      const mod = await loadRecoveryVaultModule();
+      await mod.clearRecoveryVaultContinuityPassphrase();
+      await refreshRecoveryVaultLinkState().catch(() => null);
+      setRecoveryVaultLastError(null);
+      window.toast?.success?.("Account-backed Recovery Vault sync disabled.");
+    } catch (error) {
+      const mod = await loadRecoveryVaultModule();
+      const failure = await mod.recordRecoveryVaultFailure(error, {
+        eventName: "vault_sync_failed",
+        context: { action: "disable_continuity" },
+      });
+      setRecoveryVaultLastError(failure.userMessage);
+      window.toast?.error?.(failure.userMessage);
+    } finally {
+      setIsRecoveryVaultSyncing(false);
+    }
+  };
+
+  const handleDisableTrustedRecoveryVaultContinuity = async () => {
+    setIsRecoveryVaultSyncing(true);
+    try {
+      const mod = await loadRecoveryVaultModule();
+      await mod.clearTrustedRecoveryVaultContinuity();
+      await refreshRecoveryVaultLinkState().catch(() => null);
+      setRecoveryVaultLastError(null);
+      window.toast?.success?.("Seamless Recovery Vault restore disabled.");
+    } catch (error) {
+      const mod = await loadRecoveryVaultModule();
+      const failure = await mod.recordRecoveryVaultFailure(error, {
+        eventName: "vault_sync_failed",
+        context: { action: "disable_trusted_continuity" },
+      });
+      setRecoveryVaultLastError(failure.userMessage);
+      window.toast?.error?.(failure.userMessage);
+    } finally {
+      setIsRecoveryVaultSyncing(false);
     }
   };
 
@@ -581,8 +930,13 @@ export default function SettingsTab({
       }
       setBackupStatus("exporting");
       const { exportBackup } = await loadBackupModule();
-      const { count, plaidConnectionCount } = await exportBackup(passphrase);
+      const { count, exportedAt, plaidConnectionCount } = await exportBackup(passphrase);
+      setLastPortableBackupTS(Date.parse(exportedAt) || Date.now());
+      setLastPortableBackupKind("encrypted-export");
       setBackupStatus("done");
+      void trackFunnel("backup_configured");
+      void recordFirstExportValue();
+      void trackSupportEvent("export_used", { kind: "json" });
       setStatusMsg(
         `Encrypted backup saved with ${count} data keys${plaidConnectionCount > 0 ? ` and ${plaidConnectionCount} reconnect-ready bank ${plaidConnectionCount === 1 ? "profile" : "profiles"}` : ""}.`
       );
@@ -604,7 +958,12 @@ export default function SettingsTab({
       setBackupStatus("exporting");
       const { generateBackupSpreadsheet } = await loadSpreadsheetModule();
       await (generateBackupSpreadsheet as unknown as (passphrase: string) => Promise<void>)(passphrase);
+      setLastPortableBackupTS(Date.now());
+      setLastPortableBackupKind("spreadsheet-export");
       setBackupStatus("done");
+      void trackFunnel("backup_configured");
+      void recordFirstExportValue();
+      void trackSupportEvent("export_used", { kind: "spreadsheet" });
       setStatusMsg("Exported encrypted spreadsheet backup.");
     } catch (e) {
       setBackupStatus("error");
@@ -624,6 +983,9 @@ export default function SettingsTab({
         throw new Error("Unsupported backup file — choose a Catalyst Cash .enc or .json backup.");
       }
       const { count, exportedAt, plaidReconnectCount } = await importBackup(file, () => showPassphraseModal("import"));
+      setLastBackupTS(null);
+      setLastPortableBackupTS(null);
+      setLastPortableBackupKind(null);
       setRestoreStatus("done");
       const dateStr = exportedAt ? new Date(exportedAt).toLocaleDateString() : "unknown date";
       setStatusMsg(
@@ -638,6 +1000,7 @@ export default function SettingsTab({
         return;
       }
       setRestoreStatus("error");
+      void trackSupportEvent("restore_failed", { reason: message });
       setStatusMsg(message);
     }
   };
@@ -698,6 +1061,8 @@ export default function SettingsTab({
       ? "AI & Engine"
       : activeMenu === "backup"
         ? "Backup & Data"
+        : activeMenu === "trust"
+          ? "Trust Center"
         : activeMenu === "finance"
           ? "Financial Profile"
           : activeMenu === "plaid"
@@ -730,7 +1095,7 @@ export default function SettingsTab({
         justifyContent: "space-between",
       }}
     >
-      <div style={{ width: 36 }}>
+      <div style={{ width: 44, minWidth: 44, display: "flex", justifyContent: "flex-start" }}>
         {(onBack || menu) && (
           <button
             onClick={() => {
@@ -742,9 +1107,9 @@ export default function SettingsTab({
             }}
             aria-label={menu ? "Back to Settings" : "Close Settings"}
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: 10,
+              width: 40,
+              height: 40,
+              borderRadius: 12,
               border: `1px solid ${T.border.default}`,
               background: T.bg.elevated,
               color: T.text.secondary,
@@ -758,7 +1123,19 @@ export default function SettingsTab({
           </button>
         )}
       </div>
-      <div style={{ textAlign: "center", flex: 1, minWidth: 0, overflow: "hidden" }}>
+      <div
+        style={{
+          textAlign: "center",
+          flex: 1,
+          minWidth: 0,
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "0 12px",
+        }}
+      >
         <h1
           style={{
             fontSize: 20,
@@ -775,87 +1152,154 @@ export default function SettingsTab({
             : "Settings"}
         </h1>
         {!menu && (
-          <p style={{ fontSize: 10, color: T.text.dim, marginTop: 3, fontFamily: T.font.mono, margin: 0 }}>
+          <p style={{ fontSize: 10, color: T.text.dim, marginTop: 3, fontFamily: T.font.mono, margin: 0, lineHeight: 1.1 }}>
             VERSION {APP_VERSION}
           </p>
         )}
       </div>
-      <div style={{ width: 36 }}></div>
+      <div style={{ width: 44, minWidth: 44 }}></div>
     </div>
+  );
+
+  const sectionFallback = (
+    <Card>
+      <div style={{ padding: 20, textAlign: "center", color: T.text.muted }}>Loading...</div>
+    </Card>
   );
 
   const detailSettingsContent = (
     <div style={{ display: activeSegment === "app" ? "block" : "none" }}>
-      <FinanceProfileSection
-        activeMenu={activeMenu}
-        financialConfig={financialConfig}
-        financeSummaryItems={financeSummaryItems}
-        proEnabled={proEnabled}
-        setFinancialConfig={setFinancialConfig}
-        setShowPaywall={setShowPaywall}
-      />
+      {activeMenu === "finance" && (
+        <Suspense fallback={sectionFallback}>
+          <LazyFinanceProfileSection
+            activeMenu={activeMenu}
+            financialConfig={financialConfig}
+            financeSummaryItems={financeSummaryItems}
+            proEnabled={proEnabled}
+            setFinancialConfig={setFinancialConfig}
+            setShowPaywall={setShowPaywall}
+          />
+        </Suspense>
+      )}
 
-      <AppearanceSection activeMenu={activeMenu} themeMode={themeMode} setThemeMode={setThemeMode} />
+      {activeMenu === "profile" && (
+        <Suspense fallback={sectionFallback}>
+          <LazyAppearanceSection activeMenu={activeMenu} themeMode={themeMode} setThemeMode={setThemeMode} />
+        </Suspense>
+      )}
 
-      <AISection 
-         activeMenu={activeMenu}
-         aiModel={aiModel}
-         setAiModel={setAiModel}
-         setAiProvider={setAiProvider}
-         currentProvider={currentProvider}
-         selectedModel={selectedModel}
-         showUpgradeCta={gatingVisible && !hasPremiumModelAccess}
-         showModelSelector={hasPremiumModelAccess}
-         setShowPaywall={setShowPaywall}
-         apiKey={apiKey}
-         setApiKey={setApiKey}
-         handleKeyChange={handleKeyChange}
-         isNonGemini={isNonGemini}
-         hasApiKey={hasApiKey}
-         showApiSetup={showApiSetup}
-         setShowApiSetup={setShowApiSetup}
-         personalRules={personalRules}
-         setPersonalRules={setPersonalRules}
-      />
+      {activeMenu === "ai" && (
+        <Suspense fallback={sectionFallback}>
+          <LazyAISection
+             activeMenu={activeMenu}
+             aiModel={aiModel}
+             setAiModel={setAiModel}
+             setAiProvider={setAiProvider}
+             currentProvider={currentProvider}
+             selectedModel={selectedModel}
+             showUpgradeCta={gatingVisible && !hasPremiumModelAccess}
+             showModelSelector={hasPremiumModelAccess}
+             setShowPaywall={setShowPaywall}
+             apiKey={apiKey}
+             setApiKey={setApiKey}
+             handleKeyChange={handleKeyChange}
+             isNonGemini={isNonGemini}
+             hasApiKey={hasApiKey}
+             showApiSetup={showApiSetup}
+             setShowApiSetup={setShowApiSetup}
+             personalRules={personalRules}
+             setPersonalRules={setPersonalRules}
+          />
+        </Suspense>
+      )}
 
-      <BackupSection 
-        activeMenu={activeMenu}
-        backupStatus={backupStatus}
-        setBackupStatus={setBackupStatus}
-        restoreStatus={restoreStatus}
-        setRestoreStatus={setRestoreStatus}
-        statusMsg={statusMsg}
-        setStatusMsg={setStatusMsg}
-        handleExport={handleExport}
-        handleExportSheet={handleExportSheet}
-        handleImport={handleImport}
-        householdId={householdId}
-        secretStorageStatus={secretStorageStatus}
-        setHouseholdId={setHouseholdId}
-        householdPasscode={householdPasscode}
-        setHouseholdPasscode={setHouseholdPasscode}
-        showHouseholdModal={showHouseholdModal}
-        setShowHouseholdModal={setShowHouseholdModal}
-        hsInputId={hsInputId}
-        setHsInputId={setHsInputId}
-        hsInputPasscode={hsInputPasscode}
-        setHsInputPasscode={setHsInputPasscode}
-        appleLinkedId={appleLinkedId}
-        handleAppleSignIn={handleAppleSignIn}
-        unlinkApple={unlinkApple}
-        autoBackupInterval={autoBackupInterval}
-        setAutoBackupInterval={setAutoBackupInterval}
-        lastBackupTS={lastBackupTS}
-        isForceSyncing={isForceSyncing}
-        forceICloudSync={forceICloudSync}
-        onClear={onClear}
-        onClearDemoData={onClearDemoData}
-        onFactoryReset={onFactoryReset}
-        confirmClear={confirmClear}
-        setConfirmClear={setConfirmClear}
-        confirmFactoryReset={confirmFactoryReset}
-        setConfirmFactoryReset={setConfirmFactoryReset}
-      />
+      {activeMenu === "backup" && (
+        <Suspense fallback={sectionFallback}>
+          <LazyBackupSection
+            activeMenu={activeMenu}
+            backupStatus={backupStatus}
+            setBackupStatus={setBackupStatus}
+            restoreStatus={restoreStatus}
+            setRestoreStatus={setRestoreStatus}
+            statusMsg={statusMsg}
+            setStatusMsg={setStatusMsg}
+            handleExport={handleExport}
+            handleExportSheet={handleExportSheet}
+            handleImport={handleImport}
+            householdId={householdId}
+            secretStorageStatus={secretStorageStatus}
+            setHouseholdId={setHouseholdId}
+            householdPasscode={householdPasscode}
+            setHouseholdPasscode={setHouseholdPasscode}
+            showHouseholdModal={showHouseholdModal}
+            setShowHouseholdModal={setShowHouseholdModal}
+            hsInputId={hsInputId}
+            setHsInputId={setHsInputId}
+            hsInputPasscode={hsInputPasscode}
+            setHsInputPasscode={setHsInputPasscode}
+            appleLinkedId={appleLinkedId}
+            handleAppleSignIn={handleAppleSignIn}
+            unlinkApple={unlinkApple}
+            autoBackupInterval={autoBackupInterval}
+            setAutoBackupInterval={setAutoBackupInterval}
+            lastBackupTS={lastBackupTS}
+            lastPortableBackupTS={lastPortableBackupTS}
+            lastPortableBackupKind={lastPortableBackupKind}
+            recoveryVaultId={recoveryVaultId}
+            linkedRecoveryVaultId={linkedRecoveryVaultId}
+            continuityRecoveryVaultId={continuityRecoveryVaultId}
+            recoveryVaultContinuityEnabled={recoveryVaultContinuityEnabled}
+            recoveryVaultContinuityHasStoredPassphrase={recoveryVaultContinuityHasStoredPassphrase}
+            trustedContinuityRecoveryVaultId={trustedContinuityRecoveryVaultId}
+            recoveryVaultTrustedContinuityEnabled={recoveryVaultTrustedContinuityEnabled}
+            recoveryVaultLastSyncTs={recoveryVaultLastSyncTs}
+            recoveryVaultLastError={recoveryVaultLastError}
+            recoveryVaultRevealKey={recoveryVaultRevealKey}
+            setRecoveryVaultRevealKey={setRecoveryVaultRevealKey}
+            isRecoveryVaultSyncing={isRecoveryVaultSyncing}
+            handleCreateRecoveryVault={handleCreateRecoveryVault}
+            handleSyncRecoveryVault={handleSyncRecoveryVault}
+            handleRotateRecoveryVault={handleRotateRecoveryVault}
+            handleDeleteRecoveryVault={handleDeleteRecoveryVault}
+            handleRevealRecoveryVaultKey={handleRevealRecoveryVaultKey}
+            handleCopyRecoveryVaultKit={handleCopyRecoveryVaultKit}
+            handleEnableRecoveryVaultContinuity={handleEnableRecoveryVaultContinuity}
+            handleDisableRecoveryVaultContinuity={handleDisableRecoveryVaultContinuity}
+            handleEnableTrustedRecoveryVaultContinuity={handleEnableTrustedRecoveryVaultContinuity}
+            handleDisableTrustedRecoveryVaultContinuity={handleDisableTrustedRecoveryVaultContinuity}
+            isForceSyncing={isForceSyncing}
+            forceICloudSync={forceICloudSync}
+            onClear={onClear}
+            onClearDemoData={onClearDemoData}
+            onFactoryReset={onFactoryReset}
+            confirmClear={confirmClear}
+            setConfirmClear={setConfirmClear}
+            confirmFactoryReset={confirmFactoryReset}
+            setConfirmFactoryReset={setConfirmFactoryReset}
+          />
+        </Suspense>
+      )}
+
+      {activeMenu === "trust" && (
+        <Suspense fallback={sectionFallback}>
+          <LazyTrustCenterSection
+            activeMenu={activeMenu}
+            secretStorageStatus={secretStorageStatus}
+            appleLinkedId={appleLinkedId}
+            householdId={householdId}
+            recoveryVaultId={recoveryVaultId}
+            linkedRecoveryVaultId={linkedRecoveryVaultId}
+            continuityRecoveryVaultId={continuityRecoveryVaultId}
+            recoveryVaultContinuityEnabled={recoveryVaultContinuityEnabled}
+            recoveryVaultContinuityHasStoredPassphrase={recoveryVaultContinuityHasStoredPassphrase}
+            trustedContinuityRecoveryVaultId={trustedContinuityRecoveryVaultId}
+            recoveryVaultTrustedContinuityEnabled={recoveryVaultTrustedContinuityEnabled}
+            recoveryVaultLastSyncTs={recoveryVaultLastSyncTs}
+            lastPortableBackupTS={lastPortableBackupTS}
+            lastPortableBackupKind={lastPortableBackupKind}
+          />
+        </Suspense>
+      )}
 
       <DeveloperToolsSection
         visible={activeMenu === "dev"}
@@ -863,24 +1307,28 @@ export default function SettingsTab({
         onOpenQaAudit={handleOpenQaAudit}
       />
 
-      <SecuritySection
-         activeMenu={activeMenu}
-         appPasscode={appPasscode}
-         handlePasscodeChange={handlePasscodeChange}
-         requireAuth={requireAuth}
-        handleRequireAuthToggle={handleRequireAuthToggle}
-        useFaceId={useFaceId}
-        handleUseFaceIdToggle={handleUseFaceIdToggle}
-        biometricToggleBusy={isUpdatingBiometricPreference}
-        secretStorageStatus={secretStorageStatus}
-        lockTimeout={lockTimeout}
-        setLockTimeout={setLockTimeout}
-         confirmDataDeletion={confirmDataDeletion}
-         setConfirmDataDeletion={setConfirmDataDeletion}
-         deletionInProgress={deletionInProgress}
-         setDeletionInProgress={setDeletionInProgress}
-         onConfirmDataDeletion={onFactoryReset}
-      />
+      {activeMenu === "security" && (
+        <Suspense fallback={sectionFallback}>
+          <LazySecuritySection
+             activeMenu={activeMenu}
+             appPasscode={appPasscode}
+             handlePasscodeChange={handlePasscodeChange}
+             requireAuth={requireAuth}
+            handleRequireAuthToggle={handleRequireAuthToggle}
+            useFaceId={useFaceId}
+            handleUseFaceIdToggle={handleUseFaceIdToggle}
+            biometricToggleBusy={isUpdatingBiometricPreference}
+            secretStorageStatus={secretStorageStatus}
+            lockTimeout={lockTimeout}
+            setLockTimeout={setLockTimeout}
+             confirmDataDeletion={confirmDataDeletion}
+             setConfirmDataDeletion={setConfirmDataDeletion}
+             deletionInProgress={deletionInProgress}
+             setDeletionInProgress={setDeletionInProgress}
+             onConfirmDataDeletion={onFactoryReset}
+          />
+        </Suspense>
+      )}
 
       {ENABLE_PLAID && activeMenu === "plaid" && (
         <Suspense

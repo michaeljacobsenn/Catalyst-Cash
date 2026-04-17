@@ -83,10 +83,7 @@ interface ListRowProps {
   isLast?: boolean;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// GLOBAL HAPTICS — Auto-fire haptic.light() on every button tap
-// Single delegated listener, zero per-component wiring needed
-// ═══════════════════════════════════════════════════════════════
+// Delegated touch haptics for buttons.
 export function useGlobalHaptics() {
   useEffect(() => {
     let lastTouchHapticAt = 0;
@@ -106,22 +103,16 @@ export function useGlobalHaptics() {
   }, []);
 }
 
-// ═══════════════════════════════════════════════════════════════
-// DYNAMIC TYPOGRAPHY TRACKING
-// Replicates Apple's San Francisco dynamic letter-spacing curves.
-// Larger text = tighter tracking. Smaller text = looser tracking.
-// ═══════════════════════════════════════════════════════════════
+// Font-size-based letter-spacing helper.
 export const getTracking = (fontSize: number, weight: FontWeight = "regular") => {
-  // Base mathematical curve for SF Pro
   let tracking =
     fontSize <= 10 ? 0.04
     : fontSize <= 12 ? 0.02
     : fontSize <= 16 ? 0
     : fontSize <= 24 ? -0.015
     : fontSize <= 36 ? -0.025
-    : -0.04; // Massive numbers
+    : -0.04;
 
-  // Adjust for visual weight (heavy weights need slightly more breathing room)
   if (weight === "bold" || (typeof weight === "number" && weight >= 700)) {
     tracking += 0.005;
   }
@@ -135,17 +126,17 @@ export const GlobalStyles = () => (
     
     /* iOS 18 Typography & Form elements — minimum 44pt touch targets */
     input,textarea,select{
-      font-family:${T.font.sans};background:linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card});
+      font-family:${T.font.sans};background:${T.bg.elevated};
       border:1.5px solid ${T.border.default};color:${T.text.primary};
       border-radius:${T.radius.md}px;padding:14px 16px;font-size:16px;line-height:1.2;
       min-height:44px; /* HIG 44pt Touch Target */
       width:100%;outline:none;transition:border-color .25s ease,box-shadow .25s ease,background .25s ease,transform .25s ease;
       -webkit-appearance:none;-webkit-tap-highlight-color:transparent;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 18px rgba(0,0,0,0.10);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 4px 12px rgba(0,0,0,0.08);
     }
     input:focus,textarea:focus,select:focus{
       border-color:${T.border.focus};
-      box-shadow:0 0 0 3px ${T.accent.primaryDim},0 0 18px ${T.accent.primaryGlow}, 0 10px 24px rgba(0,0,0,0.12);
+      box-shadow:0 0 0 3px ${T.accent.primaryDim}, 0 10px 18px rgba(0,0,0,0.10);
       background:${T.bg.surface};
     }
     input::placeholder,textarea::placeholder{color:${T.text.muted};font-weight:400}
@@ -165,23 +156,12 @@ export const GlobalStyles = () => (
     @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
     @keyframes progressFill{from{width:0%}}
-    @keyframes glowPulse{0%,100%{box-shadow:0 4px 16px rgba(130,120,255,0.2)}50%{box-shadow:0 4px 24px rgba(130,120,255,0.35)}}
-    @keyframes pulseShadow{0%,100%{transform:scale(1);filter:drop-shadow(0 8px 32px rgba(0,0,0,0.4))}50%{transform:scale(1.03);filter:drop-shadow(0 16px 48px rgba(130,120,255,0.4))}}
-    @keyframes subtleBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
-    @keyframes pulseAlert{0%,100%{box-shadow:0 0 0 0 rgba(248,81,73,0.4)}70%{box-shadow:0 0 0 10px rgba(248,81,73,0)}}
     @keyframes scorePop{0%{opacity:0;transform:scale(0.85)}60%{opacity:1;transform:scale(1.05)}100%{opacity:1;transform:scale(1)}}
-    @keyframes confettiFall{0%{transform:translateY(0) rotate(0deg) scale(1);opacity:1}100%{transform:translateY(85vh) rotate(720deg) scale(0.3);opacity:0}}
-    @keyframes confettiBurst{0%{transform:translateY(0) scale(0);opacity:0}15%{opacity:1;transform:translateY(-20px) scale(1)}100%{transform:translateY(85vh) rotate(720deg) scale(0.3);opacity:0}}
-    @keyframes floatUp{0%{transform:translateY(0);opacity:0.8}50%{transform:translateY(-10px);opacity:1}100%{transform:translateY(0);opacity:0.6}}
-    @keyframes ctaShimmer{0%{background-position:-200% center}100%{background-position:200% center}}
-    @keyframes ambientFloat{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(8px,-6px) scale(1.05)}66%{transform:translate(-4px,4px) scale(0.97)}}
     @keyframes tabSlideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
     @keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
     @keyframes tabFadeIn{from{opacity:0}to{opacity:1}}
-    @keyframes shellBreathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-1px)}}
     @keyframes settingsSlideIn{from{opacity:0;transform:translateX(50px)}to{opacity:1;transform:translateX(0)}}
     @keyframes settingsSlideOut{from{opacity:0;transform:translateX(-50px)}to{opacity:1;transform:translateX(0)}}
-    @keyframes slidePaneIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
     @keyframes paneSlideFromRight{from{transform:translateX(100%);opacity:0.8}to{transform:translateX(0);opacity:1}}
     @keyframes paneSlideToRight{from{transform:translateX(0);opacity:1}to{transform:translateX(100%);opacity:0.6}}
     @keyframes modalSlideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
@@ -201,7 +181,6 @@ export const GlobalStyles = () => (
     .scale-in{animation:scaleIn .4s var(--spring-elastic) both;transform:translateZ(0);}
     .score-pop{animation:scorePop .6s var(--spring-elastic) .4s both;will-change:transform,opacity;transform:translateZ(0);}
     .shimmer-bg{background:linear-gradient(90deg,${T.bg.card} 30%,${T.bg.elevated} 50%,${T.bg.card} 70%);background-size:200% 100%;animation:shimmer 2.5s ease-in-out 1 forwards;transform:translateZ(0);}
-    .pulse-alert{animation:pulseAlert 2.5s infinite var(--spring-soft);transform:translateZ(0);}
     .spin{animation:spin .8s linear infinite;transform:translateZ(0);}
     .tab-transition{animation:tabSlideIn .35s var(--spring-elastic) both;will-change:transform,opacity;transform:translateZ(0);}
     /* REMOVED: .tab-slide-right and .tab-slide-left replaced by native scroll-snap */
@@ -263,33 +242,35 @@ export const GlobalStyles = () => (
 
     /* Top 0.00001% Micro-Animations & Haptic Press States */
     .hover-card {
-      transition: border-color .4s ease, box-shadow .4s var(--spring-elastic), transform .4s var(--spring-elastic) !important;
+      transition: border-color .24s ease, box-shadow .24s ease, transform .24s ease !important;
       will-change: transform, box-shadow;
     }
-    .hover-card:hover {
-      transform: translateY(-3px) scale(1.008) translateZ(0) !important;
-      box-shadow: 0 18px 38px rgba(0,0,0,0.34), 0 8px 16px rgba(0,0,0,0.18), 0 0 0 1px rgba(160,140,220,0.16) !important;
-      border-color: rgba(160,140,220,0.26) !important;
-      z-index: 10;
+    @media (hover:hover) and (pointer:fine){
+      .hover-card:hover {
+        transform: translateY(-1px) translateZ(0) !important;
+        box-shadow: 0 14px 26px rgba(0,0,0,0.22), 0 4px 10px rgba(0,0,0,0.12) !important;
+        border-color: ${T.border.default} !important;
+        z-index: 10;
+      }
     }
     .hover-card:active {
-      transform: translateY(2px) scale(0.97) translateZ(0) !important;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.7), 0 0 0 1px rgba(160,140,220,0.05) !important;
+      transform: translateY(1px) scale(0.992) translateZ(0) !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.24) !important;
       transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease !important;
     }
     
     .hover-btn {
-      transition: transform .3s var(--spring-elastic), box-shadow .3s ease, filter .3s ease, opacity .3s ease !important;
+      transition: transform .2s ease, box-shadow .2s ease, filter .2s ease, opacity .2s ease !important;
       will-change: transform, filter;
     }
     .hover-btn:not(:disabled):hover {
-      filter: brightness(1.1);
-      transform: translateY(-1px) scale(1.02) translateZ(0) !important;
+      filter: brightness(1.03);
+      transform: translateY(-1px) translateZ(0) !important;
     }
     .hover-btn:not(:disabled):active {
-      transform: translateY(2px) scale(0.94) translateZ(0) !important;
-      filter: brightness(0.9);
-      opacity: 0.85;
+      transform: translateY(1px) scale(0.99) translateZ(0) !important;
+      filter: brightness(0.98);
+      opacity: 0.92;
       transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), filter 0.1s ease, opacity 0.1s ease !important;
     }
 
@@ -406,10 +387,10 @@ export const GlobalStyles = () => (
     /* Remove focus ring for mouse/touch (only :focus-visible above applies for keyboard) */
     :focus:not(:focus-visible){outline:none;}
 
-    /* ── Premium Input Focus Glow ── */
+    /* ── Focused input state ── */
     input:focus,textarea:focus,select:focus{
-      border-color:${T.accent.primary} !important;
-      box-shadow:inset 0 2px 4px rgba(0,0,0,0.3), 0 0 0 3px ${T.accent.primaryGlow}, 0 0 16px ${T.accent.primaryDim} !important;
+      border-color:${T.border.focus} !important;
+      box-shadow:inset 0 1px 2px rgba(0,0,0,0.18), 0 0 0 3px ${T.accent.primaryDim}, 0 8px 16px rgba(0,0,0,0.08) !important;
       transition:border-color .2s ease, box-shadow .3s var(--spring-elastic) !important;
     }
 
@@ -423,55 +404,6 @@ export const GlobalStyles = () => (
       transform:scale(0.95) translateZ(0) !important;
       box-shadow:0 2px 8px rgba(0,0,0,0.5) !important;
       transition:transform .1s cubic-bezier(0.4,0,0.2,1), box-shadow .1s ease !important;
-    }
-
-    /* ── CTA Shimmer Button — draws attention to primary actions ── */
-    .cta-shimmer{
-      position:relative;
-      overflow:hidden;
-    }
-    .cta-shimmer::after{
-      content:'';
-      position:absolute;
-      inset:0;
-      background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,0.15) 50%,transparent 60%);
-      background-size:200% 100%;
-      animation:ctaShimmer 3s ease-in-out infinite;
-      pointer-events:none;
-      border-radius:inherit;
-    }
-
-    /* ── Nav Active Dot Indicator ── */
-    .nav-active-dot::after{
-      content:'';
-      position:absolute;
-      bottom:2px;
-      left:50%;
-      transform:translateX(-50%);
-      width:4px;
-      height:4px;
-      border-radius:2px;
-      background:${T.accent.primary};
-      opacity:0;
-      transition:opacity .3s ease, transform .3s var(--spring-elastic);
-    }
-    .nav-active-dot[data-active="true"]::after{
-      opacity:1;
-      transform:translateX(-50%) scale(1);
-    }
-    .shell-breathe{
-      animation:shellBreathe 5s ease-in-out infinite;
-    }
-
-    /* ── Landscape mode: constrain to a centered 520px pillar ── */
-    @media (orientation:landscape) and (max-height:600px){
-      #root{
-        max-width:520px;
-        margin-left:auto;
-        margin-right:auto;
-        border-left:1px solid rgba(255,255,255,0.04);
-        border-right:1px solid rgba(255,255,255,0.04);
-      }
     }
 
     /* ── Landscape mode: constrain to a centered 520px pillar ── */
@@ -499,24 +431,24 @@ export const Card = ({ children, style, animate, delay = 0, onClick, variant = "
     default: {
       background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
       border: `1px solid ${T.border.default}`,
-      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(255,255,255,0.02), ${T.shadow.card}`,
+      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04), ${T.shadow.card}`,
     },
     elevated: {
       background: `linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card})`,
       border: `1px solid ${T.border.default}`,
-      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(255,255,255,0.02), ${T.shadow.elevated}`,
+      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04), ${T.shadow.elevated}`,
     },
     glass: {
       background: `linear-gradient(180deg, ${T.bg.glass}, ${T.bg.card})`,
       border: `1px solid ${T.border.default}`,
-      backdropFilter: "blur(26px) saturate(1.25)",
-      WebkitBackdropFilter: "blur(26px) saturate(1.25)",
-      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(255,255,255,0.02), ${T.shadow.card}`,
+      backdropFilter: "blur(20px) saturate(1.08)",
+      WebkitBackdropFilter: "blur(20px) saturate(1.08)",
+      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04), ${T.shadow.card}`,
     },
     accent: {
-      background: `linear-gradient(165deg, ${T.accent.primaryDim}, ${T.bg.card} 58%, ${T.accent.emeraldDim})`,
+      background: `linear-gradient(165deg, ${T.accent.primaryDim}, ${T.bg.card} 58%, ${T.bg.elevated})`,
       border: `1px solid ${T.accent.primarySoft}`,
-      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.1), ${T.shadow.card}, 0 0 24px rgba(123,94,167,0.06)`,
+      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), ${T.shadow.card}`,
     },
   };
   const v = variants[variant] || variants.default;
@@ -547,8 +479,8 @@ export const Card = ({ children, style, animate, delay = 0, onClick, variant = "
       style={{
         ...v,
         borderRadius: T.radius.lg,
-        padding: "clamp(15px, 2.6vw, 18px)",
-        marginBottom: 10,
+        padding: "clamp(15px, 2.4vw, 18px)",
+        marginBottom: 12,
         ...style,
         ...(onClick ? { cursor: "pointer", position: "relative" } : {}),
         ...(animate ? { animationDelay: `${delay}ms` } : {}),
@@ -603,15 +535,16 @@ export const Badge = ({ variant = "gray", children, style, size = "md" }: BadgeP
         alignItems: "center",
         gap: 3,
         padding,
-        borderRadius: 6,
+        borderRadius: 999,
         fontSize,
         fontWeight: 700,
         background: s.bg,
         color: s.c,
         fontFamily: T.font.mono,
-        letterSpacing: "0.04em",
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
         whiteSpace: "nowrap",
-        border: `1px solid ${s.c}12`,
+        border: `1px solid ${s.c}18`,
         ...style,
       }}
     >
@@ -746,10 +679,6 @@ export const ProgressBar = ({ progress = 0, color = T.accent.primary, style }) =
   </div>
 );
 
-// ═══════════════════════════════════════════════════════════════
-// 100/100 ELITE SKELETON LOADER
-// Apple-style shimmering skeleton for loading states, replacing spinners.
-// ═══════════════════════════════════════════════════════════════
 export const Skeleton = ({ width = "100%", height = 24, borderRadius = 8, style, isCircle = false }: SkeletonProps) => (
   <div
     style={{
@@ -858,10 +787,6 @@ export const InlineTooltip = ({ term, children }: InlineTooltipProps) => {
 }
 
   export { ViewToggle } from "./uiComponents.js";
-
-// ═══════════════════════════════════════════════════════════════
-// IOS-STYLE SETTINGS / EDIT PANELS
-// ═══════════════════════════════════════════════════════════════
 
 export function FormGroup({ children, label, style }: FormGroupProps) {
   return (

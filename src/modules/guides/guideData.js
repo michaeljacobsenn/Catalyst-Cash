@@ -51,7 +51,7 @@ export const PAYWALL_FEATURES = [
   { label: "AI Audits", free: `${FREE_AUDIT_LIMIT} / week`, pro: `${PRO_MONTHLY_AUDIT_CAP} / month`, icon: "📊" },
   { label: "AskAI Chat", free: `${FREE_CHAT_LIMIT} / day`, pro: `${PRO_DAILY_CHAT_CAP} / day`, icon: "💬" },
   { label: "AI Models", free: "Catalyst AI", pro: "CFO + Boardroom", icon: "🧠" },
-  { label: "Audit History", free: "Last 12", pro: "Full archive", icon: "📜" },
+  { label: "Audit History", free: "Last 12 audits", pro: "Full audit archive", icon: "📜" },
   { label: "Dashboard & Charts", free: "Included", pro: "Included", icon: "📈" },
   { label: "Debt / Budget / FIRE", free: "Included", pro: "Included", icon: "⚙️" },
   { label: "Plaid Connections", free: `${INSTITUTION_LIMITS.free} institution`, pro: `${INSTITUTION_LIMITS.pro} institutions`, icon: "🏦" },
@@ -112,10 +112,10 @@ export const TAB_GUIDE_CARDS = [
       "Use it after the audit for tradeoffs: what to pay first, whether you can afford something, or how a choice changes runway.",
   },
   {
-    title: "Portfolio Vault",
+    title: "Portfolio + Ledger",
     status: "all",
     body:
-      "Your source of truth for banks, cards, loans, assets, and the freshest balances Catalyst has on hand.",
+      "Your source of truth for banks, cards, loans, assets, balances, and the transaction detail behind the weekly picture.",
   },
   {
     title: "Rewards",

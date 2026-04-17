@@ -91,34 +91,54 @@ export default function SecuritySection({
           title="App Passcode (4 Digits)"
           description="Required failsafe before enabling App Lock"
           action={
-            <form onSubmit={e => e.preventDefault()}>
-              <input
-                type="password"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={4}
-                value={appPasscode || ""}
-                onChange={handlePasscodeChange}
-                placeholder="••••"
-                aria-label="App passcode"
-                autoComplete="new-password"
-                disabled={secureControlsDisabled}
-                style={{
-                  width: 68,
-                  padding: "10px 8px",
-                  borderRadius: T.radius.md,
-                  border: `1px solid ${T.border.default}`,
-                  background: T.bg.elevated,
-                  color: T.text.primary,
-                  fontSize: 16,
-                  textAlign: "center",
-                  letterSpacing: 4,
-                  fontFamily: T.font.mono,
-                  opacity: secureControlsDisabled ? 0.45 : 1,
-                  cursor: secureControlsDisabled ? "not-allowed" : "text",
-                }}
-              />
-            </form>
+            <>
+              <form onSubmit={e => e.preventDefault()}>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={4}
+                  value={appPasscode || ""}
+                  onChange={handlePasscodeChange}
+                  placeholder="••••"
+                  aria-label="App passcode"
+                  autoComplete="new-password"
+                  disabled={secureControlsDisabled}
+                  style={{
+                    width: 68,
+                    padding: "10px 8px",
+                    borderRadius: T.radius.md,
+                    border: `1px solid ${T.border.default}`,
+                    background: T.bg.elevated,
+                    color: T.text.primary,
+                    fontSize: 16,
+                    textAlign: "center",
+                    letterSpacing: 4,
+                    fontFamily: T.font.mono,
+                    opacity: secureControlsDisabled ? 0.45 : 1,
+                    cursor: secureControlsDisabled ? "not-allowed" : "text",
+                  }}
+                />
+              </form>
+              {appPasscode?.length === 4 && (() => {
+                const pin = appPasscode;
+                const allSame = /^(.)\1{3}$/.test(pin);
+                const sequential = ["0123", "1234", "2345", "3456", "4567", "5678", "6789", "9876", "8765", "7654", "6543", "5432", "4321", "3210"].includes(pin);
+                const isWeak = allSame || sequential;
+                const strengthLabel = isWeak ? "Weak" : "Good";
+                const strengthColor = isWeak ? T.status.amber : T.status.green;
+                return (
+                  <div style={{ marginTop: 6, fontSize: 10, fontWeight: 700, color: strengthColor, textAlign: "right" }}>
+                    {strengthLabel}
+                    {isWeak && (
+                      <span style={{ fontWeight: 500, color: T.text.muted, display: "block", marginTop: 2 }}>
+                        {allSame ? "Avoid repeated digits" : "Avoid sequences"}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+            </>
           }
         />
 
@@ -345,11 +365,12 @@ export default function SecuritySection({
                     disabled={deletionInProgress}
                     onClick={async () => {
                       setDeletionInProgress(true);
-                      haptic.heavy();
+                        haptic.heavy();
                       try {
                         await runSecurityDataDeletion(onConfirmDataDeletion, async () => {
-                          const conns = await getConnections().catch(() => []);
+                          const conns = await getConnections().catch(() => []) as Array<{ id?: string }>;
                           for (const conn of conns) {
+                            if (!conn?.id) continue;
                             await removeConnection(conn.id).catch(() => {});
                           }
                           await db.clear();

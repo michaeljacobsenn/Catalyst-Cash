@@ -7,6 +7,7 @@ import { useSettings } from "../contexts/SettingsContext.js";
 import { deriveEmptyDashboardSetupState } from "./emptyDashboardModel.js";
 import { haptic } from "../haptics.js";
 import { Activity, Building2, CalendarClock, Settings, Zap } from "../icons";
+import UiGlyph from "../UiGlyph.js";
 import { Card, Label } from "../ui.js";
 
 interface EmptyDashboardProps {
@@ -24,10 +25,6 @@ interface ChecklistStep {
   Icon: ComponentType<{ size?: number; color?: string }>;
 }
 
-/**
- * EmptyDashboard — Rendered when no weekly briefing exists.
- * A guided onboarding experience to get users connecting banks and generating their first weekly plan.
- */
 export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboardProps) {
   const { financialConfig } = useSettings();
   const { cards, bankAccounts, renewals } = usePortfolio();
@@ -95,14 +92,14 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
   const isSmallPhone = typeof window !== "undefined" ? window.innerWidth <= 390 : false;
   const nextRecommendedStep = steps.find((step) => !step.done) || null;
   const setupComplete = completedSteps === steps.length;
-  const heroLabel = setupComplete ? "Ready to refresh your weekly briefing" : "Ready for your first weekly briefing";
+  const heroLabel = setupComplete ? "Ready to refresh your audit" : "Ready for your first audit";
   const heroTitle = setupComplete
-    ? "Your dashboard has context. Refresh the plan."
-    : "Run one weekly briefing and unlock the dashboard.";
+    ? "Your dashboard has context. Refresh the audit."
+    : "Run one audit and unlock the dashboard.";
   const heroBody = setupComplete
-    ? "You already connected the inputs that matter. Refresh your weekly briefing to generate a health score, next action, and cash guidance from your real setup."
-    : "Start with one weekly briefing. You can add bank sync, subscriptions, and extra detail afterward without losing momentum.";
-  const primaryCtaLabel = setupComplete ? "Refresh weekly briefing" : "Begin weekly briefing";
+    ? "You already connected the inputs that matter. Refresh your audit to generate a health score, next action, and cash guidance from your real setup."
+    : "Start with one audit. You can add bank sync, subscriptions, and extra detail afterward without losing momentum.";
+  const primaryCtaLabel = setupComplete ? "Refresh audit" : "Begin first audit";
 
   return (
     <main aria-label="Empty dashboard" style={{ width: "100%" }}>
@@ -118,15 +115,11 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
           padding: isSmallPhone ? 18 : 22,
           marginBottom: 14,
           cursor: "pointer",
-          border: `1.5px solid ${T.accent.emerald}40`,
-          background: `linear-gradient(145deg, ${T.bg.card}, ${T.accent.emerald}10)`,
-          boxShadow: `0 8px 24px ${T.accent.emerald}25`,
-          position: "relative",
-          overflow: "hidden",
+          border: `1px solid ${T.border.subtle}`,
+          background: T.bg.card,
+          boxShadow: T.shadow.card,
         }}
       >
-        <div style={{ position: "absolute", top: -50, right: -50, width: 100, height: 100, background: T.accent.emerald, opacity: 0.1, filter: "blur(40px)", pointerEvents: "none" }} />
-
         <div
           style={{
             display: "flex",
@@ -144,8 +137,8 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
                 gap: 8,
                 padding: "7px 12px",
                 borderRadius: 999,
-                background: `${T.accent.emerald}10`,
-                border: `1px solid ${T.accent.emerald}20`,
+                background: T.bg.elevated,
+                border: `1px solid ${T.border.subtle}`,
                 color: T.accent.emerald,
                 fontSize: 11,
                 fontWeight: 800,
@@ -165,13 +158,13 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
           </div>
           <div style={{
             width: 52, height: 52, borderRadius: 18,
-            background: `linear-gradient(135deg, ${T.accent.emerald}, #10B981)`,
+            background: T.bg.elevated,
+            border: `1px solid ${T.border.default}`,
             display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: `0 4px 16px ${T.accent.emerald}60`,
             flexShrink: 0,
             marginTop: 4,
           }}>
-            <Zap size={22} color="#fff" strokeWidth={2.5} />
+            <Zap size={22} color={T.accent.emerald} strokeWidth={2.4} />
           </div>
         </div>
 
@@ -211,19 +204,22 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
           </div>
         )}
 
-        <button style={{
-          width: "100%",
-          minHeight: 48,
-          padding: "14px",
-          borderRadius: T.radius.lg,
-          border: "none",
-          background: T.accent.emerald,
-          color: "#fff",
-          fontSize: 14,
-          fontWeight: 800,
-          cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 8
-        }}>
+        <button
+          aria-label={primaryCtaLabel}
+          style={{
+            width: "100%",
+            minHeight: 48,
+            padding: "14px",
+            borderRadius: T.radius.lg,
+            border: `1px solid ${T.accent.emerald}30`,
+            background: `${T.accent.emerald}12`,
+            color: T.accent.emerald,
+            fontSize: 14,
+            fontWeight: 800,
+            cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8
+          }}
+        >
           {primaryCtaLabel} <Activity size={16} />
         </button>
       </Card>
@@ -292,7 +288,7 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
                   flexShrink: 0,
                 }}
               >
-                {step.done ? "✓" : <step.Icon size={16} color={T.text.muted} />}
+                {step.done ? <UiGlyph glyph="✓" size={14} color="#fff" /> : <step.Icon size={16} color={T.text.muted} />}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
@@ -335,7 +331,10 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
               cursor: "pointer",
             }}
           >
-            Try Demo ✨
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              Try Demo
+              <UiGlyph glyph="✨" size={12} color={T.accent.primary} />
+            </span>
           </button>
         </div>
       </Card>

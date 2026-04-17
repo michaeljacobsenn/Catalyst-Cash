@@ -1,10 +1,13 @@
 import { T } from "../../constants.js";
+import UiGlyph from "../../UiGlyph.js";
 import { WizBtn } from "./primitives.js";
 
 export function PageDone({ onFinish }: { onFinish: () => void }) {
   return (
     <div style={{ textAlign: "center" }}>
-      <div style={{ fontSize: 68, marginBottom: 6 }}>🎉</div>
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
+        <UiGlyph glyph="🎉" size={56} color={T.accent.primary} />
+      </div>
       <h2 style={{ fontSize: 22, fontWeight: 800, color: T.text.primary, marginBottom: 6, letterSpacing: "-0.5px" }}>
         You're All Set
       </h2>
@@ -53,7 +56,7 @@ export function PageDone({ onFinish }: { onFinish: () => void }) {
                 fontSize: 17,
               }}
             >
-              {icon}
+              <UiGlyph glyph={icon} size={17} color={T.accent.primary} />
             </div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, lineHeight: 1.2 }}>{title}</div>
@@ -63,7 +66,7 @@ export function PageDone({ onFinish }: { onFinish: () => void }) {
         ))}
       </div>
       <WizBtn onClick={onFinish} style={{ width: "100%", fontSize: 16 }}>
-        🚀 Go to Dashboard
+        Go to Dashboard
       </WizBtn>
     </div>
   );

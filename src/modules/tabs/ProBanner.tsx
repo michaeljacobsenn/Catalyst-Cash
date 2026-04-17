@@ -1,6 +1,7 @@
 import { T } from "../constants.js";
 import { buildPromoLine, PRO_BANNER_BENEFITS } from "../planCatalog.js";
 import { haptic } from "../haptics.js";
+import UiGlyph from "../UiGlyph.js";
 
 interface ProBannerProps {
   onUpgrade?: () => void;
@@ -42,8 +43,8 @@ export default function ProBanner({ onUpgrade, label, sublabel, compact = false 
           width: "100%",
           padding: "12px 14px",
           borderRadius: 18,
-          border: `1px solid ${T.accent.primary}28`,
-          background: `linear-gradient(135deg, ${T.bg.card}, ${T.accent.primary}10)`,
+          border: `1px solid ${T.border.default}`,
+          background: `linear-gradient(135deg, ${T.bg.card}, ${T.bg.elevated})`,
           cursor: "pointer",
           display: "flex",
           alignItems: "center",
@@ -62,7 +63,6 @@ export default function ProBanner({ onUpgrade, label, sublabel, compact = false 
                 height: 8,
                 borderRadius: "50%",
                 background: T.accent.primary,
-                boxShadow: `0 0 0 4px ${T.accent.primary}18`,
                 flexShrink: 0,
               }}
             />
@@ -91,8 +91,8 @@ export default function ProBanner({ onUpgrade, label, sublabel, compact = false 
         width: "100%",
         padding: "18px 18px 16px",
         borderRadius: 24,
-        border: `1px solid ${T.accent.primary}24`,
-        background: `linear-gradient(155deg, ${T.bg.card}, ${T.bg.surface} 62%, ${T.accent.primary}0F)`,
+        border: `1px solid ${T.border.default}`,
+        background: `linear-gradient(155deg, ${T.bg.card}, ${T.bg.elevated} 62%, ${T.bg.surface})`,
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",
@@ -129,8 +129,8 @@ export default function ProBanner({ onUpgrade, label, sublabel, compact = false 
           style={{
             padding: "6px 10px",
             borderRadius: 999,
-            border: `1px solid ${T.accent.primary}24`,
-            background: `${T.accent.primary}12`,
+            border: `1px solid ${T.accent.primary}20`,
+            background: `${T.accent.primary}10`,
             color: T.accent.primary,
             fontSize: 10,
             fontWeight: 900,
@@ -160,7 +160,7 @@ export default function ProBanner({ onUpgrade, label, sublabel, compact = false 
               color: T.text.secondary,
             }}
           >
-            <span style={{ fontSize: 12 }}>{benefit.emoji}</span>
+            <UiGlyph glyph={benefit.emoji} size={12} color={T.accent.primary} />
             {benefit.text}
           </div>
         ))}

@@ -397,7 +397,7 @@ export function ModelChatQuotaWidget({ chatQuota, setAiModel, proEnabled }: Mode
         marginBottom: 12,
         padding: "10px 14px",
         borderRadius: 14,
-        background: "rgba(220,177,91,0.08)",
+        background: T.bg.card,
         border: "1px solid rgba(220,177,91,0.22)",
         display: "flex",
         alignItems: "center",
@@ -416,9 +416,9 @@ export function ModelChatQuotaWidget({ chatQuota, setAiModel, proEnabled }: Mode
           style={{
             padding: "7px 13px",
             borderRadius: 10,
-            background: "linear-gradient(135deg,#dcb15b,#f3d084)",
-            border: "none",
-            color: "#07111a",
+            background: `${T.status.amber}14`,
+            border: `1px solid ${T.status.amber}24`,
+            color: T.status.amber,
             fontSize: 13,
             fontWeight: 700,
             cursor: "pointer",
@@ -458,100 +458,89 @@ export function SubmitBar({ canSubmit, isLoading, isTestMode, setIsTestMode, onS
         bottom: 0,
         zIndex: 40,
         marginTop: 12,
-        padding: "20px 0 calc(env(safe-area-inset-bottom, 0px) + 10px)",
-        background: `linear-gradient(to top, ${T.bg.base} 72%, rgba(6,8,15,0.78) 90%, transparent)`,
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
+        padding: "16px 0 calc(env(safe-area-inset-bottom, 0px) + 10px)",
+        background: `linear-gradient(to top, ${T.bg.base} 74%, rgba(7,11,18,0.82) 90%, transparent)`,
         display: "flex",
-        gap: 10,
-        alignItems: "center",
-        isolation: "isolate",
+        justifyContent: "center",
       }}
     >
-      {canSubmit && (
-        <div
-          style={{
-            position: "absolute",
-            left: "16%",
-            bottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)",
-            width: "68%",
-            height: 40,
-            background: isTestMode ? T.status.amber : T.accent.primary,
-            filter: "blur(32px)",
-            opacity: 0.3,
-            borderRadius: "50%",
-            pointerEvents: "none",
-            animation: "pulse 3s ease-in-out infinite",
-          }}
-        />
-      )}
-      <button
-        onClick={onSubmit}
-        disabled={!canSubmit}
+      <div
         style={{
-          flex: 1,
-          padding: "16px 18px",
-          borderRadius: 100,
-          border: `1px solid ${canSubmit ? "rgba(255,255,255,0.15)" : "transparent"}`,
-          background: canSubmit
-            ? isTestMode
-              ? `linear-gradient(135deg,${T.status.amber},#d97706)`
-              : `linear-gradient(135deg,${T.accent.primary},#6C60FF)`
-            : T.bg.elevated,
-          color: canSubmit ? "#fff" : T.text.dim,
-          fontSize: 17,
-          fontWeight: 800,
-          cursor: canSubmit ? "pointer" : "not-allowed",
           display: "flex",
           alignItems: "center",
-          justifyContent: "center",
           gap: 8,
-          minHeight: 56,
-          boxShadow: canSubmit ? `0 8px 24px ${isTestMode ? T.status.amber : T.accent.primary}40, inset 0 1px 1px rgba(255,255,255,0.2)` : "none",
-          transition: "all 0.35s cubic-bezier(0.16, 1, 0.3, 1)",
-          transform: canSubmit ? "scale(1)" : "scale(0.98)",
+          width: "100%",
+          padding: "8px",
+          borderRadius: 24,
+          border: `1px solid ${T.border.default}`,
+          background: T.bg.glass,
+          backdropFilter: "blur(18px)",
+          WebkitBackdropFilter: "blur(18px)",
+          boxShadow: T.shadow.card,
         }}
       >
-        {isLoading ? (
-          <>
-            <Loader2 size={18} style={{ animation: "spin .8s linear infinite" }} />
-            Running...
-          </>
-        ) : (
-          <>
-            <Zap size={18} strokeWidth={2.5} />
-            {isTestMode ? "Test Briefing" : "Refresh Weekly Briefing"}
-          </>
-        )}
-      </button>
+        <button
+          onClick={onSubmit}
+          disabled={!canSubmit}
+          style={{
+            flex: 1,
+            padding: "16px 18px",
+            borderRadius: 18,
+            border: `1px solid ${canSubmit ? (isTestMode ? `${T.status.amber}24` : `${T.accent.primary}24`) : T.border.subtle}`,
+            background: canSubmit ? (isTestMode ? `${T.status.amber}14` : `${T.accent.primary}14`) : T.bg.elevated,
+            color: canSubmit ? (isTestMode ? T.status.amber : T.accent.primary) : T.text.dim,
+            fontSize: 16,
+            fontWeight: 800,
+            cursor: canSubmit ? "pointer" : "not-allowed",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            minHeight: 54,
+            transition: "border-color 0.25s ease, background 0.25s ease, color 0.25s ease",
+          }}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 size={18} style={{ animation: "spin .8s linear infinite" }} />
+              Running...
+            </>
+          ) : (
+            <>
+              <Zap size={18} strokeWidth={2.5} />
+              {isTestMode ? "Run Test Briefing" : "Run Weekly Audit"}
+            </>
+          )}
+        </button>
 
-      <button
-        onClick={() => canSubmit && setIsTestMode((prev) => !prev)}
-        disabled={!canSubmit}
-        title="Toggle test mode — audit not saved"
-        style={{
-          minWidth: 78,
-          height: 56,
-          borderRadius: 100,
-          border: `1px solid ${isTestMode ? T.status.amber : "rgba(255,255,255,0.1)"}`,
-          background: isTestMode ? `${T.status.amber}15` : "rgba(255,255,255,0.03)",
-          color: canSubmit ? (isTestMode ? T.status.amber : T.text.secondary) : T.text.dim,
-          cursor: canSubmit ? "pointer" : "not-allowed",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 6,
-          flexShrink: 0,
-          transition: "all 0.25s ease-out",
-          padding: "0 16px",
-          fontSize: 12,
-          fontWeight: 800,
-          fontFamily: T.font.mono,
-        }}
-      >
-        <Zap size={20} strokeWidth={isTestMode ? 3 : 2} fill={isTestMode ? T.status.amber : "none"} />
-        {isTestMode ? "TEST" : "LIVE"}
-      </button>
+        <button
+          onClick={() => canSubmit && setIsTestMode((prev) => !prev)}
+          disabled={!canSubmit}
+          title="Toggle test mode — audit not saved"
+          style={{
+            minWidth: 82,
+            height: 54,
+            borderRadius: 18,
+            border: `1px solid ${isTestMode ? `${T.status.amber}24` : T.border.subtle}`,
+            background: isTestMode ? `${T.status.amber}12` : T.bg.elevated,
+            color: canSubmit ? (isTestMode ? T.status.amber : T.text.secondary) : T.text.dim,
+            cursor: canSubmit ? "pointer" : "not-allowed",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            flexShrink: 0,
+            transition: "border-color 0.25s ease, background 0.25s ease, color 0.25s ease",
+            padding: "0 16px",
+            fontSize: 12,
+            fontWeight: 800,
+            fontFamily: T.font.mono,
+          }}
+        >
+          <Zap size={18} strokeWidth={isTestMode ? 2.8 : 2} fill={isTestMode ? T.status.amber : "none"} />
+          {isTestMode ? "TEST" : "LIVE"}
+        </button>
+      </div>
     </div>
   );
 }

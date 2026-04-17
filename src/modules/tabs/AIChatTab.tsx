@@ -28,11 +28,26 @@ import { extractMemoryTags, extractUserMemoryFacts } from "../memory.js";
 import { isLikelyNetworkError, toUserFacingRequestError } from "../networkErrors.js";
 import { buildScrubber } from "../scrubber.js";
 import { checkChatQuota, isGatingEnforced, recordChatUsage, shouldShowGating } from "../subscription.js";
-import { useToast } from "../Toast.js";
+import UiGlyph from "../UiGlyph.js";
 import { Skeleton as UISkeleton } from "../ui.js";
 import { db } from "../utils.js";
 import ProBanner from "./ProBanner.js";
 import { CHAT_STORAGE_KEY, ChatMarkdown, createChatMessage, getRandomSuggestions, stripThoughtProcess } from "./aiChat/helpers";
+import {
+  buildNegotiationPrompt,
+  CHAT_FEEDBACK_KEY,
+  CHAT_FEEDBACK_REASON_OPTIONS,
+  getChatViewportDensity,
+  getEffectiveChatModel,
+  readChatFeedbackStore,
+  recordChatFeedback,
+  toggleChatFeedbackReason,
+  type AssistantPhase,
+  type ChatFeedbackReason,
+  type ChatFeedbackStore,
+  type ChatFeedbackVerdict,
+  type ViewportSize,
+} from "./aiChat/model";
 import { buildCompactFinancialBrief, prepareScrubbedChatTransport } from "./aiChat/transport";
 import { useAIChatPersistence } from "./aiChat/useAIChatPersistence";
 const LazyProPaywall = React.lazy(() => import("./ProPaywall.js"));
@@ -112,26 +127,6 @@ interface ChatInputRisk {
   rationale?: string;
 }
 
-type ChatFeedbackVerdict = "helpful" | "needs-work";
-type ChatFeedbackReason = "too_generic" | "wrong_math" | "too_long" | "missed_context";
-
-interface ChatMessageFeedback {
-  verdict: ChatFeedbackVerdict;
-  reasons: ChatFeedbackReason[];
-  updatedAt: number;
-}
-
-type ChatFeedbackStore = Record<string, ChatMessageFeedback>;
-type AssistantPhase = "thinking" | "replying";
-
-const CHAT_FEEDBACK_KEY = "ai-chat-feedback";
-const CHAT_FEEDBACK_REASON_OPTIONS: Array<{ value: ChatFeedbackReason; label: string }> = [
-  { value: "too_generic", label: "Too generic" },
-  { value: "wrong_math", label: "Wrong math" },
-  { value: "too_long", label: "Too long" },
-  { value: "missed_context", label: "Missed context" },
-];
-
 const ProBannerTyped = ProBanner as unknown as (props: ProBannerProps) => ReactNode;
 const LazyProPaywallTyped = LazyProPaywall as unknown as (props: ProPaywallProps) => ReactNode;
 const Skeleton = UISkeleton as unknown as (props: SkeletonProps) => ReactNode;
@@ -207,7 +202,6 @@ export default memo(function AIChatTab({
   const { cards, renewals, bankAccounts } = usePortfolio();
   const { privacyMode } = useSecurity() as SecurityApi;
   const { navState, clearNavState, registerChatStreamAbort } = useNavigation() as NavigationApi;
-  const toast = useToast() as { error?: (message: string) => void } | undefined;
 
   const [input, setInput] = useState<string>("");
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
@@ -219,15 +213,10 @@ export default memo(function AIChatTab({
   const [messageFeedback, setMessageFeedback] = useState<ChatFeedbackStore>({});
   const [assistantPhase, setAssistantPhase] = useState<AssistantPhase | null>(null);
   const [liveAssistantPreview, setLiveAssistantPreview] = useState<string>("");
-  const [viewport, setViewport] = useState(() => ({
+  const [viewport, setViewport] = useState<ViewportSize>(() => ({
     width: typeof window === "undefined" ? 390 : window.innerWidth,
     height: typeof window === "undefined" ? 844 : window.innerHeight,
   }));
-
-  const suggestionsScrollRef = useRef<HTMLDivElement | null>(null);
-  const [, setCanScrollRight] = useState<boolean>(true);
-  const [, setCanScrollLeft] = useState<boolean>(false);
-
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -240,32 +229,14 @@ export default memo(function AIChatTab({
       window.removeEventListener("orientationchange", syncViewport);
     };
   }, []);
-
-  useEffect(() => {
-    if (suggestionsScrollRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = suggestionsScrollRef.current;
-      setCanScrollLeft(scrollLeft > 10); // Initialize left scroll state
-      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10); // Initialize right scroll state
-    }
-  }, []);
-
-  // Compute the effective model once for use throughout this render scope
-  const effectiveChatModel = useMemo<string>(
-    () => (aiModel === "gpt-4.1" || aiModel === "o3") ? "gpt-4.1" : aiModel,
-    [aiModel]
-  );
-
-  // Fetch quota on load and whenever the effective model changes
-  useEffect(() => {
-    checkChatQuota(effectiveChatModel).then(setChatQuota);
-  }, [effectiveChatModel]);
+  const effectiveChatModel = getEffectiveChatModel(aiModel);
 
   useEffect(() => {
     let active = true;
     db.get(CHAT_FEEDBACK_KEY)
       .then((stored) => {
-        if (active && stored && typeof stored === "object") {
-          setMessageFeedback(stored as ChatFeedbackStore);
+        if (active) {
+          setMessageFeedback(readChatFeedbackStore(stored));
         }
       })
       .catch(() => {});
@@ -284,7 +255,6 @@ export default memo(function AIChatTab({
   const {
     messages,
     setMessages,
-    memoryData,
     persistMessages,
     buildAPIMessages,
     rememberFacts,
@@ -320,13 +290,12 @@ export default memo(function AIChatTab({
     }
   }, [current, financialConfig, cards, renewals]);
 
-  // ── Refresh chat quota on mount and after each message ──
   useEffect(() => {
     const refreshQuota = async () => {
       const q = await checkChatQuota(effectiveChatModel);
       setChatQuota(q);
     };
-    refreshQuota();
+    void refreshQuota();
   }, [messages.length, effectiveChatModel]);
 
   // ── Auto-scroll to bottom ──
@@ -655,7 +624,6 @@ export default memo(function AIChatTab({
       personalRules,
       trendContext,
       chatStrategy,
-      memoryData,
       apiKey,
       aiProvider,
       aiModel,
@@ -664,7 +632,6 @@ export default memo(function AIChatTab({
       persistMessages,
       chatQuota,
       rememberFacts,
-      toast,
       setAiModel,
     ]
   );
@@ -700,14 +667,7 @@ export default memo(function AIChatTab({
   const recordMessageFeedback = useCallback(
     (messageId: string, verdict: ChatFeedbackVerdict, reasons: ChatFeedbackReason[] = []): void => {
       setMessageFeedback((prev) => {
-        const next: ChatFeedbackStore = {
-          ...prev,
-          [messageId]: {
-            verdict,
-            reasons,
-            updatedAt: Date.now(),
-          },
-        };
+        const next = recordChatFeedback(prev, messageId, verdict, reasons);
         void db.set(CHAT_FEEDBACK_KEY, next);
         log.info("chat", "Chat response feedback recorded", { verdict, reasons, messageId });
         return next;
@@ -719,21 +679,14 @@ export default memo(function AIChatTab({
 
   const toggleMessageFeedbackReason = useCallback((messageId: string, reason: ChatFeedbackReason): void => {
     setMessageFeedback((prev) => {
-      const existing = prev[messageId];
-      if (!existing || existing.verdict !== "needs-work") return prev;
-      const reasons = existing.reasons.includes(reason)
-        ? existing.reasons.filter((item) => item !== reason)
-        : [...existing.reasons, reason];
-      const next: ChatFeedbackStore = {
-        ...prev,
-        [messageId]: {
-          ...existing,
-          reasons,
-          updatedAt: Date.now(),
-        },
-      };
+      const next = toggleChatFeedbackReason(prev, messageId, reason);
+      if (next === prev) return prev;
       void db.set(CHAT_FEEDBACK_KEY, next);
-      log.info("chat", "Chat response feedback updated", { verdict: "needs-work", reasons, messageId });
+      log.info("chat", "Chat response feedback updated", {
+        verdict: "needs-work",
+        reasons: next[messageId]?.reasons || [],
+        messageId,
+      });
       return next;
     });
     haptic.selection();
@@ -771,11 +724,9 @@ export default memo(function AIChatTab({
     if (navState?.negotiateBill && !initialPromptSent.current && !isStreamingRef.current) {
       initialPromptSent.current = true;
       const { merchant, amount, tactic } = navState.negotiateBill;
-      
-      const userMessage = `Draft a negotiation script to lower my $${amount} monthly bill with ${merchant}.`;
-      
+
       const timer = setTimeout(() => {
-        void sendMessage(userMessage, {
+        void sendMessage(buildNegotiationPrompt({ merchant, amount }), {
           variant: "negotiation-script",
           merchant,
           amount,
@@ -790,18 +741,20 @@ export default memo(function AIChatTab({
 
   const [suggestions] = useState(() => getRandomSuggestions());
   const hasData = !!current?.parsed;
-  const compactEmbedded = embedded && viewport.height <= 860;
-  const denseEmbedded = embedded && viewport.height <= 780;
-  const ultraDenseEmbedded = embedded && viewport.height <= 700;
-  const suggestionCardMinHeight = ultraDenseEmbedded ? 72 : denseEmbedded ? 78 : compactEmbedded ? 86 : 100;
-  const suggestionGridGap = ultraDenseEmbedded ? 5 : denseEmbedded ? 6 : 8;
-  const emptyTopPadding = ultraDenseEmbedded ? 8 : denseEmbedded ? 18 : compactEmbedded ? 30 : 56;
-  const orbSize = ultraDenseEmbedded ? 42 : denseEmbedded ? 48 : compactEmbedded ? 54 : 64;
-  const orbIconSize = ultraDenseEmbedded ? 18 : denseEmbedded ? 20 : compactEmbedded ? 22 : 26;
-  const titleSize = ultraDenseEmbedded ? 18 : denseEmbedded ? 20 : compactEmbedded ? 21 : 24;
-  const emptyCopySize = ultraDenseEmbedded ? 11 : 12;
-  const chipMarginBottom = ultraDenseEmbedded ? 4 : denseEmbedded ? 6 : 10;
-  const promptClamp = ultraDenseEmbedded ? 2 : denseEmbedded ? 2 : 3;
+  const {
+    compactEmbedded,
+    denseEmbedded,
+    ultraDenseEmbedded,
+    suggestionCardMinHeight,
+    suggestionGridGap,
+    emptyTopPadding,
+    orbSize,
+    orbIconSize,
+    titleSize,
+    emptyCopySize,
+    chipMarginBottom,
+    promptClamp,
+  } = getChatViewportDensity({ embedded, viewport });
 
   return (
     <div
@@ -836,9 +789,7 @@ export default memo(function AIChatTab({
               padding: "0 14px",
               borderRadius: 17,
               border: `1px solid ${T.border.subtle}`,
-              background: T.bg.glass,
-              backdropFilter: "blur(8px)",
-              WebkitBackdropFilter: "blur(8px)",
+              background: T.bg.elevated,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -846,7 +797,6 @@ export default memo(function AIChatTab({
               cursor: "pointer",
               color: T.text.muted,
               transition: "all .2s cubic-bezier(.16,1,.3,1)",
-              boxShadow: T.shadow.subtle,
               pointerEvents: "auto",
             }}
             onMouseOver={e => {
@@ -903,45 +853,29 @@ export default memo(function AIChatTab({
                 width: orbSize,
                 height: orbSize,
                 borderRadius: "50%",
-                background: `linear-gradient(135deg, ${T.accent.primaryDim}, ${T.bg.card})`,
-                border: `1px solid ${T.accent.primarySoft}`,
+                background: T.bg.card,
+                border: `1px solid ${T.border.subtle}`,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 marginBottom: ultraDenseEmbedded ? 8 : denseEmbedded ? 10 : 14,
                 flexShrink: 0,
-                boxShadow: `0 8px 32px ${T.accent.primary}25`,
               }}
             >
-              {/* Breathing orb effect */}
-              <div
-                style={{
-                  position: "absolute",
-                  inset: -12,
-                  background: T.accent.primary,
-                  filter: "blur(24px)",
-                  opacity: 0.15,
-                  borderRadius: "50%",
-                  pointerEvents: "none",
-                  animation: "glowPulse 4s ease-in-out infinite",
-                }}
-              />
               <Sparkles
                 size={orbIconSize}
                 color={T.accent.primary}
                 strokeWidth={1.5}
-                style={{ filter: `drop-shadow(0 2px 10px ${T.accent.primaryGlow})`, position: "relative" }}
+                style={{ position: "relative" }}
               />
             </div>
             <h3
               style={{
                 fontSize: titleSize,
-                fontWeight: 900,
-                background: `linear-gradient(135deg, ${T.text.primary}, ${T.accent.primaryHover})`,
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
+                fontWeight: 850,
+                color: T.text.primary,
                 marginBottom: denseEmbedded ? 4 : 6,
-                letterSpacing: "-0.02em",
+                letterSpacing: "-0.04em",
               }}
             >
               Ask Anything
@@ -970,7 +904,6 @@ export default memo(function AIChatTab({
                 borderRadius: 99,
                 background: `${T.status.green}10`,
                 border: `1px solid ${T.status.green}20`,
-                boxShadow: `0 2px 10px ${T.status.green}08`,
               }}
             >
               <span
@@ -1014,9 +947,7 @@ export default memo(function AIChatTab({
                     padding: ultraDenseEmbedded ? "10px" : denseEmbedded ? "11px" : compactEmbedded ? "13px" : "16px",
                     borderRadius: 16,
                     border: `1px solid ${T.border.subtle}`,
-                    background: T.bg.glass,
-                    backdropFilter: "blur(12px)",
-                    WebkitBackdropFilter: "blur(12px)",
+                    background: T.bg.card,
                     color: T.text.primary,
                     fontSize: denseEmbedded ? 12 : 13,
                     fontWeight: 600,
@@ -1025,14 +956,16 @@ export default memo(function AIChatTab({
                     lineHeight: 1.3,
                     width: "100%",
                     minHeight: suggestionCardMinHeight,
-                    boxShadow: T.shadow.subtle,
                     transition: "all .3s cubic-bezier(.16,1,.3,1)",
                     animation: `chatBubbleIn .5s cubic-bezier(.16,1,.3,1) ${i * 0.08}s both`,
                   }}
                 >
-                  <span style={{ fontSize: denseEmbedded ? 16 : 18, flexShrink: 0, filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.5))" }}>
-                    {s.emoji}
-                  </span>
+                  <UiGlyph
+                    glyph={s.emoji}
+                    size={denseEmbedded ? 16 : 18}
+                    color={T.accent.primary}
+                    style={{ flexShrink: 0 }}
+                  />
                   <span style={{ display: "-webkit-box", WebkitLineClamp: promptClamp, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                     {s.text}
                   </span>
@@ -1459,22 +1392,21 @@ export default memo(function AIChatTab({
                   height: 36,
                   borderRadius: "50%",
                   flexShrink: 0,
-                  border: "none",
-                  background: input.trim() ? T.accent.gradient : T.bg.card,
+                  border: `1px solid ${input.trim() ? `${T.accent.primary}24` : T.border.subtle}`,
+                  background: input.trim() ? `${T.accent.primary}14` : T.bg.card,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   cursor: input.trim() ? "pointer" : "default",
-                  boxShadow: input.trim() ? `0 4px 16px rgba(123,94,167,0.35)` : "none",
                   transition: "all .4s var(--spring-elastic)",
-                  transform: input.trim() ? "scale(1) rotate(0deg)" : "scale(0.85) rotate(-15deg)",
+                  transform: input.trim() ? "scale(1)" : "scale(0.9)",
                   opacity: input.trim() ? 1 : 0.5,
                 }}
               >
                 <ArrowUpRight
                   size={20}
                   strokeWidth={2.5}
-                  color={input.trim() ? "#fff" : T.text.muted}
+                  color={input.trim() ? T.accent.primary : T.text.muted}
                 />
               </button>
             )}
@@ -1493,7 +1425,10 @@ export default memo(function AIChatTab({
           }}
         >
           {privacyMode ? (
-            <span style={{ opacity: 0.8 }}>🔒 Privacy Mode · Chats are not stored</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.8 }}>
+              <UiGlyph glyph="🔒" size={12} color={T.text.dim} />
+              Privacy mode · chats are not stored
+            </span>
           ) : chatQuota.limit !== Infinity ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
               <div style={{ display: "flex", justifyContent: "space-between", width: 150, fontWeight: 600, color: chatQuota.remaining <= 3 ? T.status.red : T.text.secondary }}>
@@ -1523,7 +1458,7 @@ export default memo(function AIChatTab({
           <div style={{ marginTop: 8 }}>
             <ProBannerTyped
               onUpgrade={() => setShowPaywall(true)}
-              label="⚡ Upgrade to Pro"
+              label="Upgrade to Pro"
               sublabel={`Only ${chatQuota.remaining} chats left today — Pro gives you 30/day`}
             />
           </div>

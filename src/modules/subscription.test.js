@@ -71,16 +71,18 @@ describe("Tier Definitions", () => {
 // IAP CONSTANTS
 // ═══════════════════════════════════════════════════════════════
 describe("IAP Constants", () => {
-  it("has product IDs for monthly and yearly", () => {
-    expect(IAP_PRODUCTS.monthly).toMatch(/^com\.catalystcash\.pro\./);
-    expect(IAP_PRODUCTS.yearly).toMatch(/^com\.catalystcash\.pro\./);
+  it("has product IDs for all plans", () => {
+    expect(IAP_PRODUCTS.monthly).toBe("com.catalystcash.pro.monthly.v2");
+    expect(IAP_PRODUCTS.yearly).toBe("com.catalystcash.pro.yearly.v2");
+    expect(IAP_PRODUCTS.lifetime).toBe("com.catalystcash.pro.lifetime.v2");
   });
 
   it("has display pricing", () => {
-    expect(IAP_PRICING.monthly.price).toBe("$9.99");
-    expect(IAP_PRICING.yearly.price).toBe("$99.99");
-    expect(IAP_PRICING.yearly.perMonth).toBe("$8.33");
-    expect(IAP_PRICING.yearly.savings).toBe("about 2 months free");
+    expect(IAP_PRICING.monthly.price).toBe("$12.99");
+    expect(IAP_PRICING.yearly.price).toBe("$109.99");
+    expect(IAP_PRICING.yearly.perMonth).toBe("$9.17");
+    expect(IAP_PRICING.yearly.savings).toBe("save $46/yr vs monthly");
+    expect(IAP_PRICING.lifetime.price).toBe("$199.99");
   });
 });
 
@@ -88,7 +90,7 @@ describe("IAP Constants", () => {
 // GATING MODE
 // ═══════════════════════════════════════════════════════════════
 describe("Gating Mode", () => {
-  it('default gating mode is "live" when no local preview override is set', () => {
+  it("defaults to the current build/runtime gating mode when no test override is set", () => {
     __setGatingModeForTests(null);
     expect(getGatingMode()).toBe("live");
   });
@@ -170,7 +172,7 @@ describe('Model Gating (launch mode "live")', () => {
   });
 
   it("pro user can access the curated premium lineup", async () => {
-    await activatePro("com.catalystcash.pro.monthly", 30);
+    await activatePro(IAP_PRODUCTS.monthly, 30);
     expect(await isModelAvailable("gemini-2.5-flash")).toBe(true);
     expect(await isModelAvailable("gpt-4.1")).toBe(true);
     expect(await isModelAvailable("o3")).toBe(true);
@@ -187,16 +189,23 @@ describe("Subscription State", () => {
     expect(state.auditsThisWeek).toBe(0);
   });
 
+  it("normalizes malformed persisted state", async () => {
+    mockStore["subscription-state"] = "corrupted";
+    const state = await getSubscriptionState();
+    expect(state.tier).toBe("free");
+    expect(state.chatMessagesByModel).toEqual({});
+  });
+
   it("activatePro sets tier and expiration", async () => {
-    const state = await activatePro("com.catalystcash.pro.monthly", 30);
+    const state = await activatePro(IAP_PRODUCTS.monthly, 30);
     expect(state.tier).toBe("pro");
-    expect(state.productId).toBe("com.catalystcash.pro.monthly");
+    expect(state.productId).toBe(IAP_PRODUCTS.monthly);
     expect(state.expiresAt).toBeTruthy();
     expect(await isPro()).toBe(true);
   });
 
   it("deactivatePro resets to free", async () => {
-    await activatePro("com.catalystcash.pro.monthly", 30);
+    await activatePro(IAP_PRODUCTS.monthly, 30);
     await deactivatePro();
     // Verify state directly so we do not couple this check to the current gating mode.
     const state = await getSubscriptionState();
@@ -222,6 +231,15 @@ describe("Subscription State", () => {
     };
     const state = await getSubscriptionState();
     expect(state.tier).toBe("free");
+  });
+
+  it("resets malformed per-model chat usage maps", async () => {
+    mockStore["subscription-state"] = {
+      tier: "pro",
+      chatMessagesByModel: ["bad-shape"],
+    };
+    const state = await getSubscriptionState();
+    expect(state.chatMessagesByModel).toEqual({});
   });
 
   it("uses UTC day, week, and month windows to match the backend", () => {
@@ -280,7 +298,7 @@ describe("getRawTier", () => {
   });
 
   it("returns pro tier when subscribed", async () => {
-    await activatePro("com.catalystcash.pro.yearly", 365);
+    await activatePro(IAP_PRODUCTS.yearly, 365);
     const tier = await getRawTier();
     expect(tier.id).toBe("pro");
   });

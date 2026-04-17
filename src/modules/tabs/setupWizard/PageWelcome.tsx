@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { T } from "../../constants.js";
+import { Check } from "../../icons.js";
 import { WizBtn } from "./primitives.js";
 
-export function PageWelcome({ onNext }: { onNext: () => void }) {
+export function PageWelcome({ onNext, onStartFast }: { onNext: () => void; onStartFast: () => void }) {
   const [accepted, setAccepted] = useState(false);
   return (
     <div style={{ textAlign: "center" }}>
@@ -218,7 +219,7 @@ export function PageWelcome({ onNext }: { onNext: () => void }) {
               transition: "all 0.2s ease",
             }}
           >
-            {accepted && <span style={{ color: "#fff", fontSize: 13, fontWeight: 800, lineHeight: 1 }}>✓</span>}
+            {accepted && <Check size={13} color="#fff" strokeWidth={3} />}
           </div>
           <p style={{ fontSize: 10, color: T.text.secondary, lineHeight: 1.55, margin: 0 }}>
             I understand that this app provides{" "}
@@ -233,9 +234,14 @@ export function PageWelcome({ onNext }: { onNext: () => void }) {
 
       <div style={{ fontSize: 10, color: T.text.dim, marginBottom: 10 }}>You can change any of this later in Settings.</div>
 
-      <WizBtn onClick={onNext} disabled={!accepted} style={{ width: "100%", fontSize: 15 }}>
-        Start Setup →
-      </WizBtn>
+      <div style={{ display: "grid", gap: 10 }}>
+        <WizBtn onClick={onStartFast} disabled={!accepted} style={{ width: "100%", fontSize: 15 }}>
+          Quick Start →
+        </WizBtn>
+        <WizBtn onClick={onNext} disabled={!accepted} variant="ghost" style={{ width: "100%", fontSize: 14 }}>
+          Full Setup →
+        </WizBtn>
+      </div>
     </div>
   );
 }

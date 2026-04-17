@@ -6,6 +6,7 @@ import {
   SETUP_WIZARD_BACKUP,
   buildStoredAudit,
   completeOnboarding,
+  completeOnboardingFast,
   getSettingsRowInput,
   getWizardFieldInput,
   installMockNativeSecureStorage,
@@ -15,6 +16,7 @@ import {
   mockBaseApi,
   mockHouseholdSyncApi,
   mockPlaidFlow,
+  mockRecoveryVaultApi,
   openAuditComposer,
   openSettingsMenu,
   readAppStorage,
@@ -61,7 +63,13 @@ test.describe("Catalyst Cash end-to-end", () => {
 
     await expect(page.getByRole("button", { name: "Open Settings" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start Setup →" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Full Setup →" })).toHaveCount(0);
+  });
+
+  test("supports the fast-start onboarding path and lands on the dashboard", async ({ page }) => {
+    await seedStorage(page, {});
+    await completeOnboardingFast(page);
+    await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
   });
 
   test("continues setup with imported backup values prefilled", async ({ page }) => {
@@ -69,7 +77,7 @@ test.describe("Catalyst Cash end-to-end", () => {
     await page.goto("/");
 
     await page.getByRole("checkbox", { name: "Accept legal disclaimer" }).click();
-    await page.getByRole("button", { name: "Start Setup →" }).click();
+    await page.getByRole("button", { name: "Full Setup →" }).click();
 
     await page.locator('input[type="file"]').first().setInputFiles({
       name: "setup-backup.json",
@@ -89,6 +97,25 @@ test.describe("Catalyst Cash end-to-end", () => {
     await expect(getWizardFieldInput(page, /Standard Paycheck/)).toHaveValue("3200");
     await expect(getWizardFieldInput(page, /First-of-Month Paycheck/)).toHaveValue("2800");
     await expect(getWizardFieldInput(page, /Weekly Spend Allowance/)).toHaveValue("425");
+  });
+
+  test("restores setup values from Recovery Vault credentials", async ({ page }) => {
+    await seedStorage(page, {});
+    await mockRecoveryVaultApi(page);
+    await page.goto("/");
+
+    await page.getByRole("checkbox", { name: "Accept legal disclaimer" }).click();
+    await page.getByRole("button", { name: "Full Setup →" }).click();
+
+    await page.getByLabel("Recovery Vault ID").fill("CC-ABCDE-FGHIJ");
+    await page.getByLabel("Recovery Key").fill("ABCD-EFGH-IJKL-MNOP");
+    await page.getByRole("button", { name: "Restore from Vault" }).click();
+
+    await expect(page.getByText("Import complete")).toBeVisible();
+    await page.getByRole("button", { name: "Continue Setup" }).click();
+    await expect(page.getByText("Your Profile", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Birth year")).toHaveValue("1991");
+    await expect(getWizardFieldInput(page, /Monthly Rent/)).toHaveValue("2100");
   });
 
   test("free-tier user can open Portfolio and stay there", async ({ page }) => {
@@ -398,13 +425,7 @@ test.describe("Catalyst Cash end-to-end", () => {
     const paycheckInput = getSettingsRowInput(page, "Standard Paycheck");
     await paycheckInput.fill("3200");
 
-    const housingTypeSelect = page
-      .locator("div")
-      .filter({ hasText: "Housing Situation" })
-      .first()
-      .getByRole("combobox")
-      .last();
-    await housingTypeSelect.selectOption("rent");
+    await page.getByRole("button", { name: "Renting" }).click();
 
     const rentInput = getSettingsRowInput(page, "Monthly Rent");
     await expect(rentInput).toBeVisible();
@@ -454,9 +475,9 @@ test.describe("Catalyst Cash end-to-end", () => {
     });
     await page.reload();
 
-    await expect(page.getByRole("button", { name: "Start Setup →" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Full Setup →" })).toBeVisible();
     await page.getByRole("checkbox", { name: "Accept legal disclaimer" }).click();
-    await page.getByRole("button", { name: "Start Setup →" }).click();
+    await page.getByRole("button", { name: "Full Setup →" }).click();
     await expect(page.getByText("Import Data")).toBeVisible();
 
     await page.locator('input[type="file"]').first().setInputFiles(downloadPath as string);
@@ -502,7 +523,7 @@ test.describe("Catalyst Cash end-to-end", () => {
     await page.getByRole("button", { name: "Link New Bank" }).click();
 
     await expect(page.getByRole("button", { name: "Disconnect Mock Bank" })).toBeVisible();
-    await expect(page.getByText("1 Accounts Linked")).toBeVisible();
+    await expect(page.getByText(/1 linked account/i)).toBeVisible();
 
     await page.getByRole("button", { name: "Back to Settings" }).click();
     await page.getByRole("button", { name: "Close Settings" }).click();
@@ -629,8 +650,8 @@ test.describe("Catalyst Cash end-to-end", () => {
 
     await page.getByRole("tab", { name: "Portfolio" }).click();
     await expect(page.getByRole("tab", { name: "Portfolio", selected: true })).toBeVisible();
-    await expect(page.getByText("Plaid Checking").last()).toBeVisible();
-    await expect(page.getByText("Reconnect required").last()).toBeVisible();
+    await expect(page.getByText("Plaid Checking", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Reconnect required", { exact: true }).first()).toBeVisible();
   });
 
   test("pushes household sync changes after a linked profile is edited", async ({ page }) => {

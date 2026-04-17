@@ -22,6 +22,7 @@
   } from "../icons";
   import { getIssuerCards,getPinnedForIssuer } from "../issuerCards.js";
   import { getTickerOptions } from "../tickerCatalog.js";
+  import UiGlyph from "../UiGlyph.js";
   import { FormGroup,FormRow } from "../ui.js";
 
 const INSTITUTIONS = [
@@ -1161,7 +1162,10 @@ export default function AddAccountSheet({
                       cursor: "pointer",
                     }}
                   >
-                    {assetForm.liquid ? "💧 Liquid" : "🔒 Illiquid"}
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <UiGlyph glyph={assetForm.liquid ? "💧" : "🔒"} size={12} color={assetForm.liquid ? T.accent.emerald : T.text.secondary} />
+                      {assetForm.liquid ? "Liquid" : "Illiquid"}
+                    </span>
                   </button>
                 </FormRow>
               </FormGroup>

@@ -26,7 +26,8 @@ vi.mock("./fetchWithRetry.js", () => ({
   fetchWithRetry: vi.fn(),
 }));
 
-import { fetchGatingConfig, getBackendUrl, streamAudit } from "./api.js";
+import { callAudit, fetchGatingConfig, getBackendUrl, streamAudit } from "./api.js";
+import { fetchWithRetry } from "./fetchWithRetry.js";
 
 function makeStreamingResponse(reader) {
   return {
@@ -156,5 +157,32 @@ describe("backend URL selection", () => {
     });
 
     expect(getBackendUrl()).toBe("https://catalystcash-api.portfoliopro-app.workers.dev");
+  });
+});
+
+describe("callAudit", () => {
+  it("bypasses retry backoff for user-triggered audits", async () => {
+    const fetchSpy = vi.fn(async () => ({
+      ok: true,
+      headers: {
+        get: () => null,
+      },
+      json: async () => ({ result: '{"ok":true}' }),
+    }));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const result = await callAudit(
+      "",
+      "snapshot",
+      "backend",
+      "gpt-4.1",
+      { variant: "core" },
+      [],
+      "device-1"
+    );
+
+    expect(result).toBe('{"ok":true}');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchWithRetry).not.toHaveBeenCalled();
   });
 });

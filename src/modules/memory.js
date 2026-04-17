@@ -298,7 +298,7 @@ export function extractAuditMilestones(parsed, prevHistory = []) {
     .filter(d => d > 0);
 
   if (debtVal === 0 && prevDebtVals.length > 0 && prevDebtVals[prevDebtVals.length - 1] > 0) {
-    milestones.push("All revolving debt cleared — $0 balance achieved 🎉");
+    milestones.push("All revolving debt cleared — $0 balance achieved");
   }
 
   // Net worth milestones
@@ -311,7 +311,7 @@ export function extractAuditMilestones(parsed, prevHistory = []) {
 
   // Positive net worth
   if (nw > 0 && prevNWs.length > 0 && prevNWs[prevNWs.length - 1] <= 0) {
-    milestones.push("Net worth turned positive 🚀");
+    milestones.push("Net worth turned positive");
   }
 
   // Net worth milestones

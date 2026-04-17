@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FULL_PROFILE_QA_BANKS, FULL_PROFILE_QA_CARDS, FULL_PROFILE_QA_RENEWALS } from "./qaSeed.js";
 
+const LAST_CLOUD_BACKUP_TS_KEY = "last-backup-ts";
+const LAST_PORTABLE_BACKUP_TS_KEY = "last-portable-backup-ts";
+const LAST_PORTABLE_BACKUP_KIND_KEY = "last-portable-backup-kind";
+
 const {
   dbStore,
   nativeExport,
@@ -232,6 +236,8 @@ describe("backup utilities", () => {
           _needsReconnect: true,
         },
       ]);
+      expect(dbStore.get(LAST_PORTABLE_BACKUP_TS_KEY)).toBeTypeOf("number");
+      expect(dbStore.get(LAST_PORTABLE_BACKUP_KIND_KEY)).toBe("encrypted-export");
     });
 
     it("strips demo portfolio records and relinks imported renewals before backup export", async () => {
@@ -301,6 +307,20 @@ describe("backup utilities", () => {
       expect(backup.data["financial-config"]).toEqual({ income: 1000 });
       expect(backup.data["personal-rules"]).toBe("stay conservative");
       expect(backup.data["full-profile-qa-seed-active"]).toBeUndefined();
+    });
+
+    it("normalizes legacy paycheck budget buckets before export", async () => {
+      dbStore.set("budget-lines-v2", [
+        { id: "line_fixed", name: "Rent", amount: 900, bucket: "fixed", icon: "🏠" },
+        { id: "line_flex", name: "Dining", amount: 120, bucket: "flex", icon: "🍔" },
+      ]);
+
+      const backup = await buildBackupPayload();
+
+      expect(backup.data["budget-lines-v2"]).toEqual([
+        expect.objectContaining({ id: "line_fixed", bucket: "bills" }),
+        expect.objectContaining({ id: "line_flex", bucket: "needs", needsReview: true }),
+      ]);
     });
   });
 
@@ -372,14 +392,16 @@ describe("backup utilities", () => {
 
     it("forces auto backup back to off during import even if the backup had it enabled", async () => {
       dbStore.set("auto-backup-interval", "monthly");
-      dbStore.set("last-backup-ts", 123456789);
+      dbStore.set(LAST_CLOUD_BACKUP_TS_KEY, 123456789);
+      dbStore.set(LAST_PORTABLE_BACKUP_TS_KEY, 123456789);
+      dbStore.set(LAST_PORTABLE_BACKUP_KIND_KEY, "icloud");
       const backup = {
         app: "Catalyst Cash",
         exportedAt: "2026-03-15T15:00:00.000Z",
         data: {
           "financial-config": { budget: 500 },
           "auto-backup-interval": "daily",
-          "last-backup-ts": 999999999,
+          [LAST_CLOUD_BACKUP_TS_KEY]: 999999999,
         },
       };
 
@@ -394,7 +416,38 @@ describe("backup utilities", () => {
 
       expect(dbStore.get("financial-config")).toEqual({ budget: 500 });
       expect(dbStore.get("auto-backup-interval")).toBe("off");
-      expect(dbStore.get("last-backup-ts")).toBeUndefined();
+      expect(dbStore.get(LAST_CLOUD_BACKUP_TS_KEY)).toBeUndefined();
+      expect(dbStore.get(LAST_PORTABLE_BACKUP_TS_KEY)).toBeUndefined();
+      expect(dbStore.get(LAST_PORTABLE_BACKUP_KIND_KEY)).toBeUndefined();
+    });
+
+    it("normalizes legacy paycheck budget buckets during restore without changing the storage key", async () => {
+      const backup = {
+        app: "Catalyst Cash",
+        exportedAt: "2026-04-16T15:00:00.000Z",
+        data: {
+          "budget-lines-v2": [
+            { id: "line_fixed", name: "Rent", amount: 900, bucket: "fixed", icon: "🏠" },
+            { id: "line_flex", name: "Dining Out", amount: 120, bucket: "flex", icon: "🍔" },
+            { id: "line_invest", name: "Emergency Fund", amount: 250, bucket: "invest", icon: "🎯" },
+          ],
+        },
+      };
+
+      await importBackup(
+        {
+          name: "CatalystCash_Backup_2026-04-16.json",
+          type: "application/json",
+          __text: JSON.stringify(backup),
+        },
+        vi.fn()
+      );
+
+      expect(dbStore.get("budget-lines-v2")).toEqual([
+        expect.objectContaining({ id: "line_fixed", bucket: "bills" }),
+        expect.objectContaining({ id: "line_flex", bucket: "needs", needsReview: true }),
+        expect.objectContaining({ id: "line_invest", bucket: "savings" }),
+      ]);
     });
 
     it("creates reconnect-ready placeholder accounts from sanitized plaid metadata", async () => {
@@ -453,6 +506,52 @@ describe("backup utilities", () => {
           chargedToType: "bank",
           chargedToId: "plaid_ally_savings",
           chargedTo: "Ally · Ally Online Savings",
+        }),
+      ]);
+    });
+
+    it("does not duplicate placeholder accounts when the same sanitized plaid backup is restored twice", async () => {
+      const backup = {
+        app: "Catalyst Cash",
+        exportedAt: "2026-03-26T15:00:00.000Z",
+        data: {
+          "plaid-connections-sanitized": [
+            {
+              id: "restored_ally",
+              institutionName: "Ally",
+              accounts: [
+                {
+                  plaidAccountId: "ally_savings",
+                  name: "Online Savings",
+                  officialName: "Ally Online Savings",
+                  type: "depository",
+                  subtype: "savings",
+                },
+              ],
+            },
+          ],
+        },
+      };
+
+      const file = {
+        name: "CatalystCash_CloudSync.json",
+        type: "application/json",
+        __text: JSON.stringify(backup),
+      };
+
+      await importBackup(file, vi.fn());
+      await importBackup(file, vi.fn());
+
+      expect(dbStore.get("plaid-connections")).toEqual([
+        expect.objectContaining({
+          id: "restored_ally",
+          _needsReconnect: true,
+        }),
+      ]);
+      expect(dbStore.get("bank-accounts")).toEqual([
+        expect.objectContaining({
+          id: "plaid_ally_savings",
+          _plaidConnectionId: "restored_ally",
         }),
       ]);
     });

@@ -1,6 +1,7 @@
   import type { CSSProperties } from "react";
   import { memo } from "react";
   import { T } from "./constants.js";
+  import { Check } from "./icons.js";
 
 /**
  * Coachmark tooltip component — appears as a floating callout
@@ -69,7 +70,7 @@ const Coachmark = memo(function Coachmark({ text, onDismiss, position = "below",
             minWidth: 28,
           }}
         >
-          ✓
+          <Check size={11} color="#fff" strokeWidth={3} />
         </button>
       </div>
       {/* Arrow */}

@@ -4,6 +4,7 @@ import type { Card as PortfolioCard, CustomValuations } from "../../../types/ind
 import { T } from "../../constants.js";
 import { inferMerchantIdentity } from "../../merchantIdentity.js";
 import { getCardMultiplier, getOptimalCard } from "../../rewardsCatalog.js";
+import type { CategoryMeta } from "./types";
 
 interface TransactionRewardInput {
   date?: string;
@@ -59,23 +60,16 @@ export type StatementCycleSpendMap = RewardCapSpendMap;
 export const CATEGORY_MAP = {
   "food and drink": { icon: "Utensils", color: "#F59E0B", bg: "rgba(245,158,11,0.10)" },
   groceries: { icon: "ShoppingCart", color: "#F59E0B", bg: "rgba(245,158,11,0.10)" },
-  restaurants: { icon: "Utensils", color: "#F59E0B", bg: "rgba(245,158,11,0.10)" },
-  shops: { icon: "ShoppingCart", color: "#8B5CF6", bg: "rgba(139,92,246,0.10)" },
-  "general merchandise": { icon: "ShoppingCart", color: "#8B5CF6", bg: "rgba(139,92,246,0.10)" },
+  shopping: { icon: "ShoppingCart", color: "#8B5CF6", bg: "rgba(139,92,246,0.10)" },
   travel: { icon: "Plane", color: "#3B82F6", bg: "rgba(59,130,246,0.10)" },
   transportation: { icon: "Car", color: "#6366F1", bg: "rgba(99,102,241,0.10)" },
   automotive: { icon: "Car", color: "#6366F1", bg: "rgba(99,102,241,0.10)" },
   transfer: { icon: "ArrowUpRight", color: "#6B7280", bg: "rgba(107,114,128,0.10)" },
-  "transfer in": { icon: "ArrowDownLeft", color: "#2ECC71", bg: "rgba(46,204,113,0.10)" },
-  "transfer out": { icon: "ArrowUpRight", color: "#6B7280", bg: "rgba(107,114,128,0.10)" },
-  payment: { icon: "CreditCard", color: "#7B5EA7", bg: "rgba(123,94,167,0.10)" },
-  "loan payments": { icon: "Building2", color: "#F97316", bg: "rgba(249,115,22,0.10)" },
-  "rent and utilities": { icon: "Home", color: "#0EA5E9", bg: "rgba(14,165,233,0.10)" },
-  utilities: { icon: "Zap", color: "#0EA5E9", bg: "rgba(14,165,233,0.10)" },
+  payments: { icon: "CreditCard", color: "#A855F7", bg: "rgba(168,85,247,0.10)" },
+  "home and bills": { icon: "Home", color: "#0EA5E9", bg: "rgba(14,165,233,0.10)" },
   "home improvement": { icon: "Wrench", color: "#0EA5E9", bg: "rgba(14,165,233,0.10)" },
-  service: { icon: "Briefcase", color: "#14B8A6", bg: "rgba(20,184,166,0.10)" },
-  "general services": { icon: "Briefcase", color: "#14B8A6", bg: "rgba(20,184,166,0.10)" },
-  subscription: { icon: "Wifi", color: "#A855F7", bg: "rgba(168,85,247,0.10)" },
+  services: { icon: "Briefcase", color: "#14B8A6", bg: "rgba(20,184,166,0.10)" },
+  subscriptions: { icon: "Wifi", color: "#A855F7", bg: "rgba(168,85,247,0.10)" },
   healthcare: { icon: "Stethoscope", color: "#EF4444", bg: "rgba(239,68,68,0.10)" },
   medical: { icon: "Stethoscope", color: "#EF4444", bg: "rgba(239,68,68,0.10)" },
   "personal care": { icon: "Heart", color: "#EC4899", bg: "rgba(236,72,153,0.10)" },
@@ -85,12 +79,73 @@ export const CATEGORY_MAP = {
   education: { icon: "GraduationCap", color: "#2563EB", bg: "rgba(37,99,235,0.10)" },
   community: { icon: "Heart", color: "#F43F5E", bg: "rgba(244,63,94,0.10)" },
   "gifts and donations": { icon: "Gift", color: "#F43F5E", bg: "rgba(244,63,94,0.10)" },
-  "government and non profit": { icon: "Landmark", color: "#3B82F6", bg: "rgba(59,130,246,0.10)" },
+  "government and nonprofit": { icon: "Landmark", color: "#3B82F6", bg: "rgba(59,130,246,0.10)" },
   income: { icon: "Banknote", color: "#2ECC71", bg: "rgba(46,204,113,0.10)" },
   "bank fees": { icon: "Building2", color: "#EF4444", bg: "rgba(239,68,68,0.10)" },
   interest: { icon: "PiggyBank", color: "#2ECC71", bg: "rgba(46,204,113,0.10)" },
   childcare: { icon: "Baby", color: "#F59E0B", bg: "rgba(245,158,11,0.10)" },
 };
+
+const CATEGORY_ALIASES: Record<string, string> = {
+  dining: "food and drink",
+  restaurants: "food and drink",
+  "food and drink": "food and drink",
+  shops: "shopping",
+  "general merchandise": "shopping",
+  payment: "payments",
+  payments: "payments",
+  "loan payments": "payments",
+  "loan disbursements": "payments",
+  "transfer in": "transfer",
+  "transfer out": "transfer",
+  transfer: "transfer",
+  service: "services",
+  "general services": "services",
+  subscription: "subscriptions",
+  subscriptions: "subscriptions",
+  utilities: "home and bills",
+  "rent and utilities": "home and bills",
+  "gifts and donations": "gifts and donations",
+  "government and non profit": "government and nonprofit",
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  "food and drink": "Food & Drink",
+  groceries: "Groceries",
+  shopping: "Shopping",
+  travel: "Travel",
+  transportation: "Transportation",
+  automotive: "Automotive",
+  transfer: "Transfer",
+  payments: "Payments",
+  "home and bills": "Home & Bills",
+  "home improvement": "Home Improvement",
+  services: "Services",
+  subscriptions: "Subscriptions",
+  healthcare: "Healthcare",
+  medical: "Medical",
+  "personal care": "Personal Care",
+  fitness: "Fitness",
+  recreation: "Entertainment",
+  entertainment: "Entertainment",
+  education: "Education",
+  community: "Community",
+  "gifts and donations": "Gifts & Donations",
+  "government and nonprofit": "Government & Nonprofit",
+  income: "Income",
+  "bank fees": "Bank Fees",
+  interest: "Interest",
+  childcare: "Childcare",
+  other: "Other",
+};
+
+const PAYMENT_DESCRIPTION_PATTERNS = [
+  /\bmobile payment\b/i,
+  /\bonline payment\b/i,
+  /\bpayment thank you\b/i,
+  /\bthank you\b/i,
+  /\bautopay\b/i,
+];
 
 export function formatDateHeader(dateStr: string) {
   const d = new Date(dateStr + "T12:00:00");
@@ -123,7 +178,7 @@ export function buildCSV(transactions: CsvTransaction[]) {
       `"${(t.description || "").replace(/"/g, '""')}"`,
       t.isCredit ? t.amount : -t.amount,
       t.isCredit ? "Credit" : "Debit",
-      `"${t.category || ""}"`,
+      `"${getCategoryLabel(t.category, t.description)}"`,
       `"${t.accountName || ""}"`,
       `"${t.institution || ""}"`,
       t.pending ? "Yes" : "No",
@@ -137,6 +192,23 @@ export function normalizeTransactionResult(result: { data?: unknown[]; transacti
     data: result?.data || result?.transactions || [],
     fetchedAt: result?.fetchedAt || "",
   };
+}
+
+export function getNormalizedCategoryKey(category: string | null | undefined, description: string | null | undefined = "") {
+  const raw = String(category || "")
+    .toLowerCase()
+    .trim();
+  const normalizedDescription = String(description || "").toLowerCase().trim();
+  if (PAYMENT_DESCRIPTION_PATTERNS.some((pattern) => pattern.test(normalizedDescription))) {
+    return "payments";
+  }
+  if (!raw) return "other";
+  return CATEGORY_ALIASES[raw] || raw;
+}
+
+export function getCategoryLabel(category: string | null | undefined, description: string | null | undefined = "") {
+  const key = getNormalizedCategoryKey(category, description);
+  return CATEGORY_LABELS[key] || key.replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 export function formatRewardRate(yieldValue: number | null | undefined) {
@@ -369,14 +441,21 @@ export function estimateStatementCycleSpend(cards: PortfolioCard[], transactions
 
 type IconComponent = React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 
-export function getCategoryMeta(category: string | null | undefined, iconMap: Record<string, IconComponent>) {
-  if (!category) return { icon: iconMap.HelpCircle as IconComponent | undefined, color: T.text.dim, bg: "rgba(107,114,128,0.08)" };
-  const key = category.toLowerCase().trim();
+export function getCategoryMeta(
+  category: string | null | undefined,
+  iconMap: Record<string, IconComponent>,
+  description: string | null | undefined = ""
+): CategoryMeta {
+  const key = getNormalizedCategoryKey(category, description);
   const meta = CATEGORY_MAP[key as keyof typeof CATEGORY_MAP];
-  if (!meta) return { icon: iconMap.HelpCircle as IconComponent | undefined, color: T.text.dim, bg: "rgba(107,114,128,0.08)" };
-  return {
-    icon: iconMap[meta.icon] as IconComponent | undefined,
-    color: meta.color,
-    bg: meta.bg,
-  };
+  if (!meta) {
+    const fallbackIcon = iconMap.HelpCircle as IconComponent | undefined;
+    return fallbackIcon
+      ? { icon: fallbackIcon, color: T.text.dim, bg: "rgba(107,114,128,0.08)" }
+      : { color: T.text.dim, bg: "rgba(107,114,128,0.08)" };
+  }
+  const icon = iconMap[meta.icon] as IconComponent | undefined;
+  return icon
+    ? { icon, color: meta.color, bg: meta.bg }
+    : { color: meta.color, bg: meta.bg };
 }

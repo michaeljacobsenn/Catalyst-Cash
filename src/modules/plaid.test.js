@@ -3,12 +3,15 @@ import {
   PLAID_MANUAL_SYNC_COOLDOWNS,
   autoMatchAccounts,
   applyBalanceSync,
+  collectConnectionCreditLimits,
   ensureConnectionAccountsPresent,
   disconnectConnectionPortfolioRecords,
   filterTransactionsForConnection,
   getPreferredFreeConnectionSwitchCooldownRemaining,
+  hydrateConnectionWithCachedCreditLimits,
   mapTransactionsFromSyncStatus,
   materializeManualFallbackForConnections,
+  normalizePlaidBalanceSnapshot,
   shouldEnforcePreferredFreeConnectionSwitchCooldown,
 } from "./plaid.js";
 
@@ -122,6 +125,109 @@ describe("Plaid free live-connection access", () => {
 });
 
 describe("Plaid sync fallback", () => {
+  it("derives a credit limit from current plus available when Plaid omits limit", () => {
+    expect(
+      normalizePlaidBalanceSnapshot({
+        current: 104.51,
+        available: 895.49,
+        limit: null,
+        iso_currency_code: "USD",
+      }, null, { deriveLimit: true })
+    ).toEqual({
+      current: 104.51,
+      available: 895.49,
+      limit: 1000,
+      currency: "USD",
+    });
+  });
+
+  it("does not invent limits for non-credit accounts from current plus available", () => {
+    expect(
+      normalizePlaidBalanceSnapshot(
+        {
+          current: 2998.86,
+          available: 2998.86,
+          limit: null,
+          iso_currency_code: "USD",
+        },
+        null,
+        { deriveLimit: false }
+      )
+    ).toEqual({
+      current: 2998.86,
+      available: 2998.86,
+      limit: null,
+      currency: "USD",
+    });
+  });
+
+  it("clears stale inherited non-credit limits from previous saved sync state", () => {
+    expect(
+      normalizePlaidBalanceSnapshot(
+        {
+          current: 2998.86,
+          available: 2998.86,
+          limit: null,
+          iso_currency_code: "USD",
+        },
+        {
+          current: 2998.86,
+          available: 2998.86,
+          limit: 5997.72,
+          currency: "USD",
+        },
+        { deriveLimit: false }
+      )
+    ).toEqual({
+      current: 2998.86,
+      available: 2998.86,
+      limit: null,
+      currency: "USD",
+    });
+  });
+
+  it("restores cached credit limits by institution and last4 when Plaid reconnect data is incomplete", () => {
+    const connection = {
+      institutionName: "Capital One",
+      accounts: [
+        {
+          plaidAccountId: "acct_cap1",
+          type: "credit",
+          mask: "0319",
+          balance: { current: 0, available: null, limit: null },
+        },
+      ],
+    };
+
+    hydrateConnectionWithCachedCreditLimits(connection, {
+      "capital one::0319": 10000,
+    });
+
+    expect(connection.accounts[0].balance).toMatchObject({
+      current: 0,
+      available: null,
+      limit: 10000,
+    });
+  });
+
+  it("collects only positive credit limits into the reconnect cache", () => {
+    const cache = collectConnectionCreditLimits(
+      {
+        institutionName: "Capital One",
+        accounts: [
+          { type: "credit", mask: "0319", balance: { limit: 10000 } },
+          { type: "credit", mask: "7649", balance: { limit: null } },
+          { type: "depository", mask: "0001", balance: { limit: 5000 } },
+        ],
+      },
+      {}
+    );
+
+    expect(cache).toEqual({
+      "capital one::0319": 10000,
+    });
+  });
+
   it("materializes missing linked accounts from a refreshed connection before applying balances", () => {
     const connection = {
       id: "item_amex",
@@ -185,6 +291,37 @@ describe("Plaid sync fallback", () => {
     expect(updatedCards[0]._plaidLimit).toBe(1000);
     expect(updatedCards[0].limit).toBe(1000);
     expect(connection.accounts[0].linkedCardId).toBe("card_1");
+  });
+
+  it("preserves recovered limits when syncing a reconnect that only has current and available", () => {
+    const connection = {
+      id: "item_cap1",
+      lastSync: "2026-04-12T00:00:00.000Z",
+      accounts: [
+        {
+          plaidAccountId: "acct_cap1",
+          type: "credit",
+          subtype: "credit card",
+          linkedCardId: "card_cap1",
+          linkedBankAccountId: null,
+          balance: { current: 104.51, available: 895.49, limit: null },
+          liability: {},
+        },
+      ],
+    };
+
+    const cards = [
+      {
+        id: "card_cap1",
+        institution: "Capital One",
+        name: "Savor Cash Rewards",
+        limit: null,
+      },
+    ];
+
+    const { updatedCards } = applyBalanceSync(connection, cards, []);
+    expect(updatedCards[0]._plaidLimit).toBe(1000);
+    expect(updatedCards[0].limit).toBe(1000);
   });
 });
 

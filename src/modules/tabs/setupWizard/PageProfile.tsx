@@ -1,6 +1,7 @@
 import type { HousingType } from "../../../types/index.js";
 import { T } from "../../constants.js";
 import { CURRENCIES } from "../../currency.js";
+import { Shield } from "../../icons.js";
 import type { SetupWizardCombinedData, SetupWizardUpdate } from "../SetupWizard.js";
 import { NavRow, WizField, WizInput, WizSelect } from "./primitives.js";
 import { US_STATES } from "./shared.js";
@@ -42,7 +43,7 @@ export function PageProfile({ data, onChange, onNext, onBack }: PageProfileProps
             boxShadow: `0 0 12px ${T.status.green}20`,
           }}
         >
-          <span style={{ fontSize: 16 }}>🛡️</span>
+          <Shield size={16} color={T.status.green} />
         </div>
         <div>
           <h4 style={{ margin: "0 0 4px 0", fontSize: 13, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
@@ -83,10 +84,10 @@ export function PageProfile({ data, onChange, onNext, onBack }: PageProfileProps
           <WizSelect
             value={data.currencyCode || "USD"}
             onChange={v => onChange("currencyCode", v)}
-            options={CURRENCIES.map(c => ({ value: c.code, label: `${c.flag} ${c.code}` }))}
+            options={CURRENCIES.map(c => ({ value: c.code, label: c.label || `${c.code} (${c.symbol})` }))}
           />
         </WizField>
-        <WizField label="State" hint="🟢 = No state income tax">
+        <WizField label="State" hint="Marked states have no state income tax">
           <WizSelect
             value={data.stateCode || ""}
             onChange={v => onChange("stateCode", v)}
@@ -113,8 +114,8 @@ export function PageProfile({ data, onChange, onNext, onBack }: PageProfileProps
             onChange={v => onChange("housingType", v as HousingType)}
             options={[
               { value: "", label: "Skip / Neither" },
-              { value: "rent", label: "🏢 Renter" },
-              { value: "own", label: "🏠 Homeowner" },
+              { value: "rent", label: "Renter" },
+              { value: "own", label: "Homeowner" },
             ]}
           />
         </WizField>

@@ -4,9 +4,13 @@
  * Triggers the native SKStoreReviewController.requestReview() dialog on iOS
  * via the Capacitor App plugin's openUrl as a fallback-safe approach.
  *
+ * Two trigger paths:
+ *  1. Audit-count path: ≥ 3 real audits, once per 90-day window
+ *  2. Value-moment path: after proven value (score improvement, first
+ *     export, first bank connection), once per 60-day window
+ *
  * Key rules:
- *  - Only fire once per 90-day window (persisted in db)
- *  - Only fire if the user has completed ≥ 3 real (non-test) audits
+ *  - Only fire once per cooldown window (persisted in db)
  *  - Only fire on native iOS platform
  *  - Never fire if the user has already rated (track via db flag)
  */
@@ -18,9 +22,35 @@ import { log } from "./logger.js";
 
 const APP_STORE_ID = "6759579655"; // Catalyst Cash App Store ID
 const RATE_COOLDOWN_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+const VALUE_MOMENT_COOLDOWN_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
 const MIN_AUDITS_BEFORE_PROMPT = 3;
 const DB_KEY_LAST_PROMPTED = "rate-prompt-last-ts";
 const DB_KEY_HAS_RATED = "rate-prompt-has-rated";
+
+/**
+ * Check cooldown eligibility for a given window.
+ * @returns {Promise<boolean>} true if cooldown has passed
+ */
+async function isCooldownPassed(cooldownMs) {
+  const [lastTs, hasRated] = await Promise.all([
+    db.get(DB_KEY_LAST_PROMPTED),
+    db.get(DB_KEY_HAS_RATED),
+  ]);
+  if (hasRated) return false;
+  const now = Date.now();
+  return !lastTs || now - Number(lastTs) > cooldownMs;
+}
+
+/**
+ * Execute the actual review prompt.
+ */
+async function executeReviewPrompt(triggerReason) {
+  await db.set(DB_KEY_LAST_PROMPTED, Date.now());
+  await App.openUrl({
+    url: `itms-apps://itunes.apple.com/app/id${APP_STORE_ID}?action=write-review`,
+  });
+  void log.info("ratePrompt", "Rating prompt triggered", { trigger: triggerReason });
+}
 
 /**
  * Call after each completed audit. Shows the rating prompt only when:
@@ -35,29 +65,34 @@ export async function maybeRequestReview(realAuditCount) {
   if (realAuditCount < MIN_AUDITS_BEFORE_PROMPT) return;
 
   try {
-    const [lastTs, hasRated] = await Promise.all([
-      db.get(DB_KEY_LAST_PROMPTED),
-      db.get(DB_KEY_HAS_RATED),
-    ]);
-
-    if (hasRated) return;
-
-    const now = Date.now();
-    const cooldownPassed = !lastTs || now - Number(lastTs) > RATE_COOLDOWN_MS;
-    if (!cooldownPassed) return;
-
-    // Mark as prompted before showing — avoids double-fire on race conditions
-    await db.set(DB_KEY_LAST_PROMPTED, now);
-
-    // Use App.openUrl to the App Store review URL (most reliable Capacitor approach)
-    // SKStoreReviewController is called natively by the OS when landing on this URL
-    await App.openUrl({
-      url: `itms-apps://itunes.apple.com/app/id${APP_STORE_ID}?action=write-review`,
-    });
-
-    void log.info("ratePrompt", "Rating prompt triggered", { auditCount: realAuditCount });
+    if (!(await isCooldownPassed(RATE_COOLDOWN_MS))) return;
+    await executeReviewPrompt(`audit_count_${realAuditCount}`);
   } catch (err) {
     void log.warn("ratePrompt", "Rating prompt failed", { error: err });
+  }
+}
+
+/**
+ * Trigger a review prompt after a proven value moment.
+ * Uses a shorter 60-day cooldown since the user just experienced real value.
+ *
+ * Valid triggers:
+ *  - "score_improvement" — health score went up ≥ 5 points
+ *  - "first_export" — first successful backup export
+ *  - "first_bank_connection" — first successful Plaid link
+ *  - "badge_earned" — milestone badge unlocked
+ *  - "negotiation_complete" — user completed a negotiation script
+ *
+ * @param {string} trigger - The value moment identifier
+ */
+export async function maybeRequestReviewForValue(trigger) {
+  if (!Capacitor.isNativePlatform()) return;
+
+  try {
+    if (!(await isCooldownPassed(VALUE_MOMENT_COOLDOWN_MS))) return;
+    await executeReviewPrompt(`value_moment_${trigger}`);
+  } catch (err) {
+    void log.warn("ratePrompt", "Value-moment rating prompt failed", { error: err });
   }
 }
 
@@ -67,3 +102,4 @@ export async function maybeRequestReview(realAuditCount) {
 export async function markUserHasRated() {
   await db.set(DB_KEY_HAS_RATED, true);
 }
+

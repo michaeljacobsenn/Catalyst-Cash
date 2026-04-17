@@ -7,17 +7,8 @@
   import { getOrCreateDeviceId,isGatingEnforced,isPro } from "./subscription.js";
   import { db } from "./utils.js";
 
-// ═══════════════════════════════════════════════════════════════
-// AI API MODULE — Catalyst Cash
-// Routes all AI requests through the Cloudflare Worker proxy.
-// ═══════════════════════════════════════════════════════════════
-
 export { getBackendUrl } from "./backendUrl.js";
 
-// ── Rate-limit sync callback ──────────────────────────────────
-// The worker returns X-RateLimit-Remaining and X-RateLimit-Limit
-// in every response. This callback allows subscription.js or UI
-// to sync the authoritative server-side count.
 let _rateLimitCallback = null;
 let _lastAuditLogId = null;
 export function onRateLimitUpdate(cb) {
@@ -177,10 +168,20 @@ async function* streamBackend(snapshot, model, context, history, deviceId, backe
   }
 }
 
-async function callBackend(snapshot, model, context, history, deviceId, backendProvider, responseFormat, requestType = "audit", signal) {
+async function callBackend(
+  snapshot,
+  model,
+  context,
+  history,
+  deviceId,
+  backendProvider,
+  responseFormat,
+  requestType = "audit",
+  signal,
+  retryOptions = {}
+) {
   const resolvedProvider = resolveProvider(model, backendProvider);
-
-  const res = await fetchWithRetry(`${getBackendUrl()}/audit`, {
+  const requestInit = {
     method: "POST",
     headers: await buildBackendHeaders(deviceId),
     body: JSON.stringify({
@@ -194,7 +195,10 @@ async function callBackend(snapshot, model, context, history, deviceId, backendP
       responseFormat: responseFormat || "json",
     }),
     signal,
-  });
+  };
+  const res = retryOptions?.maxRetries === 0
+    ? await fetch(`${getBackendUrl()}/audit`, requestInit)
+    : await fetchWithRetry(`${getBackendUrl()}/audit`, requestInit, retryOptions);
 
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
@@ -287,7 +291,8 @@ export async function callAudit(
     getBackendProvider(model),
     responseFormat,
     isChat ? "chat" : "audit",
-    signal
+    signal,
+    { maxRetries: 0 }
   );
 }
 
@@ -422,4 +427,29 @@ export async function fetchGatingConfig(options = {}) {
   } catch {
     return _cachedConfig; // Return stale cache on network error
   }
+}
+
+/**
+ * Generic JSON helper for worker-backed endpoints that still need Catalyst
+ * headers, RevenueCat identity forwarding, and retry behavior.
+ */
+export async function fetchJson(path, options = {}) {
+  const deviceId = await getOrCreateDeviceId().catch(() => null);
+  const url = path.startsWith("http") ? path : `${getBackendUrl()}${path}`;
+  const isFormData = options?.body instanceof FormData;
+
+  const response = await fetchWithRetry(url, {
+    ...options,
+    headers: {
+      ...(await buildBackendHeaders(deviceId || "unknown")),
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      ...(options?.headers || {}),
+    },
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || `Backend error: HTTP ${response.status}`);
+  }
+  return data;
 }

@@ -21,11 +21,11 @@ export function getDemoAuditPayload(prevConfig = {}, existingHistory = []) {
         "Your checking is well above floor, vault is fully funded at 6-month coverage, and debt paydown pace puts you on track for freedom by October. The only drag is Chase Sapphire utilization at 24.6% — one more aggressive payment drops you into the optimal range and could boost your credit score 15–25 points.",
     },
     alertsCard: [
-      "✅ Car insurance completely covered by Vault",
-      "💰 Roth IRA maxed out for the year",
-      "⚠️ Chase Sapphire utilization at 24.6% — aim for under 10%",
-      "📈 Net worth up $2,340 this week — 7-week growth streak",
-      "🎯 $600 away from $25K in savings",
+      "Car insurance completely covered by Vault",
+      "Roth IRA maxed out for the year",
+      "Chase Sapphire utilization at 24.6% — aim for under 10%",
+      "Net worth up $2,340 this week — 7-week growth streak",
+      "$600 away from $25K in savings",
     ],
     dashboardCard: [
       { category: "Checking", amount: "$8,450.00", status: "Above floor" },
@@ -39,11 +39,11 @@ export function getDemoAuditPayload(prevConfig = {}, existingHistory = []) {
     netWorth: 172960.0,
     netWorthDelta: "+$2,340 vs last week",
     weeklyMoves: [
-      "💳 Pay Chase Sapphire $500 — aggressive principal payment to crush 24.99% APR debt",
-      "📈 Transfer $1,000 to Vanguard Brokerage — dollar-cost averaging into VTSAX",
-      "🏦 Move $400 to Ally Vault — build toward $25K savings milestone",
-      "📊 Rebalance crypto allocation — trim BTC gains into ETH position",
-      "🎯 Review Q1 sinking fund progress — vacation fund needs $233/mo to hit target",
+      "Pay Chase Sapphire $500 — aggressive principal payment to crush 24.99% APR debt",
+      "Transfer $1,000 to Vanguard Brokerage — dollar-cost averaging into VTSAX",
+      "Move $400 to Ally Vault — build toward $25K savings milestone",
+      "Rebalance crypto allocation — trim BTC gains into ETH position",
+      "Review Q1 sinking fund progress — vacation fund needs $233/mo to hit target",
     ],
     radar: [
       { item: "Netflix", amount: "$15.49", date: new Date(Date.now() + 3 * dayMs).toISOString().split("T")[0] },
@@ -89,7 +89,7 @@ export function getDemoAuditPayload(prevConfig = {}, existingHistory = []) {
         { category: "Shopping", amount: "$156.00", pctOfTotal: "18%" },
         { category: "Entertainment", amount: "$93.00", pctOfTotal: "11%" },
       ],
-      alerts: ["✅ Under weekly allowance — surplus available for debt acceleration"],
+      alerts: ["Under weekly allowance — surplus available for debt acceleration"],
       debtImpact: "At current spending, debt-free by Oct 2026. Cutting $50/week accelerates by 3 weeks.",
     },
     paceData: [

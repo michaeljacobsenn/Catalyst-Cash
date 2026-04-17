@@ -12,7 +12,7 @@ export const AI_PROVIDERS = [
     id: "backend",
     name: "Catalyst AI",
     company: "Catalyst Cash",
-    badge: "✨ Default",
+    badge: "DEFAULT",
     models: [
       {
         id: "gemini-2.5-flash",
