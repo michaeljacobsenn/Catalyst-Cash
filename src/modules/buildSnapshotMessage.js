@@ -8,6 +8,7 @@
     getManualInvestmentSourceId,
     getPlaidInvestmentSourceId,
     getPreferredInvestmentBucketValue,
+    isManualHoldingExcluded,
     isInvestmentSourceExcluded,
   } from "./investmentHoldings.js";
 
@@ -43,6 +44,7 @@ export function buildSnapshotMessage({
   computedStrategy,
 }) {
   const plaidInvestments = activeConfig?.plaidInvestments || [];
+  const manualHoldings = activeConfig?.holdings || _financialConfig?.holdings || {};
   const excludedInvestmentSourceIds = activeConfig?.excludedInvestmentSourceIds || [];
   const selectedInvestments = Array.isArray(form?.investments) ? form.investments : [];
   const allRecurringItems = [...(Array.isArray(renewals) ? renewals : []), ...(Array.isArray(cardAnnualFees) ? cardAnnualFees : [])];
@@ -51,9 +53,25 @@ export function buildSnapshotMessage({
       .filter((account) => account?.bucket === bucket && !isInvestmentSourceExcluded(excludedInvestmentSourceIds, getPlaidInvestmentSourceId(account)))
       .reduce((sum, account) => sum + (Number(account?._plaidBalance) || 0), 0);
   const manualBucketValue = (bucket) =>
-    isInvestmentSourceExcluded(excludedInvestmentSourceIds, getManualInvestmentSourceId(bucket))
-      ? 0
-      : Number(holdingValues?.[bucket] || 0);
+    {
+      if (isInvestmentSourceExcluded(excludedInvestmentSourceIds, getManualInvestmentSourceId(bucket))) {
+        return 0;
+      }
+      const bucketHoldings = Array.isArray(manualHoldings?.[bucket]) ? manualHoldings[bucket] : [];
+      if (bucketHoldings.length === 0) {
+        return Number(holdingValues?.[bucket] || 0);
+      }
+      const includedHoldings = bucketHoldings.filter((holding) => !isManualHoldingExcluded(excludedInvestmentSourceIds, bucket, holding));
+      if (includedHoldings.length === 0) return 0;
+      const allHoldingsHavePrice = includedHoldings.every((holding) => Number.isFinite(Number(holding?.lastKnownPrice)) && Number(holding?.lastKnownPrice) > 0);
+      if (allHoldingsHavePrice) {
+        return includedHoldings.reduce(
+          (sum, holding) => sum + (Number(holding?.lastKnownPrice) || 0) * (Number(holding?.shares || 0) || 0),
+          0
+        );
+      }
+      return Number(holdingValues?.[bucket] || 0);
+    };
   const selectedInvestmentTotal = (bucket) =>
     selectedInvestments
       .filter((investment) => investment?.bucket === bucket)

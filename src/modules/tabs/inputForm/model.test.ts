@@ -462,16 +462,15 @@ describe("input form model helpers", () => {
         trackBrokerage: true,
         enableHoldings: true,
       },
-      holdingValues: {
-        roth: 0,
-        brokerage: 4200,
-        k401: 0,
+      holdingBreakdowns: {
+        "manual-holding:brokerage:holding_vti": 3000,
+        "manual-holding:brokerage:holding_vxus": 1200,
       },
       form: createForm({
         brokerage: "",
       }),
       holdings: {
-        brokerage: [{ symbol: "VTI" }, { symbol: "VXUS" }],
+        brokerage: [{ id: "holding_vti", symbol: "VTI" }, { id: "holding_vxus", symbol: "VXUS" }],
       },
       plaidInvestments: [
         {
@@ -487,7 +486,8 @@ describe("input form model helpers", () => {
     const { visibleSources, hiddenSources } = splitInvestmentAuditSources(sources, {});
 
     expect(visibleSources.map((source) => source.id)).toEqual([
-      "manual-holdings:brokerage",
+      "manual-holding:brokerage:holding_vti",
+      "manual-holding:brokerage:holding_vxus",
       "plaid:brokerage-linked",
     ]);
     expect(hiddenSources.map((source) => source.id)).toContain("manual-balance:brokerage");

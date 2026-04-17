@@ -372,6 +372,8 @@ export async function restoreBackupPayload(backup) {
     const normalizedValue =
       key === "budget-lines-v2"
         ? normalizeBudgetLines(val).lines
+        : key === "financial-config"
+          ? sanitizeManualInvestmentHoldings(val)
         : val;
     await db.set(key, normalizedValue);
     count++;
@@ -520,7 +522,7 @@ export async function importBackup(file, getPassphrase) {
             })) || config.otherAssets;
 
           const existing = (await db.get("financial-config")) || {};
-          await db.set("financial-config", { ...existing, ...config, _fromSetupWizard: true });
+          await db.set("financial-config", sanitizeManualInvestmentHoldings({ ...existing, ...config, _fromSetupWizard: true }));
           resolve({ count: Object.keys(config).length, exportedAt: new Date().toISOString(), plaidReconnectCount: 0 });
           return;
         }

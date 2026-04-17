@@ -40,7 +40,7 @@ describe("plaid duplicate resolution", () => {
     );
   });
 
-  it("does not mark a review group actionable when both accounts are linked", () => {
+  it("does not surface linked-vs-linked accounts in the portfolio review card", () => {
     const groups = buildPortfolioDuplicateReviewGroups({
       bankAccounts: [
         {
@@ -60,15 +60,7 @@ describe("plaid duplicate resolution", () => {
       ],
     });
 
-    expect(groups).toHaveLength(1);
-    expect(groups[0]).toEqual(
-      expect.objectContaining({
-        kind: "bank",
-        actionable: false,
-        preferredKeepId: undefined,
-        preferredRemoveId: undefined,
-      })
-    );
+    expect(groups).toEqual([]);
   });
 
   it("filters out acknowledged duplicate review groups", () => {

@@ -1196,12 +1196,17 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
               setCollapsedSections(p => ({ ...p, bankAccounts: false }));
             }}
             onAddInvestment={(key, symbol, shares) => {
+              const holding = {
+                id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `holding_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                symbol,
+                shares,
+              };
               setFinancialConfig((prev: CatalystCashConfig) => {
                 const cur = prev?.holdings || {};
                 return clearDeletedManualHolding({
                   ...prev,
-                  holdings: { ...cur, [key]: [...(cur[key] || []), { symbol, shares }] },
-                }, key, symbol) as CatalystCashConfig;
+                  holdings: { ...cur, [key]: [...(cur[key] || []), holding] },
+                }, key, holding) as CatalystCashConfig;
               });
               setCollapsedSections(p => ({ ...p, investments: false }));
             }}

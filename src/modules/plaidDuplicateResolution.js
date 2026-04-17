@@ -100,6 +100,7 @@ export function buildPortfolioDuplicateReviewGroups({
       const leftLinked = Boolean(left?._plaidAccountId);
       const rightLinked = Boolean(right?._plaidAccountId);
       const actionable = leftLinked !== rightLinked;
+      if (!actionable) continue;
       const manual = leftLinked ? right : left;
       const linked = leftLinked ? left : right;
       groups.push({
@@ -127,6 +128,7 @@ export function buildPortfolioDuplicateReviewGroups({
       const leftLinked = Boolean(left?._plaidAccountId);
       const rightLinked = Boolean(right?._plaidAccountId);
       const actionable = leftLinked !== rightLinked;
+      if (!actionable) continue;
       const manual = leftLinked ? right : left;
       const linked = leftLinked ? left : right;
       groups.push({

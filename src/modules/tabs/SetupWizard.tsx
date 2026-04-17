@@ -15,6 +15,7 @@
   import { useSecurity } from "../contexts/SecurityContext.js";
   import { useSettings,type ThemeMode } from "../contexts/SettingsContext.js";
   import { setActiveCurrencyCode } from "../currency.js";
+  import { sanitizeManualInvestmentHoldings } from "../investmentHoldings.js";
   import { AI_PROVIDERS } from "../providers.js";
   import { getSecretStorageStatus,setSecureItem } from "../secureStore.js";
   import { getCurrentTier,getPreferredModelForTier,normalizeModelForTier,shouldShowGating } from "../subscription.js";
@@ -513,7 +514,7 @@ export default function SetupWizard() {
         trackHSA: spending.trackHSA,
         trackCrypto: spending.trackCrypto !== false,
       };
-      const merged = { ...existing, ...payload, _fromSetupWizard: true };
+      const merged = sanitizeManualInvestmentHoldings({ ...existing, ...payload, _fromSetupWizard: true }) as CatalystCashConfig;
       await db.set("financial-config", merged);
       setActiveCurrencyCode(merged.currencyCode || "USD");
 

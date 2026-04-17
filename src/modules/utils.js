@@ -291,6 +291,15 @@ function withExplicitDebtTarget(text, targetLabel) {
     .replace(/\bpriority debt\b/gi, targetLabel);
 }
 
+function canonicalizeInvestmentGateStatusLabel(value) {
+  const explicit = String(value || "").trim();
+  if (!explicit) return "";
+  const normalized = explicit.toLowerCase();
+  if (normalized.includes("open")) return "Open";
+  if (normalized.includes("guard")) return "Guarded — safety first";
+  return explicit;
+}
+
 function normalizeDebtTargetLabel(targetLabel, cards = []) {
   const target = String(targetLabel || "").trim();
   if (!target) return "";
@@ -315,7 +324,7 @@ function inferInvestmentGateStatus({
   personalRules = "",
   snapshotDate,
 }) {
-  const explicit = typeof existingGateStatus === "string" ? existingGateStatus.trim() : "";
+  const explicit = canonicalizeInvestmentGateStatusLabel(existingGateStatus);
   const cardDebt = (Array.isArray(formData?.debts) ? formData.debts : []).reduce(
     (sum, debt) => sum + Math.max(0, parseCurrency(debt?.balance) || 0),
     0
@@ -326,6 +335,13 @@ function inferInvestmentGateStatus({
   );
   const debtTotal = Math.max(cardDebt, liveCardDebt, Number(computedStrategy?.auditSignals?.debt?.total || 0));
   const riskSet = new Set((Array.isArray(nativeRiskFlags) ? nativeRiskFlags : []).map((flag) => String(flag || "").trim()));
+  const severeFlags = new Set([
+    "transfer-needed",
+    "floor-breach-risk",
+    "critical-promo-expiry",
+    "toxic-apr",
+    "high-utilization",
+  ]);
   const urgentCashObligations = collectUpcomingCashObligations({
     renewals,
     cards,
@@ -337,19 +353,57 @@ function inferInvestmentGateStatus({
     snapshotDate,
     horizonDays: 21,
   });
-
+  const currentChecking = Math.max(0, parseCurrency(formData?.checking) || 0);
+  const currentVault = Math.max(0, (parseCurrency(formData?.savings) || 0) + (parseCurrency(formData?.ally) || 0));
+  const currentLiquidCash = currentChecking + currentVault;
+  const configuredCheckingFloor =
+    Math.max(0, Number(formData?.weeklySpendAllowance || 0) || 0) +
+    Math.max(0, Number(formData?.emergencyFloor || 0) || 0);
+  const totalCheckingFloor = configuredCheckingFloor > 0
+    ? configuredCheckingFloor
+    : Math.max(0, Number(computedStrategy?.totalCheckingFloor || 0) || 0);
+  const protectedNeed =
+    urgentCashObligations.reduce((sum, item) => sum + Math.max(0, Number(item?.amount) || 0), 0) +
+    ruleBasedObligations.reduce((sum, item) => sum + Math.max(0, Number(item?.amount) || 0), 0);
+  const availableAfterFloor = Math.max(0, currentLiquidCash - totalCheckingFloor);
+  const protectedGap = Math.max(0, protectedNeed - availableAfterFloor);
+  const operationalSurplus = Math.max(0, Number(computedStrategy?.operationalSurplus || 0));
+  const hasSevereRisk = [...riskSet].some((flag) => severeFlags.has(flag));
   const shouldGuard =
     debtTotal > 0 ||
-    urgentCashObligations.length > 0 ||
-    ruleBasedObligations.length > 0 ||
-    riskSet.has("transfer-needed") ||
-    riskSet.has("floor-breach-risk") ||
-    riskSet.has("critical-promo-expiry") ||
-    riskSet.has("promo-expiry");
+    hasSevereRisk ||
+    protectedGap > 0 ||
+    operationalSurplus <= 0;
 
   if (shouldGuard) return "Guarded — safety first";
   if (explicit) return explicit;
   return "Open";
+}
+
+function buildAuditOverrideContextNote({ formData = {} } = {}) {
+  const cashSummary = formData?.cashSummary || {};
+  const notes = String(formData?.notes || "").trim();
+  const fragments = [];
+
+  if (cashSummary?.checkingOverride) {
+    fragments.push("the audit is using your manual checking override instead of the linked live balance");
+  }
+  if (cashSummary?.savingsOverride) {
+    fragments.push("the audit is using your manual savings override instead of the linked live balance");
+  }
+
+  if (fragments.length === 0) return "";
+
+  let detail = `The audit is using ${fragments.join(" and ").replace(/^the audit is using\s+/i, "")}.`;
+  if (/reimburse/i.test(notes)) {
+    detail += " That override is being respected because you flagged a pending reimbursement.";
+  } else if (/override|deliberate|intentional/i.test(notes)) {
+    detail += " That override is being respected because you marked it as intentional.";
+  } else {
+    detail += " That override is being respected for this briefing.";
+  }
+
+  return sanitizeVisibleAuditCopy(detail);
 }
 
 function buildProtectedCashAction({
@@ -634,7 +688,11 @@ function buildDeterministicAllocationPlan({
   const checkingFloor = Math.max(0, Number(financialConfig?.weeklySpendAllowance || 0) + Number(financialConfig?.emergencyFloor || 0));
   const currentLiquidCash = Number((checkingBalance + vaultBalance).toFixed(2));
   const debtRouteAmount = Math.max(0, Number(computedStrategy?.debtStrategy?.amount || 0));
-  const debtRouteTarget = normalizeDebtTargetLabel(computedStrategy?.debtStrategy?.target, cards);
+  const debtRouteTargetRaw = String(computedStrategy?.debtStrategy?.target || "").trim();
+  const debtRouteTargetShort = normalizeDebtTargetLabel(debtRouteTargetRaw, cards);
+  const debtRouteTarget = debtRouteTargetRaw || debtRouteTargetShort;
+  const debtRouteDisplayTarget = debtRouteTargetShort || debtRouteTarget;
+  const debtRouteMethod = String(computedStrategy?.debtStrategy?.method || "").trim().toLowerCase();
   const obligations = (Array.isArray(protectedCashObligations) ? protectedCashObligations : [])
     .filter((item) => (Number(item?.amount) || 0) > 0)
     .map((item) => {
@@ -695,21 +753,25 @@ function buildDeterministicAllocationPlan({
   const debtPaymentIsSafetyCleanup =
     Boolean(ruleHints.enforceSafetyPayment) &&
     Boolean(ruleHints.safetyCardTarget) &&
-    debtRouteTarget.toLowerCase() === ruleHints.safetyCardTarget.toLowerCase();
+    debtRouteDisplayTarget.toLowerCase() === ruleHints.safetyCardTarget.toLowerCase();
+
+  const debtRouteDetailSuffix = debtPaymentIsSafetyCleanup
+    ? "This is the weekly safety payment while statement close and due dates remain unknown. Keep it partial if that is the maximum safe amount above the floor."
+    : debtRouteMethod === "promo-sprint" && debtRouteTarget
+      ? `This is the critical promo expiry payoff target on ${debtRouteTarget}. Clear it before the promotional APR window ends.`
+      : "";
 
   if (remainingSurplusCapacity > 0 && debtRouteTarget && debtRouteAmount > 0) {
     const payment = allocateOptionalPayment({
-      title: debtPaymentIsSafetyCleanup ? `Make safety payment to ${debtRouteTarget}` : debtRouteTarget,
-      targetLabel: debtRouteTarget,
+      title: debtPaymentIsSafetyCleanup ? `Make safety payment to ${debtRouteDisplayTarget}` : debtRouteDisplayTarget,
+      targetLabel: debtRouteDisplayTarget,
       semanticKind: "debt-payment",
       priority: "required",
       requestedAmount: Math.min(remainingSurplusCapacity, debtRouteAmount),
       checkingPool,
       vaultPool,
       checkingFloor,
-      detailSuffix: debtPaymentIsSafetyCleanup
-        ? "This is the weekly safety payment while statement close and due dates remain unknown. Keep it partial if that is the maximum safe amount above the floor."
-        : "",
+      detailSuffix: debtRouteDetailSuffix,
     });
     checkingPool = payment.checkingPool;
     vaultPool = payment.vaultPool;
@@ -855,27 +917,29 @@ function buildDeterministicAllocationPlan({
     obligations.length > 0
       ? Math.min(currentLiquidCash, Math.max(protectedNeed, surplusCapital))
       : Math.max(0, checkingBalance - checkingFloor) + vaultBalance;
+  const overrideContextNote = buildAuditOverrideContextNote({ formData });
 
   const nextAction =
     headlineCapital <= 0 && obligations.length > 0
       ? {
           title: "Protect near-term obligations",
-          detail: `Every dollar above your floor is already spoken for. Keep the protected balances parked for ${buildObligationSummary(obligations)} before debt paydown or investing.`,
+          detail: sanitizeVisibleAuditCopy(`Every dollar above your floor is already spoken for. Keep the protected balances parked for ${buildObligationSummary(obligations)} before debt paydown or investing.${overrideContextNote ? ` ${overrideContextNote}` : ""}`),
           amount: fmt(0),
         }
       : headlineCapital > 0 && obligations.length > 0
         ? {
             title: "Protect near-term obligations",
-            detail:
+            detail: sanitizeVisibleAuditCopy(
               protectedGap > 0
-                ? `Assign the current liquid cash first: ${buildObligationLabelSummary(obligations)}. Based on current Checking and Savings balances, you can reserve ${fmt(allocatedProtected)} now and a ${fmt(protectedGap)} protected gap still remains.`
-                : `Assign the current liquid cash in order: ${buildObligationLabelSummary(obligations)}. Protect each item below before routing anything to debt payoff or savings.${parkedCashAfterProtection > 0 && optionalAllocatedNow <= 0 ? ` After that, keep the remaining ${fmt(parkedCashAfterProtection)} parked for the next wave of obligations and floor protection.` : ""}`,
+                ? `Assign the current liquid cash first: ${buildObligationLabelSummary(obligations)}. Based on current Checking and Savings balances, you can reserve ${fmt(allocatedProtected)} now and a ${fmt(protectedGap)} protected gap still remains.${overrideContextNote ? ` ${overrideContextNote}` : ""}`
+                : `Assign the current liquid cash in order: ${buildObligationLabelSummary(obligations)}. Protect each item below before routing anything to debt payoff or savings.${parkedCashAfterProtection > 0 && optionalAllocatedNow <= 0 ? ` After that, keep the remaining ${fmt(parkedCashAfterProtection)} parked for the next wave of obligations and floor protection.` : ""}${overrideContextNote ? ` ${overrideContextNote}` : ""}`
+            ),
             amount: fmt(headlineCapital),
           }
         : headlineCapital > 0
           ? {
               title: moves[0]?.title || "Allocate this week's free cash",
-              detail: moves[0]?.detail || `Route the full ${fmt(headlineCapital)} of deployable cash to the highest-priority destinations in order.`,
+              detail: sanitizeVisibleAuditCopy(moves[0]?.detail || `Route the full ${fmt(headlineCapital)} of deployable cash to the highest-priority destinations in order.${overrideContextNote ? ` ${overrideContextNote}` : ""}`),
               amount: moves[0]?.amount || fmt(headlineCapital),
             }
         : {

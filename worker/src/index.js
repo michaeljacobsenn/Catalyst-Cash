@@ -2317,13 +2317,22 @@ export default {
     const effectiveSnapshot = budgetedRequest.snapshot;
     const effectiveHistory = budgetedRequest.history;
 
+    const auditLogId = generateAuditLogId();
+    const auditUserId = getRevenueCatAppUserId(request) || deviceId;
+
+    const providerTimeoutMs =
+      resolvedType === "chat"
+        ? 30_000
+        : (responseFormat || "json") === "text"
+          ? 45_000
+          : 50_000;
+    const requestStartedAt = Date.now();
+
     // ─── Execute Provider Call ─────────────────────────────
     try {
       // Structured audits should not stream. The app parses them as strict JSON,
       // so a complete one-shot response is more reliable than partial SSE chunks.
       const shouldStream = stream !== false && responseFormat === "text";
-      const auditLogId = generateAuditLogId();
-      const auditUserId = getRevenueCatAppUserId(request) || deviceId;
 
       const result = await handler(apiKey, {
         snapshot: effectiveSnapshot,
@@ -2332,6 +2341,7 @@ export default {
         model: resolvedModel,
         stream: shouldStream,
         responseFormat: responseFormat || "json",
+        timeoutMs: providerTimeoutMs,
       });
       const committedRateResult = testingBypass ? rateResult : await commitRateLimit(rateResult, env);
 
@@ -2383,6 +2393,7 @@ export default {
       }
 
       let resultText = stripThoughtProcess(typeof result === "string" ? result : result?.text || "");
+      let hitDegradedFallback = false;
       if ((responseFormat || "json") !== "text") {
         const coercedStructuredJson = coerceStructuredJsonResult(resultText);
         if (coercedStructuredJson) {
@@ -2393,6 +2404,16 @@ export default {
             model: resolvedModel,
             rawLength: resultText.length,
           });
+          const retryBudgetMs = Math.max(0, 55_000 - (Date.now() - requestStartedAt));
+          if (retryBudgetMs < 6_000) {
+            workerLog(env, "warn", "structured-json", "Skipping critical retry because request budget is nearly exhausted. Emitting deterministic structured fallback.", {
+              provider: selectedProvider,
+              model: resolvedModel,
+              retryBudgetMs,
+            });
+            resultText = buildStructuredAuditFallback(effectiveContext, effectiveSnapshot);
+            hitDegradedFallback = true;
+          } else {
           try {
             const retryResult = await handler(apiKey, {
               snapshot: effectiveSnapshot,
@@ -2404,6 +2425,7 @@ export default {
               model: resolvedModel,
               stream: false,
               responseFormat: "json",
+              timeoutMs: Math.min(retryBudgetMs, 10_000),
             });
             const retryText = stripThoughtProcess(typeof retryResult === "string" ? retryResult : retryResult?.text || "");
             const coercedRetryJson = coerceStructuredJsonResult(retryText);
@@ -2416,6 +2438,7 @@ export default {
                 rawLength: retryText.length,
               });
               resultText = buildStructuredAuditFallback(effectiveContext, effectiveSnapshot);
+              hitDegradedFallback = true;
             }
           } catch (retryError) {
             workerLog(env, "warn", "structured-json", "Critical retry failed. Emitting deterministic structured fallback.", {
@@ -2424,6 +2447,8 @@ export default {
               error: redactForWorkerLogs(retryError),
             });
             resultText = buildStructuredAuditFallback(effectiveContext, effectiveSnapshot);
+            hitDegradedFallback = true;
+          }
           }
         }
       }
@@ -2436,9 +2461,9 @@ export default {
         promptTokens: usage.promptTokens,
         completionTokens: usage.completionTokens,
         parseSucceeded: false,
-        hitDegradedFallback: false,
+        hitDegradedFallback,
         responsePreview: resultText,
-        confidence: "medium",
+        confidence: hitDegradedFallback ? "low" : "medium",
         driftWarning: false,
         driftDetails: [],
       });
@@ -2449,6 +2474,7 @@ export default {
         headers: buildHeaders(cors, {
           "Content-Type": "application/json",
           "X-Audit-Log-ID": auditLogId,
+          "X-Catalyst-Degraded": hitDegradedFallback ? "1" : "0",
           "X-RateLimit-Remaining": String(committedRateResult.remaining),
           "X-RateLimit-Limit": String(committedRateResult.limit),
           ...tierHeaders,
@@ -2460,6 +2486,32 @@ export default {
         provider: selectedProvider,
         type: resolvedType,
       });
+      if (resolvedType !== "chat" && (responseFormat || "json") !== "text") {
+        const fallback = buildStructuredAuditFallback(effectiveContext, effectiveSnapshot);
+        await insertAuditLogRow(env.DB, {
+          id: auditLogId,
+          provider: selectedProvider,
+          model: resolvedModel,
+          userId: auditUserId,
+          promptTokens: 0,
+          completionTokens: 0,
+          parseSucceeded: false,
+          hitDegradedFallback: true,
+          responsePreview: fallback,
+          confidence: "low",
+          driftWarning: false,
+          driftDetails: [],
+        });
+        return new Response(JSON.stringify({ result: fallback }), {
+          status: 200,
+          headers: buildHeaders(cors, {
+            "Content-Type": "application/json",
+            "X-Audit-Log-ID": auditLogId,
+            "X-Catalyst-Degraded": "1",
+            ...tierHeaders,
+          }),
+        });
+      }
       const message = err?.name === "AbortError"
         ? "Upstream provider timed out"
         : getSafeClientError(err, "Catalyst AI is temporarily unavailable. Please try again.");

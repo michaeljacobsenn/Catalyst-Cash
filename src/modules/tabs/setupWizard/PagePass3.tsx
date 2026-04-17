@@ -3,6 +3,7 @@ import { Capacitor } from "@capacitor/core";
 import { T } from "../../constants.js";
 import { haptic } from "../../haptics.js";
 import { AlertTriangle, CheckCircle2, Landmark, Sparkles } from "../../icons.js";
+import { sanitizeManualInvestmentHoldings } from "../../investmentHoldings.js";
 import {
   applyBalanceSync,
   autoMatchAccounts,
@@ -114,7 +115,7 @@ export function PagePass3({
             await db.set("bank-accounts", allBanks);
             if (newPlaidInvestments.length > 0) {
               existingConfig.plaidInvestments = allInvests;
-              await db.set("financial-config", existingConfig);
+              await db.set("financial-config", sanitizeManualInvestmentHoldings(existingConfig));
             }
 
             try {
@@ -129,7 +130,7 @@ export function PagePass3({
                 await db.set("bank-accounts", syncData.updatedBankAccounts);
                 if (syncData.updatedPlaidInvestments) {
                   existingConfig.plaidInvestments = syncData.updatedPlaidInvestments;
-                  await db.set("financial-config", existingConfig);
+                  await db.set("financial-config", sanitizeManualInvestmentHoldings(existingConfig));
                 }
                 await saveConnectionLinks(refreshed);
               }

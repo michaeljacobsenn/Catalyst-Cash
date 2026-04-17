@@ -6,8 +6,8 @@ import { usePortfolio } from "../contexts/PortfolioContext.js";
 import { useSettings } from "../contexts/SettingsContext.js";
 import { computeFireProjection } from "../fire.js";
 import {
-  getManualInvestmentSourceId,
   getPlaidInvestmentSourceId,
+  isManualHoldingExcluded,
   isInvestmentSourceExcluded,
 } from "../investmentHoldings.js";
 import { extractDashboardMetrics, fmt } from "../utils.js";
@@ -104,17 +104,17 @@ export default function useDashboardData() {
     for (const s of sections) {
       const items = holdings[s.key] || [];
       if (items.length === 0 && !s.enabled) continue;
-      const manualSourceExcluded = isInvestmentSourceExcluded(excludedSourceIds, getManualInvestmentSourceId(s.key));
       let total = 0;
-      if (!manualSourceExcluded) {
-        for (const h of items) {
-          const price = marketPrices?.[h.symbol]?.price ?? h.lastKnownPrice ?? 0;
-          total += (parseFloat(h.shares) || 0) * price;
-        }
+      let manualIncludedCount = 0;
+      for (const h of items) {
+        if (isManualHoldingExcluded(excludedSourceIds, s.key, h)) continue;
+        const price = marketPrices?.[h.symbol]?.price ?? h.lastKnownPrice ?? 0;
+        total += (parseFloat(h.shares) || 0) * price;
+        manualIncludedCount += 1;
       }
       const combinedTotal = total + (plaidBucketTotals[s.key] || 0);
       const combinedCount =
-        (manualSourceExcluded || items.length === 0 ? 0 : 1) +
+        manualIncludedCount +
         ((financialConfig?.plaidInvestments || []).filter((pi) =>
           pi?.bucket === s.key && !isInvestmentSourceExcluded(excludedSourceIds, getPlaidInvestmentSourceId(pi))
         ).length);

@@ -27,7 +27,7 @@ import { log } from "../logger.js";
 import { addMilestones, extractAuditMilestones, getMemoryBlock, loadMemory } from "../memory.js";
 import { isLikelyAbortError, toUserFacingRequestError } from "../networkErrors.js";
 import { readOnlineStatus } from "../onlineStatus.js";
-import { getProvider } from "../providers.js";
+import { getBackendProvider, getProvider } from "../providers.js";
 import { buildScrubber } from "../scrubber.js";
 import { getHistoryLimit, getOrCreateDeviceId, recordAuditUsage } from "../subscription.js";
 import { buildDegradedParsedAudit, cyrb53, db, detectAuditDrift, parseAudit, parseCurrency, validateParsedAuditConsistency } from "../utils.js";
@@ -446,9 +446,12 @@ export function AuditProvider({ children }: AuditProviderProps) {
           const memBlock = getMemoryBlock(memory);
 
           const activeScrubber = scrubber;
+          const promptProviderId = provider.isBackend
+            ? getBackendProvider(aiModel)
+            : (aiProvider || "gemini");
           const liveContext = scrubPromptContext(
             {
-              providerId: aiProvider || "gemini",
+              providerId: promptProviderId,
               financialConfig,
               cards: strategyCards,
               bankAccounts,
@@ -497,7 +500,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
           if (apiHistory.length > 6) apiHistory = apiHistory.slice(-6);
 
           historyForProvider =
-            aiProvider === "gemini"
+            promptProviderId === "gemini"
               ? apiHistory.map((message) => ({
                   role: message.role === "assistant" ? "model" : "user",
                   parts: [{ text: activeScrubber.scrub(message.content) }],

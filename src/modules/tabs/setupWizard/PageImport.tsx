@@ -10,6 +10,7 @@ import { downloadFromICloud } from "../../cloudSync.js";
 import { T } from "../../constants.js";
 import { decrypt, isEncrypted } from "../../crypto.js";
 import { refreshIdentitySessionWithAppleIdentityToken } from "../../identitySession.js";
+import { sanitizeManualInvestmentHoldings } from "../../investmentHoldings.js";
 import { log } from "../../logger.js";
 import {
   fetchRecoveryVaultBackup,
@@ -134,7 +135,7 @@ export default function PageImport({
           : num;
       }
       const existing = ((await db.get("financial-config")) || {}) as Record<string, unknown>;
-      await db.set("financial-config", { ...existing, ...config, _fromSetupWizard: true });
+      await db.set("financial-config", sanitizeManualInvestmentHoldings({ ...existing, ...config, _fromSetupWizard: true }));
       toast?.success?.(`Imported ${Object.keys(config).length} fields from spreadsheet backup`);
       await onImported?.();
       setImported(true);
@@ -415,7 +416,7 @@ export default function PageImport({
       const config = await parseSpreadsheet(file);
       if (Object.keys(config).length > 0) {
         const existing = ((await db.get("financial-config")) || {}) as Record<string, unknown>;
-        await db.set("financial-config", { ...existing, ...config, _fromSetupWizard: true });
+        await db.set("financial-config", sanitizeManualInvestmentHoldings({ ...existing, ...config, _fromSetupWizard: true }));
         toast?.success?.(`Imported ${Object.keys(config).length} fields — existing values overwritten`);
         await onImported?.();
         setImported(true);

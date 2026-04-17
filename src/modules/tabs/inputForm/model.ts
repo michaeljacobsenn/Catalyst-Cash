@@ -5,7 +5,7 @@ import type {
   InvestmentHoldings,
   PlaidInvestmentAccount,
 } from "../../../types/index.js";
-import { getManualInvestmentSourceId, getPlaidInvestmentSourceId } from "../../investmentHoldings.js";
+import { getManualHoldingSourceId, getManualInvestmentSourceId, getPlaidInvestmentSourceId } from "../../investmentHoldings.js";
 import { toNumber, type MoneyInput } from "./utils.js";
 
 export interface InputDebt extends AuditFormDebt {
@@ -84,6 +84,8 @@ export interface InvestmentAutoValues {
   brokerage: number;
   k401: number;
 }
+
+export type InvestmentHoldingBreakdowns = Record<string, number>;
 
 export type InvestmentOverrideState = Record<InvestmentAuditField["key"], boolean>;
 
@@ -262,7 +264,7 @@ export function buildInvestmentAuditFields({
 
 export function buildInvestmentAuditSources({
   trackingConfig,
-  holdingValues,
+  holdingBreakdowns = {},
   form,
   holdings = {},
   plaidInvestments = [],
@@ -272,7 +274,7 @@ export function buildInvestmentAuditSources({
     holdings?: InvestmentHoldings;
     plaidInvestments?: PlaidInvestmentAccount[];
   };
-  holdingValues: InvestmentAutoValues;
+  holdingBreakdowns?: InvestmentHoldingBreakdowns;
   form: Pick<InputFormState, "roth" | "brokerage" | "k401Balance">;
   holdings?: InvestmentHoldings;
   plaidInvestments?: PlaidInvestmentAccount[];
@@ -303,17 +305,22 @@ export function buildInvestmentAuditSources({
     });
 
     const bucketHoldings = Array.isArray(holdings?.[bucket]) ? holdings[bucket] : [];
-    const holdingsTotal = Number(holdingValues[bucket] || 0);
-    if (trackingConfig.enableHoldings && bucketHoldings.length > 0 && holdingsTotal > 0) {
-      sources.push({
-        id: getManualInvestmentSourceId(bucket),
-        bucket,
-        label: meta.label,
-        detail: `${bucketHoldings.length} manual holding${bucketHoldings.length === 1 ? "" : "s"}`,
-        accent: meta.accent,
-        amount: holdingsTotal,
-        sourceType: "manual-holdings",
-        editable: false,
+    if (trackingConfig.enableHoldings && bucketHoldings.length > 0) {
+      bucketHoldings.forEach((holding) => {
+        const sourceId = getManualHoldingSourceId(bucket, holding);
+        const amount = Number(holdingBreakdowns[sourceId] || 0);
+        if (!sourceId || amount <= 0) return;
+        const shares = Number(holding?.shares ?? 0) || 0;
+        sources.push({
+          id: sourceId,
+          bucket,
+          label: String(holding?.symbol || meta.label).trim().toUpperCase(),
+          detail: `Manual holding${shares > 0 ? ` · ${shares} sh` : ""}`,
+          accent: meta.accent,
+          amount,
+          sourceType: "manual-holdings",
+          editable: false,
+        });
       });
     }
 
@@ -344,6 +351,7 @@ export function splitInvestmentAuditSources(
 ) {
   const visibleSources = sources.filter((source) => {
     if (deletedSourceIds[source.id]) return false;
+    if (source.sourceType === "manual-holdings" && deletedSourceIds[getManualInvestmentSourceId(source.bucket)]) return false;
     if (source.editable) return Math.abs(Number(source.amount || 0)) > 0.004;
     return Math.abs(Number(source.amount || 0)) > 0.004;
   });

@@ -752,6 +752,179 @@ describe("parseAudit", () => {
     expect(parsed.weeklyMoves[0]).toContain("Delta Gold Business");
   });
 
+  it("adds promo-expiry language and the explicit full debt target when a promo sprint is re-anchored", () => {
+    const raw = JSON.stringify({
+      headerCard: { status: "YELLOW", title: "Promo cliff", subtitle: "Use the surplus well", confidence: "medium" },
+      healthScore: { score: 78, grade: "C+", trend: "flat", summary: "Promo timing matters." },
+      dashboardCard: [
+        { category: "Checking", amount: "$5,400.00", status: "ok" },
+        { category: "Vault", amount: "$4,600.00", status: "ok" },
+        { category: "Pending", amount: "$189.22", status: "watch" },
+        { category: "Debts", amount: "$4,250.00", status: "warn" },
+        { category: "Available", amount: "$3,880.00", status: "ok" },
+      ],
+      weeklyMoves: [
+        { title: "Use extra cash", detail: "Pay down your highest interest credit card debt.", amount: "$2,400.00", priority: "required" },
+      ],
+      alertsCard: [],
+      nextAction: {
+        title: "Review the week",
+        detail: "Route the current surplus to the best debt option.",
+        amount: "$3,880.00",
+      },
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: { balance: "$14,000.00", asOf: "2026-04-17", gateStatus: "guarded", netWorth: "$14,000.00", cryptoValue: null },
+    });
+
+    const parsed = validateParsedAuditConsistency(parseAudit(raw), {
+      nativeScore: 78,
+      nativeRiskFlags: ["critical-promo-expiry"],
+      operationalSurplus: 3880,
+      cards: [
+        { id: "venture", name: "Venture Rewards", balance: 1850, apr: 29.99 },
+        { id: "delta", name: "Delta SkyMiles Gold Business American Express Card", balance: 2400, apr: 0, hasPromoApr: true, promoAprExp: "2026-05-12" },
+      ],
+      formData: {
+        date: "2026-04-17",
+        checking: "5400",
+        savings: "4600",
+        debts: [
+          { name: "Venture Rewards", balance: "1850" },
+          { name: "Delta SkyMiles Gold Business American Express Card", balance: "2400" },
+        ],
+      },
+      renewals: [{ name: "Phone", amount: "95", nextDue: "2026-04-25", chargedTo: "Checking" }],
+      computedStrategy: {
+        operationalSurplus: 3880,
+        debtStrategy: {
+          target: "Delta SkyMiles Gold Business American Express Card",
+          amount: 2400,
+          method: "promo-sprint",
+        },
+      },
+      investmentAnchors: { balance: 14000, asOf: "2026-04-17", gateStatus: "Guarded — safety first", netWorth: 14000 },
+    });
+
+    const visibleMoves = parsed.structured.weeklyMoves.map((move) => `${move.title} ${move.detail}`).join(" ");
+    expect(visibleMoves).toContain("Delta SkyMiles Gold Business American Express Card");
+    expect(visibleMoves.toLowerCase()).toContain("promo expiry");
+  });
+
+  it("acknowledges deliberate checking overrides when the audit diverges from live balances", () => {
+    const raw = JSON.stringify({
+      headerCard: { status: "GREEN", title: "Mixed sources", subtitle: "Override active", confidence: "medium" },
+      healthScore: { score: 88, grade: "B+", trend: "flat", summary: "Healthy enough." },
+      dashboardCard: [
+        { category: "Checking", amount: "$1,850.00", status: "ok" },
+        { category: "Vault", amount: "$3,600.00", status: "ok" },
+        { category: "Pending", amount: "$250.00", status: "watch" },
+        { category: "Debts", amount: "$510.00", status: "warn" },
+        { category: "Available", amount: "$535.00", status: "ok" },
+      ],
+      weeklyMoves: [
+        { title: "Stay flexible", detail: "Keep cash ready for the week.", amount: "$535.00", priority: "required" },
+      ],
+      alertsCard: [],
+      nextAction: {
+        title: "Protect the week",
+        detail: "Keep enough cash for the next bills.",
+        amount: "$535.00",
+      },
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: { balance: "$17,600.00", asOf: "2026-04-17", gateStatus: "guarded", netWorth: "$17,600.00", cryptoValue: null },
+    });
+
+    const parsed = validateParsedAuditConsistency(parseAudit(raw), {
+      nativeScore: 88,
+      nativeRiskFlags: [],
+      operationalSurplus: 535,
+      cards: [{ id: "freedom", name: "Chase Freedom Flex", balance: 510, apr: 24.99 }],
+      formData: {
+        date: "2026-04-17",
+        checking: "1850",
+        savings: "3600",
+        debts: [{ name: "Chase Freedom Flex", balance: "510" }],
+        notes: "The checking override is deliberate because a reimbursement is pending.",
+        cashSummary: {
+          checkingOverride: true,
+          savingsOverride: false,
+        },
+      },
+      renewals: [{ name: "HOA", amount: "240", nextDue: "2026-04-19", chargedTo: "Checking" }],
+      computedStrategy: {
+        operationalSurplus: 535,
+        debtStrategy: { target: "Chase Freedom Flex", amount: 510, method: "avalanche" },
+      },
+      investmentAnchors: { balance: 17600, asOf: "2026-04-17", gateStatus: "Guarded — safety first", netWorth: 17600 },
+    });
+
+    expect(parsed.structured.nextAction.detail.toLowerCase()).toContain("override");
+    expect(parsed.structured.nextAction.detail.toLowerCase()).toContain("reimbursement");
+  });
+
+  it("treats open-like investment gate labels as open when re-anchoring the weekly plan", () => {
+    const raw = JSON.stringify({
+      headerCard: { status: "GREEN", title: "Invest", subtitle: "Cash is open", confidence: "high" },
+      healthScore: { score: 98, grade: "A", trend: "up", summary: "Strong." },
+      dashboardCard: [
+        { category: "Checking", amount: "$9,200.00", status: "ok" },
+        { category: "Vault", amount: "$16,000.00", status: "ok" },
+        { category: "Pending", amount: "$88.10", status: "watch" },
+        { category: "Debts", amount: "$0.00", status: "clear" },
+        { category: "Available", amount: "$7,350.00", status: "ok" },
+      ],
+      weeklyMoves: [
+        { title: "Hold cash", detail: "Keep the remainder in Vault.", amount: "$7,350.00", priority: "optional" },
+      ],
+      alertsCard: [],
+      nextAction: {
+        title: "Protect obligations",
+        detail: "Protect the next bill first.",
+        amount: "$7,350.00",
+      },
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: { balance: "$90,700.00", asOf: "2026-04-17", gateStatus: "Roth open, floor protected", netWorth: "$90,700.00", cryptoValue: null },
+    });
+
+    const parsed = validateParsedAuditConsistency(parseAudit(raw), {
+      nativeScore: 98,
+      nativeRiskFlags: [],
+      operationalSurplus: 7350,
+      cards: [],
+      formData: {
+        date: "2026-04-17",
+        checking: "9200",
+        savings: "16000",
+        roth: "22200",
+        brokerage: "14500",
+        k401Balance: "54000",
+      },
+      renewals: [{ name: "Rent", amount: "2100", nextDue: "2026-05-01", chargedTo: "Checking" }],
+      financialConfig: {
+        weeklySpendAllowance: 650,
+        emergencyFloor: 1200,
+        investmentRoth: 22200,
+        investmentBrokerage: 14500,
+        k401Balance: 54000,
+      },
+      computedStrategy: {
+        operationalSurplus: 7350,
+        debtStrategy: { target: "", amount: 0, method: "" },
+      },
+      investmentAnchors: { balance: 90700, asOf: "2026-04-17", gateStatus: "Roth open, floor protected", netWorth: 90700 },
+    });
+
+    const visibleMoves = parsed.structured.weeklyMoves.map((move) => `${move.title} ${move.detail}`).join(" ");
+    expect(parsed.investments.gateStatus).toBe("Open");
+    expect(visibleMoves).toContain("Roth IRA");
+  });
+
   it("replaces generic spending-review next actions when notes earmark funds toward a named debt", () => {
     const raw = JSON.stringify({
       headerCard: { status: "RED", title: "Cash stress", subtitle: "Checking is tight", confidence: "medium" },

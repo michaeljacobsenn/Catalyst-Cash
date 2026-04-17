@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import type { AuditRecord } from "../../../types/index.js";
+import type { AuditRecord, ParsedMoveItem } from "../../../types/index.js";
 
 import {
   buildActionPreviewRows,
+  buildAuditHandlingNotes,
   buildAllocationLedger,
   buildAnalysisNotes,
   buildFreedomJourneyMetrics,
   buildResultsInvestmentsSummary,
+  buildTacticalPlaybookData,
   cleanAllocationLead,
 } from "./model";
 
@@ -31,6 +33,28 @@ describe("resultsView model", () => {
         date: "2026-05-01",
         detail: "Keep $250.00 in Checking for Tax fund. It is reserved for 2026-05-01.",
         route: "Keep in Checking",
+      },
+    ]);
+  });
+
+  it("accepts string amounts when building compact action preview rows", () => {
+    expect(
+      buildActionPreviewRows([
+        {
+          text: "Route tax cash",
+          done: false,
+          amount: "$425.00",
+          title: "Tax fund",
+          detail: "Keep $425.00 in Checking for estimated taxes.",
+        },
+      ] as unknown as ParsedMoveItem[])
+    ).toEqual([
+      {
+        label: "Tax fund",
+        amount: "$425.00",
+        date: "",
+        detail: "Keep $425.00 in Checking for estimated taxes.",
+        route: "",
       },
     ]);
   });
@@ -99,6 +123,117 @@ describe("resultsView model", () => {
       buildAnalysisNotes(true, { qualityScore: "Native score only", autoUpdates: "Auto-updates skipped" }, "AI timeout")
     ).toBe("Native score only\n\nAuto-updates skipped\n\nAI timeout");
     expect(buildAnalysisNotes(false, { qualityScore: "Ignored" }, "Ignored")).toBe("");
+  });
+
+  it("recovers tactical playbook rows from structured weekly moves when move items are missing", () => {
+    expect(
+      buildTacticalPlaybookData({
+        moveItems: [],
+        structuredWeeklyMoves: [
+          {
+            title: "Protect tax cash",
+            detail: "Keep $425 in Checking for the NY tax gap.",
+            amount: "$425.00",
+            priority: "required",
+          },
+        ],
+      })
+    ).toEqual({
+      items: [
+        {
+          done: false,
+          text: "Keep $425 in Checking for the NY tax gap.",
+          title: "Protect tax cash",
+          detail: "Keep $425 in Checking for the NY tax gap.",
+          amount: 425,
+          tag: "REQUIRED",
+          semanticKind: null,
+          targetLabel: null,
+          sourceLabel: null,
+          routeLabel: null,
+          fundingLabel: null,
+          targetKey: null,
+          contributionKey: null,
+          transactional: false,
+        },
+      ],
+      fallbackSource: "structured-weekly-moves",
+    });
+  });
+
+  it("falls back to section move text when no structured playbook exists", () => {
+    expect(
+      buildTacticalPlaybookData({
+        moveItems: [],
+        structuredWeeklyMoves: [],
+        weeklyMoves: [],
+        sectionMoves: "- Keep checking above $900\n- Route $250 to Blue Cash Everyday",
+      })
+    ).toEqual({
+      items: [
+        {
+          done: false,
+          text: "Keep checking above $900",
+          title: "Keep checking above $900",
+          detail: "",
+          amount: 900,
+          tag: null,
+          semanticKind: null,
+          targetLabel: null,
+          sourceLabel: null,
+          routeLabel: null,
+          fundingLabel: null,
+          targetKey: null,
+          contributionKey: null,
+          transactional: false,
+        },
+        {
+          done: false,
+          text: "Route $250 to Blue Cash Everyday",
+          title: "Route $250 to Blue Cash Everyday",
+          detail: "",
+          amount: 250,
+          tag: null,
+          semanticKind: null,
+          targetLabel: null,
+          sourceLabel: null,
+          routeLabel: null,
+          fundingLabel: null,
+          targetKey: null,
+          contributionKey: null,
+          transactional: false,
+        },
+      ],
+      fallbackSource: "section-moves",
+    });
+  });
+
+  it("builds audit handling notes for repaired non-degraded audits", () => {
+    expect(
+      buildAuditHandlingNotes({
+        isDegraded: false,
+        auditFlags: [
+          {
+            code: "dashboard-repaired-to-native-anchors",
+            severity: "medium",
+            message: "Dashboard summary was rebuilt from native anchors.",
+          },
+        ],
+        consistency: {
+          scoreAnchoredToNative: true,
+          deterministicPlanReanchored: true,
+        },
+      })
+    ).toEqual({
+      content: [
+        "- Health score was re-anchored to Catalyst's native math before rendering.",
+        "- Dashboard totals were rebuilt from native cash and debt anchors because the model output drifted.",
+        "- The weekly move plan was normalized against Catalyst's deterministic allocation engine before display.",
+        "- Dashboard summary was rebuilt from native anchors.",
+      ].join("\n"),
+      badgeLabel: "Normalized",
+      accentColor: "teal",
+    });
   });
 
   it("derives freedom-journey metrics from audit history", () => {

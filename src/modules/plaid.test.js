@@ -168,6 +168,43 @@ describe("Plaid matching", () => {
     ]);
   });
 
+  it("does not reuse an already-linked card solely on issuer and last4", () => {
+    const connection = {
+      id: "item_1",
+      institutionName: "American Express",
+      accounts: [
+        {
+          plaidAccountId: "acct_123",
+          name: "Blue Cash Everyday",
+          officialName: "Blue Cash Everyday",
+          type: "credit",
+          subtype: "credit card",
+          mask: "9999",
+          linkedCardId: null,
+          linkedBankAccountId: null,
+          balance: null,
+        },
+      ],
+    };
+
+    const cards = [
+      {
+        id: "linked_delta",
+        institution: "American Express",
+        name: "Delta SkyMiles Gold Business American Express Card",
+        last4: "9999",
+        _plaidAccountId: "acct_existing",
+      },
+    ];
+
+    const { newCards, duplicateCandidates, matched } = autoMatchAccounts(connection, cards, [], null);
+    expect(newCards).toHaveLength(1);
+    expect(newCards[0].id).toBe("plaid_acct_123");
+    expect(matched).toHaveLength(1);
+    expect(connection.accounts[0].linkedCardId).toBe("plaid_acct_123");
+    expect(duplicateCandidates).toEqual([]);
+  });
+
   it("does not materialize likely duplicates during non-interactive hydration", () => {
     const connection = {
       id: "item_1",

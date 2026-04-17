@@ -196,7 +196,17 @@ export interface AuditConsistencyInfo {
   statusCorrected?: boolean;
   dashboardRepaired?: boolean;
   investmentSummaryRepaired?: boolean;
+  investmentGateRepaired?: boolean;
+  investmentMoveGuarded?: boolean;
   deterministicPlanReanchored?: boolean;
+  nextActionBackfilled?: boolean;
+  nextActionRepairedForCashPressure?: boolean;
+  nextActionRepairedFromNotes?: boolean;
+  weeklyMovesBackfilled?: boolean;
+  weeklyMoveRepairedForCashPressure?: boolean;
+  genericDebtLabelRepaired?: boolean;
+  genericWeeklyMoveLabelRepaired?: boolean;
+  noteBasedDebtStagingAppended?: boolean;
   currentLiquidCash?: number;
   protectedAllocatedNow?: number;
   optionalAllocatedNow?: number;
@@ -531,6 +541,7 @@ export type PaycheckDepositAccount = "checking" | "savings";
 export type InvestmentBucket = "roth" | "k401" | "brokerage" | "crypto" | "hsa";
 
 export interface InvestmentHolding {
+  id?: string;
   symbol: string;
   shares: number | string;
   lastKnownPrice?: number;
@@ -757,6 +768,7 @@ export interface CatalystCashConfig extends CatalystCashConfigCore {
   vaultBalance?: number;
   holdings?: InvestmentHoldings;
   deletedHoldingSymbols?: Partial<Record<InvestmentBucket, string[]>>;
+  deletedHoldingIds?: string[];
   excludedInvestmentSourceIds?: string[];
   acknowledgedDuplicateKeys?: string[];
   enableHoldings?: boolean;

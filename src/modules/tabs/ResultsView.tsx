@@ -22,10 +22,11 @@ import { fmtDate, stripPaycheckParens } from "../utils.js";
 import AuditExportSheet from "./AuditExportSheet.js";
 import {
   buildActionPreviewRows,
+  buildAuditHandlingNotes,
   buildAllocationLedger,
-  buildAnalysisNotes,
   buildFreedomJourneyMetrics,
   buildResultsInvestmentsSummary,
+  buildTacticalPlaybookData,
   cleanAllocationLead,
 } from "./resultsView/model";
 
@@ -195,10 +196,26 @@ export default memo(function ResultsView({
     parsed.structured?.nextAction && typeof parsed.structured.nextAction === "object"
       ? parsed.structured.nextAction
       : null;
-  const nextActionAllocationRows = useMemo(() => buildActionPreviewRows(parsed.moveItems || []), [parsed.moveItems]);
+  const nextActionNarrative = useMemo(() => {
+    const sectionText = typeof sections?.nextAction === "string" ? sections.nextAction.trim() : "";
+    if (sectionText) return sectionText;
+    return [nextActionCard?.title, nextActionCard?.detail].filter((value): value is string => Boolean(value && value.trim())).join("\n");
+  }, [nextActionCard?.detail, nextActionCard?.title, sections?.nextAction]);
+  const tacticalPlaybook = useMemo(
+    () =>
+      buildTacticalPlaybookData({
+        moveItems: parsed.moveItems || [],
+        structuredWeeklyMoves: parsed.structured?.weeklyMoves || [],
+        weeklyMoves: parsed.weeklyMoves || [],
+        sectionMoves: sections?.moves,
+      }),
+    [parsed.moveItems, parsed.structured?.weeklyMoves, parsed.weeklyMoves, sections?.moves]
+  );
+  const displayMoveItems = tacticalPlaybook.items;
+  const nextActionAllocationRows = useMemo(() => buildActionPreviewRows(displayMoveItems), [displayMoveItems]);
   const nextActionLead = useMemo(
-    () => cleanAllocationLead(nextActionCard?.detail || sections.nextAction),
-    [nextActionCard?.detail, sections.nextAction]
+    () => cleanAllocationLead(nextActionCard?.detail || nextActionNarrative),
+    [nextActionCard?.detail, nextActionNarrative]
   );
   const allocationLedger = useMemo(
     () => buildAllocationLedger(parsed?.consistency),
@@ -218,7 +235,7 @@ export default memo(function ResultsView({
   const liveMoveAssignments = (isLiveCurrentAudit ? current?.moveAssignments : audit.moveAssignments) || {};
   const moveAssignmentUi = useMemo(
     () =>
-      parsed.moveItems.map((item, index) =>
+      displayMoveItems.map((item, index) =>
         getMoveAssignmentOptions({
           move: item,
           cards,
@@ -228,11 +245,18 @@ export default memo(function ResultsView({
           assignment: liveMoveAssignments[String(index)] || null,
         })
       ),
-    [parsed.moveItems, cards, bankAccounts, financialConfig, liveMoveAssignments]
+    [displayMoveItems, cards, bankAccounts, financialConfig, liveMoveAssignments]
   );
-  const analysisNotes = useMemo(
-    () => buildAnalysisNotes(Boolean(isDegraded), sections, degradedInfo?.reason),
-    [degradedInfo?.reason, isDegraded, sections]
+  const auditHandlingNotes = useMemo(
+    () =>
+      buildAuditHandlingNotes({
+        isDegraded: Boolean(isDegraded),
+        sections,
+        degradedReason: degradedInfo?.reason,
+        auditFlags: parsed.auditFlags,
+        consistency: parsed.consistency,
+      }),
+    [degradedInfo?.reason, isDegraded, parsed.auditFlags, parsed.consistency, sections]
   );
   const freedomJourneyMetrics = useMemo(() => buildFreedomJourneyMetrics(history), [history]);
 
@@ -310,6 +334,7 @@ export default memo(function ResultsView({
                 {fmtDate(audit.date)}
               </Mono>
               {audit.isTest && <Badge variant="amber">TEST · NOT SAVED</Badge>}
+              {!isDegraded && auditHandlingNotes.badgeLabel && <Badge variant="teal">{auditHandlingNotes.badgeLabel}</Badge>}
             </div>
           </div>
         </div>
@@ -389,10 +414,10 @@ export default memo(function ResultsView({
         </Card>
       )}
 
-      {parsed.moveItems.length > 0 &&
+      {displayMoveItems.length > 0 &&
         (() => {
           const done = Object.values(moveChecks).filter(Boolean).length;
-          const total = parsed.moveItems.length;
+          const total = displayMoveItems.length;
           const pct = Math.round((done / total) * 100);
           const pctColor =
             pct >= 100 ? T.status.green : pct >= 80 ? T.status.green : pct >= 40 ? T.status.amber : T.text.dim;
@@ -544,7 +569,7 @@ export default memo(function ResultsView({
           </div>
         )}
 
-        {sections.nextAction && (
+        {(nextActionCard || nextActionNarrative) && (
           <section aria-labelledby="results-next-action" style={{ padding: "4px 0 22px", borderBottom: `1px solid ${T.border.subtle}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
               <div
@@ -706,7 +731,7 @@ export default memo(function ResultsView({
                 </div>
               ) : (
                 <div style={{ fontSize: 13, lineHeight: 1.65, color: T.text.secondary }}>
-                  {nextActionCard?.detail ? stripPaycheckParens(nextActionCard.detail) : <Md text={stripPaycheckParens(sections.nextAction)} />}
+                  {nextActionCard?.detail ? stripPaycheckParens(nextActionCard.detail) : <Md text={stripPaycheckParens(nextActionNarrative)} />}
                 </div>
               )}
             </div>
@@ -720,7 +745,7 @@ export default memo(function ResultsView({
           accentColor={T.accent.primary}
           badge={<Badge variant="teal">STATE OF THE UNION</Badge>}
         />
-        {parsed.moveItems.length > 0 && (
+        {displayMoveItems.length > 0 && (
           <section aria-labelledby="results-playbook" style={{ padding: "22px 0", borderBottom: `1px solid ${T.border.subtle}` }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 10, flexWrap: "wrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -740,16 +765,32 @@ export default memo(function ResultsView({
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   <h2 id="results-playbook" style={{ fontSize: "clamp(17px, 4.8vw, 20px)", fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>Tactical Playbook</h2>
                   <div style={{ fontSize: 11, color: T.text.dim, fontWeight: 700, letterSpacing: "0.02em" }}>
-                    Execute in this order
+                    {tacticalPlaybook.fallbackSource ? "Recovered from the audit narrative" : "Execute in this order"}
                   </div>
                 </div>
               </div>
               <Mono size={12} color={T.text.dim}>
-                {Object.values(moveChecks).filter(Boolean).length}/{parsed.moveItems.length} Complete
+                {Object.values(moveChecks).filter(Boolean).length}/{displayMoveItems.length} Complete
               </Mono>
             </div>
+            {tacticalPlaybook.fallbackSource && (
+              <div
+                style={{
+                  marginBottom: 12,
+                  padding: "10px 12px",
+                  borderRadius: 14,
+                  background: T.bg.elevated,
+                  border: `1px solid ${T.border.subtle}`,
+                  fontSize: 11.5,
+                  color: T.text.secondary,
+                  lineHeight: 1.55,
+                }}
+              >
+                The provider returned a thinner move payload, so Catalyst rebuilt this checklist from the structured weekly plan before rendering it.
+              </div>
+            )}
             <div style={{ display: "grid", gap: 12 }}>
-              {parsed.moveItems.map((moveItem: ParsedMoveItem, index: number) => (
+              {displayMoveItems.map((moveItem: ParsedMoveItem, index: number) => (
                 <MoveRow
                   key={index}
                   item={moveItem}
@@ -1091,15 +1132,19 @@ export default memo(function ResultsView({
         </div>
       </Card>
 
-      {isDegraded && analysisNotes && (
+      {auditHandlingNotes.content && (
         <Card style={{ marginTop: 14, background: T.bg.elevated }}>
           <ReportSection
-            title="Audit Notes"
+            title={isDegraded ? "Audit Notes" : "Audit Handling"}
             icon={CheckCircle}
-            content={analysisNotes}
-            accentColor={T.status.green}
+            content={auditHandlingNotes.content}
+            accentColor={isDegraded ? T.status.amber : T.accent.primary}
             isLast={true}
-            badge={<Badge variant="amber">Fallback</Badge>}
+            badge={
+              auditHandlingNotes.badgeLabel ? (
+                <Badge variant={auditHandlingNotes.accentColor === "amber" ? "amber" : "teal"}>{auditHandlingNotes.badgeLabel}</Badge>
+              ) : undefined
+            }
           />
         </Card>
       )}

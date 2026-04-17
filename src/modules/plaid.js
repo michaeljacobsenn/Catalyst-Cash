@@ -1354,16 +1354,21 @@ export function autoMatchAccounts(
       const matchByPlaidId = cards.find(c => c._plaidAccountId === acct.plaidAccountId);
       const matchByMask =
         !matchByPlaidId && acctLast4
-          ? cards.find(c => sameInstitution(c.institution, normalizedInst) && extractLast4(c) === acctLast4)
+          ? cards.find(
+              c => !c?._plaidAccountId && sameInstitution(c.institution, normalizedInst) && extractLast4(c) === acctLast4
+            )
           : null;
 
       const duplicateMatches =
         !matchByPlaidId && !matchByMask && acctName
-          ? findLikelyCardDuplicates(cards, {
+          ? findLikelyCardDuplicates(
+              cards.filter((card) => !card?._plaidAccountId),
+              {
               institution: normalizedInst,
               name: acct.officialName || acct.name,
               last4: acctLast4,
-            })
+              }
+            )
           : [];
 
       const cardMatch = matchByPlaidId || matchByMask;
@@ -1423,7 +1428,7 @@ export function autoMatchAccounts(
       // Try to match to existing bank account
       const matchByPlaidId = bankAccounts.find(b => b._plaidAccountId === acct.plaidAccountId);
       const duplicateMatches = !matchByPlaidId
-        ? findLikelyBankDuplicates(bankAccounts, {
+        ? findLikelyBankDuplicates(bankAccounts.filter((account) => !account?._plaidAccountId), {
             bank: normalizedInst,
             accountType: acct.subtype === "savings" ? "savings" : "checking",
             name: acct.officialName || acct.name,

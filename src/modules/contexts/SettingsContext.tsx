@@ -231,6 +231,7 @@ export const DEFAULT_FINANCIAL_CONFIG: CatalystCashConfig = {
   bigTicketItems: [],
   plaidInvestments: [],
   deletedHoldingSymbols: {},
+  deletedHoldingIds: [],
   excludedInvestmentSourceIds: [],
   acknowledgedDuplicateKeys: [],
   currencyCode: "USD",

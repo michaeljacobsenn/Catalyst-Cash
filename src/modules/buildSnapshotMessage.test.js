@@ -188,4 +188,22 @@ describe("buildSnapshotMessage", () => {
     expect(msg).toContain("Brokerage: $9600.00 (live)");
     expect(msg).not.toContain("Brokerage: $4200.00");
   });
+
+  it("respects individually excluded manual holdings when last known prices are available", () => {
+    const params = baseParams();
+    params.activeConfig.trackRothContributions = true;
+    params.activeConfig.enableHoldings = true;
+    params.activeConfig.overrideRothValue = false;
+    params.activeConfig.holdings = {
+      roth: [
+        { id: "holding_vti", symbol: "VTI", shares: "10", lastKnownPrice: 100 },
+        { id: "holding_vxus", symbol: "VXUS", shares: "5", lastKnownPrice: 50 },
+      ],
+    };
+    params.activeConfig.excludedInvestmentSourceIds = ["manual-holding:roth:holding_vxus"];
+    params.holdingValues.roth = 1250;
+    const msg = buildSnapshotMessage(params);
+    expect(msg).toContain("Roth IRA: $1000.00 (live)");
+    expect(msg).not.toContain("Roth IRA: $1250.00");
+  });
 });

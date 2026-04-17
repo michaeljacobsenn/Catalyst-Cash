@@ -5,6 +5,7 @@ const path = require("path");
 
 const ROOTS = ["src", "worker"];
 const CODE_EXTENSIONS = new Set([".js", ".jsx", ".ts", ".tsx"]);
+const IGNORED_PATH_PARTS = [".wrangler/tmp", "node_modules", "dist"];
 const THRESHOLDS = {
   maxFilesOver500: 20,
   maxFilesOver800: 8,
@@ -21,10 +22,16 @@ function isCodeFile(filePath) {
   return CODE_EXTENSIONS.has(path.extname(filePath));
 }
 
+function shouldIgnorePath(filePath) {
+  const normalized = filePath.split(path.sep).join("/");
+  return IGNORED_PATH_PARTS.some((segment) => normalized.includes(segment));
+}
+
 function walk(dir, files = []) {
   if (!fs.existsSync(dir)) return files;
   for (const name of fs.readdirSync(dir)) {
     const fullPath = path.join(dir, name);
+    if (shouldIgnorePath(fullPath)) continue;
     const stat = fs.statSync(fullPath);
     if (stat.isDirectory()) {
       walk(fullPath, files);

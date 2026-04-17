@@ -47,7 +47,7 @@
   import { DebtBalancesSection } from "./inputForm/DebtBalancesSection";
   import { InvestmentBalancesSection } from "./inputForm/InvestmentBalancesSection";
   import { PendingChargesSection } from "./inputForm/PendingChargesSection";
-  import {
+import {
     buildAuditSubmitFormState,
     buildInvestmentAuditSources,
     buildCashAccountMeta,
@@ -59,6 +59,7 @@
     splitInvestmentAuditSources,
     type InputDebt,
     type InputFormState,
+    type InvestmentHoldingBreakdowns,
     type InvestmentAuditSource,
     type PendingCharge,
   } from "./inputForm/model.js";
@@ -247,6 +248,7 @@ export default function InputForm({
 
   const [budgetActuals, setBudgetActuals] = useState<Record<string, string | number>>({});
   const [holdingValues, setHoldingValues] = useState<HoldingValues>({ roth: 0, k401: 0, brokerage: 0, crypto: 0, hsa: 0 });
+  const [holdingBreakdowns, setHoldingBreakdowns] = useState<InvestmentHoldingBreakdowns>({});
   const [overridePlaid, setOverridePlaid] = useState<OverridePlaidState>({ checking: false, vault: false, debts: {}, cashAccounts: {} });
   const [deletedDebtCardIds, setDeletedDebtCardIds] = useState<Record<string, boolean>>({});
   const [deletedCashAccountIds, setDeletedCashAccountIds] = useState<Record<string, boolean>>({});
@@ -294,7 +296,7 @@ export default function InputForm({
   const [showConfig, setShowConfig] = useState<boolean>(false);
 
   useEffect(() => {
-    void loadHoldingValues(financialConfig, setHoldingValues);
+    void loadHoldingValues(financialConfig, setHoldingValues, setHoldingBreakdowns);
   }, [financialConfig?.enableHoldings, financialConfig?.holdings]);
 
   const validation = useMemo(() => validateSnapshot(form, typedFinancialConfig), [form, typedFinancialConfig]);
@@ -332,16 +334,12 @@ export default function InputForm({
     () =>
       buildInvestmentAuditSources({
         trackingConfig: activeConfig,
-        holdingValues: {
-          roth: holdingValues.roth,
-          brokerage: holdingValues.brokerage,
-          k401: holdingValues.k401,
-        },
+        holdingBreakdowns,
         form,
         holdings: activeConfig.holdings ?? {},
         plaidInvestments: activeConfig.plaidInvestments ?? [],
       }),
-    [activeConfig, form.brokerage, form.k401Balance, form.roth, holdingValues.brokerage, holdingValues.k401, holdingValues.roth]
+    [activeConfig, form.brokerage, form.k401Balance, form.roth, holdingBreakdowns, holdingValues.brokerage, holdingValues.k401, holdingValues.roth]
   );
   const { visibleSources: visibleInvestmentSources, hiddenSources: hiddenInvestmentSources } = useMemo(
     () => splitInvestmentAuditSources(investmentSources, deletedInvestmentSourceIds),

@@ -1,4 +1,5 @@
 import type { CatalystCashConfig } from "../../../types/index.js";
+import { getManualHoldingSourceId } from "../../investmentHoldings.js";
 import { log } from "../../logger.js";
 
 const HOLDING_BUCKET_KEYS = ["roth", "k401", "brokerage", "crypto", "hsa"] as const;
@@ -12,6 +13,7 @@ const ZERO_HOLDING_VALUES = {
 
 type HoldingBucketKey = (typeof HOLDING_BUCKET_KEYS)[number];
 type HoldingValues = Record<HoldingBucketKey, number>;
+type HoldingBreakdownMap = Record<string, number>;
 
 interface HoldingSymbolEntry {
   symbol?: string;
@@ -130,10 +132,12 @@ export async function loadAuditQuota(
 
 export async function loadHoldingValues(
   financialConfig: Partial<CatalystCashConfig> | null | undefined,
-  setHoldingValues: (values: HoldingValues) => void
+  setHoldingValues: (values: HoldingValues) => void,
+  setHoldingBreakdowns?: (values: HoldingBreakdownMap) => void
 ) {
   if (!financialConfig?.enableHoldings) {
     setHoldingValues({ ...ZERO_HOLDING_VALUES });
+    setHoldingBreakdowns?.({});
     return;
   }
 
@@ -141,23 +145,36 @@ export async function loadHoldingValues(
   const allSymbols = getHoldingSymbols(holdings);
   if (allSymbols.length === 0) {
     setHoldingValues({ ...ZERO_HOLDING_VALUES });
+    setHoldingBreakdowns?.({});
     return;
   }
 
   try {
     const { calcPortfolioValue, fetchMarketPrices } = await import("../../marketData.js");
     const prices = await fetchMarketPrices(allSymbols);
-    const calc = (key: HoldingBucketKey) => calcPortfolioValue(holdings[key] || [], prices).total;
+    const calc = (key: HoldingBucketKey) => calcPortfolioValue(holdings[key] || [], prices);
+    const breakdowns = {};
+    for (const key of HOLDING_BUCKET_KEYS) {
+      const result = calc(key);
+      const breakdown = Array.isArray(result?.breakdown) ? result.breakdown : [];
+      for (const [index, holding] of (holdings[key] || []).entries()) {
+        const sourceId = getManualHoldingSourceId(key, holding);
+        const value = Number(breakdown[index]?.value || 0);
+        if (sourceId) breakdowns[sourceId] = value;
+      }
+    }
 
     setHoldingValues({
-      roth: calc("roth"),
-      k401: calc("k401"),
-      brokerage: calc("brokerage"),
-      crypto: calc("crypto"),
-      hsa: calc("hsa"),
+      roth: calc("roth").total,
+      k401: calc("k401").total,
+      brokerage: calc("brokerage").total,
+      crypto: calc("crypto").total,
+      hsa: calc("hsa").total,
     });
+    setHoldingBreakdowns?.(breakdowns);
   } catch (error) {
     setHoldingValues({ ...ZERO_HOLDING_VALUES });
+    setHoldingBreakdowns?.({});
     void log.warn("input-form", "Failed to load holding values", { error });
   }
 }

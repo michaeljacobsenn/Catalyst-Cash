@@ -1,7 +1,50 @@
 const HOLDING_BUCKETS = ["roth", "k401", "brokerage", "crypto", "hsa"];
 
+function createHoldingId(bucket, symbol) {
+  const normalizedBucket = String(bucket || "").trim() || "holding";
+  const normalizedSymbol = normalizeSymbol(symbol) || "position";
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `holding:${normalizedBucket}:${normalizedSymbol}:${crypto.randomUUID()}`;
+  }
+  return `holding:${normalizedBucket}:${normalizedSymbol}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function normalizeSymbol(symbol) {
   return String(symbol || "").trim().toUpperCase();
+}
+
+function normalizeHoldingId(value) {
+  return String(value || "").trim();
+}
+
+function normalizeHolding(bucket, holding) {
+  if (typeof holding === "string") {
+    const symbol = normalizeSymbol(holding);
+    if (!symbol) return null;
+    return {
+      id: createHoldingId(bucket, symbol),
+      symbol,
+      shares: 0,
+    };
+  }
+  if (!holding || typeof holding !== "object") return null;
+  const symbol = normalizeSymbol(holding?.symbol);
+  if (!symbol) return null;
+  return {
+    ...holding,
+    id: normalizeHoldingId(holding?.id) || createHoldingId(bucket, symbol),
+    symbol,
+  };
+}
+
+function normalizeHoldings(value) {
+  const normalized = {};
+  for (const bucket of HOLDING_BUCKETS) {
+    const items = Array.isArray(value?.[bucket]) ? value[bucket] : [];
+    const nextItems = items.map((holding) => normalizeHolding(bucket, holding)).filter(Boolean);
+    if (nextItems.length > 0) normalized[bucket] = nextItems;
+  }
+  return normalized;
 }
 
 function normalizeDeletedHoldingSymbols(value) {
@@ -14,12 +57,23 @@ function normalizeDeletedHoldingSymbols(value) {
   return normalized;
 }
 
+function normalizeDeletedHoldingIds(value) {
+  return [...new Set((Array.isArray(value) ? value : []).map(normalizeHoldingId).filter(Boolean))];
+}
+
 function normalizeExcludedInvestmentSourceIds(value) {
   return [...new Set((Array.isArray(value) ? value : []).map((entry) => String(entry || "").trim()).filter(Boolean))];
 }
 
 export function getManualInvestmentSourceId(bucket) {
   return `manual-holdings:${String(bucket || "").trim()}`;
+}
+
+export function getManualHoldingSourceId(bucket, holding) {
+  const normalizedBucket = String(bucket || "").trim();
+  const normalizedId = normalizeHoldingId(holding?.id);
+  if (!normalizedBucket || !normalizedId) return "";
+  return `manual-holding:${normalizedBucket}:${normalizedId}`;
 }
 
 export function getPlaidInvestmentSourceId(accountOrId) {
@@ -31,83 +85,91 @@ export function getPlaidInvestmentSourceId(accountOrId) {
 }
 
 export function sanitizeManualInvestmentHoldings(config = {}) {
-  const holdings = config?.holdings && typeof config.holdings === "object" ? config.holdings : {};
+  const holdings = normalizeHoldings(config?.holdings);
   const deletedHoldingSymbols = normalizeDeletedHoldingSymbols(config?.deletedHoldingSymbols);
+  const deletedHoldingIds = normalizeDeletedHoldingIds(config?.deletedHoldingIds);
   const excludedInvestmentSourceIds = normalizeExcludedInvestmentSourceIds(config?.excludedInvestmentSourceIds);
-  if (Object.keys(deletedHoldingSymbols).length === 0) {
-    if (
-      excludedInvestmentSourceIds.length === (Array.isArray(config?.excludedInvestmentSourceIds) ? config.excludedInvestmentSourceIds.length : 0)
-      && excludedInvestmentSourceIds.every((entry, index) => entry === config?.excludedInvestmentSourceIds?.[index])
-    ) {
-      return config;
-    }
-    return {
-      ...config,
-      excludedInvestmentSourceIds,
-    };
-  }
-
   let changed = false;
   const nextHoldings = { ...holdings };
   for (const bucket of HOLDING_BUCKETS) {
     const removedSymbols = deletedHoldingSymbols[bucket];
-    if (!removedSymbols?.length || !Array.isArray(nextHoldings[bucket]) || nextHoldings[bucket].length === 0) continue;
-    const removedSet = new Set(removedSymbols);
-    const filtered = nextHoldings[bucket].filter((holding) => !removedSet.has(normalizeSymbol(holding?.symbol)));
+    const removedIdsSet = new Set(deletedHoldingIds);
+    const removedSymbolsSet = new Set(removedSymbols || []);
+    if (
+      removedIdsSet.size === 0 &&
+      removedSymbolsSet.size === 0
+    ) continue;
+    if (!Array.isArray(nextHoldings[bucket]) || nextHoldings[bucket].length === 0) continue;
+    const filtered = nextHoldings[bucket].filter((holding) => {
+      const holdingId = normalizeHoldingId(holding?.id);
+      const symbol = normalizeSymbol(holding?.symbol);
+      if (holdingId && removedIdsSet.has(holdingId)) return false;
+      if (symbol && removedSymbolsSet.has(symbol)) return false;
+      return true;
+    });
     if (filtered.length !== nextHoldings[bucket].length) {
       nextHoldings[bucket] = filtered;
       changed = true;
     }
   }
 
-  if (!changed) {
-    return {
-      ...config,
-      deletedHoldingSymbols,
-      excludedInvestmentSourceIds,
-    };
-  }
-
+  const rawHoldings = config?.holdings && typeof config.holdings === "object" ? config.holdings : {};
+  const normalizedHoldingsChanged = JSON.stringify(rawHoldings) !== JSON.stringify(holdings);
   return {
     ...config,
-    holdings: nextHoldings,
+    holdings: changed ? nextHoldings : normalizedHoldingsChanged ? holdings : rawHoldings,
     deletedHoldingSymbols,
+    deletedHoldingIds,
     excludedInvestmentSourceIds,
   };
 }
 
-export function markManualHoldingDeleted(config = {}, bucket, symbol) {
-  const normalizedSymbol = normalizeSymbol(symbol);
-  if (!bucket || !normalizedSymbol) return sanitizeManualInvestmentHoldings(config);
+export function markManualHoldingDeleted(config = {}, bucket, holdingOrSymbol) {
+  const normalizedSymbol = normalizeSymbol(
+    typeof holdingOrSymbol === "string" ? holdingOrSymbol : holdingOrSymbol?.symbol
+  );
+  const normalizedHoldingId = normalizeHoldingId(
+    typeof holdingOrSymbol === "string" ? "" : holdingOrSymbol?.id
+  );
+  if (!bucket || (!normalizedSymbol && !normalizedHoldingId)) return sanitizeManualInvestmentHoldings(config);
   const deletedHoldingSymbols = normalizeDeletedHoldingSymbols(config?.deletedHoldingSymbols);
+  const deletedHoldingIds = normalizeDeletedHoldingIds(config?.deletedHoldingIds);
   return sanitizeManualInvestmentHoldings({
     ...config,
     deletedHoldingSymbols: {
       ...deletedHoldingSymbols,
-      [bucket]: [...new Set([...(deletedHoldingSymbols[bucket] || []), normalizedSymbol])],
+      [bucket]: normalizedSymbol
+        ? [...new Set([...(deletedHoldingSymbols[bucket] || []), normalizedSymbol])]
+        : deletedHoldingSymbols[bucket] || [],
     },
+    deletedHoldingIds: normalizedHoldingId ? [...new Set([...deletedHoldingIds, normalizedHoldingId])] : deletedHoldingIds,
   });
 }
 
-export function clearDeletedManualHolding(config = {}, bucket, symbol) {
-  const normalizedSymbol = normalizeSymbol(symbol);
-  if (!bucket || !normalizedSymbol) return sanitizeManualInvestmentHoldings(config);
+export function clearDeletedManualHolding(config = {}, bucket, holdingOrSymbol) {
+  const normalizedSymbol = normalizeSymbol(
+    typeof holdingOrSymbol === "string" ? holdingOrSymbol : holdingOrSymbol?.symbol
+  );
+  const normalizedHoldingId = normalizeHoldingId(
+    typeof holdingOrSymbol === "string" ? "" : holdingOrSymbol?.id
+  );
+  if (!bucket || (!normalizedSymbol && !normalizedHoldingId)) return sanitizeManualInvestmentHoldings(config);
   const deletedHoldingSymbols = normalizeDeletedHoldingSymbols(config?.deletedHoldingSymbols);
-  if (!deletedHoldingSymbols[bucket]?.length) {
-    return sanitizeManualInvestmentHoldings(config);
-  }
-
   const nextDeletedHoldingSymbols = { ...deletedHoldingSymbols };
-  const filteredBucket = deletedHoldingSymbols[bucket].filter((entry) => entry !== normalizedSymbol);
-  if (filteredBucket.length > 0) {
-    nextDeletedHoldingSymbols[bucket] = filteredBucket;
-  } else {
-    delete nextDeletedHoldingSymbols[bucket];
+  if (normalizedSymbol && deletedHoldingSymbols[bucket]?.length) {
+    const filteredBucket = deletedHoldingSymbols[bucket].filter((entry) => entry !== normalizedSymbol);
+    if (filteredBucket.length > 0) {
+      nextDeletedHoldingSymbols[bucket] = filteredBucket;
+    } else {
+      delete nextDeletedHoldingSymbols[bucket];
+    }
   }
+  const nextDeletedHoldingIds = normalizeDeletedHoldingIds(config?.deletedHoldingIds).filter((entry) => entry !== normalizedHoldingId);
 
   return sanitizeManualInvestmentHoldings({
     ...config,
     deletedHoldingSymbols: nextDeletedHoldingSymbols,
+    deletedHoldingIds: nextDeletedHoldingIds,
   });
 }
 
@@ -129,6 +191,13 @@ export function isInvestmentSourceExcluded(excludedSourceIds = [], sourceId) {
   const normalizedSourceId = String(sourceId || "").trim();
   if (!normalizedSourceId) return false;
   return normalizeExcludedInvestmentSourceIds(excludedSourceIds).includes(normalizedSourceId);
+}
+
+export function isManualHoldingExcluded(excludedSourceIds = [], bucket, holding) {
+  return (
+    isInvestmentSourceExcluded(excludedSourceIds, getManualInvestmentSourceId(bucket))
+    || isInvestmentSourceExcluded(excludedSourceIds, getManualHoldingSourceId(bucket, holding))
+  );
 }
 
 export function getPreferredInvestmentBucketValue({ manualValue = 0, plaidValue = 0 } = {}) {

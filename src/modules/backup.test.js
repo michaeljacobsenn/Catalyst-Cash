@@ -382,7 +382,9 @@ describe("backup utilities", () => {
         exportedAt: "2026-03-15T15:00:00.000Z",
         plaidReconnectCount: 1,
       });
-      expect(dbStore.get("financial-config")).toEqual({ budget: 500 });
+      expect(dbStore.get("financial-config")).toEqual(
+        expect.objectContaining({ budget: 500 })
+      );
       expect(dbStore.get("household-id-protected")).toBeUndefined();
       expect(dbStore.get("plaid-connections")).toEqual([
         { id: "existing", institutionName: "Existing Bank", accounts: [] },
@@ -414,7 +416,9 @@ describe("backup utilities", () => {
         vi.fn()
       );
 
-      expect(dbStore.get("financial-config")).toEqual({ budget: 500 });
+      expect(dbStore.get("financial-config")).toEqual(
+        expect.objectContaining({ budget: 500 })
+      );
       expect(dbStore.get("auto-backup-interval")).toBe("off");
       expect(dbStore.get(LAST_CLOUD_BACKUP_TS_KEY)).toBeUndefined();
       expect(dbStore.get(LAST_PORTABLE_BACKUP_TS_KEY)).toBeUndefined();
@@ -645,7 +649,9 @@ describe("backup utilities", () => {
 
       expect(result.count).toBe(1);
       expect(decrypt).toHaveBeenCalledTimes(1);
-      expect(dbStore.get("financial-config")).toEqual({ restored: true });
+      expect(dbStore.get("financial-config")).toEqual(
+        expect.objectContaining({ restored: true })
+      );
     });
   });
 
