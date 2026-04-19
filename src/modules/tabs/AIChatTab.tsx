@@ -13,7 +13,9 @@ import React,{
 import { callAudit, streamAudit } from "../api.js";
 import {
   analyzeChatInputRisk,
+  analyzeChatTopicRisk,
   buildDeterministicChatFallback,
+  buildHighRiskTopicRefusal,
   buildPromptInjectionRefusal,
   normalizeChatAssistantOutput,
 } from "../chatSafety.js";
@@ -25,10 +27,10 @@ import { haptic } from "../haptics.js";
 import { AlertTriangle, ArrowDown, ArrowUpRight, CheckCircle2, MessageCircle, Sparkles, Trash2 } from "../icons";
 import { log } from "../logger.js";
 import { extractMemoryTags, extractUserMemoryFacts } from "../memory.js";
-import { isLikelyNetworkError, toUserFacingRequestError } from "../networkErrors.js";
+import { isLikelyNetworkError, isLikelyProviderAvailabilityError, toUserFacingRequestError } from "../networkErrors.js";
 import { useOnlineStatus } from "../onlineStatus.js";
 import { buildScrubber } from "../scrubber.js";
-import { checkChatQuota, isGatingEnforced, recordChatUsage, shouldShowGating } from "../subscription.js";
+import { checkChatQuota, hasPaidProAccess, isGatingEnforced, recordChatUsage, shouldShowGating } from "../subscription.js";
 import UiGlyph from "../UiGlyph.js";
 import { Skeleton as UISkeleton } from "../ui.js";
 import { db } from "../utils.js";
@@ -38,6 +40,9 @@ import {
   buildNegotiationPrompt,
   CHAT_FEEDBACK_KEY,
   CHAT_FEEDBACK_REASON_OPTIONS,
+  getChatFallbackModel,
+  getChatFallbackModels,
+  getChatModelDisplayName,
   getChatViewportDensity,
   getEffectiveChatModel,
   readChatFeedbackStore,
@@ -128,16 +133,31 @@ interface ChatInputRisk {
   rationale?: string;
 }
 
+interface ChatTopicRisk {
+  blocked: boolean;
+  severity: string;
+  kind: string | null;
+  matches: Array<{ flag: string; kind?: string; severity?: string; rationale?: string }>;
+  rationale?: string;
+}
+
 const ProBannerTyped = ProBanner as unknown as (props: ProBannerProps) => ReactNode;
 const LazyProPaywallTyped = LazyProPaywall as unknown as (props: ProPaywallProps) => ReactNode;
 const Skeleton = UISkeleton as unknown as (props: SkeletonProps) => ReactNode;
 const analyzeChatInputRiskTyped = analyzeChatInputRisk as unknown as (text: string) => ChatInputRisk;
+const analyzeChatTopicRiskTyped = analyzeChatTopicRisk as unknown as (text: string) => ChatTopicRisk;
 const buildPromptInjectionRefusalTyped = buildPromptInjectionRefusal as unknown as () => string;
 const buildDeterministicChatFallbackTyped = buildDeterministicChatFallback as unknown as (options: {
   current?: AuditRecord | null;
   computedStrategy?: Record<string, unknown> | null;
   decisionRecommendations?: DecisionRecommendation[];
   error?: string;
+}) => string;
+const buildHighRiskTopicRefusalTyped = buildHighRiskTopicRefusal as unknown as (options: {
+  risk?: ChatTopicRisk | null;
+  current?: AuditRecord | null;
+  computedStrategy?: Record<string, unknown> | null;
+  decisionRecommendations?: DecisionRecommendation[];
 }) => string;
 const normalizeChatAssistantOutputTyped = normalizeChatAssistantOutput as unknown as (text: string) => {
   text: string;
@@ -354,14 +374,12 @@ export default memo(function AIChatTab({
         computedStrategy: chatStrategy,
       }) as DecisionRecommendation[];
       const inputRisk = analyzeChatInputRiskTyped(trimmedText);
+      const topicRisk = analyzeChatTopicRiskTyped(trimmedText);
       const userMemoryFacts = extractUserMemoryFacts(trimmedText);
 
       setMessages(newMsgs);
       setInput("");
       setError(null);
-      if (userMemoryFacts.length > 0) {
-        void rememberFacts(userMemoryFacts);
-      }
 
       if (inputRisk.blocked) {
         const blockedReply = createChatMessage(
@@ -378,6 +396,27 @@ export default memo(function AIChatTab({
         setError("Catalyst blocked a prompt override attempt. Ask a finance question instead.");
         haptic.medium();
         return;
+      }
+
+      if (topicRisk.blocked) {
+        const blockedReply = createChatMessage(
+          "assistant",
+          buildHighRiskTopicRefusalTyped({
+            risk: topicRisk,
+            current,
+            computedStrategy: chatStrategy,
+            decisionRecommendations,
+          })
+        );
+        const blockedMsgs = [...newMsgs, blockedReply];
+        setMessages(blockedMsgs);
+        void persistMessages(blockedMsgs);
+        haptic.medium();
+        return;
+      }
+
+      if (userMemoryFacts.length > 0) {
+        void rememberFacts(userMemoryFacts);
       }
 
       setIsStreaming(true);
@@ -418,6 +457,9 @@ export default memo(function AIChatTab({
         apiHistory,
         scrub: scrubber.scrub,
       });
+      const canUseAlternateModels = proEnabled
+        ? await hasPaidProAccess().catch(() => false)
+        : false;
 
       const abort = new AbortController();
       abortRef.current = abort;
@@ -428,13 +470,15 @@ export default memo(function AIChatTab({
 
       const finalizeAssistantResponse = async (
         rawText: string,
-        errorCode: string
+        errorCode: string,
+        options: { modelUsed?: string; prefix?: string } = {}
       ): Promise<boolean> => {
-        const restored = scrubber.unscrub(rawText || "");
+        const restored = `${options.prefix || ""}${scrubber.unscrub(rawText || "")}`.trim();
         const { cleanText, newFacts } = extractMemoryTags(restored);
         const displayText = stripThoughtProcess(cleanText || restored);
         const normalizedResponse = normalizeChatAssistantOutputTyped(displayText);
         if (!normalizedResponse.valid) return false;
+        const modelUsed = options.modelUsed || effectiveChatModel;
 
         const finalMsgs = [...newMsgs, { ...assistantMsg, content: normalizedResponse.text, ts: Date.now() }];
         setMessages(finalMsgs);
@@ -442,14 +486,14 @@ export default memo(function AIChatTab({
         if (newFacts.length > 0) {
           void rememberFacts(newFacts);
         }
-        recordChatUsage(effectiveChatModel).catch(() => { });
-        const q = await checkChatQuota(effectiveChatModel);
+        recordChatUsage(modelUsed).catch(() => { });
+        const q = await checkChatQuota(modelUsed);
         setChatQuota(q);
         setError(null);
         setAssistantPhase(null);
         setLiveAssistantPreview("");
         log.info("chat", "Chat response finalized", {
-          model: effectiveChatModel,
+          model: modelUsed,
           source: errorCode,
         });
         return true;
@@ -481,6 +525,53 @@ export default memo(function AIChatTab({
           });
           return false;
         }
+      };
+
+      const tryAutomaticModelRecovery = async (reason: string, sourceError: unknown): Promise<boolean> => {
+        const fallbackModels = getChatFallbackModels(effectiveChatModel, { proEnabled: canUseAlternateModels });
+        if (fallbackModels.length === 0) return false;
+        if (!isLikelyProviderAvailabilityError(sourceError)) return false;
+
+        for (const fallbackModel of fallbackModels) {
+          try {
+            log.warn("chat", "Retrying AskAI with alternate model failover", {
+              model: effectiveChatModel,
+              fallbackModel,
+              reason,
+              error: sourceError instanceof Error ? sourceError.message : String(sourceError),
+            });
+            const fallbackRaw = await callAuditTyped(
+              apiKey,
+              transport.snapshot,
+              aiProvider,
+              fallbackModel,
+              transport.promptContext,
+              transport.apiHistory,
+              undefined,
+              true,
+              abort.signal
+            );
+            const finalized = await finalizeAssistantResponse(
+              fallbackRaw,
+              `alternate-model:${reason}`,
+              {
+                modelUsed: fallbackModel,
+                prefix: `*${getChatModelDisplayName(effectiveChatModel)} is temporarily unavailable, so ${getChatModelDisplayName(fallbackModel)} handled this reply.*\n\n`,
+              }
+            );
+            if (!finalized) continue;
+            (setAiModel as (m: string) => void)(fallbackModel);
+            return true;
+          } catch (fallbackError) {
+            log.warn("chat", "Alternate model recovery failed", {
+              model: effectiveChatModel,
+              fallbackModel,
+              reason,
+              error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+            });
+          }
+        }
+        return false;
       };
 
       try {
@@ -578,21 +669,18 @@ export default memo(function AIChatTab({
           // ── Per-model cap auto-switch (Pro only) ──
           const modelCap = (err as Record<string, unknown>)?.modelCapReached;
           if (modelCap && typeof modelCap === "string") {
-            // Priority order: gemini (cheapest/most quota) → gpt-4.1
-            const MODEL_FALLBACK_ORDER = ["gemini-2.5-flash", "gpt-4.1"];
-            const nextModel = MODEL_FALLBACK_ORDER.find(m => m !== modelCap);
+            const nextModel = getChatFallbackModel(modelCap, { proEnabled: canUseAlternateModels });
             if (nextModel) {
               (setAiModel as (m: string) => void)(nextModel);
-              const modelNames: Record<string, string> = {
-                "gemini-2.5-flash": "Catalyst AI",
-                "gpt-4.1": "Catalyst AI CFO",
-              };
-              setError(`Daily ${modelNames[modelCap] || modelCap} limit reached. Switched to ${modelNames[nextModel] || nextModel} — send your message again.`);
+              setError(`Daily ${getChatModelDisplayName(modelCap)} limit reached. Switched to ${getChatModelDisplayName(nextModel)} — send your message again.`);
               // Remove the failed assistant message so user can retry cleanly
               setMessages(newMsgs);
               return;
             }
           }
+
+          const failoverRecovered = await tryAutomaticModelRecovery("provider-availability", err);
+          if (failoverRecovered) return;
 
           if (!preferNonStreamingChat && !String(accumulated || "").trim()) {
             const recovered = await tryNonStreamingRecovery("stream-transport-error");

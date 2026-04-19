@@ -7,6 +7,7 @@ import {
   buildAuditHandlingNotes,
   buildAllocationLedger,
   buildAnalysisNotes,
+  buildTimelineRows,
   buildFreedomJourneyMetrics,
   buildResultsOverview,
   buildResultsInvestmentsSummary,
@@ -88,6 +89,26 @@ describe("resultsView model", () => {
     ]);
   });
 
+  it("dedupes repeated next-action paragraphs before rendering", () => {
+    expect(
+      cleanAllocationLead(
+        "Execute the $500 Chase Sapphire payment first.\n\nExecute the $500 Chase Sapphire payment first."
+      )
+    ).toBe("Execute the $500 Chase Sapphire payment first.");
+  });
+
+  it("parses dated radar lines into structured timeline rows", () => {
+    expect(
+      buildTimelineRows(`
+        2026-04-20 Netflix $15.49
+        2026-05-01 Car Insurance $145.00
+      `)
+    ).toEqual([
+      { date: "2026-04-20", label: "Netflix", amount: "$15.49" },
+      { date: "2026-05-01", label: "Car Insurance", amount: "$145.00" },
+    ]);
+  });
+
   it("reanchors investment balance to the submitted snapshot when only selected keys were included", () => {
     const audit = {
       date: "2026-04-16",
@@ -160,6 +181,31 @@ describe("resultsView model", () => {
         },
       ],
       fallbackSource: "structured-weekly-moves",
+    });
+  });
+
+  it("strips duplicate move detail when the provider repeats the headline", () => {
+    expect(
+      buildTacticalPlaybookData({
+        moveItems: [
+          {
+            done: false,
+            text: "Pay Chase Sapphire $500",
+            title: "Pay Chase Sapphire $500",
+            detail: "Pay Chase Sapphire $500",
+          },
+        ] as ParsedMoveItem[],
+      })
+    ).toEqual({
+      items: [
+        {
+          done: false,
+          text: "Pay Chase Sapphire $500",
+          title: "Pay Chase Sapphire $500",
+          detail: "",
+        },
+      ],
+      fallbackSource: null,
     });
   });
 

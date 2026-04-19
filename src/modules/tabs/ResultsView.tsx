@@ -24,6 +24,7 @@ import {
   buildActionPreviewRows,
   buildAuditHandlingNotes,
   buildAllocationLedger,
+  buildTimelineRows,
   buildFreedomJourneyMetrics,
   buildResultsOverview,
   buildResultsInvestmentsSummary,
@@ -93,6 +94,15 @@ interface ReportSectionProps {
   title: string;
   icon?: LucideIcon;
   content?: string | null;
+  accentColor: string;
+  badge?: ReactNode;
+  isLast?: boolean;
+}
+
+interface TimelineSectionProps {
+  title: string;
+  icon?: LucideIcon;
+  rows: Array<{ date: string; label: string; amount: string }>;
   accentColor: string;
   badge?: ReactNode;
   isLast?: boolean;
@@ -176,6 +186,101 @@ const ReportSection = ({ title, icon: Icon, content, accentColor, badge, isLast 
   );
 };
 
+const TimelineSection = ({ title, icon: Icon, rows, accentColor, badge, isLast = false }: TimelineSectionProps) => {
+  if (!rows.length) return null;
+  return (
+    <section
+      aria-labelledby={`report-section-${title.replace(/\s+/g, "-").toLowerCase()}`}
+      style={{ padding: "18px 0", borderBottom: isLast ? "none" : `1px solid ${T.border.subtle}` }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+        {Icon && (
+          <div
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 9,
+              background: `${accentColor}15`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Icon size={15} color={accentColor} strokeWidth={2.5} />
+          </div>
+        )}
+        <h2
+          id={`report-section-${title.replace(/\s+/g, "-").toLowerCase()}`}
+          style={{ fontSize: "clamp(16px, 4.5vw, 19px)", fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em", margin: 0 }}
+        >
+          {title}
+        </h2>
+        {badge}
+      </div>
+      <div style={{ display: "grid", gap: 10 }}>
+        {rows.map((row) => (
+          <div
+            key={`${title}-${row.date}-${row.label}-${row.amount}`}
+            style={{
+              padding: "12px 14px",
+              borderRadius: 16,
+              background: `${T.bg.elevated}`,
+              border: `1px solid ${T.border.subtle}`,
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) auto",
+              gap: 12,
+              alignItems: "center",
+            }}
+          >
+            <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  width: "fit-content",
+                  padding: "4px 8px",
+                  borderRadius: 999,
+                  background: `${accentColor}12`,
+                  border: `1px solid ${accentColor}18`,
+                  color: accentColor,
+                  fontSize: 10,
+                  fontWeight: 900,
+                  fontFamily: T.font.mono,
+                  letterSpacing: "0.04em",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {row.date}
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: T.text.primary, lineHeight: 1.45, minWidth: 0 }}>
+                {row.label}
+              </div>
+            </div>
+            {row.amount ? (
+              <div
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  background: `${T.bg.card}92`,
+                  border: `1px solid ${T.border.subtle}`,
+                  color: T.text.primary,
+                  fontSize: 11,
+                  fontWeight: 900,
+                  fontFamily: T.font.mono,
+                  whiteSpace: "nowrap",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {row.amount}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+};
+
 export default memo(function ResultsView({
   audit,
   moveChecks,
@@ -194,6 +299,7 @@ export default memo(function ResultsView({
 
   const [showExportSheet, setShowExportSheet] = useState<boolean>(false);
   const isSmallPhone = typeof window !== "undefined" ? window.innerWidth <= 390 : false;
+  const isNarrowResultsLayout = typeof window !== "undefined" ? window.innerWidth <= 520 : false;
   if (!audit)
     return (
       <div
@@ -270,6 +376,13 @@ export default memo(function ResultsView({
     () => cleanAllocationLead(nextActionCard?.detail || nextActionNarrative),
     [nextActionCard?.detail, nextActionNarrative]
   );
+  const nextActionTitle = useMemo(() => {
+    const candidate = String(nextActionCard?.title || "").trim();
+    if (!candidate) return "";
+    if (/^next action$/i.test(candidate) || /^immediate next action$/i.test(candidate)) return "";
+    return candidate;
+  }, [nextActionCard?.title]);
+  const nextActionAmount = String(nextActionCard?.amount || "").trim();
   const allocationLedger = useMemo(
     () => buildAllocationLedger(parsed?.consistency),
     [parsed?.consistency]
@@ -328,6 +441,9 @@ export default memo(function ResultsView({
   const scoreToneStyles = getOverviewToneStyles(resultsOverview.scoreTone);
   const statusToneStyles = getOverviewToneStyles(resultsOverview.statusTone);
   const freedomJourneyMetrics = useMemo(() => buildFreedomJourneyMetrics(history), [history]);
+  const radarRows = useMemo(() => buildTimelineRows(sections.radar), [sections.radar]);
+  const longRangeRows = useMemo(() => buildTimelineRows(sections.longRange), [sections.longRange]);
+  const forwardRadarRows = useMemo(() => buildTimelineRows(sections.forwardRadar), [sections.forwardRadar]);
 
   const handleExitResults = (): void => {
     if (onBack) return onBack();
@@ -448,9 +564,9 @@ export default memo(function ResultsView({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: isSmallPhone ? "1fr" : "minmax(0, 1.25fr) minmax(260px, 0.95fr)",
+            gridTemplateColumns: isNarrowResultsLayout ? "1fr" : "minmax(0, 1.15fr) minmax(250px, 0.95fr)",
             gap: 16,
-            alignItems: "start",
+            alignItems: isNarrowResultsLayout ? "stretch" : "start",
           }}
         >
           <div style={{ minWidth: 0 }}>
@@ -528,7 +644,7 @@ export default memo(function ResultsView({
                 </div>
               ) : null}
             </div>
-            <p style={{ margin: "12px 0 0", fontSize: 13, lineHeight: 1.7, color: T.text.secondary, maxWidth: 480 }}>
+            <p style={{ margin: "12px 0 0", fontSize: 13, lineHeight: 1.7, color: T.text.secondary, maxWidth: isNarrowResultsLayout ? "100%" : 480 }}>
               {resultsOverview.summary}
             </p>
           </div>
@@ -536,12 +652,12 @@ export default memo(function ResultsView({
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))",
+              gridTemplateColumns: isNarrowResultsLayout ? "repeat(2, minmax(0, 1fr))" : "repeat(auto-fit, minmax(118px, 1fr))",
               gap: 10,
               alignSelf: "stretch",
             }}
           >
-            {resultsOverview.metrics.map((metric) => {
+            {resultsOverview.metrics.map((metric, index) => {
               const toneStyles = getOverviewToneStyles(metric.tone);
               return (
                 <div
@@ -552,12 +668,16 @@ export default memo(function ResultsView({
                     background: `${T.bg.card}82`,
                     border: `1px solid ${T.border.subtle}`,
                     minWidth: 0,
+                    gridColumn:
+                      isNarrowResultsLayout && resultsOverview.metrics.length % 2 === 1 && index === resultsOverview.metrics.length - 1
+                        ? "1 / -1"
+                        : undefined,
                   }}
                 >
                   <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase" }}>
                     {metric.label}
                   </div>
-                  <div style={{ marginTop: 8, fontSize: 16, fontWeight: 800, color: toneStyles.color, lineHeight: 1.2, letterSpacing: "-0.02em" }}>
+                  <div style={{ marginTop: 8, fontSize: 16, fontWeight: 800, color: toneStyles.color, lineHeight: 1.2, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
                     {metric.value}
                   </div>
                 </div>
@@ -797,12 +917,14 @@ export default memo(function ResultsView({
                 gap: 12,
               }}
             >
-              {nextActionCard?.title ? (
+              {nextActionTitle || nextActionAmount ? (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em" }}>
-                    {nextActionCard.title}
-                  </div>
-                  {nextActionCard.amount ? (
+                  {nextActionTitle ? (
+                    <div style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em" }}>
+                      {nextActionTitle}
+                    </div>
+                  ) : <div />}
+                  {nextActionAmount ? (
                     <div
                       style={{
                         padding: "6px 10px",
@@ -816,7 +938,7 @@ export default memo(function ResultsView({
                         letterSpacing: "0.03em",
                       }}
                     >
-                      {nextActionCard.amount}
+                      {nextActionAmount}
                     </div>
                   ) : null}
                 </div>
@@ -1083,9 +1205,21 @@ export default memo(function ResultsView({
           </section>
         )}
 
-        <ReportSection title="Radar — 90 Days" icon={Target} content={sections.radar} accentColor={T.status.amber} />
-        <ReportSection title="Long-Range Radar" icon={Clock} content={sections.longRange} accentColor={T.text.secondary} />
-        <ReportSection title="Forward Radar" icon={TrendingUp} content={sections.forwardRadar} accentColor={T.status.blue} />
+        {radarRows.length > 0 ? (
+          <TimelineSection title="Radar — 90 Days" icon={Target} rows={radarRows} accentColor={T.status.amber} />
+        ) : (
+          <ReportSection title="Radar — 90 Days" icon={Target} content={sections.radar} accentColor={T.status.amber} />
+        )}
+        {longRangeRows.length > 0 ? (
+          <TimelineSection title="Long-Range Radar" icon={Clock} rows={longRangeRows} accentColor={T.text.secondary} />
+        ) : (
+          <ReportSection title="Long-Range Radar" icon={Clock} content={sections.longRange} accentColor={T.text.secondary} />
+        )}
+        {forwardRadarRows.length > 0 ? (
+          <TimelineSection title="Forward Radar" icon={TrendingUp} rows={forwardRadarRows} accentColor={T.status.blue} />
+        ) : (
+          <ReportSection title="Forward Radar" icon={TrendingUp} content={sections.forwardRadar} accentColor={T.status.blue} />
+        )}
         {investmentsSummary ? (
           <section aria-labelledby="results-investments" style={{ padding: "22px 0 0" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>

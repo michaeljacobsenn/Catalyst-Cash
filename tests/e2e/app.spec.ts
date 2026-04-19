@@ -25,6 +25,24 @@ import {
   writeAppStorage,
 } from "./helpers/appHarness";
 
+function getRunAuditButton(page: Page) {
+  return page.getByRole("button", { name: /Run (Catalyst|Weekly) Audit/ });
+}
+
+function getResultsHeading(page: Page) {
+  return page.getByRole("heading", { name: /^(Full Results|Weekly Briefing)$/ });
+}
+
+function getImmediateNextActionRegion(page: Page) {
+  return page.getByRole("region", { name: "Immediate Next Action" });
+}
+
+async function expectNextActionCopy(page: Page, copy: string) {
+  const nextActionRegion = getImmediateNextActionRegion(page);
+  await expect(nextActionRegion).toBeVisible();
+  await expect(nextActionRegion.getByText(copy).first()).toBeVisible();
+}
+
 async function importAuditFromHistory(page: Page, payload: string) {
   const auditTab = page.getByRole("tab", { name: "Audit", exact: true });
   const auditTabBox = await auditTab.boundingBox();
@@ -124,7 +142,7 @@ test.describe("Catalyst Cash end-to-end", () => {
 
     await page.getByRole("tab", { name: "Portfolio" }).click();
     await expect(page.getByRole("tab", { name: "Portfolio", selected: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Total Net Worth" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Portfolio Snapshot" })).toBeVisible();
 
     await page.waitForTimeout(1000);
 
@@ -141,19 +159,15 @@ test.describe("Catalyst Cash end-to-end", () => {
     await page.getByRole("spinbutton", { name: "Checking balance" }).fill("4600");
     await expect(page.getByLabel("Notes for this week")).toBeVisible();
     await page.getByLabel("Notes for this week").fill("E2E audit coverage");
-    await page.getByRole("button", { name: "Run Catalyst Audit" }).click();
+    await getRunAuditButton(page).click();
     const consentModal = page.getByText("AI Data Consent");
     if (await consentModal.isVisible().catch(() => false)) {
       await page.getByRole("button", { name: "I Agree" }).click();
-      await page.getByRole("button", { name: "Run Catalyst Audit" }).click();
+      await getRunAuditButton(page).click();
     }
 
-    await expect(page.getByRole("heading", { name: "Full Results" })).toBeVisible();
-    const nextActionHeading = page.getByRole("heading", { name: "Immediate Next Action" });
-    await expect(nextActionHeading).toBeVisible();
-    await expect(nextActionHeading.locator("xpath=following::p[1]")).toHaveText(
-      "Route $300 to Chase Freedom this week and keep checking above $900."
-    );
+    await expect(getResultsHeading(page)).toBeVisible();
+    await expectNextActionCopy(page, "Route $300 to Chase Freedom this week and keep checking above $900.");
   });
 
   test("keeps the current audit result when navigating away and returning to Results", async ({ page }) => {
@@ -164,14 +178,14 @@ test.describe("Catalyst Cash end-to-end", () => {
     await openAuditComposer(page);
     await page.getByRole("spinbutton", { name: "Checking balance" }).fill("4600");
     await page.getByLabel("Notes for this week").fill("Persist results across navigation");
-    await page.getByRole("button", { name: "Run Catalyst Audit" }).click();
+    await getRunAuditButton(page).click();
     const consentModal = page.getByText("AI Data Consent");
     if (await consentModal.isVisible().catch(() => false)) {
       await page.getByRole("button", { name: "I Agree" }).click();
-      await page.getByRole("button", { name: "Run Catalyst Audit" }).click();
+      await getRunAuditButton(page).click();
     }
 
-    await expect(page.getByRole("heading", { name: "Full Results" })).toBeVisible();
+    await expect(getResultsHeading(page)).toBeVisible();
     await page.getByRole("button", { name: "Back" }).first().click();
     await expect(page.getByRole("tab", { name: "Audit", selected: true })).toBeVisible();
     await expect(page.getByText("LATEST AUDIT")).toBeVisible();
@@ -184,12 +198,8 @@ test.describe("Catalyst Cash end-to-end", () => {
     await expect(latestAuditButton).toBeVisible();
     await latestAuditButton.click();
 
-    await expect(page.getByRole("heading", { name: "Full Results" })).toBeVisible();
-    const returnedNextActionHeading = page.getByRole("heading", { name: "Immediate Next Action" });
-    await expect(returnedNextActionHeading).toBeVisible();
-    await expect(returnedNextActionHeading.locator("xpath=following::p[1]")).toHaveText(
-      "Route $300 to Chase Freedom this week and keep checking above $900."
-    );
+    await expect(getResultsHeading(page)).toBeVisible();
+    await expectNextActionCopy(page, "Route $300 to Chase Freedom this week and keep checking above $900.");
   });
 
   test("restores a prior audit after a fresh reload and surfaces the saved result", async ({ page }) => {
@@ -215,11 +225,11 @@ test.describe("Catalyst Cash end-to-end", () => {
     await openAuditComposer(page);
     await page.getByRole("spinbutton", { name: "Checking balance" }).fill("4600");
     await page.getByLabel("Notes for this week").fill("Trigger the unhappy path.");
-    await page.getByRole("button", { name: "Run Catalyst Audit" }).click();
+    await getRunAuditButton(page).click();
     const consentModal = page.getByText("AI Data Consent");
     if (await consentModal.isVisible().catch(() => false)) {
       await page.getByRole("button", { name: "I Agree" }).click();
-      await page.getByRole("button", { name: "Run Catalyst Audit" }).click();
+      await getRunAuditButton(page).click();
     }
 
     await expect(page.getByText("Audit blocked").first()).toBeVisible();
@@ -248,8 +258,8 @@ test.describe("Catalyst Cash end-to-end", () => {
 
     await importAuditFromHistory(page, JSON.stringify(AUDIT_FIXTURE));
 
-    await expect(page.getByRole("heading", { name: "Full Results" })).toBeVisible();
-    await expect(page.getByText("Audit imported successfully")).toBeVisible();
+    await expect(getResultsHeading(page)).toBeVisible();
+    await expectNextActionCopy(page, "Route $300 to Chase Freedom this week and keep checking above $900.");
   });
 
   test("replaces an imported audit cleanly when the user runs a second audit", async ({ page, context }) => {
@@ -264,18 +274,15 @@ test.describe("Catalyst Cash end-to-end", () => {
 
     await importAuditFromHistory(page, JSON.stringify(AUDIT_FIXTURE));
 
-    await expect(page.getByRole("heading", { name: "Full Results" })).toBeVisible();
-    const importedNextActionHeading = page.getByRole("heading", { name: "Immediate Next Action" });
-    await expect(importedNextActionHeading).toBeVisible();
-    await expect(importedNextActionHeading.locator("xpath=following::p[1]")).toHaveText(
-      "Route $300 to Chase Freedom this week and keep checking above $900."
-    );
+    await expect(getResultsHeading(page)).toBeVisible();
+    await expectNextActionCopy(page, "Route $300 to Chase Freedom this week and keep checking above $900.");
 
     await page.getByRole("button", { name: "Back", exact: true }).first().click();
     await page.waitForTimeout(500);
 
-    // ResultsView sent us to HistoryTab. We must exit to Dashboard.
-    await page.getByRole("button", { name: "← Back", exact: true }).click();
+    // ResultsView sent us to HistoryTab. Exit back to the dashboard shell.
+    await expect(page.getByRole("heading", { name: "Briefing Archive" })).toBeVisible();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
     await page.waitForTimeout(500);
 
     // Now on Dashboard, bottom nav visible. Audit FAB is a role=tab per a11y tree.
@@ -290,19 +297,15 @@ test.describe("Catalyst Cash end-to-end", () => {
     await expect(page.getByRole("spinbutton", { name: "Checking balance" })).toBeVisible();
     await page.getByRole("spinbutton", { name: "Checking balance" }).fill("2400");
     await page.getByLabel("Notes for this week").fill("Second audit should replace the imported current result");
-    await page.getByRole("button", { name: "Run Catalyst Audit" }).click();
+    await getRunAuditButton(page).click();
     const consentModal = page.getByText("AI Data Consent");
     if (await consentModal.isVisible().catch(() => false)) {
       await page.getByRole("button", { name: "I Agree" }).click();
-      await page.getByRole("button", { name: "Run Catalyst Audit" }).click();
+      await getRunAuditButton(page).click();
     }
 
-    await expect(page.getByRole("heading", { name: "Full Results" })).toBeVisible();
-    const secondNextActionHeading = page.getByRole("heading", { name: "Immediate Next Action" });
-    await expect(secondNextActionHeading).toBeVisible();
-    await expect(secondNextActionHeading.locator("xpath=following::p[1]")).toHaveText(
-      "Pause nonessential spending until your checking buffer recovers."
-    );
+    await expect(getResultsHeading(page)).toBeVisible();
+    await expectNextActionCopy(page, "Pause nonessential spending until your checking buffer recovers.");
     await expect(page.getByText("Route $300 to Chase Freedom this week and keep checking above $900.")).toHaveCount(0);
 
     await page.getByRole("button", { name: "Back", exact: true }).first().click();
@@ -310,11 +313,7 @@ test.describe("Catalyst Cash end-to-end", () => {
     const latestAuditButton = page.getByRole("button", { name: /LATEST AUDIT/i }).first();
     await expect(latestAuditButton).toBeVisible();
     await latestAuditButton.click();
-    const reopenedNextActionHeading = page.getByRole("heading", { name: "Immediate Next Action" });
-    await expect(reopenedNextActionHeading).toBeVisible();
-    await expect(reopenedNextActionHeading.locator("xpath=following::p[1]")).toHaveText(
-      "Pause nonessential spending until your checking buffer recovers."
-    );
+    await expectNextActionCopy(page, "Pause nonessential spending until your checking buffer recovers.");
   });
 
   test("rejects invalid pasted audit JSON with a visible error", async ({ page, context }) => {
@@ -353,7 +352,7 @@ test.describe("Catalyst Cash end-to-end", () => {
 
     await openAuditComposer(page);
     const notesField = page.getByLabel("Notes for this week");
-    const runAuditButton = page.getByRole("button", { name: "Run Catalyst Audit" });
+    const runAuditButton = getRunAuditButton(page);
 
     await notesField.scrollIntoViewIfNeeded();
     const notesBox = await notesField.boundingBox();

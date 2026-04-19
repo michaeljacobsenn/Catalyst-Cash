@@ -25,11 +25,11 @@ import { generateStrategy, mergeSnapshotDebts } from "../engine.js";
 import { haptic } from "../haptics.js";
 import { log } from "../logger.js";
 import { addMilestones, extractAuditMilestones, getMemoryBlock, loadMemory } from "../memory.js";
-import { isLikelyAbortError, toUserFacingRequestError } from "../networkErrors.js";
+import { isLikelyAbortError, isLikelyProviderAvailabilityError, toUserFacingRequestError } from "../networkErrors.js";
 import { readOnlineStatus } from "../onlineStatus.js";
-import { getBackendProvider, getProvider } from "../providers.js";
+import { getBackendProvider, getModelDisplayName, getOperationalFallbackModels, getProvider } from "../providers.js";
 import { buildScrubber } from "../scrubber.js";
-import { getHistoryLimit, getOrCreateDeviceId, recordAuditUsage } from "../subscription.js";
+import { getHistoryLimit, getOrCreateDeviceId, hasPaidProAccess, recordAuditUsage } from "../subscription.js";
 import { buildDegradedParsedAudit, cyrb53, db, detectAuditDrift, parseAudit, parseCurrency, validateParsedAuditConsistency } from "../utils.js";
 import { maybeRequestReview } from "../ratePrompt.js";
 import { scheduleOverrunNotification } from "../notifications.js";
@@ -392,8 +392,9 @@ export function AuditProvider({ children }: AuditProviderProps) {
       let promptRenewals: typeof renewals = [...renewals, ...cardAnnualFees];
       let strategyCards = cards;
       let scrubber: { scrub: (input: string) => string; unscrub: (input: string) => string } | null = null;
-      let historyForProvider: Array<{ role: string; content: string } | { role: string; parts: Array<{ text: string }> }> = [];
       let deviceId: string | null = null;
+      let resolvedAuditModel = aiModel;
+      let availabilityFallbackModel: string | null = null;
 
       try {
         if (manualResultText) {
@@ -446,50 +447,68 @@ export function AuditProvider({ children }: AuditProviderProps) {
           const memBlock = getMemoryBlock(memory);
 
           const activeScrubber = scrubber;
-          const promptProviderId = provider.isBackend
-            ? getBackendProvider(aiModel)
-            : (aiProvider || "gemini");
-          const liveContext = scrubPromptContext(
-            {
-              providerId: promptProviderId,
-              financialConfig,
-              cards: strategyCards,
-              bankAccounts,
-              renewals: promptRenewals,
-              personalRules: personalRules || "",
-              trendContext,
-              persona,
-              computedStrategy: computedStrategy || undefined,
-              chatContext,
-              memoryBlock: memBlock,
-              aiConsent,
-              // ── Paycheck CFO Budget ──────────────────────────────
-              // Budget lines from the user's paycheck-cycle budget.
-              // Each line: { name, amount (per cycle $), bucket, icon }.
-              // cycleIncome is take-home per paycheck.
-              // Audit category totals in parsed.categories are MONTHLY.
-              budgetContext: budgetLines.length > 0 ? (() => {
-                const freq = financialConfig.payFrequency || "bi-weekly";
-                const paychecksPerMonth = freq === "weekly" ? 4.33 : freq === "bi-weekly" ? 2.17 : freq === "semi-monthly" ? 2 : 1;
-                return {
-                  cycleIncome,
-                  payFrequency: freq,
-                  paychecksPerMonth: Math.round(paychecksPerMonth * 100) / 100,
-                  lines: budgetLines.map(l => ({
-                    name: l.name,
-                    bucket: l.bucket,
-                    perCycleTarget: l.amount,
-                  })),
-                };
-              })() : null,
-            },
-            activeScrubber.scrub
-          );
-          const liveHash = cyrb53(JSON.stringify(liveContext)).toString();
           const historyKey = `api-history-${aiProvider || "gemini"}`;
           const hashKey = `api-history-hash-${aiProvider || "gemini"}`;
-          const lastHash = (await db.get(hashKey)) as string | null;
           let apiHistory = ((await db.get(historyKey)) as Array<{ role: string; content: string }> | null) || [];
+          const buildRequestStateForModel = (modelId: string) => {
+            const promptProviderId = provider.isBackend
+              ? getBackendProvider(modelId)
+              : (aiProvider || "gemini");
+            const liveContext = scrubPromptContext(
+              {
+                providerId: promptProviderId,
+                financialConfig,
+                cards: strategyCards,
+                bankAccounts,
+                renewals: promptRenewals,
+                personalRules: personalRules || "",
+                trendContext,
+                persona,
+                computedStrategy: computedStrategy || undefined,
+                chatContext,
+                memoryBlock: memBlock,
+                aiConsent,
+                // ── Paycheck CFO Budget ──────────────────────────────
+                // Budget lines from the user's paycheck-cycle budget.
+                // Each line: { name, amount (per cycle $), bucket, icon }.
+                // cycleIncome is take-home per paycheck.
+                // Audit category totals in parsed.categories are MONTHLY.
+                budgetContext: budgetLines.length > 0 ? (() => {
+                  const freq = financialConfig.payFrequency || "bi-weekly";
+                  const paychecksPerMonth = freq === "weekly" ? 4.33 : freq === "bi-weekly" ? 2.17 : freq === "semi-monthly" ? 2 : 1;
+                  return {
+                    cycleIncome,
+                    payFrequency: freq,
+                    paychecksPerMonth: Math.round(paychecksPerMonth * 100) / 100,
+                    lines: budgetLines.map(l => ({
+                      name: l.name,
+                      bucket: l.bucket,
+                      perCycleTarget: l.amount,
+                    })),
+                  };
+                })() : null,
+              },
+              activeScrubber.scrub
+            );
+
+            const normalizedHistory =
+              promptProviderId === "gemini"
+                ? apiHistory.map((message) => ({
+                    role: message.role === "assistant" ? "model" : "user",
+                    parts: [{ text: activeScrubber.scrub(message.content) }],
+                  }))
+                : apiHistory.map((message) => ({ ...message, content: activeScrubber.scrub(message.content) }));
+
+            return {
+              promptProviderId,
+              liveContext,
+              historyForProvider: normalizedHistory,
+              scrubbedMsg: activeScrubber.scrub(msg),
+            };
+          };
+          const initialRequestState = buildRequestStateForModel(aiModel);
+          const liveHash = cyrb53(JSON.stringify(initialRequestState.liveContext)).toString();
+          const lastHash = (await db.get(hashKey)) as string | null;
           if (lastHash !== liveHash) {
             apiHistory = [];
             await db.set(hashKey, liveHash);
@@ -499,43 +518,78 @@ export function AuditProvider({ children }: AuditProviderProps) {
 
           if (apiHistory.length > 6) apiHistory = apiHistory.slice(-6);
 
-          historyForProvider =
-            promptProviderId === "gemini"
-              ? apiHistory.map((message) => ({
-                  role: message.role === "assistant" ? "model" : "user",
-                  parts: [{ text: activeScrubber.scrub(message.content) }],
-                }))
-              : apiHistory.map((message) => ({ ...message, content: activeScrubber.scrub(message.content) }));
-
-          const scrubbedMsg = activeScrubber.scrub(msg);
-          deviceId = await getOrCreateDeviceId();
-          setAuditLoadingPhase("connecting");
-          if (useStream) {
-            for await (const chunk of streamAudit(
-              trimmedApiKey,
-              scrubbedMsg,
-              aiProvider,
-              aiModel,
-              liveContext,
-              historyForProvider,
-              deviceId,
-              controller.signal
-            )) {
-              raw += chunk;
-              auditRawRef.current = raw;
-              setStreamText(activeScrubber.unscrub(raw));
+          const executeAuditRequest = async (modelId: string) => {
+            const requestState = buildRequestStateForModel(modelId);
+            let nextRaw = "";
+            setAuditLoadingPhase("connecting");
+            if (useStream) {
+              setStreamText("");
+              for await (const chunk of streamAudit(
+                trimmedApiKey,
+                requestState.scrubbedMsg,
+                aiProvider,
+                modelId,
+                requestState.liveContext,
+                requestState.historyForProvider,
+                deviceId,
+                controller.signal
+              )) {
+                nextRaw += chunk;
+                auditRawRef.current = nextRaw;
+                setStreamText(activeScrubber.unscrub(nextRaw));
+              }
+            } else {
+              nextRaw = (await callAudit(
+                trimmedApiKey,
+                requestState.scrubbedMsg,
+                aiProvider,
+                modelId,
+                requestState.liveContext,
+                requestState.historyForProvider,
+                deviceId
+              )) as string;
+              auditRawRef.current = nextRaw;
             }
-          } else {
-            raw = (await callAudit(
-              trimmedApiKey,
-              scrubbedMsg,
-              aiProvider,
-              aiModel,
-              liveContext,
-              historyForProvider,
-              deviceId
-            )) as string;
-            auditRawRef.current = raw;
+
+            return {
+              raw: nextRaw,
+              liveContext: requestState.liveContext,
+              historyForProvider: requestState.historyForProvider,
+            };
+          };
+
+          deviceId = await getOrCreateDeviceId();
+          const canUseAlternateModel = await hasPaidProAccess().catch(() => false);
+
+          try {
+            const primaryResult = await executeAuditRequest(aiModel);
+            raw = primaryResult.raw;
+            resolvedAuditModel = aiModel;
+          } catch (requestError) {
+            let recovered = false;
+            if (canUseAlternateModel && isLikelyProviderAvailabilityError(requestError)) {
+              const fallbackModels = getOperationalFallbackModels(aiModel);
+              for (const fallbackModel of fallbackModels) {
+                try {
+                  const fallbackResult = await executeAuditRequest(fallbackModel);
+                  raw = fallbackResult.raw;
+                  resolvedAuditModel = fallbackModel;
+                  availabilityFallbackModel = fallbackModel;
+                  (setAiModel as (m: string) => void)(fallbackModel);
+                  recovered = true;
+                  break;
+                } catch (fallbackError) {
+                  log.warn("audit", "Alternate audit model recovery failed", {
+                    model: resolvedAuditModel,
+                    fallbackModel,
+                    error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+                  });
+                }
+              }
+            }
+            if (!recovered) {
+              throw requestError;
+            }
           }
 
           raw = activeScrubber.unscrub(raw);
@@ -565,7 +619,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
               trimmedApiKey,
               scrubber.scrub(msg),
               aiProvider,
-              aiModel,
+              resolvedAuditModel,
               scrubPromptContext(
                 {
                   variant: "critical-retry",
@@ -854,6 +908,8 @@ export function AuditProvider({ children }: AuditProviderProps) {
             ? "Test audit complete — saved to history"
             : parsed.mode === "DEGRADED"
               ? "Audit completed with deterministic fallback"
+              : availabilityFallbackModel
+                ? `${getModelDisplayName(aiModel)} was unavailable. Audit completed with ${getModelDisplayName(availabilityFallbackModel)}.`
               : "Audit complete"
         );
 

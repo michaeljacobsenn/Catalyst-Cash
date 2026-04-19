@@ -176,6 +176,29 @@ describe("chatPromptBuilders", () => {
     expect(prompt).toContain("### investment_posture");
   });
 
+  it("hardens the gambling guardrail beyond generic refusal text", () => {
+    const prompt = getChatSystemPrompt(
+      null,
+      {},
+      [],
+      [],
+      [],
+      null,
+      "",
+      null,
+      null,
+      "gemini",
+      "",
+      [],
+      null,
+      null
+    );
+
+    expect(prompt).toContain("do not analyze odds or bankroll sizing");
+    expect(prompt).toContain("redirect to a safer financial move");
+    expect(prompt).toContain("1-800-522-4700");
+  });
+
   it("adds a finance action contract for mixed questions", () => {
     const prompt = getChatSystemPrompt(
       null,

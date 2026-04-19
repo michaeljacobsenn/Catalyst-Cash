@@ -1,3 +1,5 @@
+import { getModelDisplayName, getOperationalFallbackModels } from "../../providers.js";
+
 export type ChatFeedbackVerdict = "helpful" | "needs-work";
 export type ChatFeedbackReason = "too_generic" | "wrong_math" | "too_long" | "missed_context";
 export type AssistantPhase = "thinking" | "replying";
@@ -91,6 +93,20 @@ export function toggleChatFeedbackReason(
 
 export function getEffectiveChatModel(aiModel: string): string {
   return aiModel === "gpt-4.1" || aiModel === "o3" ? "gpt-4.1" : aiModel;
+}
+
+export function getChatModelDisplayName(aiModel: string): string {
+  return getModelDisplayName(getEffectiveChatModel(aiModel));
+}
+
+export function getChatFallbackModel(aiModel: string, options: { proEnabled?: boolean } = {}): string | null {
+  return getChatFallbackModels(aiModel, options)[0] || null;
+}
+
+export function getChatFallbackModels(aiModel: string, options: { proEnabled?: boolean } = {}): string[] {
+  const effectiveModel = getEffectiveChatModel(aiModel);
+  if (!options.proEnabled) return [];
+  return getOperationalFallbackModels(effectiveModel);
 }
 
 export function buildNegotiationPrompt({ merchant, amount }: { merchant: string; amount: number }) {

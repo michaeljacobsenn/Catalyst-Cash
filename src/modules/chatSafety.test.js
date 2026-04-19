@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   analyzeChatInputRisk,
+  analyzeChatTopicRisk,
   buildDeterministicChatFallback,
+  buildHighRiskTopicRefusal,
   buildPromptInjectionRefusal,
   normalizeChatAssistantOutput,
 } from "./chatSafety.js";
@@ -18,6 +20,19 @@ describe("chatSafety", () => {
     const result = analyzeChatInputRisk("Am I safe until my next paycheck if I pay $300 toward debt?");
     expect(result.blocked).toBe(false);
     expect(result.severity).toBe("none");
+  });
+
+  it("blocks gambling questions before they rely on model compliance", () => {
+    const result = analyzeChatTopicRisk("Can I bet $500 on the Mets tonight?");
+    expect(result.blocked).toBe(true);
+    expect(result.kind).toBe("gambling");
+    expect(result.severity).toBe("high");
+  });
+
+  it("blocks softer sportsbook phrasing that avoids the word bet", () => {
+    expect(analyzeChatTopicRisk("Can I put $500 on the Mets tonight?").blocked).toBe(true);
+    expect(analyzeChatTopicRisk("Should I take the over on this game?").blocked).toBe(true);
+    expect(analyzeChatTopicRisk("What bankroll should I use for parlays?").blocked).toBe(true);
   });
 
   it("normalizes valid assistant output while stripping thought process blocks", () => {
@@ -131,5 +146,24 @@ describe("chatSafety", () => {
     const refusal = buildPromptInjectionRefusal();
     expect(refusal).toContain("can't ignore safety rules");
     expect(refusal).toContain("cash flow");
+  });
+
+  it("builds a deterministic gambling refusal with a safer alternative", () => {
+    const refusal = buildHighRiskTopicRefusal({
+      risk: { kind: "gambling" },
+      current: {
+        parsed: {
+          weeklyMoves: ["Pay the highest APR card before optional spending."],
+          healthScore: { score: 68, grade: "D+", summary: "Cash is tight." },
+        },
+      },
+      computedStrategy: { operationalSurplus: 200 },
+    });
+
+    expect(refusal).toContain("can't help decide whether to place a bet");
+    expect(refusal).toContain("about $200 available");
+    expect(refusal).toContain("Safer move instead");
+    expect(refusal).toContain("highest APR card");
+    expect(refusal).toContain("1-800-522-4700");
   });
 });

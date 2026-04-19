@@ -35,6 +35,7 @@ import {
   getHistoryLimit,
   activatePro,
   deactivatePro,
+  hasPaidProAccess,
   isPro,
   getUsageWindowKeys,
 } from "./subscription.js";
@@ -105,6 +106,12 @@ describe("Gating Mode", () => {
 
   it("isPro reports true in soft mode so client headers match effective Pro access", async () => {
     expect(await isPro()).toBe(true);
+  });
+
+  it("hasPaidProAccess stays false in soft mode until the user is actually subscribed", async () => {
+    expect(await hasPaidProAccess()).toBe(false);
+    await activatePro(IAP_PRODUCTS.monthly, 30);
+    expect(await hasPaidProAccess()).toBe(true);
   });
 });
 
@@ -212,6 +219,14 @@ describe("Subscription State", () => {
     expect(state.tier).toBe("free");
     expect(state.expiresAt).toBeNull();
     expect(state.productId).toBeNull();
+  });
+
+  it("hasPaidProAccess returns the raw stored entitlement state", async () => {
+    expect(await hasPaidProAccess()).toBe(false);
+    await activatePro(IAP_PRODUCTS.monthly, 30);
+    expect(await hasPaidProAccess()).toBe(true);
+    await deactivatePro();
+    expect(await hasPaidProAccess()).toBe(false);
   });
 
   it("recordAuditUsage increments counter", async () => {

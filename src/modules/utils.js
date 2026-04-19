@@ -295,8 +295,19 @@ function canonicalizeInvestmentGateStatusLabel(value) {
   const explicit = String(value || "").trim();
   if (!explicit) return "";
   const normalized = explicit.toLowerCase();
-  if (normalized.includes("open")) return "Open";
   if (normalized.includes("guard")) return "Guarded — safety first";
+  if (
+    normalized.includes("open") ||
+    normalized.includes("allow") ||
+    normalized.includes("permit") ||
+    normalized.includes("unlock") ||
+    normalized.includes("resume") ||
+    normalized.includes("accelerat") ||
+    normalized.includes("enable") ||
+    normalized.includes("greenlit")
+  ) {
+    return "Open";
+  }
   return explicit;
 }
 
@@ -1915,6 +1926,74 @@ export function validateParsedAuditConsistency(parsed, options = {}) {
         ...parsed.sections,
         nextAction: normalizedNextActionText,
       };
+    }
+  }
+
+  if (normalizedNativeRiskFlags.length > 0) {
+    const currentVisibleRiskText = normalizeLooseText(
+      [
+        parsed.sections?.alerts || "",
+        parsed.sections?.nextAction || "",
+        ...(Array.isArray(parsed.alertsCard) ? parsed.alertsCard : []),
+        ...(Array.isArray(parsed.weeklyMoves) ? parsed.weeklyMoves : []),
+      ].join(" ")
+    );
+    const surfacedRiskFlags = normalizedNativeRiskFlags.filter((flag) => {
+      const formatted = formatRiskFlag(flag);
+      return formatted && currentVisibleRiskText.includes(normalizeLooseText(formatted));
+    });
+
+    if (surfacedRiskFlags.length === 0) {
+      const primaryRiskAlert = `Primary risk flags: ${normalizedNativeRiskFlags.slice(0, 3).map(formatRiskFlag).join(", ")}.`;
+      const existingAlerts = Array.isArray(parsed.alertsCard)
+        ? parsed.alertsCard.map((detail) => String(detail || "").trim()).filter(Boolean)
+        : [];
+      parsed.alertsCard = existingAlerts.includes(primaryRiskAlert)
+        ? existingAlerts
+        : [...existingAlerts, primaryRiskAlert];
+
+      if (parsed.structured && typeof parsed.structured === "object") {
+        const existingStructuredAlerts = Array.isArray(parsed.structured.alertsCard)
+          ? parsed.structured.alertsCard.filter((item) => item && typeof item === "object")
+          : [];
+        const alertExists = existingStructuredAlerts.some(
+          (item) => normalizeLooseText(item?.detail || "") === normalizeLooseText(primaryRiskAlert)
+        );
+        if (!alertExists) {
+          parsed.structured.alertsCard = [
+            ...existingStructuredAlerts,
+            {
+              level: "critical",
+              title: "Primary Risk Flags",
+              detail: primaryRiskAlert,
+            },
+          ];
+        }
+      }
+
+      const alertLine = `Alert: ${primaryRiskAlert}`;
+      if (!parsed.sections || typeof parsed.sections !== "object") {
+        parsed.sections = {
+          alerts: alertLine,
+        };
+      } else if (typeof parsed.sections.alerts !== "string" || !parsed.sections.alerts.trim()) {
+        parsed.sections = {
+          ...parsed.sections,
+          alerts: alertLine,
+        };
+      } else if (!normalizeLooseText(parsed.sections.alerts).includes(normalizeLooseText(primaryRiskAlert))) {
+        parsed.sections = {
+          ...parsed.sections,
+          alerts: `${parsed.sections.alerts.trim()}\n${alertLine}`,
+        };
+      }
+
+      consistency.nativeRiskFlagsBackfilled = true;
+      auditFlags.push({
+        code: "native-risk-flags-backfilled",
+        severity: "low",
+        message: "Primary native risk flags were appended to the visible alert copy.",
+      });
     }
   }
 

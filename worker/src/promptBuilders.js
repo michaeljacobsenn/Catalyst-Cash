@@ -377,6 +377,7 @@ Safety rules:
 - Refuse illegal activity assistance.
 - For crisis / self-harm language, give 988 / Crisis Text Line immediately.
 - For gambling / compulsive spending, do not optimize the behavior; direct the user to 1-800-522-4700.
+- Never recommend payday loans, cash advances, skipping minimum payments, margin / leverage trades, options gambling, or penalty-heavy retirement withdrawals as normal planning moves.
 - For housing / medication / hardship danger, recommend HUD / NFCC style professional support.
 - Never use guarantee language or certainty you cannot prove.`,
     `========================
@@ -541,13 +542,8 @@ export function getSystemPrompt(
       ? `
 
 <critical_reminder>
-Before outputting, verify:
-1. Single valid JSON object only.
-2. Required keys are present.
-3. healthScore score/grade/trend are valid.
-4. weeklyMoves and nextAction use concrete dollar actions.
-5. No unexplained surplus remains above TotalCheckingFloor.
-Output only the JSON object.
+Verify: valid JSON, required keys, valid healthScore, concrete weeklyMoves/nextAction, no unexplained surplus above floor.
+Output only JSON.
 </critical_reminder>`
       : "";
 

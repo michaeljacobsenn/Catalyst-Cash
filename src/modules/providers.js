@@ -83,6 +83,20 @@ export function getBackendProvider(modelId) {
   return model?.provider || "gemini";
 }
 
+export function getModelDisplayName(modelId) {
+  const backend = getProvider("backend");
+  const model = backend.models.find(m => m.id === modelId);
+  return model?.name || String(modelId || "Catalyst AI");
+}
+
+export function getOperationalFallbackModels(modelId) {
+  const normalized = String(modelId || "").trim();
+  if (normalized === "gemini-2.5-flash") return ["gpt-4.1"];
+  if (normalized === "gpt-4.1") return ["gemini-2.5-flash"];
+  if (normalized === "o3") return ["gpt-4.1", "gemini-2.5-flash"];
+  return [];
+}
+
 /**
  * Check if a model requires Pro subscription
  */

@@ -53,8 +53,8 @@ TAX / SELF-EMPLOYMENT:
 K) TAX SETTLEMENT ESCROW (IF APPLICABLE)
 ========================
 - Treat contractor taxes as mandatory reserves before discretionary debt acceleration.
-- If contractor tax setup is missing, confidence must drop and the output should recommend CPA / tax-pro help.
-- Apply LIVE APP DATA and PERSONAL RULES for any dedicated tax escrow or refund holdback.
+- If tax setup is missing, lower confidence and recommend CPA / tax-pro help.
+- Apply LIVE APP DATA and PERSONAL RULES for tax escrow or refund holdback.
 `;
 
   if (placement === "liveData") return liveData;
@@ -95,9 +95,9 @@ HABIT TRACKING:
 
   const step325 = `
 Step 3.25: SMART DEFERRAL — HABIT vs FLOOR (HARD)
-- If restocking would push projected checking below ${cSym}${totalCheckingFloor.toFixed(2)} or leave a due-before-next-payday bill short, defer it one payday unless HabitCount <= ${config.habitCriticalThreshold || 3}.
-- If HabitCount <= ${config.habitCriticalThreshold || 3}, allow the restock, mark floor stress, and add a catch-up move.
-- Record either "HABIT DEFERRED" or the approved restock action explicitly in WEEKLY MOVES.
+- If restocking breaks ${cSym}${totalCheckingFloor.toFixed(2)} or a due-before-next-payday bill, defer one payday unless HabitCount <= ${config.habitCriticalThreshold || 3}.
+- If HabitCount <= ${config.habitCriticalThreshold || 3}, allow it, mark floor stress, and add a catch-up move.
+- Record either "HABIT DEFERRED" or the approved restock action explicitly.
 `;
 
   if (placement === "liveData") return liveData;
@@ -113,10 +113,9 @@ export function buildInvestmentsSection(config, _cSym = "$") {
 ========================
 S) INVESTMENTS & CRYPTO (REFERENCE — DO NOT DELETE)
 ========================
-- Use LIVE APP DATA balances/holdings when present; do not invent allocations, returns, or missing balances.
+- Use LIVE APP DATA balances/holdings; do not invent allocations, returns, or missing balances.
 - Treat brokerage, retirement, and crypto as wealth context, not emergency liquidity.
-- Crypto is volatile: include it in net worth, never in reserve coverage.
-- Always print InvestmentsAsOfDate when showing investment values. If stale or missing, flag it and avoid precise recommendations based on it.
+- Crypto counts in net worth, never in reserve coverage. Print InvestmentsAsOfDate when values are shown.
 `;
 }
 
@@ -126,23 +125,10 @@ export function buildRothSection(config, cSym = "$", totalCheckingFloor = 0) {
   return `State:
 - Roth YTD Contributions: ${cSym}${Number.isFinite(config?.rothContributedYTD) ? config.rothContributedYTD.toFixed(2) : "0.00"}
 - Roth Annual Limit: ${cSym}${Number.isFinite(config?.rothAnnualLimit) ? config.rothAnnualLimit.toFixed(2) : "0.00"}
-- Objective: Maximize Roth contributions AFTER debt payoff priority is satisfied.
-
-Debt-First Default:
-- While revolving debt remains, default Roth weekly contribution to ${cSym}0.00 unless the user explicitly overrides.
-
-Roth Activation Gate (automatic "turn-on"):
-Roth contributions may begin only when ALL are true:
-1) No listed credit-card balances exist OR only the subscriptions card has a balance that is being paid to ${cSym}0.00 weekly
-2) All hard-deadline items in LIVE APP DATA (Sinking/One-Time + any min-pay) are on-pace
-3) Checking end-of-audit projects ≥ ${cSym}${(config?.greenStatusTarget || 0).toFixed(2)} (soft target)
-
-Contribution Sizing (do not guess IRS limit):
-- AnnualRothLimit = user-provided in Settings or snapshot.
-- Do not guess limits.
-- RemainingToMax = AnnualRothLimit - RothYTD
-- WeeklyRothTarget = RemainingToMax / PaychecksRemainingInYear
-- Never fund Roth if it causes Checking < ${cSym}${totalCheckingFloor.toFixed(2)} or creates any hard-deadline shortfall.
+- Debt-first default: while revolving debt remains, Roth weekly contribution defaults to ${cSym}0.00 unless explicitly overridden.
+- Activate Roth only when hard-deadline items are on pace and projected checking stays ≥ ${cSym}${(config?.greenStatusTarget || 0).toFixed(2)}.
+- WeeklyRothTarget = (AnnualRothLimit - RothYTD) / PaychecksRemainingInYear.
+- Never fund Roth if it breaks the ${cSym}${totalCheckingFloor.toFixed(2)} floor or creates a hard-deadline shortfall.
 `;
 }
 
@@ -150,7 +136,7 @@ export function build401kSection(config, cSym = "$") {
   if (!is401kTrackingEnabled(config)) return "";
 
   return `
-401k Tracking (if enabled):
+401k Tracking:
 - 401k Balance: ${cSym}${Number.isFinite(config?.k401Balance) ? config.k401Balance.toFixed(2) : "0.00"}
 - 401k YTD Contributions: ${cSym}${Number.isFinite(config?.k401ContributedYTD) ? config.k401ContributedYTD.toFixed(2) : "0.00"}
 - 401k Annual Limit: ${cSym}${Number.isFinite(config?.k401AnnualLimit) ? config.k401AnnualLimit.toFixed(2) : "0.00"}${
@@ -167,11 +153,11 @@ export function buildHSASection(config, cSym = "$") {
   if (!isHSATrackingEnabled(config)) return "";
 
   return `
-HSA Tracking (if enabled):
+HSA Tracking:
 - HSA Balance: ${cSym}${Number.isFinite(config?.hsaBalance) ? config.hsaBalance.toFixed(2) : "0.00"}
 - HSA YTD Contributions: ${cSym}${Number.isFinite(config?.hsaContributedYTD) ? config.hsaContributedYTD.toFixed(2) : "0.00"}
 - HSA Annual Limit: ${cSym}${Number.isFinite(config?.hsaAnnualLimit) ? config.hsaAnnualLimit.toFixed(2) : "4300.00"}
-- HSA TRIPLE-TAX ADVANTAGE RULE (SOFT): after employer match, HSA usually beats Roth when medical exposure exists; mention that priority without turning it into a rigid requirement.
+- HSA TRIPLE-TAX ADVANTAGE RULE (SOFT): after employer match, HSA usually beats Roth when medical exposure exists.
 `;
 }
 
@@ -182,8 +168,8 @@ WEALTH BUILDING & TAX-ADVANTAGED LADDER
 ========================
 - Default ladder: 401k match → HSA → Roth IRA → 401k → taxable brokerage unless cash-flow risk blocks it.
 - Mention FSA deadlines, backdoor Roth, mega-backdoor Roth, or 529s only when clearly relevant.
-- Short-term goals (<3 years) belong in cash-like vehicles, not equities.
-- Never recommend new investing that breaks the checking floor, misses minimums, or ignores promo APR cliffs.
+- Keep short-term goals (<3 years) in cash-like vehicles, not equities.
+- Never invest through floor breaches, missed minimums, or promo APR cliffs.
 `;
 }
 
@@ -197,39 +183,27 @@ export function buildExpandedCoverageLite(config, _cSym = "$") {
 ========================
 CE) EXPANDED FINANCIAL SITUATION COVERAGE (CONCISE)
 ========================
-Use only the scenarios that are relevant to the current snapshot or notes.
-
-${hasHousing ? `MORTGAGE / RENT
-- Housing is structural. Treat rent or mortgage as highest-priority fixed cost and flag >30% of gross income.
+${hasHousing ? `MORTGAGE / RENT — structural fixed cost; flag >30% of gross income.
 ` : ""}${
     hasStudentDebt
-      ? `STUDENT LOAN STRATEGIES
-- Check PSLF / IDR tradeoffs before aggressive payoff of federal loans; private student debt follows normal prioritization.
+      ? `STUDENT LOAN STRATEGIES — check PSLF / IDR before fast federal payoff; private student debt follows normal prioritization.
 `
       : ""
-  }MEDICAL DEBT
-- Push itemized bills, hardship plans, and provider negotiation before collections payoff.
+  }MEDICAL DEBT — itemized bill + hardship plan before collections payoff.
 
-ALIMONY / CHILD SUPPORT
-- Treat any court-ordered support as non-deferrable and legal-risk-bearing.
+ALIMONY / CHILD SUPPORT — non-deferrable legal-risk outflow.
 
-${hasDependents ? `DEPENDENT / CHILDCARE EXPENSES
-- Childcare/support costs are structural fixed costs; mention dependent-care FSA / education savings only when relevant.
-` : ""}DEBT CONSOLIDATION / BALANCE TRANSFER
-- Mention balance transfers or consolidation only when multiple high-APR debts exist, and warn about fees plus relapse risk.
+${hasDependents ? `DEPENDENT / CHILDCARE EXPENSES — structural fixed cost; mention dependent-care FSA / education savings only when relevant.
+` : ""}DEBT CONSOLIDATION / BALANCE TRANSFER — only for multiple high-APR debts; warn about fees plus relapse risk.
 
-${config?.birthYear && new Date().getFullYear() - config.birthYear >= 30 ? `ESTATE PLANNING / LIFE INSURANCE
-- If the user is 30+ with dependents or meaningful assets, mention term life + basic estate documents.
+${config?.birthYear && new Date().getFullYear() - config.birthYear >= 30 ? `ESTATE PLANNING / LIFE INSURANCE — if 30+ with dependents or meaningful assets, mention term life + basic estate documents.
 ` : ""}${
     is55Plus
-      ? `PENSION / ANNUITY / SOCIAL SECURITY
-- Treat pensions/annuities as guaranteed income; mention Social Security timing, RMDs, and Medicare only when age-relevant.
+      ? `PENSION / ANNUITY / SOCIAL SECURITY — treat pensions/annuities as guaranteed income; mention Social Security timing, RMDs, and Medicare only when age-relevant.
 `
       : ""
-  }RENTAL INCOME / REAL ESTATE
-- Count only net rental income after property costs, and warn that real estate is illiquid.
+  }RENTAL INCOME / REAL ESTATE — count net rental income after property costs; real estate is illiquid.
 
-EQUITY COMPENSATION (RSU/ESPP/STOCK OPTIONS)
-- Track vesting or expiry dates, concentration risk, and tax-complexity warnings when employer stock is mentioned.
+EQUITY COMPENSATION (RSU/ESPP/STOCK OPTIONS) — track vesting, concentration risk, and tax complexity.
 `;
 }

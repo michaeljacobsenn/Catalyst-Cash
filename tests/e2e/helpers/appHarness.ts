@@ -19,10 +19,41 @@ function bytesToHex(bytes: Uint8Array) {
     .join("");
 }
 
-async function sha256Hex(value: string) {
-  const encoded = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", encoded);
-  return bytesToHex(new Uint8Array(digest));
+async function derivePbkdf2Hex({
+  secret,
+  salt,
+  iterations,
+}: {
+  secret: string;
+  salt: string;
+  iterations: number;
+}) {
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(String(secret || "")),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const derivedBits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: new TextEncoder().encode(String(salt || "")),
+      iterations,
+    },
+    keyMaterial,
+    256,
+  );
+  return bytesToHex(new Uint8Array(derivedBits));
+}
+
+async function deriveHouseholdAuthToken(householdId: string, passcode: string) {
+  return derivePbkdf2Hex({
+    secret: String(passcode || "").trim(),
+    salt: `household-auth-v2:${String(householdId || "").trim()}`,
+    iterations: 200000,
+  });
 }
 
 async function buildHouseholdIntegrityTag({
@@ -692,12 +723,10 @@ export async function completeOnboardingFast(page: Page) {
   await expect(page.getByRole("button", { name: "Quick Start →" })).toBeVisible();
   await page.getByRole("checkbox", { name: "Accept legal disclaimer" }).click();
   await page.getByRole("button", { name: "Quick Start →" }).click();
-  await expect(page.getByText("Cash Flow", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Next →" }).click();
-  await expect(page.getByText("Safety Targets", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Next →" }).click();
-  await expect(page.getByText("Connections & Security", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Save & Finish →" }).click();
+  await expect(page.getByRole("heading", { name: "Your Income Story" })).toBeVisible();
+  await getWizardFieldInput(page, /Typical Paycheck/).fill("3200");
+  await getWizardFieldInput(page, /Weekly Spend Allowance/).fill("425");
+  await page.getByRole("button", { name: "Save & Go to Dashboard" }).click();
 
   await expect.poll(
     async () => {
@@ -961,7 +990,7 @@ export async function seedHouseholdRemoteRecord(
   },
 ) {
   const encryptedBlob = await encrypt(JSON.stringify(payload), passcode);
-  const authToken = await sha256Hex(`household-auth-v1:${householdId.trim()}:${passcode.trim()}`);
+  const authToken = await deriveHouseholdAuthToken(householdId, passcode);
   const integrityTag = await buildHouseholdIntegrityTag({
     householdId,
     encryptedBlob,

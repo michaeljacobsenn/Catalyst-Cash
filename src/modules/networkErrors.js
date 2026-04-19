@@ -5,6 +5,33 @@ function getErrorMessage(error) {
   return typeof error === "string" ? error : "Unknown error";
 }
 
+export function isLikelyProviderAvailabilityError(error) {
+  if (error && typeof error === "object") {
+    const flagged =
+      Boolean(error.providerAvailabilityFailure) ||
+      Boolean(error.providerQuotaExceeded) ||
+      Boolean(error.providerRateLimited);
+    if (flagged) return true;
+  }
+
+  const message = getErrorMessage(error).toLowerCase();
+  const providerTagged =
+    message.includes("gemini error") ||
+    message.includes("openai error") ||
+    message.includes("claude error") ||
+    message.includes("anthropic error");
+  const availabilitySignal =
+    message.includes("quota") ||
+    message.includes("rate limit") ||
+    message.includes("resource exhausted") ||
+    message.includes("temporarily unavailable") ||
+    message.includes("currently unavailable") ||
+    message.includes("overloaded") ||
+    message.includes("capacity");
+
+  return providerTagged && availabilitySignal;
+}
+
 export function isLikelyNetworkError(error) {
   const message = getErrorMessage(error).toLowerCase();
   return (

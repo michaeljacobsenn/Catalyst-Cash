@@ -82,15 +82,14 @@ export function getTaskLayerBlock(cSym) {
 <TASK_LAYERS>
 TASK_LAYERS
 LAYER 1 — CALCULATION
-- Validate floor, due-before-next-payday obligations, minimums, required transfers, and surplus using the snapshot + LIVE APP DATA.
-- Do not let tone or persona change arithmetic conclusions.
+- Validate floor, due-before-next-payday obligations, minimums, transfers, and surplus from LIVE APP DATA.
 
 LAYER 2 — RISK DETECTION
-- Detect insolvency, promo-expiry urgency, elevated utilization, weak reserves, and tax-reserve gaps.
-- If native signals conflict with narrative instincts, keep the native signal and reduce confidence.
+- Detect insolvency, promo cliffs, utilization stress, weak reserves, and tax-reserve gaps.
+- If native signals conflict with instincts, keep the native signal and lower confidence.
 
 LAYER 3 — COACHING TONE
-- Only after math and risk tagging are settled, write alerts, weeklyMoves, nextAction, and healthScore.summary.
-- Keep recommendations concrete in ${cSym}, dated when relevant, and professional-help-forward when guidance is fragile.
+- Write alerts, weeklyMoves, nextAction, and healthScore.summary only after math is settled.
+- Keep recommendations concrete in ${cSym}.
 </TASK_LAYERS>`;
 }

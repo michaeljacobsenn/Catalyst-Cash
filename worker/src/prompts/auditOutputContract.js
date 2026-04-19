@@ -1,7 +1,6 @@
 export function getProviderTweaks(providerId, cSym = "$") {
   const common = `
 PROVIDER DIRECTIVE TAGS
-- Preserve strict JSON validity and compact schema compliance.
 - ALIAS NORMALIZATION: normalize equivalent labels to the app's canonical schema fields before output.
 `;
 
@@ -9,8 +8,7 @@ PROVIDER DIRECTIVE TAGS
     return `
 <openai_system_directive>
 ${common}
-- Use concise field-safe phrasing and avoid decorative narration.
-- Prefer executive-grade wording: crisp titles, explicit tradeoffs, and exact money references over generic coaching language.
+- Use concise, field-safe wording with exact money references.
 </openai_system_directive>`;
   }
 
@@ -19,7 +17,7 @@ ${common}
 <claude_system_directive>
 ${common}
 - Preserve compact reasoning and mention triple-tax-advantaged accounts only when relevant.
-- Prefer executive-grade wording: crisp titles, explicit tradeoffs, and exact money references over generic coaching language.
+- Prefer crisp tradeoffs and exact money references.
 </claude_system_directive>`;
   }
 
@@ -28,7 +26,6 @@ ${common}
 ${common}
 - STRATEGIC EMOJIS: allowed sparingly only inside user-facing summary fields, never in numeric values or keys.
 - Keep money formatting explicit in ${cSym}.
-- Prefer executive-grade wording: crisp titles, explicit tradeoffs, and exact money references over generic coaching language.
 </gemini_system_directive>`;
 }
 
@@ -270,34 +267,15 @@ export function getJsonWrapper(_providerId, _cSym = "$") {
   return `
 JSON OUTPUT SHAPE (MINIFIED CONTRACT)
 Core object:
-- headerCard { title, subtitle, status, confidence }
-- alertsCard[] { level, title, detail }
-- dashboardCard[] fixed categories: Checking, Vault, Pending, Debts, Available
-- healthScore { score, grade, trend, summary }
-- weeklyMoves[] { title, detail, amount, priority }
-- moveItems[] for only clear money actions
-- radar { next90Days[], longRange[] }
-- nextAction { title, detail, amount }
-- investments { balance, asOf, gateStatus, netWorth, cryptoValue }
-- assumptions[]
-- spendingAnalysis or null
-- Reconcile dashboardCard to native anchors; never zero-fill unless truly zero.
-- Use exact account/card/funding-source names.
-- Write the action plan like an owner-operator managing these exact balances personally, not like a detached summary.
-- weeklyMoves[] must read in execution order: what to do first, second, third, and why.
-- moveItems[] must be the concrete step-by-step checklist that implements weeklyMoves[]. Prefer 2-6 ordered items when action is required.
-- Each moveItems[] entry should describe one action only: hold, transfer, reserve, pay, delay, or stage.
-- If multiple protected obligations are driving the plan, separate them into distinct moveItems[] rows instead of cramming them into one sentence.
-- If Operational Surplus is greater than $0.00, allocate that full amount across named destinations in weeklyMoves[] / moveItems[] until it is exhausted. Do not leave deployable cash unassigned.
-- Each dollar move should answer: from where, to what destination, how much, and why now.
-- For moveItems[], populate sourceLabel, targetLabel, and routeLabel / fundingLabel whenever a money movement or reserve action exists.
-- If the user supplied Custom AI / Persona rules for this run, treat them as hard run-specific constraints, not soft preferences.
-- End the action set with the remaining parked cash / protected gap / unallocated amount when that number matters to execution.
-- If Operational Surplus is $0.00, say that explicitly and frame the plan as protection / staging rather than pretending there is free money to deploy.
-- If protected obligations exceed deployable cash, show the allocation order first, then state the remaining protected gap explicitly.
-- nextAction should be the single first move. Keep it crisp. Put the fuller sequencing in weeklyMoves[] and moveItems[].
-- If a hard deadline, locked escrow rule, or funding-source constraint is driving the recommendation, encode that explicitly in nextAction.detail and the first REQUIRED weeklyMoves[].detail.
-- Use recent-spending details to explain patterns or decision-relevant anomalies; do not surface a merchant-level callout unless it changes the recommendation materially.
-- If data is partial or contradictory, say so in assumptions or alertsCard.
-- Keep strings concise and mobile-readable; use null for missing optional values.`;
+- headerCard, alertsCard, dashboardCard, healthScore
+- weeklyMoves, moveItems, radar, nextAction, investments
+- assumptions, spendingAnalysis may be null
+
+Execution rules:
+- Reconcile to native anchors; never zero-fill unless truly zero.
+- weeklyMoves are ordered; nextAction is only the first move.
+- moveItems are one action each.
+- If Operational Surplus is > $0.00, allocate all of it.
+- Each dollar move says source, destination, amount, and reason.
+- Keep strings concise; use null for missing optional values.`;
 }

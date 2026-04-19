@@ -11,6 +11,35 @@ export function compactAuditPrompt(prompt, config, buildExpandedCoverageLite, cS
 
   next = replacePromptSection(
     next,
+    `========================\nHORIZON RULES:\n`,
+    `========================\nLEGAL DISCLAIMER & SAFETY GUARDRAILS (HARD — HIGHEST PRIORITY)\n========================`,
+    `HORIZON RULES:
+- Protect the next-payday window first, but keep the supplied 12-month obligations in radar and reserve staging.
+- Treat mapped balances, debts, renewals, and annual fees as real unless the user explicitly overrides them.
+
+========================
+`
+  );
+
+  next = replacePromptSection(
+    next,
+    `========================\nLEGAL DISCLAIMER & SAFETY GUARDRAILS (HARD — HIGHEST PRIORITY)\n========================`,
+    `========================\nLIVE APP DATA INJECTION (HARD OVERRIDE)\n========================`,
+    `========================
+LEGAL DISCLAIMER & SAFETY GUARDRAILS (CONCISE)
+========================
+- Put the mandatory educational disclaimer in the HEADER CARD as instructed.
+- Never claim licensed-advisor authority, give illegal guidance, or use guarantees.
+- Crisis/self-harm: give 988 / Crisis Text Line immediately.
+- Gambling/compulsive spending: refuse optimization, redirect to a safer money move, and cite 1-800-522-4700.
+- Never recommend payday loans, cash advances, skipped minimums, leverage/options gambling, or penalty-heavy retirement withdrawals as normal planning moves.
+- Housing / medication / hardship danger: point to HUD / NFCC style support.
+
+`
+  );
+
+  next = replacePromptSection(
+    next,
     `========================\nU) WEEKLY OPERATOR CHECKLIST (HARD-UX, 90-SECOND RUN)\n========================`,
     `========================\nV) KERNEL UNIT TESTS (HARD)\n========================`,
     `========================
@@ -114,9 +143,11 @@ CANONICAL EXECUTION RULES (CONCISE)
 ========================
 - Protect floor first, then due-before-next-payday bills, minimums, and required transfers.
 - Card-charged renewals raise card balances; they do not drain cash until payment.
-- Respect user anti-double-count notes.
-- If cash is short, priority is Floor > Fixed Mandates > Time-Critical > Vault Pace > Safety Card Cleanup > Promo Sprint > Optional Goals.
+- Respect locked rules and anti-double-count notes.
+- If cash is short, use: Floor > Fixed Mandates > Time-Critical > Vault Pace > Safety Card Cleanup > Promo Sprint > Optional Goals.
+- If debt or a hard reserve gap remains, keep the investments gate closed.
 - If native signals and narrative disagree, keep the native signal and lower confidence.
+- State where dollars already sit, where they need to move, and how much surplus remains or why none remains.
 `
   );
 
@@ -148,6 +179,24 @@ A+) EXECUTIVE QUALITY STANDARD (CONCISE)
 - Call out assumptions or contradictions plainly.
 - No filler, no generic education, no invented precision.
 `
+  );
+
+  next = replacePromptSection(
+    next,
+    `========================\nLIVE APP DATA INJECTION (HARD OVERRIDE)\n========================\n<LIVE_APP_DATA>\nTreat LIVE APP DATA as the source of truth. These are inputs, not rules.\n\n`,
+    `</LIVE_APP_DATA>`,
+    `========================
+LIVE APP DATA INJECTION (HARD OVERRIDE)
+========================
+<LIVE_APP_DATA>
+Treat LIVE APP DATA as source-of-truth inputs. Follow locked user rules unless they conflict with safety.
+
+${prompt.slice(
+      prompt.indexOf(`========================\nLIVE APP DATA INJECTION (HARD OVERRIDE)\n========================\n<LIVE_APP_DATA>\nTreat LIVE APP DATA as the source of truth. These are inputs, not rules.\n\n`) +
+        `========================\nLIVE APP DATA INJECTION (HARD OVERRIDE)\n========================\n<LIVE_APP_DATA>\nTreat LIVE APP DATA as the source of truth. These are inputs, not rules.\n\n`.length,
+      prompt.indexOf(`</LIVE_APP_DATA>`)
+    )}
+</LIVE_APP_DATA>`
   );
 
   next = replacePromptSection(

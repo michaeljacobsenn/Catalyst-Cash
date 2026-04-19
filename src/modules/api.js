@@ -34,6 +34,40 @@ function emitRateLimit(res, isChat) {
   }
 }
 
+function buildBackendError(message, status, provider) {
+  const error = new Error(message || `Backend error: HTTP ${status}`);
+  error.backendStatus = status;
+  error.backendProvider = provider || "unknown";
+
+  const normalizedMessage = String(message || "").toLowerCase();
+  const providerTagged =
+    normalizedMessage.includes("gemini error") ||
+    normalizedMessage.includes("openai error") ||
+    normalizedMessage.includes("claude error") ||
+    normalizedMessage.includes("anthropic error");
+  const quotaSignal =
+    normalizedMessage.includes("quota") ||
+    normalizedMessage.includes("resource exhausted");
+  const rateSignal = normalizedMessage.includes("rate limit");
+  const availabilitySignal =
+    normalizedMessage.includes("temporarily unavailable") ||
+    normalizedMessage.includes("currently unavailable") ||
+    normalizedMessage.includes("overloaded") ||
+    normalizedMessage.includes("capacity");
+
+  if (providerTagged && (quotaSignal || rateSignal || availabilitySignal)) {
+    error.providerAvailabilityFailure = true;
+  }
+  if (providerTagged && quotaSignal) {
+    error.providerQuotaExceeded = true;
+  }
+  if (providerTagged && rateSignal) {
+    error.providerRateLimited = true;
+  }
+
+  return error;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // BACKEND MODE — Cloudflare Worker Proxy
 // ═══════════════════════════════════════════════════════════════
@@ -132,7 +166,7 @@ async function* streamBackend(snapshot, model, context, history, deviceId, backe
       throw new Error(msg);
     }
     log.error("audit", "Backend error", { status: res.status });
-    throw new Error(e.error || `Backend error: HTTP ${res.status}`);
+    throw buildBackendError(e.error || `Backend error: HTTP ${res.status}`, res.status, resolvedProvider);
   }
 
   _lastAuditLogId = res.headers.get("X-Audit-Log-ID") || null;
@@ -210,7 +244,7 @@ async function callBackend(
         : e.error || "Daily audit limit reached. Try again later!";
       throw new Error(msg);
     }
-    throw new Error(e.error || `Backend error: HTTP ${res.status}`);
+    throw buildBackendError(e.error || `Backend error: HTTP ${res.status}`, res.status, resolvedProvider);
   }
 
   _lastAuditLogId = res.headers.get("X-Audit-Log-ID") || null;
@@ -292,7 +326,7 @@ export async function callAudit(
     responseFormat,
     isChat ? "chat" : "audit",
     signal,
-    { maxRetries: 0 }
+    isChat ? { maxRetries: 1 } : { maxRetries: 0 }
   );
 }
 

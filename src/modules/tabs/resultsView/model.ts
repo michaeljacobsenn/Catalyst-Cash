@@ -43,6 +43,12 @@ export interface TacticalPlaybookFallbackCopy {
   message: string;
 }
 
+export interface TimelineRow {
+  date: string;
+  label: string;
+  amount: string;
+}
+
 export interface AuditHandlingNotes {
   content: string;
   badgeLabel: string | null;
@@ -108,12 +114,21 @@ function normalizeExistingMoveItems(moveItems: ParsedMoveItem[] = []) {
   return moveItems
     .map((item) => {
       const amount = parseCurrency(item?.amount);
+      const text = normalizeMoveLine(item?.text || item?.detail || item?.title || "");
+      const title = normalizeMoveLine(item?.title || item?.targetLabel || item?.text || "");
+      const detail = normalizeMoveLine(item?.detail || "");
+      const normalizedDetail =
+        detail &&
+        detail.toLowerCase() !== title.toLowerCase() &&
+        detail.toLowerCase() !== text.toLowerCase()
+          ? detail
+          : "";
       return {
         ...item,
         done: Boolean(item?.done),
-        text: normalizeMoveLine(item?.text || item?.detail || item?.title || ""),
-        title: normalizeMoveLine(item?.title || item?.targetLabel || item?.text || ""),
-        detail: normalizeMoveLine(item?.detail || ""),
+        text,
+        title,
+        detail: normalizedDetail,
         ...(amount != null ? { amount } : {}),
       };
     })
@@ -258,8 +273,13 @@ export function cleanAllocationLead(detail: string | null | undefined) {
   const withoutRows = withoutFiller
     .replace(/([^,.;]+?)\s*\(\$[\d,]+(?:\.\d{2})?\s+by\s+\d{4}-\d{2}-\d{2}\)/g, "")
     .replace(/\s+,/g, ",");
-  const cleaned = withoutRows
-    .replace(/\s{2,}/g, " ")
+  const dedupedParagraphs = withoutRows
+    .split(/\n+/)
+    .map((paragraph) => paragraph.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .filter((paragraph, index, list) => list.findIndex((candidate) => candidate.toLowerCase() === paragraph.toLowerCase()) === index);
+  const cleaned = dedupedParagraphs
+    .join(" ")
     .replace(/,\s*,/g, ",")
     .replace(/,\s*\./g, ".")
     .replace(/^[^a-z0-9$]+/i, "")
@@ -267,6 +287,35 @@ export function cleanAllocationLead(detail: string | null | undefined) {
     .replace(/[,:;]\s*$/, "")
     .trim();
   return /[a-z0-9]/i.test(cleaned) ? cleaned : "";
+}
+
+export function buildTimelineRows(content: string | null | undefined): TimelineRow[] {
+  const lines = String(content || "")
+    .split(/\n+/)
+    .map((line) =>
+      String(line || "")
+        .replace(/^\s*(?:[-*•]\s+|\d+\.\s+)/, "")
+        .replace(/\*\*/g, "")
+        .trim()
+    )
+    .filter((line): line is string => Boolean(line));
+
+  return lines.flatMap((line) => {
+      const match = line.match(/^(\d{4}-\d{2}-\d{2})(?:\s*[–—-]\s*|\s+)(.+)$/);
+      if (!match) return [];
+
+      const [, rawDate = "", rawRemainder = ""] = match;
+      const date = String(rawDate).trim();
+      const remainder = String(rawRemainder).trim();
+      const amountMatch = remainder.match(/^(.*?)(?:\s+[–—-]\s+)?(\$[\d,]+(?:\.\d{2})?)$/);
+      const label = String(amountMatch?.[1] || remainder)
+        .replace(/\s+[–—-]\s*$/, "")
+        .trim();
+      const amount = String(amountMatch?.[2] || "").trim();
+
+      if (!date || !label) return [];
+      return [{ date, label, amount }];
+    });
 }
 
 export function buildAllocationLedger(consistency: AuditConsistencyInfo | null | undefined): AllocationLedgerEntry[] {

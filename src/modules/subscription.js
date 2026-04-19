@@ -428,6 +428,11 @@ export async function deactivatePro() {
   await db.set(STATE_KEY, state);
 }
 
+export async function hasPaidProAccess() {
+  const state = await getSubscriptionState();
+  return state.tier === "pro";
+}
+
 export async function isPro() {
   if (getGatingMode() !== "live") return true;
   const state = await getSubscriptionState();

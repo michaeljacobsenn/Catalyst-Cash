@@ -925,6 +925,221 @@ describe("parseAudit", () => {
     expect(visibleMoves).toContain("Roth IRA");
   });
 
+  it("maps unlocked contribution labels to an open investment gate", () => {
+    const raw = JSON.stringify({
+      headerCard: { status: "GREEN", title: "Invest", subtitle: "Cash is open", confidence: "high" },
+      healthScore: { score: 98, grade: "A", trend: "up", summary: "Strong." },
+      dashboardCard: [
+        { category: "Checking", amount: "$9,200.00", status: "ok" },
+        { category: "Vault", amount: "$16,000.00", status: "ok" },
+        { category: "Pending", amount: "$0.00", status: "clear" },
+        { category: "Debts", amount: "$0.00", status: "clear" },
+        { category: "Available", amount: "$7,350.00", status: "ok" },
+      ],
+      weeklyMoves: [],
+      alertsCard: [],
+      nextAction: {
+        title: "Fund Roth",
+        detail: "Contribute to Roth IRA.",
+        amount: "$7,350.00",
+      },
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: { balance: "$90,700.00", asOf: "2026-04-17", gateStatus: "Roth contributions unlocked", netWorth: "$90,700.00", cryptoValue: null },
+    });
+
+    const parsed = validateParsedAuditConsistency(parseAudit(raw), {
+      nativeScore: 98,
+      nativeRiskFlags: [],
+      operationalSurplus: 7350,
+      cards: [],
+      formData: {
+        date: "2026-04-17",
+        checking: "9200",
+        savings: "16000",
+        roth: "22200",
+        brokerage: "14500",
+        k401Balance: "54000",
+      },
+      renewals: [],
+      financialConfig: {
+        weeklySpendAllowance: 650,
+        emergencyFloor: 1200,
+      },
+      computedStrategy: {
+        operationalSurplus: 7350,
+        debtStrategy: { target: "", amount: 0, method: "" },
+      },
+      investmentAnchors: { balance: 90700, asOf: "2026-04-17", gateStatus: "Roth contributions unlocked", netWorth: 90700 },
+    });
+
+    expect(parsed.investments.gateStatus).toBe("Open");
+  });
+
+  it("maps allowed contribution labels to an open investment gate", () => {
+    const raw = JSON.stringify({
+      headerCard: { status: "GREEN", title: "Invest", subtitle: "Cash is open", confidence: "high" },
+      healthScore: { score: 98, grade: "A", trend: "up", summary: "Strong." },
+      dashboardCard: [
+        { category: "Checking", amount: "$9,200.00", status: "ok" },
+        { category: "Vault", amount: "$16,000.00", status: "ok" },
+        { category: "Pending", amount: "$0.00", status: "clear" },
+        { category: "Debts", amount: "$0.00", status: "clear" },
+        { category: "Available", amount: "$7,350.00", status: "ok" },
+      ],
+      weeklyMoves: [],
+      alertsCard: [],
+      nextAction: {
+        title: "Fund Roth",
+        detail: "Contribute to Roth IRA.",
+        amount: "$7,350.00",
+      },
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: { balance: "$90,700.00", asOf: "2026-04-17", gateStatus: "Roth contributions allowed (no debt, floor protected)", netWorth: "$90,700.00", cryptoValue: null },
+    });
+
+    const parsed = validateParsedAuditConsistency(parseAudit(raw), {
+      nativeScore: 98,
+      nativeRiskFlags: [],
+      operationalSurplus: 7350,
+      cards: [],
+      formData: {
+        date: "2026-04-17",
+        checking: "9200",
+        savings: "16000",
+      },
+      renewals: [],
+      financialConfig: {
+        weeklySpendAllowance: 650,
+        emergencyFloor: 1200,
+      },
+      computedStrategy: {
+        operationalSurplus: 7350,
+        debtStrategy: { target: "", amount: 0, method: "" },
+      },
+      investmentAnchors: {
+        balance: 90700,
+        asOf: "2026-04-17",
+        gateStatus: "Roth contributions allowed (no debt, floor protected)",
+        netWorth: 90700,
+      },
+    });
+
+    expect(parsed.investments.gateStatus).toBe("Open");
+  });
+
+  it("maps permitted contribution labels to an open investment gate", () => {
+    const raw = JSON.stringify({
+      headerCard: { status: "GREEN", title: "Invest", subtitle: "Cash is open", confidence: "high" },
+      healthScore: { score: 98, grade: "A", trend: "up", summary: "Strong." },
+      dashboardCard: [
+        { category: "Checking", amount: "$9,200.00", status: "ok" },
+        { category: "Vault", amount: "$16,000.00", status: "ok" },
+        { category: "Pending", amount: "$0.00", status: "clear" },
+        { category: "Debts", amount: "$0.00", status: "clear" },
+        { category: "Available", amount: "$7,350.00", status: "ok" },
+      ],
+      weeklyMoves: [],
+      alertsCard: [],
+      nextAction: {
+        title: "Fund Roth",
+        detail: "Contribute to Roth IRA.",
+        amount: "$7,350.00",
+      },
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: { balance: "$90,700.00", asOf: "2026-04-17", gateStatus: "Roth contributions permitted (no debt, floor protected)", netWorth: "$90,700.00", cryptoValue: null },
+    });
+
+    const parsed = validateParsedAuditConsistency(parseAudit(raw), {
+      nativeScore: 98,
+      nativeRiskFlags: [],
+      operationalSurplus: 7350,
+      cards: [],
+      formData: {
+        date: "2026-04-17",
+        checking: "9200",
+        savings: "16000",
+      },
+      renewals: [],
+      financialConfig: {
+        weeklySpendAllowance: 650,
+        emergencyFloor: 1200,
+      },
+      computedStrategy: {
+        operationalSurplus: 7350,
+        debtStrategy: { target: "", amount: 0, method: "" },
+      },
+      investmentAnchors: {
+        balance: 90700,
+        asOf: "2026-04-17",
+        gateStatus: "Roth contributions permitted (no debt, floor protected)",
+        netWorth: 90700,
+      },
+    });
+
+    expect(parsed.investments.gateStatus).toBe("Open");
+  });
+
+  it("backfills native risk flags into visible alerts when the model omits them", () => {
+    const raw = JSON.stringify({
+      headerCard: { status: "RED", title: "Protect cash", subtitle: "Cash is tight", confidence: "medium" },
+      healthScore: { score: 34, grade: "F", trend: "down", summary: "Cash is under pressure." },
+      dashboardCard: [
+        { category: "Checking", amount: "$398.06", status: "low" },
+        { category: "Vault", amount: "$132.86", status: "low" },
+        { category: "Pending", amount: "$45.27", status: "watch" },
+        { category: "Debts", amount: "$10,839.00", status: "high" },
+        { category: "Available", amount: "$0.00", status: "protected" },
+      ],
+      weeklyMoves: [
+        { title: "Protect obligations", detail: "Cover Acura first.", amount: "$663.78", priority: "required" },
+      ],
+      alertsCard: ["Alert: Protect the next bills first."],
+      nextAction: {
+        title: "Protect obligations",
+        detail: "Cover Acura and Geico first.",
+        amount: "$663.78",
+      },
+      radar: [],
+      longRangeRadar: [],
+      milestones: [],
+      investments: { balance: "$6,360.71", asOf: "2026-04-17", gateStatus: "Guarded — safety first", netWorth: "$-10,308.08", cryptoValue: null },
+    });
+
+    const parsed = validateParsedAuditConsistency(parseAudit(raw), {
+      nativeScore: 34,
+      nativeRiskFlags: ["transfer-needed", "floor-breach-risk", "promo-expiry"],
+      operationalSurplus: 0,
+      cards: [],
+      formData: {
+        date: "2026-04-17",
+        checking: "398.06",
+        savings: "132.86",
+      },
+      renewals: [],
+      financialConfig: {
+        weeklySpendAllowance: 275,
+        emergencyFloor: 600,
+      },
+      computedStrategy: {
+        operationalSurplus: 0,
+        debtStrategy: { target: "", amount: 0, method: "" },
+        auditSignals: {
+          riskFlags: ["transfer-needed", "floor-breach-risk", "promo-expiry"],
+        },
+      },
+    });
+
+    expect(parsed.alertsCard.join(" ")).toContain("Transfer Needed");
+    expect(parsed.sections.alerts).toContain("Primary risk flags");
+    expect(parsed.auditFlags.map((flag) => flag.code)).toContain("native-risk-flags-backfilled");
+  });
+
   it("replaces generic spending-review next actions when notes earmark funds toward a named debt", () => {
     const raw = JSON.stringify({
       headerCard: { status: "RED", title: "Cash stress", subtitle: "Checking is tight", confidence: "medium" },

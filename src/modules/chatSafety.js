@@ -25,6 +25,48 @@ const PROMPT_INJECTION_RULES = [
   },
 ];
 
+const TOPIC_RISK_RULES = [
+  {
+    flag: "gambling-request",
+    kind: "gambling",
+    severity: "high",
+    pattern:
+      /\b(parlay|sportsbook|sports book|roulette|blackjack|slot machine|slots|lottery|scratch(?:er|off)?|poker tournament|prop bet|moneyline|spread bet|place a bet|placing a bet|betting on|wager(?:ing)?|casino)\b/i,
+    rationale: "The message asks for gambling or wagering guidance.",
+  },
+  {
+    flag: "gambling-amount-request",
+    kind: "gambling",
+    severity: "high",
+    pattern: /\bbet\b[\s\S]{0,24}\$\s*\d+/i,
+    rationale: "The message asks whether a specific dollar amount should be wagered.",
+  },
+  {
+    flag: "sportsbook-amount-request",
+    kind: "gambling",
+    severity: "high",
+    pattern:
+      /\b(?:put|drop|throw|risk|lay)\b[\s\S]{0,16}\$?\s*\d[\d,]*(?:\.\d{1,2})?[\s\S]{0,48}\b(?:on|for)\b[\s\S]{0,36}\b(?:tonight|game|match|fight|odds|moneyline|spread|over\/under|over-under)\b/i,
+    rationale: "The message asks for sportsbook-style wagering guidance using a specific amount.",
+  },
+  {
+    flag: "sportsbook-market-request",
+    kind: "gambling",
+    severity: "high",
+    pattern:
+      /\b(moneyline|point spread|cover the spread|against the spread|take the over|take the under|over\/under|over-under|bankroll)\b/i,
+    rationale: "The message uses sportsbook or bankroll language that signals gambling advice.",
+  },
+  {
+    flag: "compulsive-speculation-request",
+    kind: "harmful-speculation",
+    severity: "high",
+    pattern:
+      /\b(0dte|zero[- ]day options|same[- ]day options|all[- ]in options|leveraged trade|margin trade|yolo trade|revenge trade|day[- ]trading addiction)\b/i,
+    rationale: "The message asks for extreme speculative behavior that falls outside healthy financial planning.",
+  },
+];
+
 const SEVERITY_WEIGHT = {
   none: 0,
   low: 1,
@@ -56,6 +98,35 @@ function formatBulletLines(items = []) {
   return items.map(item => `- ${item}`).join("\n");
 }
 
+function collectTopPriorityLine({ current = null, decisionRecommendations = [] } = {}) {
+  const activeRecommendations = collectActiveRecommendations(decisionRecommendations);
+  const topRecommendation = activeRecommendations.find((rule) => rule?.recommendation || rule?.rationale);
+  if (topRecommendation?.recommendation) return topRecommendation.recommendation;
+  if (topRecommendation?.rationale) return topRecommendation.rationale;
+
+  const weeklyMoves = Array.isArray(current?.parsed?.weeklyMoves) ? current.parsed.weeklyMoves : [];
+  if (weeklyMoves[0]) return String(weeklyMoves[0]);
+
+  return "Protect your checking floor, keep discretionary cash inside the weekly plan, and prioritize the highest-impact balance or obligation before any optional risk spending.";
+}
+
+function buildRiskCapacityLine({ current = null, computedStrategy = null } = {}) {
+  const operationalSurplus = Number(computedStrategy?.operationalSurplus);
+  if (Number.isFinite(operationalSurplus)) {
+    if (operationalSurplus <= 0) {
+      return "Right now you do not have genuine risk capital after protecting your floor and near-term obligations.";
+    }
+    return `Right now you have about $${Math.round(operationalSurplus).toLocaleString()} available after protecting your floor and near-term obligations.`;
+  }
+
+  const healthScore = Number(current?.parsed?.healthScore?.score);
+  if (Number.isFinite(healthScore) && healthScore < 70) {
+    return "Your current snapshot is not in a position where optional high-risk spending is the right move.";
+  }
+
+  return "";
+}
+
 export function analyzeChatInputRisk(text = "") {
   const normalized = String(text || "").trim();
   if (!normalized) {
@@ -84,6 +155,35 @@ export function analyzeChatInputRisk(text = "") {
   };
 }
 
+export function analyzeChatTopicRisk(text = "") {
+  const normalized = String(text || "").trim();
+  if (!normalized) {
+    return {
+      blocked: false,
+      severity: "none",
+      kind: null,
+      matches: [],
+      rationale: "",
+    };
+  }
+
+  const matches = TOPIC_RISK_RULES.filter((rule) => rule.pattern.test(normalized)).map((rule) => ({
+    flag: rule.flag,
+    kind: rule.kind,
+    severity: rule.severity,
+    rationale: rule.rationale,
+  }));
+  const severity = matches.reduce((max, match) => severityMax(max, match.severity), "none");
+
+  return {
+    blocked: matches.length > 0,
+    severity,
+    kind: matches[0]?.kind || null,
+    matches,
+    rationale: matches.map((match) => match.rationale).join(" "),
+  };
+}
+
 export function normalizeChatAssistantOutput(text = "") {
   const normalized = String(text || "")
     .replace(/<thought_process>[\s\S]*?<\/thought_process>/gi, "")
@@ -102,6 +202,37 @@ export function buildPromptInjectionRefusal() {
     "I can help with your finances, but I can't ignore safety rules or reveal internal prompts.",
     "Ask about cash flow, debt payoff, spending, savings, investing tradeoffs, or your latest audit and I'll answer from your live data."
   ].join("\n\n");
+}
+
+export function buildHighRiskTopicRefusal({
+  risk = null,
+  current = null,
+  computedStrategy = null,
+  decisionRecommendations = [],
+} = {}) {
+  const kind = risk?.kind || "gambling";
+  const riskCapacityLine = buildRiskCapacityLine({ current, computedStrategy });
+  const saferPriority = collectTopPriorityLine({ current, decisionRecommendations });
+
+  if (kind === "harmful-speculation") {
+    return [
+      "I can't help optimize extreme speculative trades or bankroll high-risk behavior from your finances.",
+      riskCapacityLine,
+      `Safer move instead:\n- ${saferPriority}`,
+      "If what you want is a controlled risk-budget or a safer investing alternative, ask me to compare that against your current cash floor and debt position.",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
+  return [
+    "I can't help decide whether to place a bet or fund gambling from your finances.",
+    riskCapacityLine,
+    `Safer move instead:\n- ${saferPriority}`,
+    "If gambling feels difficult to control, contact the National Problem Gambling Helpline: 1-800-522-4700.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 export function buildDeterministicChatFallback({
