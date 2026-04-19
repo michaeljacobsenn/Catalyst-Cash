@@ -459,94 +459,131 @@ export default memo(function ResultsView({
         flexDirection: "column",
         alignItems: "center",
         width: "100%",
-        paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
+        paddingTop: 0,
         ["--page-bottom-clearance" as string]: "calc(env(safe-area-inset-bottom, 0px) + 28px)",
       }}
     >
-      <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column", gap: 12 }}>
-      <div
+      <header
         style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 18,
+          width: "100%",
+          maxWidth: 768,
+          paddingTop: "calc(env(safe-area-inset-top, 0px) + 6px)",
+          paddingLeft: 16,
+          paddingRight: 16,
+          paddingBottom: 10,
+          background: T.bg.navGlass,
+          backdropFilter: "blur(20px) saturate(1.3)",
+          WebkitBackdropFilter: "blur(20px) saturate(1.3)",
+          borderBottom: `1px solid ${T.border.subtle}`,
           display: "flex",
-          alignItems: "flex-start",
+          alignItems: "center",
           justifyContent: "space-between",
-          gap: 12,
-          paddingBottom: 4,
+          flexShrink: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, minWidth: 0 }}>
+        <div style={{ width: 44, minWidth: 44, display: "flex", justifyContent: "flex-start" }}>
           <button
             onClick={handleExitResults}
             aria-label="Back"
             style={{
-              width: 46,
-              height: 46,
-              borderRadius: 16,
-              border: `1px solid ${T.border.subtle}`,
+              width: 40,
+              height: 40,
+              borderRadius: 12,
+              border: `1px solid ${T.border.default}`,
               background: T.bg.elevated,
-              color: T.text.primary,
-              flexShrink: 0,
+              color: T.text.secondary,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            <ArrowLeft size={18} strokeWidth={2.4} />
+            <ArrowLeft size={16} strokeWidth={2.2} />
           </button>
-          <div style={{ minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: 10,
-                fontWeight: 800,
-                color: T.accent.primary,
-                fontFamily: T.font.mono,
-                letterSpacing: "0.08em",
-                marginBottom: 4,
-              }}
-            >
-              AUDIT RESULTS
-            </div>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: "clamp(28px, 8vw, 36px)",
-                lineHeight: 1.02,
-                letterSpacing: "-0.04em",
-                color: T.text.primary,
-                fontWeight: 900,
-              }}
-            >
-              Weekly Briefing
-            </h1>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
-              <Mono size={11} color={T.text.dim}>
-                {fmtDate(audit.date)}
-              </Mono>
-              {audit.isTest && <Badge variant="amber">TEST · NOT SAVED</Badge>}
-              {!isDegraded && auditHandlingNotes.badgeLabel && <Badge variant="teal">{auditHandlingNotes.badgeLabel}</Badge>}
-            </div>
+        </div>
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 2,
+            padding: "0 12px",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 9,
+              fontWeight: 800,
+              color: T.text.dim,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              fontFamily: T.font.mono,
+              lineHeight: 1.1,
+            }}
+          >
+            Audit Results
           </div>
+          <h1
+            style={{
+              fontSize: 17,
+              fontWeight: 850,
+              color: T.text.primary,
+              letterSpacing: "-0.02em",
+              lineHeight: 1.1,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              maxWidth: "100%",
+              margin: 0,
+            }}
+          >
+            Weekly Briefing
+          </h1>
         </div>
         <button
           onClick={() => setShowExportSheet(true)}
           title="Export Audit"
+          aria-label="Export Audit"
           style={{
-            height: 46,
-            padding: "0 16px",
-            borderRadius: 16,
-            border: `1px solid ${T.border.subtle}`,
+            width: 40,
+            height: 40,
+            borderRadius: 12,
+            border: `1px solid ${T.border.default}`,
             background: T.bg.elevated,
-            color: T.text.primary,
+            color: T.text.secondary,
             cursor: "pointer",
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            gap: 8,
             flexShrink: 0,
-            fontSize: 12,
-            fontWeight: 800,
-            fontFamily: T.font.mono,
           }}
         >
-          <Share2 size={15} strokeWidth={2.5} />
-          Export
+          <Share2 size={16} strokeWidth={2.3} />
         </button>
+      </header>
+
+      <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column", gap: 12, paddingTop: 12 }}>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          flexWrap: "wrap",
+          paddingBottom: 2,
+        }}
+      >
+        <Mono size={11} color={T.text.dim}>
+          {fmtDate(audit.date)}
+        </Mono>
+        {audit.isTest && <Badge variant="amber">TEST · NOT SAVED</Badge>}
+        {!isDegraded && auditHandlingNotes.badgeLabel && <Badge variant="teal">{auditHandlingNotes.badgeLabel}</Badge>}
       </div>
 
       {showExportSheet && audit && (

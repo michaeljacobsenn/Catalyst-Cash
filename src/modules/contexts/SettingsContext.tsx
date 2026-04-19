@@ -27,7 +27,7 @@ interface ProviderConfig {
   keyStorageKey?: string | null;
 }
 
-export type PersonaMode = "coach" | "friend" | "nerd" | null;
+export type PersonaMode = "coach" | "nerd" | null;
 export type BackupInterval = "off" | "daily" | "weekly" | "monthly";
 export type NotificationPermissionState = "granted" | "denied" | "prompt";
 export type ThemeMode = "system" | "light" | "dark";
@@ -113,6 +113,10 @@ const SETTINGS_STORAGE_BOOT_TIMEOUT_MS = 4200;
 
 export function resolveStoredThemeMode(savedTheme: ThemeMode | null | undefined, pendingOverride: ThemeMode | null | undefined): ThemeMode {
   return pendingOverride || savedTheme || "system";
+}
+
+function sanitizeStoredPersona(value: unknown): PersonaMode {
+  return value === "coach" || value === "nerd" ? value : null;
 }
 
 function getFallbackStorageStatus() {
@@ -399,7 +403,11 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
 
       if (personalRulesValue) setPersonalRules(personalRulesValue);
       if (consent) setAiConsent(true);
-      if (savedPersona) setPersona(savedPersona);
+      const sanitizedPersona = sanitizeStoredPersona(savedPersona);
+      setPersona(sanitizedPersona);
+      if (savedPersona !== sanitizedPersona) {
+        await db.set("ai-persona", sanitizedPersona);
+      }
       setAutoBackupInterval(backupInterval || "off");
 
       const resolvedTheme = resolveStoredThemeMode(savedTheme, pendingThemeOverrideRef.current);

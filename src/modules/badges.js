@@ -41,7 +41,7 @@ export const BADGE_DEFINITIONS = [
 
   // Engagement
   { id: "shared_score", emoji: "📤", name: "Social Butterfly", desc: "Shared your health score", tier: "bronze" },
-  { id: "persona_set", emoji: "🎭", name: "My Style", desc: "Chose an AI personality", tier: "bronze" },
+  { id: "persona_set", emoji: "🎭", name: "My Style", desc: "Chose an AI style", tier: "bronze" },
   { id: "budget_boss", emoji: "👑", name: "Budget Boss", desc: "4 consecutive weeks under budget", tier: "gold" },
   {
     id: "challenge_complete",

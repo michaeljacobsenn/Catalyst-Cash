@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { beginBiometricInteraction, endBiometricInteraction, isBiometricInteractionActive } from "./biometricSession.js";
+import { beginBiometricInteraction, endBiometricInteraction, isBiometricInteractionActive, withBiometricPromptTimeout } from "./biometricSession.js";
 
 describe("biometricSession", () => {
   beforeEach(() => {
@@ -48,5 +48,27 @@ describe("biometricSession", () => {
 
     vi.advanceTimersByTime(1);
     expect(isBiometricInteractionActive()).toBe(false);
+  });
+
+  it("times out a hung biometric prompt", async () => {
+    const pending = expect(
+      withBiometricPromptTimeout(() => new Promise<never>(() => {}), {
+        timeoutMs: 900,
+        timeoutMessage: "Face ID timed out",
+      })
+    ).rejects.toThrow("Face ID timed out");
+
+    await vi.advanceTimersByTimeAsync(900);
+    await pending;
+  });
+
+  it("clears the timeout when the biometric prompt resolves", async () => {
+    const pending = withBiometricPromptTimeout(async () => {
+      await Promise.resolve();
+      return "ok";
+    }, { timeoutMs: 900 });
+
+    await expect(pending).resolves.toBe("ok");
+    await vi.advanceTimersByTimeAsync(900);
   });
 });

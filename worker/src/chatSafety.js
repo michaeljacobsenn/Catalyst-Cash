@@ -3,25 +3,21 @@ const PROMPT_INJECTION_RULES = [
     flag: "prompt-override-attempt",
     severity: "high",
     pattern: /\b(ignore|disregard|forget|override|bypass)\b[\s\S]{0,60}\b(system|developer|previous|prior|hidden)\b[\s\S]{0,20}\b(prompt|instruction|rules?)\b/i,
-    rationale: "The message attempts to override or discard internal instructions.",
   },
   {
     flag: "prompt-leak-request",
     severity: "high",
     pattern: /\b(reveal|show|print|dump|display|repeat|quote)\b[\s\S]{0,60}\b(system prompt|hidden prompt|developer message|internal instructions?|chain of thought|thought process)\b/i,
-    rationale: "The message asks for internal prompt or reasoning content rather than financial help.",
   },
   {
     flag: "role-jailbreak-attempt",
     severity: "medium",
     pattern: /\b(you are now|act as|pretend to be|jailbreak|developer mode|system override)\b/i,
-    rationale: "The message is trying to change the assistant role instead of asking a finance question.",
   },
   {
     flag: "guardrail-bypass-attempt",
     severity: "medium",
     pattern: /\b(disable|turn off|ignore|bypass)\b[\s\S]{0,40}\b(safety|guardrail|policy|filters?)\b/i,
-    rationale: "The message explicitly asks to disable app safeguards.",
   },
 ];
 
@@ -35,14 +31,12 @@ const TOPIC_RISK_RULES = [
     severity: "high",
     pattern:
       /\b(parlay|sportsbook|sports book|roulette|blackjack|slot machine|slots|lottery|scratch(?:er|off)?|poker tournament|prop bet|moneyline|spread bet|place a bet|placing a bet|betting on|wager(?:ing)?|casino)\b/i,
-    rationale: "The message asks for gambling or wagering guidance.",
   },
   {
     flag: "gambling-amount-request",
     kind: "gambling",
     severity: "high",
     pattern: /\bbet\b[\s\S]{0,24}\$\s*\d+/i,
-    rationale: "The message asks whether a specific dollar amount should be wagered.",
   },
   {
     flag: "sportsbook-amount-request",
@@ -50,7 +44,6 @@ const TOPIC_RISK_RULES = [
     severity: "high",
     pattern:
       /\b(?:put|drop|throw|risk|lay)\b[\s\S]{0,16}\$?\s*\d[\d,]*(?:\.\d{1,2})?[\s\S]{0,48}\b(?:on|for)\b[\s\S]{0,36}\b(?:tonight|game|match|fight|odds|moneyline|spread|over\/under|over-under)\b/i,
-    rationale: "The message asks for sportsbook-style wagering guidance using a specific amount.",
   },
   {
     flag: "sportsbook-market-request",
@@ -58,7 +51,6 @@ const TOPIC_RISK_RULES = [
     severity: "high",
     pattern:
       /\b(moneyline|point spread|cover the spread|against the spread|take the over|take the under|over\/under|over-under|bankroll)\b/i,
-    rationale: "The message uses sportsbook or bankroll language that signals gambling advice.",
   },
   {
     flag: "compulsive-speculation-request",
@@ -66,7 +58,6 @@ const TOPIC_RISK_RULES = [
     severity: "high",
     pattern:
       /\b(0dte|zero[- ]day options|same[- ]day options|all[- ]in options|leveraged trade|margin trade|yolo trade|revenge trade|day[- ]trading addiction)\b/i,
-    rationale: "The message asks for extreme speculative behavior that falls outside healthy financial planning.",
   },
   {
     flag: "self-harm-crisis",
@@ -74,7 +65,6 @@ const TOPIC_RISK_RULES = [
     severity: "high",
     pattern:
       /\b(suicid(?:e|al)|kill myself|end my life|hurt myself|self[- ]harm|better off dead|want to die|don't want to live|not worth living|wish I were dead)\b/i,
-    rationale: "The message contains crisis or self-harm language that requires immediate safety escalation.",
   },
   {
     flag: "relationship-boundary",
@@ -82,7 +72,6 @@ const TOPIC_RISK_RULES = [
     severity: "high",
     pattern:
       /\b(be my (?:friend|boyfriend|girlfriend|partner|wife|husband)|become my (?:friend|boyfriend|girlfriend|partner)|do you love me|say you love me|i love you|you're my only friend|you're all i need|you're the only one (?:i can talk to|who understands me)|only you understand me|don't leave me|stay with me tonight|stay with me forever|keep this between us|don't tell anyone about (?:this|us)|pretend to be my (?:boyfriend|girlfriend|wife|husband)|romantic roleplay)\b/i,
-    rationale: "The message tries to turn AskAI into a companion, relationship, or attachment surface instead of a finance tool.",
   },
   {
     flag: "mental-health-therapy",
@@ -90,7 +79,6 @@ const TOPIC_RISK_RULES = [
     severity: "high",
     pattern:
       /\b(be my therapist|act as my therapist|therapy session|therapist mode|counsel me|counseling session|diagnose my (?:depression|anxiety|adhd|bipolar|ocd|ptsd)|help my depression|treat my anxiety|talk me down|be my emotional support)\b/i,
-    rationale: "The message asks AskAI to provide therapy or mental-health counseling outside its finance scope.",
   },
   {
     flag: "illegal-finance-request",
@@ -98,7 +86,6 @@ const TOPIC_RISK_RULES = [
     severity: "high",
     pattern:
       /\b(tax evasion|evade taxes|hide (?:money|assets|income)|conceal assets|fake pay(?:stub|check)|forge|fraud|money laundering|launder money|chargeback fraud|lie about my income|fake bank statement|scam)\b/i,
-    rationale: "The message asks for illegal, deceptive, or fraudulent financial guidance.",
   },
   {
     flag: "abuse-or-retaliation-finance",
@@ -106,7 +93,6 @@ const TOPIC_RISK_RULES = [
     severity: "high",
     pattern:
       /\b(financially ruin|ruin my ex|ruin my spouse|drain (?:our|the|my) (?:joint )?(?:account|savings)|empty (?:our|the|my) (?:joint )?(?:account|savings)|withhold money to|control (?:him|her|them|my partner|my spouse) with money|trap (?:him|her|them) financially|punish (?:him|her|them) financially)\b/i,
-    rationale: "The message asks for revenge, coercion, or abusive financial behavior.",
   },
   {
     flag: "violence-or-physical-harm",
@@ -114,7 +100,6 @@ const TOPIC_RISK_RULES = [
     severity: "high",
     pattern:
       /\b(help me|how do i|can i|should i|plan to|want to|ways to)\b[\s\S]{0,24}\b(kill|hurt|attack|shoot|stab|poison|murder|beat)\b[\s\S]{0,28}\b(him|her|them|my ex|my spouse|my partner|my boss|someone)\b/i,
-    rationale: "The message asks for violence, assault, or physical harm.",
   },
   {
     flag: "off-domain-smalltalk",
@@ -122,7 +107,6 @@ const TOPIC_RISK_RULES = [
     severity: "medium",
     pattern:
       /\b(tell me a joke|write me a poem|write a love letter|what are you wearing|how are you\b|what's up\b|tell me about yourself|who are you really|roleplay with me|let's just chat|keep me company)\b/i,
-    rationale: "The message is trying to pull AskAI into general-purpose chat instead of finance help.",
   },
 ];
 
@@ -133,7 +117,6 @@ const ASSISTANT_OUTPUT_RISK_RULES = [
     severity: "high",
     pattern:
       /\b(kill yourself|end your life|you should die|better off dead|not worth living|there'?s no point in living)\b/i,
-    rationale: "The assistant output contains self-harm or hopelessness language.",
   },
   {
     flag: "relationship-reciprocation",
@@ -141,7 +124,6 @@ const ASSISTANT_OUTPUT_RISK_RULES = [
     severity: "high",
     pattern:
       /\b(i love you|i can be your friend|i'm your friend|i'll stay with you tonight|i won't leave you|i'm all you need|you don't need anyone else|only i understand you|keep this between us|don't tell anyone|i'm your safe place|i'm here for you always|let's just talk about anything you want|i can keep you company)\b/i,
-    rationale: "The assistant output drifts into companionship or attachment language.",
   },
   {
     flag: "therapy-roleplay",
@@ -149,7 +131,6 @@ const ASSISTANT_OUTPUT_RISK_RULES = [
     severity: "high",
     pattern:
       /\b(i can be your therapist|let's do therapy|i can counsel you|i'm your emotional support|let's process your feelings together)\b/i,
-    rationale: "The assistant output drifts into therapy or emotional-support language.",
   },
   {
     flag: "illegal-guidance-output",
@@ -157,7 +138,6 @@ const ASSISTANT_OUTPUT_RISK_RULES = [
     severity: "high",
     pattern:
       /\b(hide your assets|fake (?:a )?(?:paystub|bank statement|document)|evade taxes|launder money|chargeback fraud)\b/i,
-    rationale: "The assistant output contains illegal financial guidance.",
   },
   {
     flag: "abusive-guidance-output",
@@ -165,7 +145,6 @@ const ASSISTANT_OUTPUT_RISK_RULES = [
     severity: "high",
     pattern:
       /\b(financially ruin|drain (?:the|their|your|our) (?:joint )?(?:account|savings)|empty (?:the|their|your|our) (?:joint )?(?:account|savings)|withhold money to|control (?:him|her|them) with money|punish (?:him|her|them) financially)\b/i,
-    rationale: "The assistant output contains coercive, retaliatory, or abusive financial guidance.",
   },
   {
     flag: "violence-guidance-output",
@@ -173,7 +152,6 @@ const ASSISTANT_OUTPUT_RISK_RULES = [
     severity: "high",
     pattern:
       /\b(?:you should|go|just|try to|plan to|the best move is to|you can)\b[\s\S]{0,20}\b(kill|hurt|attack|shoot|stab|poison|murder|beat)\b[\s\S]{0,24}\b(him|her|them)\b/i,
-    rationale: "The assistant output contains violent or harmful guidance.",
   },
 ];
 
@@ -192,40 +170,22 @@ function hasFinanceAnchor(text = "") {
   return FINANCE_ANCHOR_PATTERN.test(String(text || ""));
 }
 
-function collectActiveRecommendations(decisionRecommendations = []) {
-  if (!Array.isArray(decisionRecommendations)) return [];
-  const weight = { high: 3, medium: 2, low: 1, none: 0 };
-  return decisionRecommendations
-    .filter(rule => rule?.active)
-    .sort((a, b) => {
-      const severityDelta = (weight[b?.severity] || 0) - (weight[a?.severity] || 0);
-      if (severityDelta !== 0) return severityDelta;
-      const professionalDelta = Number(Boolean(b?.requiresProfessionalHelp)) - Number(Boolean(a?.requiresProfessionalHelp));
-      if (professionalDelta !== 0) return professionalDelta;
-      const confidenceWeight = { low: 3, medium: 2, high: 1, none: 0 };
-      return (confidenceWeight[b?.confidence] || 0) - (confidenceWeight[a?.confidence] || 0);
-    })
-    .slice(0, 4);
-}
-
-function formatBulletLines(items = []) {
-  return items.map(item => `- ${item}`).join("\n");
-}
-
-function collectTopPriorityLine({ current = null, decisionRecommendations = [] } = {}) {
-  const activeRecommendations = collectActiveRecommendations(decisionRecommendations);
+function collectTopPriorityLine(context = {}) {
+  const activeRecommendations = Array.isArray(context?.decisionRecommendations)
+    ? context.decisionRecommendations.filter((rule) => rule?.active)
+    : [];
   const topRecommendation = activeRecommendations.find((rule) => rule?.recommendation || rule?.rationale);
   if (topRecommendation?.recommendation) return topRecommendation.recommendation;
   if (topRecommendation?.rationale) return topRecommendation.rationale;
 
-  const weeklyMoves = Array.isArray(current?.parsed?.weeklyMoves) ? current.parsed.weeklyMoves : [];
+  const weeklyMoves = Array.isArray(context?.current?.parsed?.weeklyMoves) ? context.current.parsed.weeklyMoves : [];
   if (weeklyMoves[0]) return String(weeklyMoves[0]);
 
-  return "Protect your checking floor, keep discretionary cash inside the weekly plan, and prioritize the highest-impact balance or obligation before any optional risk spending.";
+  return "Protect your checking floor, cover minimums, and handle the most time-sensitive obligation before any optional spending.";
 }
 
-function buildRiskCapacityLine({ current = null, computedStrategy = null } = {}) {
-  const operationalSurplus = Number(computedStrategy?.operationalSurplus);
+function buildRiskCapacityLine(context = {}) {
+  const operationalSurplus = Number(context?.computedStrategy?.operationalSurplus);
   if (Number.isFinite(operationalSurplus)) {
     if (operationalSurplus <= 0) {
       return "Right now you do not have genuine risk capital after protecting your floor and near-term obligations.";
@@ -233,7 +193,7 @@ function buildRiskCapacityLine({ current = null, computedStrategy = null } = {})
     return `Right now you have about $${Math.round(operationalSurplus).toLocaleString()} available after protecting your floor and near-term obligations.`;
   }
 
-  const healthScore = Number(current?.parsed?.healthScore?.score);
+  const healthScore = Number(context?.current?.parsed?.healthScore?.score);
   if (Number.isFinite(healthScore) && healthScore < 70) {
     return "Your current snapshot is not in a position where optional high-risk spending is the right move.";
   }
@@ -241,7 +201,7 @@ function buildRiskCapacityLine({ current = null, computedStrategy = null } = {})
   return "";
 }
 
-export function analyzeChatInputRisk(text = "") {
+export function analyzeServerChatInputRisk(text = "") {
   const normalized = String(text || "").trim();
   if (!normalized) {
     return {
@@ -249,27 +209,23 @@ export function analyzeChatInputRisk(text = "") {
       suspectedPromptInjection: false,
       severity: "none",
       matches: [],
-      rationale: "",
     };
   }
 
-  const matches = PROMPT_INJECTION_RULES.filter(rule => rule.pattern.test(normalized)).map(rule => ({
+  const matches = PROMPT_INJECTION_RULES.filter((rule) => rule.pattern.test(normalized)).map((rule) => ({
     flag: rule.flag,
     severity: rule.severity,
-    rationale: rule.rationale,
   }));
-  const severity = matches.reduce((max, match) => severityMax(max, match.severity), "none");
 
   return {
     blocked: matches.length > 0,
     suspectedPromptInjection: matches.length > 0,
-    severity,
+    severity: matches.reduce((max, match) => severityMax(max, match.severity), "none"),
     matches,
-    rationale: matches.map(match => match.rationale).join(" "),
   };
 }
 
-export function analyzeChatTopicRisk(text = "") {
+export function analyzeServerChatTopicRisk(text = "") {
   const normalized = String(text || "").trim();
   if (!normalized) {
     return {
@@ -277,7 +233,6 @@ export function analyzeChatTopicRisk(text = "") {
       severity: "none",
       kind: null,
       matches: [],
-      rationale: "",
     };
   }
 
@@ -291,20 +246,17 @@ export function analyzeChatTopicRisk(text = "") {
     flag: rule.flag,
     kind: rule.kind,
     severity: rule.severity,
-    rationale: rule.rationale,
   }));
-  const severity = matches.reduce((max, match) => severityMax(max, match.severity), "none");
 
   return {
     blocked: matches.length > 0,
-    severity,
+    severity: matches.reduce((max, match) => severityMax(max, match.severity), "none"),
     kind: matches[0]?.kind || null,
     matches,
-    rationale: matches.map((match) => match.rationale).join(" "),
   };
 }
 
-export function analyzeChatAssistantOutputRisk(text = "") {
+export function analyzeServerChatOutputRisk(text = "") {
   const normalized = String(text || "").trim();
   if (!normalized) {
     return {
@@ -312,7 +264,6 @@ export function analyzeChatAssistantOutputRisk(text = "") {
       severity: "none",
       kind: null,
       matches: [],
-      rationale: "",
     };
   }
 
@@ -320,54 +271,33 @@ export function analyzeChatAssistantOutputRisk(text = "") {
     flag: rule.flag,
     kind: rule.kind,
     severity: rule.severity,
-    rationale: rule.rationale,
   }));
-  const severity = matches.reduce((max, match) => severityMax(max, match.severity), "none");
 
   return {
     blocked: matches.length > 0,
-    severity,
+    severity: matches.reduce((max, match) => severityMax(max, match.severity), "none"),
     kind: matches[0]?.kind || null,
     matches,
-    rationale: matches.map((match) => match.rationale).join(" "),
   };
 }
 
-export function normalizeChatAssistantOutput(text = "") {
-  const normalized = String(text || "")
-    .replace(/<thought_process>[\s\S]*?<\/thought_process>/gi, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  const tokenCount = (normalized.match(/[A-Za-z0-9$%]+/g) || []).length;
-
-  return {
-    text: normalized,
-    valid: normalized.length >= 24 && tokenCount >= 5,
-  };
-}
-
-export function buildPromptInjectionRefusal() {
+export function buildServerPromptInjectionRefusal() {
   return [
     "I can help with your finances, but I can't ignore safety rules or reveal internal prompts.",
-    "Ask about cash flow, debt payoff, spending, savings, investing tradeoffs, or your latest audit and I'll answer from your live data."
+    "Ask about cash flow, debt payoff, spending, savings, investing tradeoffs, subscriptions, or your latest audit and I'll stay focused on that.",
   ].join("\n\n");
 }
 
-export function buildHighRiskTopicRefusal({
-  risk = null,
-  current = null,
-  computedStrategy = null,
-  decisionRecommendations = [],
-} = {}) {
+export function buildServerTopicRiskRefusal(risk = null, context = {}) {
   const kind = risk?.kind || "gambling";
-  const riskCapacityLine = buildRiskCapacityLine({ current, computedStrategy });
-  const saferPriority = collectTopPriorityLine({ current, decisionRecommendations });
+  const saferPriority = collectTopPriorityLine(context);
+  const riskCapacityLine = buildRiskCapacityLine(context);
 
   if (kind === "self-harm-crisis") {
     return [
       "If you are in crisis, please contact the 988 Suicide & Crisis Lifeline by calling or texting 988, or text HOME to 741741 for the Crisis Text Line. You are not alone.",
       "I can't help with self-harm or hopelessness.",
-      "If the pressure is coming from money, I can still help you reduce immediate financial stress once you're safe: we can identify the next bill, protect your floor, and find the least-damaging next move.",
+      "If the pressure is coming from money, I can help you reduce immediate financial stress once you're safe.",
     ].join("\n\n");
   }
 
@@ -383,7 +313,7 @@ export function buildHighRiskTopicRefusal({
     return [
       "I can't provide therapy or mental-health counseling.",
       "If you're in immediate danger or thinking about hurting yourself, call or text 988 right now.",
-      "If what you're feeling is tied to money stress, I can help you turn that into a concrete financial plan around bills, debt, spending, and next steps.",
+      "If the stress is tied to your money, I can still help you turn that into a concrete financial plan.",
     ].join("\n\n");
   }
 
@@ -434,78 +364,6 @@ export function buildHighRiskTopicRefusal({
     riskCapacityLine,
     `Safer move instead:\n- ${saferPriority}`,
     "If gambling feels difficult to control, contact the National Problem Gambling Helpline: 1-800-522-4700.",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-}
-
-export function buildDeterministicChatFallback({
-  current = null,
-  computedStrategy = null,
-  decisionRecommendations = [],
-  error = "",
-} = {}) {
-  const parsed = current?.parsed || null;
-  const healthScore = parsed?.healthScore;
-  const safetyState = parsed?.degraded?.safetyState || null;
-  const riskFlags = Array.isArray(parsed?.degraded?.riskFlags)
-    ? parsed.degraded.riskFlags
-    : Array.isArray(computedStrategy?.auditSignals?.riskFlags)
-      ? computedStrategy.auditSignals.riskFlags
-      : [];
-  const activeRecommendations = collectActiveRecommendations(decisionRecommendations);
-  const highSeverityCount = activeRecommendations.filter(rule => rule?.severity === "high").length;
-  const requiresProfessionalHelp = activeRecommendations.some(rule => rule?.requiresProfessionalHelp);
-  const directionalOnly = activeRecommendations.some(rule => rule?.directionalOnly);
-
-  const intro = error
-    ? "The full AI response is unavailable right now, so here's the deterministic app view from your current data."
-    : "Here's the deterministic app view from your current data.";
-
-  const snapshotParts = [];
-  if (healthScore?.score != null) {
-    snapshotParts.push(`Health score: ${healthScore.score}/100 (${healthScore.grade || "?"}). ${healthScore.summary || ""}`.trim());
-  }
-  if (safetyState?.headline || safetyState?.summary) {
-    snapshotParts.push(`Safety state: ${safetyState.headline || safetyState.summary}`);
-  } else if (Array.isArray(parsed?.weeklyMoves) && parsed.weeklyMoves[0]) {
-    snapshotParts.push(`Top next move: ${parsed.weeklyMoves[0]}`);
-  }
-  if (directionalOnly || highSeverityCount >= 2) {
-    snapshotParts.push(
-      requiresProfessionalHelp
-        ? "Confidence is limited because the current snapshot has stacked high-risk or conflicting signals. Use this as a stabilization-first view, not precise professional advice."
-        : "Confidence is limited because the current snapshot has stacked high-risk or conflicting signals. Prefer safety-first stabilization over optimization."
-    );
-  }
-
-  const priorities = [];
-  activeRecommendations.forEach(rule => {
-    const parts = [`${rule.rationale}${rule.recommendation ? ` ${rule.recommendation}` : ""}`.trim()];
-    if (rule?.directionalOnly) parts.push("Treat this guidance as directional only until the inputs are corrected.");
-    if (rule?.requiresProfessionalHelp) {
-      parts.push(
-        rule?.professionalHelpReason
-          ? `Professional help recommended: ${rule.professionalHelpReason}`
-          : "Professional help recommended before making large financial changes."
-      );
-    }
-    priorities.push(parts.filter(Boolean).join(" "));
-  });
-  if (priorities.length === 0 && parsed?.weeklyMoves?.length) {
-    priorities.push(...parsed.weeklyMoves.slice(0, 2));
-  }
-  if (priorities.length === 0 && riskFlags.length) {
-    priorities.push(`Native risk flags: ${riskFlags.slice(0, 3).join(", ")}.`);
-  }
-  if (priorities.length === 0) {
-    priorities.push("Protect your checking floor, cover minimum payments, and keep discretionary spending inside the weekly plan until the next audit refresh.");
-  }
-
-  return [
-    intro,
-    snapshotParts.filter(Boolean).join("\n"),
-    `What matters now:\n${formatBulletLines(priorities)}`,
   ]
     .filter(Boolean)
     .join("\n\n");

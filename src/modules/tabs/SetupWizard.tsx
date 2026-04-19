@@ -660,8 +660,81 @@ export default function SetupWizard() {
       }}
     >
       <div
+        style={{
+          flexShrink: 0,
+          width: "100%",
+          paddingTop: "calc(env(safe-area-inset-top, 0px) + 6px)",
+          paddingLeft: 20,
+          paddingRight: 20,
+          paddingBottom: 10,
+          background: T.bg.navGlass,
+          backdropFilter: "blur(20px) saturate(1.3)",
+          WebkitBackdropFilter: "blur(20px) saturate(1.3)",
+          borderBottom: `1px solid ${T.border.subtle}`,
+        }}
+      >
+        <div
+          style={{
+            maxWidth: fastTrack ? 456 : 420,
+            margin: "0 auto",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 9,
+                fontWeight: 800,
+                color: T.text.dim,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                fontFamily: T.font.mono,
+                lineHeight: 1.1,
+                marginBottom: 2,
+              }}
+            >
+              Catalyst Cash Setup
+            </div>
+            <div
+              style={{
+                fontSize: 17,
+                fontWeight: 850,
+                color: T.text.primary,
+                letterSpacing: "-0.02em",
+                lineHeight: 1.1,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {fastTrack ? "Quick Start" : pageId === "done" ? "Ready to Launch" : "Setup Wizard"}
+            </div>
+          </div>
+          <div
+            style={{
+              flexShrink: 0,
+              padding: "6px 10px",
+              borderRadius: 999,
+              background: fastTrack ? `${T.accent.emerald}10` : T.bg.elevated,
+              border: `1px solid ${fastTrack ? `${T.accent.emerald}22` : T.border.subtle}`,
+              color: fastTrack ? T.accent.emerald : T.text.secondary,
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              fontFamily: T.font.mono,
+            }}
+          >
+            {fastTrack ? "Quick" : pageId === "done" ? "Complete" : `Step ${Math.min(step + 1, TOTAL)} / ${TOTAL}`}
+          </div>
+        </div>
+      </div>
+      <div
         ref={scrollRef}
-        style={{ flex: 1, overflowY: "auto", padding: "calc(env(safe-area-inset-top, 24px) + 12px) 20px 48px" }}
+        style={{ flex: 1, overflowY: "auto", padding: "12px 20px 48px" }}
       >
         <style>{`
           @keyframes slideFadeIn {

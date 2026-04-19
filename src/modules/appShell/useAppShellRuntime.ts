@@ -7,7 +7,7 @@ import { isBiometricInteractionActive } from "../biometricSession.js";
 import { haptic } from "../haptics.js";
 import { log } from "../logger.js";
 import { registerNotificationDeepLinks, triggerStoreArrivalNotification } from "../notifications.js";
-import { getGatingMode, isPro, syncRemoteGatingMode } from "../subscription.js";
+import { getGatingMode, isPro, SUBSCRIPTION_STATE_CHANGED_EVENT, syncRemoteGatingMode } from "../subscription.js";
 import type { ToastApi } from "../Toast.js";
 type AppTab = "dashboard" | "cashflow" | "audit" | "portfolio" | "chat" | "settings" | "history" | "results" | "input";
 
@@ -63,6 +63,29 @@ export function useBootServices(setProEnabled: (value: boolean) => void) {
     return () => {
       cancelled = true;
     };
+  }, [setProEnabled]);
+
+  useEffect(() => {
+    const syncProFromEvent = (event?: Event) => {
+      const mode = getGatingMode();
+      if (mode === "off" || mode === "soft") {
+        setProEnabled(true);
+        return;
+      }
+
+      const detail = (event as CustomEvent<{ proEnabled?: boolean }> | undefined)?.detail;
+      if (typeof detail?.proEnabled === "boolean") {
+        setProEnabled(detail.proEnabled);
+        return;
+      }
+
+      void isPro()
+        .then(value => setProEnabled(value))
+        .catch(() => setProEnabled(false));
+    };
+
+    window.addEventListener(SUBSCRIPTION_STATE_CHANGED_EVENT, syncProFromEvent as EventListener);
+    return () => window.removeEventListener(SUBSCRIPTION_STATE_CHANGED_EVENT, syncProFromEvent as EventListener);
   }, [setProEnabled]);
 }
 

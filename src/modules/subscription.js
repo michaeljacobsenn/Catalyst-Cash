@@ -53,6 +53,7 @@ const DEVICE_ID_KEY = "device-id";
 const KC_DEVICE_ID_KEY = "cc-device-id";
 const KC_AUDIT_STATE_KEY = "cc-audit-state";
 const isNativePlatform = Capacitor.isNativePlatform();
+export const SUBSCRIPTION_STATE_CHANGED_EVENT = "catalyst:subscription-state-changed";
 
 const DEFAULT_STATE = {
   tier: "free",
@@ -163,6 +164,22 @@ function applySoftModeResult(result, blocked) {
     result.softBlocked = true;
   }
   return result;
+}
+
+function notifySubscriptionStateChange(state) {
+  if (typeof globalThis === "undefined" || typeof globalThis.dispatchEvent !== "function") return;
+  if (typeof globalThis.CustomEvent !== "function") return;
+  globalThis.dispatchEvent(
+    new CustomEvent(SUBSCRIPTION_STATE_CHANGED_EVENT, {
+      detail: {
+        tier: state?.tier || "free",
+        proEnabled: state?.tier === "pro",
+        productId: state?.productId || null,
+        expiresAt: state?.expiresAt || null,
+        isLifetime: !!state?.isLifetime,
+      },
+    })
+  );
 }
 
 async function keychainGet(key) {
@@ -417,6 +434,7 @@ export async function activatePro(productId, durationDays = 30, { isLifetime = f
   }
 
   await db.set(STATE_KEY, state);
+  notifySubscriptionStateChange(state);
   return state;
 }
 
@@ -426,6 +444,7 @@ export async function deactivatePro() {
   state.expiresAt = null;
   state.productId = null;
   await db.set(STATE_KEY, state);
+  notifySubscriptionStateChange(state);
 }
 
 export async function hasPaidProAccess() {

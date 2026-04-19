@@ -54,16 +54,6 @@ COMMUNICATION STYLE (USER PREFERENCE): STRICT COACH 🪖
 - Apply this style to ALL output fields: nextAction, weeklyMoves descriptions, alertsCard items, and healthScore.summary.
 `;
   }
-  if (persona === "friend") {
-    return `
-COMMUNICATION STYLE (USER PREFERENCE): SUPPORTIVE FRIEND 🤗
-- Be warm, encouraging, and empathetic. Celebrate wins, no matter how small.
-- Frame challenges positively: "You're making progress — let's keep the momentum going!"
-- Use first-person inclusive language: "We can tackle this together."
-- Acknowledge that financial stress is real. Provide hope alongside the numbers.
-- Apply this style to ALL output fields: nextAction, weeklyMoves descriptions, alertsCard items, and healthScore.summary.
-`;
-  }
   if (persona === "nerd") {
     return `
 COMMUNICATION STYLE (USER PREFERENCE): DATA NERD 🤓

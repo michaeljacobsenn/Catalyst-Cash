@@ -1,9 +1,10 @@
   import { Capacitor } from "@capacitor/core";
-  import { LOG_LEVEL,Purchases } from "@revenuecat/purchases-capacitor";
+  import { LOG_LEVEL,Purchases,PURCHASES_ERROR_CODE } from "@revenuecat/purchases-capacitor";
   import { log } from "./logger.js";
   import { activatePro,deactivatePro } from "./subscription.js";
 
 const ENTITLEMENT_ID = "Catalyst Cash Pro";
+const APPLE_SUBSCRIPTIONS_URL = "https://apps.apple.com/account/subscriptions";
 const RC_ENTITLEMENT_VERIFICATION_MODE = "INFORMATIONAL";
 const RC_VERIFICATION_FAILED = "FAILED";
 const REVENUECAT_TIMEOUT_MS = 1500;
@@ -19,6 +20,15 @@ let revenueCatUiPromise = null;
 let revenueCatConfigured = false;
 let revenueCatInitPromise = null;
 let customerInfoListenerId = null;
+
+function unwrapCustomerInfo(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  return payload.customerInfo && typeof payload.customerInfo === "object" ? payload.customerInfo : payload;
+}
+
+function isRevenueCatError(error) {
+  return !!error && typeof error === "object" && typeof error.code === "string";
+}
 
 function withRevenueCatTimeout(promiseFactory, label) {
   let timer = null;
@@ -49,8 +59,9 @@ function cacheRevenueCatIdentity(customerInfo) {
 }
 
 async function applyCustomerInfo(customerInfo) {
-  cacheRevenueCatIdentity(customerInfo);
-  const entitlement = getEntitlementInfo(customerInfo);
+  const normalizedCustomerInfo = unwrapCustomerInfo(customerInfo);
+  cacheRevenueCatIdentity(normalizedCustomerInfo);
+  const entitlement = getEntitlementInfo(normalizedCustomerInfo);
   if (entitlement?.verification === RC_VERIFICATION_FAILED) {
     log.warn("revenuecat", "Entitlement verification failed");
   }
@@ -108,7 +119,7 @@ export async function syncProStatus() {
   if (!revenueCatConfigured) return false;
 
   try {
-    const customerInfo = await withRevenueCatTimeout(
+    const { customerInfo } = await withRevenueCatTimeout(
       () => Purchases.getCustomerInfo(),
       "RevenueCat getCustomerInfo"
     );
@@ -231,6 +242,11 @@ export async function purchaseProPlan(plan = "monthly") {
   }
 
   try {
+    const alreadyActive = await syncProStatus().catch(() => false);
+    if (alreadyActive) {
+      return true;
+    }
+
     const offerings = await withRevenueCatTimeout(
       () => Purchases.getOfferings(),
       "RevenueCat getOfferings"
@@ -242,10 +258,15 @@ export async function purchaseProPlan(plan = "monthly") {
       return presentPaywall();
     }
 
-    await withRevenueCatTimeout(
+    const purchaseResult = await withRevenueCatTimeout(
       () => Purchases.purchasePackage({ aPackage: selectedPackage }),
       `RevenueCat purchase ${plan} package`
     );
+
+    const purchased = await applyCustomerInfo(purchaseResult?.customerInfo);
+    if (purchased) {
+      return true;
+    }
 
     await new Promise(r => setTimeout(r, 400));
     return await syncProStatus();
@@ -254,6 +275,19 @@ export async function purchaseProPlan(plan = "monthly") {
       error: error instanceof Error ? error.message : "unknown",
       plan,
     });
+    if (isRevenueCatError(error) && error.code === PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR) {
+      return false;
+    }
+    if (isRevenueCatError(error) && error.code === PURCHASES_ERROR_CODE.PRODUCT_ALREADY_PURCHASED_ERROR) {
+      const restored = await restorePurchases().catch(() => false);
+      if (restored) {
+        return true;
+      }
+    }
+    const recovered = await syncProStatus().catch(() => false);
+    if (recovered) {
+      return true;
+    }
     if (window.toast) window.toast.error("Purchase did not complete.");
     return false;
   }
@@ -267,13 +301,17 @@ export async function restorePurchases() {
   if (!getRevenueCatApiKey()) return false;
 
   try {
-    const customerInfo = await withRevenueCatTimeout(
+    const { customerInfo } = await withRevenueCatTimeout(
       () => Purchases.restorePurchases(),
       "RevenueCat restorePurchases"
     );
     return applyCustomerInfo(customerInfo);
   } catch {
     log.error("revenuecat", "Error restoring purchases");
+    const recovered = await syncProStatus().catch(() => false);
+    if (recovered) {
+      return true;
+    }
     return false;
   }
 }
@@ -288,27 +326,41 @@ export async function presentCustomerCenter() {
     if (window.toast) window.toast.error("Subscription management is only available in the iOS app.");
     return;
   }
-  if (!getRevenueCatApiKey()) {
-    if (window.toast) window.toast.error("Purchases are not configured in this build.");
+
+  try {
+    const { Browser } = await import("@capacitor/browser");
+    await Browser.open({
+      url: APPLE_SUBSCRIPTIONS_URL,
+      presentationStyle: "fullscreen",
+      toolbarColor: "#0C121B",
+    });
     return;
+  } catch (browserError) {
+    log.warn("revenuecat", "Browser plugin unavailable for subscription management", {
+      error: browserError instanceof Error ? browserError.message : "unknown",
+    });
   }
 
   try {
-    const RevenueCatUI = await getRevenueCatUI();
-    if (!RevenueCatUI) {
-      throw new Error("RevenueCat UI module unavailable");
+    if (typeof window !== "undefined" && typeof window.open === "function") {
+      const popup = window.open(APPLE_SUBSCRIPTIONS_URL, "_blank", "noopener,noreferrer");
+      if (popup) {
+        return;
+      }
     }
-    // According to RevenueCat UI SDK docs, this method will automatically show the Customer Center.
-    // It relies on the app having configured the Customer Center in the RevenueCat Dashboard.
-    await RevenueCatUI.presentCustomerCenter();
   } catch {
-    log.error("revenuecat", "Error opening Customer Center, falling back to Apple Subscriptions URL");
-    try {
-      const { Browser } = await import("@capacitor/browser");
-      await Browser.open({ url: "https://apps.apple.com/account/subscriptions" });
-    } catch {
-      if (window.toast)
-        window.toast.error("Could not load subscriptions. Go to iOS Settings > Apple ID > Subscriptions.");
-    }
+    // Fall through to location assignment below.
   }
+
+  try {
+    if (typeof window !== "undefined") {
+      window.location.assign(APPLE_SUBSCRIPTIONS_URL);
+      return;
+    }
+  } catch {
+    // Final toast below.
+  }
+
+  if (window.toast)
+    window.toast.error("Could not open subscriptions. Go to iOS Settings > Apple ID > Subscriptions.");
 }

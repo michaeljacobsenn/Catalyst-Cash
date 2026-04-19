@@ -3,7 +3,7 @@
   import { normalizeAppError } from "../appErrors.js";
   import { clearCloudBackupMetadata,clearPortableBackupMetadata,readBackupMetadata } from "../backupMetadata.js";
   import { performCloudBackup } from "../backup.js";
-  import { beginBiometricInteraction,endBiometricInteraction } from "../biometricSession.js";
+  import { beginBiometricInteraction,endBiometricInteraction,withBiometricPromptTimeout } from "../biometricSession.js";
   import { APP_VERSION,T } from "../constants.js";
   import { CURRENCIES } from "../currency.js";
   import {
@@ -835,7 +835,13 @@ export default function SettingsTab({
         return;
       }
 
-      await FaceId.authenticate({ reason: "Verify to enable Face ID / Touch ID for app lock" });
+      await withBiometricPromptTimeout(
+        () => FaceId.authenticate({ reason: "Verify to enable Face ID / Touch ID for app lock" }),
+        {
+          timeoutMs: 12000,
+          timeoutMessage: "Biometric verification timed out",
+        }
+      );
 
       haptic.success();
       setUseFaceId(true);

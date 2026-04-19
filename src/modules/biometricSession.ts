@@ -1,4 +1,13 @@
 const DEFAULT_BIOMETRIC_GRACE_MS = 2500;
+const DEFAULT_BIOMETRIC_PROMPT_TIMEOUT_MS = 12000;
+
+export interface DeviceAuthAvailability {
+  isAvailable?: boolean;
+  canAuthenticate?: boolean;
+  biometryType?: string;
+  errorCode?: number;
+  errorMessage?: string;
+}
 
 type BiometricWindow = Window & {
   __biometricActive?: boolean;
@@ -45,4 +54,32 @@ export function isBiometricInteractionActive(now = Date.now()): boolean {
   if (!appWindow) return false;
 
   return Boolean(appWindow.__biometricActive) || (appWindow.__biometricActiveUntil || 0) > now;
+}
+
+export function canAttemptDeviceAuthentication(availability: DeviceAuthAvailability | null | undefined): boolean {
+  return Boolean(availability?.isAvailable || availability?.canAuthenticate);
+}
+
+export async function withBiometricPromptTimeout<T>(
+  task: () => Promise<T>,
+  {
+    timeoutMs = DEFAULT_BIOMETRIC_PROMPT_TIMEOUT_MS,
+    timeoutMessage = "Biometric authentication timed out",
+  }: {
+    timeoutMs?: number;
+    timeoutMessage?: string;
+  } = {}
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  try {
+    return await Promise.race([
+      Promise.resolve().then(task),
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(timeoutMessage)), Math.max(1, timeoutMs));
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }

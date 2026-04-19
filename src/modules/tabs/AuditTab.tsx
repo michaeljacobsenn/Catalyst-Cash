@@ -245,7 +245,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
 
         {/* quota + demo — contextual, directly below CTA */}
         {(remaining != null && limit != null) || typeof onDemoAudit === "function" ? (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginTop: 8, marginBottom: -4 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginTop: 8, marginBottom: 8 }}>
             {remaining != null && limit != null && (
               <span style={{ fontSize: 10, fontWeight: 600, color: T.text.dim, fontFamily: T.font.mono }}>
                 {remaining} of {limit} audits remaining

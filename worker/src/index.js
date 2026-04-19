@@ -12,6 +12,13 @@ import {
 } from "./promptBuilders.js";
 import { getChatSystemPrompt } from "./chatPromptBuilders.js";
 import {
+  analyzeServerChatInputRisk,
+  analyzeServerChatOutputRisk,
+  analyzeServerChatTopicRisk,
+  buildServerPromptInjectionRefusal,
+  buildServerTopicRiskRefusal,
+} from "./chatSafety.js";
+import {
   buildHouseholdIntegrityTag,
   sha256Hex,
   verifyHouseholdIntegrity,
@@ -135,13 +142,6 @@ function buildPersonaProfile(persona) {
       name: "Coach Catalyst",
       style:
         "You are a tough-love financial coach. Be direct, no-nonsense, and strict about discipline. Don't sugarcoat bad habits. Push the user to be better.",
-    };
-  }
-  if (persona === "friend") {
-    return {
-      name: "Catalyst AI",
-      style:
-        "You are a highly supportive, empathetic financial best friend. Be warm, encouraging, and celebrate small wins. Reassure the user when they slip up.",
     };
   }
   if (persona === "nerd") {
@@ -657,6 +657,72 @@ function buildSystemPrompt(type, context = {}, resolvedProvider = "gemini", late
     context.memoryBlock || "",
     context
   );
+}
+
+function buildBlockedChatResponse({ cors, tierHeaders, rateResult, stream, responseFormat, message }) {
+  if (stream !== false && responseFormat === "text") {
+    return buildTextStreamResponse({
+      cors,
+      tierHeaders,
+      rateResult,
+      message,
+    });
+  }
+
+  return new Response(JSON.stringify({ result: message }), {
+    status: 200,
+    headers: buildHeaders(cors, {
+      "Content-Type": "application/json",
+      "X-RateLimit-Remaining": String(rateResult.remaining),
+      "X-RateLimit-Limit": String(rateResult.limit),
+      ...tierHeaders,
+    }),
+  });
+}
+
+function buildTextStreamResponse({ cors, tierHeaders, rateResult, message, auditLogId = null, degraded = false }) {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(
+        encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: message } }] })}\n\n`)
+      );
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+
+  return new Response(body, {
+    status: 200,
+    headers: buildHeaders(cors, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      ...(auditLogId ? { "X-Audit-Log-ID": auditLogId } : {}),
+      ...(degraded ? { "X-Catalyst-Degraded": "1" } : {}),
+      "X-RateLimit-Remaining": String(rateResult.remaining),
+      "X-RateLimit-Limit": String(rateResult.limit),
+      ...tierHeaders,
+    }),
+  });
+}
+
+function logChatOutputSafetyReplacement(env, provider, model, outputRisk) {
+  workerLog(env, "warn", "chat-output-safety", "Chat output triggered server-side safety replacement.", {
+    provider,
+    model,
+    kind: outputRisk.kind,
+    flags: outputRisk.matches.map((match) => match.flag),
+  });
+}
+
+function replaceUnsafeChatOutput(env, provider, model, resultText, effectiveContext) {
+  const outputRisk = analyzeServerChatOutputRisk(resultText);
+  if (!outputRisk.blocked) {
+    return resultText;
+  }
+
+  logChatOutputSafetyReplacement(env, provider, model, outputRisk);
+  return buildServerTopicRiskRefusal(outputRisk, effectiveContext);
 }
 
 function logPromptProfile(env, type, provider, prompt) {
@@ -2274,6 +2340,32 @@ export default {
     }
 
     let effectiveContext = context || {};
+    if (!systemPrompt && resolvedType === "chat" && typeof snapshot === "string") {
+      const serverInputRisk = analyzeServerChatInputRisk(snapshot);
+      if (serverInputRisk.blocked) {
+        return buildBlockedChatResponse({
+          cors,
+          tierHeaders,
+          rateResult,
+          stream,
+          responseFormat,
+          message: buildServerPromptInjectionRefusal(),
+        });
+      }
+
+      const serverTopicRisk = analyzeServerChatTopicRisk(snapshot);
+      if (serverTopicRisk.blocked) {
+        return buildBlockedChatResponse({
+          cors,
+          tierHeaders,
+          rateResult,
+          stream,
+          responseFormat,
+          message: buildServerTopicRiskRefusal(serverTopicRisk, effectiveContext),
+        });
+      }
+    }
+
     if (
       !systemPrompt &&
       resolvedType === "chat" &&
@@ -2333,13 +2425,14 @@ export default {
       // Structured audits should not stream. The app parses them as strict JSON,
       // so a complete one-shot response is more reliable than partial SSE chunks.
       const shouldStream = stream !== false && responseFormat === "text";
+      const providerShouldStream = shouldStream && resolvedType !== "chat";
 
       const result = await handler(apiKey, {
         snapshot: effectiveSnapshot,
         systemPrompt: resolvedSystemPrompt,
         history: effectiveHistory,
         model: resolvedModel,
-        stream: shouldStream,
+        stream: providerShouldStream,
         responseFormat: responseFormat || "json",
         timeoutMs: providerTimeoutMs,
       });
@@ -2362,7 +2455,7 @@ export default {
       }
 
       // Streaming: pipe raw response through
-      if (shouldStream && result instanceof Response) {
+      if (providerShouldStream && result instanceof Response) {
         await insertAuditLogRow(env.DB, {
           id: auditLogId,
           provider: selectedProvider,
@@ -2452,6 +2545,9 @@ export default {
           }
         }
       }
+      if (resolvedType === "chat") {
+        resultText = replaceUnsafeChatOutput(env, selectedProvider, resolvedModel, resultText, effectiveContext);
+      }
       const usage = typeof result === "string" ? buildUsage() : buildUsage(result?.usage?.promptTokens, result?.usage?.completionTokens);
       await insertAuditLogRow(env.DB, {
         id: auditLogId,
@@ -2467,6 +2563,17 @@ export default {
         driftWarning: false,
         driftDetails: [],
       });
+
+      if (shouldStream) {
+        return buildTextStreamResponse({
+          cors,
+          tierHeaders,
+          rateResult: committedRateResult,
+          message: resultText,
+          auditLogId,
+          degraded: hitDegradedFallback,
+        });
+      }
 
       // Non-streaming: wrap text in JSON
       return new Response(JSON.stringify({ result: resultText }), {

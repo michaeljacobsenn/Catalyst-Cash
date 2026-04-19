@@ -35,6 +35,39 @@ let referralStatsSyncPromise = null;
 let lastReferralStatsSyncAt = 0;
 let lastReferralStatsSyncError = "";
 
+async function copyText(text) {
+  const normalizedText = String(text || "").trim();
+  if (!normalizedText) return false;
+
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(normalizedText);
+    return true;
+  }
+
+  if (typeof document === "undefined" || !document.body) return false;
+
+  const textarea = document.createElement("textarea");
+  textarea.value = normalizedText;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  textarea.style.top = "0";
+  textarea.style.left = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } finally {
+    textarea.remove();
+  }
+
+  return copied;
+}
+
 /**
  * Generate a random alphanumeric code of given length.
  */
@@ -181,26 +214,39 @@ export async function shareReferralLink() {
   try {
     if (Capacitor.isNativePlatform()) {
       const { Share } = await import("@capacitor/share");
-      await Share.share({
-        title: "Get a free month of Catalyst Cash Pro",
-        text,
-        url,
-        dialogTitle: "Share your referral link",
-      });
+      const capability = await Share.canShare().catch(() => ({ value: true }));
+      if (capability?.value) {
+        await Share.share({
+          title: "Get a free month of Catalyst Cash Pro",
+          text,
+          url,
+          dialogTitle: "Share your referral link",
+        });
+        return true;
+      }
     } else if (navigator.share) {
       await navigator.share({ title: "Catalyst Cash Referral", text, url });
-    } else {
-      await navigator.clipboard.writeText(url);
-      window.toast?.success?.("Referral link copied to clipboard!");
+      return true;
     }
-    return true;
   } catch (err) {
     // User cancellation is expected from share sheet
     const msg = String(err?.message || "");
     if (msg.includes("cancel") || msg.includes("abort")) return false;
     void log.warn("referral", "Share referral failed", { error: msg });
-    return false;
   }
+
+  try {
+    const copied = await copyText(url);
+    if (copied) {
+      window.toast?.success?.("Referral link copied. Paste it anywhere.");
+      return true;
+    }
+  } catch (err) {
+    void log.warn("referral", "Referral clipboard fallback failed", { error: err?.message });
+  }
+
+  window.toast?.error?.("Could not open the share sheet. Please copy your referral code manually.");
+  return false;
 }
 
 /**

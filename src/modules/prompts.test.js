@@ -96,9 +96,10 @@ describe("getSystemPrompt", () => {
     expect(prompt).toContain("drill sergeant");
   });
 
-  it("injects friend persona when specified", () => {
+  it("ignores the retired friend persona", () => {
     const prompt = getSystemPrompt("gemini", minConfig, [], [], "", null, "friend");
-    expect(prompt).toContain("SUPPORTIVE FRIEND");
+    expect(prompt).not.toContain("SUPPORTIVE FRIEND");
+    expect(prompt).not.toContain("COMMUNICATION STYLE");
   });
 
   it("injects nerd persona when specified", () => {

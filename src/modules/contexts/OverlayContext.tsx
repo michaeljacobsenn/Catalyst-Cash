@@ -42,7 +42,7 @@ interface OverlayContextValue {
   financialConfig: CatalystCashConfig;
   personalRules: string;
   setPersonalRules: (value: string) => void;
-  persona: "coach" | "friend" | "nerd" | null;
+  persona: "coach" | "nerd" | null;
   instructionHash: string | null;
   setInstructionHash: (value: string | null) => void;
 }

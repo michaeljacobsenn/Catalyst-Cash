@@ -18,21 +18,24 @@ public class FaceIdPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func isAvailable(_ call: CAPPluginCall) {
         let context = LAContext()
         var deviceAuthError: NSError?
+        var biometricError: NSError?
 
         let canAuthenticate = context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &deviceAuthError)
-        let canUseBiometrics = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
+        let canUseBiometrics = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &biometricError)
         let biometryType = canUseBiometrics ? mappedBiometryType(from: context.biometryType) : "none"
-        NSLog("[FaceIdPlugin] isAvailable canAuthenticate=%@ canUseBiometrics=%@ biometryType=%@ error=%@",
+        NSLog("[FaceIdPlugin] isAvailable canAuthenticate=%@ canUseBiometrics=%@ biometryType=%@ deviceError=%@ biometricError=%@",
               canAuthenticate.description,
               canUseBiometrics.description,
               biometryType,
-              deviceAuthError?.localizedDescription ?? "")
+              deviceAuthError?.localizedDescription ?? "",
+              biometricError?.localizedDescription ?? "")
 
         let response: [String: Any] = [
-            "isAvailable": canAuthenticate,
+            "isAvailable": canUseBiometrics,
+            "canAuthenticate": canAuthenticate,
             "biometryType": biometryType,
-            "errorCode": canAuthenticate ? 0 : (deviceAuthError?.code ?? 0),
-            "errorMessage": canAuthenticate ? "" : (deviceAuthError?.localizedDescription ?? "")
+            "errorCode": canUseBiometrics ? 0 : (biometricError?.code ?? deviceAuthError?.code ?? 0),
+            "errorMessage": canUseBiometrics ? "" : (biometricError?.localizedDescription ?? deviceAuthError?.localizedDescription ?? "")
         ]
 
         call.resolve(response)
@@ -41,19 +44,18 @@ public class FaceIdPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func authenticate(_ call: CAPPluginCall) {
         let reason = sanitizedReason(from: call.getString("reason"))
         let context = LAContext()
-        context.localizedFallbackTitle = ""
         NSLog("[FaceIdPlugin] authenticate requested reason=%@", reason)
 
         var availabilityError: NSError?
-        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &availabilityError) else {
+        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &availabilityError) else {
             let code = availabilityError?.code ?? LAError.biometryNotAvailable.rawValue
-            let message = availabilityError?.localizedDescription ?? "Biometrics are not available"
+            let message = availabilityError?.localizedDescription ?? "Device authentication is not available"
             NSLog("[FaceIdPlugin] authenticate unavailable code=%d message=%@", code, message)
             rejectOnMain(call, message: message, code: code, error: availabilityError)
             return
         }
 
-        context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { [weak self] success, authenticationError in
+        context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { [weak self] success, authenticationError in
             guard let self else {
                 DispatchQueue.main.async {
                     call.reject("Authentication session ended unexpectedly")
@@ -70,30 +72,18 @@ public class FaceIdPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func mappedBiometryType(from biometryType: LABiometryType) -> String {
-        if #available(iOS 17.0, *) {
-            switch biometryType {
-            case .none:
-                return "none"
-            case .faceID:
-                return "faceId"
-            case .touchID:
-                return "touchId"
-            case .opticID:
+        switch biometryType {
+        case .none:
+            return "none"
+        case .faceID:
+            return "faceId"
+        case .touchID:
+            return "touchId"
+        default:
+            if #available(iOS 17.0, *), biometryType == .opticID {
                 return "opticId"
-            @unknown default:
-                return "unknown"
             }
-        } else {
-            switch biometryType {
-            case .none:
-                return "none"
-            case .faceID:
-                return "faceId"
-            case .touchID:
-                return "touchId"
-            @unknown default:
-                return "unknown"
-            }
+            return "unknown"
         }
     }
 

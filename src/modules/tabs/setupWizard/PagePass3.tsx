@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
+import { beginBiometricInteraction, endBiometricInteraction, withBiometricPromptTimeout } from "../../biometricSession.js";
 import { T } from "../../constants.js";
 import { haptic } from "../../haptics.js";
 import { AlertTriangle, CheckCircle2, Landmark, Sparkles } from "../../icons.js";
@@ -169,14 +170,24 @@ export function PagePass3({
       return;
     }
     try {
+      beginBiometricInteraction();
       const res = await FaceId.isAvailable();
       if (!res.isAvailable) {
         getWindowToast()?.error?.("No biometrics set up on this device.");
         return;
       }
+      await withBiometricPromptTimeout(
+        () => FaceId.authenticate({ reason: "Verify to enable Face ID / Touch ID for app lock" }),
+        {
+          timeoutMs: 12000,
+          timeoutMessage: "Biometric verification timed out",
+        }
+      );
       updateSecurity("useFaceId", true);
     } catch {
       getWindowToast()?.error?.("Biometrics unavailable.");
+    } finally {
+      endBiometricInteraction();
     }
   };
 

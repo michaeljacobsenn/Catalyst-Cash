@@ -9,7 +9,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIWindowSceneDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Set dark background on the native window so no white bars show during load
-        window?.backgroundColor = UIColor(red: 0.024, green: 0.035, blue: 0.055, alpha: 1.0)
+        window?.backgroundColor = UIColor(red: 0.047, green: 0.071, blue: 0.106, alpha: 1.0)
         
         // Allow local notifications to display as banners even when app is in foreground
         UNUserNotificationCenter.current().delegate = self

@@ -5,7 +5,7 @@ async function loadRevenueCatModule() {
 
   const purchases = {
     getAppUserID: vi.fn(async () => ({ appUserID: "$RCAnonymousID:test" })),
-    getCustomerInfo: vi.fn(async () => ({ entitlements: { active: {} } })),
+    getCustomerInfo: vi.fn(async () => ({ customerInfo: { entitlements: { active: {} } } })),
     getOfferings: vi.fn(async () => ({
       current: {
         monthly: { identifier: "$rc_monthly", product: { identifier: "com.catalystcash.pro.monthly.v2" } },
@@ -17,10 +17,11 @@ async function loadRevenueCatModule() {
     configure: vi.fn(async () => undefined),
     addCustomerInfoUpdateListener: vi.fn(async () => "listener_1"),
     removeCustomerInfoUpdateListener: vi.fn(async () => ({ wasRemoved: true })),
-    restorePurchases: vi.fn(async () => ({ entitlements: { active: {} } })),
+    restorePurchases: vi.fn(async () => ({ customerInfo: { entitlements: { active: {} } } })),
   };
   const activatePro = vi.fn(async () => true);
   const deactivatePro = vi.fn(async () => true);
+  const browserOpen = vi.fn(async () => undefined);
 
   vi.doMock("@capacitor/core", () => ({
     Capacitor: {
@@ -31,6 +32,10 @@ async function loadRevenueCatModule() {
 
   vi.doMock("@revenuecat/purchases-capacitor", () => ({
     LOG_LEVEL: { WARN: "WARN" },
+    PURCHASES_ERROR_CODE: {
+      PURCHASE_CANCELLED_ERROR: "1",
+      PRODUCT_ALREADY_PURCHASED_ERROR: "6",
+    },
     Purchases: purchases,
   }));
 
@@ -47,10 +52,16 @@ async function loadRevenueCatModule() {
     deactivatePro,
   }));
 
+  vi.doMock("@capacitor/browser", () => ({
+    Browser: {
+      open: browserOpen,
+    },
+  }));
+
   vi.stubEnv("VITE_REVENUECAT_KEY", "test_rc_key");
 
   const mod = await import("./revenuecat.js");
-  return { mod, purchases, activatePro, deactivatePro };
+  return { mod, purchases, activatePro, deactivatePro, browserOpen };
 }
 
 afterEach(() => {
@@ -104,6 +115,79 @@ describe("revenuecat", () => {
     expect(purchases.getOfferings).toHaveBeenCalled();
     expect(purchases.purchasePackage).toHaveBeenCalledWith({
       aPackage: expect.objectContaining({ identifier: "$rc_annual" }),
+    });
+  });
+
+  it("recovers active entitlement after an already-subscribed purchase attempt", async () => {
+    const { mod, purchases, activatePro } = await loadRevenueCatModule();
+
+    purchases.getCustomerInfo
+      .mockResolvedValueOnce({ customerInfo: { entitlements: { active: {} } } })
+      .mockResolvedValueOnce({ customerInfo: { entitlements: { active: {} } } });
+    purchases.restorePurchases.mockResolvedValueOnce({
+      customerInfo: {
+        entitlements: {
+          active: {
+            "Catalyst Cash Pro": {
+              productIdentifier: "com.catalystcash.pro.yearly.v2",
+              expirationDate: "2099-01-01T00:00:00.000Z",
+            },
+          },
+        },
+      },
+    });
+    purchases.purchasePackage.mockRejectedValueOnce({
+      code: "6",
+      message: "already subscribed",
+      userCancelled: false,
+    });
+
+    await mod.initRevenueCat();
+    await expect(mod.purchaseProPlan("yearly")).resolves.toBe(true);
+    expect(purchases.restorePurchases).toHaveBeenCalled();
+
+    expect(activatePro).toHaveBeenCalledWith(
+      "com.catalystcash.pro.yearly.v2",
+      3650,
+      { isLifetime: false },
+    );
+  });
+
+  it("restores an active entitlement from the wrapped restorePurchases response", async () => {
+    const { mod, purchases, activatePro } = await loadRevenueCatModule();
+
+    purchases.restorePurchases.mockResolvedValueOnce({
+      customerInfo: {
+        entitlements: {
+          active: {
+            "Catalyst Cash Pro": {
+              productIdentifier: "com.catalystcash.pro.yearly.v2",
+              expirationDate: "2099-01-01T00:00:00.000Z",
+            },
+          },
+        },
+      },
+    });
+
+    await mod.initRevenueCat();
+    await expect(mod.restorePurchases()).resolves.toBe(true);
+
+    expect(activatePro).toHaveBeenCalledWith(
+      "com.catalystcash.pro.yearly.v2",
+      3650,
+      { isLifetime: false },
+    );
+  });
+
+  it("opens Apple subscription management when asked to manage Pro", async () => {
+    const { mod, browserOpen } = await loadRevenueCatModule();
+
+    await expect(mod.presentCustomerCenter()).resolves.toBeUndefined();
+
+    expect(browserOpen).toHaveBeenCalledWith({
+      url: "https://apps.apple.com/account/subscriptions",
+      presentationStyle: "fullscreen",
+      toolbarColor: "#0C121B",
     });
   });
 });

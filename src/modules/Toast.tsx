@@ -112,7 +112,7 @@ const ToastContainer: FC<ToastContainerProps> = ({ toasts, onRemove }) => {
         top: `calc(env(safe-area-inset-top, 12px) + 8px)`,
         left: 16,
         right: 16,
-        zIndex: 200,
+        zIndex: 100100,
         display: "flex",
         flexDirection: "column",
         gap: 8,

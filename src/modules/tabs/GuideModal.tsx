@@ -113,6 +113,33 @@ export default function GuideModal({ onClose: onExplicitClose, proEnabled = fals
 
   const guideUrl = proEnabled ? "/CatalystCash-Guide-Pro.html" : "/CatalystCash-Guide-Free.html";
   const plan = proEnabled ? PLAN_FACTS.pro : PLAN_FACTS.free;
+  const headerPalette = proEnabled
+    ? {
+        surface: "linear-gradient(180deg, rgba(35,34,40,0.98) 0%, rgba(24,24,30,0.96) 58%, rgba(16,17,22,0.94) 100%)",
+        line: "rgba(248,231,161,0.22)",
+        glow: "rgba(248,231,161,0.16)",
+        textPrimary: "#FFF8E5",
+        textSecondary: "rgba(255,244,214,0.74)",
+        textTertiary: "rgba(255,244,214,0.52)",
+        badgeColor: "#F8E7A1",
+        badgeBg: "rgba(248,231,161,0.12)",
+        badgeBorder: "rgba(248,231,161,0.26)",
+        closeBg: "rgba(255,255,255,0.06)",
+        closeBorder: "rgba(248,231,161,0.18)",
+      }
+    : {
+        surface: `linear-gradient(180deg, rgba(15,39,44,0.98) 0%, rgba(14,28,36,0.96) 55%, rgba(10,16,24,0.94) 100%)`,
+        line: `${T.accent.emerald}26`,
+        glow: `${T.accent.emerald}18`,
+        textPrimary: "#F2FCFF",
+        textSecondary: "rgba(220,242,247,0.76)",
+        textTertiary: "rgba(220,242,247,0.52)",
+        badgeColor: "#86EAD4",
+        badgeBg: "rgba(134,234,212,0.12)",
+        badgeBorder: "rgba(134,234,212,0.26)",
+        closeBg: "rgba(255,255,255,0.06)",
+        closeBorder: "rgba(134,234,212,0.16)",
+      };
 
   useEffect(() => {
     setIframeReady(false);
@@ -177,17 +204,40 @@ export default function GuideModal({ onClose: onExplicitClose, proEnabled = fals
             onPanEnd={handleHeaderPanEnd}
             style={{
               padding: `calc(env(safe-area-inset-top, 20px) + 8px) 20px 16px 20px`,
-              background: `linear-gradient(180deg, ${T.bg.base}, ${T.bg.elevated})`,
-              borderBottom: `1px solid ${T.border.subtle}`,
-              boxShadow: `0 10px 32px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.05)`,
+              background: headerPalette.surface,
+              borderBottom: `1px solid ${headerPalette.line}`,
+              boxShadow: `0 12px 34px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.05)`,
               flexShrink: 0,
               display: "flex",
               alignItems: "flex-start",
               gap: 12,
               userSelect: "none",
               touchAction: "none",
+              position: "relative",
+              overflow: "hidden",
             }}
           >
+            <div
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                inset: 0,
+                background: `radial-gradient(circle at top center, ${headerPalette.glow} 0%, transparent 56%)`,
+                pointerEvents: "none",
+              }}
+            />
+            <div
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: -1,
+                height: 1,
+                background: `linear-gradient(90deg, transparent, ${headerPalette.line}, transparent)`,
+                pointerEvents: "none",
+              }}
+            />
             <div
               style={{
                 flex: 1,
@@ -205,26 +255,26 @@ export default function GuideModal({ onClose: onExplicitClose, proEnabled = fals
                     width: 38,
                     height: 5,
                     borderRadius: 999,
-                    background: "rgba(255,255,255,0.22)",
+                    background: "rgba(255,255,255,0.18)",
                     boxShadow: "0 1px 0 rgba(255,255,255,0.05)",
                   }}
                 />
               </div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-                  <h1 style={{ fontSize: 22, fontWeight: 800, color: T.text.primary, margin: 0, letterSpacing: "-0.01em" }}>
+                  <h1 style={{ fontSize: 22, fontWeight: 800, color: headerPalette.textPrimary, margin: 0, letterSpacing: "-0.01em" }}>
                     {proEnabled ? "Pro Guide" : "Free Guide"}
                   </h1>
                   <span
                     style={{
                       fontSize: 9,
-                      color: proEnabled ? "#F8E7A1" : T.accent.emerald,
+                      color: headerPalette.badgeColor,
                       fontFamily: T.font.mono,
                       fontWeight: 700,
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
-                      border: `1px solid ${proEnabled ? "rgba(248,231,161,0.28)" : `${T.accent.emerald}30`}`,
-                      background: proEnabled ? "rgba(248,231,161,0.1)" : `${T.accent.emerald}12`,
+                      border: `1px solid ${headerPalette.badgeBorder}`,
+                      background: headerPalette.badgeBg,
                       padding: "3px 8px",
                       borderRadius: 999,
                     }}
@@ -235,7 +285,7 @@ export default function GuideModal({ onClose: onExplicitClose, proEnabled = fals
                 <span
                   style={{
                     fontSize: 10,
-                    color: T.text.dim,
+                    color: headerPalette.textTertiary,
                     fontFamily: T.font.mono,
                     fontWeight: 600,
                     letterSpacing: "1px",
@@ -254,15 +304,17 @@ export default function GuideModal({ onClose: onExplicitClose, proEnabled = fals
                 width: 32,
                 height: 32,
                 borderRadius: 10,
-                border: `1px solid ${T.border.default}`,
-                background: "rgba(255,255,255,0.05)",
+                border: `1px solid ${headerPalette.closeBorder}`,
+                background: headerPalette.closeBg,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
-                color: T.text.secondary,
-                transition: "background 0.2s",
+                color: headerPalette.textSecondary,
+                transition: "background 0.2s, border-color 0.2s",
                 flexShrink: 0,
+                position: "relative",
+                zIndex: 1,
               }}
             >
               <X size={16} />

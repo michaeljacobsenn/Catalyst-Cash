@@ -18,6 +18,7 @@ injectCachedOTA();
 // On web (vite dev server) this is a no-op.
 
 const App = lazy(() => import("./App.js"));
+const BOOT_BG = "#0C121B";
 
 const BootFallback = () => (
   <div
@@ -26,7 +27,7 @@ const BootFallback = () => (
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      background: "#0b1220",
+      background: BOOT_BG,
       color: "#f8fafc",
       fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
       fontSize: 14,
@@ -35,7 +36,7 @@ const BootFallback = () => (
       textTransform: "uppercase",
     }}
   >
-    Loading PortfolioPro...
+    Loading Catalyst Cash...
   </div>
 );
 
@@ -43,6 +44,15 @@ const rootElement = document.getElementById("root");
 if (!rootElement) {
   throw new Error("Root element #root was not found");
 }
+
+document.documentElement.style.background = BOOT_BG;
+document.documentElement.style.colorScheme = "dark";
+document.documentElement.style.setProperty("--cc-bg-base", BOOT_BG);
+if (document.body) {
+  document.body.style.background = BOOT_BG;
+  document.body.style.margin = "0";
+}
+rootElement.style.background = BOOT_BG;
 
 const root = createRoot(rootElement);
 root.render(

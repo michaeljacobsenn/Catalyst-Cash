@@ -199,6 +199,32 @@ describe("chatPromptBuilders", () => {
     expect(prompt).toContain("1-800-522-4700");
   });
 
+  it("hardens the scope boundary against companionship and therapy drift", () => {
+    const prompt = getChatSystemPrompt(
+      null,
+      {},
+      [],
+      [],
+      [],
+      null,
+      "",
+      null,
+      null,
+      "openai",
+      "",
+      [],
+      null,
+      null
+    );
+
+    expect(prompt).toContain("Do NOT act as a friend, romantic partner, therapist, emotional companion, or general-purpose chat buddy.");
+    expect(prompt).toContain("Do NOT encourage emotional dependency");
+    expect(prompt).toContain("coercion, abuse, violence, retaliation");
+    expect(prompt).toContain("Do not act as a friend, therapist, romantic partner, or general-purpose companion.");
+    expect(prompt).toContain("Never encourage dependency, secrecy, coercion, abuse, violence, retaliation, self-harm, revenge, or destructive outcomes.");
+    expect(prompt).toContain("Never shame the user, catastrophize, or push them toward destructive choices.");
+  });
+
   it("adds a finance action contract for mixed questions", () => {
     const prompt = getChatSystemPrompt(
       null,

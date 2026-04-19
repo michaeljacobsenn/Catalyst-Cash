@@ -37,6 +37,7 @@ import {
   deactivatePro,
   hasPaidProAccess,
   isPro,
+  SUBSCRIPTION_STATE_CHANGED_EVENT,
   getUsageWindowKeys,
 } from "./subscription.js";
 
@@ -219,6 +220,63 @@ describe("Subscription State", () => {
     expect(state.tier).toBe("free");
     expect(state.expiresAt).toBeNull();
     expect(state.productId).toBeNull();
+  });
+
+  it("broadcasts entitlement changes so the app shell can drop gating without a reload", async () => {
+    const originalDispatch = globalThis.dispatchEvent;
+    const originalCustomEvent = globalThis.CustomEvent;
+    const dispatchSpy = vi.fn();
+
+    class TestCustomEvent {
+      constructor(type, init = {}) {
+        this.type = type;
+        this.detail = init.detail;
+      }
+    }
+
+    Object.defineProperty(globalThis, "dispatchEvent", {
+      value: dispatchSpy,
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "CustomEvent", {
+      value: TestCustomEvent,
+      configurable: true,
+      writable: true,
+    });
+
+    try {
+      await activatePro(IAP_PRODUCTS.monthly, 30);
+      await deactivatePro();
+    } finally {
+      if (originalDispatch) {
+        Object.defineProperty(globalThis, "dispatchEvent", {
+          value: originalDispatch,
+          configurable: true,
+          writable: true,
+        });
+      } else {
+        delete globalThis.dispatchEvent;
+      }
+
+      if (originalCustomEvent) {
+        Object.defineProperty(globalThis, "CustomEvent", {
+          value: originalCustomEvent,
+          configurable: true,
+          writable: true,
+        });
+      } else {
+        delete globalThis.CustomEvent;
+      }
+    }
+
+    const matchingEvents = dispatchSpy.mock.calls
+      .map(([event]) => event)
+      .filter(event => event?.type === SUBSCRIPTION_STATE_CHANGED_EVENT);
+
+    expect(matchingEvents).toHaveLength(2);
+    expect(matchingEvents[0].detail).toMatchObject({ proEnabled: true, tier: "pro" });
+    expect(matchingEvents[1].detail).toMatchObject({ proEnabled: false, tier: "free" });
   });
 
   it("hasPaidProAccess returns the raw stored entitlement state", async () => {

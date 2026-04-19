@@ -12,6 +12,7 @@ import React,{
 } from "react";
 import { callAudit, streamAudit } from "../api.js";
 import {
+  analyzeChatAssistantOutputRisk,
   analyzeChatInputRisk,
   analyzeChatTopicRisk,
   buildDeterministicChatFallback,
@@ -146,6 +147,7 @@ const LazyProPaywallTyped = LazyProPaywall as unknown as (props: ProPaywallProps
 const Skeleton = UISkeleton as unknown as (props: SkeletonProps) => ReactNode;
 const analyzeChatInputRiskTyped = analyzeChatInputRisk as unknown as (text: string) => ChatInputRisk;
 const analyzeChatTopicRiskTyped = analyzeChatTopicRisk as unknown as (text: string) => ChatTopicRisk;
+const analyzeChatAssistantOutputRiskTyped = analyzeChatAssistantOutputRisk as unknown as (text: string) => ChatTopicRisk;
 const buildPromptInjectionRefusalTyped = buildPromptInjectionRefusal as unknown as () => string;
 const buildDeterministicChatFallbackTyped = buildDeterministicChatFallback as unknown as (options: {
   current?: AuditRecord | null;
@@ -478,13 +480,23 @@ export default memo(function AIChatTab({
         const displayText = stripThoughtProcess(cleanText || restored);
         const normalizedResponse = normalizeChatAssistantOutputTyped(displayText);
         if (!normalizedResponse.valid) return false;
+        const outputRisk = analyzeChatAssistantOutputRiskTyped(normalizedResponse.text);
+        const safeResponse = outputRisk.blocked
+          ? buildHighRiskTopicRefusalTyped({
+            risk: outputRisk,
+            current,
+            computedStrategy: chatStrategy,
+            decisionRecommendations,
+          })
+          : normalizedResponse.text;
+        const safeFacts = outputRisk.blocked ? [] : newFacts;
         const modelUsed = options.modelUsed || effectiveChatModel;
 
-        const finalMsgs = [...newMsgs, { ...assistantMsg, content: normalizedResponse.text, ts: Date.now() }];
+        const finalMsgs = [...newMsgs, { ...assistantMsg, content: safeResponse, ts: Date.now() }];
         setMessages(finalMsgs);
         void persistMessages(finalMsgs);
-        if (newFacts.length > 0) {
-          void rememberFacts(newFacts);
+        if (safeFacts.length > 0) {
+          void rememberFacts(safeFacts);
         }
         recordChatUsage(modelUsed).catch(() => { });
         const q = await checkChatQuota(modelUsed);

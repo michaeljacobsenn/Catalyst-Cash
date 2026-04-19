@@ -119,10 +119,24 @@ export const getTracking = (fontSize: number, weight: FontWeight = "regular") =>
   return `${tracking}em`;
 };
 
-export const GlobalStyles = () => (
+export const GlobalStyles = () => {
+  const isLightMode = T._mode === "light";
+  const inputShadow = isLightMode
+    ? "inset 0 1px 0 rgba(255,255,255,0.92), 0 8px 22px rgba(148,163,184,0.12)"
+    : "inset 0 1px 0 rgba(255,255,255,0.03), 0 4px 12px rgba(0,0,0,0.08)";
+  const inputFocusShadow = isLightMode
+    ? `0 0 0 3px ${T.accent.primaryDim}, 0 14px 30px rgba(94,121,201,0.12)`
+    : `0 0 0 3px ${T.accent.primaryDim}, 0 10px 18px rgba(0,0,0,0.10)`;
+
+  return (
   <style>{`
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html,body,#root{height:100dvh;height:100vh;background:var(--cc-bg-base, ${T.bg.base});font-family:${T.font.sans};color:${T.text.primary};-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow:hidden;-webkit-text-size-adjust:100%}
+    html[data-theme-switching="true"],html[data-theme-switching="true"] body{background:var(--cc-bg-base, ${T.bg.base}) !important}
+    html[data-theme-switching="true"] *,html[data-theme-switching="true"] *::before,html[data-theme-switching="true"] *::after{
+      transition:none !important;
+      animation:none !important;
+    }
     
     /* iOS 18 Typography & Form elements — minimum 44pt touch targets */
     input,textarea,select{
@@ -132,11 +146,11 @@ export const GlobalStyles = () => (
       min-height:44px; /* HIG 44pt Touch Target */
       width:100%;outline:none;transition:border-color .25s ease,box-shadow .25s ease,background .25s ease,transform .25s ease;
       -webkit-appearance:none;-webkit-tap-highlight-color:transparent;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 4px 12px rgba(0,0,0,0.08);
+      box-shadow:${inputShadow};
     }
     input:focus,textarea:focus,select:focus{
       border-color:${T.border.focus};
-      box-shadow:0 0 0 3px ${T.accent.primaryDim}, 0 10px 18px rgba(0,0,0,0.10);
+      box-shadow:${inputFocusShadow};
       background:${T.bg.surface};
     }
     input::placeholder,textarea::placeholder{color:${T.text.muted};font-weight:400}
@@ -424,31 +438,34 @@ export const GlobalStyles = () => (
       }
     }
   `}</style>
-);
+  );
+};
 
 export const Card = ({ children, style, animate, delay = 0, onClick, variant = "default", className = "" }: CardProps) => {
+  const isLightMode = T._mode === "light";
+  const insetHighlight = isLightMode ? "inset 0 1px 0 rgba(255,255,255,0.94)" : "inset 0 1px 0 rgba(255,255,255,0.04)";
   const variants = {
     default: {
-      background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
+      background: `linear-gradient(180deg, ${T.bg.card}, ${isLightMode ? T.bg.surface : T.bg.elevated})`,
       border: `1px solid ${T.border.default}`,
-      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04), ${T.shadow.card}`,
+      boxShadow: `${insetHighlight}, ${T.shadow.card}`,
     },
     elevated: {
-      background: `linear-gradient(180deg, ${T.bg.elevated}, ${T.bg.card})`,
+      background: `linear-gradient(180deg, ${isLightMode ? T.bg.surface : T.bg.elevated}, ${T.bg.card})`,
       border: `1px solid ${T.border.default}`,
-      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04), ${T.shadow.elevated}`,
+      boxShadow: `${insetHighlight}, ${T.shadow.elevated}`,
     },
     glass: {
-      background: `linear-gradient(180deg, ${T.bg.glass}, ${T.bg.card})`,
+      background: `linear-gradient(180deg, ${T.bg.glass}, ${isLightMode ? "rgba(255,255,255,0.98)" : T.bg.card})`,
       border: `1px solid ${T.border.default}`,
       backdropFilter: "blur(20px) saturate(1.08)",
       WebkitBackdropFilter: "blur(20px) saturate(1.08)",
-      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04), ${T.shadow.card}`,
+      boxShadow: `${insetHighlight}, ${T.shadow.card}`,
     },
     accent: {
       background: `linear-gradient(165deg, ${T.accent.primaryDim}, ${T.bg.card} 58%, ${T.bg.elevated})`,
       border: `1px solid ${T.accent.primarySoft}`,
-      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), ${T.shadow.card}`,
+      boxShadow: `${isLightMode ? "inset 0 1px 0 rgba(255,255,255,0.96)" : "inset 0 1px 0 rgba(255,255,255,0.05)"}, ${T.shadow.card}`,
     },
   };
   const v = variants[variant] || variants.default;

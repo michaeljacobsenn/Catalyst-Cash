@@ -452,6 +452,27 @@ export function ModelChatQuotaWidget({ chatQuota, setAiModel, proEnabled }: Mode
 }
 
 export function SubmitBar({ canSubmit, offline = false, isLoading, isTestMode, setIsTestMode, onSubmit }: SubmitBarProps) {
+  const isLightMode = T._mode === "light";
+  const stickyBackground = isLightMode
+    ? T.bg.base
+    : `linear-gradient(to top, ${T.bg.base} 74%, rgba(7,11,18,0.82) 90%, transparent)`;
+  const trayBackground = isLightMode ? "#FFFFFF" : T.bg.glass;
+  const trayShadow = isLightMode ? "none" : T.shadow.card;
+  const primaryBackground = canSubmit
+    ? isTestMode
+      ? `${T.status.amber}14`
+      : isLightMode
+        ? T.bg.surface
+        : `${T.accent.primary}14`
+    : T.bg.elevated;
+  const primaryShadow = canSubmit
+    ? isTestMode
+      ? "none"
+      : isLightMode
+        ? "none"
+        : "none"
+    : "none";
+
   return (
     <div
       style={{
@@ -459,10 +480,11 @@ export function SubmitBar({ canSubmit, offline = false, isLoading, isTestMode, s
         bottom: 0,
         zIndex: 40,
         marginTop: 12,
-        padding: "16px 0 calc(env(safe-area-inset-bottom, 0px) + 10px)",
-        background: `linear-gradient(to top, ${T.bg.base} 74%, rgba(7,11,18,0.82) 90%, transparent)`,
+        padding: "12px 0 calc(env(safe-area-inset-bottom, 0px) + 10px)",
+        background: stickyBackground,
         display: "flex",
         justifyContent: "center",
+        borderTop: isLightMode ? `1px solid ${T.border.subtle}` : "none",
       }}
     >
       <div
@@ -474,10 +496,10 @@ export function SubmitBar({ canSubmit, offline = false, isLoading, isTestMode, s
           padding: "8px",
           borderRadius: 24,
           border: `1px solid ${T.border.default}`,
-          background: T.bg.glass,
-          backdropFilter: "blur(18px)",
-          WebkitBackdropFilter: "blur(18px)",
-          boxShadow: T.shadow.card,
+          background: trayBackground,
+          backdropFilter: isLightMode ? "none" : "blur(18px)",
+          WebkitBackdropFilter: isLightMode ? "none" : "blur(18px)",
+          boxShadow: trayShadow,
         }}
       >
         <button
@@ -487,8 +509,8 @@ export function SubmitBar({ canSubmit, offline = false, isLoading, isTestMode, s
             flex: 1,
             padding: "16px 18px",
             borderRadius: 18,
-            border: `1px solid ${canSubmit ? (isTestMode ? `${T.status.amber}24` : `${T.accent.primary}24`) : T.border.subtle}`,
-            background: canSubmit ? (isTestMode ? `${T.status.amber}14` : `${T.accent.primary}14`) : T.bg.elevated,
+            border: `1px solid ${canSubmit ? (isTestMode ? `${T.status.amber}24` : `${T.accent.primary}${isLightMode ? "28" : "24"}`) : T.border.subtle}`,
+            background: primaryBackground,
             color: canSubmit ? (isTestMode ? T.status.amber : T.accent.primary) : T.text.dim,
             fontSize: 16,
             fontWeight: 800,
@@ -498,6 +520,7 @@ export function SubmitBar({ canSubmit, offline = false, isLoading, isTestMode, s
             justifyContent: "center",
             gap: 8,
             minHeight: 54,
+            boxShadow: primaryShadow,
             transition: "border-color 0.25s ease, background 0.25s ease, color 0.25s ease",
           }}
         >
@@ -528,7 +551,7 @@ export function SubmitBar({ canSubmit, offline = false, isLoading, isTestMode, s
             height: 54,
             borderRadius: 18,
             border: `1px solid ${isTestMode ? `${T.status.amber}24` : T.border.subtle}`,
-            background: isTestMode ? `${T.status.amber}12` : T.bg.elevated,
+            background: isTestMode ? `${T.status.amber}12` : (isLightMode ? "rgba(255,255,255,0.74)" : T.bg.elevated),
             color: canSubmit ? (isTestMode ? T.status.amber : T.text.secondary) : T.text.dim,
             cursor: canSubmit ? "pointer" : "not-allowed",
             display: "flex",
@@ -541,6 +564,7 @@ export function SubmitBar({ canSubmit, offline = false, isLoading, isTestMode, s
             fontSize: 12,
             fontWeight: 800,
             fontFamily: T.font.mono,
+            boxShadow: "none",
           }}
         >
           <Zap size={18} strokeWidth={isTestMode ? 2.8 : 2} fill={isTestMode ? T.status.amber : "none"} />

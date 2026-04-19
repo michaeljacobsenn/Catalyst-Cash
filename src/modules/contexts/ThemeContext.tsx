@@ -1,4 +1,4 @@
-  import { createContext,useContext,useEffect,useLayoutEffect,useMemo,useState,type ReactNode } from "react";
+  import { createContext,useContext,useEffect,useLayoutEffect,useMemo,useRef,useState,type ReactNode } from "react";
   import { DARK_TOKENS,LIGHT_TOKENS,SHARED_TOKENS,T,cloneThemeTokens } from "../constants.js";
   import { useSettings } from "./SettingsContext.js";
 
@@ -44,6 +44,8 @@ function syncThemeTokens(mode: EffectiveThemeMode): ThemeTokens {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const { themeMode, themeTick } = useSettings();
   const [systemPrefersLight, setSystemPrefersLight] = useState<boolean>(() => getSystemPrefersLight());
+  const previousModeRef = useRef<EffectiveThemeMode | null>(null);
+  const themeSwitchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const effectiveMode = resolveEffectiveMode(themeMode, systemPrefersLight);
   const theme = useMemo<ThemeTokens>(() => {
     syncThemeTokens(effectiveMode);
@@ -60,6 +62,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useLayoutEffect(() => {
     if (typeof document === "undefined") return;
+    const previousMode = previousModeRef.current;
+    if (previousMode && previousMode !== effectiveMode) {
+      document.documentElement.dataset.themeSwitching = "true";
+      if (themeSwitchTimerRef.current) clearTimeout(themeSwitchTimerRef.current);
+      themeSwitchTimerRef.current = setTimeout(() => {
+        document.documentElement.removeAttribute("data-theme-switching");
+      }, 220);
+    }
+    previousModeRef.current = effectiveMode;
     document.documentElement.dataset.theme = effectiveMode;
     document.documentElement.style.setProperty("--cc-bg-base", theme.bg.base);
     document.documentElement.style.colorScheme = effectiveMode;
@@ -69,6 +80,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       metaThemeColor.setAttribute("content", theme.bg.base);
     }
   }, [effectiveMode, theme, themeTick]);
+
+  useEffect(() => () => {
+    if (themeSwitchTimerRef.current) clearTimeout(themeSwitchTimerRef.current);
+  }, []);
 
   const value = useMemo<ThemeContextValue>(
     () => ({

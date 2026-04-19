@@ -684,11 +684,99 @@ export default function InputForm({
         flexDirection: "column",
         alignItems: "center",
         width: "100%",
-        paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
+        paddingTop: 0,
         ["--page-bottom-clearance" as string]: "calc(env(safe-area-inset-bottom, 0px) + 168px)",
       }}
     >
-      <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column", gap: 12 }}>
+      <header
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 18,
+          width: "100%",
+          maxWidth: 768,
+          paddingTop: "calc(env(safe-area-inset-top, 0px) + 6px)",
+          paddingLeft: 16,
+          paddingRight: 16,
+          paddingBottom: 10,
+          background: T.bg.navGlass,
+          backdropFilter: "blur(20px) saturate(1.3)",
+          WebkitBackdropFilter: "blur(20px) saturate(1.3)",
+          borderBottom: `1px solid ${T.border.subtle}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ width: 44, minWidth: 44, display: "flex", justifyContent: "flex-start" }}>
+          <button
+            onClick={() => {
+              haptic.light();
+              onBack();
+            }}
+            aria-label="Back"
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 12,
+              border: `1px solid ${T.border.default}`,
+              background: T.bg.elevated,
+              color: T.text.secondary,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <ArrowLeft size={16} strokeWidth={2.2} />
+          </button>
+        </div>
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 2,
+            padding: "0 12px",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 9,
+              fontWeight: 800,
+              color: T.text.dim,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              fontFamily: T.font.mono,
+              lineHeight: 1.1,
+            }}
+          >
+            Financial Check-In
+          </div>
+          <div
+            style={{
+              fontSize: 17,
+              fontWeight: 850,
+              color: T.text.primary,
+              letterSpacing: "-0.02em",
+              lineHeight: 1.1,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              maxWidth: "100%",
+            }}
+          >
+            Weekly Audit
+          </div>
+        </div>
+        <div style={{ width: 44, minWidth: 44 }} />
+      </header>
+
+      <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column", gap: 12, paddingTop: 12 }}>
       <div
         style={{
           display: "flex",
@@ -710,62 +798,42 @@ export default function InputForm({
             paddingBottom: 2,
           }}
         >
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 12, minWidth: 0 }}>
-            <button
-              onClick={() => {
-                haptic.light();
-                onBack();
-              }}
-              aria-label="Back"
+          <div style={{ minWidth: 0 }}>
+            <div
               style={{
-                width: 44,
-                height: 44,
-                borderRadius: 16,
-                border: `1px solid ${T.border.subtle}`,
-                background: T.bg.elevated,
-                color: T.text.primary,
-                flexShrink: 0,
+                fontSize: 10,
+                fontWeight: 800,
+                color: T.text.dim,
+                fontFamily: T.font.mono,
+                letterSpacing: "0.08em",
+                marginBottom: 4,
               }}
             >
-              <ArrowLeft size={18} strokeWidth={2.4} />
-            </button>
-            <div style={{ minWidth: 0 }}>
-              <div
-                style={{
-                  fontSize: 10,
-                  fontWeight: 800,
-                  color: T.text.dim,
-                  fontFamily: T.font.mono,
-                  letterSpacing: "0.08em",
-                  marginBottom: 4,
-                }}
-              >
-                WEEKLY AUDIT
-              </div>
-              <h1
-                style={{
-                  margin: 0,
-                  fontSize: 28,
-                  lineHeight: 1.05,
-                  letterSpacing: "-0.03em",
-                  color: T.text.primary,
-                  fontWeight: 900,
-                }}
-              >
-                Prepare Weekly Audit
-              </h1>
-              <p
-                style={{
-                  margin: "8px 0 0 0",
-                  fontSize: 13,
-                  lineHeight: 1.55,
-                  color: T.text.secondary,
-                  maxWidth: 500,
-                }}
-              >
-                Refresh the accounts that matter this week and give the audit the context it needs to produce a credible plan.
-              </p>
+              WEEKLY AUDIT
             </div>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 28,
+                lineHeight: 1.05,
+                letterSpacing: "-0.03em",
+                color: T.text.primary,
+                fontWeight: 900,
+              }}
+            >
+              Prepare Weekly Audit
+            </h1>
+            <p
+              style={{
+                margin: "8px 0 0 0",
+                fontSize: 13,
+                lineHeight: 1.55,
+                color: T.text.secondary,
+                maxWidth: 500,
+              }}
+            >
+              Refresh the accounts that matter this week and give the audit the context it needs to produce a credible plan.
+            </p>
           </div>
         </div>
         <div

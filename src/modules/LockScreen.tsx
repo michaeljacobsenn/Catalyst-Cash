@@ -1,6 +1,6 @@
   import { Capacitor } from "@capacitor/core";
   import { useEffect,useRef,useState } from "react";
-  import { beginBiometricInteraction,endBiometricInteraction } from "./biometricSession.js";
+  import { beginBiometricInteraction,canAttemptDeviceAuthentication,endBiometricInteraction,withBiometricPromptTimeout } from "./biometricSession.js";
   import { T } from "./constants.js";
   import { useSecurity } from "./contexts/SecurityContext.js";
   import { haptic } from "./haptics.js";
@@ -12,7 +12,7 @@ export async function isBiometricAvailable() {
   if (Capacitor.getPlatform() === "web") return false;
   try {
     const result = await FaceId.isAvailable();
-    return result.isAvailable;
+    return canAttemptDeviceAuthentication(result);
   } catch {
     return false;
   }
@@ -32,6 +32,7 @@ export async function authenticateBiometric() {
 
 const PIN_MAX_ATTEMPTS = 5;
 const PIN_LOCKOUT_SECS = 30;
+const LOCK_SCREEN_BIOMETRIC_TIMEOUT_MS = 12000;
 
 export default function LockScreen() {
   const { appPasscode, useFaceId, setIsLocked } = useSecurity();
@@ -61,6 +62,7 @@ export default function LockScreen() {
 
   const isLockedOut = lockoutUntil > Date.now();
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasAutoTriggeredRef = useRef(false);
 
   const showError = (msg: string) => {
     setStatus("error");
@@ -76,6 +78,7 @@ export default function LockScreen() {
   };
 
   const tryDeviceAuth = async () => {
+    if (isLockedOut || status === "authenticating" || status === "unlocked") return;
     if (Capacitor.getPlatform() === "web") {
       onUnlock();
       return;
@@ -84,7 +87,7 @@ export default function LockScreen() {
     beginBiometricInteraction();
     try {
       const availability = await FaceId.isAvailable();
-      if (!availability?.isAvailable) {
+      if (!canAttemptDeviceAuthentication(availability)) {
         setShowPinPad(true);
         setStatus("locked");
         setErrorMsg("Face ID unavailable — use PIN");
@@ -96,16 +99,21 @@ export default function LockScreen() {
         }, 2000);
         return;
       }
-      await FaceId.authenticate({ reason: "Unlock Catalyst Cash" });
+      await withBiometricPromptTimeout(
+        () => FaceId.authenticate({ reason: "Unlock Catalyst Cash" }),
+        {
+          timeoutMs: LOCK_SCREEN_BIOMETRIC_TIMEOUT_MS,
+          timeoutMessage: "Face ID took too long to respond",
+        }
+      );
       setStatus("unlocked");
       haptic.success();
       setTimeout(onUnlock, 300);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       void log.warn("security", "Biometric authentication failed", { message });
-      // Fall back to custom PIN Pad on cancellation or failure
       setShowPinPad(true);
-      setStatus("locked");
+      showError(message.includes("too long") ? "Face ID timed out — use PIN" : "Face ID unavailable — use PIN");
     } finally {
       endBiometricInteraction();
     }
@@ -147,8 +155,10 @@ export default function LockScreen() {
   // Auto-trigger native auth on mount
   useEffect(() => {
     if (Capacitor.getPlatform() !== "web" && useFaceId) {
+      if (hasAutoTriggeredRef.current) return;
+      hasAutoTriggeredRef.current = true;
       const timer = setTimeout(() => {
-        tryDeviceAuth();
+        void tryDeviceAuth();
       }, 600);
       return () => clearTimeout(timer);
     } else if (!useFaceId) {

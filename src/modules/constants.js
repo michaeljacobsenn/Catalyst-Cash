@@ -67,18 +67,18 @@ export const DARK_TOKENS = {
 
 export const LIGHT_TOKENS = {
   bg: {
-    base: "#F4F6FA",
+    base: "#F6F8FC",
     card: "#FFFFFF",
-    elevated: "#FBFCFE",
-    surface: "#EEF3FA",
-    hover: "rgba(109, 142, 217, 0.06)",
-    glass: "rgba(255,255,255,0.90)",
-    navGlass: "rgba(244,246,250,0.94)",
+    elevated: "#F9FBFE",
+    surface: "#F1F5FB",
+    hover: "rgba(94,121,201,0.05)",
+    glass: "rgba(255,255,255,0.82)",
+    navGlass: "rgba(247,249,252,0.90)",
   },
   border: {
-    subtle: "rgba(108, 124, 154, 0.08)",
-    default: "rgba(108, 124, 154, 0.14)",
-    focus: "rgba(109, 142, 217, 0.24)",
+    subtle: "rgba(108, 124, 154, 0.10)",
+    default: "rgba(108, 124, 154, 0.17)",
+    focus: "rgba(94,121,201,0.24)",
     glow: "rgba(109, 142, 217, 0.08)",
   },
   text: {
@@ -114,11 +114,11 @@ export const LIGHT_TOKENS = {
     purpleDim: "rgba(123,105,216,0.08)",
   },
   shadow: {
-    sm: "0 1px 2px rgba(31,41,55,0.06)",
-    card: "0 10px 28px rgba(31,41,55,0.05), 0 2px 6px rgba(31,41,55,0.03)",
-    elevated: "0 18px 48px rgba(31,41,55,0.08), 0 6px 16px rgba(31,41,55,0.05)",
+    sm: "0 1px 2px rgba(15,23,42,0.05)",
+    card: "0 14px 34px rgba(148,163,184,0.18), 0 3px 10px rgba(15,23,42,0.05)",
+    elevated: "0 22px 52px rgba(148,163,184,0.20), 0 8px 18px rgba(15,23,42,0.06)",
     glow: "0 0 24px rgba(94,121,201,0.08)",
-    navBtn: "0 4px 16px rgba(31,41,55,0.08), 0 2px 6px rgba(31,41,55,0.04)",
+    navBtn: "0 12px 28px rgba(148,163,184,0.18), 0 3px 8px rgba(15,23,42,0.05)",
   },
 };
 
