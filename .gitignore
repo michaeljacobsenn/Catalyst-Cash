@@ -2,6 +2,8 @@
 node_modules/
 dist/
 .wrangler/
+build/
+output/
 
 # ── iOS Build Artifacts ──
 ios/App/Pods/
@@ -75,6 +77,8 @@ refactor_card_portfolio.py
 
 .vite/
 test-results/
+playwright-report/
+coverage/
 
 # Private prompt modules
 src/modules/*Prompts*.js
@@ -99,6 +103,11 @@ wrangler.secrets.json
 ios/App/App/*.mobileprovision
 ios/App/App/*.p12
 ios/App/*.xcarchive/
+*.xcresult
+DerivedData/
+*.ipa
+*.apk
+*.aab
 
 # ── Security: Keystores & Databases ──
 *.keystore
