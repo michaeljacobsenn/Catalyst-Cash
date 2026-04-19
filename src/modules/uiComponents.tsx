@@ -22,6 +22,7 @@ export const ViewToggle = ({ options, active, onChange, style, variant = "pill" 
         return (
           <button
             key={opt.id}
+            type="button"
             onClick={() => {
               if (!isActive) {
                 haptic.selection();
@@ -38,7 +39,7 @@ export const ViewToggle = ({ options, active, onChange, style, variant = "pill" 
               fontWeight: isActive ? 800 : (isUnderline ? 650 : 600),
               fontSize: 13,
               cursor: "pointer",
-              transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+              transition: "background 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
               boxShadow: isUnderline ? "none" : (isActive ? "0 2px 8px rgba(0,0,0,0.2)" : "none"),
               letterSpacing: isUnderline ? "0.015em" : "normal",
             }}
@@ -58,7 +59,7 @@ export const ViewToggle = ({ options, active, onChange, style, variant = "pill" 
                   borderRadius: 999,
                   background: isActive ? `linear-gradient(90deg, ${T.accent.primary}, ${T.accent.emerald})` : "transparent",
                   boxShadow: isActive ? `0 0 14px ${T.accent.primary}40` : "none",
-                  transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                  transition: "width 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
                 }}
               />
             ) : null}

@@ -154,6 +154,7 @@ export function PassphraseModal({
   onConfirm,
 }: PassphraseModalProps) {
   if (!open) return null;
+  const shouldAutoFocus = typeof window !== "undefined" && Boolean(window.matchMedia?.("(pointer:fine)").matches);
   return (
     <div
       style={{
@@ -192,7 +193,7 @@ export function PassphraseModal({
         >
           <input
             type="password"
-            autoFocus
+            autoFocus={shouldAutoFocus}
             placeholder="Passphrase"
             aria-label="Backup passphrase"
             autoComplete={mode === "export" ? "new-password" : "current-password"}
@@ -233,7 +234,7 @@ export function PassphraseModal({
               Cancel
             </button>
             <button
-              onClick={onConfirm}
+              type="submit"
               disabled={!value}
               style={{
                 flex: 1,

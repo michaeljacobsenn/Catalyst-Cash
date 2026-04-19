@@ -129,7 +129,7 @@ export default function CustomSelect({
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
-          transition: "all .2s ease",
+          transition: "border-color .2s ease, background .2s ease, box-shadow .2s ease, color .2s ease",
           boxShadow: isOpen ? `0 0 0 3px ${T.accent.primaryDim}, 0 8px 18px rgba(0,0,0,0.18)` : `inset 0 1px 0 rgba(255,255,255,0.03)`,
           transform: "translateZ(0)",
           backfaceVisibility: "hidden",
@@ -242,6 +242,7 @@ export default function CustomSelect({
 function OptionItem({ option, isSelected, onSelect }: OptionItemProps) {
   return (
     <button
+      type="button"
       role="option"
       aria-selected={isSelected}
       onClick={onSelect}

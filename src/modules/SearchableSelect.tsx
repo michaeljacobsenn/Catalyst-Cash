@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════════
 
   import type { ChangeEvent,CSSProperties,MouseEvent as ReactMouseEvent } from "react";
-  import { useCallback,useEffect,useMemo,useRef,useState } from "react";
+  import { useCallback,useEffect,useId,useMemo,useRef,useState } from "react";
   import { createPortal } from "react-dom";
   import { T } from "./constants.js";
 
@@ -48,6 +48,7 @@ export default function SearchableSelect({
   const ref = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0, flip: false });
+  const dropdownId = useId();
 
   // Calculate dropdown position from trigger rect
   const calcPosition = useCallback(() => {
@@ -133,6 +134,8 @@ export default function SearchableSelect({
     <button
       key={o.value}
       type="button"
+      role="option"
+      aria-selected={o.value === value}
       onClick={() => {
         onChange(o.value);
         setOpen(false);
@@ -197,8 +200,18 @@ export default function SearchableSelect({
           >
             <input
               ref={inputRef}
+              type="search"
+              inputMode="search"
+              aria-label="Filter options"
               value={query}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setOpen(false);
+                  setQuery("");
+                }
+              }}
               placeholder="Type to search…"
               style={{
                 width: "100%",
@@ -216,7 +229,7 @@ export default function SearchableSelect({
           </div>
 
           {/* Options list */}
-          <div style={{ maxHeight, overflowY: "auto", padding: "6px 0", order: dropPos.flip ? 1 : 1 }}>
+          <div id={dropdownId} role="listbox" style={{ maxHeight, overflowY: "auto", padding: "6px 0", order: dropPos.flip ? 1 : 1 }}>
             {filtered.length === 0 && (
               <div style={{ padding: "12px 14px", fontSize: 11, color: T.text.muted, textAlign: "center" }}>
                 No results found
@@ -254,9 +267,22 @@ export default function SearchableSelect({
       {/* Trigger */}
       <button
         type="button"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-controls={open ? dropdownId : undefined}
         onClick={() => {
           setOpen(!open);
           setQuery("");
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            setOpen(true);
+          }
+          if (e.key === "Escape") {
+            setOpen(false);
+            setQuery("");
+          }
         }}
       style={{
           width: "100%",

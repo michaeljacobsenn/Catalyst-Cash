@@ -121,6 +121,9 @@ export const getTracking = (fontSize: number, weight: FontWeight = "regular") =>
 
 export const GlobalStyles = () => {
   const isLightMode = T._mode === "light";
+  const appShellBackground = isLightMode
+    ? `radial-gradient(circle at top left, rgba(94,121,201,0.12), transparent 34%), radial-gradient(circle at top right, rgba(41,149,106,0.10), transparent 30%), linear-gradient(180deg, #FBFCFE 0%, ${T.bg.base} 42%, #EEF3F9 100%)`
+    : `radial-gradient(circle at top left, rgba(109,142,217,0.16), transparent 32%), radial-gradient(circle at top right, rgba(79,188,140,0.12), transparent 28%), linear-gradient(180deg, #050911 0%, ${T.bg.base} 44%, #0B1320 100%)`;
   const inputShadow = isLightMode
     ? "inset 0 1px 0 rgba(255,255,255,0.92), 0 8px 22px rgba(148,163,184,0.12)"
     : "inset 0 1px 0 rgba(255,255,255,0.03), 0 4px 12px rgba(0,0,0,0.08)";
@@ -131,7 +134,7 @@ export const GlobalStyles = () => {
   return (
   <style>{`
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    html,body,#root{height:100dvh;height:100vh;background:var(--cc-bg-base, ${T.bg.base});font-family:${T.font.sans};color:${T.text.primary};-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow:hidden;-webkit-text-size-adjust:100%}
+    html,body,#root{height:100dvh;height:100vh;background:${appShellBackground};background-attachment:fixed;font-family:${T.font.sans};color:${T.text.primary};-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow:hidden;-webkit-text-size-adjust:100%}
     html[data-theme-switching="true"],html[data-theme-switching="true"] body{background:var(--cc-bg-base, ${T.bg.base}) !important}
     html[data-theme-switching="true"] *,html[data-theme-switching="true"] *::before,html[data-theme-switching="true"] *::after{
       transition:none !important;
@@ -674,7 +677,7 @@ export const ListRow = ({ icon, title, description, value, action, onClick, styl
 
   if (onClick) {
     return (
-      <button className="settings-row hover-btn" onClick={onClick} style={rowStyle}>
+      <button type="button" className="settings-row hover-btn" onClick={onClick} style={rowStyle}>
         {content}
       </button>
     );
@@ -874,7 +877,7 @@ export function FormRow({ icon: Icon, label, children, isLast = false, onClick, 
 
   if (onClick) {
     return (
-      <button className="hover-btn" onClick={onClick} style={rowStyle}>
+      <button type="button" className="hover-btn" onClick={onClick} style={rowStyle}>
         {inner}
       </button>
     );

@@ -36,7 +36,7 @@ const BootFallback = () => (
       textTransform: "uppercase",
     }}
   >
-    Loading Catalyst Cash...
+    Loading Catalyst Cash…
   </div>
 );
 

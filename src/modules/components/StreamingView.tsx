@@ -87,7 +87,11 @@ export default function StreamingView({
         >
           <img
             src="/icon-192.png"
-            alt="Catalyst Cash Icon"
+            alt="Catalyst Cash icon"
+            width={isReceiving ? 48 : 64}
+            height={isReceiving ? 48 : 64}
+            decoding="async"
+            fetchPriority="high"
             style={{
               width: "100%",
               height: "100%",
@@ -196,7 +200,7 @@ export default function StreamingView({
                 borderColor: showCancelProminent ? T.status.amber : undefined,
                 background: showCancelProminent ? `${T.status.amber}12` : undefined,
                 color: showCancelProminent ? T.status.amber : undefined,
-                transition: "all 0.4s ease",
+                transition: "border-color 0.4s ease, background 0.4s ease, color 0.4s ease",
               }}
             >
               {showCancelProminent ? "Taking too long? Cancel" : "Cancel"}

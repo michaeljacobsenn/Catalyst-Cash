@@ -70,6 +70,7 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
             </div>
           </div>
           <button
+            type="button"
             onClick={() => this.setState({ hasError: false, error: null })}
             style={{
               marginLeft: "auto",
