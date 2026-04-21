@@ -657,8 +657,8 @@ export default memo(function RenewalsTab({
               style={{
                 padding: "16px 16px 14px",
                 borderRadius: 20,
-                border: `1px solid ${T.accent.primary}18`,
-                background: `radial-gradient(circle at top right, ${T.accent.primaryDim}, transparent 38%), linear-gradient(180deg, ${T.bg.surface}, ${T.accent.primary}10)`,
+                border: `1px solid ${T.border.subtle}`,
+                background: `radial-gradient(circle at top right, rgba(255,255,255,0.035), transparent 42%), linear-gradient(180deg, ${T.bg.surface}, rgba(255,255,255,0.015))`,
                 boxShadow: `inset 0 1px 0 rgba(255,255,255,0.025), 0 0 0 1px rgba(0,0,0,0.02)`,
                 display: "grid",
                 gap: 12,
@@ -711,16 +711,16 @@ export default memo(function RenewalsTab({
                     minHeight: isNarrowPhone ? 108 : 116,
                     padding: "16px 16px 14px",
                     borderRadius: 18,
-                    border: `1px solid ${T.accent.primary}20`,
-                    background: `radial-gradient(circle at top right, ${T.accent.primary}18, transparent 48%), linear-gradient(180deg, ${T.bg.card}, ${T.accent.primary}14)`,
+                    border: `1px solid ${T.border.subtle}`,
+                    background: `radial-gradient(circle at top right, rgba(255,255,255,0.03), transparent 46%), linear-gradient(180deg, ${T.bg.card}, rgba(255,255,255,0.018))`,
                     display: "grid",
                     alignContent: "space-between",
                     gap: 10,
                     minWidth: 0,
-                    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.025), 0 10px 20px rgba(0,0,0,0.08)`,
+                    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.025), 0 10px 20px rgba(0,0,0,0.06)`,
                   }}
                 >
-                  <div style={{ fontSize: 10, fontWeight: 800, color: T.accent.primary, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: T.font.mono }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: T.font.mono }}>
                     Monthly
                   </div>
                   <Mono size={isNarrowPhone ? 24 : 31} weight={800} color={T.accent.primary} style={{ lineHeight: 1.02 }}>
@@ -756,9 +756,9 @@ export default memo(function RenewalsTab({
                         minHeight: isNarrowPhone ? 48 : 53,
                         padding: isNarrowPhone ? "10px 12px" : "12px 14px",
                         borderRadius: 18,
-                        border: `1px solid ${metric.accent ? `${T.accent.primary}24` : `${T.text.dim}18`}`,
+                        border: `1px solid ${metric.accent ? `${T.accent.primary}16` : `${T.text.dim}18`}`,
                         background: metric.accent
-                          ? `radial-gradient(circle at top left, ${T.accent.primary}12, transparent 54%), linear-gradient(180deg, ${T.bg.surface}, ${T.accent.primaryDim})`
+                          ? `linear-gradient(180deg, ${T.bg.surface}, rgba(255,255,255,0.02))`
                           : `radial-gradient(circle at top right, rgba(255,255,255,0.025), transparent 58%), linear-gradient(180deg, ${T.bg.surface}, rgba(255,255,255,0.01))`,
                         display: "grid",
                         gap: 4,
@@ -771,7 +771,7 @@ export default memo(function RenewalsTab({
                         style={{
                           fontSize: 10,
                           fontWeight: 800,
-                          color: metric.accent ? T.accent.primary : T.text.secondary,
+                          color: metric.accent ? T.text.secondary : T.text.secondary,
                           textTransform: "uppercase",
                           letterSpacing: "0.08em",
                         }}
