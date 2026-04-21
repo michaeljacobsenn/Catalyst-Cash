@@ -173,7 +173,7 @@ export default memo(function RenewalsTab({
   const { current } = useAudit();
   const portfolioContext = usePortfolio();
   const { navTo } = useNavigation();
-  const { isNarrowPhone, isTablet } = useResponsiveLayout();
+  const { isNarrowPhone } = useResponsiveLayout();
 
   const [negotiateSheet, setNegotiateSheet] = useState<NegotiationSheetState | null>(null);
 
@@ -707,7 +707,7 @@ export default memo(function RenewalsTab({
               >
                 <div
                   style={{
-                    minHeight: 116,
+                    minHeight: isNarrowPhone ? 108 : 116,
                     padding: "16px 16px 14px",
                     borderRadius: 18,
                     border: `1px solid ${T.accent.primary}20`,
@@ -721,7 +721,7 @@ export default memo(function RenewalsTab({
                   <div style={{ fontSize: 10, fontWeight: 800, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: T.font.mono }}>
                     Monthly
                   </div>
-                  <Mono size={isNarrowPhone ? 28 : 31} weight={800} color={T.accent.primary}>
+                  <Mono size={isNarrowPhone ? 24 : 31} weight={800} color={T.accent.primary} style={{ lineHeight: 1.02 }}>
                     {fmt(monthlyTotal)}
                   </Mono>
                   <div style={{ fontSize: 11.5, color: T.text.secondary, lineHeight: 1.4 }}>
@@ -751,8 +751,8 @@ export default memo(function RenewalsTab({
                     <div
                       key={metric.label}
                       style={{
-                        minHeight: 53,
-                        padding: "12px 14px",
+                        minHeight: isNarrowPhone ? 48 : 53,
+                        padding: isNarrowPhone ? "10px 12px" : "12px 14px",
                         borderRadius: 18,
                         border: `1px solid ${metric.accent ? `${T.accent.primary}24` : T.border.subtle}`,
                         background: metric.accent ? `${T.accent.primary}10` : T.bg.surface,
@@ -765,9 +765,19 @@ export default memo(function RenewalsTab({
                       <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                         {metric.label}
                       </div>
-                      <Mono size={metric.accent ? 15 : 14} weight={800} color={metric.accent ? T.accent.primary : T.text.primary}>
-                        {metric.value}
-                      </Mono>
+                      <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+                        <Mono
+                          size={isNarrowPhone ? 13 : metric.accent ? 15 : 14}
+                          weight={800}
+                          color={metric.accent ? T.accent.primary : T.text.primary}
+                          style={{ lineHeight: 1.05, minWidth: 0 }}
+                        >
+                          {metric.accent ? fmt(weeklyRunRate) : fmt(annualRunRate)}
+                        </Mono>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: T.text.dim, whiteSpace: "nowrap", lineHeight: 1.1 }}>
+                          {metric.accent ? "Per week" : "Per year"}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -778,11 +788,7 @@ export default memo(function RenewalsTab({
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: isNarrowPhone
-                ? "minmax(0, 1.18fr) minmax(126px, 0.82fr)"
-                : isTablet
-                  ? "minmax(0, 1.16fr) minmax(220px, 0.84fr)"
-                  : "minmax(0, 1.16fr) minmax(168px, 0.84fr)",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
               gap: 10,
               alignItems: "stretch",
             }}
@@ -794,15 +800,15 @@ export default memo(function RenewalsTab({
                 border: `1px solid ${T.border.subtle}`,
                 background: T.bg.surface,
                 display: "grid",
-                gridTemplateRows: "auto 1fr auto",
+                gridTemplateRows: "auto auto auto",
                 gap: 10,
-                minHeight: 150,
+                minHeight: isNarrowPhone ? 122 : 132,
               }}
             >
               <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 Due next
               </div>
-              <div style={{ fontSize: isNarrowPhone ? 16 : 18, fontWeight: 800, color: T.text.primary, lineHeight: 1.18, alignSelf: "center" }}>
+              <div style={{ fontSize: isNarrowPhone ? 16 : 18, fontWeight: 800, color: T.text.primary, lineHeight: 1.18 }}>
                 {nextDueItem ? nextDueItem.name : "No due date set"}
               </div>
               <div
@@ -810,14 +816,15 @@ export default memo(function RenewalsTab({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  gap: 10,
+                  gap: 8,
                   flexWrap: "wrap",
+                  marginTop: "auto",
                 }}
               >
-                <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.4 }}>
+                <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.35 }}>
                   {nextDueItem
                     ? formatRenewalDueDate(nextDueItem.nextDue)
-                    : "Set a due date to surface the next charge."}
+                    : "Set a due date"}
                 </div>
                 {nextDueItem ? (
                   <div
@@ -846,19 +853,19 @@ export default memo(function RenewalsTab({
                 border: `1px solid ${T.border.subtle}`,
                 background: T.bg.surface,
                 display: "grid",
-                gridTemplateRows: "auto 1fr auto",
+                gridTemplateRows: "auto auto auto",
                 gap: 10,
-                minHeight: 150,
+                minHeight: isNarrowPhone ? 122 : 132,
               }}
             >
               <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 Average item
               </div>
-              <div style={{ fontSize: isNarrowPhone ? 18 : 22, fontWeight: 800, color: T.text.primary, lineHeight: 1.15, alignSelf: "center" }}>
+              <div style={{ fontSize: isNarrowPhone ? 18 : 22, fontWeight: 800, color: T.text.primary, lineHeight: 1.15 }}>
                 {fmt(averageActiveItemMonthly)}
               </div>
-              <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.4 }}>
-                Per month across {activeItemCount || 0} active {activeItemCount === 1 ? "item" : "items"}.
+              <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.35, marginTop: "auto" }}>
+                Per month across {activeItemCount || 0} active items.
               </div>
             </div>
           </div>
