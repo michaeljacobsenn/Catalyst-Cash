@@ -15,7 +15,7 @@ export const PLAN_FACTS = {
     badge: "Included",
     heroTitle: "Build a clean weekly money rhythm.",
     heroBody:
-      "Free gives you the core Catalyst loop: keep your key accounts honest, run a sharp weekly audit, and leave with a short list of next moves.",
+      "Free gives you the core Catalyst loop: load the accounts that shape the week, run a sharp weekly audit, and leave with a short list of next moves.",
     audits: PLAN_DISPLAY.free.audits,
     chats: PLAN_DISPLAY.free.chats,
     models: PLAN_DISPLAY.free.models,
@@ -28,7 +28,7 @@ export const PLAN_FACTS = {
     badge: "Unlocked",
     heroTitle: "Run the full Catalyst operating system.",
     heroBody:
-      "Pro is for people who want up to 8 Plaid institutions, quieter balance and ledger upkeep, deeper AI, and the archive needed to see whether decisions are actually working.",
+      "Pro is for people who want up to 8 Plaid institutions, quieter balance and ledger upkeep, deeper AI, nearby rewards help, and the archive needed to see whether decisions are actually working.",
     audits: PLAN_DISPLAY.pro.audits,
     chats: PLAN_DISPLAY.pro.chats,
     models: PLAN_DISPLAY.pro.models,
@@ -80,6 +80,11 @@ export const FIRST_ACTION_STEPS = [
       "Do not wait for perfect setup. Current cash, debt, and due dates are enough to get a useful first action list.",
   },
   {
+    title: "Use demo mode if you want a guided preview",
+    body:
+      "Demo shows a complete household without overwriting your real setup. It restores your real data when you exit and clears on a full relaunch.",
+  },
+  {
     title: "Come back after paydays and big moves",
     body:
       "Catalyst works best as a weekly operating rhythm, not a once-a-quarter reporting app.",
@@ -103,25 +108,25 @@ export const TAB_GUIDE_CARDS = [
     title: "Cashflow",
     status: "all",
     body:
-      "Use this to stage bills, subscriptions, and the next 30 days so timing problems show up before they hurt.",
+      "Use this to stage bills, subscriptions, and the next 30 days so timing problems show up before they hurt. Tracked recurring items can also seed missing budget lines.",
   },
   {
     title: "AskAI",
     status: "all",
     body:
-      "Use it after the audit for tradeoffs: what to pay first, whether you can afford something, or how a choice changes runway.",
+      "Use it after the audit for tradeoffs: what to pay first, whether you can afford something, or how a choice changes runway. Feedback can shape future answers on-device, and saved chats expire after 24 hours.",
   },
   {
     title: "Portfolio + Ledger",
     status: "all",
     body:
-      "Your source of truth for banks, cards, loans, assets, balances, and the transaction detail behind the weekly picture.",
+      "Your source of truth for banks, cards, loans, assets, balances, and the transaction detail behind the weekly picture. It also explains whether balances are live, cached, or waiting for the next sync.",
   },
   {
     title: "Rewards",
     status: "all",
     body:
-      "Use it at the point of purchase to pick the right card instead of guessing.",
+      "Use it at the point of purchase to pick the right card instead of guessing. Search a merchant, use Nearby when several stores are close, and review missed rewards before you pay.",
   },
   {
     title: "History",
@@ -139,7 +144,7 @@ export const TAB_GUIDE_CARDS = [
     title: "Settings",
     status: "all",
     body:
-      "Control security, backup, restore, Plaid, AI behavior, and the deletion tools that keep you in charge.",
+      "Control security, auto-backup, encrypted restore, Plaid, AI behavior, demo reset, and the deletion tools that keep you in charge.",
   },
 ];
 
@@ -157,7 +162,7 @@ export const WORKFLOW_STEPS = [
   {
     title: "Open the tool that resolves the bottleneck",
     body:
-      "Use AskAI for tradeoffs, Cashflow for timing, Renewals for recurring waste, and Ledger for cleanup.",
+      "Use AskAI for tradeoffs, Cashflow for timing, Rewards for card choice, Renewals for recurring waste, and Ledger for cleanup.",
   },
   {
     title: "Record the truth after you act",
@@ -233,7 +238,13 @@ export const PRIVACY_CARDS = [
     title: "Backup and restore",
     status: "split",
     body:
-      "Encrypted export and restore are built in. iCloud and household sync depend on secure native device storage.",
+      "Auto-Backup and encrypted export are built in. Household Cloud and Recovery Vault are there when you want more continuity across devices.",
+  },
+  {
+    title: "Demo mode stays isolated",
+    status: "all",
+    body:
+      "Demo scenarios temporarily swap in sample finances, restore your real setup when you exit, and clear on a full relaunch.",
   },
   {
     title: "You stay in control",
@@ -299,6 +310,26 @@ export const COMMON_QUESTIONS = [
     question: "Do I need Plaid to get value?",
     answer:
       "No. Manual entry works. Plaid mainly saves time and keeps balances and ledger data fresher in the background, which matters more as your account set grows.",
+  },
+  {
+    question: "Can Rewards help when several nearby stores could match my location?",
+    answer:
+      "Yes. Nearby suggestions are designed for dense areas like malls and plazas, so you can choose the exact merchant near you before Catalyst ranks the best card.",
+  },
+  {
+    question: "Do Bills and Budget work together?",
+    answer:
+      "Yes. Tracked recurring items in Bills can seed missing budget lines so your plan starts from real obligations instead of a blank spreadsheet.",
+  },
+  {
+    question: "Which backup option should I use first?",
+    answer:
+      "Start with Auto-Backup if you want the default hands-off option. Use encrypted export when you want a manual backup file. Household Cloud and Recovery Vault are stronger continuity tools when you want cross-device recovery.",
+  },
+  {
+    question: "Will demo mode overwrite my real setup?",
+    answer:
+      "No. Demo mode snapshots your real data first, swaps in sample finances temporarily, restores your real setup when you exit, and clears on a full relaunch.",
   },
   {
     question: "Is the output financial advice?",
