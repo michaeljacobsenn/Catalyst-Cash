@@ -658,7 +658,8 @@ export default memo(function RenewalsTab({
                 padding: "16px 16px 14px",
                 borderRadius: 20,
                 border: `1px solid ${T.accent.primary}18`,
-                background: `linear-gradient(180deg, ${T.bg.surface}, ${T.accent.primary}10)`,
+                background: `radial-gradient(circle at top right, ${T.accent.primaryDim}, transparent 38%), linear-gradient(180deg, ${T.bg.surface}, ${T.accent.primary}10)`,
+                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.025), 0 0 0 1px rgba(0,0,0,0.02)`,
                 display: "grid",
                 gap: 12,
                 minWidth: 0,
@@ -711,14 +712,15 @@ export default memo(function RenewalsTab({
                     padding: "16px 16px 14px",
                     borderRadius: 18,
                     border: `1px solid ${T.accent.primary}20`,
-                    background: `linear-gradient(180deg, ${T.bg.card}, ${T.accent.primary}12)`,
+                    background: `radial-gradient(circle at top right, ${T.accent.primary}18, transparent 48%), linear-gradient(180deg, ${T.bg.card}, ${T.accent.primary}14)`,
                     display: "grid",
                     alignContent: "space-between",
                     gap: 10,
                     minWidth: 0,
+                    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.025), 0 10px 20px rgba(0,0,0,0.08)`,
                   }}
                 >
-                  <div style={{ fontSize: 10, fontWeight: 800, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: T.font.mono }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: T.accent.primary, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: T.font.mono }}>
                     Monthly
                   </div>
                   <Mono size={isNarrowPhone ? 24 : 31} weight={800} color={T.accent.primary} style={{ lineHeight: 1.02 }}>
@@ -754,15 +756,26 @@ export default memo(function RenewalsTab({
                         minHeight: isNarrowPhone ? 48 : 53,
                         padding: isNarrowPhone ? "10px 12px" : "12px 14px",
                         borderRadius: 18,
-                        border: `1px solid ${metric.accent ? `${T.accent.primary}24` : T.border.subtle}`,
-                        background: metric.accent ? `${T.accent.primary}10` : T.bg.surface,
+                        border: `1px solid ${metric.accent ? `${T.accent.primary}24` : `${T.text.dim}18`}`,
+                        background: metric.accent
+                          ? `radial-gradient(circle at top left, ${T.accent.primary}12, transparent 54%), linear-gradient(180deg, ${T.bg.surface}, ${T.accent.primaryDim})`
+                          : `radial-gradient(circle at top right, rgba(255,255,255,0.025), transparent 58%), linear-gradient(180deg, ${T.bg.surface}, rgba(255,255,255,0.01))`,
                         display: "grid",
                         gap: 4,
                         alignContent: "center",
                         minWidth: 0,
+                        boxShadow: metric.accent ? `inset 0 1px 0 rgba(255,255,255,0.02)` : undefined,
                       }}
                     >
-                      <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      <div
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 800,
+                          color: metric.accent ? T.accent.primary : T.text.secondary,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.08em",
+                        }}
+                      >
                         {metric.label}
                       </div>
                       <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
@@ -797,15 +810,16 @@ export default memo(function RenewalsTab({
               style={{
                 padding: "14px 14px 13px",
                 borderRadius: 18,
-                border: `1px solid ${T.border.subtle}`,
-                background: T.bg.surface,
+                border: `1px solid ${T.status.amber}24`,
+                background: `radial-gradient(circle at top right, ${T.status.amber}14, transparent 46%), linear-gradient(180deg, ${T.bg.surface}, ${T.status.amberDim})`,
+                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.02), 0 0 0 1px rgba(0,0,0,0.02)`,
                 display: "grid",
                 gridTemplateRows: "auto auto auto",
                 gap: 10,
                 minHeight: isNarrowPhone ? 122 : 132,
               }}
             >
-              <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: T.status.amber, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 Due next
               </div>
               <div style={{ fontSize: isNarrowPhone ? 16 : 18, fontWeight: 800, color: T.text.primary, lineHeight: 1.18 }}>
@@ -821,28 +835,44 @@ export default memo(function RenewalsTab({
                   marginTop: "auto",
                 }}
               >
-                <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.35 }}>
-                  {nextDueItem
-                    ? formatRenewalDueDate(nextDueItem.nextDue)
-                    : "Set a due date"}
-                </div>
                 {nextDueItem ? (
-                  <div
-                    style={{
-                      minHeight: 28,
-                      padding: "0 10px",
-                      borderRadius: 999,
-                      border: `1px solid ${T.accent.primary}24`,
-                      background: `${T.accent.primary}10`,
-                      display: "inline-flex",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Mono size={11.5} weight={800} color={T.accent.primary}>
-                      {fmt(nextDueItem.amount || 0)}
-                    </Mono>
+                  <>
+                    <div
+                      style={{
+                        minHeight: 28,
+                        padding: "0 10px",
+                        borderRadius: 999,
+                        border: `1px solid ${T.status.amber}20`,
+                        background: `rgba(212, 161, 95, 0.08)`,
+                        display: "inline-flex",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span style={{ fontSize: 11.5, fontWeight: 800, color: T.status.amber, lineHeight: 1 }}>
+                        {formatRenewalDueDate(nextDueItem.nextDue)}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        minHeight: 28,
+                        padding: "0 10px",
+                        borderRadius: 999,
+                        border: `1px solid ${T.status.amber}28`,
+                        background: `${T.status.amberDim}`,
+                        display: "inline-flex",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Mono size={11.5} weight={800} color={T.status.amber}>
+                        {fmt(nextDueItem.amount || 0)}
+                      </Mono>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.35 }}>
+                    Set a due date
                   </div>
-                ) : null}
+                )}
               </div>
             </div>
 
@@ -850,22 +880,40 @@ export default memo(function RenewalsTab({
               style={{
                 padding: "14px 14px 13px",
                 borderRadius: 18,
-                border: `1px solid ${T.border.subtle}`,
-                background: T.bg.surface,
+                border: `1px solid ${T.status.green}24`,
+                background: `radial-gradient(circle at top right, ${T.status.green}14, transparent 46%), linear-gradient(180deg, ${T.bg.surface}, ${T.status.greenDim})`,
+                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.02), 0 0 0 1px rgba(0,0,0,0.02)`,
                 display: "grid",
                 gridTemplateRows: "auto auto auto",
                 gap: 10,
                 minHeight: isNarrowPhone ? 122 : 132,
               }}
             >
-              <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: T.status.green, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 Average item
               </div>
-              <div style={{ fontSize: isNarrowPhone ? 18 : 22, fontWeight: 800, color: T.text.primary, lineHeight: 1.15 }}>
+              <div style={{ fontSize: isNarrowPhone ? 18 : 22, fontWeight: 800, color: T.status.green, lineHeight: 1.15 }}>
                 {fmt(averageActiveItemMonthly)}
               </div>
-              <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.35, marginTop: "auto" }}>
-                Per month across {activeItemCount || 0} active items.
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: "auto" }}>
+                <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.35 }}>
+                  Per month across {activeItemCount || 0} active items.
+                </div>
+                <div
+                  style={{
+                    minHeight: 26,
+                    padding: "0 9px",
+                    borderRadius: 999,
+                    border: `1px solid ${T.status.green}22`,
+                    background: `${T.status.greenDim}`,
+                    display: "inline-flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <span style={{ fontSize: 10.5, fontWeight: 800, color: T.status.green, lineHeight: 1 }}>
+                    Baseline
+                  </span>
+                </div>
               </div>
             </div>
           </div>
