@@ -400,7 +400,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
         <div style={{ paddingTop: 6, paddingBottom: 12, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 12, minWidth: 0 }}>
             <button type="button"
-              onClick={() => navTo("dashboard")}
+              onClick={() => navTo("audit")}
               aria-label="Back"
               style={{
                 width: 44,
