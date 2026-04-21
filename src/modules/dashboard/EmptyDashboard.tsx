@@ -99,7 +99,7 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
   const heroBody = setupComplete
     ? "You already connected the inputs that matter. Refresh your audit to generate a health score, next action, and cash guidance from your real setup."
     : "Start with one audit. You can add bank sync, subscriptions, and extra detail afterward without losing momentum.";
-  const primaryCtaLabel = setupComplete ? "Refresh audit" : "Begin first audit";
+  const primaryCtaLabel = setupComplete ? "Refresh Audit" : "Start First Audit";
 
   return (
     <main aria-label="Empty dashboard" style={{ width: "100%" }}>
@@ -255,10 +255,12 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
           <div>
             <Label style={{ margin: 0, textTransform: "none", fontSize: 14 }}>
-              {setupComplete ? "Connected inputs" : "Suggested setup"}
+              {setupComplete ? "Connected Inputs" : "Suggested Setup"}
             </Label>
             <div style={{ fontSize: 11, color: T.text.dim, marginTop: 2 }}>
-              {setupComplete ? "You already added the core context that sharpens your weekly briefing." : "Finish the core context that improves your weekly briefing quality"}
+              {setupComplete
+                ? "Your core inputs are already in place for a sharper weekly audit."
+                : "Finish these core inputs to unlock a sharper weekly audit."}
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -337,7 +339,7 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
 
       {(hasConnectedAccounts || hasRenewals) && (
         <Card animate delay={400} style={{ marginBottom: 14, padding: "14px 16px" }}>
-          <Label>Connected data</Label>
+          <Label>Connected Data</Label>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <div style={{ padding: "12px", background: T.bg.elevated, borderRadius: T.radius.md, border: `1px solid ${T.border.subtle}` }}>
               <div style={{ fontSize: 10, color: T.text.dim, fontWeight: 700 }}>ACCOUNTS</div>

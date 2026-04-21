@@ -164,6 +164,25 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
 
     if (enabledInvestments.length === 0) return null;
 
+    const inclusionPillStyle = (activeColor: string, excluded = false) => ({
+        minWidth: 68,
+        height: 22,
+        borderRadius: 999,
+        border: `1px solid ${excluded ? `${T.status.amber}48` : `${activeColor}32`}`,
+        background: excluded ? `${T.status.amber}12` : `${activeColor}10`,
+        color: excluded ? T.status.amber : activeColor,
+        cursor: "pointer",
+        fontSize: 8.5,
+        fontWeight: 800,
+        letterSpacing: "0.04em",
+        textTransform: "uppercase" as const,
+        padding: "0 8px",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        whiteSpace: "nowrap" as const,
+    });
+
     return (
         <div
             style={{
@@ -320,7 +339,7 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                 variant="outline"
                                                 style={{ fontSize: 8, color: T.status.amber, borderColor: `${T.status.amber}45`, padding: "1px 5px" }}
                                             >
-                                                {excludedSourceCount} excluded
+                                                {excludedSourceCount} Excluded
                                             </Badge>
                                         )}
                                     </div>
@@ -374,10 +393,11 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                     <div
                                                         key={pi.id}
                                                         style={{
-                                                            display: "flex",
-                                                            justifyContent: "space-between",
+                                                            display: "grid",
+                                                            gridTemplateColumns: "minmax(0, 1fr) auto",
                                                             alignItems: "center",
-                                                            padding: "6px 0",
+                                                            gap: 10,
+                                                            padding: "8px 0",
                                                             borderBottom: `1px solid ${T.border.subtle}`,
                                                             opacity: isExcluded ? 0.58 : 1,
                                                         }}
@@ -404,20 +424,15 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                                 </span>
                                                             </div>
                                                         </div>
-                                                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                                            <Mono size={11} weight={800} color={color}>
-                                                                {fmt(pi._plaidBalance)}
-                                                            </Mono>
-                                                            <div
-                                                                style={{
-                                                                    width: 5,
-                                                                    height: 5,
-                                                                    borderRadius: "50%",
-                                                                    background: T.status.green,
-                                                                    boxShadow: `0 0 4px ${T.status.green}`,
-                                                                }}
-                                                                title="Synced with Plaid"
-                                                            />
+                                                        <div style={{ display: "grid", justifyItems: "end", gap: 4 }}>
+                                                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                                                                <Mono size={11} weight={800} color={color}>
+                                                                    {fmt(pi._plaidBalance)}
+                                                                </Mono>
+                                                                <span style={{ fontSize: 8.5, color: T.status.green, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase" }}>
+                                                                    Live
+                                                                </span>
+                                                            </div>
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => {
@@ -427,20 +442,7 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                                         setInvestmentSourceExcluded(prev, sourceId, !isExcluded) as CatalystCashConfig
                                                                     );
                                                                 }}
-                                                                style={{
-                                                                    minWidth: 74,
-                                                                    height: 24,
-                                                                    borderRadius: 999,
-                                                                    border: `1px solid ${isExcluded ? `${T.status.amber}55` : `${color}38`}`,
-                                                                    background: isExcluded ? `${T.status.amber}12` : `${color}10`,
-                                                                    color: isExcluded ? T.status.amber : color,
-                                                                    cursor: "pointer",
-                                                                    fontSize: 9,
-                                                                    fontWeight: 800,
-                                                                    letterSpacing: "0.04em",
-                                                                    textTransform: "uppercase",
-                                                                    padding: "0 8px",
-                                                                }}
+                                                                style={inclusionPillStyle(color, isExcluded)}
                                                             >
                                                                 {isExcluded ? "Excluded" : "Counted"}
                                                             </button>
@@ -464,9 +466,10 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                             style={{
                                                                 display: "flex",
                                                                 justifyContent: "space-between",
-                                                                alignItems: "flex-start",
+                                                                alignItems: "center",
                                                                 gap: 12,
                                                                 marginBottom: 6,
+                                                                flexWrap: "wrap",
                                                             }}
                                                         >
                                                             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -480,11 +483,11 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                                     {sortedManualItems.length} {sortedManualItems.length === 1 ? "holding" : "holdings"} · {manualExcludedCount} excluded
                                                                 </span>
                                                             </div>
-                                                            <div style={{ textAlign: "right" }}>
+                                                            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginLeft: "auto" }}>
                                                                 <Mono size={11} weight={800} color={color}>
                                                                     {fmt(manualValue)}
                                                                 </Mono>
-                                                                <div style={{ fontSize: 9, color: T.text.dim, marginTop: 2 }}>
+                                                                <div style={{ fontSize: 9, color: T.text.dim }}>
                                                                     Included manual total
                                                                 </div>
                                                             </div>
@@ -505,9 +508,10 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                             >
                                                                 <div
                                                                     style={{
-                                                                        display: "flex",
-                                                                        justifyContent: "space-between",
+                                                                        display: "grid",
+                                                                        gridTemplateColumns: "minmax(0, 1fr) auto",
                                                                         alignItems: "center",
+                                                                        gap: 10,
                                                                         padding: "8px 4px",
                                                                     }}
                                                                 >
@@ -519,8 +523,8 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                                             {key === "crypto" ? `${h.shares} units` : `${h.shares} sh`}
                                                                         </span>
                                                                     </div>
-                                                                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                                                        <div style={{ textAlign: "right" }}>
+                                                                    <div style={{ display: "grid", justifyItems: "end", gap: 4 }}>
+                                                                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                                                                             {price ? (
                                                                                 <>
                                                                                     <Mono size={11} weight={700} color={color}>
@@ -547,66 +551,55 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                                                 </Mono>
                                                                             )}
                                                                         </div>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={(e) => {
-                                                                                e.preventDefault();
-                                                                                e.stopPropagation();
-                                                                                setFinancialConfig((prev: CatalystCashConfig) =>
-                                                                                    setInvestmentSourceExcluded(prev, sourceId, !holdingExcluded) as CatalystCashConfig
-                                                                                );
-                                                                            }}
-                                                                            style={{
-                                                                                minWidth: 74,
-                                                                                height: 24,
-                                                                                borderRadius: 999,
-                                                                                border: `1px solid ${holdingExcluded ? `${T.status.amber}55` : `${color}38`}`,
-                                                                                background: holdingExcluded ? `${T.status.amber}12` : `${color}10`,
-                                                                                color: holdingExcluded ? T.status.amber : color,
-                                                                                cursor: "pointer",
-                                                                                fontSize: 9,
-                                                                                fontWeight: 800,
-                                                                                letterSpacing: "0.04em",
-                                                                                textTransform: "uppercase",
-                                                                                padding: "0 8px",
-                                                                            }}
-                                                                        >
-                                                                            {holdingExcluded ? "Excluded" : "Counted"}
-                                                                        </button>
-                                                                        {setFinancialConfig && (
-                                                                            <button type="button"
+                                                                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                                                            <button
+                                                                                type="button"
                                                                                 onClick={(e) => {
                                                                                     e.preventDefault();
                                                                                     e.stopPropagation();
-                                                                                    if (window.confirm(`Delete ${h.symbol}?`)) {
-                                                                                        setFinancialConfig((prev: CatalystCashConfig) => {
-                                                                                            const cur = prev?.holdings || {};
-                                                                                            const updated = (cur[key] || []).filter((holding, idx) =>
-                                                                                                h?.id ? holding?.id !== h.id : idx !== originalIndex
-                                                                                            );
-                                                                                            return markManualHoldingDeleted({
-                                                                                                ...prev,
-                                                                                                holdings: { ...cur, [key]: updated },
-                                                                                            }, key, h) as CatalystCashConfig;
-                                                                                        });
-                                                                                    }
+                                                                                    setFinancialConfig((prev: CatalystCashConfig) =>
+                                                                                        setInvestmentSourceExcluded(prev, sourceId, !holdingExcluded) as CatalystCashConfig
+                                                                                    );
                                                                                 }}
-                                                                                style={{
-                                                                                    width: 24,
-                                                                                    height: 24,
-                                                                                    borderRadius: T.radius.md,
-                                                                                    border: "none",
-                                                                                    background: "transparent",
-                                                                                    color: T.text.dim,
-                                                                                    cursor: "pointer",
-                                                                                    display: "flex",
-                                                                                    alignItems: "center",
-                                                                                    justifyContent: "center",
-                                                                                }}
+                                                                                style={inclusionPillStyle(color, holdingExcluded)}
                                                                             >
-                                                                                <Trash2 size={11} />
+                                                                                {holdingExcluded ? "Excluded" : "Counted"}
                                                                             </button>
-                                                                        )}
+                                                                            {setFinancialConfig && (
+                                                                                <button type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.preventDefault();
+                                                                                        e.stopPropagation();
+                                                                                        if (window.confirm(`Delete ${h.symbol}?`)) {
+                                                                                            setFinancialConfig((prev: CatalystCashConfig) => {
+                                                                                                const cur = prev?.holdings || {};
+                                                                                                const updated = (cur[key] || []).filter((holding, idx) =>
+                                                                                                    h?.id ? holding?.id !== h.id : idx !== originalIndex
+                                                                                                );
+                                                                                                return markManualHoldingDeleted({
+                                                                                                    ...prev,
+                                                                                                    holdings: { ...cur, [key]: updated },
+                                                                                                }, key, h) as CatalystCashConfig;
+                                                                                            });
+                                                                                        }
+                                                                                    }}
+                                                                                    style={{
+                                                                                        width: 24,
+                                                                                        height: 24,
+                                                                                        borderRadius: T.radius.md,
+                                                                                        border: "none",
+                                                                                        background: "transparent",
+                                                                                        color: T.text.dim,
+                                                                                        cursor: "pointer",
+                                                                                        display: "flex",
+                                                                                        alignItems: "center",
+                                                                                        justifyContent: "center",
+                                                                                    }}
+                                                                                >
+                                                                                    <Trash2 size={11} />
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </div>

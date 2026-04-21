@@ -385,6 +385,8 @@ export function getDemoAuditPayload(prevConfig = {}, existingHistory = [], scena
   const demoConfig = {
     ...prevConfig,
     ...scenario.financialConfig,
+    plaidInvestments: scenario.financialConfig?.plaidInvestments || [],
+    excludedInvestmentSourceIds: scenario.financialConfig?.excludedInvestmentSourceIds || [],
     _preDemoSnapshot: prevConfig._preDemoSnapshot || { ...prevConfig },
     isDemoConfig: true,
   };

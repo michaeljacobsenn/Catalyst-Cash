@@ -196,6 +196,23 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
       }),
     [cards, bankAccounts, financialConfig?.acknowledgedDuplicateKeys]
   );
+  const portfolioFreshnessLabel = useMemo(() => {
+    const cachedCount = stalePlaidBreakdown.connectedButCached.length;
+    if (cachedCount > 0 && lastPlaidSyncDateShort) {
+      return `Last refresh ${lastPlaidSyncDateShort}. ${cachedCount} linked ${cachedCount === 1 ? "institution is" : "institutions are"} waiting for the next live sync.`;
+    }
+    if (cachedCount > 0) {
+      return `${cachedCount} linked ${cachedCount === 1 ? "institution is" : "institutions are"} waiting for the next live sync.`;
+    }
+    if (lastPlaidSyncDateShort) {
+      return `Last refresh ${lastPlaidSyncDateShort}.`;
+    }
+    if (linkedPlaidItems.length > 0) {
+      return "Manual balances are live. Connect Plaid if you want automatic refreshes.";
+    }
+    return "Add accounts or connect Plaid to build your live portfolio snapshot.";
+  }, [lastPlaidSyncDateShort, linkedPlaidItems.length, stalePlaidBreakdown.connectedButCached.length]);
+  const portfolioFreshnessTone = stalePlaidBreakdown.connectedButCached.length > 0 ? T.status.amber : T.text.secondary;
 
   useEffect(() => {
     let cancelled = false;
@@ -583,8 +600,16 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
         padding: embedded ? "12px 12px 14px" : "16px 14px 18px",
         boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04)`,
       }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: isNarrowPhone ? "wrap" : "nowrap" }}>
-          <div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) auto",
+            alignItems: "start",
+            columnGap: 10,
+            rowGap: 8,
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
             <h1 style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.font.mono, marginBottom: 6 }}>
               Portfolio Snapshot
             </h1>
@@ -592,8 +617,8 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
               {fmt(netWorth)}
             </div>
           </div>
-          
-          <div style={{ display: "flex", gap: 8, marginLeft: isNarrowPhone ? "auto" : undefined }}>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center", justifySelf: "end" }}>
             <button type="button"
               onClick={() => openSheet()}
               className="hover-btn card-press"
@@ -635,6 +660,9 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
                 {plaidLoading ? <Loader2 size={16} className="spin" color={T.text.primary} /> : <Link2 size={16} strokeWidth={2.5} color={T.text.primary} />}
               </button>
             )}
+          </div>
+          <div style={{ gridColumn: "1 / -1", fontSize: 11.5, color: portfolioFreshnessTone, lineHeight: 1.45, maxWidth: 520 }}>
+            {portfolioFreshnessLabel}
           </div>
         </div>
 

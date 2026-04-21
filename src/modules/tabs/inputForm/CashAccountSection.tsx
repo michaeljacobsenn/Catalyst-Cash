@@ -72,6 +72,8 @@ export function CashAccountSection({
     id: account.id,
     label: account.displayLabel,
   }));
+  const summaryPillHeight = isTablet ? 34 : 30;
+  const summaryPillPadding = isNarrowPhone ? "0 10px" : "0 12px";
 
   return (
     <Card
@@ -96,14 +98,14 @@ export function CashAccountSection({
       <div
         style={{
           display: "flex",
-          alignItems: isNarrowPhone ? "flex-start" : "center",
+          alignItems: "flex-start",
           justifyContent: "space-between",
           gap: 10,
-          flexWrap: isNarrowPhone ? "wrap" : "nowrap",
-          marginBottom: hasAccounts ? 10 : 6,
+          flexWrap: "wrap",
+          marginBottom: hasAccounts ? 8 : 6,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexWrap: "wrap", flex: 1 }}>
           <Label style={{ marginBottom: 0, fontWeight: 800 }}>{title}</Label>
           {visibleCount > 0 && (
             <Badge
@@ -118,24 +120,11 @@ export function CashAccountSection({
               {visibleCount} {visibleCount === 1 ? "ACCOUNT" : "ACCOUNTS"}
             </Badge>
           )}
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: isNarrowPhone && effectiveTotal !== null ? "space-between" : "flex-end",
-            gap: 8,
-            flexWrap: "wrap",
-            flexShrink: 0,
-            width: isNarrowPhone ? "100%" : undefined,
-          }}
-        >
           {effectiveTotal !== null && (
             <div
               style={{
-                minWidth: isNarrowPhone ? 0 : 92,
-                minHeight: rowActionSize,
-                padding: "0 12px",
+                minHeight: summaryPillHeight,
+                padding: summaryPillPadding,
                 borderRadius: 999,
                 border: `1px solid ${anyAccountOverridden ? `${toneColor}35` : T.border.subtle}`,
                 background: anyAccountOverridden ? `${toneColor}10` : T.bg.surface,
@@ -144,11 +133,13 @@ export function CashAccountSection({
                 justifyContent: "center",
               }}
             >
-              <Mono size={13} weight={800} color={anyAccountOverridden ? toneColor : T.text.primary}>
+              <Mono size={12.5} weight={800} color={anyAccountOverridden ? toneColor : T.text.primary}>
                 {fmt(effectiveTotal)}
               </Mono>
             </div>
           )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <SectionAddControl
             accent={toneColor}
             buttonAriaLabel={`Add ${title.toLowerCase()} to audit`}
@@ -175,7 +166,7 @@ export function CashAccountSection({
                   gridTemplateColumns: accountRowGrid,
                   alignItems: isNarrowPhone ? "start" : "center",
                   gap: 10,
-                  padding: "10px 12px",
+                  padding: isNarrowPhone ? "9px 10px" : "10px 12px",
                   borderRadius: T.radius.md,
                   background: isOverridden ? `${toneColor}08` : T.bg.elevated,
                   border: `1px solid ${isOverridden ? `${toneColor}35` : T.border.subtle}`,

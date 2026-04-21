@@ -87,4 +87,32 @@ describe("demo audit payload", () => {
     expect(payload.audit.parsed.structured.nextAction?.detail || "").toContain("Savor");
     expect(payload.audit.parsed.alertsCard.join(" ")).toContain("credit utilization");
   });
+
+  it("replaces real investment linkage state when demo mode is loaded", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-20T12:00:00.000Z"));
+
+    const payload = getDemoAuditPayload(
+      {
+        plaidInvestments: [{ id: "live-plaid-invest", bucket: "brokerage", _plaidBalance: 99999 }],
+        excludedInvestmentSourceIds: ["plaid:live-plaid-invest"],
+        holdings: {
+          roth: [{ id: "live-roth", symbol: "SPY", shares: 10 }],
+          brokerage: [],
+          k401: [],
+          crypto: [],
+          hsa: [],
+        },
+      },
+      []
+    );
+
+    expect(payload.demoConfig.plaidInvestments).toEqual([]);
+    expect(payload.demoConfig.excludedInvestmentSourceIds).toEqual([]);
+    const holdingIds = Object.values(payload.demoConfig.holdings || {})
+      .flat()
+      .map((holding) => String(holding?.id || ""));
+    expect(holdingIds.every((id) => id.startsWith("demo-"))).toBe(true);
+    expect(payload.demoConfig.holdings.roth.some((holding) => String(holding.id || "").startsWith("live-"))).toBe(false);
+  });
 });

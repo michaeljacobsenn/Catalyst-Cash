@@ -44,6 +44,13 @@ function formatBudgetCompact(value: number) {
   return `$${amount.toFixed(0)}`;
 }
 
+function normalizeBudgetLabelKey(value: string) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 interface AddLineFormProps {
   bucket: Bucket;
   onAdd: (line: Omit<BudgetLine, "id">) => void;
@@ -498,6 +505,7 @@ export default function BudgetTab({ embedded, proEnabled = false, privacyMode: _
   const [showPaywall, setShowPaywall] = useState(false);
   const [seedPending, setSeedPending] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [dismissedTrackedBillPromptKey, setDismissedTrackedBillPromptKey] = useState("");
 
   const auditCategories = (current?.parsed?.categories ?? null) as Record<string, { total?: number }> | null;
   const hasAudit = !!auditCategories;
@@ -513,6 +521,27 @@ export default function BudgetTab({ embedded, proEnabled = false, privacyMode: _
   );
   const hasSeedSources = hasAudit || activeRenewals.length > 0;
   const showSeedBanner = hasSeedSources && hasNoLines && !dismissed && isBudgetReady;
+  const budgetLineNameKeys = useMemo(
+    () => new Set(lines.map((line) => normalizeBudgetLabelKey(line.name)).filter(Boolean)),
+    [lines]
+  );
+  const missingTrackedBills = useMemo(
+    () =>
+      activeRenewals.filter((renewal) => {
+        const renewalKey = normalizeBudgetLabelKey(String(renewal?.name || ""));
+        return renewalKey && !budgetLineNameKeys.has(renewalKey);
+      }),
+    [activeRenewals, budgetLineNameKeys]
+  );
+  const missingTrackedBillPromptKey = useMemo(
+    () => missingTrackedBills.map((renewal) => normalizeBudgetLabelKey(String(renewal?.name || ""))).join("|"),
+    [missingTrackedBills]
+  );
+  const showTrackedBillPrompt =
+    isBudgetReady &&
+    lines.length > 0 &&
+    missingTrackedBills.length > 0 &&
+    dismissedTrackedBillPromptKey !== missingTrackedBillPromptKey;
 
   const handleSeed = useCallback(async () => {
     if (!hasSeedSources) return;
@@ -521,6 +550,15 @@ export default function BudgetTab({ embedded, proEnabled = false, privacyMode: _
     setSeedPending(false);
     haptic.success();
   }, [activeRenewals, auditCategories, hasSeedSources, suggestFromAudit]);
+
+  const handleImportTrackedBills = useCallback(async () => {
+    if (!missingTrackedBills.length) return;
+    setSeedPending(true);
+    await suggestFromAudit(null, { renewals: missingTrackedBills });
+    setSeedPending(false);
+    setDismissedTrackedBillPromptKey(missingTrackedBillPromptKey);
+    haptic.success();
+  }, [missingTrackedBillPromptKey, missingTrackedBills, suggestFromAudit]);
 
   const linesByBucket = useMemo(() => {
     const map: Record<Bucket, BudgetLine[]> = { bills: [], needs: [], wants: [], savings: [] };
@@ -845,6 +883,87 @@ export default function BudgetTab({ embedded, proEnabled = false, privacyMode: _
                 }}
               >
                 Start manually
+              </button>
+            </div>
+          </Card>
+        )}
+
+        {showTrackedBillPrompt && (
+          <Card
+            variant="glass"
+            style={{
+              padding: isNarrowPhone ? "16px" : "18px",
+              borderRadius: 24,
+              display: "grid",
+              gap: 14,
+              border: `1px solid ${T.status.blue}22`,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+              <div
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 14,
+                  background: `${T.status.blue}14`,
+                  border: `1px solid ${T.status.blue}22`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <TrendingUp size={18} color={T.status.blue} />
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary, marginBottom: 4 }}>
+                  Pull {missingTrackedBills.length} tracked {missingTrackedBills.length === 1 ? "bill" : "bills"} into this plan
+                </div>
+                <div style={{ fontSize: 12.5, color: T.text.secondary, lineHeight: 1.5 }}>
+                  {missingTrackedBills
+                    .slice(0, 2)
+                    .map((renewal) => renewal.name)
+                    .join(", ")}
+                  {missingTrackedBills.length > 2 ? ` and ${missingTrackedBills.length - 2} more ` : " "}
+                  are already tracked in Bills. Add them here so the budget stays aligned with your recurring obligations.
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: isNarrowPhone ? "1fr" : "minmax(0, 1fr) auto", gap: 10 }}>
+              <button
+                type="button"
+                onClick={handleImportTrackedBills}
+                disabled={seedPending}
+                style={{
+                  minHeight: 46,
+                  borderRadius: 14,
+                  border: `1px solid ${T.status.blue}25`,
+                  background: `${T.status.blue}14`,
+                  color: T.status.blue,
+                  fontSize: 13,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  opacity: seedPending ? 0.7 : 1,
+                }}
+              >
+                {seedPending ? "Adding tracked bills…" : "Add tracked bills"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDismissedTrackedBillPromptKey(missingTrackedBillPromptKey)}
+                style={{
+                  minHeight: 46,
+                  padding: "0 18px",
+                  borderRadius: 14,
+                  border: `1px solid ${T.border.default}`,
+                  background: "transparent",
+                  color: T.text.secondary,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Not now
               </button>
             </div>
           </Card>

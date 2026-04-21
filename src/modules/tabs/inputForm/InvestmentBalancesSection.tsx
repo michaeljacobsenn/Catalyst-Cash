@@ -69,20 +69,22 @@ export function InvestmentBalancesSection({
     if (!source) return;
     onRestoreSource(source);
   };
+  const summaryPillHeight = isTablet ? 34 : 30;
+  const summaryPillPadding = isNarrowPhone ? "0 10px" : "0 12px";
 
   return (
     <Card variant="glass" style={{ marginBottom: 8, position: "relative", overflow: "hidden" }}>
       <div
         style={{
           display: "flex",
-          alignItems: isNarrowPhone ? "flex-start" : "center",
+          alignItems: "flex-start",
           justifyContent: "space-between",
           gap: 10,
-          flexWrap: isNarrowPhone ? "wrap" : "nowrap",
-          marginBottom: 10,
+          flexWrap: "wrap",
+          marginBottom: 8,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexWrap: "wrap", flex: 1 }}>
           <Label style={{ marginBottom: 0, fontWeight: 800 }}>Investment Balances</Label>
           {visibleSources.length > 0 && (
             <Badge
@@ -97,24 +99,11 @@ export function InvestmentBalancesSection({
               {visibleSources.length} {visibleSources.length === 1 ? "SOURCE" : "SOURCES"}
             </Badge>
           )}
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: isNarrowPhone && visibleSources.length > 0 ? "space-between" : "flex-end",
-            gap: 8,
-            flexWrap: "wrap",
-            flexShrink: 0,
-            width: isNarrowPhone ? "100%" : undefined,
-          }}
-        >
           {visibleSources.length > 0 && (
             <div
               style={{
-                minWidth: isNarrowPhone ? 0 : 92,
-                minHeight: rowActionSize,
-                padding: "0 12px",
+                minHeight: summaryPillHeight,
+                padding: summaryPillPadding,
                 borderRadius: 999,
                 border: `1px solid ${T.accent.emerald}35`,
                 background: `${T.accent.emerald}10`,
@@ -123,11 +112,13 @@ export function InvestmentBalancesSection({
                 justifyContent: "center",
               }}
             >
-              <Mono size={13} weight={800} color={T.accent.emerald}>
+              <Mono size={12.5} weight={800} color={T.accent.emerald}>
                 {fmt(totalBalance)}
               </Mono>
             </div>
           )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <SectionAddControl
             accent={T.accent.emerald}
             buttonAriaLabel="Add investment balance to audit"
@@ -172,7 +163,7 @@ export function InvestmentBalancesSection({
                 gridTemplateColumns: investmentRowGrid,
                 alignItems: isNarrowPhone ? "start" : "center",
                 gap: 10,
-                padding: "10px 12px",
+                padding: isNarrowPhone ? "9px 10px" : "10px 12px",
                 background: T.bg.elevated,
                 borderRadius: T.radius.md,
                 border: `1px solid ${T.border.subtle}`,

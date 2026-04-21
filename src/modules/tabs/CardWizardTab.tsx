@@ -36,7 +36,6 @@
     TrendingUp,
     Tv,
     X,
-    Wallet,
     Zap
   } from "../icons";
   import { extractCategoryByKeywords,MERCHANT_DATABASE } from "../merchantDatabase.js";
@@ -872,6 +871,9 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
   const topMissedPurchaseLabel = rewardSnapshot.topMissedTransaction
     ? formatMerchantSurfaceLabel(rewardSnapshot.topMissedTransaction.merchant, rewardSnapshot.topMissedTransaction.category)
     : null;
+  const topMissedCategoryLabel = rewardSnapshot.topMissedTransaction
+    ? formatRewardCategoryLabel(rewardSnapshot.topMissedTransaction.category)
+    : null;
   const spendPresets = useMemo(() => {
     const presetsByCategory: Record<string, number[]> = {
       dining: [25, 75, 150, 250],
@@ -887,11 +889,38 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
     };
     return presetsByCategory[resolvedCategory || ""] || [25, 75, 150, 300];
   }, [resolvedCategory]);
-  const topMissedMetricDetail = rewardSnapshot.topMissedTransaction
-    ? `${topMissedPurchaseLabel}. Best card: ${rewardSnapshot.topMissedTransaction.bestCard}.`
-    : "Search a merchant or tap a category to see the best card instantly.";
   const showRecentMerchantRow = !resolvedCategory && !query.trim() && recentMerchantChips.length > 1;
   const maxContentWidth = isTablet ? 980 : 768;
+  const activeCardsLabel = `${activeCreditCards.length} active ${activeCreditCards.length === 1 ? "card" : "cards"}`;
+  const compactRewardsOverview = viewport.width <= 390;
+  const rewardsOverviewColumns = compactRewardsOverview ? "1fr" : "repeat(2, minmax(0, 1fr))";
+  const missedCategoryColumns = viewport.width <= 390 ? "1fr" : isTablet ? "repeat(3, minmax(0, 1fr))" : "repeat(2, minmax(0, 1fr))";
+  const hasMissedRewardInsight = rewardSnapshot.topMissedTransactions.length > 0;
+  const topMissedUsedPaymentLabel = rewardSnapshot.topMissedTransactions[0]?.usedPayment;
+  const missedInsightButtonLabel = selectedInsight === "missed" ? "Hide missed rewards" : "Review missed rewards";
+  const topMissedCardSummary = rewardSnapshot.topMissedTransaction
+    ? topMissedUsedPaymentLabel
+      ? `Use ${rewardSnapshot.topMissedTransaction.bestCard} instead of ${topMissedUsedPaymentLabel}.`
+      : `Use ${rewardSnapshot.topMissedTransaction.bestCard} for purchases like this.`
+    : "Your recent purchases are already routing to the right card.";
+  const rewardOverviewMetrics = [
+    {
+      label: "Missed rewards",
+      value: rewardSnapshot.totalMissedValue > 0 ? formatCompactCurrency(rewardSnapshot.totalMissedValue) : "$0",
+      detail: rewardSnapshot.badTxns > 0 ? `${rewardSnapshot.badTxns} purchases missed a better card` : "No meaningful misses found",
+      icon: TrendingUp,
+      tone: rewardSnapshot.totalMissedValue > 0 ? T.status.amber : T.status.green,
+      action: hasMissedRewardInsight ? "missed" : null,
+    },
+    {
+      label: "Purchases scored",
+      value: `${rewardSnapshot.analyzedCount}`,
+      detail: rewardSnapshot.optimalTxns > 0 ? `${rewardSnapshot.optimalTxns} matched your best card` : "Link recent card activity to score more purchases",
+      icon: Target,
+      tone: T.text.primary,
+      action: null,
+    },
+  ];
 
   return (
     <div ref={scrollRef} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", flex: 1 }}>
@@ -1154,47 +1183,22 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: isNarrowPhone ? "wrap" : "nowrap" }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 11, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
-                  This month
+                  Rewards snapshot
                 </div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em", marginBottom: 4 }}>
-                  See where your wallet is working and where it is leaking
+                <div style={{ fontSize: isNarrowPhone ? 17 : 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em", marginBottom: 4, lineHeight: 1.15 }}>
+                  See where you are leaving rewards behind
                 </div>
                 <div style={{ fontSize: 12.5, color: T.text.secondary, lineHeight: 1.55, maxWidth: 520 }}>
-                  Search a merchant for an exact answer, or use the category winners below for the purchases you make most often.
+                  Search a merchant for an exact answer, or review the places where another card would have returned more this month.
                 </div>
               </div>
               <Badge variant="outline" style={{ color: T.accent.primary, borderColor: `${T.accent.primary}35`, background: `${T.accent.primary}10` }}>
-                {activeCreditCards.length} cards
+                {activeCardsLabel}
               </Badge>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: walletGridColumns, gap: 10 }}>
-              {[
-                {
-                  label: "Missed rewards",
-                  value: rewardSnapshot.totalMissedValue > 0 ? formatCompactCurrency(rewardSnapshot.totalMissedValue) : "$0",
-                  detail: rewardSnapshot.badTxns > 0 ? `${rewardSnapshot.badTxns} purchases could have earned more` : "No meaningful misses found",
-                  icon: TrendingUp,
-                  tone: rewardSnapshot.totalMissedValue > 0 ? T.status.amber : T.status.green,
-                  action: rewardSnapshot.topMissedTransactions.length > 0 ? "missed" : null,
-                },
-                {
-                  label: "Purchases scored",
-                  value: `${rewardSnapshot.analyzedCount}`,
-                  detail: rewardSnapshot.optimalTxns > 0 ? `${rewardSnapshot.optimalTxns} already used the best card` : "Link recent card activity to score more purchases",
-                  icon: Target,
-                  tone: T.text.primary,
-                },
-                {
-                  label: "Largest missed reward",
-                  value: rewardSnapshot.topMissedTransaction ? formatCompactCurrency(rewardSnapshot.topMissedTransaction.delta) : "Clear",
-                  detail: topMissedMetricDetail,
-                  icon: Wallet,
-                  tone: rewardSnapshot.topMissedTransaction ? T.accent.primary : T.status.green,
-                  featured: true,
-                  action: rewardSnapshot.topMissedTransactions.length > 0 ? "missed" : null,
-                },
-              ].map((metric) => {
+            <div style={{ display: "grid", gridTemplateColumns: rewardsOverviewColumns, gap: 10 }}>
+              {rewardOverviewMetrics.map((metric) => {
                 const Icon = metric.icon;
                 const isSelected = metric.action === "missed" && selectedInsight === "missed";
                 return (
@@ -1207,28 +1211,40 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                       setSelectedInsight(selectedInsight === "missed" ? null : "missed");
                     }}
                     style={{
-                      padding: "12px 12px 11px",
+                      padding: compactRewardsOverview ? "12px 12px 11px" : "14px 14px 13px",
                       borderRadius: 18,
                       border: `1px solid ${isSelected ? `${metric.tone}40` : T.border.subtle}`,
                       background: isSelected ? `${metric.tone}10` : T.bg.surface,
                       minWidth: 0,
-                      gridColumn: metric.featured && !isTablet ? "1 / -1" : undefined,
                       textAlign: "left",
                       cursor: metric.action ? "pointer" : "default",
+                      display: "grid",
+                      gap: 10,
+                      alignItems: "stretch",
+                      justifyItems: "stretch",
+                      justifyContent: "stretch",
+                      minHeight: compactRewardsOverview ? 132 : 144,
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: 10, background: `${metric.tone}12`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Icon size={14} color={metric.tone} />
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 10, background: `${metric.tone}12`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <Icon size={14} color={metric.tone} />
+                        </div>
+                        <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                          {metric.label}
+                        </div>
                       </div>
-                      <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                        {metric.label}
-                      </div>
+                      {metric.action && (
+                        <div style={{ fontSize: 10, fontWeight: 800, color: metric.tone, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
+                          {isSelected ? "Showing" : "Review"}
+                        </div>
+                      )}
                     </div>
-                    <div style={{ fontSize: 17, fontWeight: 900, color: metric.tone, letterSpacing: "-0.03em", lineHeight: 1.08 }}>
+                    <div style={{ fontSize: compactRewardsOverview ? 24 : 28, fontWeight: 900, color: metric.tone, letterSpacing: "-0.04em", lineHeight: 1 }}>
                       {metric.value}
                     </div>
-                    <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45, marginTop: 6 }}>
+                    <div style={{ fontSize: 11.5, color: T.text.secondary, lineHeight: 1.42, maxWidth: compactRewardsOverview ? "100%" : 220 }}>
                       {metric.detail}
                     </div>
                   </button>
@@ -1236,29 +1252,112 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
               })}
             </div>
 
+            <div
+              style={{
+                padding: compactRewardsOverview ? "14px 14px 12px" : "16px 16px 14px",
+                borderRadius: 20,
+                border: `1px solid ${selectedInsight === "missed" ? `${T.accent.primary}35` : T.border.subtle}`,
+                background: selectedInsight === "missed"
+                  ? `linear-gradient(180deg, ${T.accent.primary}12, ${T.bg.surface})`
+                  : `linear-gradient(180deg, ${T.bg.surface}, ${T.bg.card})`,
+                display: "grid",
+                gap: compactRewardsOverview ? 12 : 10,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: compactRewardsOverview ? "wrap" : "nowrap" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+                    Largest missed reward
+                  </div>
+                </div>
+                <div style={{ display: "grid", gap: 8, justifyItems: compactRewardsOverview ? "start" : "end" }}>
+                  <div style={{ fontSize: compactRewardsOverview ? 24 : 28, fontWeight: 900, color: rewardSnapshot.topMissedTransaction ? T.accent.primary : T.status.green, letterSpacing: "-0.04em", lineHeight: 1 }}>
+                    {rewardSnapshot.topMissedTransaction ? formatCompactCurrency(rewardSnapshot.topMissedTransaction.delta) : "Clear"}
+                  </div>
+                  {hasMissedRewardInsight && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptic.selection();
+                        setSelectedInsight(selectedInsight === "missed" ? null : "missed");
+                      }}
+                      style={{
+                        minHeight: 34,
+                        padding: "0 14px",
+                        borderRadius: 999,
+                        border: `1px solid ${selectedInsight === "missed" ? `${T.accent.primary}35` : T.border.subtle}`,
+                        background: selectedInsight === "missed" ? `${T.accent.primary}12` : T.bg.surface,
+                        color: selectedInsight === "missed" ? T.accent.primary : T.text.secondary,
+                        fontSize: 11,
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {missedInsightButtonLabel}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: 6 }}>
+                <div style={{ fontSize: 17, fontWeight: 800, color: T.text.primary, lineHeight: 1.2 }}>
+                  {topMissedPurchaseLabel ?? "Your recent purchases are landing on the right card"}
+                </div>
+                <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5 }}>
+                  {topMissedCardSummary}
+                </div>
+              </div>
+
+              {rewardSnapshot.topMissedTransaction && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <Badge
+                    variant="outline"
+                    style={{
+                      color: T.accent.primary,
+                      borderColor: `${T.accent.primary}35`,
+                      background: `${T.accent.primary}12`,
+                    }}
+                  >
+                    {topMissedCategoryLabel}
+                  </Badge>
+                  <span style={{ fontSize: 11.5, color: T.text.secondary }}>
+                    Best card: <span style={{ color: T.text.primary, fontWeight: 700 }}>{rewardSnapshot.topMissedTransaction.bestCard}</span>
+                  </span>
+                </div>
+              )}
+            </div>
+
             {rewardSnapshot.topMissedCategories.length > 0 && (
               <div style={{ display: "grid", gap: 8 }}>
                 <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                   Top missed categories
                 </div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <div style={{ display: "grid", gridTemplateColumns: missedCategoryColumns, gap: 8 }}>
                 {rewardSnapshot.topMissedCategories.map((category) => (
                   <div
                     key={category.category}
                     style={{
-                      padding: "10px 12px",
+                      minHeight: 88,
+                      padding: "12px 12px 11px",
                       borderRadius: 16,
                       border: `1px solid ${T.border.subtle}`,
                       background: T.bg.surface,
                       display: "grid",
-                      gap: 2,
+                      alignContent: "space-between",
+                      gap: 8,
                     }}
                   >
-                    <div style={{ fontSize: 11, fontWeight: 800, color: T.text.primary }}>
-                      {category.category} · {formatCompactCurrency(category.delta)}
+                    <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, lineHeight: 1.25 }}>
+                      {category.category}
                     </div>
-                    <div style={{ fontSize: 10, color: T.text.secondary, lineHeight: 1.4 }}>
-                      Use {category.bestCard}
+                    <div style={{ display: "grid", gap: 3 }}>
+                      <div style={{ fontSize: 16, fontWeight: 900, color: T.status.amber, letterSpacing: "-0.03em", lineHeight: 1 }}>
+                        {formatCompactCurrency(category.delta)}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: T.text.secondary, lineHeight: 1.4 }}>
+                        Use {category.bestCard}
+                      </div>
                     </div>
                   </div>
                 ))}

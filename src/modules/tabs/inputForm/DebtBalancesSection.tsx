@@ -99,6 +99,8 @@ export function DebtBalancesSection({
   const handleAddCard = (cardId: string) => {
     onAddDebtCard(cardId);
   };
+  const summaryPillHeight = isTablet ? 34 : 30;
+  const summaryPillPadding = isNarrowPhone ? "0 10px" : "0 12px";
 
   return (
     <Card
@@ -123,14 +125,14 @@ export function DebtBalancesSection({
       <div
         style={{
           display: "flex",
-          alignItems: isNarrowPhone ? "flex-start" : "center",
+          alignItems: "flex-start",
           justifyContent: "space-between",
           gap: 10,
-          flexWrap: isNarrowPhone ? "wrap" : "nowrap",
-          marginBottom: debts.length > 0 ? 10 : 6,
+          flexWrap: "wrap",
+          marginBottom: debts.length > 0 ? 8 : 6,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexWrap: "wrap", flex: 1 }}>
           <Label style={{ marginBottom: 0, fontWeight: 800 }}>Credit Card Balances</Label>
           {debts.length > 0 && (
             <Badge
@@ -145,24 +147,11 @@ export function DebtBalancesSection({
               {debts.length} {debts.length === 1 ? "CARD" : "CARDS"}
             </Badge>
           )}
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: isNarrowPhone && debts.length > 0 ? "space-between" : "flex-end",
-            gap: 8,
-            flexWrap: "wrap",
-            flexShrink: 0,
-            width: isNarrowPhone ? "100%" : undefined,
-          }}
-        >
           {debts.length > 0 && (
             <div
               style={{
-                minWidth: isNarrowPhone ? 0 : 92,
-                minHeight: rowActionSize,
-                padding: "0 12px",
+                minHeight: summaryPillHeight,
+                padding: summaryPillPadding,
                 borderRadius: 999,
                 border: `1px solid ${T.status.red}35`,
                 background: `${T.status.red}10`,
@@ -171,11 +160,13 @@ export function DebtBalancesSection({
                 justifyContent: "center",
               }}
             >
-              <Mono size={13} weight={800} color={T.status.red}>
+              <Mono size={12.5} weight={800} color={T.status.red}>
                 {fmt(totalBalance)}
               </Mono>
             </div>
           )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <SectionAddControl
             accent={T.status.red}
             buttonAriaLabel="Add card balance to audit"
@@ -221,7 +212,7 @@ export function DebtBalancesSection({
                   gridTemplateColumns: debtRowGrid,
                   alignItems: isNarrowPhone ? "start" : "center",
                   gap: 10,
-                  padding: "10px 12px",
+                  padding: isNarrowPhone ? "9px 10px" : "10px 12px",
                   borderRadius: T.radius.md,
                   background: isOverridden ? `${T.status.red}08` : T.bg.elevated,
                   border: `1px solid ${isOverridden ? `${T.status.red}35` : T.border.subtle}`,

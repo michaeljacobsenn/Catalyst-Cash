@@ -9,7 +9,7 @@ const BASE_URL =
   process.env.VISUAL_PASS_BASE_URL ||
   "http://127.0.0.1:4173/";
 
-const DEFAULT_SURFACES = ["dashboard", "audit", "budget", "rewards", "chat", "financial-profile", "backup"];
+const DEFAULT_SURFACES = ["dashboard", "audit", "bills", "budget", "vault", "rewards", "chat", "settings", "financial-profile", "backup"];
 const SURFACES = (
   process.argv.find((arg) => arg.startsWith("--surfaces="))?.split("=")[1] ||
   process.env.VISUAL_PASS_SURFACES ||
@@ -162,6 +162,8 @@ const SEEDED_BUDGET_LINES = [
   { id: "budget-travel", name: "Travel Fund", amount: 120, bucket: "savings", icon: "✈️", isAuto: false },
 ];
 
+const SEEDED_NOW = Date.now();
+
 const SEEDED_AUDIT = {
   ts: 1776662400000,
   date: "2026-04-20",
@@ -211,42 +213,42 @@ const SEEDED_CHAT_HISTORY = [
   {
     role: "user",
     content: "How much room do I have before payday?",
-    ts: 1776662000000,
+    ts: SEEDED_NOW - 5 * 60 * 1000,
   },
   {
     role: "assistant",
     content:
       "You have about **$425** of weekly spend room before Friday if you keep checking above your $1,500 floor.",
-    ts: 1776662001000,
+    ts: SEEDED_NOW - 4 * 60 * 1000,
   },
   {
     role: "user",
     content: "Should I use checking or savings for the dentist bill?",
-    ts: 1776662002000,
+    ts: SEEDED_NOW - 3 * 60 * 1000,
   },
   {
     role: "assistant",
     content:
       "Pay it from checking if the bill stays inside your protected buffer. If it would push checking below **$1,500**, pull only the difference from savings instead of floating it on a card.",
-    ts: 1776662003000,
+    ts: SEEDED_NOW - 2 * 60 * 1000,
   },
   {
     role: "user",
     content: "What if the bill comes in closer to $900?",
-    ts: 1776662004000,
+    ts: SEEDED_NOW - 60 * 1000,
   },
 ];
 
 const SEEDED_CHAT_FEEDBACK = {
-  "1776662001000": {
+  [String(SEEDED_CHAT_HISTORY[1].ts)]: {
     verdict: "helpful",
     reasons: [],
-    updatedAt: 1776662005000,
+    updatedAt: SEEDED_NOW - 45 * 1000,
   },
-  "1776662003000": {
+  [String(SEEDED_CHAT_HISTORY[3].ts)]: {
     verdict: "needs-work",
     reasons: ["too_generic", "missed_context"],
-    updatedAt: 1776662006000,
+    updatedAt: SEEDED_NOW - 30 * 1000,
   },
 };
 
@@ -661,6 +663,22 @@ async function captureBudgetState(page, outputDir) {
   return captureSamples(page, outputDir, "budget", { rootSelector: MAIN_PAGE_SELECTOR });
 }
 
+async function captureBillsState(page, outputDir) {
+  await waitForAppShell(page);
+  await clickMainTab(page, "Cashflow");
+  await page.getByRole("button", { name: "Bills", exact: true }).click();
+  await page.getByText(/Recurring Load|Monthly Burn Rate/i).first().waitFor({ state: "visible", timeout: 15000 });
+  return captureSamples(page, outputDir, "bills", { rootSelector: MAIN_PAGE_SELECTOR });
+}
+
+async function captureVaultState(page, outputDir) {
+  await waitForAppShell(page);
+  await clickMainTab(page, "Portfolio");
+  await page.getByRole("button", { name: "Vault", exact: true }).click();
+  await page.getByText(/Portfolio Snapshot|Liquid Cash/i).first().waitFor({ state: "visible", timeout: 15000 });
+  return captureSamples(page, outputDir, "vault", { rootSelector: MAIN_PAGE_SELECTOR });
+}
+
 async function captureRewardsState(page, outputDir) {
   await waitForAppShell(page);
   await clickMainTab(page, "Portfolio");
@@ -695,7 +713,7 @@ async function captureChatState(page, outputDir) {
   await page.reload({ waitUntil: "domcontentloaded" });
   await waitForAppShell(page);
   await clickMainTab(page, "Ask AI");
-  await page.getByText("What if the bill comes in closer to $900?").waitFor({ state: "visible", timeout: 15000 });
+  await page.getByText(/How much room do I have before payday\?|What if the bill comes in closer to \$900\?/).first().waitFor({ state: "visible", timeout: 15000 });
   await page.waitForTimeout(900);
   const history = await captureSamples(page, outputDir, "chat-history", { rootSelector: MAIN_PAGE_SELECTOR });
   return { empty, history };
@@ -705,6 +723,14 @@ async function captureFinancialProfileState(page, outputDir) {
   await waitForAppShell(page);
   await openSettingsSection(page, /Financial Profile/i, "Financial Profile");
   return captureSamples(page, outputDir, "financial-profile", { rootSelector: SETTINGS_PAGE_SELECTOR });
+}
+
+async function captureSettingsHomeState(page, outputDir) {
+  await waitForAppShell(page);
+  await page.getByRole("button", { name: "Open Settings" }).click();
+  await page.getByRole("heading", { name: "Settings" }).waitFor({ state: "visible", timeout: 15000 });
+  await page.waitForTimeout(450);
+  return captureSamples(page, outputDir, "settings", { rootSelector: SETTINGS_PAGE_SELECTOR });
 }
 
 async function captureBackupState(page, outputDir) {
@@ -756,14 +782,23 @@ async function run() {
       if (SURFACES.includes("audit")) {
         deviceReport.audit = await captureAuditState(page, deviceDir);
       }
+      if (SURFACES.includes("bills")) {
+        deviceReport.bills = await captureBillsState(page, deviceDir);
+      }
       if (SURFACES.includes("budget")) {
         deviceReport.budget = await captureBudgetState(page, deviceDir);
+      }
+      if (SURFACES.includes("vault")) {
+        deviceReport.vault = await captureVaultState(page, deviceDir);
       }
       if (SURFACES.includes("rewards")) {
         deviceReport.rewards = await captureRewardsState(page, deviceDir);
       }
       if (SURFACES.includes("chat")) {
         deviceReport.chat = await captureChatState(page, deviceDir);
+      }
+      if (SURFACES.includes("settings")) {
+        deviceReport.settings = await captureSettingsHomeState(page, deviceDir);
       }
       if (SURFACES.includes("financial-profile")) {
         deviceReport.financialProfile = await captureFinancialProfileState(page, deviceDir);
@@ -787,11 +822,14 @@ async function run() {
     dashboard: maxOverflow(deviceReport.dashboard),
     auditHome: maxOverflow(deviceReport.audit?.home),
     auditComposer: maxOverflow(deviceReport.audit?.composer),
+    bills: maxOverflow(deviceReport.bills),
     budget: maxOverflow(deviceReport.budget),
+    vault: maxOverflow(deviceReport.vault),
     rewardsHome: maxOverflow(deviceReport.rewards?.home),
     rewardsResult: maxOverflow(deviceReport.rewards?.result),
     chatEmpty: maxOverflow(deviceReport.chat?.empty),
     chatHistory: maxOverflow(deviceReport.chat?.history),
+    settings: maxOverflow(deviceReport.settings),
     financialProfile: maxOverflow(deviceReport.financialProfile),
     backup: maxOverflow(deviceReport.backup),
     consoleErrors: deviceReport.consoleErrors.length,

@@ -49,44 +49,34 @@ function BackupNudgeCard({
         </button>
       </div>
       <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 10px" }}>
-        Your data hasn't been backed up recently. Protect your financial data.
+        Turn on auto-backup for hands-off protection, or create a fresh encrypted backup now.
       </p>
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
         <button type="button"
-          onClick={onBackupNow}
-          disabled={backingUp}
+          onClick={onEnableAutoBackup}
           className="hover-btn"
           style={{
-            flex: "1 1 160px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
             gap: 5,
             padding: "10px 12px",
             borderRadius: T.radius.md,
-            border: "none",
             background: `${T.status.amber}16`,
             color: T.status.amber,
             fontSize: 11,
             fontWeight: 800,
             cursor: "pointer",
-            opacity: backingUp ? 0.6 : 1,
             borderWidth: 1,
             borderStyle: "solid",
             borderColor: `${T.status.amber}28`,
           }}
         >
-          <CloudUpload size={13} />
-          {backingUp ? "Backing up..." : "Back Up Now"}
+          <Shield size={13} />
+          Enable Auto-Backup
         </button>
         <button type="button"
-          onClick={onEnableAutoBackup}
+          onClick={onBackupNow}
+          disabled={backingUp}
           className="hover-btn"
           style={{
-            flex: 1,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
             gap: 5,
             padding: "10px 12px",
             borderRadius: T.radius.md,
@@ -96,9 +86,11 @@ function BackupNudgeCard({
             fontSize: 11,
             fontWeight: 700,
             cursor: "pointer",
+            opacity: backingUp ? 0.6 : 1,
           }}
         >
-          Enable Auto-Backup
+          <CloudUpload size={13} />
+          {backingUp ? "Backing up..." : "Back Up Now"}
         </button>
       </div>
     </div>
