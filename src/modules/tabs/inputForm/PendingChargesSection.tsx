@@ -3,6 +3,7 @@ import { CustomSelect as UICustomSelect, DI as UIDI } from "../../components.js"
 import { T } from "../../constants.js";
 import { AlertTriangle, CheckCircle, Plus, Trash2 } from "../../icons";
 import { Card, Label } from "../../ui.js";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout.js";
 import { sanitizeDollar, toNumber, type MoneyInput } from "./utils.js";
 import type { PendingCharge } from "./model.js";
 
@@ -56,37 +57,14 @@ export function PendingChargesSection({
   onChangeDescription,
   onToggleConfirmed,
 }: PendingChargesSectionProps) {
-  if (!pendingCharges.length) {
-    return (
-      <button
-        onClick={onAddCharge}
-        className="hover-btn"
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 8,
-          padding: "16px 18px",
-          borderRadius: T.radius.lg,
-          border: `1px solid ${T.border.default}`,
-          background: T.bg.glass,
-          color: T.text.primary,
-          fontSize: 14,
-          fontWeight: 800,
-          cursor: "pointer",
-          marginBottom: 10,
-          transition: "all .2s ease",
-          boxShadow: T.shadow.soft,
-        }}
-      >
-        <Plus size={16} color={T.accent.primary} strokeWidth={2.8} /> Add Pending Charge
-      </button>
-    );
-  }
-
+  const { isNarrowPhone, isTablet } = useResponsiveLayout();
   const confirmedChargeCount = pendingCharges.filter((charge) => toNumber(charge.amount) > 0).length;
   const pendingChargeTotal = pendingCharges.reduce((sum, charge) => sum + toNumber(charge.amount), 0);
+  const chargeRowGrid = isNarrowPhone
+    ? "minmax(0, 1fr) 36px"
+    : isTablet
+      ? "minmax(0, 1fr) minmax(132px, 176px) 36px"
+      : "minmax(0, 1fr) minmax(112px, 148px) 36px";
 
   return (
     <Card variant="glass" style={{ padding: "12px 14px", position: "relative", overflow: "hidden", marginBottom: 10 }}>
@@ -104,36 +82,115 @@ export function PendingChargesSection({
           pointerEvents: "none",
         }}
       />
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <Label style={{ marginBottom: 0, fontWeight: 800 }}>Pending Charges</Label>
-        <button
-          onClick={onAddCharge}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: isNarrowPhone ? "flex-start" : "center",
+          gap: 10,
+          flexWrap: isNarrowPhone ? "wrap" : "nowrap",
+          marginBottom: pendingCharges.length > 0 ? 10 : 6,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <Label style={{ marginBottom: 0, fontWeight: 800 }}>Pending Charges</Label>
+          {pendingCharges.length > 0 && (
+            <div
+              style={{
+                padding: "4px 8px",
+                borderRadius: 999,
+                border: `1px solid ${T.status.amber}35`,
+                background: `${T.status.amber}10`,
+                color: T.status.amber,
+                fontSize: 9,
+                fontWeight: 800,
+                fontFamily: T.font.mono,
+                letterSpacing: "0.04em",
+              }}
+            >
+              {pendingCharges.length} {pendingCharges.length === 1 ? "ITEM" : "ITEMS"}
+            </div>
+          )}
+        </div>
+        <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 4,
-            padding: "4px 10px",
-            borderRadius: T.radius.sm,
-            border: `1px solid ${T.status.amber}40`,
-            background: `${T.status.amber}0A`,
-            color: T.status.amber,
-            fontSize: 10,
-            fontWeight: 700,
-            cursor: "pointer",
-            fontFamily: T.font.mono,
+            justifyContent: isNarrowPhone && pendingCharges.length > 0 ? "space-between" : "flex-end",
+            gap: 8,
+            flexWrap: "wrap",
+            flexShrink: 0,
+            width: isNarrowPhone ? "100%" : undefined,
           }}
         >
-          <Plus size={11} />
-          ADD
-        </button>
+          {pendingCharges.length > 0 && (
+            <div
+              style={{
+                minWidth: isNarrowPhone ? 0 : 92,
+                minHeight: 32,
+                padding: "0 12px",
+                borderRadius: 999,
+                border: `1px solid ${T.status.amber}35`,
+                background: `${T.status.amber}10`,
+                color: T.status.amber,
+                fontSize: 13,
+                fontWeight: 800,
+                fontFamily: T.font.mono,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              ${pendingChargeTotal.toFixed(2)}
+            </div>
+          )}
+          <button type="button"
+            onClick={onAddCharge}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              minWidth: 68,
+              minHeight: 32,
+              padding: "0 12px",
+              borderRadius: 999,
+              border: `1px solid ${T.status.amber}40`,
+              background: `${T.status.amber}12`,
+              color: T.status.amber,
+              fontSize: 10,
+              fontWeight: 800,
+              fontFamily: T.font.mono,
+              letterSpacing: "0.04em",
+            }}
+          >
+            <Plus size={11} />
+            ADD
+          </button>
+        </div>
       </div>
+      {pendingCharges.length === 0 && (
+        <div
+          style={{
+            padding: "12px 14px",
+            borderRadius: T.radius.md,
+            background: T.bg.elevated,
+            border: `1px solid ${T.border.subtle}`,
+            color: T.text.secondary,
+            fontSize: 12,
+            lineHeight: 1.5,
+          }}
+        >
+          Add upcoming charges that have not posted yet so the audit respects this week’s real spending pressure.
+        </div>
+      )}
       {pendingCharges.map((charge, index) => (
         <div
           key={index}
           className="slide-up"
-          style={{
-            marginBottom: 6,
-            background: T.bg.elevated,
+            style={{
+              marginBottom: 6,
+              background: T.bg.elevated,
             borderRadius: T.radius.md,
             padding: "8px 10px",
             border: `1px solid ${charge.confirmed ? `${T.status.green}40` : T.border.default}`,
@@ -144,53 +201,71 @@ export function PendingChargesSection({
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "minmax(0, 1fr) minmax(124px, 0.56fr) 44px",
+              gridTemplateColumns: chargeRowGrid,
               gap: 8,
-              alignItems: "center",
+              alignItems: isNarrowPhone ? "start" : "center",
               marginBottom: 6,
             }}
           >
-            <CustomSelect
-              ariaLabel={`Pending charge card ${index + 1}`}
-              value={charge.cardId || ""}
-              onChange={(value) => onSelectCard(index, value)}
-              placeholder="Card..."
-              options={cardOptions}
-            />
-            <div style={{ minWidth: 0 }}>
+            <div style={{ minWidth: 0, gridColumn: isNarrowPhone ? "1 / 2" : undefined }}>
+              <CustomSelect
+                ariaLabel={`Pending charge card ${index + 1}`}
+                value={charge.cardId || ""}
+                onChange={(value) => onSelectCard(index, value)}
+                placeholder="Card…"
+                options={cardOptions}
+              />
+            </div>
+            <div
+              style={{
+                minWidth: 0,
+                gridColumn: isNarrowPhone ? "1 / -1" : undefined,
+                gridRow: isNarrowPhone ? "2 / 3" : undefined,
+              }}
+            >
               <DI
                 value={charge.amount}
                 onChange={(event) => onChangeAmount(index, sanitizeDollar(event.target.value))}
               />
             </div>
-            <button
+            <button type="button"
               onClick={() => onRemoveCharge(index)}
               style={{
-                width: 44,
-                height: 44,
+                width: 36,
+                height: 36,
                 borderRadius: T.radius.sm,
                 border: "none",
                 background: T.status.redDim,
                 color: T.status.red,
-                cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
+                gridColumn: isNarrowPhone ? "2 / 3" : undefined,
+                gridRow: isNarrowPhone ? "1 / 2" : undefined,
+                justifySelf: "end",
               }}
             >
               <Trash2 size={12} />
             </button>
           </div>
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 6,
+              alignItems: isNarrowPhone ? "stretch" : "center",
+              flexDirection: isNarrowPhone ? "column" : "row",
+            }}
+          >
             <input
               type="text"
               aria-label={`Pending charge description ${index + 1}`}
               value={charge.description || ""}
               onChange={(event) => onChangeDescription(index, event.target.value)}
-              placeholder="Description..."
+              placeholder="Description…"
               style={{
                 flex: 1,
+                width: "100%",
                 boxSizing: "border-box",
                 padding: "7px 10px",
                 borderRadius: T.radius.md,
@@ -200,12 +275,11 @@ export function PendingChargesSection({
                 fontSize: 11,
               }}
             />
-            <button
+            <button type="button"
               onClick={() => onToggleConfirmed(index)}
               style={{
                 padding: "7px 12px",
                 borderRadius: T.radius.md,
-                cursor: "pointer",
                 fontSize: 10,
                 fontWeight: 800,
                 fontFamily: T.font.mono,
@@ -213,6 +287,8 @@ export function PendingChargesSection({
                 alignItems: "center",
                 gap: 4,
                 flexShrink: 0,
+                justifyContent: "center",
+                width: isNarrowPhone ? "100%" : undefined,
                 whiteSpace: "nowrap",
                 border: charge.confirmed ? `1px solid ${T.status.green}30` : `1px solid ${T.status.amber}40`,
                 background: charge.confirmed ? T.status.greenDim : T.status.amberDim,
@@ -238,7 +314,7 @@ export function PendingChargesSection({
         <div
           style={{ fontSize: 10, fontFamily: T.font.mono, color: T.text.secondary, textAlign: "right", marginTop: 2 }}
         >
-          TOTAL: ${pendingChargeTotal.toFixed(2)}
+          {confirmedChargeCount} active pending items
         </div>
       )}
     </Card>

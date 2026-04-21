@@ -410,7 +410,7 @@ export const MoveRow = ({ item, checked, onToggle, index, detail = null }: MoveR
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          transition: "all .2s",
+          transition: "transform .2s, opacity .2s, background-color .2s, border-color .2s, color .2s, box-shadow .2s",
         }}
       >
         {checked && <CheckCircle size={13} color={T.bg.base} strokeWidth={3} />}
@@ -541,7 +541,7 @@ export const DI = ({ value, onChange, placeholder = "0.00", label = "Amount" }: 
           fontSize: 14,
           outline: "none",
           boxSizing: "border-box",
-          transition: "all 0.2s",
+          transition: "transform 0.2s, opacity 0.2s, background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s",
           fontFamily: T.font.mono,
           fontWeight: 700,
           boxShadow: focused ? `0 0 0 3px ${T.accent.primary}30` : "none",

@@ -80,6 +80,16 @@ function withPlaidTimeout(promiseFactory, ms, label) {
   });
 }
 
+function formatPlaidRetryAfter(ms) {
+  const totalMinutes = Math.max(1, Math.ceil(ms / 60000));
+  const hours = Math.floor(totalMinutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days}d ${hours % 24}h`;
+  if (hours > 0) return `${hours}h ${totalMinutes % 60}m`;
+  return `${totalMinutes}m`;
+}
+
 async function buildPlaidBackendHeaders(extra = {}) {
   return buildIdentityHeaders({
     "Content-Type": "application/json",
@@ -564,11 +574,16 @@ export async function forceBackendSync(options = {}) {
   if (!res.ok) {
     if (res.status === 429) {
       void log.warn("plaid", `Force sync throttled by backend cooldown. Using cached D1 data.`);
+      const retryAfterMs = Math.max(0, Number(payload?.retryAfterMs) || 0);
       return {
         success: false,
         throttled: true,
         status: res.status,
-        message: payload?.message || "Manual sync is on cooldown.",
+        retryAfterMs,
+        message:
+          retryAfterMs > 0
+            ? `Next live sync in ${formatPlaidRetryAfter(retryAfterMs)}`
+            : (payload?.message || "Manual sync is on cooldown."),
         reconnectRequired: false,
         failedItems: [],
       };

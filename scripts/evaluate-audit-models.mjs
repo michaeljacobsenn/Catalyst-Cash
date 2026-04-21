@@ -1,6 +1,7 @@
 globalThis.window = globalThis.window || {};
 
 import { buildSnapshotMessage } from "../src/modules/buildSnapshotMessage.js";
+import { buildDemoScenario, DEMO_SCENARIO_ORDER, getDemoScenarioMeta } from "../src/modules/demoScenario.js";
 import { generateStrategy } from "../src/modules/engine.js";
 import { parseAudit, validateParsedAuditConsistency } from "../src/modules/utils.js";
 
@@ -39,7 +40,7 @@ function buildScenarioBase() {
 }
 
 function makeScenarios() {
-  return [
+  const scenarios = [
     {
       id: "tight_liquidity_tax_gap",
       label: "Tight liquidity with protected cash gap",
@@ -397,6 +398,28 @@ function makeScenarios() {
       },
     },
   ];
+  const demoScenarios = DEMO_SCENARIO_ORDER.map((scenarioId) => {
+    const demoScenario = buildDemoScenario(new Date("2026-04-20T12:00:00.000Z"), scenarioId);
+    return {
+      id: `demo_mode_${scenarioId}`,
+      label: `Demo mode: ${getDemoScenarioMeta(scenarioId).name}`,
+      ...buildScenarioBase(),
+      financialConfig: demoScenario.financialConfig,
+      cards: demoScenario.cards,
+      bankAccounts: demoScenario.bankAccounts,
+      renewals: demoScenario.renewals,
+      form: demoScenario.form,
+      parsedTransactions: demoScenario.parsedTransactions,
+      budgetActuals: demoScenario.budgetActuals,
+      holdingValues: demoScenario.holdingValues,
+      personalRules: demoScenario.personalRules,
+      expectations: {
+        shouldOpenInvesting: true,
+        expectedStatusAtLeast: "GREEN",
+      },
+    };
+  });
+  return [...scenarios, ...demoScenarios];
 }
 
 function buildInvestmentAnchorBalance(scenario) {

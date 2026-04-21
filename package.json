@@ -30,6 +30,9 @@
     "test:e2e": "node scripts/run-e2e.cjs",
     "test:e2e:smoke": "node scripts/run-e2e-smoke.cjs",
     "test:e2e:critical": "node scripts/run-e2e.cjs tests/e2e/app.spec.ts",
+    "visual:site": "node scripts/visual-pass-site.mjs",
+    "visual:budget-rewards": "node scripts/visual-pass-budget-rewards.mjs --surfaces=budget,rewards",
+    "visual:core-surfaces": "node scripts/visual-pass-budget-rewards.mjs",
     "verify": "npm run lint && npm run prompts:check && npm run typecheck && npm run perf:check && npm run test:unit && npm run test:e2e:smoke && npm run test:e2e:critical",
     "sync": "npm run build && echo '\\n⏳ Syncing iOS web assets...' && node scripts/sync-ios-web.cjs && node scripts/inject-local-plugins.cjs",
     "pods:install": "cd ios/App && LANG=en_US.UTF-8 pod install",
@@ -37,8 +40,9 @@
     "ios": "npm run sync && node ./node_modules/@capacitor/cli/bin/capacitor open ios",
     "ios:native": "npm run sync:native && node ./node_modules/@capacitor/cli/bin/capacitor open ios",
     "sync:site": "node scripts/sync-site.cjs",
-    "deploy:site": "npx wrangler pages deploy site --project-name=catalystcash",
-    "deploy": "npm run sync"
+    "deploy:worker": "npx wrangler deploy --config worker/wrangler.toml",
+    "deploy:site": "npm run sync:site && npx wrangler pages deploy site --project-name=catalystcash",
+    "deploy": "npm run deploy:worker && npm run deploy:site"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",

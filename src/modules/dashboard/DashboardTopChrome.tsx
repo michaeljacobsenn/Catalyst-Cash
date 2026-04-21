@@ -41,7 +41,7 @@ function BackupNudgeCard({
         <span style={{ fontSize: 11, fontWeight: 800, color: T.status.amber, fontFamily: T.font.mono, letterSpacing: "0.04em" }}>
           BACKUP REMINDER
         </span>
-        <button
+        <button type="button"
           onClick={onDismissBackupNudge}
           style={{ marginLeft: "auto", background: "none", border: "none", color: T.text.dim, cursor: "pointer", fontSize: 16, padding: 4, lineHeight: 1 }}
         >
@@ -52,7 +52,7 @@ function BackupNudgeCard({
         Your data hasn't been backed up recently. Protect your financial data.
       </p>
       <div style={{ display: "flex", gap: 8 }}>
-        <button
+        <button type="button"
           onClick={onBackupNow}
           disabled={backingUp}
           className="hover-btn"
@@ -79,7 +79,7 @@ function BackupNudgeCard({
           <CloudUpload size={13} />
           {backingUp ? "Backing up..." : "Back Up Now"}
         </button>
-        <button
+        <button type="button"
           onClick={onEnableAutoBackup}
           className="hover-btn"
           style={{

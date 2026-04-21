@@ -216,7 +216,7 @@ export function PageWelcome({ onNext, onStartFast }: { onNext: () => void; onSta
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              transition: "all 0.2s ease",
+              transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
             }}
           >
             {accepted && <Check size={13} color="#fff" strokeWidth={3} />}

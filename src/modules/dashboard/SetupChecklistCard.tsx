@@ -99,7 +99,7 @@ export default function SetupChecklistCard({
                 justifyContent: "center",
                 background: step.done ? T.accent.emerald : `${T.text.muted}10`,
                 color: step.done ? "#fff" : T.text.prominent,
-                transition: "all 0.3s",
+                transition: "transform 0.3s, opacity 0.3s, background-color 0.3s, border-color 0.3s, color 0.3s, box-shadow 0.3s",
               }}
             >
               {step.done ? <CheckCircle size={18} strokeWidth={2.5} /> : <step.Icon size={18} strokeWidth={2} />}

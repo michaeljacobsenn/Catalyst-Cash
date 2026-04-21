@@ -4,7 +4,6 @@ import { performCloudBackup } from "../backup.js";
 import AlertStrip from "../dashboard/AlertStrip.js";
 import DashboardOverview from "../dashboard/DashboardOverview.js";
 import { DashboardTopChrome } from "../dashboard/DashboardTopChrome.js";
-import DemoAuditButton from "../dashboard/DemoAuditButton.js";
 import EmptyDashboard from "../dashboard/EmptyDashboard.js";
 import InsightsBoardCard from "../dashboard/InsightsBoardCard.js";
 import {
@@ -223,7 +222,6 @@ export default memo(function DashboardTab({
 
   // ── Synthetic Percentile (client-side, no real user data) ──
   const percentile = computeScorePercentile(score);
-  const demoAuditLabel = "Load Demo Data";
   const canSyncPlaid = !current?.isTest && (cards.some((card) => card._plaidAccountId) || bankAccounts.some((account) => account._plaidAccountId));
   const showInsightsBoard = Boolean(summary || insightSentences.length > 0 || nextActionBrief);
 
@@ -286,8 +284,6 @@ export default memo(function DashboardTab({
             }}
           />
 
-          {typeof onDemoAudit === "function" && <DemoAuditButton label={demoAuditLabel} onClick={handleDemoAuditClick} />}
-
           <EmptyDashboard {...(onRestore ? { onRestore } : {})} onDemoAudit={onDemoAudit || (() => undefined)} />
         </div>
       </div>
@@ -347,31 +343,55 @@ export default memo(function DashboardTab({
                     DEMO DATA
                   </div>
                   <p style={{ fontSize: 10, color: T.text.secondary, lineHeight: 1.4, margin: 0 }}>
-                    Showing sample data from a demo audit
+                    {current?.demoScenarioName || "Demo scenario"} active. Demo mode clears on full app relaunch.
                   </p>
                 </div>
-                <button
-                  className="a11y-hit-target"
-                  onClick={onRefreshDashboard}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 5,
-                    padding: "6px 12px",
-                    borderRadius: T.radius.md,
-                    border: `1px solid ${T.border.default}`,
-                    background: T.bg.elevated,
-                    color: T.text.primary,
-                    fontSize: 10,
-                    fontWeight: 800,
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}
-                >
-                  <RefreshCw size={11} strokeWidth={2.5} />
-                  Reset
-                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  {typeof onDemoAudit === "function" && (
+                    <button type="button"
+                      className="a11y-hit-target"
+                      onClick={handleDemoAuditClick}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 5,
+                        padding: "6px 12px",
+                        borderRadius: T.radius.md,
+                        border: `1px solid ${T.border.default}`,
+                        background: T.bg.elevated,
+                        color: T.text.primary,
+                        fontSize: 10,
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <RefreshCw size={11} strokeWidth={2.5} />
+                      Load next demo
+                    </button>
+                  )}
+                  <button type="button"
+                    className="a11y-hit-target"
+                    onClick={onRefreshDashboard}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                      padding: "6px 12px",
+                      borderRadius: T.radius.md,
+                      border: `1px solid ${T.border.default}`,
+                      background: T.bg.elevated,
+                      color: T.text.primary,
+                      fontSize: 10,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <RefreshCw size={11} strokeWidth={2.5} />
+                    Reset
+                  </button>
+                </div>
               </div>
             </Card>
           )}
@@ -449,7 +469,6 @@ export default memo(function DashboardTab({
 
 
           <DashboardSection>
-          {typeof onDemoAudit === "function" && <DemoAuditButton label={demoAuditLabel} onClick={handleDemoAuditClick} />}
           <InsightsBoardCard
             visible={showInsightsBoard}
             summary={summary}

@@ -23,8 +23,76 @@ export interface PlaidStaleBreakdown {
   connectedButCached: PlaidStaleInstitution[];
 }
 
+export interface PlaidSyncIssueInput {
+  institutionName?: string;
+  message?: string;
+}
+
+export interface PlaidGroupedSyncIssue {
+  institutionName: string;
+  institutionNames: string[];
+  message: string;
+  issueCount: number;
+  cachedSnapshots: string[];
+}
+
 function getInstitutionLabel(item: PlaidLinkedStatusItem): string {
   return String(item?.institution || item?.bank || item?.name || "Linked institution").trim();
+}
+
+function extractCachedSnapshotLabel(message = ""): string | null {
+  const match = String(message).match(/cached balances from (.+?)(?=\.|$)/i);
+  const label = String(match?.[1] || "").trim();
+  return label || null;
+}
+
+function normalizePlaidSyncIssue(message = "") {
+  const cleaned = String(message).replace(/\s+/g, " ").trim() || "Needs attention.";
+  const needsReconnect = /reconnect/i.test(cleaned);
+  const processing = /processing/i.test(cleaned);
+  const waitingForLiveSync = /next live sync/i.test(cleaned);
+  const waitingForRefreshWindow = /next plaid refresh window/i.test(cleaned);
+  const verifyBeforeActing = /verify before acting/i.test(cleaned);
+  const hasCachedSnapshot = /cached balances from /i.test(cleaned);
+
+  if (needsReconnect) {
+    return {
+      key: `reconnect:${verifyBeforeActing ? "verify" : "standard"}`,
+      message: verifyBeforeActing
+        ? "Reconnect is required in Settings before live balances can update. Verify balances before acting."
+        : "Reconnect is required in Settings before live balances can update.",
+    };
+  }
+
+  if (processing) {
+    return {
+      key: "processing",
+      message: "Plaid is still processing this refresh. Fresh balances should appear on the next live sync.",
+    };
+  }
+
+  if (waitingForRefreshWindow) {
+    return {
+      key: `cached-refresh-window:${verifyBeforeActing ? "verify" : "standard"}`,
+      message: verifyBeforeActing
+        ? "Cached balances are waiting for the next Plaid refresh window. Verify balances before acting."
+        : "Cached balances are waiting for the next Plaid refresh window.",
+    };
+  }
+
+  if (waitingForLiveSync || hasCachedSnapshot) {
+    return {
+      key: `cached-live-sync:${verifyBeforeActing ? "verify" : "standard"}`,
+      message: verifyBeforeActing
+        ? "Cached balances are waiting for the next live sync. Verify balances before acting."
+        : "Cached balances are waiting for the next live sync.",
+    };
+  }
+
+  return {
+    key: cleaned.toLowerCase(),
+    message: cleaned,
+  };
 }
 
 export function getLatestPlaidSyncDate(items: PlaidLinkedStatusItem[] = []): Date | null {
@@ -132,4 +200,53 @@ export function summarizeReconnectRequired(
   maxEntries = 2
 ): string | null {
   return summarizeEntries(entries, (entry) => entry.name, maxEntries);
+}
+
+export function groupPlaidSyncIssues(issues: PlaidSyncIssueInput[] = []): PlaidGroupedSyncIssue[] {
+  const grouped = new Map<
+    string,
+    {
+      message: string;
+      institutionNames: string[];
+      cachedSnapshots: string[];
+    }
+  >();
+
+  for (const issue of issues) {
+    const institutionName = String(issue?.institutionName || "Linked institution").trim() || "Linked institution";
+    const normalized = normalizePlaidSyncIssue(issue?.message || "");
+    const snapshotLabel = extractCachedSnapshotLabel(issue?.message || "");
+    const existing = grouped.get(normalized.key);
+
+    if (existing) {
+      if (!existing.institutionNames.includes(institutionName)) {
+        existing.institutionNames.push(institutionName);
+      }
+      if (snapshotLabel) {
+        const snapshotEntry = `${institutionName} (${snapshotLabel})`;
+        if (!existing.cachedSnapshots.includes(snapshotEntry)) {
+          existing.cachedSnapshots.push(snapshotEntry);
+        }
+      }
+      continue;
+    }
+
+    grouped.set(normalized.key, {
+      message: normalized.message,
+      institutionNames: [institutionName],
+      cachedSnapshots: snapshotLabel ? [`${institutionName} (${snapshotLabel})`] : [],
+    });
+  }
+
+  return Array.from(grouped.values()).map((group) => {
+    const preview = group.institutionNames.slice(0, 2).join(", ");
+    const extraCount = Math.max(group.institutionNames.length - 2, 0);
+    return {
+      institutionName: extraCount > 0 ? `${preview} +${extraCount}` : preview,
+      institutionNames: group.institutionNames,
+      message: group.message,
+      issueCount: group.institutionNames.length,
+      cachedSnapshots: group.cachedSnapshots,
+    };
+  });
 }

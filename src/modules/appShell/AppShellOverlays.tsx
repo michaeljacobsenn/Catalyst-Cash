@@ -89,7 +89,7 @@ export function AiConsentModal({ open, onCancel, onConfirm }: ConsentModalProps)
           We do not sell AI access or store your data on our servers. By continuing, you agree to this data transfer.
         </p>
         <div style={{ display: "flex", gap: 12 }}>
-          <button
+          <button type="button"
             onClick={onCancel}
             style={{
               flex: 1,
@@ -105,7 +105,7 @@ export function AiConsentModal({ open, onCancel, onConfirm }: ConsentModalProps)
           >
             Cancel
           </button>
-          <button
+          <button type="button"
             onClick={() => void onConfirm()}
             style={{
               flex: 1,

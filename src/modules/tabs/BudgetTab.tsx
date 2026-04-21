@@ -1,24 +1,48 @@
 import { type FormEvent, Suspense, lazy, useCallback, useMemo, useState } from "react";
+
 import { T } from "../constants.js";
 import { useAudit } from "../contexts/AuditContext.js";
+import type { BudgetLine } from "../contexts/BudgetContext.js";
 import { useBudget } from "../contexts/BudgetContext.js";
+import { usePortfolio } from "../contexts/PortfolioContext.js";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout.js";
 import { useSettings } from "../contexts/SettingsContext.js";
 import { haptic } from "../haptics.js";
-import { Plus, Trash2, Zap } from "../icons.js";
+import {
+  AlertTriangle,
+  CheckCircle,
+  PiggyBank,
+  Plus,
+  Target,
+  Trash2,
+  TrendingUp,
+  Wallet,
+  Zap,
+} from "../icons.js";
 import { shouldShowGating } from "../subscription.js";
 import UiGlyph from "../UiGlyph.js";
-import { Card } from "../ui.js";
-import ProBanner from "./ProBanner.js";
+import { Badge, Card } from "../ui.js";
+import { fmt } from "../utils.js";
 import { BUCKET_CONFIG, getActualSpendForLine } from "../budgetEngine.js";
 import { BUDGET_BUCKET_ORDER, DEFAULT_BUDGET_ICONS } from "../budgetBuckets.js";
-import type { BudgetLine } from "../contexts/BudgetContext.js";
+import ProBanner from "./ProBanner.js";
+
 const LazyProPaywall = lazy(() => import("./ProPaywall.js"));
 
 type Bucket = BudgetLine["bucket"];
 const BUCKET_ORDER = BUDGET_BUCKET_ORDER as readonly Bucket[];
-
 const DEFAULT_ICONS = DEFAULT_BUDGET_ICONS as Record<Bucket, string>;
 const READY_TO_ASSIGN_EPSILON = 0.5;
+
+function formatBudgetMoney(value: number) {
+  return fmt(Number(value) || 0);
+}
+
+function formatBudgetCompact(value: number) {
+  const amount = Number(value) || 0;
+  if (Math.abs(amount) >= 1000) return `$${(amount / 1000).toFixed(1)}k`;
+  return `$${amount.toFixed(0)}`;
+}
 
 interface AddLineFormProps {
   bucket: Bucket;
@@ -27,48 +51,116 @@ interface AddLineFormProps {
 }
 
 function AddLineForm({ bucket, onAdd, onCancel }: AddLineFormProps) {
+  const { isNarrowPhone } = useResponsiveLayout();
+  const shouldAutoFocus = typeof window !== "undefined" && Boolean(window.matchMedia?.("(pointer:fine)").matches);
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [icon, setIcon] = useState(DEFAULT_ICONS[bucket]);
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
     const val = parseFloat(amount.replace(/[^0-9.]/g, ""));
-    if (!name.trim() || isNaN(val) || val <= 0) return;
+    if (!name.trim() || Number.isNaN(val) || val <= 0) return;
     onAdd({ name: name.trim(), amount: val, bucket, icon, isAuto: false });
     haptic.success();
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ padding: "12px 16px", background: T.bg.elevated, borderRadius: 14, margin: "8px 0", display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", gap: 8 }}>
+    <form
+      onSubmit={handleSubmit}
+      style={{
+        padding: isNarrowPhone ? "14px" : "16px",
+        borderRadius: 20,
+        background: `linear-gradient(180deg, ${T.bg.surface}, ${T.bg.elevated})`,
+        border: `1px solid ${T.border.subtle}`,
+        display: "grid",
+        gap: 12,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.text.dim, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Add Budget Line
+          </div>
+          <div style={{ fontSize: 13, color: T.text.secondary, lineHeight: 1.45, marginTop: 4 }}>
+            Add a per-paycheck target for this bucket.
+          </div>
+        </div>
+        <Badge variant="outline" style={{ color: BUCKET_CONFIG[bucket].color, borderColor: `${BUCKET_CONFIG[bucket].color}35`, background: `${BUCKET_CONFIG[bucket].color}10` }}>
+          {BUCKET_CONFIG[bucket].label}
+        </Badge>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: isNarrowPhone ? "56px minmax(0, 1fr)" : "60px minmax(0, 1fr)", gap: 10 }}>
         <input
           value={icon}
-          onChange={e => setIcon(e.target.value)}
+          onChange={(event) => setIcon(event.target.value)}
           maxLength={2}
-          style={{ width: 44, background: T.bg.surface, border: `1px solid ${T.border.default}`, borderRadius: 10, color: T.text.primary, fontSize: 20, textAlign: "center", padding: "8px 4px", outline: "none" }}
+          aria-label="Budget line icon"
+          style={{
+            textAlign: "center",
+            fontSize: 22,
+            fontWeight: 700,
+            padding: "12px 6px",
+            borderRadius: 14,
+          }}
         />
         <input
-          autoFocus
+          autoFocus={shouldAutoFocus}
           placeholder="Category name"
           value={name}
-          onChange={e => setName(e.target.value)}
-          style={{ flex: 1, background: T.bg.surface, border: `1px solid ${T.border.default}`, borderRadius: 10, color: T.text.primary, fontSize: 14, fontWeight: 700, padding: "8px 12px", outline: "none" }}
+          onChange={(event) => setName(event.target.value)}
+          aria-label="Budget line name"
+          style={{ fontSize: 15, fontWeight: 700, borderRadius: 14 }}
         />
       </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <div style={{ position: "relative", flex: 1 }}>
-          <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: T.text.muted, fontSize: 14, fontWeight: 700 }}>$</span>
+
+      <div style={{ display: "grid", gridTemplateColumns: isNarrowPhone ? "1fr" : "minmax(0, 1fr) auto auto", gap: 10 }}>
+        <div style={{ position: "relative" }}>
+          <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.muted, fontSize: 14, fontWeight: 700 }}>$</span>
           <input
             type="number"
+            inputMode="decimal"
             placeholder="Amount per paycheck"
             value={amount}
-            onChange={e => setAmount(e.target.value)}
-            style={{ width: "100%", background: T.bg.surface, border: `1px solid ${T.border.default}`, borderRadius: 10, color: T.text.primary, fontSize: 14, fontWeight: 700, padding: "8px 12px 8px 28px", outline: "none", boxSizing: "border-box" }}
+            onChange={(event) => setAmount(event.target.value)}
+            aria-label="Budget line amount"
+            style={{ paddingLeft: 30, fontSize: 15, fontWeight: 700, borderRadius: 14 }}
           />
         </div>
-        <button type="submit" style={{ padding: "8px 18px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`, color: "white", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>Add</button>
-        <button type="button" onClick={onCancel} style={{ padding: "8px 14px", borderRadius: 10, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.secondary, fontWeight: 700, fontSize: 13, cursor: "pointer" }}><UiGlyph glyph="✕" size={14} color={T.text.secondary} /></button>
+        <button
+          type="submit"
+          style={{
+            minHeight: 46,
+            padding: "0 18px",
+            borderRadius: 14,
+            border: "none",
+            background: `linear-gradient(135deg, ${T.accent.primary}, #6C60FF)`,
+            color: "#fff",
+            fontSize: 13,
+            fontWeight: 800,
+            cursor: "pointer",
+          }}
+        >
+          Add Line
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          style={{
+            minHeight: 46,
+            padding: "0 16px",
+            borderRadius: 14,
+            border: `1px solid ${T.border.default}`,
+            background: "transparent",
+            color: T.text.secondary,
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          Cancel
+        </button>
       </div>
     </form>
   );
@@ -82,8 +174,11 @@ interface BudgetLineRowProps {
 }
 
 function BudgetLineRow({ line, actualSpend, onUpdate, onDelete }: BudgetLineRowProps) {
+  const { isNarrowPhone } = useResponsiveLayout();
+  const shouldAutoFocus = typeof window !== "undefined" && Boolean(window.matchMedia?.("(pointer:fine)").matches);
   const [editingAmount, setEditingAmount] = useState(false);
   const [amountInput, setAmountInput] = useState("");
+
   const normalizedActualSpend = Math.max(0, Number(actualSpend) || 0);
   const progress = line.amount > 0 ? Math.min(normalizedActualSpend / line.amount, 1) : 0;
   const remaining = line.amount - normalizedActualSpend;
@@ -94,128 +189,279 @@ function BudgetLineRow({ line, actualSpend, onUpdate, onDelete }: BudgetLineRowP
   const bucketLabel = BUCKET_CONFIG[line.bucket].label;
 
   return (
-    <div style={{ padding: "14px 16px", borderBottom: `1px solid ${T.border.subtle}`, display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <UiGlyph glyph={line.icon} size={20} color={T.text.primary} style={{ flexShrink: 0 }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{line.name}</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
-            {line.isAuto ? <div style={{ fontSize: 10, color: T.accent.primary, fontWeight: 700, letterSpacing: "0.03em" }}>AUTO · FROM AUDIT</div> : null}
-            {line.needsReview ? (
-              <div style={{ fontSize: 10, color: T.status.amber, fontWeight: 800, letterSpacing: "0.03em" }}>
-                REVIEW · MOVED FROM FLEX
-              </div>
-            ) : (
-              <div style={{ fontSize: 10, color: T.text.dim, fontWeight: 700, letterSpacing: "0.03em" }}>
-                {bucketLabel.toUpperCase()}
-              </div>
-            )}
+    <div
+      style={{
+        padding: isNarrowPhone ? "14px 14px 12px" : "16px 16px 14px",
+        borderTop: `1px solid ${T.border.subtle}`,
+        display: "grid",
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isNarrowPhone ? "minmax(0, 1fr) auto" : "minmax(0, 1fr) auto auto",
+          gap: 10,
+          alignItems: "start",
+        }}
+      >
+        <div style={{ minWidth: 0, display: "flex", gap: 10 }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 14,
+              background: `${BUCKET_CONFIG[line.bucket].color}12`,
+              border: `1px solid ${BUCKET_CONFIG[line.bucket].color}20`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <UiGlyph glyph={line.icon} size={18} color={BUCKET_CONFIG[line.bucket].color} />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: T.text.primary, lineHeight: 1.2, wordBreak: "break-word" }}>
+              {line.name}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 800,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  color: line.needsReview ? T.status.amber : T.text.dim,
+                }}
+              >
+                {line.needsReview ? "Review bucket" : bucketLabel}
+              </span>
+              {line.isAuto ? (
+                <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: T.accent.primary }}>
+                  From audit
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
+
         {editingAmount ? (
-          <form onSubmit={e => { e.preventDefault(); const v = parseFloat(amountInput.replace(/[^0-9.]/g, "")); if (!isNaN(v) && v >= 0) { onUpdate({ amount: v }); haptic.success(); } setEditingAmount(false); }} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const value = parseFloat(amountInput.replace(/[^0-9.]/g, ""));
+              if (!Number.isNaN(value) && value >= 0) {
+                onUpdate({ amount: value });
+                haptic.success();
+              }
+              setEditingAmount(false);
+            }}
+            style={{
+              display: "grid",
+              gridTemplateColumns: isNarrowPhone ? "minmax(92px, 1fr) 40px" : "minmax(104px, 1fr) 40px",
+              gap: 6,
+              alignItems: "center",
+              gridColumn: isNarrowPhone ? "1 / -1" : undefined,
+            }}
+          >
             <div style={{ position: "relative" }}>
-              <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: T.text.muted, fontSize: 13 }}>$</span>
-              <input autoFocus type="number" value={amountInput} onChange={e => setAmountInput(e.target.value)}
-                style={{ width: 80, background: T.bg.surface, border: `1px solid ${T.accent.primary}`, borderRadius: 8, color: T.accent.primary, fontSize: 14, fontWeight: 800, padding: "5px 8px 5px 20px", outline: "none" }} />
+              <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.text.muted, fontSize: 13, fontWeight: 700 }}>$</span>
+              <input
+                autoFocus={shouldAutoFocus}
+                type="number"
+                inputMode="decimal"
+                value={amountInput}
+                onChange={(event) => setAmountInput(event.target.value)}
+                aria-label={`Edit ${line.name} amount`}
+                style={{
+                  width: "100%",
+                  minHeight: 40,
+                  padding: "8px 10px 8px 24px",
+                  borderRadius: 12,
+                  border: `1px solid ${T.accent.primary}`,
+                  color: T.accent.primary,
+                  fontSize: 14,
+                  fontWeight: 800,
+                  boxShadow: "none",
+                }}
+              />
             </div>
-            <button type="submit" style={{ background: T.accent.primary, border: "none", borderRadius: 8, color: "white", fontWeight: 800, fontSize: 12, padding: "5px 10px", cursor: "pointer" }}><UiGlyph glyph="✓" size={12} color="#fff" /></button>
+            <button
+              type="submit"
+              aria-label="Save budget amount"
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                border: "none",
+                background: T.accent.primary,
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+              }}
+            >
+              <CheckCircle size={15} />
+            </button>
           </form>
         ) : (
-          <button onClick={() => { setAmountInput(String(line.amount)); setEditingAmount(true); haptic.light(); }}
-            style={{ background: "transparent", border: `1px solid ${T.border.default}`, borderRadius: 10, color: T.accent.primary, fontSize: 15, fontWeight: 900, padding: "4px 12px", cursor: "pointer", letterSpacing: "-0.02em" }}>
-            ${line.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+          <button
+            type="button"
+            onClick={() => {
+              setAmountInput(String(line.amount));
+              setEditingAmount(true);
+              haptic.light();
+            }}
+            style={{
+              minHeight: 40,
+              padding: "0 14px",
+              borderRadius: 12,
+              border: `1px solid ${T.border.default}`,
+              background: T.bg.surface,
+              color: T.text.primary,
+              fontSize: 14,
+              fontWeight: 900,
+              letterSpacing: "-0.02em",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {formatBudgetMoney(line.amount)}
           </button>
         )}
-        <button onClick={() => { haptic.light(); onDelete(); }}
-          style={{ background: "transparent", border: "none", color: T.text.muted, cursor: "pointer", padding: "4px", borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center" }}>
+
+        <button
+          type="button"
+          onClick={() => {
+            haptic.light();
+            onDelete();
+          }}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 12,
+            border: "none",
+            background: T.bg.surface,
+            color: T.text.muted,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           <Trash2 size={14} strokeWidth={2} />
         </button>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: T.text.dim }}>Bucket</span>
-        <div style={{ position: "relative" }}>
-          <select
-            aria-label={`Move ${line.name} to a different bucket`}
-            value={line.bucket}
-            onChange={e => {
-              haptic.selection();
-              onUpdate({ bucket: e.target.value as Bucket, needsReview: false });
-            }}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isNarrowPhone ? "repeat(3, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr)) auto",
+          gap: 8,
+          alignItems: "stretch",
+        }}
+      >
+        {[
+          { label: "Planned", value: formatBudgetCompact(line.amount), tone: T.text.primary },
+          { label: "Spent", value: hasActuals ? formatBudgetCompact(normalizedActualSpend) : "No audit", tone: hasActuals ? T.text.primary : T.text.dim },
+          { label: "Left", value: hasActuals ? (isOver ? `-${formatBudgetCompact(Math.abs(remaining)).slice(1)}` : formatBudgetCompact(Math.max(remaining, 0))) : "Waiting", tone: isOver ? T.status.red : isWarning ? T.status.amber : T.status.green },
+        ].map((stat) => (
+          <div
+            key={stat.label}
             style={{
-              appearance: "none",
-              WebkitAppearance: "none",
-              padding: "6px 28px 6px 10px",
-              borderRadius: 999,
-              border: `1px solid ${line.needsReview ? `${T.status.amber}55` : T.border.default}`,
-              background: line.needsReview ? `${T.status.amber}14` : T.bg.elevated,
-              color: line.needsReview ? T.status.amber : T.text.primary,
-              fontSize: 11,
-              fontWeight: 800,
-              cursor: "pointer",
-              outline: "none",
+              padding: "10px 10px 9px",
+              borderRadius: 14,
+              border: `1px solid ${T.border.subtle}`,
+              background: T.bg.surface,
+              minWidth: 0,
             }}
           >
-            {BUCKET_ORDER.map(bucket => (
-              <option key={bucket} value={bucket}>
-                {BUCKET_CONFIG[bucket].label}
-              </option>
-            ))}
-          </select>
-          <span
-            style={{
-              position: "absolute",
-              right: 10,
-              top: "50%",
-              transform: "translateY(-50%)",
-              pointerEvents: "none",
-              color: line.needsReview ? T.status.amber : T.text.muted,
-              fontSize: 10,
-              fontWeight: 900,
-            }}
-          >
-            ▾
-          </span>
+            <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              {stat.label}
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: stat.tone, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {stat.value}
+            </div>
+          </div>
+        ))}
+
+        <div style={{ minWidth: 0, gridColumn: isNarrowPhone ? "1 / -1" : undefined }}>
+          <div style={{ position: "relative" }}>
+            <select
+              data-unstyled="true"
+              aria-label={`Move ${line.name} to a different bucket`}
+              value={line.bucket}
+              onChange={(event) => {
+                haptic.selection();
+                onUpdate({ bucket: event.target.value as Bucket, needsReview: false });
+              }}
+              style={{
+                width: "100%",
+                minHeight: 44,
+                padding: "12px 30px 12px 12px",
+                borderRadius: 14,
+                border: `1px solid ${line.needsReview ? `${T.status.amber}55` : T.border.subtle}`,
+                background: line.needsReview ? `${T.status.amber}12` : T.bg.surface,
+                color: line.needsReview ? T.status.amber : T.text.primary,
+                fontSize: 12,
+                fontWeight: 800,
+                boxShadow: "none",
+              }}
+            >
+              {BUCKET_ORDER.map((bucket) => (
+                <option key={bucket} value={bucket}>
+                  {BUCKET_CONFIG[bucket].label}
+                </option>
+              ))}
+            </select>
+            <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: line.needsReview ? T.status.amber : T.text.muted, pointerEvents: "none", fontSize: 10, fontWeight: 900 }}>
+              ▾
+            </span>
+          </div>
         </div>
-        {line.needsReview ? (
-          <button
-            type="button"
-            onClick={() => {
-              haptic.success();
-              onUpdate({ needsReview: false });
-            }}
-            style={{
-              border: `1px solid ${T.status.amber}40`,
-              background: `${T.status.amber}14`,
-              color: T.status.amber,
-              borderRadius: 999,
-              padding: "6px 10px",
-              fontSize: 11,
-              fontWeight: 800,
-              cursor: "pointer",
-            }}
-          >
-            Keep as {bucketLabel}
-          </button>
-        ) : null}
       </div>
 
-      {hasActuals && (
-        <>
-          <div style={{ width: "100%", height: 4, borderRadius: 2, background: T.bg.surface, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${progress * 100}%`, borderRadius: 2, background: barColor, transition: "width 0.5s ease" }} />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: isOver ? T.status.red : T.text.secondary }}>
-              {isOver ? `$${Math.abs(remaining).toFixed(0)} over` : `$${remaining.toFixed(0)} left`}
-            </span>
-            <span style={{ fontSize: 11, color: T.text.dim }}>
-              ${normalizedActualSpend.toFixed(0)} spent this cycle
-            </span>
-          </div>
-        </>
-      )}
+      <div style={{ display: "grid", gap: 8 }}>
+        <div style={{ width: "100%", height: 6, borderRadius: 999, background: T.bg.surface, overflow: "hidden" }}>
+          <div
+            style={{
+              height: "100%",
+              width: `${Math.max(0, Math.min(progress, 1)) * 100}%`,
+              borderRadius: 999,
+              background: barColor,
+              transition: "width 0.35s ease",
+            }}
+          />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11, color: hasActuals ? (isOver ? T.status.red : T.text.secondary) : T.text.dim, fontWeight: 700 }}>
+            {hasActuals ? (isOver ? `${formatBudgetMoney(Math.abs(remaining))} over plan` : `${formatBudgetMoney(Math.max(remaining, 0))} still available`) : "Run an audit to compare planned vs actual."}
+          </span>
+          {line.needsReview ? (
+            <button
+              type="button"
+              onClick={() => {
+                haptic.success();
+                onUpdate({ needsReview: false });
+              }}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 999,
+                border: `1px solid ${T.status.amber}35`,
+                background: `${T.status.amber}12`,
+                color: T.status.amber,
+                fontSize: 11,
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              Keep current bucket
+            </button>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }
@@ -228,6 +474,7 @@ interface BudgetTabProps {
 
 export default function BudgetTab({ embedded, proEnabled = false, privacyMode: _pm = false }: BudgetTabProps) {
   void _pm;
+  const { isNarrowPhone, isTablet, isLargeTablet } = useResponsiveLayout();
   const {
     lines,
     cycleIncome,
@@ -239,10 +486,12 @@ export default function BudgetTab({ embedded, proEnabled = false, privacyMode: _
     totalNeeds,
     totalWants,
     totalSavings,
+    totalAssigned,
     readyToAssign,
     isBudgetReady,
   } = useBudget();
   const { financialConfig } = useSettings();
+  const { renewals } = usePortfolio();
   const { current } = useAudit();
 
   const [addingBucket, setAddingBucket] = useState<Bucket | null>(null);
@@ -253,19 +502,29 @@ export default function BudgetTab({ embedded, proEnabled = false, privacyMode: _
   const auditCategories = (current?.parsed?.categories ?? null) as Record<string, { total?: number }> | null;
   const hasAudit = !!auditCategories;
   const hasNoLines = lines.length === 0;
-  const showSeedBanner = hasAudit && hasNoLines && !dismissed && isBudgetReady;
+  const activeRenewals = useMemo(
+    () =>
+      (Array.isArray(renewals) ? renewals : []).filter((renewal) => {
+        if (!renewal || renewal.isCancelled || renewal.archivedAt || renewal.isWaived) return false;
+        if (renewal.isAnnualFee || renewal.isCardAF) return false;
+        return (Number(renewal.amount) || 0) > 0;
+      }),
+    [renewals]
+  );
+  const hasSeedSources = hasAudit || activeRenewals.length > 0;
+  const showSeedBanner = hasSeedSources && hasNoLines && !dismissed && isBudgetReady;
 
   const handleSeed = useCallback(async () => {
-    if (!auditCategories) return;
+    if (!hasSeedSources) return;
     setSeedPending(true);
-    await suggestFromAudit(auditCategories);
+    await suggestFromAudit(auditCategories, { renewals: activeRenewals });
     setSeedPending(false);
     haptic.success();
-  }, [auditCategories, suggestFromAudit]);
+  }, [activeRenewals, auditCategories, hasSeedSources, suggestFromAudit]);
 
   const linesByBucket = useMemo(() => {
     const map: Record<Bucket, BudgetLine[]> = { bills: [], needs: [], wants: [], savings: [] };
-    for (const l of lines) map[l.bucket as Bucket]?.push(l);
+    for (const line of lines) map[line.bucket as Bucket]?.push(line);
     return map;
   }, [lines]);
 
@@ -274,31 +533,84 @@ export default function BudgetTab({ embedded, proEnabled = false, privacyMode: _
     [lines]
   );
 
-  // AI overspend nudges
   const overspentLines = useMemo(() => {
     if (!auditCategories) return [];
-    return lines.filter(l => {
-      const actual = getActualSpendForLine(auditCategories, l.name, financialConfig.payFrequency) as number;
-      return actual > l.amount && l.amount > 0;
-    });
+    return lines
+      .map((line) => {
+        const actual = getActualSpendForLine(auditCategories, line.name, financialConfig.payFrequency) as number;
+        const overBy = actual - line.amount;
+        return { line, actual, overBy };
+      })
+      .filter((entry) => entry.overBy > 0)
+      .sort((left, right) => right.overBy - left.overBy);
   }, [lines, auditCategories, financialConfig.payFrequency]);
 
-  const cy = cycleIncome > 0 ? `$${cycleIncome.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : null;
+  const bucketSummaries = useMemo(() => {
+    return BUCKET_ORDER.map((bucket) => {
+      const bucketLines = linesByBucket[bucket] ?? [];
+      const assigned = bucketLines.reduce((sum, line) => sum + (Number(line.amount) || 0), 0);
+      const actual = auditCategories
+        ? bucketLines.reduce((sum, line) => sum + (getActualSpendForLine(auditCategories, line.name, financialConfig.payFrequency) as number), 0)
+        : 0;
+      const remaining = assigned - actual;
+      const progress = assigned > 0 ? Math.min(actual / assigned, 1) : 0;
+      const share = totalAssigned > 0 ? assigned / totalAssigned : 0;
+      return {
+        bucket,
+        config: BUCKET_CONFIG[bucket],
+        lineCount: bucketLines.length,
+        assigned,
+        actual,
+        remaining,
+        progress,
+        share,
+      };
+    });
+  }, [auditCategories, financialConfig.payFrequency, linesByBucket, totalAssigned]);
+
+  const largestBucket = useMemo(
+    () => bucketSummaries.reduce((largest, currentBucket) => (currentBucket.assigned > largest.assigned ? currentBucket : largest), bucketSummaries[0] || {
+      bucket: "bills" as Bucket,
+      config: BUCKET_CONFIG.bills,
+      lineCount: 0,
+      assigned: 0,
+      actual: 0,
+      remaining: 0,
+      progress: 0,
+      share: 0,
+    }),
+    [bucketSummaries]
+  );
+
+  const fundedBuckets = bucketSummaries.filter((bucket) => bucket.assigned > 0).length;
+  const assignedPercent = cycleIncome > 0 ? Math.min(totalAssigned / cycleIncome, 1.4) : 0;
+  const cycleLabel = financialConfig.payFrequency?.replace("-", " ") ?? "Per paycheck";
   const isComplete = Math.abs(readyToAssign) < READY_TO_ASSIGN_EPSILON && lines.length > 0;
   const isOver = !isComplete && readyToAssign < 0;
+  const planningStatusLabel = isOver ? "Over-assigned" : isComplete ? "Balanced" : "Ready to assign";
+  const planningStatusColor = isOver ? T.status.red : isComplete ? T.status.green : T.accent.primary;
+  const topOverspend = overspentLines[0] || null;
+  const summaryGridColumns = isLargeTablet ? "repeat(4, minmax(0, 1fr))" : isTablet ? "repeat(2, minmax(0, 1fr))" : "repeat(2, minmax(0, 1fr))";
+  const allocationMix = [
+    { label: "Bills", value: totalBills, tone: BUCKET_CONFIG.bills.color },
+    { label: "Needs", value: totalNeeds, tone: BUCKET_CONFIG.needs.color },
+    { label: "Wants", value: totalWants, tone: BUCKET_CONFIG.wants.color },
+    { label: "Savings", value: totalSavings, tone: BUCKET_CONFIG.savings.color },
+  ];
 
   return (
     <div className="page-body" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
-      <div style={{ width: "100%", maxWidth: 768, display: "flex", flexDirection: "column" }}>
-
-        {/* Header */}
+      <div style={{ width: "100%", maxWidth: isLargeTablet ? 1024 : 860, display: "flex", flexDirection: "column", gap: 16 }}>
         {!embedded && (
-          <div style={{ paddingTop: 20, paddingBottom: 12 }}>
-            <h1 style={{ fontSize: 24, fontWeight: 900, color: T.text.primary, marginBottom: 4, letterSpacing: "-0.03em" }}>
-              Paycheck Plan
+          <div style={{ paddingTop: 20, paddingBottom: 2 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+              Paycheck Budget
+            </div>
+            <h1 style={{ fontSize: 28, fontWeight: 900, color: T.text.primary, marginBottom: 6, letterSpacing: "-0.04em", lineHeight: 1.02 }}>
+              Budget workspace
             </h1>
-            <p style={{ fontSize: 13, color: T.text.secondary, margin: 0, lineHeight: 1.5 }}>
-              Plan every paycheck across bills, needs, wants, and savings goals.
+            <p style={{ fontSize: 13, color: T.text.secondary, margin: 0, lineHeight: 1.55, maxWidth: 560 }}>
+              Allocate each paycheck across obligations, essentials, lifestyle spending, and goals. The moment an audit lands, this view turns into an operating board instead of a static list.
             </p>
           </div>
         )}
@@ -306,109 +618,331 @@ export default function BudgetTab({ embedded, proEnabled = false, privacyMode: _
         {shouldShowGating() && !proEnabled && (
           <ProBanner onUpgrade={() => setShowPaywall(true)} label="Paycheck CFO Budget" sublabel="Pro unlocks AI-seeded budgets and overspend alerts" />
         )}
-        {showPaywall && <Suspense fallback={null}><LazyProPaywall onClose={() => setShowPaywall(false)} source="budget" /></Suspense>}
+        {showPaywall && (
+          <Suspense fallback={null}>
+            <LazyProPaywall onClose={() => setShowPaywall(false)} source="budget" />
+          </Suspense>
+        )}
 
-        {/* ── Paycheck Overview Card ── */}
-        <Card className="slide-up" style={{ padding: "22px 20px", marginBottom: 16, background: T.bg.card, border: `1px solid ${T.border.subtle}`, borderRadius: 24 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
-                {financialConfig.payFrequency?.replace("-", " ") ?? "Per Paycheck"} take-home
+        <Card
+          variant="glass"
+          className="slide-up"
+          style={{
+            padding: isNarrowPhone ? "18px 16px" : "22px 22px",
+            borderRadius: 28,
+            border: `1px solid ${T.border.subtle}`,
+            background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.surface})`,
+            display: "grid",
+            gap: 16,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: isNarrowPhone ? "flex-start" : "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+                {cycleLabel} take-home
               </div>
-              <div style={{ fontSize: 34, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.04em", lineHeight: 1 }}>
-                {cycleIncome > 0 ? cy : <span style={{ color: T.text.muted, fontSize: 18 }}>Set in Settings → Financial Config</span>}
+              <div style={{ fontSize: isNarrowPhone ? 30 : 38, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.05em", lineHeight: 1 }}>
+                {cycleIncome > 0 ? formatBudgetMoney(cycleIncome) : "Add take-home pay"}
+              </div>
+              <div style={{ fontSize: 13, color: T.text.secondary, lineHeight: 1.5, marginTop: 8, maxWidth: 520 }}>
+                {cycleIncome > 0
+                  ? `Assigned ${formatBudgetMoney(totalAssigned)} across ${fundedBuckets || 0} funded buckets. ${largestBucket?.assigned > 0 ? `${largestBucket.config.label} holds ${Math.round(largestBucket.share * 100)}% of the current plan.` : "Start with the bills and essentials you know you need to cover."}`
+                  : "Set your standard paycheck in Financial Profile so Catalyst can calculate ready-to-assign cash each cycle."}
               </div>
             </div>
-            <div style={{
-              padding: "8px 14px", borderRadius: 100,
-              background: isOver ? `${T.status.red}20` : isComplete ? `${T.status.green}20` : `${T.accent.primary}15`,
-              border: `1px solid ${isOver ? T.status.red : isComplete ? T.status.green : T.accent.primary}30`,
-            }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>
-                {isOver ? "Over" : isComplete ? "Balanced" : "To Assign"}
+
+            <div
+              style={{
+                minWidth: isNarrowPhone ? "100%" : 180,
+                padding: "12px 14px",
+                borderRadius: 20,
+                border: `1px solid ${planningStatusColor}35`,
+                background: `${planningStatusColor}12`,
+              }}
+            >
+              <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+                {planningStatusLabel}
               </div>
-              <div style={{ fontSize: 20, fontWeight: 900, color: isOver ? T.status.red : isComplete ? T.status.green : T.accent.primary, letterSpacing: "-0.03em" }}>
-                {isComplete ? "Balanced" : `${isOver ? "-" : ""}$${Math.abs(readyToAssign).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+              <div style={{ fontSize: isNarrowPhone ? 24 : 28, fontWeight: 900, color: planningStatusColor, letterSpacing: "-0.04em", lineHeight: 1.02 }}>
+                {isComplete ? "Balanced" : `${isOver ? "-" : ""}${formatBudgetMoney(Math.abs(readyToAssign))}`}
+              </div>
+              <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.45, marginTop: 6 }}>
+                {isOver
+                  ? "Trim lower-priority lines before the next paycheck lands."
+                  : isComplete
+                    ? "Every dollar has a job this cycle."
+                    : "Still available to place into a bucket."}
               </div>
             </div>
           </div>
 
-          {/* Bucket summary pills */}
-          {lines.length > 0 && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {[
-                { label: BUCKET_CONFIG.bills.label, val: totalBills, color: BUCKET_CONFIG.bills.color },
-                { label: BUCKET_CONFIG.needs.label, val: totalNeeds, color: BUCKET_CONFIG.needs.color },
-                { label: BUCKET_CONFIG.wants.label, val: totalWants, color: BUCKET_CONFIG.wants.color },
-                { label: BUCKET_CONFIG.savings.label, val: totalSavings, color: BUCKET_CONFIG.savings.color },
-              ].map(({ label, val, color }) => (
-                <div key={label} style={{ flex: "1 1 140px", background: `${color}12`, borderRadius: 12, padding: "8px 10px", border: `1px solid ${color}25` }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, color, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>{label}</div>
-                  <div style={{ fontSize: 14, fontWeight: 900, color: T.text.primary }}>
-                    ${val >= 1000 ? `${(val / 1000).toFixed(1)}k` : val.toFixed(0)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
+          <div style={{ width: "100%", height: 8, borderRadius: 999, background: T.bg.surface, overflow: "hidden" }}>
+            <div
+              style={{
+                width: `${Math.max(0, Math.min(assignedPercent, 1)) * 100}%`,
+                height: "100%",
+                borderRadius: 999,
+                background: isOver ? T.status.red : isComplete ? T.status.green : T.accent.primary,
+                transition: "width 0.35s ease",
+              }}
+            />
+          </div>
 
-        {/* ── AI Overspend Nudges ── */}
-        {overspentLines.length > 0 && (
-          <div style={{ background: T.bg.card, border: `1px solid ${T.status.red}22`, borderRadius: 16, padding: "12px 16px", marginBottom: 16, display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: T.text.primary, display: "flex", alignItems: "center", gap: 6 }}>
-              <Zap size={13} /> Over-budget this cycle
-            </div>
-            {overspentLines.map(l => {
-              const actual = getActualSpendForLine(auditCategories ?? {}, l.name, financialConfig.payFrequency) as number;
+          <div style={{ display: "grid", gridTemplateColumns: summaryGridColumns, gap: 10 }}>
+            {[
+              {
+                label: "Assigned",
+                value: formatBudgetMoney(totalAssigned),
+                detail: cycleIncome > 0 ? `${Math.round(Math.min((totalAssigned / cycleIncome) * 100, 999))}% of take-home` : "Waiting on take-home",
+                icon: Wallet,
+                tone: T.text.primary,
+              },
+              {
+                label: "Overspend Watch",
+                value: overspentLines.length ? `${overspentLines.length}` : "Clear",
+                detail: topOverspend ? `${topOverspend.line.name} is ${formatBudgetMoney(topOverspend.overBy)} over` : "No lines over plan this cycle",
+                icon: AlertTriangle,
+                tone: overspentLines.length ? T.status.red : T.status.green,
+              },
+              {
+                label: "Needs Review",
+                value: needsReviewCount ? `${needsReviewCount}` : "Done",
+                detail: needsReviewCount ? "A few suggested lines still need their final bucket" : "All suggested lines are confirmed",
+                icon: CheckCircle,
+                tone: needsReviewCount ? T.status.amber : T.status.green,
+              },
+              {
+                label: "Goal Funding",
+                value: totalSavings > 0 ? formatBudgetMoney(totalSavings) : "Not set",
+                detail: totalSavings > 0 ? `${Math.round((totalSavings / Math.max(totalAssigned, 1)) * 100)}% of assigned cash` : "Add savings goals to reserve future cash",
+                icon: PiggyBank,
+                tone: totalSavings > 0 ? T.accent.primary : T.text.dim,
+              },
+            ].map((metric) => {
+              const Icon = metric.icon;
               return (
-                <div key={l.id} style={{ fontSize: 12, color: T.text.secondary, display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><UiGlyph glyph={l.icon} size={12} color={T.text.secondary} />{l.name}</span>
-                  <span style={{ fontWeight: 700, color: T.status.red }}>+${(actual - l.amount).toFixed(0)} over</span>
+                <div
+                  key={metric.label}
+                  style={{
+                    padding: "12px 12px 11px",
+                    borderRadius: 18,
+                    border: `1px solid ${T.border.subtle}`,
+                    background: T.bg.surface,
+                    minWidth: 0,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <div style={{ width: 30, height: 30, borderRadius: 10, background: `${metric.tone}12`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Icon size={15} color={metric.tone} />
+                    </div>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      {metric.label}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: metric.tone, letterSpacing: "-0.03em", lineHeight: 1.05 }}>
+                    {metric.value}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45, marginTop: 6 }}>
+                    {metric.detail}
+                  </div>
                 </div>
               );
             })}
           </div>
-        )}
 
-        {/* ── Audit Seed Banner ── */}
+          <div style={{ display: "grid", gap: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              Allocation mix
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+              {allocationMix.map((allocation) => (
+                <div
+                  key={allocation.label}
+                  style={{
+                    minHeight: 84,
+                    padding: "12px 14px",
+                    borderRadius: 18,
+                    border: `1px solid ${allocation.tone}26`,
+                    background: `${allocation.tone}12`,
+                    display: "grid",
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ fontSize: 10, fontWeight: 800, color: allocation.tone, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    {allocation.label}
+                  </div>
+                  <div style={{ fontSize: isNarrowPhone ? 20 : 22, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.03em", lineHeight: 1 }}>
+                    {allocation.value > 0 ? formatBudgetMoney(allocation.value) : "$0"}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.text.secondary, fontWeight: 700 }}>
+                    {totalAssigned > 0 ? `${Math.round((allocation.value / totalAssigned) * 100)}% of assigned cash` : "0% of assigned cash"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+
         {showSeedBanner && (
-          <Card style={{ padding: "18px 20px", marginBottom: 16, background: T.bg.card, border: `1px solid ${T.border.subtle}`, borderRadius: 20 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 42, height: 42, borderRadius: 13, background: `${T.accent.primary}14`, border: `1px solid ${T.accent.primary}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><UiGlyph glyph="🪄" size={20} color={T.accent.primary} /></div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary, marginBottom: 3 }}>Set up from your audit</div>
-                <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.4 }}>Auto-create budget lines from your most recent audit's spending categories.</div>
+          <Card
+            variant="glass"
+            style={{
+              padding: isNarrowPhone ? "16px" : "18px",
+              borderRadius: 24,
+              display: "grid",
+              gap: 14,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+              <div style={{ width: 42, height: 42, borderRadius: 14, background: `${T.accent.primary}14`, border: `1px solid ${T.accent.primary}22`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Zap size={18} color={T.accent.primary} />
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: T.text.primary, marginBottom: 4 }}>
+                  {activeRenewals.length > 0 && hasAudit ? "Build the first plan from bills and spending" : activeRenewals.length > 0 ? "Build the first plan from tracked bills" : "Build the first plan from your audit"}
+                </div>
+                <div style={{ fontSize: 12.5, color: T.text.secondary, lineHeight: 1.5 }}>
+                  {activeRenewals.length > 0 && hasAudit
+                    ? "Catalyst can pull in your tracked recurring bills, then fill the rest from recent spending so you can refine instead of starting from zero."
+                    : activeRenewals.length > 0
+                      ? "Catalyst can pull in your tracked recurring bills as starter lines, then you can layer in the rest of your plan."
+                      : "Catalyst can seed the first plan from your recent spending profile, then you refine the buckets that matter."}
+                </div>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-              <button onClick={handleSeed} disabled={seedPending}
-                style={{ flex: 1, padding: "10px 0", borderRadius: 12, border: `1px solid ${T.accent.primary}22`, background: `${T.accent.primary}14`, color: T.accent.primary, fontWeight: 800, fontSize: 13, cursor: "pointer", opacity: seedPending ? 0.7 : 1 }}>
-                {seedPending ? "Building…" : "Auto-Build Budget"}
+            <div style={{ display: "grid", gridTemplateColumns: isNarrowPhone ? "1fr" : "minmax(0, 1fr) auto", gap: 10 }}>
+              <button
+                type="button"
+                onClick={handleSeed}
+                disabled={seedPending}
+                style={{
+                  minHeight: 46,
+                  borderRadius: 14,
+                  border: `1px solid ${T.accent.primary}25`,
+                  background: `${T.accent.primary}14`,
+                  color: T.accent.primary,
+                  fontSize: 13,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  opacity: seedPending ? 0.7 : 1,
+                }}
+              >
+                {seedPending ? "Building plan…" : activeRenewals.length > 0 && hasAudit ? "Build starter plan" : activeRenewals.length > 0 ? "Build from bills" : "Auto-build budget"}
               </button>
-              <button onClick={() => setDismissed(true)}
-                style={{ padding: "10px 16px", borderRadius: 12, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.secondary, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                Manual
+              <button
+                type="button"
+                onClick={() => setDismissed(true)}
+                style={{
+                  minHeight: 46,
+                  padding: "0 18px",
+                  borderRadius: 14,
+                  border: `1px solid ${T.border.default}`,
+                  background: "transparent",
+                  color: T.text.secondary,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Start manually
               </button>
             </div>
           </Card>
         )}
 
+        {bucketSummaries.some((bucket) => bucket.assigned > 0 || bucket.actual > 0) && (
+          <div style={{ display: "grid", gridTemplateColumns: isLargeTablet ? "repeat(4, minmax(0, 1fr))" : "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+            {bucketSummaries.map((bucket) => (
+              <div
+                key={bucket.bucket}
+                style={{
+                  padding: isNarrowPhone ? "12px" : "13px 12px",
+                  borderRadius: 20,
+                  border: `1px solid ${bucket.config.color}24`,
+                  background: `${bucket.config.color}0E`,
+                  display: "grid",
+                  gap: 8,
+                  minWidth: 0,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <UiGlyph glyph={bucket.config.emoji} size={16} color={bucket.config.color} />
+                    <div style={{ fontSize: 12, fontWeight: 800, color: T.text.primary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {bucket.config.label}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 10, color: bucket.config.color, fontWeight: 800 }}>
+                    {bucket.lineCount || 0}
+                  </span>
+                </div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.03em", lineHeight: 1 }}>
+                  {bucket.assigned > 0 ? formatBudgetCompact(bucket.assigned) : "$0"}
+                </div>
+                <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>
+                  {hasAudit
+                    ? `${formatBudgetCompact(bucket.actual)} spent • ${bucket.remaining < 0 ? `${formatBudgetCompact(Math.abs(bucket.remaining))} over` : `${formatBudgetCompact(Math.max(bucket.remaining, 0))} left`}`
+                    : bucket.assigned > 0
+                      ? `${Math.round(bucket.share * 100)}% of assigned cash`
+                      : "No funding in this bucket yet"}
+                </div>
+                <div style={{ width: "100%", height: 5, borderRadius: 999, background: `${bucket.config.color}18`, overflow: "hidden" }}>
+                  <div style={{ width: `${Math.max(0, Math.min(bucket.progress, 1)) * 100}%`, height: "100%", borderRadius: 999, background: bucket.remaining < 0 ? T.status.red : bucket.config.color }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {needsReviewCount > 0 && (
           <Card
+            variant="glass"
             style={{
               padding: "16px 18px",
-              marginBottom: 16,
-              background: T.bg.card,
+              borderRadius: 22,
               border: `1px solid ${T.status.amber}22`,
-              borderRadius: 20,
+              display: "grid",
+              gap: 6,
             }}
           >
-            <div style={{ fontSize: 13, fontWeight: 900, color: T.text.primary, marginBottom: 4 }}>
-              Review {needsReviewCount} migrated {needsReviewCount === 1 ? "line" : "lines"}
+            <div style={{ fontSize: 13, fontWeight: 900, color: T.text.primary }}>
+              Review {needsReviewCount} suggested {needsReviewCount === 1 ? "line" : "lines"}
             </div>
             <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5 }}>
-              Older Flex lines were mapped to Needs to preserve your saved data. Move any discretionary items to Wants.
+              A few starter lines still need a final bucket. Move anything discretionary into Wants so the plan reflects how you actually spend.
+            </div>
+          </Card>
+        )}
+
+        {overspentLines.length > 0 && (
+          <Card
+            variant="glass"
+            style={{
+              padding: "16px 18px",
+              borderRadius: 22,
+              border: `1px solid ${T.status.red}22`,
+              display: "grid",
+              gap: 10,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <AlertTriangle size={15} color={T.status.red} />
+              <div style={{ fontSize: 13, fontWeight: 900, color: T.text.primary }}>
+                Spending pressure this cycle
+              </div>
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {overspentLines.slice(0, 3).map(({ line, overBy, actual }) => (
+                <div key={line.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                  <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                    <UiGlyph glyph={line.icon} size={14} color={T.text.secondary} />
+                    <span style={{ fontSize: 12, color: T.text.secondary, fontWeight: 700 }}>{line.name}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: T.status.red, fontWeight: 800 }}>
+                    {formatBudgetMoney(actual)} spent • {formatBudgetMoney(overBy)} over
+                  </div>
+                </div>
+              ))}
             </div>
           </Card>
         )}
@@ -417,42 +951,105 @@ export default function BudgetTab({ embedded, proEnabled = false, privacyMode: _
           const cfg = BUCKET_CONFIG[bucket];
           const bucketLines = linesByBucket[bucket] ?? [];
           const isAdding = addingBucket === bucket;
+          const summary = bucketSummaries.find((entry) => entry.bucket === bucket);
 
           return (
-            <div key={bucket} style={{ marginBottom: 16 }}>
-              {/* Bucket header */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <UiGlyph glyph={cfg.emoji} size={17} color={cfg.color} />
-                  <div>
-                    <span style={{ fontSize: 14, fontWeight: 900, color: T.text.primary }}>{cfg.label}</span>
-                    <span style={{ fontSize: 11, color: T.text.muted, marginLeft: 8 }}>{cfg.description}</span>
+            <Card
+              key={bucket}
+              variant="glass"
+              style={{
+                padding: isNarrowPhone ? "16px 14px" : "18px 18px",
+                borderRadius: 26,
+                overflow: "hidden",
+                display: "grid",
+                gap: 12,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: isNarrowPhone ? "flex-start" : "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0, display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 14, background: `${cfg.color}12`, border: `1px solid ${cfg.color}20`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <UiGlyph glyph={cfg.emoji} size={18} color={cfg.color} />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 16, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.02em" }}>{cfg.label}</div>
+                    <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5, marginTop: 4, maxWidth: 520 }}>{cfg.description}</div>
                   </div>
                 </div>
-                <button onClick={() => { setAddingBucket(isAdding ? null : bucket); haptic.light(); }}
-                  style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: `1px solid ${T.border.default}`, borderRadius: 10, color: T.text.secondary, fontWeight: 700, fontSize: 11, padding: "5px 10px", cursor: "pointer" }}>
-                  <Plus size={11} strokeWidth={2.5} /> Add
-                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", width: isNarrowPhone ? "100%" : undefined }}>
+                  {summary ? (
+                    <>
+                      <div style={{ padding: "7px 10px", borderRadius: 999, background: `${cfg.color}10`, border: `1px solid ${cfg.color}24`, color: cfg.color, fontSize: 11, fontWeight: 800 }}>
+                        {summary.lineCount} {summary.lineCount === 1 ? "line" : "lines"}
+                      </div>
+                      <div style={{ padding: "7px 10px", borderRadius: 999, background: T.bg.surface, border: `1px solid ${T.border.subtle}`, color: T.text.primary, fontSize: 11, fontWeight: 800 }}>
+                        {summary.assigned > 0 ? `${formatBudgetMoney(summary.assigned)} planned` : "No funding"}
+                      </div>
+                      {hasAudit && summary.actual > 0 ? (
+                        <div style={{ padding: "7px 10px", borderRadius: 999, background: T.bg.surface, border: `1px solid ${T.border.subtle}`, color: summary.remaining < 0 ? T.status.red : T.text.secondary, fontSize: 11, fontWeight: 800 }}>
+                          {formatBudgetMoney(summary.actual)} spent
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingBucket(isAdding ? null : bucket);
+                      haptic.light();
+                    }}
+                    style={{
+                      minHeight: 36,
+                      padding: "0 14px",
+                      borderRadius: 999,
+                      border: `1px solid ${cfg.color}30`,
+                      background: `${cfg.color}12`,
+                      color: cfg.color,
+                      fontSize: 11,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      marginLeft: isNarrowPhone ? "auto" : 0,
+                    }}
+                  >
+                    <Plus size={12} style={{ marginRight: 6, verticalAlign: "text-bottom" }} />
+                    Add line
+                  </button>
+                </div>
               </div>
 
-              <div style={{ background: T.bg.card, borderRadius: 20, border: `1px solid ${T.border.subtle}`, overflow: "hidden" }}>
-                {isAdding && (
-                  <div style={{ padding: "0 12px" }}>
-                    <AddLineForm bucket={bucket} onAdd={async (l) => { await addLine(l); setAddingBucket(null); }} onCancel={() => setAddingBucket(null)} />
-                  </div>
-                )}
+              {isAdding && (
+                <AddLineForm
+                  bucket={bucket}
+                  onAdd={async (line) => {
+                    await addLine(line);
+                    setAddingBucket(null);
+                  }}
+                  onCancel={() => setAddingBucket(null)}
+                />
+              )}
 
-                {bucketLines.length === 0 && !isAdding ? (
-                  <div style={{ padding: "20px 20px", textAlign: "center", color: T.text.muted, fontSize: 13, fontWeight: 600 }}>
-                    No {cfg.label.toLowerCase()} lines yet — tap Add
-                  </div>
-                ) : (
-                  bucketLines.map((line, i) => {
+              {bucketLines.length === 0 && !isAdding ? (
+                <div
+                  style={{
+                    padding: "18px 16px",
+                    borderRadius: 20,
+                    border: `1px solid ${T.border.subtle}`,
+                    background: T.bg.surface,
+                    textAlign: "center",
+                    color: T.text.secondary,
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  No {cfg.label.toLowerCase()} lines yet. Add the recurring or planned items you want this bucket to hold.
+                </div>
+              ) : (
+                <div style={{ borderRadius: 20, border: `1px solid ${T.border.subtle}`, overflow: "hidden", background: T.bg.card }}>
+                  {bucketLines.map((line, index) => {
                     const actual = auditCategories
                       ? (getActualSpendForLine(auditCategories, line.name, financialConfig.payFrequency) as number)
                       : 0;
                     return (
-                      <div key={line.id} style={{ borderTop: i === 0 && !isAdding ? "none" : undefined }}>
+                      <div key={line.id} style={{ borderTop: index === 0 ? "none" : `1px solid ${T.border.subtle}` }}>
                         <BudgetLineRow
                           line={line}
                           actualSpend={actual}
@@ -461,20 +1058,64 @@ export default function BudgetTab({ embedded, proEnabled = false, privacyMode: _
                         />
                       </div>
                     );
-                  })
-                )}
-              </div>
-            </div>
+                  })}
+                </div>
+              )}
+            </Card>
           );
         })}
 
-        {/* Bottom CTA if no audit yet */}
         {!hasAudit && lines.length > 0 && (
-          <div style={{ textAlign: "center", padding: "20px 0 32px", color: T.text.muted, fontSize: 13, fontWeight: 600 }}>
-            Run your first audit to see actual spending vs. your budget
+          <div style={{ padding: "4px 2px 28px", color: T.text.secondary, fontSize: 13, lineHeight: 1.55, display: "flex", alignItems: "center", gap: 8 }}>
+            <TrendingUp size={15} color={T.text.dim} />
+            Run an audit to compare each line against real-cycle spending and expose overspend before the next paycheck lands.
           </div>
         )}
 
+        {!lines.length && !showSeedBanner && (
+          <Card
+            variant="glass"
+            style={{
+              padding: "22px 20px",
+              borderRadius: 24,
+              textAlign: "center",
+              display: "grid",
+              gap: 10,
+            }}
+          >
+            <div style={{ width: 52, height: 52, borderRadius: 18, background: `${T.accent.primary}12`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto" }}>
+              <Target size={22} color={T.accent.primary} />
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 900, color: T.text.primary }}>No budget lines yet</div>
+            <div style={{ fontSize: 13, color: T.text.secondary, lineHeight: 1.55, maxWidth: 420, margin: "0 auto" }}>
+              Start with obligations and essentials first. Once those are set, add wants and savings so every paycheck has a clear destination.
+            </div>
+            <div style={{ display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+              {BUCKET_ORDER.map((bucket) => (
+                <button
+                  key={bucket}
+                  type="button"
+                  onClick={() => setAddingBucket(bucket)}
+                  style={{
+                    minHeight: 38,
+                    padding: "0 14px",
+                    borderRadius: 999,
+                    border: `1px solid ${BUCKET_CONFIG[bucket].color}30`,
+                    background: `${BUCKET_CONFIG[bucket].color}12`,
+                    color: BUCKET_CONFIG[bucket].color,
+                    fontSize: 12,
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  {BUCKET_CONFIG[bucket].label}
+                </button>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        <div style={{ height: 8 }} />
       </div>
     </div>
   );

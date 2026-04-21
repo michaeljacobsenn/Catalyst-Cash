@@ -50,7 +50,7 @@ const Coachmark = memo(function Coachmark({ text, onDismiss, position = "below",
         }}
       >
         <span style={{ flex: 1 }}>{text}</span>
-        <button
+        <button type="button"
           onClick={e => {
             e.stopPropagation();
             onDismiss();

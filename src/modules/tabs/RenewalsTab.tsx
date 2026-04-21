@@ -423,7 +423,7 @@ export default memo(function RenewalsTab({
                     ${(negotiateSheet.amount || 0).toFixed(2)}/mo · Negotiation Playbook
                   </div>
                 </div>
-                <button
+                <button type="button"
                   onClick={() => { setNegotiateSheet(null); haptic.light(); }}
                   style={{
                     width: 32, height: 32, borderRadius: "50%",
@@ -461,7 +461,7 @@ export default memo(function RenewalsTab({
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <button
+                  <button type="button"
                     onClick={() => {
                       if (shouldShowGating() && !proEnabled) {
                         haptic.selection();
@@ -497,7 +497,7 @@ export default memo(function RenewalsTab({
                     <Bot size={15} />
                     Generate Full AI Phone Script
                   </button>
-                  <button
+                  <button type="button"
                     onClick={() => { setNegotiateSheet(null); haptic.light(); }}
                     style={{
                       width: "100%", padding: "12px",
@@ -562,7 +562,7 @@ export default memo(function RenewalsTab({
                   boxSizing: "border-box",
                   outline: "none",
                   WebkitAppearance: "none",
-                  transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                  transition: "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
                 }}
               >
                 {showAdd ? <X size={14} style={{ flexShrink: 0 }} /> : <Plus size={14} style={{ flexShrink: 0 }} />}
@@ -725,7 +725,7 @@ export default memo(function RenewalsTab({
                       {fmt(sub.amount)}
                     </Mono>
                     <div style={{ display: "flex", gap: 4 }}>
-                      <button
+                      <button type="button"
                         onClick={() => {
                           setRenewals(prev => [...(prev || []), buildNewRenewal({
                             name: sub.name,
@@ -757,7 +757,7 @@ export default memo(function RenewalsTab({
                       >
                         <Plus size={16} />
                       </button>
-                      <button
+                      <button type="button"
                         onClick={() => {
                           dismissSuggestion(sub.id);
                           haptic.light();
@@ -818,7 +818,7 @@ export default memo(function RenewalsTab({
               bankAccounts={bankAccounts || []}
               formInputStyle={formInputStyle}
             />
-            <button
+            <button type="button"
               onClick={addItem}
               disabled={!addForm.name.trim() || !addForm.amount}
               className="hover-lift"
@@ -944,7 +944,7 @@ export default memo(function RenewalsTab({
                                   }}
                                 />
                                 {tabs.map((tab, idx) => (
-                                  <button
+                                  <button type="button"
                                     key={idx}
                                     onClick={() => {
                                       if (typeof haptic !== "undefined") haptic.selection();
@@ -1010,7 +1010,7 @@ export default memo(function RenewalsTab({
                           {/* ── Actions — always visible ── */}
                           <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
                             {editStep > 0 && (
-                              <button
+                              <button type="button"
                                 onClick={() => {
                                   if (typeof haptic !== "undefined") haptic.selection();
                                   setEditStep(s => s - 1);
@@ -1026,7 +1026,7 @@ export default memo(function RenewalsTab({
                                 ← Back
                               </button>
                             )}
-                            <button
+                            <button type="button"
                               onClick={() => {
                                 saveEdit(renewalIndex, item.name);
                                 setEditStep(0);
@@ -1052,7 +1052,7 @@ export default memo(function RenewalsTab({
                               Save
                             </button>
                             {editStep < 2 && (
-                              <button
+                              <button type="button"
                                 onClick={() => {
                                   if (typeof haptic !== "undefined") haptic.selection();
                                   setEditStep(s => s + 1);
@@ -1068,7 +1068,7 @@ export default memo(function RenewalsTab({
                                 Next →
                               </button>
                             )}
-                            <button
+                            <button type="button"
                               onClick={() => {
                                 setEditing(null);
                                 setEditStep(0);
@@ -1228,7 +1228,7 @@ export default memo(function RenewalsTab({
 
                                 {/* Negotiate — opens inline sheet, no tab navigation */}
                                 {negotiableMerchant && (
-                                  <button
+                                  <button type="button"
                                     onClick={(e) => {
                                       e.preventDefault();
                                       e.stopPropagation();
@@ -1275,7 +1275,7 @@ export default memo(function RenewalsTab({
 
                             {!item.isCardAF && isUserRenewal && editing !== renewalIndex && (
                               <div style={{ display: "flex", gap: 5 }}>
-                                <button
+                                <button type="button"
                                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEdit(item, renewalIndex); }}
                                   className="hover-btn"
                                   style={{
@@ -1286,7 +1286,7 @@ export default memo(function RenewalsTab({
                                 >
                                   <UiGlyph glyph="✎" size={12} color={T.text.secondary} />
                                 </button>
-                                <button
+                                <button type="button"
                                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeItem(renewalIndex, item.name); }}
                                   className="hover-btn"
                                   style={{
@@ -1313,7 +1313,7 @@ export default memo(function RenewalsTab({
         {/* Show/Hide Inactive Button below the entire list if there are inactive items */}
         {inactiveItemCount > 0 && (
           <div style={{ display: "flex", justifyContent: "center", marginTop: 24, marginBottom: 40 }}>
-            <button
+            <button type="button"
               onClick={() => setShowInactive(prev => !prev)}
               className="hover-btn"
               style={{

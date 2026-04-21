@@ -414,23 +414,55 @@ export async function getHistoryLimit() {
   return tier.historyLimit;
 }
 
-export async function activatePro(productId, durationDays = 30, { isLifetime = false } = {}) {
+function normalizeSubscriptionDate(value) {
+  if (!value) return null;
+  const parsed = value instanceof Date ? new Date(value.getTime()) : new Date(String(value));
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+}
+
+export async function activatePro(
+  productId,
+  durationDays = 30,
+  {
+    isLifetime = false,
+    purchaseDate = null,
+    expiresAt = null,
+  } = {}
+) {
   const state = await getSubscriptionState();
   const now = new Date();
+  const wasPro = state.tier === "pro";
+  const previousProductId = state.productId;
+  const previousAnchorDay = state.purchaseAnchorDay;
+  const previousBillingCycleKey = state.billingCycleKey;
+  const resolvedPurchaseDate = normalizeSubscriptionDate(purchaseDate) || now;
+  const resolvedExpiryDate = normalizeSubscriptionDate(expiresAt);
+  const nextPurchaseAnchorDay = resolvedPurchaseDate.getUTCDate();
+  const nextBillingCycleKey = getBillingCycleKey(nextPurchaseAnchorDay, now);
+  const shouldResetMonthlyUsage =
+    !wasPro
+    || previousProductId !== productId
+    || previousAnchorDay !== nextPurchaseAnchorDay
+    || previousBillingCycleKey !== nextBillingCycleKey;
 
   state.tier = "pro";
   state.productId = productId;
-  state.purchaseDate = now.toISOString();
+  state.purchaseDate = resolvedPurchaseDate.toISOString();
   state.isLifetime = isLifetime;
-  state.purchaseAnchorDay = now.getUTCDate();
-  state.billingCycleKey = getBillingCycleKey(state.purchaseAnchorDay, now);
+  state.purchaseAnchorDay = nextPurchaseAnchorDay;
+  state.billingCycleKey = nextBillingCycleKey;
+  if (shouldResetMonthlyUsage) {
+    state.auditsThisMonth = 0;
+  }
 
   if (isLifetime) {
     state.expiresAt = null;
+  } else if (resolvedExpiryDate) {
+    state.expiresAt = resolvedExpiryDate.toISOString();
   } else {
-    const expiresAt = new Date(now);
-    expiresAt.setDate(expiresAt.getDate() + durationDays);
-    state.expiresAt = expiresAt.toISOString();
+    const computedExpiryDate = new Date(resolvedPurchaseDate);
+    computedExpiryDate.setDate(computedExpiryDate.getDate() + durationDays);
+    state.expiresAt = computedExpiryDate.toISOString();
   }
 
   await db.set(STATE_KEY, state);
@@ -443,6 +475,10 @@ export async function deactivatePro() {
   state.tier = "free";
   state.expiresAt = null;
   state.productId = null;
+  state.isLifetime = false;
+  state.purchaseDate = null;
+  state.purchaseAnchorDay = null;
+  state.billingCycleKey = null;
   await db.set(STATE_KEY, state);
   notifySubscriptionStateChange(state);
 }

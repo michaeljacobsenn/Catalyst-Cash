@@ -97,7 +97,7 @@ export default function ScenarioSandbox({ currentNetWorth = 0, currentAnnualInco
             animation: "fadeIn .2s ease-out"
         }}>
             <Card style={{ width: "100%", maxWidth: 600, maxHeight: "90vh", overflowY: "auto", position: "relative", border: `1px solid ${T.accent.emerald}40` }}>
-                <button
+                <button type="button"
                     onClick={() => { haptic.light(); onClose(); }}
                     style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", color: T.text.dim, cursor: "pointer", padding: 4 }}
                 >
@@ -153,7 +153,7 @@ export default function ScenarioSandbox({ currentNetWorth = 0, currentAnnualInco
                         />
                         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                             {[-1000, 500, 1000, 2500].map(v => (
-                                <button key={v} onClick={() => { setIncomeOffset(p => p + v); haptic.light(); }} style={{ flex: 1, padding: "4px 0", fontSize: 10, background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: 4, color: T.text.secondary, cursor: "pointer", fontWeight: 700 }}>
+                                <button type="button" key={v} onClick={() => { setIncomeOffset(p => p + v); haptic.light(); }} style={{ flex: 1, padding: "4px 0", fontSize: 10, background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: 4, color: T.text.secondary, cursor: "pointer", fontWeight: 700 }}>
                                     {v > 0 ? '+' : ''}{v}
                                 </button>
                             ))}
@@ -175,7 +175,7 @@ export default function ScenarioSandbox({ currentNetWorth = 0, currentAnnualInco
                         />
                         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                             {[-500, -250, 500, 1500].map(v => (
-                                <button key={v} onClick={() => { setExpenseOffset(p => p + v); haptic.light(); }} style={{ flex: 1, padding: "4px 0", fontSize: 10, background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: 4, color: T.text.secondary, cursor: "pointer", fontWeight: 700 }}>
+                                <button type="button" key={v} onClick={() => { setExpenseOffset(p => p + v); haptic.light(); }} style={{ flex: 1, padding: "4px 0", fontSize: 10, background: T.bg.elevated, border: `1px solid ${T.border.subtle}`, borderRadius: 4, color: T.text.secondary, cursor: "pointer", fontWeight: 700 }}>
                                     {v > 0 ? '+' : ''}{v}
                                 </button>
                             ))}

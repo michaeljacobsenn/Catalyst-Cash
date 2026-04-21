@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ── Mock the db module ────────────────────────────────────────
 // subscription.js imports { db } from "./utils.js"
@@ -45,6 +45,10 @@ import {
 beforeEach(() => {
   Object.keys(mockStore).forEach(k => delete mockStore[k]);
   __setGatingModeForTests("soft");
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -212,6 +216,21 @@ describe("Subscription State", () => {
     expect(await isPro()).toBe(true);
   });
 
+  it("activatePro preserves the real purchase anchor when entitlement dates are provided", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-19T16:00:00.000Z"));
+
+    const state = await activatePro(IAP_PRODUCTS.yearly, 3650, {
+      purchaseDate: "2026-04-15T09:30:00.000Z",
+      expiresAt: "2027-04-15T09:30:00.000Z",
+    });
+
+    expect(state.purchaseDate).toBe("2026-04-15T09:30:00.000Z");
+    expect(state.purchaseAnchorDay).toBe(15);
+    expect(state.billingCycleKey).toBe("2026-04-15");
+    expect(state.expiresAt).toBe("2027-04-15T09:30:00.000Z");
+  });
+
   it("deactivatePro resets to free", async () => {
     await activatePro(IAP_PRODUCTS.monthly, 30);
     await deactivatePro();
@@ -220,6 +239,10 @@ describe("Subscription State", () => {
     expect(state.tier).toBe("free");
     expect(state.expiresAt).toBeNull();
     expect(state.productId).toBeNull();
+    expect(state.isLifetime).toBe(false);
+    expect(state.purchaseDate).toBeNull();
+    expect(state.purchaseAnchorDay).toBeNull();
+    expect(state.billingCycleKey).toBe(state.monthKey);
   });
 
   it("broadcasts entitlement changes so the app shell can drop gating without a reload", async () => {
@@ -292,6 +315,25 @@ describe("Subscription State", () => {
     await recordAuditUsage();
     const state = await getSubscriptionState();
     expect(state.auditsThisWeek).toBe(2);
+  });
+
+  it("resets the monthly audit window when a user re-enters Pro on a new billing anchor", async () => {
+    mockStore["subscription-state"] = {
+      tier: "free",
+      productId: null,
+      purchaseAnchorDay: 2,
+      billingCycleKey: "2026-03-02",
+      auditsThisMonth: 9,
+    };
+
+    const state = await activatePro(IAP_PRODUCTS.yearly, 3650, {
+      purchaseDate: "2026-04-15T09:30:00.000Z",
+      expiresAt: "2027-04-15T09:30:00.000Z",
+    });
+
+    expect(state.purchaseAnchorDay).toBe(15);
+    expect(state.billingCycleKey).toBe("2026-04-15");
+    expect(state.auditsThisMonth).toBe(0);
   });
 
   it("expired pro reverts to free", async () => {

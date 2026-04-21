@@ -300,7 +300,7 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
         />
 
         {/* Close X button */}
-        <button
+        <button type="button"
           onClick={handleClose}
           style={{
             position: "absolute",
@@ -475,7 +475,7 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
                 ? "Best value · Own forever"
                 : null;
             return (
-              <button
+              <button type="button"
                 key={p}
                 onClick={() => {
                   setPlan(p);
@@ -498,7 +498,7 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
                   justifyContent: "flex-start",
                   gap: 4,
                   minHeight: 128,
-                  transition: "all 0.25s ease",
+                  transition: "transform 0.25s ease, opacity 0.25s ease, background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease",
                 }}
               >
                 {planBadge ? (
@@ -671,7 +671,7 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
             </div>
           </div>
 
-          <button
+          <button type="button"
             onClick={handlePurchase}
             disabled={purchasing}
             className="hover-btn"
@@ -702,7 +702,7 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
           </button>
 
           <div style={{ textAlign: "center", paddingBottom: 4 }}>
-            <button
+            <button type="button"
               onClick={handleRestore}
               style={{
                 background: "none",
@@ -839,18 +839,22 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
         </Card>
 
         <div style={{ marginTop: 4, display: "flex", justifyContent: "center", gap: 16, paddingBottom: 6 }}>
-          <button
-            onClick={() => window.open("https://catalystcash.app/terms", "_blank")}
-            style={{ background: "none", border: "none", color: T.text.muted, fontSize: 10, textDecoration: "underline", cursor: "pointer" }}
+          <a
+            href="https://catalystcash.app/terms"
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: T.text.muted, fontSize: 10, textDecoration: "underline", cursor: "pointer" }}
           >
             Terms of Service
-          </button>
-          <button
-            onClick={() => window.open("https://catalystcash.app/privacy", "_blank")}
-            style={{ background: "none", border: "none", color: T.text.muted, fontSize: 10, textDecoration: "underline", cursor: "pointer" }}
+          </a>
+          <a
+            href="https://catalystcash.app/privacy"
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: T.text.muted, fontSize: 10, textDecoration: "underline", cursor: "pointer" }}
           >
             Privacy Policy
-          </button>
+          </a>
         </div>
       </div>
     </div>,

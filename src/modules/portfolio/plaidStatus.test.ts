@@ -3,6 +3,7 @@ import {
   formatPlaidSyncDateTimeLabel,
   getLatestPlaidSyncDate,
   getStalePlaidInstitutions,
+  groupPlaidSyncIssues,
   splitPlaidInstitutionsByReconnect,
   summarizeConnectedButCached,
   summarizeReconnectRequired,
@@ -87,5 +88,36 @@ describe("portfolio plaid status helpers", () => {
         { connectionId: "item_3", name: "Barclays", lastSyncAt: 3 },
       ])
     ).toBe("Chase, Ally, and others");
+  });
+
+  it("groups cached sync issues even when the snapshot timestamps differ", () => {
+    expect(
+      groupPlaidSyncIssues([
+        {
+          institutionName: "Chase",
+          message: "Cached balances from Apr 20 at 1:28 PM. Waiting for the next live sync.",
+        },
+        {
+          institutionName: "Ally Bank",
+          message: "Cached balances from Apr 20 at 6:29 PM. Waiting for the next live sync.",
+        },
+        {
+          institutionName: "Barclays",
+          message: "Cached balances from Apr 19 at 11:57 PM. Waiting for the next live sync.",
+        },
+      ])
+    ).toEqual([
+      {
+        institutionName: "Chase, Ally Bank +1",
+        institutionNames: ["Chase", "Ally Bank", "Barclays"],
+        message: "Cached balances are waiting for the next live sync.",
+        issueCount: 3,
+        cachedSnapshots: [
+          "Chase (Apr 20 at 1:28 PM)",
+          "Ally Bank (Apr 20 at 6:29 PM)",
+          "Barclays (Apr 19 at 11:57 PM)",
+        ],
+      },
+    ]);
   });
 });

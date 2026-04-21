@@ -222,7 +222,7 @@ export default function DebtSimulator({ cards = [], financialConfig }: DebtSimul
           <UiGlyph glyph="⚡" size={18} color={T.accent.primary} />
           <span style={{ fontSize: 14, fontWeight: 800 }}>Debt Payoff Simulator</span>
         </div>
-        <button
+        <button type="button"
           onClick={() => setShowSim(false)}
           className="hover-btn"
           style={{
@@ -251,7 +251,7 @@ export default function DebtSimulator({ cards = [], financialConfig }: DebtSimul
 
       {/* Launch Sandbox Button */}
       <div style={{ marginBottom: 16 }}>
-        <button
+        <button type="button"
           onClick={() => { haptic.selection(); setShowSandbox(true); }}
           className="hover-btn"
           style={{
@@ -278,7 +278,7 @@ export default function DebtSimulator({ cards = [], financialConfig }: DebtSimul
       {/* Strategy Toggle */}
       <div style={{ display: "flex", background: T.bg.elevated, padding: 4, borderRadius: T.radius.lg, marginBottom: 16, border: `1px solid ${T.border.subtle}` }}>
         {PAYOFF_STRATEGIES.map(s => (
-          <button
+          <button type="button"
             key={s.id}
             onClick={() => {
               triggerHaptic("selection");
@@ -288,7 +288,7 @@ export default function DebtSimulator({ cards = [], financialConfig }: DebtSimul
               flex: 1, padding: "8px 0", border: "none", borderRadius: T.radius.md,
               background: activeStrategy === s.id ? T.bg.card : "transparent",
               boxShadow: activeStrategy === s.id ? T.shadow.navBtn : "none",
-              cursor: "pointer", transition: "all 0.2s"
+              cursor: "pointer", transition: "transform 0.2s, opacity 0.2s, background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s"
             }}
           >
             <div style={{ fontSize: 13, fontWeight: 700, color: activeStrategy === s.id ? T.text.primary : T.text.dim }}>{s.label}</div>

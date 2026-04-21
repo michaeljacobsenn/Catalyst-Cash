@@ -124,7 +124,7 @@ function initFaqSearch() {
       resultLabel.textContent = `Showing ${visibleCount} ${answerLabel} for "${trimmed}".${topLabel}`;
       emptyState.hidden = true;
     } else {
-      resultLabel.textContent = `No exact match needed. Try "bank", "switch", "backup", or "Pro".`;
+      resultLabel.textContent = `No exact match needed. Try "bank", "rewards", "budget", "backup", or "Pro".`;
       emptyState.hidden = false;
     }
 
@@ -228,6 +228,13 @@ const FAQ_ALIAS_MAP = {
   subscription: ["pricing", "plan", "pro"],
   askai: ["ai", "chat"],
   ai: ["askai", "chat"],
+  reward: ["card", "merchant", "nearby", "store", "mall"],
+  rewards: ["card", "merchant", "nearby", "store", "mall"],
+  card: ["reward", "rewards", "merchant", "category"],
+  nearby: ["merchant", "location", "mall", "store"],
+  mall: ["nearby", "merchant", "store", "location"],
+  budget: ["bills", "line", "category", "seed"],
+  demo: ["sample", "scenario", "restore"],
 };
 
 function stemFaqToken(token) {

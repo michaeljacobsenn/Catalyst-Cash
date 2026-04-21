@@ -37,6 +37,7 @@
   import { useSettings } from "./modules/contexts/SettingsContext.js";
   import { ThemeProvider } from "./modules/contexts/ThemeContext.js";
   import { getDemoAuditPayload } from "./modules/demoAudit.js";
+  import { getDefaultDemoScenarioId,getNextDemoScenarioId } from "./modules/demoScenario.js";
   import { installGlobalHandlers } from "./modules/errorReporter.js";
   import { normalizeAppError } from "./modules/appErrors.js";
   import { haptic } from "./modules/haptics.js";
@@ -50,7 +51,7 @@
   import { useToast } from "./modules/Toast.js";
   import { GlobalStyles,useGlobalHaptics } from "./modules/ui.js";
   import { db } from "./modules/utils.js";
-  import type { AuditRecord,BankAccount,Card as CardType,ParsedAudit,PlaidInvestmentAccount,Renewal } from "./types/index.js";
+  import type { AuditRecord,BankAccount,Card as CardType,CatalystCashConfig,ParsedAudit,PlaidInvestmentAccount,Renewal } from "./types/index.js";
 // Payday reminder scheduling is handled in SettingsContext
 installGlobalHandlers();
 const LockScreen = lazy(() => import("./modules/LockScreen.js"));
@@ -66,6 +67,11 @@ interface AppFinancialConfigExtras {
   valuations?: Record<string, unknown>;
   isDemoConfig?: boolean;
   _preDemoSnapshot?: Record<string, unknown>;
+  _preDemoPortfolioSnapshot?: {
+    cards?: CardType[];
+    bankAccounts?: BankAccount[];
+    renewals?: Renewal[];
+  };
 }
 
 function CatalystCashShell() {
@@ -190,6 +196,7 @@ function CatalystCashShell() {
   const lastScrollY = useRef(0);
   const [transactionFeedTab, setTransactionFeedTab] = useState<AppTab | null>(null);
   const [chatInitialPrompt, setChatInitialPrompt] = useState<string | null>(null);
+  const didEvaluatePersistedDemoRef = useRef(false);
   const renderedBaseTab: AppTab = SWIPE_TAB_ORDER.includes(tab)
     ? tab
     : overlayBaseTab && SWIPE_TAB_ORDER.includes(overlayBaseTab)
@@ -499,13 +506,16 @@ function CatalystCashShell() {
   // Upgraded: lights up ALL 15+ dashboard sections with rich synthetic data
   // ═══════════════════════════════════════════════════════════════
   const handleDemoAudit = async () => {
-    const payload = getDemoAuditPayload(financialConfig, history);
+    const scenarioId = current?.isTest
+      ? getNextDemoScenarioId(current.demoScenarioId)
+      : getDefaultDemoScenarioId();
+    const payload = getDemoAuditPayload(financialConfig, history, scenarioId);
     if (!payload.audit.parsed) {
       toast.error("Demo parsing failed");
       return;
     }
 
-    const { audit, nh, demoConfig, demoCards, demoRenewals } = payload;
+    const { audit, nh, demoConfig, demoCards, demoBankAccounts, demoRenewals } = payload;
     const safeAuditDate = audit.date ?? new Date().toISOString().split("T")[0] ?? "";
     const safeAudit = {
       ...audit,
@@ -520,15 +530,25 @@ function CatalystCashShell() {
       const { nextDue, ...rest } = renewal;
       return nextDue ? { ...rest, nextDue } : rest;
     });
+    const demoConfigWithSnapshots = {
+      ...demoConfig,
+      _preDemoPortfolioSnapshot: extendedFinancialConfig._preDemoPortfolioSnapshot || {
+        cards: [...cards],
+        bankAccounts: [...bankAccounts],
+        renewals: [...renewals],
+      },
+    };
+    const typedDemoConfig = demoConfigWithSnapshots as unknown as Partial<CatalystCashConfig> & AppFinancialConfigExtras;
 
     // ── 6. SET ALL REACT STATE SYNCHRONOUSLY (before awaits) ───
     // This ensures the dashboard renders immediately with full data
     setCurrent(safeAudit);
     setViewing(null);
     setHistory(nh);
-    setFinancialConfig(demoConfig);
-    if (cards.length === 0) setCards(demoCards);
-    if ((renewals || []).length === 0) setRenewals(safeRenewals);
+    setFinancialConfig(typedDemoConfig);
+    setCards(demoCards as CardType[]);
+    setBankAccounts(demoBankAccounts);
+    setRenewals(safeRenewals);
 
     // ── 7. PERSIST TO DB (async, non-blocking) ─────────────────
     await db.set("current-audit", safeAudit);
@@ -547,62 +567,98 @@ function CatalystCashShell() {
       investor: existingBadges.investor || Date.now(),
     };
     await db.set("unlocked-badges", demoBadges);
-    if (cards.length === 0) await db.set("card-portfolio", demoCards);
-    if ((renewals || []).length === 0) await db.set("renewals", demoRenewals);
+    await db.set("card-portfolio", demoCards);
+    await db.set("bank-accounts", demoBankAccounts);
+    await db.set("renewals", demoRenewals);
 
-    toast.success("🎓 Demo audit loaded — explore the full experience!");
+    toast.success(`Demo loaded: ${payload.demoScenarioMeta?.name || "Scenario"}`);
     haptic.success();
   };
 
+  const restorePreDemoState = useCallback(
+    async ({ preserveRealAudit = true, suppressToast = false }: { preserveRealAudit?: boolean; suppressToast?: boolean } = {}) => {
+      const cleanedHistory = history.filter(a => !a.isTest && !a.isDemoHistory);
+      setHistory(cleanedHistory);
+      await db.set("audit-history", cleanedHistory);
+
+      const realAudit = preserveRealAudit && cleanedHistory.length > 0 ? cleanedHistory[0] : null;
+      if (realAudit) {
+        setCurrent(realAudit);
+        setMoveChecks(realAudit.moveChecks || {});
+        await db.set("current-audit", realAudit);
+        await db.set("move-states", realAudit.moveChecks || {});
+        if (!suppressToast) toast.success("Dashboard restored to your latest real audit");
+      } else {
+        setCurrent(null);
+        setMoveChecks({});
+        await db.del("current-audit");
+        await db.del("move-states");
+        if (!suppressToast) toast.success("Demo cleared — run your first real audit!");
+      }
+
+      if (extendedFinancialConfig.isDemoConfig && extendedFinancialConfig._preDemoSnapshot) {
+        const restored = { ...extendedFinancialConfig._preDemoSnapshot };
+        delete restored.isDemoConfig;
+        delete restored._preDemoSnapshot;
+        delete restored._preDemoPortfolioSnapshot;
+        setFinancialConfig(restored);
+        await db.set("financial-config", restored);
+      }
+
+      const preDemoPortfolio = extendedFinancialConfig._preDemoPortfolioSnapshot;
+      if (preDemoPortfolio) {
+        const restoredCards = Array.isArray(preDemoPortfolio.cards) ? preDemoPortfolio.cards : [];
+        const restoredBankAccounts = Array.isArray(preDemoPortfolio.bankAccounts) ? preDemoPortfolio.bankAccounts : [];
+        const restoredRenewals = Array.isArray(preDemoPortfolio.renewals) ? preDemoPortfolio.renewals : [];
+        setCards(restoredCards);
+        setBankAccounts(restoredBankAccounts);
+        setRenewals(restoredRenewals);
+        await db.set("card-portfolio", restoredCards);
+        await db.set("bank-accounts", restoredBankAccounts);
+        await db.set("renewals", restoredRenewals);
+      } else {
+        const currentCards = cards || [];
+        const currentBankAccounts = bankAccounts || [];
+        const currentRenewals = renewals || [];
+        const realCards = currentCards.filter(c => !c.id?.startsWith("demo-"));
+        const realBankAccounts = currentBankAccounts.filter(account => !account.id?.startsWith("demo-"));
+        const realRenewals = currentRenewals.filter(r => !r.id?.startsWith("demo-"));
+        setCards(realCards);
+        setBankAccounts(realBankAccounts);
+        setRenewals(realRenewals);
+        await db.set("card-portfolio", realCards);
+        await db.set("bank-accounts", realBankAccounts);
+        await db.set("renewals", realRenewals);
+      }
+    },
+    [
+      bankAccounts,
+      cards,
+      extendedFinancialConfig,
+      history,
+      renewals,
+      setBankAccounts,
+      setCards,
+      setCurrent,
+      setFinancialConfig,
+      setHistory,
+      setMoveChecks,
+      setRenewals,
+      toast,
+    ]
+  );
+
+  useEffect(() => {
+    if (!ready || didEvaluatePersistedDemoRef.current) return;
+    didEvaluatePersistedDemoRef.current = true;
+    if (!extendedFinancialConfig.isDemoConfig && !current?.isTest && !history.some((auditEntry) => auditEntry.isDemoHistory)) {
+      return;
+    }
+    void restorePreDemoState({ suppressToast: true });
+  }, [current?.isTest, extendedFinancialConfig.isDemoConfig, history, ready, restorePreDemoState]);
+
   const handleRefreshDashboard = async () => {
-    // Remove all demo/test AND synthetic demo-history audits
-    const cleanedHistory = history.filter(a => !a.isTest && !a.isDemoHistory);
-    setHistory(cleanedHistory);
-    await db.set("audit-history", cleanedHistory);
-
-    // Find the most recent real (non-test) audit
-    const realAudit = cleanedHistory.length > 0 ? cleanedHistory[0] : null;
-    if (realAudit) {
-      setCurrent(realAudit);
-      setMoveChecks(realAudit.moveChecks || {});
-      await db.set("current-audit", realAudit);
-      await db.set("move-states", realAudit.moveChecks || {});
-      toast.success("Dashboard restored to your latest real audit");
-    } else {
-      setCurrent(null);
-      setMoveChecks({});
-      await db.del("current-audit");
-      await db.del("move-states");
-      toast.success("Demo cleared — run your first real audit!");
-    }
-
-    // Restore pre-demo financialConfig if we overlaid one
-    if (extendedFinancialConfig.isDemoConfig && extendedFinancialConfig._preDemoSnapshot) {
-      const restored = { ...extendedFinancialConfig._preDemoSnapshot };
-      delete restored.isDemoConfig;
-      delete restored._preDemoSnapshot;
-      setFinancialConfig(restored);
-    }
-
-    // Clean demo-seeded badges (remove only the ones we added that weren't already there)
-    // Only remove badges that were seeded during THIS demo session (timestamp matches)
-    // For simplicity, keep all badges — users may have earned some legitimately
-    // Just let evaluateBadges re-check on next real audit
-
-    // Remove demo cards/renewals if they're the demo ones
-    const currentCards = cards || [];
-    if (currentCards.some(c => c.id?.startsWith("demo-"))) {
-      const realCards = currentCards.filter(c => !c.id?.startsWith("demo-"));
-      setCards(realCards);
-      await db.set("card-portfolio", realCards);
-    }
-    const currentRenewals = renewals || [];
-    if (currentRenewals.some(r => r.id?.startsWith("demo-"))) {
-      const realRenewals = currentRenewals.filter(r => !r.id?.startsWith("demo-"));
-      setRenewals(realRenewals);
-      await db.set("renewals", realRenewals);
-    }
-
+    await restorePreDemoState();
     haptic.medium();
   };
 

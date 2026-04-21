@@ -205,7 +205,7 @@ export function TransactionRow({
                   >
                     Match {txn.rewardComparison.usedCardMatchConfidence || "none"}
                   </span>
-                  <button
+                  <button type="button"
                     onClick={onToggleReview}
                     style={{
                       padding: "4px 8px",
@@ -275,7 +275,7 @@ export function TransactionRow({
                   Reconcile payment method
                 </span>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  <button
+                  <button type="button"
                     onClick={() => void onOverrideLink(txn, { linkedCardId: null, linkedBankAccountId: "manual-bank" })}
                     style={{
                       padding: "6px 9px",
@@ -290,7 +290,7 @@ export function TransactionRow({
                   >
                     Mark as debit/bank
                   </button>
-                  <button
+                  <button type="button"
                     onClick={() => void onOverrideLink(txn, { linkedCardId: null, linkedBankAccountId: null })}
                     style={{
                       padding: "6px 9px",
@@ -309,7 +309,7 @@ export function TransactionRow({
                     const cardId = String(cardOption.id);
                     const isActive = txn.linkedCardId === cardId;
                     return (
-                      <button
+                      <button type="button"
                         key={cardId}
                         onClick={() => void onOverrideLink(txn, { linkedCardId: cardId, linkedBankAccountId: null })}
                         style={{

@@ -279,7 +279,7 @@ export function PagePass3({
               </p>
             )}
             <div style={{ display: "flex", gap: 8 }}>
-              <button
+              <button type="button"
                 onClick={() => {
                   haptic.medium();
                   void handlePlaidConnect();
@@ -297,7 +297,7 @@ export function PagePass3({
                   cursor: plaidConnecting ? "not-allowed" : "pointer",
                   opacity: plaidConnecting ? 0.6 : 1,
                   boxShadow: `inset 0 1px 1px rgba(255,255,255,0.15), 0 4px 12px ${T.accent.primary}30`,
-                  transition: "all 0.2s",
+                  transition: "transform 0.2s, opacity 0.2s, background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s",
                 }}
               >
                 {plaidConnecting ? "Connecting…" : plaidCount > 0 ? "+ Link Another Bank" : "Link via Plaid"}
@@ -424,7 +424,7 @@ export function PagePass3({
               const isProModel = m.tier === "pro";
               const locked = (isProModel && !isPro) || m.disabled;
               return (
-                <button
+                <button type="button"
                   key={m.id}
                   onClick={() => {
                     if (!locked) {

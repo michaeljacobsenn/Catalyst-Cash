@@ -66,8 +66,7 @@ export function SectionAddControl({
 
   return (
     <div style={{ position: "relative", flexShrink: 0 }}>
-      <button
-        type="button"
+      <button type="button"
         aria-label={buttonAriaLabel}
         className="hover-btn"
         onClick={handleAddPress}
@@ -75,19 +74,23 @@ export function SectionAddControl({
           display: "flex",
           alignItems: "center",
           gap: 6,
-          padding: "5px 10px",
-          borderRadius: T.radius.sm,
+          minWidth: 68,
+          minHeight: 32,
+          padding: "0 12px",
+          borderRadius: 999,
           border: `1px solid ${accent}40`,
           background: `${accent}12`,
           color: accent,
-          fontSize: 9,
+          fontSize: 10,
           fontWeight: 800,
-          cursor: "pointer",
           fontFamily: T.font.mono,
-          transition: "all .2s ease",
+          letterSpacing: "0.04em",
+          justifyContent: "center",
+          boxShadow: "none",
+          transition: "transform .2s ease, opacity .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease",
         }}
       >
-        <Plus size={10} strokeWidth={3} />
+        <Plus size={11} strokeWidth={2.8} />
         ADD
       </button>
 

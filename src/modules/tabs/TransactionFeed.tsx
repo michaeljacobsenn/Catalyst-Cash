@@ -393,7 +393,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
           zIndex: 20,
         }}
       >
-        <button
+        <button type="button"
           onClick={() => {
             haptic.light();
             onClose();
@@ -431,7 +431,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
 
         <div style={{ display: "flex", gap: 6 }}>
           {proEnabled && (
-            <button
+            <button type="button"
               onClick={() => {
                 haptic.light();
                 setShowExportMenu(!showExportMenu);
@@ -452,9 +452,11 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
               <Download size={17} strokeWidth={2} />
             </button>
           )}
-          <button
+          <button type="button"
             onClick={handleRefresh}
             disabled={refreshing}
+            aria-label={refreshing ? "Refreshing transactions" : "Refresh transactions"}
+            title={refreshing ? "Refreshing transactions" : "Refresh transactions"}
             style={{
               width: 40,
               height: 40,
@@ -497,7 +499,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
             animation: "txnSlideDown 0.2s ease-out",
           }}
         >
-          <button
+          <button type="button"
             onClick={handleExportCSV}
             className="txn-export-btn"
             style={{
@@ -519,7 +521,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
             <FileSpreadsheet size={16} color={T.status.green} />
             Export as CSV
           </button>
-          <button
+          <button type="button"
             onClick={handleExportJSON}
             className="txn-export-btn"
             style={{
@@ -645,7 +647,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
               background: T.bg.base,
             }}
           >
-            <button
+            <button type="button"
               onClick={() => {
                 haptic.light();
                 setShowBreakdown(!showBreakdown);
@@ -794,13 +796,13 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                 ref={searchRef}
                 className="txn-search-input"
                 type="text"
-                placeholder="Search transactions..."
+                placeholder="Search transactions…"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 style={{ color: T.text.primary }}
               />
               {searchQuery && (
-                <button
+                <button type="button"
                   onClick={() => setSearchQuery("")}
                   style={{
                     background: "none",
@@ -815,7 +817,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                 </button>
               )}
             </div>
-            <button
+            <button type="button"
               onClick={() => {
                 haptic.light();
                 setShowFilters(!showFilters);
@@ -832,7 +834,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                 justifyContent: "center",
                 cursor: "pointer",
                 color: showFilters || hasFilters ? T.accent.primary : T.text.dim,
-                transition: "all 0.2s",
+                transition: "transform 0.2s, opacity 0.2s, background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s",
               }}
             >
               <Filter size={16} strokeWidth={2} />
@@ -866,7 +868,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
               </span>
               <div className="txn-filter-strip">
                 {hasFilters && (
-                  <button
+                  <button type="button"
                     onClick={clearFilters}
                     className="txn-filter-pill"
                 style={{
@@ -882,7 +884,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                   const active = activeCategory === cat;
                   const meta = getCategoryMeta(cat, categoryIconMap);
                   return (
-                    <button
+                    <button type="button"
                       key={cat}
                       onClick={() => {
                         haptic.light();
@@ -919,7 +921,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                 {accounts.map(acct => {
                   const active = activeAccount === acct;
                   return (
-                    <button
+                    <button type="button"
                       key={acct}
                       onClick={() => {
                         haptic.light();
@@ -967,7 +969,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
               action={
                 <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 10 }}>
                   {hasPlaidConnections && !needsReconnectOnly && (
-                    <button
+                    <button type="button"
                       onClick={handleRefresh}
                       disabled={refreshing}
                       className="hover-lift btn-secondary"
@@ -983,7 +985,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                     </button>
                   )}
                   {onConnectPlaid && (
-                    <button
+                    <button type="button"
                       onClick={async () => {
                         haptic.light();
                         await onConnectPlaid();
@@ -1023,7 +1025,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
           >
             <AlertCircle size={36} color={T.text.dim} strokeWidth={1.5} />
             <p style={{ fontSize: 14, fontWeight: 600, color: T.text.secondary }}>No matching transactions</p>
-            <button
+            <button type="button"
               onClick={clearFilters}
               style={{
                 padding: "10px 20px",
@@ -1161,7 +1163,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
                     <div style={{ fontSize: 11, color: T.text.dim, lineHeight: 1.45 }}>
                       Better for cleanup, audits, and recurring-spend analysis.
                     </div>
-                    <button
+                    <button type="button"
                       onClick={() => { haptic.medium(); setShowPaywall(true); }}
                       style={{
                         padding: "10px 14px",
@@ -1190,7 +1192,7 @@ export default function TransactionFeed({ onClose, proEnabled = false, onConnect
             {/* Load More */}
             {proEnabled && visibleCount < filtered.length && (
               <div style={{ padding: "16px", display: "flex", justifyContent: "center" }}>
-                <button
+                <button type="button"
                   onClick={() => setVisibleCount(v => v + 50)}
                   style={{
                     display: "flex",

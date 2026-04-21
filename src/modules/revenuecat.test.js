@@ -130,6 +130,7 @@ describe("revenuecat", () => {
           active: {
             "Catalyst Cash Pro": {
               productIdentifier: "com.catalystcash.pro.yearly.v2",
+              latestPurchaseDate: "2026-04-15T00:00:00.000Z",
               expirationDate: "2099-01-01T00:00:00.000Z",
             },
           },
@@ -149,7 +150,11 @@ describe("revenuecat", () => {
     expect(activatePro).toHaveBeenCalledWith(
       "com.catalystcash.pro.yearly.v2",
       3650,
-      { isLifetime: false },
+      {
+        isLifetime: false,
+        purchaseDate: "2026-04-15T00:00:00.000Z",
+        expiresAt: "2099-01-01T00:00:00.000Z",
+      },
     );
   });
 
@@ -162,6 +167,7 @@ describe("revenuecat", () => {
           active: {
             "Catalyst Cash Pro": {
               productIdentifier: "com.catalystcash.pro.yearly.v2",
+              latestPurchaseDate: "2026-04-15T00:00:00.000Z",
               expirationDate: "2099-01-01T00:00:00.000Z",
             },
           },
@@ -175,7 +181,11 @@ describe("revenuecat", () => {
     expect(activatePro).toHaveBeenCalledWith(
       "com.catalystcash.pro.yearly.v2",
       3650,
-      { isLifetime: false },
+      {
+        isLifetime: false,
+        purchaseDate: "2026-04-15T00:00:00.000Z",
+        expiresAt: "2099-01-01T00:00:00.000Z",
+      },
     );
   });
 

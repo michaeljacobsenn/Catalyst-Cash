@@ -485,7 +485,7 @@ export default memo(function ResultsView({
         }}
       >
         <div style={{ width: 44, minWidth: 44, display: "flex", justifyContent: "flex-start" }}>
-          <button
+          <button type="button"
             onClick={handleExitResults}
             aria-label="Back"
             style={{
@@ -546,7 +546,7 @@ export default memo(function ResultsView({
             Weekly Briefing
           </h1>
         </div>
-        <button
+        <button type="button"
           onClick={() => setShowExportSheet(true)}
           title="Export Audit"
           aria-label="Export Audit"

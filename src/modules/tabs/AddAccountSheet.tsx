@@ -141,7 +141,7 @@ export default function AddAccountSheet({
     fontSize: 14,
     fontWeight: 800,
     cursor: enabled ? "pointer" : "not-allowed",
-    transition: "all .2s",
+    transition: "transform .2s, opacity .2s, background-color .2s, border-color .2s, color .2s, box-shadow .2s",
   });
 
   // Shared segmented control component
@@ -170,7 +170,7 @@ export default function AddAccountSheet({
         }}
       />
       {steps.map((step, idx) => (
-        <button
+        <button type="button"
           key={idx}
           onClick={() => {
             haptic.selection();
@@ -215,7 +215,7 @@ export default function AddAccountSheet({
   }) => (
     <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
       {step > 0 && (
-        <button
+        <button type="button"
           onClick={onPrev}
           style={{
             flex: 0.6,
@@ -232,7 +232,7 @@ export default function AddAccountSheet({
           ← Back
         </button>
       )}
-      <button
+      <button type="button"
         className="hover-btn"
         onClick={onSubmit}
         disabled={!canSubmit}
@@ -255,7 +255,7 @@ export default function AddAccountSheet({
         {submitLabel}
       </button>
       {step < maxStep && (
-        <button
+        <button type="button"
           onClick={onNext}
           style={{
             flex: 0.6,
@@ -314,7 +314,7 @@ export default function AddAccountSheet({
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", padding: "14px 20px 12px", gap: 8, background: "linear-gradient(180deg, rgba(255,255,255,0.02), transparent)" }}>
           {step && (
-            <button
+            <button type="button"
               onClick={() => onSetStep(null)}
               style={{
                 width: 32,
@@ -341,7 +341,7 @@ export default function AddAccountSheet({
             {step === "asset" && "Add Other Asset"}
             {step === "debt" && "Add Debt / Loan"}
           </span>
-          <button
+          <button type="button"
             onClick={onClose}
             style={{
               width: 32,
@@ -366,7 +366,7 @@ export default function AddAccountSheet({
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {/* Plaid hero button */}
               {ENABLE_PLAID && (
-                <button
+                <button type="button"
                   onClick={onPlaidConnect}
                   disabled={plaidLoading}
                   style={{
@@ -385,7 +385,7 @@ export default function AddAccountSheet({
                     boxShadow: plaidLoading
                       ? "none"
                       : "0 8px 28px rgba(26,124,218,0.35), inset 0 1px 0 rgba(255,255,255,0.15)",
-                    transition: "all .25s",
+                    transition: "transform .25s, opacity .25s, background-color .25s, border-color .25s, color .25s, box-shadow .25s",
                   }}
                 >
                   {!plaidLoading && (
@@ -517,7 +517,7 @@ export default function AddAccountSheet({
                   { id: "goal", icon: Target, label: "Savings Goal", color: T.accent.primary },
                   { id: "asset", icon: Wallet, label: "Other Asset", color: T.accent.copper },
                 ].map(({ id, icon: Icon, label, color }) => (
-                  <button
+                  <button type="button"
                     key={id}
                     onClick={() => onSetStep(id)}
                     style={{
@@ -530,7 +530,7 @@ export default function AddAccountSheet({
                       background: `${color}08`,
                       cursor: "pointer",
                       textAlign: "left",
-                      transition: "all .2s",
+                      transition: "transform .2s, opacity .2s, background-color .2s, border-color .2s, color .2s, box-shadow .2s",
                     }}
                   >
                     <div
@@ -735,7 +735,7 @@ export default function AddAccountSheet({
                       <div style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border.subtle}` }}>
                         <div style={{ display: "flex", background: T.bg.card, borderRadius: T.radius.sm, padding: 3 }}>
                           {["checking", "savings"].map(t => (
-                            <button
+                            <button type="button"
                               key={t}
                               onClick={() => {
                                 haptic.selection();
@@ -856,7 +856,7 @@ export default function AddAccountSheet({
                   { key: "hsa", label: "HSA", color: "#06B6D4" },
                   { key: "crypto", label: "Crypto", color: T.status.amber },
                 ].map(o => (
-                  <button
+                  <button type="button"
                     key={o.key}
                     onClick={() => setInvestKey(o.key)}
                     style={{
@@ -912,7 +912,7 @@ export default function AddAccountSheet({
                 </FormRow>
               </FormGroup>
 
-              <button
+              <button type="button"
                 className="hover-btn"
                 onClick={() => {
                   const canAdd = !!(investSym?.trim() && Number(investShares) > 0);
@@ -978,7 +978,7 @@ export default function AddAccountSheet({
                 </FormRow>
               </FormGroup>
 
-              <button
+              <button type="button"
                 className="hover-btn"
                 onClick={() => {
                   if (!goalForm.name.trim()) return;
@@ -1032,7 +1032,7 @@ export default function AddAccountSheet({
                         { key: "personal", label: "Personal" },
                         { key: "medical", label: "Medical" },
                       ].map(t => (
-                        <button
+                        <button type="button"
                           key={t.key}
                           onClick={() => setDebtForm(p => ({ ...p, type: t.key }))}
                           style={{
@@ -1146,7 +1146,7 @@ export default function AddAccountSheet({
                   />
                 </FormRow>
                 <FormRow label="Liquidity" isLast>
-                  <button
+                  <button type="button"
                     onClick={() => {
                       haptic.selection();
                       setAssetForm(p => ({ ...p, liquid: !p.liquid }));
@@ -1170,7 +1170,7 @@ export default function AddAccountSheet({
                 </FormRow>
               </FormGroup>
 
-              <button
+              <button type="button"
                 className="hover-btn"
                 onClick={() => {
                   if (!assetForm.name.trim()) return;

@@ -206,8 +206,8 @@ export function PlaidTransactionsCard({
           marginTop: 10,
         }}
       >
-        <button
-          type="button"
+        <button type="button"
+         
           onClick={() => {
             if (!proEnabled) return;
             haptic.light();
@@ -252,8 +252,8 @@ export function PlaidTransactionsCard({
           />
           {proEnabled ? (includeRecentSpending ? "Included in briefing" : "Exclude from briefing") : "Ledger is Pro"}
         </button>
-        <button
-          type="button"
+        <button type="button"
+         
           onClick={() => {
             haptic.light();
             setShowTxns((prev) => !prev);
@@ -270,7 +270,6 @@ export function PlaidTransactionsCard({
             color: T.text.secondary,
             fontSize: 11,
             fontWeight: 800,
-            cursor: "pointer",
             justifySelf: "end",
           }}
         >
@@ -413,7 +412,7 @@ export function ModelChatQuotaWidget({ chatQuota, setAiModel, proEnabled }: Mode
             Switch to {altLabel} — {chatQuota.alternateRemaining} chats remaining today
           </div>
         </div>
-        <button
+        <button type="button"
           style={{
             padding: "7px 13px",
             borderRadius: 10,
@@ -422,7 +421,6 @@ export function ModelChatQuotaWidget({ chatQuota, setAiModel, proEnabled }: Mode
             color: T.status.amber,
             fontSize: 13,
             fontWeight: 700,
-            cursor: "pointer",
             whiteSpace: "nowrap",
             flexShrink: 0,
           }}
@@ -502,7 +500,7 @@ export function SubmitBar({ canSubmit, offline = false, isLoading, isTestMode, s
           boxShadow: trayShadow,
         }}
       >
-        <button
+        <button type="button"
           onClick={onSubmit}
           disabled={!canSubmit}
           style={{
@@ -542,7 +540,7 @@ export function SubmitBar({ canSubmit, offline = false, isLoading, isTestMode, s
           )}
         </button>
 
-        <button
+        <button type="button"
           onClick={() => canSubmit && setIsTestMode((prev) => !prev)}
           disabled={!canSubmit}
           title="Toggle test mode — audit not saved"

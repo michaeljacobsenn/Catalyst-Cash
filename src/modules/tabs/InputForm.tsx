@@ -710,7 +710,7 @@ export default function InputForm({
         }}
       >
         <div style={{ width: 44, minWidth: 44, display: "flex", justifyContent: "flex-start" }}>
-          <button
+          <button type="button"
             onClick={() => {
               haptic.light();
               onBack();
@@ -723,7 +723,6 @@ export default function InputForm({
               border: `1px solid ${T.border.default}`,
               background: T.bg.elevated,
               color: T.text.secondary,
-              cursor: "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -832,7 +831,7 @@ export default function InputForm({
                 maxWidth: 500,
               }}
             >
-              Refresh the accounts that matter this week and give the audit the context it needs to produce a credible plan.
+              Refresh the accounts that matter this week so the audit starts from current, credible balances.
             </p>
           </div>
         </div>
@@ -879,7 +878,7 @@ export default function InputForm({
                   Add accounts in Portfolio first
                 </div>
                 <div style={{ fontSize: 13, lineHeight: 1.58, color: T.text.secondary }}>
-                  The weekly audit should be built from the accounts you actually track. Add your cards and bank accounts in Portfolio, then return here to review live balances and generate a real briefing.
+                  Build the weekly audit from the accounts you already track. Add cards and bank accounts in Portfolio, then return here to review live balances and generate the briefing.
                 </div>
               </div>
             </div>
@@ -1085,7 +1084,7 @@ export default function InputForm({
                         Include upcoming paycheck not yet deposited
                       </div>
                     </div>
-                    <button
+                    <button type="button"
                       onClick={() => {
                         haptic.light();
                         s("autoPaycheckAdd", !form.autoPaycheckAdd);
@@ -1097,7 +1096,6 @@ export default function InputForm({
                         border: `1px solid ${form.autoPaycheckAdd ? T.accent.primary : T.border.default}`,
                         background: form.autoPaycheckAdd ? T.accent.primaryDim : T.bg.elevated,
                         position: "relative",
-                        cursor: "pointer",
                       }}
                     >
                       <div
@@ -1108,8 +1106,9 @@ export default function InputForm({
                           background: form.autoPaycheckAdd ? T.accent.primary : T.bg.card,
                           position: "absolute",
                           top: 2,
-                          left: form.autoPaycheckAdd ? 22 : 2,
-                          transition: "all .2s box-shadow .2s",
+                          left: 2,
+                          transform: form.autoPaycheckAdd ? "translateX(20px)" : "translateX(0)",
+                          transition: "transform .2s ease, background-color .2s ease, box-shadow .2s ease",
                           boxShadow: form.autoPaycheckAdd ? `0 0 6px ${T.accent.primary}60` : "0 1px 2px rgba(0,0,0,0.2)",
                         }}
                       />
@@ -1139,7 +1138,7 @@ export default function InputForm({
                       {configuredPaycheckDisplay}
                     </div>
                     <div style={{ fontSize: 11, lineHeight: 1.45, color: T.text.muted }}>
-                      The plan-ahead toggle uses the income amount you set above in Audit Profile, Notes &amp; AI.
+                      Plan-ahead uses the income amount set in Audit Profile, Notes &amp; AI.
                     </div>
                   </div>
                 </div>
@@ -1169,7 +1168,7 @@ export default function InputForm({
                 <Label>{financialConfig?.habitName || "Habit"} Restock Count</Label>
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   {[-1, 1].map((dir) => (
-                    <button
+                    <button type="button"
                       key={dir}
                       onClick={() => {
                         haptic.light();
@@ -1182,7 +1181,6 @@ export default function InputForm({
                         border: `1.5px solid ${T.border.default}`,
                         background: T.bg.elevated,
                         color: T.text.primary,
-                        cursor: "pointer",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",

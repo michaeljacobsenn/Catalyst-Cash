@@ -4,6 +4,7 @@ import { T } from "../../constants.js";
 import { Trash2 } from "../../icons";
 import { Badge, Card, Label } from "../../ui.js";
 import { fmt } from "../../utils.js";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout.js";
 import { SectionAddControl } from "./SectionAddControl";
 import type { InputFormState, InvestmentAuditSource } from "./model.js";
 import { sanitizeDollar, toNumber, type MoneyInput } from "./utils.js";
@@ -35,6 +36,7 @@ interface InvestmentBalancesSectionProps {
 
 const Mono = UIMono as unknown as (props: MonoProps) => ReactNode;
 const DI = UIDI as unknown as (props: DollarInputProps) => ReactNode;
+const INVESTMENT_ROW_GRID = "minmax(0, 1fr) minmax(112px, 168px) 34px";
 
 export function InvestmentBalancesSection({
   visibleSources,
@@ -45,6 +47,13 @@ export function InvestmentBalancesSection({
   onRemoveSource,
   onRestoreSource,
 }: InvestmentBalancesSectionProps) {
+  const { isNarrowPhone, isTablet } = useResponsiveLayout();
+  const rowActionSize = isTablet ? 36 : 34;
+  const investmentRowGrid = isNarrowPhone
+    ? `minmax(0, 1fr) ${rowActionSize}px`
+    : isTablet
+      ? "minmax(0, 1fr) minmax(136px, 188px) 36px"
+      : INVESTMENT_ROW_GRID;
   const addableFields = useMemo(
     () =>
       hiddenSources.map((source) => ({
@@ -63,7 +72,16 @@ export function InvestmentBalancesSection({
 
   return (
     <Card variant="glass" style={{ marginBottom: 8, position: "relative", overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: isNarrowPhone ? "flex-start" : "center",
+          justifyContent: "space-between",
+          gap: 10,
+          flexWrap: isNarrowPhone ? "wrap" : "nowrap",
+          marginBottom: 10,
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           <Label style={{ marginBottom: 0, fontWeight: 800 }}>Investment Balances</Label>
           {visibleSources.length > 0 && (
@@ -80,18 +98,42 @@ export function InvestmentBalancesSection({
             </Badge>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: isNarrowPhone && visibleSources.length > 0 ? "space-between" : "flex-end",
+            gap: 8,
+            flexWrap: "wrap",
+            flexShrink: 0,
+            width: isNarrowPhone ? "100%" : undefined,
+          }}
+        >
           {visibleSources.length > 0 && (
-            <Mono size={14} weight={800} color={T.text.primary}>
-              {fmt(totalBalance)}
-            </Mono>
+            <div
+              style={{
+                minWidth: isNarrowPhone ? 0 : 92,
+                minHeight: rowActionSize,
+                padding: "0 12px",
+                borderRadius: 999,
+                border: `1px solid ${T.accent.emerald}35`,
+                background: `${T.accent.emerald}10`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Mono size={13} weight={800} color={T.accent.emerald}>
+                {fmt(totalBalance)}
+              </Mono>
+            </div>
           )}
           <SectionAddControl
             accent={T.accent.emerald}
             buttonAriaLabel="Add investment balance to audit"
             options={addableFields}
             pickerLabel="Choose investment source"
-            placeholder="Select balance..."
+            placeholder="Select balance…"
             onSelect={handleAddField}
           />
         </div>
@@ -126,18 +168,19 @@ export function InvestmentBalancesSection({
               key={source.id}
               className="slide-up"
               style={{
-                display: "flex",
-                alignItems: "center",
+                display: "grid",
+                gridTemplateColumns: investmentRowGrid,
+                alignItems: isNarrowPhone ? "start" : "center",
                 gap: 10,
                 padding: "10px 12px",
                 background: T.bg.elevated,
                 borderRadius: T.radius.md,
                 border: `1px solid ${T.border.subtle}`,
                 boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
-                transition: "all 0.2s ease",
+                transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
               }}
             >
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ minWidth: 0, gridColumn: isNarrowPhone ? "1 / 2" : undefined }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 7, minWidth: 0 }}>
                   <div style={{ width: 6, height: 6, borderRadius: 3, background: source.accent, flexShrink: 0, marginTop: 4 }} />
                   <div style={{ minWidth: 0 }}>
@@ -151,7 +194,13 @@ export function InvestmentBalancesSection({
                 </div>
               </div>
               {showManualInput ? (
-                <div style={{ flexShrink: 0, maxWidth: 180 }}>
+                <div
+                  style={{
+                    minWidth: 0,
+                    gridColumn: isNarrowPhone ? "1 / -1" : undefined,
+                    gridRow: isNarrowPhone ? "2 / 3" : undefined,
+                  }}
+                >
                   <DI
                     value={inputValue}
                     onChange={(event) => onChangeField(source.formKey as "roth" | "brokerage" | "k401Balance", sanitizeDollar(event.target.value))}
@@ -164,13 +213,15 @@ export function InvestmentBalancesSection({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    minWidth: 96,
-                    height: 36,
+                    width: "100%",
+                    minHeight: rowActionSize + 2,
                     background: `${source.accent}0C`,
                     border: `1px solid ${source.accent}30`,
                     borderRadius: T.radius.md,
                     padding: "0 12px",
-                    transition: "all 0.2s ease",
+                    gridColumn: isNarrowPhone ? "1 / -1" : undefined,
+                    gridRow: isNarrowPhone ? "2 / 3" : undefined,
+                    transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
                     flexShrink: 0,
                   }}
                 >
@@ -179,21 +230,22 @@ export function InvestmentBalancesSection({
                   </Mono>
                 </div>
               )}
-              <button
-                type="button"
+              <button type="button"
                 onClick={() => onRemoveSource(source.id)}
                 style={{
-                  width: 34,
-                  height: 34,
+                  width: rowActionSize,
+                  height: rowActionSize,
                   borderRadius: T.radius.sm,
                   border: "none",
                   background: `${source.accent}14`,
                   color: source.accent,
-                  cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   flexShrink: 0,
+                  gridColumn: isNarrowPhone ? "2 / 3" : undefined,
+                  gridRow: isNarrowPhone ? "1 / 2" : undefined,
+                  justifySelf: "end",
                 }}
               >
                 <Trash2 size={11} />

@@ -48,6 +48,33 @@ interface PlaidConnectionLike {
     _needsReconnect?: boolean;
 }
 
+const compactInputStyle = {
+    width: "100%",
+    minHeight: 42,
+    padding: "10px 12px",
+    borderRadius: T.radius.md,
+    border: `1px solid ${T.border.default}`,
+    background: T.bg.elevated,
+    color: T.text.primary,
+    fontSize: 13,
+    outline: "none",
+    boxSizing: "border-box" as const,
+    boxShadow: "none",
+};
+
+const compactMonoInputStyle = {
+    ...compactInputStyle,
+    fontFamily: T.font.mono,
+    fontWeight: 600,
+};
+
+const compactMiniInputStyle = {
+    ...compactInputStyle,
+    minHeight: 36,
+    padding: "8px 10px",
+    fontSize: 12,
+};
+
 export default function CreditCardsSection({
     collapsedSections: propCollapsed,
     setCollapsedSections: propSetCollapsed,
@@ -86,6 +113,20 @@ export default function CreditCardsSection({
             return instCmp !== 0 ? instCmp : (a.name || "").localeCompare(b.name || "");
         }),
     [cards]);
+
+    const getVisibleBalance = (card: CardRecord) => {
+        const needsReconnect = !!(card._plaidConnectionId && reconnectConnectionIds.has(card._plaidConnectionId));
+        const usesManualFallback = !!card._plaidManualFallback || needsReconnect;
+        return !usesManualFallback && card._plaidBalance != null
+            ? card._plaidBalance
+            : Number(card.balance || 0);
+    };
+
+    const creditCardBalanceTotal = useMemo(
+        () => sortedCards.reduce((sum, card) => sum + getVisibleBalance(card), 0),
+        [sortedCards, reconnectConnectionIds]
+    );
+    const creditCardBalanceTone = creditCardBalanceTotal > 0 ? T.status.red : T.accent.emerald;
 
     useEffect(() => {
         let active = true;
@@ -223,7 +264,7 @@ export default function CreditCardsSection({
                     border: checked ? "none" : `2px solid ${T.text.dim}`,
                     background: checked ? T.accent.primary : "transparent",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    transition: "all .2s",
+                    transition: "transform .2s, opacity .2s, background-color .2s, border-color .2s, color .2s, box-shadow .2s",
                 }}
                 onClick={onChange}
             >
@@ -243,7 +284,7 @@ export default function CreditCardsSection({
                     border: checked ? "none" : `2px solid ${T.text.dim}`,
                     background: checked ? T.accent.emerald : "transparent",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    transition: "all .2s",
+                    transition: "transform .2s, opacity .2s, background-color .2s, border-color .2s, color .2s, box-shadow .2s",
                 }}
                 onClick={onChange}
             >
@@ -277,9 +318,13 @@ export default function CreditCardsSection({
                         <CreditCard size={14} color={T.accent.primary} />
                     </div>
                     <h2 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Credit Cards</h2>
-                    <Badge variant="outline" style={{ fontSize: 10, color: cards.length > 0 ? T.accent.primary : T.text.muted, borderColor: cards.length > 0 ? `${T.accent.primary}40` : T.border.default }}>{cards.length}</Badge>
                 </div>
-                <ChevronDown size={16} color={T.text.muted} className="chevron-animated" data-open={String(!collapsedSections.creditCards)} />
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Badge variant="outline" style={{ fontSize: 10, color: creditCardBalanceTone, borderColor: `${creditCardBalanceTone}40` }}>
+                        {fmt(creditCardBalanceTotal)}
+                    </Badge>
+                    <ChevronDown size={16} color={T.text.muted} className="chevron-animated" data-open={String(!collapsedSections.creditCards)} />
+                </div>
             </div>
 
             <div className="collapse-section" data-collapsed={String(collapsedSections.creditCards)}>
@@ -354,7 +399,7 @@ export default function CreditCardsSection({
                                                     <div style={{ display: "flex", borderRadius: T.radius.md, background: T.bg.elevated, border: `1px solid ${T.border.default}`, padding: 2, position: "relative" }}>
                                                         <div style={{ position: "absolute", top: 2, left: `calc(${editStep * 33.33}% + 2px)`, width: "calc(33.33% - 4px)", height: "calc(100% - 4px)", borderRadius: T.radius.sm, background: T.accent.primaryDim, transition: "left 0.25s cubic-bezier(0.4, 0, 0.2, 1)", zIndex: 0 }} />
                                                         {tabs.map((tab, idx) => (
-                                                            <button key={idx} onClick={() => { haptic.selection(); setEditStep(idx); }} style={{ flex: 1, padding: "7px 0", border: "none", background: "transparent", color: editStep === idx ? T.accent.primary : T.text.dim, fontSize: 10, fontWeight: editStep === idx ? 800 : 600, cursor: "pointer", fontFamily: T.font.mono, position: "relative", zIndex: 1, transition: "color 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                                                            <button type="button" key={idx} onClick={() => { haptic.selection(); setEditStep(idx); }} style={{ flex: 1, padding: "7px 0", border: "none", background: "transparent", color: editStep === idx ? T.accent.primary : T.text.dim, fontSize: 10, fontWeight: editStep === idx ? 800 : 600, cursor: "pointer", fontFamily: T.font.mono, position: "relative", zIndex: 1, transition: "color 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
                                                                 {tab.filled && editStep !== idx && <CheckCircle2 size={9} style={{ opacity: 0.6 }} />}
                                                                 {tab.label}
                                                             </button>
@@ -381,7 +426,7 @@ export default function CreditCardsSection({
                                                         return (
                                                             <div style={{ position: "relative" }}>
                                                                 <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600 }}>$</span>
-                                                                <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={editForm.balance} onChange={e => setEditForm(p => ({ ...p, balance: e.target.value }))} placeholder="Current Balance" aria-label="Current card balance" style={{ width: "100%", paddingLeft: 28, fontFamily: T.font.mono, fontWeight: 600, boxSizing: "border-box" }} />
+                                                                <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={editForm.balance} onChange={e => setEditForm(p => ({ ...p, balance: e.target.value }))} placeholder="Current Balance" aria-label="Current card balance" style={{ ...compactMonoInputStyle, paddingLeft: 28 }} />
                                                             </div>
                                                         );
                                                     })()}
@@ -400,10 +445,10 @@ export default function CreditCardsSection({
                                                     <div style={{ display: "flex", gap: 8 }}>
                                                         <div style={{ flex: 1, position: "relative" }}>
                                                             <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 14, fontWeight: 600 }}>$</span>
-                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" value={editForm.limit} onChange={e => setEditForm(p => ({ ...p, limit: e.target.value }))} placeholder="Limit" aria-label="Credit limit" style={{ paddingLeft: 28, fontFamily: T.font.mono, fontWeight: 600 }} />
+                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" value={editForm.limit} onChange={e => setEditForm(p => ({ ...p, limit: e.target.value }))} placeholder="Limit" aria-label="Credit limit" style={{ ...compactMonoInputStyle, paddingLeft: 28 }} />
                                                         </div>
                                                         <div style={{ flex: 1 }}>
-                                                            <input value={editForm.nickname} onChange={e => setEditForm(p => ({ ...p, nickname: e.target.value }))} placeholder="Nickname (e.g. 'Daily Driver')" aria-label="Card nickname" style={{ width: "100%", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                                            <input value={editForm.nickname} onChange={e => setEditForm(p => ({ ...p, nickname: e.target.value }))} placeholder="Nickname (e.g. 'Daily Driver')" aria-label="Card nickname" style={compactInputStyle} />
                                                         </div>
                                                     </div>
                                                     {card._plaidAccountId && (
@@ -423,11 +468,11 @@ export default function CreditCardsSection({
                                                     <div style={{ display: "flex", gap: 8 }}>
                                                         <div style={{ flex: 0.5, position: "relative" }}>
                                                             <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 13, fontWeight: 600 }}>$</span>
-                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" value={editForm.annualFee} onChange={e => setEditForm(p => ({ ...p, annualFee: e.target.value }))} placeholder="Annual Fee" aria-label="Annual fee" style={{ paddingLeft: 28, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" value={editForm.annualFee} onChange={e => setEditForm(p => ({ ...p, annualFee: e.target.value }))} placeholder="Annual Fee" aria-label="Annual fee" style={{ ...compactMonoInputStyle, paddingLeft: 28 }} />
                                                         </div>
                                                         <div style={{ flex: 0.5, position: "relative" }}>
                                                             <span style={{ position: "absolute", left: 10, top: "8px", color: T.text.dim, fontSize: 11, fontWeight: 700, pointerEvents: "none" }}>AF DUE</span>
-                                                            <input type="date" value={editForm.annualFeeDue} onChange={e => setEditForm(p => ({ ...p, annualFeeDue: e.target.value }))} aria-label="Annual fee due date" style={{ width: "100%", padding: "20px 10px 6px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, outline: "none", boxSizing: "border-box", height: "100%" }} />
+                                                            <input type="date" value={editForm.annualFeeDue} onChange={e => setEditForm(p => ({ ...p, annualFeeDue: e.target.value }))} aria-label="Annual fee due date" style={{ ...compactInputStyle, padding: "20px 10px 6px 10px", height: "100%" }} />
                                                         </div>
                                                     </div>
                                                     <div style={{ marginTop: -4, paddingLeft: 4 }}>
@@ -436,7 +481,7 @@ export default function CreditCardsSection({
                                                     <div style={{ display: "flex", gap: 8 }}>
                                                         <div style={{ flex: 1, position: "relative" }}>
                                                             <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 12 }}>%</span>
-                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" value={editForm.apr} onChange={e => setEditForm(p => ({ ...p, apr: e.target.value }))} placeholder="Standard APR (%)" aria-label="Standard APR percentage" style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" value={editForm.apr} onChange={e => setEditForm(p => ({ ...p, apr: e.target.value }))} placeholder="Standard APR (%)" aria-label="Standard APR percentage" style={{ ...compactMonoInputStyle, padding: "10px 24px 10px 10px" }} />
                                                         </div>
                                                     </div>
                                                     <div style={{ marginTop: -4, paddingLeft: 4 }}>
@@ -446,11 +491,11 @@ export default function CreditCardsSection({
                                                         <div style={{ display: "flex", gap: 8, marginTop: -4 }}>
                                                             <div style={{ flex: 0.5, position: "relative" }}>
                                                                 <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: T.text.dim, fontFamily: T.font.mono, fontSize: 12 }}>%</span>
-                                                                <input type="number" inputMode="decimal" pattern="[0-9]*" value={editForm.promoAprAmount} onChange={e => setEditForm(p => ({ ...p, promoAprAmount: e.target.value }))} placeholder="Promo APR" aria-label="Promo APR percentage" style={{ width: "100%", padding: "10px 24px 10px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontFamily: T.font.mono, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                                                                <input type="number" inputMode="decimal" pattern="[0-9]*" value={editForm.promoAprAmount} onChange={e => setEditForm(p => ({ ...p, promoAprAmount: e.target.value }))} placeholder="Promo APR" aria-label="Promo APR percentage" style={{ ...compactMonoInputStyle, padding: "10px 24px 10px 10px" }} />
                                                             </div>
                                                             <div style={{ flex: 0.5, position: "relative" }}>
                                                                 <span style={{ position: "absolute", left: 10, top: "8px", color: T.text.dim, fontSize: 11, fontWeight: 700, pointerEvents: "none" }}>PROMO EXP</span>
-                                                                <input type="date" value={editForm.promoAprExp} onChange={e => setEditForm(p => ({ ...p, promoAprExp: e.target.value }))} aria-label="Promo APR expiration date" style={{ width: "100%", padding: "20px 10px 6px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 13, outline: "none", boxSizing: "border-box", height: "100%" }} />
+                                                                <input type="date" value={editForm.promoAprExp} onChange={e => setEditForm(p => ({ ...p, promoAprExp: e.target.value }))} aria-label="Promo APR expiration date" style={{ ...compactInputStyle, padding: "20px 10px 6px 10px", height: "100%" }} />
                                                             </div>
                                                         </div>
                                                     )}
@@ -463,31 +508,31 @@ export default function CreditCardsSection({
                                                     <div style={{ display: "flex", gap: 6 }}>
                                                         <div style={{ flex: 1 }}>
                                                             <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono, display: "block", marginBottom: 2 }}>STMT CLOSES</span>
-                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" min="1" max="31" value={editForm.statementCloseDay} onChange={e => setEditForm(p => ({ ...p, statementCloseDay: e.target.value }))} placeholder="Day" aria-label="Statement close day" style={{ width: "100%", padding: "8px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" min="1" max="31" value={editForm.statementCloseDay} onChange={e => setEditForm(p => ({ ...p, statementCloseDay: e.target.value }))} placeholder="Day" aria-label="Statement close day" style={compactMiniInputStyle} />
                                                         </div>
                                                         <div style={{ flex: 1 }}>
                                                             <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono, display: "block", marginBottom: 2 }}>PMT DUE</span>
-                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" min="1" max="31" value={editForm.paymentDueDay} onChange={e => setEditForm(p => ({ ...p, paymentDueDay: e.target.value }))} placeholder="Day" aria-label="Payment due day" style={{ width: "100%", padding: "8px 10px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" min="1" max="31" value={editForm.paymentDueDay} onChange={e => setEditForm(p => ({ ...p, paymentDueDay: e.target.value }))} placeholder="Day" aria-label="Payment due day" style={compactMiniInputStyle} />
                                                         </div>
                                                         <div style={{ flex: 1, position: "relative" }}>
                                                             <span style={{ fontSize: 9, color: T.text.dim, fontFamily: T.font.mono, display: "block", marginBottom: 2 }}>MIN PMT</span>
                                                             <span style={{ position: "absolute", left: 8, bottom: 9, color: T.text.dim, fontSize: 11, fontWeight: 600 }}>$</span>
-                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={editForm.minPayment} onChange={e => setEditForm(p => ({ ...p, minPayment: e.target.value }))} placeholder="35" aria-label="Minimum payment" style={{ width: "100%", padding: "8px 8px 8px 18px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+                                                            <input type="number" inputMode="decimal" pattern="[0-9]*" step="0.01" value={editForm.minPayment} onChange={e => setEditForm(p => ({ ...p, minPayment: e.target.value }))} placeholder="35" aria-label="Minimum payment" style={{ ...compactMiniInputStyle, padding: "8px 8px 8px 18px" }} />
                                                         </div>
                                                     </div>
-                                                    <input value={editForm.notes} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notes" aria-label="Card notes" style={{ width: "100%", fontSize: 13, padding: "8px 12px", borderRadius: T.radius.md, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
+                                                    <input value={editForm.notes} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notes" aria-label="Card notes" style={{ ...compactMiniInputStyle, padding: "8px 12px" }} />
                                                 </>
                                             )}
 
                                             {/* ── Actions ── */}
                                             <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
-                                                {editStep > 0 && <button onClick={() => { haptic.selection(); setEditStep(s => s - 1); }} aria-label="Previous page" style={{ flex: 0.6, padding: 10, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>← Back</button>}
-                                                <button onClick={() => saveEdit(card.id)} style={{ flex: 1, padding: 10, borderRadius: T.radius.sm, border: "none", background: T.accent.primaryDim, color: T.accent.primary, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Check size={12} /> Save</button>
-                                                {editStep < 2 && <button onClick={() => { haptic.selection(); setEditStep(s => s + 1); }} aria-label="Next page" style={{ flex: 0.6, padding: 10, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.primary, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Next →</button>}
-                                                <button onClick={() => setEditingCard(null)} style={{ flex: 0.5, padding: 10, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
+                                                {editStep > 0 && <button type="button" onClick={() => { haptic.selection(); setEditStep(s => s - 1); }} aria-label="Previous page" style={{ flex: 0.6, padding: 10, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>← Back</button>}
+                                                <button type="button" onClick={() => saveEdit(card.id)} style={{ flex: 1, padding: 10, borderRadius: T.radius.sm, border: "none", background: T.accent.primaryDim, color: T.accent.primary, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Check size={12} /> Save</button>
+                                                {editStep < 2 && <button type="button" onClick={() => { haptic.selection(); setEditStep(s => s + 1); }} aria-label="Next page" style={{ flex: 0.6, padding: 10, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.primary, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Next →</button>}
+                                                <button type="button" onClick={() => setEditingCard(null)} style={{ flex: 0.5, padding: 10, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
                                             </div>
                                             <div style={{ textAlign: "center", paddingTop: 2 }}>
-                                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (window.confirm(`Delete "${card.nickname || card.name}"?`)) removeCard(card.id); }} style={{ background: "none", border: "none", color: T.status.red, fontSize: 10, cursor: "pointer", fontWeight: 600, opacity: 0.6, padding: "2px 8px" }}>Delete card</button>
+                                                <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (window.confirm(`Delete "${card.nickname || card.name}"?`)) removeCard(card.id); }} style={{ background: "none", border: "none", color: T.status.red, fontSize: 10, cursor: "pointer", fontWeight: 600, opacity: 0.6, padding: "2px 8px" }}>Delete card</button>
                                             </div>
                                         </div>
                                     ) : (
@@ -598,7 +643,7 @@ export default function CreditCardsSection({
                                                             </div>
                                                         )}
                                                     </div>
-                                                    <button
+                                                    <button type="button"
                                                         onClick={() => startEdit(card)}
                                                         style={{ width: 22, height: 22, borderRadius: 7, border: `1px solid ${T.border.subtle}`, background: "transparent", color: T.text.muted, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
                                                     >

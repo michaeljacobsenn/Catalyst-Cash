@@ -183,21 +183,6 @@ export default function useDashboardData() {
   }, [financialConfig, bankAccounts, cards, investmentSnapshot.total, dashboardMetrics?.checking, dashboardMetrics?.vault]);
 
   const fireProjection = useMemo(() => {
-    if (current?.isTest) {
-      return computeFireProjection({
-        financialConfig: {
-          incomeSources: [{ amount: 150000, frequency: "yearly" }],
-          budgetCategories: [{ monthlyTarget: 4000 }],
-          fireExpectedReturnPct: 7,
-          fireInflationPct: 2.5,
-          fireSafeWithdrawalPct: 4,
-        },
-        renewals: [],
-        cards: [],
-        portfolioMarketValue: 180000,
-        asOfDate: current?.date || new Date().toISOString().split("T")[0],
-      });
-    }
     return computeFireProjection({
       financialConfig,
       renewals,
@@ -400,15 +385,6 @@ export default function useDashboardData() {
   }, [chartData, scoreData, spendData]);
 
   const freedomStats = useMemo(() => {
-    // Demo mode: provide hardcoded freedom stats so Debt Freedom Countdown renders
-    if (current?.isTest) {
-      const freeDate = new Date();
-      freeDate.setDate(freeDate.getDate() + Math.ceil(3690 / 400) * 7);
-      return {
-        freeDateStr: freeDate.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
-        weeklyPaydown: 400,
-      };
-    }
     const result = { freeDateStr: null, weeklyPaydown: null };
     const realAudits = history.filter(a => !a.isTest && a.form);
     if (realAudits.length >= 2) {
@@ -444,21 +420,100 @@ export default function useDashboardData() {
   const alerts = useMemo(() => {
     const result = [];
 
-    // Demo mode: inject curated showcase alerts
+    // Demo mode: keep the showcase strip, but derive it from the same seeded household.
     if (current?.isTest) {
-      result.push(
-        {
-          icon: "🎯",
+      const demoHistory = history
+        .filter(a => a.parsed?.healthScore?.score != null)
+        .slice(0, 6);
+      const priorScores = demoHistory
+        .slice(1)
+        .map((audit) => audit.parsed.healthScore.score)
+        .filter((value) => Number.isFinite(value));
+      const latestScore = current?.parsed?.healthScore?.score ?? null;
+      const latestNetWorth = current?.parsed?.netWorth ?? portfolioMetrics?.netWorth ?? null;
+      const oldestNetWorth = demoHistory[demoHistory.length - 1]?.parsed?.netWorth ?? null;
+      const reserveTarget = Number(financialConfig?.emergencyReserveTarget) || 0;
+      const reserveBalance = Number(dashboardMetrics?.vault) || 0;
+      const reserveSurplus = reserveBalance - reserveTarget;
+      const k401ContributedYtd = Number(financialConfig?.k401ContributedYTD) || 0;
+      const taxBracketPercent = Number(financialConfig?.taxBracketPercent) || 0;
+      const spendingMessage = current?.parsed?.spendingAnalysis?.vsAllowance || "";
+      const cardDebt = cards.reduce((sum, card) => sum + Math.max(0, Number(card?.balance) || 0), 0);
+      const cardLimit = cards.reduce((sum, card) => sum + Math.max(0, Number(card?.limit) || 0), 0);
+      const utilizationPct = cardLimit > 0 ? Math.round((cardDebt / cardLimit) * 100) : 0;
+
+      if (Number.isFinite(latestScore) && priorScores.length > 0) {
+        const avgScore = priorScores.reduce((sum, value) => sum + value, 0) / priorScores.length;
+        if (latestScore >= avgScore) {
+          result.push({
+            icon: "📈",
+            color: T.status.green,
+            title: "Score Rising",
+            text: `${latestScore} — ${Math.round(latestScore - avgScore)}pts above demo trend`,
+          });
+        }
+      }
+
+      if (Number.isFinite(latestNetWorth) && Number.isFinite(oldestNetWorth) && latestNetWorth > oldestNetWorth) {
+        result.push({
+          icon: "💰",
           color: T.status.green,
-          title: "Debt-Free",
-          text: `At $400/wk → ${freedomStats.freeDateStr || "Oct 2026"}`,
-        },
-        { icon: "📈", color: T.status.green, title: "Score Rising", text: "88 — 16pts above 6-week avg" },
-        { icon: "💰", color: T.status.green, title: "Net Worth", text: "+$14,560 over last 6 audits" },
-        { icon: "🏦", color: T.status.green, title: "Almost There", text: "$600 away from $25K saved" },
-        { icon: "🛡️", color: T.status.purple, title: "Tax Shield", text: "$1,870 saved at 22%" }
+          title: "Net Worth",
+          text: `+${fmt(latestNetWorth - oldestNetWorth)} over the last ${demoHistory.length} audits`,
+        });
+      }
+
+      if (reserveTarget > 0 && reserveSurplus >= 0) {
+        result.push({
+          icon: "🏦",
+          color: T.status.green,
+          title: "Reserve Ready",
+          text: `${fmt(reserveSurplus)} above the emergency target`,
+        });
+      }
+
+      if (cardDebt > 0) {
+        result.push({
+          icon: "🎯",
+          color: T.status.amber,
+          title: "Paydown Sprint",
+          text: `${fmt(cardDebt)} at ${utilizationPct}% utilization`,
+        });
+      }
+
+      if (k401ContributedYtd > 0 && taxBracketPercent > 0) {
+        result.push({
+          icon: "🛡️",
+          color: T.status.purple,
+          title: "Tax Shield",
+          text: `${fmt(k401ContributedYtd * (taxBracketPercent / 100))} saved at ${taxBracketPercent}%`,
+        });
+      }
+
+      if (investmentSnapshot.total > 0) {
+        result.push({
+          icon: cardDebt > 0 ? "🧭" : "🚀",
+          color: cardDebt > 0 ? T.status.amber : T.status.green,
+          title: cardDebt > 0 ? "Investing Guarded" : "Investing Gate",
+          text: cardDebt > 0 ? `Keep ${fmt(investmentSnapshot.total)} invested, but send new surplus to payoff first` : `${fmt(investmentSnapshot.total)} already compounding`,
+        });
+      }
+
+      if (spendingMessage) {
+        result.push({
+          icon: "🧾",
+          color: T.status.green,
+          title: "Weekly Spend",
+          text: spendingMessage,
+        });
+      }
+
+      result.push(
+        cardDebt > 0
+          ? { icon: "💳", color: T.status.amber, title: "Debt Plan", text: "Floor protected, reserve intact, payoff first" }
+          : { icon: "✅", color: T.status.green, title: "Debt-Free", text: "No revolving balances across the demo wallet" }
       );
-      return result;
+      return result.slice(0, 6);
     }
 
     const realAudits = history.filter(a => !a.isTest && a.form);
@@ -672,7 +727,7 @@ export default function useDashboardData() {
       }
     }
     return result;
-  }, [history, floor, financialConfig, cards, spendData]);
+  }, [history, current?.isTest, current?.parsed, dashboardMetrics?.vault, financialConfig, cards, spendData, investmentSnapshot.total, portfolioMetrics?.netWorth]);
 
   return {
     dashboardMetrics,

@@ -9,7 +9,7 @@ interface DemoAuditButtonProps {
 export default function DemoAuditButton({ label, onClick }: DemoAuditButtonProps) {
   return (
     <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-      <button
+      <button type="button"
         onClick={onClick}
         style={{
           padding: "8px 12px",

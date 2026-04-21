@@ -3,12 +3,13 @@ main = "src/index.js"
 compatibility_date = "2024-12-01"
 
 [vars]
-ALLOWED_ORIGIN = "https://catalystcash.app"
+ALLOWED_ORIGIN = "https://catalystcash.app,https://www.catalystcash.app,https://catalystcash.pages.dev"
 # Launch default: enforce live gating in production unless an environment overrides it.
 GATING_MODE = "live"
 AUDIT_LOG_RETENTION_DAYS = "30"
 
-# Custom domain: attach api.catalystcash.app to the catalystcash-api Worker after validation.
+# Primary web traffic should use api.catalystcash.app; native and loopback builds keep
+# using the workers.dev hostname directly to avoid local-network and certificate drift.
 
 [[d1_databases]]
 binding = "DB"

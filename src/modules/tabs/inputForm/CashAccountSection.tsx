@@ -4,6 +4,7 @@ import { T } from "../../constants.js";
 import { Trash2 } from "../../icons";
 import { Badge, Card, Label } from "../../ui.js";
 import { fmt } from "../../utils.js";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout.js";
 import { InlineOverrideMoneyInput } from "./InlineOverrideMoneyInput";
 import { SectionAddControl } from "./SectionAddControl";
 import { getEffectiveCashAccountTotal, type CashAccountMeta } from "./model.js";
@@ -36,6 +37,7 @@ interface CashAccountSectionProps {
 }
 
 const Mono = UIMono as unknown as (props: MonoProps) => ReactNode;
+const ACCOUNT_ROW_GRID = "minmax(0, 1fr) minmax(112px, 168px) 34px";
 
 export function CashAccountSection({
   meta,
@@ -54,11 +56,18 @@ export function CashAccountSection({
   onRemoveAccount,
   onRestoreAccount,
 }: CashAccountSectionProps) {
+  const { isNarrowPhone, isTablet } = useResponsiveLayout();
   const hasAccounts = meta.accounts.length > 0;
   const hasLinkedAccounts = hasAccounts || hiddenAccounts.length > 0;
   const visibleCount = meta.accounts.length;
   const effectiveTotal = getEffectiveCashAccountTotal(meta, accountOverrides);
   const anyAccountOverridden = hasAccounts && meta.accounts.some((account) => accountOverrides[account.id] !== undefined);
+  const rowActionSize = isTablet ? 36 : 34;
+  const accountRowGrid = isNarrowPhone
+    ? `minmax(0, 1fr) ${rowActionSize}px`
+    : isTablet
+      ? "minmax(0, 1fr) minmax(136px, 188px) 36px"
+      : ACCOUNT_ROW_GRID;
   const addableOptions = hiddenAccounts.map((account) => ({
     id: account.id,
     label: account.displayLabel,
@@ -84,7 +93,16 @@ export function CashAccountSection({
           pointerEvents: "none",
         }}
       />
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: hasAccounts ? 10 : 6 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: isNarrowPhone ? "flex-start" : "center",
+          justifyContent: "space-between",
+          gap: 10,
+          flexWrap: isNarrowPhone ? "wrap" : "nowrap",
+          marginBottom: hasAccounts ? 10 : 6,
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           <Label style={{ marginBottom: 0, fontWeight: 800 }}>{title}</Label>
           {visibleCount > 0 && (
@@ -101,18 +119,42 @@ export function CashAccountSection({
             </Badge>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: isNarrowPhone && effectiveTotal !== null ? "space-between" : "flex-end",
+            gap: 8,
+            flexWrap: "wrap",
+            flexShrink: 0,
+            width: isNarrowPhone ? "100%" : undefined,
+          }}
+        >
           {effectiveTotal !== null && (
-            <Mono size={14} weight={800} color={anyAccountOverridden ? toneColor : T.text.primary}>
-              {fmt(effectiveTotal)}
-            </Mono>
+            <div
+              style={{
+                minWidth: isNarrowPhone ? 0 : 92,
+                minHeight: rowActionSize,
+                padding: "0 12px",
+                borderRadius: 999,
+                border: `1px solid ${anyAccountOverridden ? `${toneColor}35` : T.border.subtle}`,
+                background: anyAccountOverridden ? `${toneColor}10` : T.bg.surface,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Mono size={13} weight={800} color={anyAccountOverridden ? toneColor : T.text.primary}>
+                {fmt(effectiveTotal)}
+              </Mono>
+            </div>
           )}
           <SectionAddControl
             accent={toneColor}
             buttonAriaLabel={`Add ${title.toLowerCase()} to audit`}
             options={addableOptions}
             pickerLabel="Choose account to add"
-            placeholder="Select account..."
+            placeholder="Select account…"
             onSelect={onRestoreAccount}
           />
         </div>
@@ -129,19 +171,20 @@ export function CashAccountSection({
                 key={account.id}
                 className="slide-up"
                 style={{
-                  display: "flex",
-                  alignItems: "center",
+                  display: "grid",
+                  gridTemplateColumns: accountRowGrid,
+                  alignItems: isNarrowPhone ? "start" : "center",
                   gap: 10,
                   padding: "10px 12px",
                   borderRadius: T.radius.md,
                   background: isOverridden ? `${toneColor}08` : T.bg.elevated,
                   border: `1px solid ${isOverridden ? `${toneColor}35` : T.border.subtle}`,
                   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
-                  transition: "all 0.2s ease",
+                  transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
                   animationDelay: `${index * 0.05}s`,
                 }}
               >
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ minWidth: 0, gridColumn: isNarrowPhone ? "1 / 2" : undefined }}>
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 7, minWidth: 0 }}>
                     <div
                       style={{
@@ -176,7 +219,13 @@ export function CashAccountSection({
                 </div>
 
                 {isOverridden ? (
-                  <div style={{ flexShrink: 0, maxWidth: 180 }}>
+                  <div
+                    style={{
+                      minWidth: 0,
+                      gridColumn: isNarrowPhone ? "1 / -1" : undefined,
+                      gridRow: isNarrowPhone ? "2 / 3" : undefined,
+                    }}
+                  >
                     <InlineOverrideMoneyInput
                       label={`${account.displayLabel} override`}
                       value={overrideValue}
@@ -186,22 +235,22 @@ export function CashAccountSection({
                     />
                   </div>
                 ) : (
-                  <button
-                    type="button"
+                  <button type="button"
                     onClick={() => onOverrideAccount(account.id, "" as MoneyInput)}
                     style={{
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      minWidth: 96,
-                      height: 36,
+                      width: "100%",
+                      minHeight: rowActionSize + 2,
                       background: `${toneColor}0C`,
                       border: `1px solid ${toneColor}30`,
                       borderRadius: T.radius.md,
-                      cursor: "pointer",
                       padding: "0 12px",
                       flexShrink: 0,
-                      transition: "all 0.2s ease",
+                      gridColumn: isNarrowPhone ? "1 / -1" : undefined,
+                      gridRow: isNarrowPhone ? "2 / 3" : undefined,
+                      transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
                     }}
                   >
                     <Mono size={12.5} weight={800} color={toneColor}>
@@ -209,21 +258,22 @@ export function CashAccountSection({
                     </Mono>
                   </button>
                 )}
-                <button
-                  type="button"
+                <button type="button"
                   onClick={() => onRemoveAccount(account.id)}
                   style={{
-                    width: 34,
-                    height: 34,
+                    width: rowActionSize,
+                    height: rowActionSize,
                     borderRadius: T.radius.sm,
                     border: "none",
                     background: `${toneColor}14`,
                     color: toneColor,
-                    cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     flexShrink: 0,
+                    gridColumn: isNarrowPhone ? "2 / 3" : undefined,
+                    gridRow: isNarrowPhone ? "1 / 2" : undefined,
+                    justifySelf: "end",
                   }}
                 >
                   <Trash2 size={11} />
@@ -249,8 +299,7 @@ export function CashAccountSection({
           </div>
         </div>
       ) : effectiveTotal !== null && !aggregateOverrideActive ? (
-        <button
-          type="button"
+        <button type="button"
           onClick={onEnableAggregateOverride}
           style={{
             width: "100%",
@@ -261,7 +310,6 @@ export function CashAccountSection({
             background: `${toneColor}10`,
             border: `1px solid ${toneColor}40`,
             borderRadius: T.radius.md,
-            cursor: "pointer",
           }}
         >
           <Mono size={13} weight={800} color={toneColor}>

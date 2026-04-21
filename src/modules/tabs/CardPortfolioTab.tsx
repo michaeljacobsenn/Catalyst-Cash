@@ -36,6 +36,7 @@ import CreditUtilizationWidget from "../portfolio/CreditUtilizationWidget.js";
 import {
   formatPlaidSyncDateTimeLabel,
   getLatestPlaidSyncDate,
+  groupPlaidSyncIssues,
   getStalePlaidInstitutions,
   splitPlaidInstitutionsByReconnect,
   summarizeConnectedButCached,
@@ -49,7 +50,7 @@ const TransactionsSection = lazy(() => import("../portfolio/TransactionsSection.
 const AddAccountSheet = lazy(() => import("./AddAccountSheet.js"));
 
 const ENABLE_PLAID = true;
-
+const BREAKDOWN_LABEL_STYLE = { fontSize: 8, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 3 };
 // One-time cleanup flag — runs once per app session
 let _purgeDone = false;
 
@@ -116,6 +117,7 @@ import { useAudit } from "../contexts/AuditContext.js";
 import { PortfolioContext,usePortfolio } from "../contexts/PortfolioContext.js";
 import { useSettings } from "../contexts/SettingsContext.js";
 import useDashboardData from "../dashboard/useDashboardData.js";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout.js";
 import type { PortfolioCollapsedSections } from "../portfolio/types.js";
 
 type AddSheetStep = "goal" | "asset" | "debt" | null;
@@ -134,9 +136,22 @@ interface PlaidConnectionLike {
   _needsReconnect?: boolean;
 }
 
+function getSyncIssueAccent(message = "") {
+  if (/reconnect/i.test(message)) return T.status.red;
+  if (/processing/i.test(message)) return T.status.blue;
+  return T.status.amber;
+}
+
+function getSyncIssueBadge(message = "") {
+  if (/reconnect/i.test(message)) return "Reconnect";
+  if (/processing/i.test(message)) return "Pending";
+  return "Cached";
+}
+
 export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled = false, embedded = false, privacyMode: _privacyModeTick = false, themeTick: _themeTick = 0 }: CardPortfolioTabProps) {
   void _privacyModeTick;
   void _themeTick;
+  const { isNarrowPhone, isTablet } = useResponsiveLayout();
   const { current } = useAudit();
   const portfolioContext = usePortfolio();
   const isTest = current?.isTest;
@@ -545,7 +560,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
   const investTotalValue = portfolioMetrics?.totalInvestments || 0;
   const totalOtherAssets = portfolioMetrics?.totalOtherAssets || 0;
   const breakdownValueStyle = {
-    fontSize: embedded ? 15 : 16,
+    fontSize: embedded ? 15 : isNarrowPhone ? 14 : 16,
     fontWeight: 800,
     fontFamily: T.font.mono,
     fontVariantNumeric: "tabular-nums",
@@ -568,7 +583,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
         padding: embedded ? "12px 12px 14px" : "16px 14px 18px",
         boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04)`,
       }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: isNarrowPhone ? "wrap" : "nowrap" }}>
           <div>
             <h1 style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.font.mono, marginBottom: 6 }}>
               Portfolio Snapshot
@@ -578,29 +593,27 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
             </div>
           </div>
           
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
+          <div style={{ display: "flex", gap: 8, marginLeft: isNarrowPhone ? "auto" : undefined }}>
+            <button type="button"
               onClick={() => openSheet()}
               className="hover-btn card-press"
               style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                width: 36,
-                height: 36,
-                borderRadius: 18,
+                width: isTablet ? 38 : 36,
+                height: isTablet ? 38 : 36,
+                borderRadius: 999,
                 background: T.bg.elevated,
                 color: T.accent.primary,
                 border: `1px solid ${T.border.subtle}`,
-                cursor: "pointer",
-                transition: "all .2s cubic-bezier(0.16, 1, 0.3, 1)",
               }}
               title="Add Account"
             >
               <Plus size={16} strokeWidth={2.5} color={T.accent.primary} />
             </button>
             {ENABLE_PLAID && (
-              <button
+              <button type="button"
                 onClick={() => { haptic.medium(); void handlePlaidConnect(); }}
                 disabled={plaidLoading}
                 className="hover-btn card-press"
@@ -608,15 +621,14 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
                   display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                width: 36,
-                height: 36,
-                borderRadius: 18,
+                width: isTablet ? 38 : 36,
+                height: isTablet ? 38 : 36,
+                borderRadius: 999,
                 background: T.bg.elevated,
                 border: `1px solid ${T.border.subtle}`,
                 color: T.text.primary,
-                cursor: plaidLoading ? "wait" : "pointer",
+                cursor: plaidLoading ? "wait" : undefined,
                 opacity: plaidLoading ? 0.6 : 1,
-                  transition: "all .2s cubic-bezier(0.16, 1, 0.3, 1)",
                 }}
                 title="Plaid Sync"
               >
@@ -627,17 +639,17 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
         </div>
 
         {/* Wealth Breakdown */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: embedded ? 5 : 6 }}>
-          <div style={{ background: T.bg.card, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: embedded ? "8px 6px" : "10px 8px", textAlign: "center" }}>
-            <div style={{ fontSize: 8, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 3 }}>Liquid Cash</div>
+        <div style={{ display: "grid", gridTemplateColumns: isNarrowPhone ? "repeat(2, minmax(0, 1fr))" : "repeat(3, 1fr)", gap: embedded ? 5 : 6 }}>
+          <div style={{ background: T.bg.card, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: isNarrowPhone ? "9px 7px" : embedded ? "8px 6px" : "10px 8px", textAlign: "center" }}>
+            <div style={BREAKDOWN_LABEL_STYLE}>Liquid Cash</div>
             <span style={{ ...breakdownValueStyle, color: T.accent.emerald }}>{fmt(totalCash)}</span>
           </div>
-          <div style={{ background: T.bg.card, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: embedded ? "8px 6px" : "10px 8px", textAlign: "center" }}>
-            <div style={{ fontSize: 8, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 3 }}>Investments</div>
+          <div style={{ background: T.bg.card, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: isNarrowPhone ? "9px 7px" : embedded ? "8px 6px" : "10px 8px", textAlign: "center" }}>
+            <div style={BREAKDOWN_LABEL_STYLE}>Investments</div>
             <span style={{ ...breakdownValueStyle, color: T.status.blue }}>{fmt(investTotalValue + totalOtherAssets)}</span>
           </div>
-          <div style={{ background: T.bg.card, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: embedded ? "8px 6px" : "10px 8px", textAlign: "center" }}>
-            <div style={{ fontSize: 8, fontWeight: 700, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 3 }}>Liabilities</div>
+          <div style={{ background: T.bg.card, border: `1px solid ${T.border.subtle}`, borderRadius: T.radius.md, padding: isNarrowPhone ? "9px 7px" : embedded ? "8px 6px" : "10px 8px", textAlign: "center", gridColumn: isNarrowPhone ? "1 / -1" : undefined }}>
+            <div style={BREAKDOWN_LABEL_STYLE}>Liabilities</div>
             <span style={{ ...breakdownValueStyle, color: T.status.red }}>{fmt(Math.abs(totalDebtBalance))}</span>
           </div>
         </div>
@@ -649,30 +661,31 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
       <div
         style={{
           display: "flex",
-          justifyContent: "space-between",
           alignItems: "center",
+          flexWrap: "wrap",
+          gap: 6,
           marginTop: embedded ? 10 : 12,
           marginBottom: 8,
           padding: "0 4px",
         }}
       >
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", width: "100%" }}>
           {onViewTransactions && (
-            <button
+            <button type="button"
               onClick={() => { haptic.light(); onViewTransactions(); }}
               className="hover-btn"
-              style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 10px", borderRadius: 16, border: `1px solid ${T.border.subtle}`, background: T.bg.elevated, color: T.text.primary, fontSize: 10, fontWeight: 700, cursor: "pointer", transition: "all .2s", position: "relative" }}
+              style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 10px", borderRadius: 16, border: `1px solid ${T.border.subtle}`, background: T.bg.elevated, color: T.text.primary, fontSize: 10, fontWeight: 700, position: "relative" }}
             >
               <ReceiptText size={10} /> Ledger
               {!proEnabled && <div style={{ position: "absolute", top: -4, right: -4, fontSize: 7, fontWeight: 800, background: T.accent.primary, color: "#fff", padding: "1px 4px", borderRadius: 4, fontFamily: T.font.mono }}>PRO</div>}
             </button>
           )}
           {ENABLE_PLAID && (cards.some(c => c._plaidAccountId) || bankAccounts.some(b => b._plaidAccountId)) && (
-            <button
+            <button type="button"
               onClick={handleRefreshPlaid}
               disabled={plaidRefreshing}
               className="hover-btn"
-              style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 10px", borderRadius: 16, border: `1px solid ${T.border.subtle}`, background: T.bg.elevated, color: T.text.primary, fontSize: 10, fontWeight: 700, cursor: plaidRefreshing ? "wait" : "pointer", transition: "all .2s" }}
+              style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 10px", borderRadius: 16, border: `1px solid ${T.border.subtle}`, background: T.bg.elevated, color: T.text.primary, fontSize: 10, fontWeight: 700, cursor: plaidRefreshing ? "wait" : undefined }}
             >
               <RefreshCw
                 size={10}
@@ -681,22 +694,37 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
               {plaidRefreshing ? "Refreshing..." : "Refresh Balances"}
             </button>
           )}
+          <button type="button"
+            onClick={toggleAllSections}
+            className="hover-btn"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "6px 10px",
+              borderRadius: 16,
+              border: `1px solid ${T.border.subtle}`,
+              background: T.bg.elevated,
+              color: T.text.secondary,
+              fontSize: 10,
+              fontWeight: 700,
+              fontFamily: T.font.mono,
+              letterSpacing: "0.04em",
+              marginLeft: isNarrowPhone ? 0 : "auto",
+            }}
+          >
+            {Object.values(collapsedSections).every(Boolean) ? "Expand All" : "Collapse All"}
+          </button>
         </div>
-
-        <button
-          onClick={toggleAllSections}
-          className="hover-btn"
-          style={{ border: "none", background: "transparent", color: T.text.dim, fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontFamily: T.font.mono, letterSpacing: "0.04em" }}
-        >
-          {Object.values(collapsedSections).every(Boolean) ? "Expand All" : "Collapse All"}
-        </button>
       </div>
 
       {(syncState.phase === "syncing" || syncState.phase === "warning") && (
         (() => {
-          const visibleIssues = Array.isArray(syncState.issues)
-            ? syncState.issues.slice(0, 4) as Array<{ institutionName?: string; message?: string }>
+          const groupedIssues = Array.isArray(syncState.issues)
+            ? groupPlaidSyncIssues(syncState.issues as Array<{ institutionName?: string; message?: string }>)
             : [];
+          const visibleIssues = groupedIssues.slice(0, 4);
+          const hiddenIssueCount = Math.max(groupedIssues.length - visibleIssues.length, 0);
           return (
         <div
           style={{
@@ -711,17 +739,32 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
                 : T.bg.card,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: isNarrowPhone ? "flex-start" : "center", gap: 8, flexWrap: "wrap", marginBottom: syncState.phase === "warning" ? 10 : 8 }}>
             {syncState.phase === "warning" ? (
               <AlertTriangle size={14} color={T.status.amber} />
             ) : (
               <RefreshCw size={14} color={T.status.blue} style={{ animation: "spin .9s linear infinite", transformOrigin: "center" }} />
             )}
-            <div style={{ fontSize: 12, fontWeight: 800, color: T.text.primary }}>
-              {syncState.phase === "warning" ? "Bank sync needs attention" : syncState.message}
-            </div>
-            {syncState.phase === "syncing" && (
-              <div style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, color: T.text.secondary, fontFamily: T.font.mono }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: T.text.primary }}>
+              {syncState.phase === "warning" ? "Sync" : syncState.message}
+              </div>
+            {syncState.phase === "warning" ? (
+              <div
+                style={{
+                  marginLeft: isNarrowPhone ? 0 : "auto",
+                  padding: "3px 7px",
+                  borderRadius: 999,
+                  background: `${T.status.amber}14`,
+                  color: T.status.amber,
+                  fontSize: 9.5,
+                  fontWeight: 800,
+                  letterSpacing: "0.03em",
+                }}
+              >
+                {groupedIssues.length || 0} {groupedIssues.length === 1 ? "item" : "items"}
+              </div>
+            ) : (
+              <div style={{ marginLeft: isNarrowPhone ? 0 : "auto", fontSize: 10, fontWeight: 700, color: T.text.secondary, fontFamily: T.font.mono }}>
                 {syncState.completedCount}/{Math.max(syncState.requestedCount, 1)}
               </div>
             )}
@@ -753,29 +796,83 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
             </>
           ) : (
             <div style={{ display: "grid", gap: 8 }}>
-              <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>
                 {syncState.warning}
               </div>
               {visibleIssues.length > 0 && (
-                <div style={{ display: "grid", gap: 6 }}>
-                  {visibleIssues.map((issue, index) => (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: 0,
+                    borderRadius: T.radius.sm,
+                    border: `1px solid ${T.border.subtle}`,
+                    background: `${T.bg.elevated}CC`,
+                    overflow: "hidden",
+                  }}
+                >
+                  {visibleIssues.map((issue, index) => {
+                    const issueMessage = issue?.message || "";
+                    const issueAccent = getSyncIssueAccent(issueMessage);
+                    const issueBadge = getSyncIssueBadge(issueMessage);
+
+                    return (
+                      <div
+                        key={`${issue?.institutionName || "issue"}-${index}`}
+                        style={{
+                          padding: "9px 10px",
+                          display: "grid",
+                          gap: 4,
+                          borderTop: index === 0 ? "none" : `1px solid ${T.border.subtle}`,
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between", flexWrap: "wrap" }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: T.text.primary }}>
+                            {issue?.institutionName || "Bank"}
+                          </div>
+                          <div
+                            style={{
+                              padding: "2px 6px",
+                              borderRadius: 999,
+                              background: `${issueAccent}18`,
+                              color: issueAccent,
+                              fontSize: 9,
+                              fontWeight: 800,
+                              letterSpacing: "0.03em",
+                            }}
+                          >
+                            {issueBadge}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 10.5, color: T.text.secondary, lineHeight: 1.4 }}>
+                          {issueMessage || "Needs attention."}
+                        </div>
+                        {issue.issueCount > 1 && (
+                          <div style={{ fontSize: 9.5, color: T.text.dim, lineHeight: 1.3 }}>
+                            Same status across {issue.issueCount} linked institutions.
+                          </div>
+                        )}
+                        {issue.cachedSnapshots.length > 0 && (
+                          <div style={{ fontSize: 9.5, color: T.text.dim, lineHeight: 1.35 }}>
+                            Recent cached snapshots: {issue.cachedSnapshots.slice(0, 2).join(", ")}
+                            {issue.cachedSnapshots.length > 2 ? `, +${issue.cachedSnapshots.length - 2} more` : ""}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {hiddenIssueCount > 0 && (
                     <div
-                      key={`${issue?.institutionName || "issue"}-${index}`}
                       style={{
                         padding: "8px 10px",
-                        borderRadius: T.radius.sm,
-                        background: `${T.bg.elevated}D0`,
-                        border: `1px solid ${T.border.subtle}`,
+                        borderTop: `1px solid ${T.border.subtle}`,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: T.text.dim,
                       }}
                     >
-                      <div style={{ fontSize: 11, fontWeight: 700, color: T.text.primary }}>
-                        {issue?.institutionName || "Linked institution"}
-                      </div>
-                      <div style={{ marginTop: 2, fontSize: 10.5, color: T.text.secondary, lineHeight: 1.45 }}>
-                        {issue?.message || "Needs attention."}
-                      </div>
+                      +{hiddenIssueCount} more {hiddenIssueCount === 1 ? "bank" : "banks"}
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
@@ -799,16 +896,15 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
             lineHeight: 1.55,
           }}
         >
-          Plaid-linked balances are shown from the last verified sync. Latest Plaid refresh: <span style={{ color: T.text.primary, fontWeight: 700 }}>{lastPlaidSyncDateShort || lastPlaidSyncLabel}</span>.
+          Latest refresh: <span style={{ color: T.text.primary, fontWeight: 700 }}>{lastPlaidSyncDateShort || lastPlaidSyncLabel}</span>.
           {staleConnectedSummary ? (
             <div style={{ marginTop: 6, color: T.status.amber }}>
-              Some institutions are still showing cached balances because Plaid returned older saved data or fresh balances have not landed yet: <span style={{ color: T.text.primary, fontWeight: 700 }}>{staleConnectedSummary}</span>.
-              <span style={{ color: T.text.secondary }}> Reconnect is not currently required for these institutions.</span>
+              Cached: <span style={{ color: T.text.primary, fontWeight: 700 }}>{staleConnectedSummary}</span>.
             </div>
           ) : null}
           {reconnectRequiredSummary ? (
             <div style={{ marginTop: 6, color: T.status.red }}>
-              Reconnect required before live balances can resume: <span style={{ color: T.text.primary, fontWeight: 700 }}>{reconnectRequiredSummary}</span>.
+              Reconnect: <span style={{ color: T.text.primary, fontWeight: 700 }}>{reconnectRequiredSummary}</span>.
             </div>
           ) : null}
         </div>
@@ -899,7 +995,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {group.actionable && (
-                      <button
+                      <button type="button"
                         onClick={() => { void mergeDuplicateGroup(group); }}
                         style={{
                           padding: "7px 10px",
@@ -907,7 +1003,6 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
                           border: `1px solid ${T.accent.emerald}30`,
                           background: `${T.accent.emerald}12`,
                           color: T.accent.emerald,
-                          cursor: "pointer",
                           fontSize: 10,
                           fontWeight: 800,
                         }}
@@ -915,7 +1010,7 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
                         Link + keep existing
                       </button>
                     )}
-                    <button
+                    <button type="button"
                       onClick={() => dismissDuplicateGroup(group.key)}
                       style={{
                         padding: "7px 10px",
@@ -923,7 +1018,6 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
                         border: `1px solid ${T.border.default}`,
                         background: T.bg.card,
                         color: T.text.secondary,
-                        cursor: "pointer",
                         fontSize: 10,
                         fontWeight: 700,
                       }}

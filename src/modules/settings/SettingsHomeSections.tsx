@@ -129,7 +129,7 @@ function ReferralCard() {
             marginBottom: 12,
           }}
         >
-          <button
+          <button type="button"
             onClick={handleCopy}
             style={{
               flex: 1,
@@ -144,13 +144,15 @@ function ReferralCard() {
               letterSpacing: "0.1em",
               textAlign: "center",
               cursor: "pointer",
-              transition: "all 0.2s",
+              transition: "transform 0.2s, opacity 0.2s, background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s",
             }}
           >
             {copied ? "Copied!" : code || "···"}
           </button>
-          <button
+          <button type="button"
             onClick={handleShare}
+            aria-label="Share referral link"
+            title="Share referral link"
             className="hover-btn"
             style={{
               width: 44,
@@ -376,7 +378,7 @@ export function RootSettingsSection({
             Subscription
           </span>
           {proEnabled ? (
-            <button
+            <button type="button"
               className="hover-btn settings-row"
               onClick={onManageSubscription}
               style={{
@@ -431,7 +433,7 @@ export function RootSettingsSection({
               position: "relative",
             }}
           >
-            <button
+            <button type="button"
               onClick={() => {
                 localStorage.setItem("setup-progress-dismissed", "1");
                 setSetupDismissed(true);
@@ -540,7 +542,7 @@ export function RootSettingsSection({
                     </span>
                   </div>
                   {!step.done && step.nav && (
-                    <button
+                    <button type="button"
                       onClick={() => {
                         const nextTab = step.nav;
                         if (!nextTab) return;
@@ -605,7 +607,7 @@ export function DeveloperToolsSection({
         title="Founder telemetry workflow"
         message="Run `ADMIN_TOKEN=... npm run telemetry:summary -- --days=14` for console output, or `ADMIN_TOKEN=... npm run telemetry:report -- --days=14` to save a markdown founder report in `docs/`."
       />
-      <button
+      <button type="button"
         onClick={() => void onLoadFullProfileQaSeed()}
         className="hover-btn"
         style={{
@@ -623,7 +625,7 @@ export function DeveloperToolsSection({
       >
         Load Full-Profile QA Seed
       </button>
-      <button
+      <button type="button"
         onClick={onOpenQaAudit}
         className="hover-btn"
         style={{
@@ -642,7 +644,7 @@ export function DeveloperToolsSection({
         Open Weekly Audit
       </button>
       {["Whole Foods", "Shell Gas"].map((store) => (
-        <button
+        <button type="button"
           key={store}
           onClick={() => {
             window.dispatchEvent(new CustomEvent("simulate-geo-fence", { detail: { store } }));

@@ -208,36 +208,36 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                     </h2>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <button
-                        onClick={e => {
-                            e.stopPropagation();
-                            void handleRefreshPrices();
-                        }}
-                        disabled={refreshingPrices || !manualRefreshStatus.allowed}
-                        title={refreshingPrices ? "Refreshing prices..." : manualRefreshCooldownLabel}
-                        className="hover-btn"
-                        style={{
-                            background: "transparent",
-                            border: "none",
-                            color: refreshingPrices || !manualRefreshStatus.allowed ? T.text.muted : T.accent.emerald,
-                            cursor: refreshingPrices || !manualRefreshStatus.allowed ? "not-allowed" : "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            padding: 4,
-                            opacity: refreshingPrices || !manualRefreshStatus.allowed ? 0.45 : 0.8,
-                            transition: "opacity 0.2s",
-                        }}
+                    <Badge
+                        variant="outline"
+                        style={{ fontSize: 10, color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}
                     >
-                        <RefreshCw size={13} strokeWidth={2.5} className={refreshingPrices ? "spin" : ""} />
-                    </button>
-                    {investTotalValue > 0 && (
-                        <Badge
-                            variant="outline"
-                            style={{ fontSize: 10, color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}
+                        {fmt(Math.round(investTotalValue))}
+                    </Badge>
+                    {allHoldingSymbols.length > 0 && (
+                        <button type="button"
+                            onClick={e => {
+                                e.stopPropagation();
+                                void handleRefreshPrices();
+                            }}
+                            disabled={refreshingPrices || !manualRefreshStatus.allowed}
+                            title={refreshingPrices ? "Refreshing prices..." : manualRefreshCooldownLabel}
+                            className="hover-btn"
+                            style={{
+                                background: "transparent",
+                                border: "none",
+                                color: refreshingPrices || !manualRefreshStatus.allowed ? T.text.muted : T.accent.emerald,
+                                cursor: refreshingPrices || !manualRefreshStatus.allowed ? "not-allowed" : "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                padding: 4,
+                                opacity: refreshingPrices || !manualRefreshStatus.allowed ? 0.45 : 0.8,
+                                transition: "opacity 0.2s",
+                            }}
                         >
-                            {fmt(Math.round(investTotalValue))}
-                        </Badge>
+                            <RefreshCw size={13} strokeWidth={2.5} className={refreshingPrices ? "spin" : ""} />
+                        </button>
                     )}
                     <ChevronDown
                         size={16}
@@ -574,7 +574,7 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                                                             {holdingExcluded ? "Excluded" : "Counted"}
                                                                         </button>
                                                                         {setFinancialConfig && (
-                                                                            <button
+                                                                            <button type="button"
                                                                                 onClick={(e) => {
                                                                                     e.preventDefault();
                                                                                     e.stopPropagation();

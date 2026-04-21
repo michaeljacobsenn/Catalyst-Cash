@@ -110,6 +110,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
 
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [exportAuditRecord, setExportAuditRecord] = useState<AuditRecord | null>(null);
+  const demoCtaLabel = current?.isTest ? "Load next demo" : "Load demo data";
 
   const filteredAudits = statusFilter ? audits.filter(a => getAuditColor(a) === statusFilter) : audits;
   const filteredAuditKeys = filteredAudits.map((audit, index) => getAuditKey(audit, index));
@@ -212,7 +213,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
         )}
 
         {/* ═══ 1. PRIMARY CTA ═══ */}
-        <button
+        <button type="button"
           onClick={onRunAudit}
           className="hover-btn"
           style={{
@@ -230,7 +231,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
             justifyContent: "center",
             gap: 10,
             boxShadow: `0 6px 24px ${T.accent.primary}40`,
-            transition: "all .2s cubic-bezier(.16,1,.3,1)",
+            transition: "transform .2s cubic-bezier(.16,1,.3,1), opacity .2s cubic-bezier(.16,1,.3,1), background-color .2s cubic-bezier(.16,1,.3,1), border-color .2s cubic-bezier(.16,1,.3,1), color .2s cubic-bezier(.16,1,.3,1), box-shadow .2s cubic-bezier(.16,1,.3,1)",
           }}
         >
           <Plus size={18} strokeWidth={2.5} />
@@ -252,7 +253,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
               </span>
             )}
             {typeof onDemoAudit === "function" && (
-              <button
+              <button type="button"
                 onClick={() => { haptic.light(); onDemoAudit(); }}
                 style={{
                   padding: "6px 12px",
@@ -269,7 +270,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                 }}
               >
                 <Zap size={12} strokeWidth={2.2} />
-                Load Demo Data
+                {demoCtaLabel}
               </button>
             )}
           </div>
@@ -382,7 +383,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
           </Card>
         )}
 
-        <button
+        <button type="button"
           onClick={onOpenHistory}
           style={{
             width: "100%",
@@ -407,7 +408,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
 
         {/* inline upgrade nudge for free users who have a score */}
         {shouldShowGating() && !proEnabled && score != null && !demoActive && (
-          <button
+          <button type="button"
             onClick={() => { haptic.light(); setShowPaywall(true); }}
             style={{
               width: "100%",
@@ -421,7 +422,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
               alignItems: "center",
               gap: 10,
               textAlign: "left" as const,
-              transition: "all .2s ease",
+              transition: "transform .2s ease, opacity .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease",
             }}
           >
             <div style={{
@@ -501,7 +502,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
               {/* Compact export toolbar */}
               <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
                 {selMode && sel.size > 0 && (
-                  <button
+                  <button type="button"
                     onClick={() => void doExportSel()}
                     style={{
                       display: "flex",
@@ -522,7 +523,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                     <Download size={9} /> {sel.size}
                   </button>
                 )}
-                <button
+                <button type="button"
                   onClick={() => { setSelMode(!selMode); setSel(new Set()); setConfirmDelete(null); }}
                   title="Select audits"
                   style={{
@@ -543,7 +544,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                 >
                   {selMode ? <UiGlyph glyph="✕" size={12} color={T.accent.primary} /> : <CheckCircle size={12} />}
                 </button>
-                <button
+                <button type="button"
                   onClick={() => void handleExportCsv()}
                   title="Export CSV"
                   style={{
@@ -564,7 +565,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                 >
                   CSV
                 </button>
-                <button
+                <button type="button"
                   onClick={() => void handleExportJson()}
                   title="Export JSON"
                   style={{
@@ -638,7 +639,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                 const c = colorFor(f);
                 const count = f ? audits.filter((a) => getAuditColor(a) === f).length : audits.length;
                 return (
-                  <button
+                  <button type="button"
                     key={label}
                     onClick={() => {
                       setStatusFilter(f);
@@ -661,7 +662,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                       alignItems: "center",
                       justifyContent: "center",
                       gap: 4,
-                      transition: "all .2s ease",
+                      transition: "transform .2s ease, opacity .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease",
                     }}
                   >
                     {f && <div style={{ width: 5, height: 5, borderRadius: "50%", background: c }} />}
@@ -725,7 +726,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                             : sel.has(auditKey)
                               ? `${T.accent.primary}08`
                               : T.bg.card,
-                          transition: "all 0.2s ease",
+                          transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
                         }}
                       >
                         {/* Color accent strip */}
@@ -747,7 +748,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                               Delete the {fmtDate(a.date)} audit?
                             </div>
                             <div style={{ display: "flex", gap: 8 }}>
-                              <button
+                              <button type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onDelete(a);
@@ -767,7 +768,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                               >
                                 Delete
                               </button>
-                              <button
+                              <button type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setConfirmDelete(null);
@@ -842,7 +843,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                                   </div>
                                 ) : (
                                   <>
-                                    <button
+                                    <button type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setExportAuditRecord(a);
@@ -862,7 +863,7 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
                                     >
                                       <Download size={12} />
                                     </button>
-                                    <button
+                                    <button type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setConfirmDelete(auditKey);

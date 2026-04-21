@@ -62,7 +62,7 @@ export default function NotificationPrePrompt({ onAllow, onSkip }: NotificationP
 
         {/* CTA buttons */}
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
-          <button
+          <button type="button"
             onClick={() => { haptic.success(); onAllow(); }}
             style={{
               width: "100%", padding: "16px 0",
@@ -74,7 +74,7 @@ export default function NotificationPrePrompt({ onAllow, onSkip }: NotificationP
           >
             Enable Notifications
           </button>
-          <button
+          <button type="button"
             onClick={() => { haptic.light(); onSkip(); }}
             style={{
               width: "100%", padding: "14px 0",

@@ -4,6 +4,7 @@ import { T } from "../../constants.js";
 import { Trash2 } from "../../icons";
 import { Badge, Card, Label } from "../../ui.js";
 import { fmt } from "../../utils.js";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout.js";
 import { InlineOverrideMoneyInput } from "./InlineOverrideMoneyInput";
 import { SectionAddControl } from "./SectionAddControl";
 import type { InputDebt } from "./model.js";
@@ -62,6 +63,7 @@ interface DebtBalancesSectionProps {
 const Mono = UIMono as unknown as (props: MonoProps) => ReactNode;
 const DI = UIDI as unknown as (props: DollarInputProps) => ReactNode;
 const CustomSelect = UICustomSelect as unknown as (props: CustomSelectProps) => ReactNode;
+const DEBT_ROW_GRID = "minmax(0, 1fr) minmax(112px, 168px) 34px";
 
 export function DebtBalancesSection({
   debts,
@@ -78,6 +80,13 @@ export function DebtBalancesSection({
   onResetDebtOverride,
   onChangeDebtBalance,
 }: DebtBalancesSectionProps) {
+  const { isNarrowPhone, isTablet } = useResponsiveLayout();
+  const rowActionSize = isTablet ? 36 : 34;
+  const debtRowGrid = isNarrowPhone
+    ? `minmax(0, 1fr) ${rowActionSize}px`
+    : isTablet
+      ? "minmax(0, 1fr) minmax(136px, 188px) 36px"
+      : DEBT_ROW_GRID;
   const addableOptions = useMemo(
     () =>
       addableDebtCards.map((card) => ({
@@ -111,7 +120,16 @@ export function DebtBalancesSection({
           pointerEvents: "none",
         }}
       />
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: debts.length > 0 ? 10 : 6 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: isNarrowPhone ? "flex-start" : "center",
+          justifyContent: "space-between",
+          gap: 10,
+          flexWrap: isNarrowPhone ? "wrap" : "nowrap",
+          marginBottom: debts.length > 0 ? 10 : 6,
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           <Label style={{ marginBottom: 0, fontWeight: 800 }}>Credit Card Balances</Label>
           {debts.length > 0 && (
@@ -128,18 +146,42 @@ export function DebtBalancesSection({
             </Badge>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: isNarrowPhone && debts.length > 0 ? "space-between" : "flex-end",
+            gap: 8,
+            flexWrap: "wrap",
+            flexShrink: 0,
+            width: isNarrowPhone ? "100%" : undefined,
+          }}
+        >
           {debts.length > 0 && (
-            <Mono size={14} weight={800} color={T.text.primary}>
-              {fmt(totalBalance)}
-            </Mono>
+            <div
+              style={{
+                minWidth: isNarrowPhone ? 0 : 92,
+                minHeight: rowActionSize,
+                padding: "0 12px",
+                borderRadius: 999,
+                border: `1px solid ${T.status.red}35`,
+                background: `${T.status.red}10`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Mono size={13} weight={800} color={T.status.red}>
+                {fmt(totalBalance)}
+              </Mono>
+            </div>
           )}
           <SectionAddControl
             accent={T.status.red}
             buttonAriaLabel="Add card balance to audit"
             options={addableOptions}
             pickerLabel="Choose card to add"
-            placeholder="Select card..."
+            placeholder="Select card…"
             onSelect={handleAddCard}
           />
         </div>
@@ -175,20 +217,32 @@ export function DebtBalancesSection({
                 key={index}
                 className="slide-up"
                 style={{
-                  display: isCardSelected ? "flex" : "grid",
-                  gridTemplateColumns: isCardSelected ? undefined : "minmax(0, 1fr) 34px",
-                  alignItems: isCardSelected ? "center" : undefined,
+                  display: "grid",
+                  gridTemplateColumns: debtRowGrid,
+                  alignItems: isNarrowPhone ? "start" : "center",
                   gap: 10,
                   padding: "10px 12px",
                   borderRadius: T.radius.md,
                   background: isOverridden ? `${T.status.red}08` : T.bg.elevated,
                   border: `1px solid ${isOverridden ? `${T.status.red}35` : T.border.subtle}`,
                   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
-                  transition: "all 0.2s ease",
+                  transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
                   animationDelay: `${index * 0.06}s`,
                 }}
               >
-                <div style={isCardSelected ? { flex: 1, minWidth: 0 } : { gridColumn: "1 / -1", minWidth: 0 }}>
+                <div
+                  style={
+                    isCardSelected
+                      ? {
+                          minWidth: 0,
+                          gridColumn: isNarrowPhone ? "1 / 2" : undefined,
+                        }
+                      : {
+                          minWidth: 0,
+                          gridColumn: isNarrowPhone ? "1 / 2" : "1 / 3",
+                        }
+                  }
+                >
                   {debt.cardId ? (
                     <div style={{ display: "flex", alignItems: "flex-start", gap: 7, minWidth: 0 }}>
                       <div style={{ width: 6, height: 6, borderRadius: 3, background: T.status.red, flexShrink: 0, marginTop: 4 }} />
@@ -230,30 +284,42 @@ export function DebtBalancesSection({
                         ariaLabel={`Debt card ${index + 1}`}
                         value={debt.cardId || debt.name || ""}
                         onChange={(value) => onSelectDebtCard(index, value)}
-                        placeholder="Select card..."
+                        placeholder="Select card…"
                         options={cardOptions}
                       />
                     </div>
                   )}
                 </div>
 
-                <div style={isCardSelected ? { flexShrink: 0, maxWidth: 180 } : { minWidth: 0 }}>
+                <div
+                  style={
+                    isCardSelected
+                      ? {
+                          minWidth: 0,
+                          gridColumn: isNarrowPhone ? "1 / -1" : undefined,
+                          gridRow: isNarrowPhone ? "2 / 3" : undefined,
+                        }
+                      : {
+                          minWidth: 0,
+                          gridColumn: isNarrowPhone ? "1 / -1" : "1 / 3",
+                          gridRow: isNarrowPhone ? "2 / 3" : undefined,
+                        }
+                  }
+                >
                   {hasLiveBalance && !isOverridden ? (
-                    <button
-                      type="button"
+                    <button type="button"
                       onClick={() => debt.cardId && onEnableDebtOverride(debt.cardId)}
                       style={{
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        minWidth: 96,
-                        height: 36,
+                        width: "100%",
+                        minHeight: rowActionSize + 2,
                         background: `${T.status.red}0C`,
                         border: `1px solid ${T.status.red}30`,
                         borderRadius: T.radius.md,
-                        cursor: "pointer",
                         padding: "0 12px",
-                        transition: "all 0.2s ease",
+                        transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
                       }}
                     >
                       <Mono size={12.5} weight={800} color={T.status.red}>
@@ -278,21 +344,22 @@ export function DebtBalancesSection({
                   )}
                 </div>
 
-                <button
+                <button type="button"
                   onClick={() => onRemoveDebtRow(index)}
                   style={{
-                    width: 34,
-                    height: 34,
+                    width: rowActionSize,
+                    height: rowActionSize,
                     borderRadius: T.radius.sm,
                     border: "none",
                     background: T.status.redDim,
                     color: T.status.red,
-                    cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     flexShrink: 0,
-                    justifySelf: isCardSelected ? undefined : "stretch",
+                    justifySelf: isNarrowPhone ? "end" : "stretch",
+                    gridColumn: isNarrowPhone ? "2 / 3" : undefined,
+                    gridRow: isNarrowPhone ? "1 / 2" : undefined,
                   }}
                 >
                   <Trash2 size={11} />

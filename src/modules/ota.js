@@ -1,5 +1,6 @@
   import { injectOTAMerchants } from "./merchantDatabase.js";
   import { log } from "./logger.js";
+  import { emitRewardsRuntimeUpdated } from "./rewardsRuntime.js";
   import { injectOTACatalog } from "./rewardsCatalog.js";
 
 const OTA_ENDPOINTS = {
@@ -99,6 +100,9 @@ export function injectCachedOTA() {
  */
 export async function syncOTAData() {
   try {
+    let hotAppliedCatalog = false;
+    let hotAppliedMerchants = false;
+    let catalogVersion = null;
     const results = await Promise.allSettled([
       fetch(OTA_ENDPOINTS.CATALOG).then(res => res.ok ? res.json() : null).catch(() => null),
       fetch(OTA_ENDPOINTS.MERCHANTS).then(res => res.ok ? res.json() : null).catch(() => null)
@@ -111,13 +115,21 @@ export async function syncOTAData() {
       const payload = catalogResult.value;
       if (payload.REWARDS_CATALOG && validateCatalogPayload(payload.REWARDS_CATALOG)) {
         localStorage.setItem("ota_catalog", JSON.stringify(payload.REWARDS_CATALOG));
+        injectOTACatalog(payload.REWARDS_CATALOG, payload.VALUATIONS || null);
+        hotAppliedCatalog = true;
+        catalogVersion = payload.version || null;
         if (payload.version) localStorage.setItem("ota_catalog_version", payload.version);
+        localStorage.setItem("ota_catalog_synced_at", new Date().toISOString());
         log.info("ota", "Cached latest Rewards Catalog payload for next boot.");
       } else if (payload.REWARDS_CATALOG) {
         log.warn("ota", "Remote catalog failed validation. Not caching.");
       }
       if (payload.VALUATIONS && validateValuationsPayload(payload.VALUATIONS)) {
         localStorage.setItem("ota_valuations", JSON.stringify(payload.VALUATIONS));
+        if (!hotAppliedCatalog) {
+          injectOTACatalog(null, payload.VALUATIONS);
+          hotAppliedCatalog = true;
+        }
         log.info("ota", "Cached latest Valuations payload for next boot.");
       } else if (payload.VALUATIONS) {
         log.warn("ota", "Remote valuations failed validation. Not caching.");
@@ -128,10 +140,22 @@ export async function syncOTAData() {
       const merchants = merchantsResult.value.MERCHANT_DATABASE;
       if (Array.isArray(merchants) && validateMerchantsPayload(merchants)) {
         localStorage.setItem("ota_merchants", JSON.stringify(merchants));
+        localStorage.setItem("ota_merchants_synced_at", new Date().toISOString());
+        injectOTAMerchants(merchants);
+        hotAppliedMerchants = true;
         log.info("ota", "Cached latest Merchant Database payload for next boot.");
       } else if (merchants) {
         log.warn("ota", "Remote merchants failed validation. Not caching.");
       }
+    }
+
+    if (hotAppliedCatalog || hotAppliedMerchants) {
+      emitRewardsRuntimeUpdated({
+        source: "ota-sync",
+        catalogHotApplied: hotAppliedCatalog,
+        merchantsHotApplied: hotAppliedMerchants,
+        catalogVersion,
+      });
     }
 
   } catch (err) {

@@ -3,6 +3,7 @@ import { T } from "../constants.js";
 import { Badge, Card, Label, NoticeBanner } from "../ui.js";
 import { ChevronDown, Layers, RefreshCw, Save } from "../icons";
 import { haptic } from "../haptics.js";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout.js";
 import { db } from "../utils.js";
 
 interface FinanceSummaryItem {
@@ -46,12 +47,12 @@ function SectionCard({
       variant="glass"
       style={{
         margin: SECTION_MARGIN,
-        padding: "18px 18px 16px",
+        padding: "20px 18px 18px",
         border: `1px solid ${T.border.subtle}`,
         background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.surface})`,
       }}
     >
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
         <div style={{ minWidth: 0 }}>
           {eyebrow ? (
             <div
@@ -68,9 +69,9 @@ function SectionCard({
               {eyebrow}
             </div>
           ) : null}
-          <div style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.025em" }}>{title}</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.03em", lineHeight: 1.12 }}>{title}</div>
           {description ? (
-            <p style={{ margin: "6px 0 0", fontSize: 12, lineHeight: 1.55, color: T.text.secondary }}>{description}</p>
+            <p style={{ margin: "7px 0 0", fontSize: 12, lineHeight: 1.6, color: T.text.secondary, maxWidth: 420 }}>{description}</p>
           ) : null}
         </div>
         {action ? <div style={{ flexShrink: 0 }}>{action}</div> : null}
@@ -104,10 +105,10 @@ function MetricTile({ label, value }: { label: string; value: string }) {
       <div
         style={{
           marginTop: 7,
-          fontSize: 14,
+          fontSize: 13,
           fontWeight: 700,
           color: T.text.primary,
-          lineHeight: 1.35,
+          lineHeight: 1.3,
         }}
       >
         {value}
@@ -139,6 +140,7 @@ function SelectShell({
       }}
     >
       <select
+        data-unstyled="true"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-label={ariaLabel}
@@ -218,6 +220,7 @@ function TextField({
     >
       {prefix ? <span style={{ color: T.text.muted, fontSize: 15 }}>{prefix}</span> : null}
       <input
+        data-unstyled="true"
         type={inputMode === "decimal" ? "text" : "text"}
         inputMode={inputMode}
         value={value || ""}
@@ -256,11 +259,11 @@ function FieldBlock({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ display: "grid", gap: 7, minWidth: 0 }}>
+    <div style={{ display: "grid", gap: 8, minWidth: 0 }}>
       <div>
         <Label style={{ marginBottom: 0 }}>{label}</Label>
         {detail ? (
-          <div style={{ marginTop: 4, fontSize: 11, lineHeight: 1.45, color: T.text.secondary }}>{detail}</div>
+          <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.5, color: T.text.secondary }}>{detail}</div>
         ) : null}
       </div>
       {children}
@@ -278,7 +281,7 @@ function ChoicePills<TValue extends string>({
   onChange: (value: TValue | "") => void;
 }) {
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))`, gap: 8 }}>
       {options.map((option) => {
         const active = value === option.value;
         return (
@@ -290,7 +293,9 @@ function ChoicePills<TValue extends string>({
               onChange(option.value);
             }}
             style={{
-              padding: "11px 14px",
+              minHeight: 46,
+              width: "100%",
+              padding: "12px 10px",
               borderRadius: 14,
               border: `1px solid ${active ? T.accent.primarySoft : T.border.subtle}`,
               background: active ? `linear-gradient(180deg, ${T.accent.primaryDim}, ${T.bg.elevated})` : T.bg.surface,
@@ -300,47 +305,17 @@ function ChoicePills<TValue extends string>({
               letterSpacing: "-0.01em",
               cursor: "pointer",
               boxShadow: active ? `0 0 0 1px ${T.accent.primaryDim} inset` : "inset 0 1px 0 rgba(255,255,255,0.03)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              textAlign: "center",
+              lineHeight: 1.2,
             }}
           >
             {option.label}
           </button>
         );
       })}
-    </div>
-  );
-}
-
-function RowLabel({ title, detail }: { title: string; detail?: string }) {
-  return (
-    <div style={{ minWidth: 0 }}>
-      <div style={{ fontSize: 14, fontWeight: 700, color: T.text.primary, lineHeight: 1.25 }}>{title}</div>
-      {detail ? <div style={{ marginTop: 4, fontSize: 11, lineHeight: 1.45, color: T.text.secondary }}>{detail}</div> : null}
-    </div>
-  );
-}
-
-function ControlRow({
-  title,
-  detail,
-  control,
-  stackOnMobile = false,
-}: {
-  title: string;
-  detail?: string;
-  control: React.ReactNode;
-  stackOnMobile?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: stackOnMobile ? "1fr" : "minmax(0, 1fr) auto",
-        gap: 12,
-        alignItems: "center",
-      }}
-    >
-      <RowLabel {...(detail ? { title, detail } : { title })} />
-      <div style={{ minWidth: 0 }}>{control}</div>
     </div>
   );
 }
@@ -370,7 +345,12 @@ export function FinanceProfileSection({
 
   const incomeType = financialConfig?.incomeType || "salary";
   const housingType = financialConfig?.housingType || "";
-  const isCompactPhone = typeof window !== "undefined" ? window.innerWidth <= 390 : false;
+  const { isCompactPhone, isTablet, isLargeTablet } = useResponsiveLayout();
+  const summaryGridColumns = isLargeTablet
+    ? "repeat(4, minmax(0, 1fr))"
+    : isTablet
+      ? "repeat(3, minmax(0, 1fr))"
+      : "repeat(2, minmax(0, 1fr))";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "16px 0 28px" }}>
@@ -380,7 +360,7 @@ export function FinanceProfileSection({
         description="Keep this page lean. Only inputs that materially change timing, liquidity, tax treatment, or risk belong here."
         action={<Badge variant="purple">Lean Inputs</Badge>}
       >
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: summaryGridColumns, gap: 10, alignItems: "stretch" }}>
           {financeSummaryItems.map((item) => (
             <MetricTile key={item.label} label={item.label} value={item.value} />
           ))}
@@ -633,36 +613,28 @@ export function FinanceProfileSection({
             />
           </div>
           {housingType === "rent" ? (
-            <ControlRow
-              title="Monthly Rent"
-              detail="Use the all-in recurring rent amount that materially impacts your plan."
-              control={
-                <TextField
-                  value={financialConfig?.monthlyRent || ""}
-                  onChange={(value) => setNumericField("monthlyRent", value)}
-                  ariaLabel="Monthly Rent"
-                  placeholder="0"
-                  prefix="$"
-                  fullWidth
-                />
-              }
-            />
+            <FieldBlock label="Monthly Rent" detail="Use the all-in recurring rent amount that materially impacts your plan.">
+              <TextField
+                value={financialConfig?.monthlyRent || ""}
+                onChange={(value) => setNumericField("monthlyRent", value)}
+                ariaLabel="Monthly Rent"
+                placeholder="0"
+                prefix="$"
+                fullWidth
+              />
+            </FieldBlock>
           ) : null}
           {housingType === "own" ? (
-            <ControlRow
-              title="Mortgage (PITI)"
-              detail="Use the recurring all-in homeowner payment if it shapes weekly liquidity."
-              control={
-                <TextField
-                  value={financialConfig?.mortgagePayment || ""}
-                  onChange={(value) => setNumericField("mortgagePayment", value)}
-                  ariaLabel="Mortgage (PITI)"
-                  placeholder="0"
-                  prefix="$"
-                  fullWidth
-                />
-              }
-            />
+            <FieldBlock label="Mortgage (PITI)" detail="Use the recurring all-in homeowner payment if it shapes weekly liquidity.">
+              <TextField
+                value={financialConfig?.mortgagePayment || ""}
+                onChange={(value) => setNumericField("mortgagePayment", value)}
+                ariaLabel="Mortgage (PITI)"
+                placeholder="0"
+                prefix="$"
+                fullWidth
+              />
+            </FieldBlock>
           ) : null}
           {!housingType ? (
             <NoticeBanner

@@ -81,7 +81,7 @@ export default function StreamingView({
             borderRadius: isReceiving ? 12 : 16,
             overflow: "hidden",
             boxShadow: `0 8px 16px ${T.accent.emerald}20`,
-            transition: "all .4s cubic-bezier(.16,1,.3,1)",
+            transition: "transform .4s cubic-bezier(.16,1,.3,1), opacity .4s cubic-bezier(.16,1,.3,1), background-color .4s cubic-bezier(.16,1,.3,1), border-color .4s cubic-bezier(.16,1,.3,1), color .4s cubic-bezier(.16,1,.3,1), box-shadow .4s cubic-bezier(.16,1,.3,1)",
             background: T.bg.card,
           }}
         >
@@ -192,7 +192,7 @@ export default function StreamingView({
 
         {showCancel && onCancel && (
           <div style={{ marginTop: 18 }}>
-            <button
+            <button type="button"
               onClick={onCancel}
               aria-label="Cancel audit"
               className={showCancelProminent ? "btn-secondary hover-lift" : "btn-secondary"}
@@ -288,7 +288,7 @@ export default function StreamingView({
                   background: isActive ? `${T.accent.primary}12` : `${T.bg.card}`,
                   border: `1px solid ${isActive ? `${T.accent.primary}2e` : T.border.subtle}`,
                   boxShadow: isActive ? `0 10px 26px ${T.accent.primary}18` : "none",
-                  transition: "all .25s ease",
+                  transition: "transform .25s ease, opacity .25s ease, background-color .25s ease, border-color .25s ease, color .25s ease, box-shadow .25s ease",
                 }}
               >
                 <div

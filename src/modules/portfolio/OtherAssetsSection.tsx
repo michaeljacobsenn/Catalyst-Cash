@@ -299,7 +299,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                                                         {targetAmount.toLocaleString()}
                                                                     </Mono>
                                                                     {editingGoals && (
-                                                                        <button
+                                                                        <button type="button"
                                                                             onClick={(e) => {
                                                                                 e.preventDefault();
                                                                                 e.stopPropagation();
@@ -377,7 +377,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                             )}
 
                             <div style={{ display: "flex", gap: 8, padding: "12px 16px", borderTop: `1px solid ${T.border.subtle}` }}>
-                                <button
+                                <button type="button"
                                     onClick={() => setEditingGoals(!editingGoals)}
                                     className="hover-lift"
                                     style={{
@@ -395,7 +395,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                 >
                                     {editingGoals ? "Done" : "Edit"}
                                 </button>
-                                <button
+                                <button type="button"
                                     onClick={() => openSheet("goal")}
                                     className="hover-lift"
                                     style={{
@@ -531,7 +531,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                                                     }}
                                                                 />
                                                             </div>
-                                                            <button
+                                                            <button type="button"
                                                                 onClick={() => updateAsset(i, "liquid", !asset.liquid)}
                                                                 title={asset.liquid ? "Liquid" : "Illiquid"}
                                                                 style={{
@@ -551,7 +551,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                                             >
                                                                 <UiGlyph glyph={asset.liquid ? "💧" : "🔒"} size={12} color={asset.liquid ? T.accent.emerald : T.text.muted} />
                                                             </button>
-                                                            <button
+                                                            <button type="button"
                                                                 onClick={(e) => {
                                                                     e.preventDefault();
                                                                     e.stopPropagation();
@@ -662,7 +662,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                             )}
 
                             <div style={{ display: "flex", gap: 8, padding: "12px 16px", borderTop: `1px solid ${T.border.subtle}` }}>
-                                <button
+                                <button type="button"
                                     onClick={() => setEditingAssets(!editingAssets)}
                                     className="hover-lift"
                                     style={{
@@ -679,7 +679,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                 >
                                     {editingAssets ? "Done" : "Edit"}
                                 </button>
-                                <button
+                                <button type="button"
                                     onClick={() => openSheet("asset")}
                                     className="hover-lift"
                                     style={{
@@ -945,7 +945,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                                                 </div>
                                                             )}
                                                             <div style={{ display: "flex", gap: 8 }}>
-                                                                <button
+                                                                <button type="button"
                                                                     onClick={() => saveEditDebt(i)}
                                                                     style={{
                                                                         flex: 1,
@@ -966,7 +966,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                                                     <Check size={14} />
                                                                     Save
                                                                 </button>
-                                                                <button
+                                                                <button type="button"
                                                                     onClick={(e) => {
                                                                         e.preventDefault();
                                                                         e.stopPropagation();
@@ -990,7 +990,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                                                 >
                                                                     Delete
                                                                 </button>
-                                                                <button
+                                                                <button type="button"
                                                                     onClick={() => setEditingDebt(null)}
                                                                     style={{
                                                                         flex: 1,
@@ -1077,7 +1077,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                                                                             </div>
                                                                         )}
                                                                     </div>
-                                                                    <button
+                                                                    <button type="button"
                                                                         onClick={() => startEditDebt(debt, i)}
                                                                         style={{
                                                                             width: 36,
@@ -1106,7 +1106,7 @@ export default function OtherAssetsSection({ collapsedSections, setCollapsedSect
                             )}
 
                             <div style={{ padding: "12px 16px", borderTop: `1px solid ${T.border.subtle}` }}>
-                                <button
+                                <button type="button"
                                     onClick={() => openSheet("debt")}
                                     className="hover-btn"
                                     style={{

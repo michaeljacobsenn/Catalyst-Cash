@@ -309,7 +309,7 @@ export default function WeeklyChallenges() {
       </div>
 
       {!completed ? (
-        <button
+        <button type="button"
           onClick={handleComplete}
           style={{
             width: "100%",

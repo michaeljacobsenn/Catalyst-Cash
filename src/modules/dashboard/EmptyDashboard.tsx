@@ -130,24 +130,51 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
           }}
         >
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "7px 12px",
-                borderRadius: 999,
-                background: T.bg.elevated,
-                border: `1px solid ${T.border.subtle}`,
-                color: T.accent.emerald,
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                marginBottom: 12,
-              }}
-            >
-              {heroLabel}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "7px 12px",
+                  borderRadius: 999,
+                  background: T.bg.elevated,
+                  border: `1px solid ${T.border.subtle}`,
+                  color: T.accent.emerald,
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {heroLabel}
+              </div>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  haptic.light();
+                  onDemoAudit();
+                }}
+                className="hover-btn"
+                style={{
+                  padding: "9px 14px",
+                  borderRadius: 999,
+                  border: `1px solid ${T.border.default}`,
+                  background: `${T.bg.base}90`,
+                  color: T.text.secondary,
+                  fontSize: 12,
+                  fontWeight: 750,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 7,
+                  boxShadow: "none",
+                }}
+              >
+                <Zap size={13} strokeWidth={2.2} />
+                Load demo data
+              </button>
             </div>
             <h1 style={{ fontSize: "clamp(22px, 6.6vw, 26px)", fontWeight: 900, marginBottom: 8, fontFamily: T.font.sans, color: T.text.primary, letterSpacing: "-0.03em", lineHeight: 1.02 }}>
               {heroTitle}
@@ -204,7 +231,7 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
           </div>
         )}
 
-        <button
+        <button type="button"
           aria-label={primaryCtaLabel}
           style={{
             width: "100%",
@@ -253,7 +280,7 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {steps.map(step => (
-            <button
+            <button type="button"
               key={step.id}
               onClick={() => {
                 haptic.light();
@@ -270,7 +297,7 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
                 background: step.done ? `${T.accent.emerald}0A` : T.bg.elevated,
                 border: `1px solid ${step.done ? `${T.accent.emerald}20` : T.border.subtle}`,
                 cursor: "pointer",
-                transition: "all 0.2s",
+                transition: "transform 0.2s, opacity 0.2s, background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s",
                 textAlign: "left",
               }}
               aria-label={`${step.title}. ${step.done ? "Completed" : "Open setup"}. ${step.desc}`}
@@ -308,37 +335,6 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
         </div>
       </Card>
 
-      <Card animate delay={300} style={{ marginBottom: 14, padding: "16px", background: `linear-gradient(135deg, ${T.bg.elevated}, ${T.accent.primary}05)`, border: `1px solid ${T.accent.primary}20` }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary }}>Just exploring?</div>
-            <div style={{ fontSize: 11, color: T.text.dim, marginTop: 2 }}>Load example data first and look around.</div>
-          </div>
-          <button
-            onClick={() => {
-              haptic.light();
-              onDemoAudit();
-            }}
-            className="hover-btn"
-            style={{
-              padding: "8px 16px",
-              borderRadius: T.radius.md,
-              border: `1px solid ${T.accent.primary}`,
-              background: T.accent.primaryDim,
-              color: T.accent.primary,
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              Try Demo
-              <UiGlyph glyph="✨" size={12} color={T.accent.primary} />
-            </span>
-          </button>
-        </div>
-      </Card>
-
       {(hasConnectedAccounts || hasRenewals) && (
         <Card animate delay={400} style={{ marginBottom: 14, padding: "14px 16px" }}>
           <Label>Connected data</Label>
@@ -368,7 +364,7 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
           style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
         />
         {onRestore && (
-          <button
+          <button type="button"
             onClick={() => {
               haptic.light();
               restoreInputRef.current?.click();

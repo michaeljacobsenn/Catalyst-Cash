@@ -139,7 +139,7 @@ export default function AuditExportSheet({ audit, onClose, toast }: AuditExportS
 
         <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
           {ACTIONS.map(action => (
-            <button
+            <button type="button"
               key={action.id}
               onClick={() => void handleExport(action.id, action.exporter, action.title)}
               disabled={Boolean(activeExportId)}
@@ -183,7 +183,7 @@ export default function AuditExportSheet({ audit, onClose, toast }: AuditExportS
         </div>
 
         <div style={{ padding: "0 12px 12px" }}>
-          <button
+          <button type="button"
             onClick={onClose}
             disabled={Boolean(activeExportId)}
             style={{

@@ -63,7 +63,7 @@ export default function TransactionsSection({ collapsedSections, setCollapsedSec
                     WebkitBackdropFilter: "blur(20px)",
                     border: `1px solid ${T.border.subtle}`,
                     boxShadow: `0 10px 24px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.05)`,
-                    transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+                    transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1), color 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
                 }}
             >
                 <div

@@ -558,7 +558,7 @@ export default function PageImport({
             onClick: () => csvRef.current?.click(),
           },
         ].map((item) => (
-          <button
+          <button type="button"
             key={item.title}
             onClick={item.onClick}
             disabled={importing}
@@ -674,7 +674,7 @@ export default function PageImport({
               }}
             />
           </WizField>
-          <button
+          <button type="button"
             onClick={() => void handlePasteRecoveryKit()}
             disabled={importing}
             style={{
@@ -693,7 +693,7 @@ export default function PageImport({
             Paste Recovery Kit
           </button>
           {Capacitor.getPlatform() !== "web" && (
-            <button
+            <button type="button"
               onClick={() => void handleUseLinkedRecoveryId()}
               disabled={importing || loadingLinkedRecoveryId}
               style={{
@@ -778,7 +778,7 @@ export default function PageImport({
           <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 10px 0" }}>
             Link your Apple ID to instantly restore your latest backup and enable continuous auto-sync.
           </p>
-          <button
+          <button type="button"
             onClick={async () => {
               try {
                 const { SignInWithApple } = await loadAppleSignIn();
@@ -981,7 +981,7 @@ export default function PageImport({
           Download a blank template
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button
+          <button type="button"
             onClick={() =>
               void downloadTemplate(
                 "/CatalystCash-Setup-Template.xlsx",
@@ -1009,7 +1009,7 @@ export default function PageImport({
               <div style={{ fontSize: 11, color: T.text.dim }}>Dropdowns included</div>
             </div>
           </button>
-          <button
+          <button type="button"
             onClick={() =>
               void downloadTemplate("/CatalystCash-Setup-Template.csv", "CatalystCash-Setup-Template.csv", "text/csv")
             }

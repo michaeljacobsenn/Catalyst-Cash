@@ -34,7 +34,7 @@ export default function ProBanner({ onUpgrade, label, sublabel, compact = false 
 
   if (compact) {
     return (
-      <button
+      <button type="button"
         role="banner"
         aria-label="Upgrade to Pro"
         data-no-swipe="true"
@@ -82,7 +82,7 @@ export default function ProBanner({ onUpgrade, label, sublabel, compact = false 
   const visibleBenefits = PRO_BANNER_BENEFITS.slice(0, 3);
 
   return (
-    <button
+    <button type="button"
       role="banner"
       aria-label="Upgrade to Catalyst Cash Pro"
       data-no-swipe="true"

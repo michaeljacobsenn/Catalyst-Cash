@@ -40,7 +40,7 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
 }: ConfigSectionProps<TConfig>) {
   return (
     <div style={{ margin: 0 }}>
-      <button
+      <button type="button"
         onClick={() => {
           haptic.medium();
           setShowConfig((prev) => !prev);
@@ -56,7 +56,6 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
           border: `1px solid ${showConfig ? T.border.default : T.border.subtle}`,
           background: showConfig ? T.bg.elevated : T.bg.card,
           color: showConfig ? T.text.primary : T.text.secondary,
-          cursor: "pointer",
           transition: "border-color 0.24s ease, background 0.24s ease, color 0.24s ease",
         }}
       >
@@ -127,7 +126,7 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
             <Label>Income & Cash Flow</Label>
             <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
               {(["salary", "hourly", "variable"] as const).map((type) => (
-                <button
+                <button type="button"
                   key={type}
                   onClick={() => {
                     haptic.light();
@@ -142,9 +141,8 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
                     color: typedFinancialConfig?.incomeType === type ? T.accent.primary : T.text.secondary,
                     fontSize: 12,
                     fontWeight: 700,
-                    cursor: "pointer",
                     textTransform: "capitalize",
-                    transition: "all .2s",
+                    transition: "transform .2s, opacity .2s, background-color .2s, border-color .2s, color .2s, box-shadow .2s",
                   }}
                 >
                   {type}

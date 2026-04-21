@@ -151,6 +151,24 @@ export default function BankAccountsSection({
             }),
     [bankAccounts]);
 
+    const getVisibleBalance = (acct: BankAccount) => {
+        const needsReconnect = !!(acct._plaidConnectionId && reconnectConnectionIds.has(acct._plaidConnectionId));
+        const usesManualFallback = !!acct._plaidManualFallback || needsReconnect;
+        return !usesManualFallback && acct._plaidBalance != null ? acct._plaidBalance : Number(acct.balance || 0);
+    };
+
+    const checkingTotal = useMemo(
+        () => checkingAccounts.reduce((sum, acct) => sum + getVisibleBalance(acct), 0),
+        [checkingAccounts, reconnectConnectionIds]
+    );
+
+    const savingsTotal = useMemo(
+        () => savingsAccounts.reduce((sum, acct) => sum + getVisibleBalance(acct), 0),
+        [savingsAccounts, reconnectConnectionIds]
+    );
+    const checkingTotalTone = checkingTotal >= 0 ? T.accent.emerald : T.status.red;
+    const savingsTotalTone = savingsTotal >= 0 ? T.accent.emerald : T.status.red;
+
     if (bankAccounts.length === 0) return null;
 
     const renderAccountRow = (acct: BankAccount, i: number, total: number, sectionColor: string) => {
@@ -226,9 +244,9 @@ export default function BankAccountsSection({
                             <input value={editBankForm.notes} onChange={e => setEditBankForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notes" aria-label="Account notes" style={{ flex: 1, fontSize: 13, padding: "8px 10px", borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: T.bg.elevated, color: T.text.primary, outline: "none", boxSizing: "border-box" }} />
                         </div>
                         <div style={{ display: "flex", gap: 8 }}>
-                            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); saveEditBank(acct.id); }} style={{ flex: 1, padding: 8, borderRadius: T.radius.sm, border: "none", background: `${sectionColor}18`, color: sectionColor, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Check size={14} /> Save</button>
-                            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (window.confirm(`Delete "${acct.name}"?`)) removeBankAccount(acct.id); }} style={{ flex: 1, padding: 8, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>Delete</button>
-                            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditingBank(null); }} style={{ flex: 1, padding: 8, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
+                            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); saveEditBank(acct.id); }} style={{ flex: 1, padding: 8, borderRadius: T.radius.sm, border: "none", background: `${sectionColor}18`, color: sectionColor, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Check size={14} /> Save</button>
+                            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (window.confirm(`Delete "${acct.name}"?`)) removeBankAccount(acct.id); }} style={{ flex: 1, padding: 8, borderRadius: T.radius.sm, border: "none", background: T.status.redDim, color: T.status.red, fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>Delete</button>
+                            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditingBank(null); }} style={{ flex: 1, padding: 8, borderRadius: T.radius.sm, border: `1px solid ${T.border.default}`, background: "transparent", color: T.text.dim, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
                         </div>
                     </div>
                 ) : (
@@ -290,7 +308,7 @@ export default function BankAccountsSection({
                                         {balanceMeta}
                                     </div>
                                 </div>
-                                <button onClick={() => startEditBank(acct)} style={{ width: 22, height: 22, borderRadius: 7, border: `1px solid ${T.border.subtle}`, background: "transparent", color: T.text.muted, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} className="hover-btn"><Edit3 size={10} /></button>
+                                <button type="button" onClick={() => startEditBank(acct)} style={{ width: 22, height: 22, borderRadius: 7, border: `1px solid ${T.border.subtle}`, background: "transparent", color: T.text.muted, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} className="hover-btn"><Edit3 size={10} /></button>
                             </div>
                             <div
                                 style={{
@@ -392,23 +410,21 @@ export default function BankAccountsSection({
                         <h2 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
                             Checking
                         </h2>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <Badge
                             variant="outline"
-                            style={{
-                                fontSize: 10,
-                                color: T.status.blue,
-                                borderColor: `${T.status.blue}40`,
-                            }}
+                            style={{ fontSize: 10, color: checkingTotalTone, borderColor: `${checkingTotalTone}40` }}
                         >
-                            {checkingAccounts.length}
+                            {fmt(checkingTotal)}
                         </Badge>
+                        <ChevronDown
+                            size={16}
+                            color={T.text.muted}
+                            className="chevron-animated"
+                            data-open={String(!collapsedSections.bankAccounts)}
+                        />
                     </div>
-                    <ChevronDown
-                        size={16}
-                        color={T.text.muted}
-                        className="chevron-animated"
-                        data-open={String(!collapsedSections.bankAccounts)}
-                    />
                 </div>
 
                 <div className="collapse-section stagger-container" data-collapsed={String(collapsedSections.bankAccounts)}>
@@ -460,23 +476,21 @@ export default function BankAccountsSection({
                         <h2 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
                             Savings
                         </h2>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <Badge
                             variant="outline"
-                            style={{
-                                fontSize: 10,
-                                color: T.accent.emerald,
-                                borderColor: `${T.accent.emerald}40`,
-                            }}
+                            style={{ fontSize: 10, color: savingsTotalTone, borderColor: `${savingsTotalTone}40` }}
                         >
-                            {savingsAccounts.length}
+                            {fmt(savingsTotal)}
                         </Badge>
+                        <ChevronDown
+                            size={16}
+                            color={T.text.muted}
+                            className="chevron-animated"
+                            data-open={String(!collapsedSections.savingsAccounts)}
+                        />
                     </div>
-                    <ChevronDown
-                        size={16}
-                        color={T.text.muted}
-                        className="chevron-animated"
-                        data-open={String(!collapsedSections.savingsAccounts)}
-                    />
                 </div>
 
                 <div className="collapse-section stagger-container" data-collapsed={String(collapsedSections.savingsAccounts)}>

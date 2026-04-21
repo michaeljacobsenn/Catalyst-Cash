@@ -295,7 +295,7 @@ export default function GuideModal({ onClose: onExplicitClose, proEnabled = fals
                 </span>
               </div>
             </div>
-            <button
+            <button type="button"
               onClick={() => animateClose()}
               onPointerDown={(event) => event.stopPropagation()}
               onTouchStart={(event) => event.stopPropagation()}

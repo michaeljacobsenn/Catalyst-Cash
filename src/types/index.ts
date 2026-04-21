@@ -419,6 +419,8 @@ export interface AuditRecord {
   model?: string;
   isTest: boolean;
   isDemoHistory?: boolean;
+  demoScenarioId?: string;
+  demoScenarioName?: string;
   moveChecks: MoveCheckState;
   moveAssignments?: Record<string, { sourceAccountId?: string; targetAccountId?: string }>;
   appliedMoveEffects?: Record<string, boolean>;

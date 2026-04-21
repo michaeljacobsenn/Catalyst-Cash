@@ -21,7 +21,7 @@ export function AppearanceSection({
     fontSize: 13,
     fontWeight: 700,
     cursor: "pointer",
-    transition: "all 0.2s",
+    transition: "transform 0.2s, opacity 0.2s, background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s",
   });
 
   return (

@@ -133,7 +133,7 @@ export default function FIReSimulator({ currentNetWorth = 0, annualIncome = 0, a
                     <span style={{ fontSize: 14, fontWeight: 800 }}>FIRE Simulator</span>
                     <Badge variant="success" size="sm">FREE TOOL</Badge>
                 </div>
-                <button
+                <button type="button"
                     onClick={() => setShowSim(false)}
                     style={{
                         background: "none",
@@ -171,7 +171,7 @@ export default function FIReSimulator({ currentNetWorth = 0, annualIncome = 0, a
 
             {/* Launch Sandbox Button */}
             <div style={{ marginBottom: 16 }}>
-                <button
+                <button type="button"
                     onClick={() => { haptic.selection(); setShowSandbox(true); }}
                     className="hover-btn"
                     style={{

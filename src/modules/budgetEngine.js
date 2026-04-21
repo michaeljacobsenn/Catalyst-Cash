@@ -195,6 +195,69 @@ export function suggestLinesFromAudit(auditCategories, payFrequency) {
     .sort((a, b) => b.amount - a.amount);
 }
 
+function normalizeRenewalIntervalUnit(value) {
+  const unit = String(value || "months").toLowerCase().trim();
+  if (unit === "day" || unit === "daily") return "days";
+  if (unit === "week" || unit === "weekly" || unit === "fortnights" || unit === "fortnight") return "weeks";
+  if (unit === "semi-monthly" || unit === "semimonthly") return "semi-monthly";
+  if (unit === "month" || unit === "monthly") return "months";
+  if (unit === "quarter" || unit === "quarters" || unit === "quarterly") return "quarters";
+  if (unit === "year" || unit === "yearly" || unit === "annual" || unit === "annually") return "years";
+  if (unit === "one-time" || unit === "once") return "one-time";
+  return unit;
+}
+
+function estimateMonthlyRenewalAmount(item) {
+  const amount = Math.max(0, Number(item?.amount) || 0);
+  const interval = Math.max(1, Number.parseInt(item?.interval, 10) || 1);
+  const unit = normalizeRenewalIntervalUnit(item?.intervalUnit);
+  if (amount <= 0 || unit === "one-time") return 0;
+
+  if (unit === "days") return (amount * 30.436875) / interval;
+  if (unit === "weeks") return (amount * 4.348125) / interval;
+  if (unit === "semi-monthly") return (amount * 2) / interval;
+  if (unit === "quarters") return amount / (interval * 3);
+  if (unit === "years") return amount / (interval * 12);
+  return amount / interval;
+}
+
+function isSeedableRenewal(item) {
+  if (!item || typeof item !== "object") return false;
+  if (item.isCancelled || item.archivedAt || item.isWaived) return false;
+  if (item.isAnnualFee || item.isCardAF) return false;
+  if (!String(item.name || "").trim()) return false;
+  return estimateMonthlyRenewalAmount(item) > 0;
+}
+
+/**
+ * Auto-generates suggested budget lines from tracked recurring bills/renewals.
+ * Returns array of BudgetLine (not yet persisted).
+ * @param {Array<import("../types/index.js").Renewal>} renewals
+ * @param {import("../types/index.js").PayFrequency} payFrequency
+ */
+export function suggestLinesFromRenewals(renewals, payFrequency) {
+  if (!Array.isArray(renewals) || renewals.length === 0) return [];
+  const perMonth = paychecksPerMonth(payFrequency);
+
+  return renewals
+    .filter(isSeedableRenewal)
+    .map((renewal) => {
+      const monthlyAmount = estimateMonthlyRenewalAmount(renewal);
+      const cycleAmount = Math.round((monthlyAmount / perMonth) * 100) / 100;
+      const descriptor = [renewal.category, renewal.name].filter(Boolean).join(" ");
+      return {
+        id: `auto-renewal-${String(renewal.id || renewal.name).replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${Date.now()}`,
+        name: String(renewal.name).trim(),
+        amount: cycleAmount,
+        bucket: inferBucket(descriptor),
+        icon: inferIcon(descriptor),
+        isAuto: true,
+      };
+    })
+    .filter((line) => line.amount > 0)
+    .sort((a, b) => b.amount - a.amount);
+}
+
 /**
  * Compute summary stats from current budget lines.
  * @param {Array} lines

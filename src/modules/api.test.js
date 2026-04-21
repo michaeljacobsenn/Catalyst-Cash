@@ -158,6 +158,15 @@ describe("backend URL selection", () => {
 
     expect(getBackendUrl()).toBe("https://catalystcash-api.portfoliopro-app.workers.dev");
   });
+
+  it("uses the custom API domain on production web hosts", () => {
+    vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(false);
+    vi.stubGlobal("window", {
+      location: { hostname: "catalystcash.app" },
+    });
+
+    expect(getBackendUrl()).toBe("https://api.catalystcash.app");
+  });
 });
 
 describe("callAudit", () => {

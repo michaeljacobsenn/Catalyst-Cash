@@ -31,13 +31,21 @@ import { extractMemoryTags, extractUserMemoryFacts } from "../memory.js";
 import { isLikelyNetworkError, isLikelyProviderAvailabilityError, toUserFacingRequestError } from "../networkErrors.js";
 import { useOnlineStatus } from "../onlineStatus.js";
 import { buildScrubber } from "../scrubber.js";
-import { checkChatQuota, hasPaidProAccess, isGatingEnforced, recordChatUsage, shouldShowGating } from "../subscription.js";
+import {
+  checkChatQuota,
+  hasPaidProAccess,
+  isGatingEnforced,
+  recordChatUsage,
+  shouldShowGating,
+  SUBSCRIPTION_STATE_CHANGED_EVENT,
+} from "../subscription.js";
 import UiGlyph from "../UiGlyph.js";
 import { Skeleton as UISkeleton } from "../ui.js";
 import { db } from "../utils.js";
 import ProBanner from "./ProBanner.js";
 import { CHAT_STORAGE_KEY, ChatMarkdown, createChatMessage, getRandomSuggestions, stripThoughtProcess } from "./aiChat/helpers";
 import {
+  buildChatFeedbackProfile,
   buildNegotiationPrompt,
   CHAT_FEEDBACK_KEY,
   CHAT_FEEDBACK_REASON_OPTIONS,
@@ -208,6 +216,26 @@ function TypingDots() {
   );
 }
 
+function findPreviousUserQuestion(messages: ChatHistoryMessage[], assistantIndex: number): string {
+  for (let index = assistantIndex - 1; index >= 0; index -= 1) {
+    const candidate = messages[index];
+    if (candidate?.role === "user" && candidate.content?.trim()) {
+      return candidate.content.trim();
+    }
+  }
+  return "";
+}
+
+function getFeedbackReasonLabels(reasons: ChatFeedbackReason[]): string[] {
+  return CHAT_FEEDBACK_REASON_OPTIONS
+    .filter((option) => reasons.includes(option.value))
+    .map((option) => option.label);
+}
+
+interface SendMessageUiOptions {
+  displayText?: string;
+}
+
 export default memo(function AIChatTab({
   proEnabled = false,
   privacyMode: _privacyModeTick = false,
@@ -254,6 +282,25 @@ export default memo(function AIChatTab({
     };
   }, []);
   const effectiveChatModel = getEffectiveChatModel(aiModel);
+  const showChatQuotaStatus = !privacyMode && chatQuota.limit !== Infinity;
+  const chatQuotaTone =
+    chatQuota.remaining <= 3
+      ? T.status.red
+      : chatQuota.remaining <= 8
+        ? T.status.amber
+        : T.accent.primary;
+  const chatQuotaModelLabel =
+    chatQuota.modelId === "gpt-4.1"
+      ? "CFO"
+      : chatQuota.modelId === "gemini-2.5-flash"
+        ? "Flash"
+        : chatQuota.modelId === "o3"
+          ? "Reasoning"
+          : "AskAI";
+  const chatQuotaStatusCopy =
+    chatQuota.remaining === 0
+      ? `${chatQuotaModelLabel} limit reached today`
+      : `${chatQuota.remaining} of ${chatQuota.limit} chats left today`;
 
   useEffect(() => {
     let active = true;
@@ -288,6 +335,10 @@ export default memo(function AIChatTab({
     aiProvider,
     aiModel,
   });
+  const chatFeedbackProfile = useMemo(
+    () => buildChatFeedbackProfile(messageFeedback),
+    [messageFeedback]
+  );
 
   const chatStrategy = useMemo<Record<string, unknown> | null>(() => {
     if (!current?.form || !financialConfig) return null;
@@ -320,7 +371,18 @@ export default memo(function AIChatTab({
       setChatQuota(q);
     };
     void refreshQuota();
-  }, [messages.length, effectiveChatModel]);
+  }, [messages.length, effectiveChatModel, proEnabled]);
+
+  useEffect(() => {
+    const refreshQuota = () => {
+      void checkChatQuota(effectiveChatModel)
+        .then(setChatQuota)
+        .catch(() => {});
+    };
+
+    window.addEventListener(SUBSCRIPTION_STATE_CHANGED_EVENT, refreshQuota);
+    return () => window.removeEventListener(SUBSCRIPTION_STATE_CHANGED_EVENT, refreshQuota);
+  }, [effectiveChatModel]);
 
   // ── Auto-scroll to bottom ──
   const scrollToBottom = useCallback((smooth = true): void => {
@@ -343,9 +405,14 @@ export default memo(function AIChatTab({
 
   // ── Send message ──
   const sendMessage = useCallback(
-    async (text: string, extraPromptContext: Record<string, unknown> | null = null): Promise<void> => {
+    async (
+      text: string,
+      extraPromptContext: Record<string, unknown> | null = null,
+      uiOptions: SendMessageUiOptions = {}
+    ): Promise<void> => {
       const trimmedText = text?.trim();
-      if (!trimmedText || isStreamingRef.current) return;
+      const visibleText = (uiOptions.displayText || trimmedText || "").trim();
+      if (!trimmedText || !visibleText || isStreamingRef.current) return;
       if (!online) {
         setError("You're offline. Ask AI resumes when you reconnect. Existing chat history is still available.");
         haptic.medium();
@@ -359,13 +426,13 @@ export default memo(function AIChatTab({
         return;
       }
 
-      const userMsg = createChatMessage("user", trimmedText);
+      const userMsg = createChatMessage("user", visibleText);
       // Guard: if the last message is already this user message (e.g. after a retry),
       // don't duplicate it — just resume from the existing state.
       const lastMsg = messages[messages.length - 1];
       const alreadyPresent = lastMsg?.role === "user" && lastMsg?.content === userMsg.content;
       const newMsgs = alreadyPresent ? [...messages] : [...messages, userMsg];
-      lastUserMsgRef.current = trimmedText; // Track for safe retry
+      lastUserMsgRef.current = visibleText; // Track for safe retry
 
       const decisionRecommendations = evaluateChatDecisionRules({
         current,
@@ -447,6 +514,11 @@ export default memo(function AIChatTab({
         memoryBlock: memBlock,
         decisionRecommendations,
         chatInputRisk: inputRisk,
+        chatFeedbackProfile:
+          chatFeedbackProfile.totalHelpful || chatFeedbackProfile.totalNeedsWork
+            ? chatFeedbackProfile
+            : null,
+        chatFeedbackGuidance: chatFeedbackProfile.promptGuidance || "",
         aiConsent: true,
         ...extraPromptContext,
       };
@@ -686,7 +758,7 @@ export default memo(function AIChatTab({
               (setAiModel as (m: string) => void)(nextModel);
               setError(`Daily ${getChatModelDisplayName(modelCap)} limit reached. Switched to ${getChatModelDisplayName(nextModel)} — send your message again.`);
               // Remove the failed assistant message so user can retry cleanly
-              setMessages(newMsgs);
+      setMessages(newMsgs);
               return;
             }
           }
@@ -738,6 +810,7 @@ export default memo(function AIChatTab({
       getMemoryBlock,
       persistMessages,
       chatQuota,
+      chatFeedbackProfile,
       rememberFacts,
       setAiModel,
       online,
@@ -800,6 +873,33 @@ export default memo(function AIChatTab({
     haptic.selection();
   }, []);
 
+  const requestFeedbackRevision = useCallback(
+    (assistantIndex: number, reasons: ChatFeedbackReason[] = []): void => {
+      const assistantMessage = messages[assistantIndex];
+      if (!assistantMessage || assistantMessage.role !== "assistant") return;
+
+      const originalQuestion = findPreviousUserQuestion(messages, assistantIndex);
+      const reasonLabels = getFeedbackReasonLabels(reasons);
+
+      void sendMessage(
+        "Revise the previous answer using my feedback.",
+        {
+          variant: "feedback-revision",
+          feedbackRevisionRequest: {
+            originalQuestion,
+            issues: reasonLabels,
+            instruction:
+              reasonLabels.length > 0
+                ? `Revise the previous answer for the same question. Fix these issues: ${reasonLabels.join(", ")}.`
+                : "Revise the previous answer for the same question. Make it more specific, concise, and grounded in the user's live financial context.",
+          },
+        },
+        { displayText: "Improve that answer." }
+      );
+    },
+    [messages, sendMessage]
+  );
+
   // ── Handle submit ──
   const handleSubmit = (event?: FormEvent<HTMLFormElement> | KeyboardEvent<HTMLTextAreaElement>): void => {
     event?.preventDefault();
@@ -855,6 +955,7 @@ export default memo(function AIChatTab({
     ultraDenseEmbedded,
     suggestionCardMinHeight,
     suggestionGridGap,
+    suggestionColumns,
     emptyTopPadding,
     orbSize,
     orbIconSize,
@@ -889,7 +990,7 @@ export default memo(function AIChatTab({
       {/* ── HEADER ACTIONS ONLY ── */}
       <div style={{ position: "absolute", top: 12, left: 16, right: 16, zIndex: 10, display: "flex", justifyContent: "flex-start", alignItems: "center", pointerEvents: "none" }}>
         {messages.length > 0 && (
-          <button
+          <button type="button"
             onClick={clearChat}
             aria-label="Clear chat"
             style={{
@@ -904,7 +1005,7 @@ export default memo(function AIChatTab({
               gap: 8,
               cursor: "pointer",
               color: T.text.muted,
-              transition: "all .2s cubic-bezier(.16,1,.3,1)",
+              transition: "transform .2s cubic-bezier(.16,1,.3,1), opacity .2s cubic-bezier(.16,1,.3,1), background-color .2s cubic-bezier(.16,1,.3,1), border-color .2s cubic-bezier(.16,1,.3,1), color .2s cubic-bezier(.16,1,.3,1), box-shadow .2s cubic-bezier(.16,1,.3,1)",
               pointerEvents: "auto",
             }}
             onMouseOver={e => {
@@ -1034,14 +1135,14 @@ export default memo(function AIChatTab({
                 className="scroll-area hide-scrollbar"
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
+                  gridTemplateColumns: suggestionColumns === 1 ? "1fr" : "1fr 1fr",
                   gap: suggestionGridGap,
                   width: "100%",
                   paddingBottom: ultraDenseEmbedded ? 4 : denseEmbedded ? 6 : 10,
                 }}
               >
                 {suggestions.map((s, i) => (
-                <button
+                <button type="button"
                   key={i}
                   className="card-press"
                   onClick={() => sendMessage(s.text)}
@@ -1064,7 +1165,7 @@ export default memo(function AIChatTab({
                     lineHeight: 1.3,
                     width: "100%",
                     minHeight: suggestionCardMinHeight,
-                    transition: "all .3s cubic-bezier(.16,1,.3,1)",
+                    transition: "transform .3s cubic-bezier(.16,1,.3,1), opacity .3s cubic-bezier(.16,1,.3,1), background-color .3s cubic-bezier(.16,1,.3,1), border-color .3s cubic-bezier(.16,1,.3,1), color .3s cubic-bezier(.16,1,.3,1), box-shadow .3s cubic-bezier(.16,1,.3,1)",
                     animation: `chatBubbleIn .5s cubic-bezier(.16,1,.3,1) ${i * 0.08}s both`,
                   }}
                 >
@@ -1074,7 +1175,17 @@ export default memo(function AIChatTab({
                     color={T.accent.primary}
                     style={{ flexShrink: 0 }}
                   />
-                  <span style={{ display: "-webkit-box", WebkitLineClamp: promptClamp, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                  <span
+                    style={{
+                      display: "block",
+                      overflow: "visible",
+                      lineHeight: 1.35,
+                      minHeight: promptClamp > 0 ? `${promptClamp * 1.35}em` : undefined,
+                      whiteSpace: "normal",
+                      wordBreak: "break-word",
+                      textWrap: "pretty",
+                    }}
+                  >
                     {s.text}
                   </span>
                 </button>
@@ -1260,9 +1371,35 @@ export default memo(function AIChatTab({
                           </div>
                         </div>
                       )}
+                      {feedback?.verdict === "needs-work" && (
+                        <button
+                          type="button"
+                          onClick={() => requestFeedbackRevision(i, feedback.reasons)}
+                          disabled={isStreaming}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "6px 11px",
+                            borderRadius: 999,
+                            border: `1px solid ${T.accent.primary}35`,
+                            background: `${T.accent.primary}12`,
+                            color: T.accent.primary,
+                            fontSize: 11,
+                            fontWeight: 800,
+                            cursor: isStreaming ? "not-allowed" : "pointer",
+                            opacity: isStreaming ? 0.55 : 1,
+                          }}
+                        >
+                          <ArrowUpRight size={12} />
+                          Improve answer
+                        </button>
+                      )}
                       {feedback && (
                         <span style={{ fontSize: 10, color: T.text.dim, fontWeight: 600 }}>
-                          Feedback saved on this device.
+                          {feedback.verdict === "helpful"
+                            ? "Catalyst will lean toward this style in future replies on this device."
+                            : "Catalyst will use this feedback to tighten future replies on this device."}
                         </span>
                       )}
                     </div>
@@ -1334,7 +1471,7 @@ export default memo(function AIChatTab({
 
       {/* ── Scroll-down FAB ── */}
       {showScrollDown && (
-        <button
+        <button type="button"
           onClick={() => scrollToBottom()}
           style={{
             position: "absolute",
@@ -1427,6 +1564,46 @@ export default memo(function AIChatTab({
             </div>
           </div>
         )}
+        {showChatQuotaStatus && (
+          <div
+            style={{
+              marginBottom: 10,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              padding: "9px 12px",
+              borderRadius: 14,
+              background: `${chatQuotaTone}10`,
+              border: `1px solid ${chatQuotaTone}24`,
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: chatQuotaTone, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                AskAI capacity
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.text.primary, marginTop: 2 }}>
+                {chatQuotaStatusCopy}
+              </div>
+            </div>
+            <div style={{ minWidth: 82, textAlign: "right" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary }}>
+                {chatQuotaModelLabel}
+              </div>
+              <div style={{ marginTop: 6, width: 82, height: 5, background: T.border.subtle, borderRadius: 999, overflow: "hidden" }}>
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${Math.max(0, Math.min(100, (chatQuota.remaining / Math.max(chatQuota.limit, 1)) * 100))}%`,
+                    background: chatQuotaTone,
+                    borderRadius: 999,
+                    transition: "width 0.5s var(--spring-elastic), background 0.3s ease",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
         <form
           onSubmit={handleSubmit}
           style={{
@@ -1450,6 +1627,7 @@ export default memo(function AIChatTab({
             }}
           >
             <textarea
+              data-unstyled="true"
               ref={inputRef}
               value={input}
               onChange={e => {
@@ -1487,6 +1665,7 @@ export default memo(function AIChatTab({
                 minHeight: 20,
                 WebkitUserSelect: "text",
                 userSelect: "text",
+                boxShadow: "none",
               }}
             />
 
@@ -1509,7 +1688,7 @@ export default memo(function AIChatTab({
                   alignItems: "center",
                   justifyContent: "center",
                   cursor: "pointer",
-                  transition: "all .3s var(--spring-elastic)",
+                  transition: "transform .3s var(--spring-elastic), opacity .3s var(--spring-elastic), background-color .3s var(--spring-elastic), border-color .3s var(--spring-elastic), color .3s var(--spring-elastic), box-shadow .3s var(--spring-elastic)",
                 }}
               >
                 <div
@@ -1525,6 +1704,8 @@ export default memo(function AIChatTab({
               <button
                 type="submit"
                 disabled={!input.trim() || !online}
+                aria-label="Send message"
+                title="Send message"
                 style={{
                   width: 36,
                   height: 36,
@@ -1536,7 +1717,7 @@ export default memo(function AIChatTab({
                   alignItems: "center",
                   justifyContent: "center",
                   cursor: input.trim() && online ? "pointer" : "default",
-                  transition: "all .4s var(--spring-elastic)",
+                  transition: "transform .4s var(--spring-elastic), opacity .4s var(--spring-elastic), background-color .4s var(--spring-elastic), border-color .4s var(--spring-elastic), color .4s var(--spring-elastic), box-shadow .4s var(--spring-elastic)",
                   transform: input.trim() && online ? "scale(1)" : "scale(0.9)",
                   opacity: input.trim() && online ? 1 : 0.5,
                 }}
@@ -1568,24 +1749,14 @@ export default memo(function AIChatTab({
               Privacy mode · chats are not stored
             </span>
           ) : chatQuota.limit !== Infinity ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", width: 150, fontWeight: 600, color: chatQuota.remaining <= 3 ? T.status.red : T.text.secondary }}>
-                <span>{chatQuota.remaining} chats left</span>
-                <span style={{ opacity: 0.5, fontSize: 11 }}>
-                  {chatQuota.modelId === "gpt-4.1" ? "CFO" : chatQuota.modelId === "gemini-2.5-flash" ? "Flash" : ""}
-                  {chatQuota.modelId ? ` · ${chatQuota.limit} limit` : ` ${chatQuota.limit} limit`}
-                </span>
-              </div>
-              <div style={{ width: 140, height: 4, background: T.border.subtle, borderRadius: 2, overflow: "hidden" }}>
-                <div style={{ 
-                  height: "100%", 
-                  width: `${(chatQuota.remaining / chatQuota.limit) * 100}%`, 
-                  background: chatQuota.remaining <= 3 ? T.status.red : T.accent.primary,
-                  borderRadius: 2,
-                  transition: "width 0.5s var(--spring-elastic), background 0.3s ease"
-                }} />
-              </div>
-            </div>
+            <span style={{ opacity: 0.8 }}>
+              {chatQuota.modelId === "gpt-4.1"
+                ? "Catalyst AI CFO"
+                : chatQuota.modelId === "gemini-2.5-flash"
+                  ? "Catalyst AI Flash"
+                  : "Catalyst AI"}{" "}
+              · daily quota active
+            </span>
           ) : (
             <span style={{ opacity: 0.8 }}>Encrypted local chat history auto-expires after 24 hours</span>
           )}
@@ -1623,7 +1794,7 @@ export default memo(function AIChatTab({
                 Switch to {chatQuota.alternateModel === "gpt-4.1" ? "Catalyst AI CFO" : "Catalyst AI"} — {chatQuota.alternateRemaining} chats remaining
               </div>
             </div>
-            <button
+            <button type="button"
               style={{
                 padding: "7px 13px",
                 borderRadius: 10,

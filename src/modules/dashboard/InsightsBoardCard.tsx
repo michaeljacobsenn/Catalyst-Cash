@@ -215,7 +215,7 @@ export default function InsightsBoardCard({
                   {nextActionBrief.detail}
                 </div>
                 {nextActionBrief.detail.length > 110 && (
-                  <button
+                  <button type="button"
                     onClick={onToggleNextAction}
                     style={{
                       marginTop: 8,
@@ -242,7 +242,7 @@ export default function InsightsBoardCard({
         )}
 
         {onDiscussWithCFO && (
-          <button
+          <button type="button"
             className="hover-btn"
             onClick={onDiscussWithCFO}
             style={{

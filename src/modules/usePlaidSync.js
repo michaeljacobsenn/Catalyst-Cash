@@ -201,6 +201,48 @@ function formatCompactDuration(ms) {
   return `${totalMinutes}m`;
 }
 
+function getUtcDayWindowStart(now = Date.now()) {
+  const current = new Date(now);
+  return Date.UTC(
+    current.getUTCFullYear(),
+    current.getUTCMonth(),
+    current.getUTCDate()
+  );
+}
+
+function getUtcWeekWindowStart(now = Date.now()) {
+  const current = new Date(now);
+  const utcDay = current.getUTCDay();
+  const mondayOffset = (utcDay + 6) % 7;
+  return Date.UTC(
+    current.getUTCFullYear(),
+    current.getUTCMonth(),
+    current.getUTCDate() - mondayOffset
+  );
+}
+
+function getAlignedCooldownWindow(cooldownMs, now = Date.now()) {
+  if (!cooldownMs || cooldownMs <= 0) return null;
+  if (cooldownMs === DAY_MS) {
+    const start = getUtcDayWindowStart(now);
+    return { start, end: start + DAY_MS };
+  }
+  if (cooldownMs === 7 * DAY_MS) {
+    const start = getUtcWeekWindowStart(now);
+    return { start, end: start + (7 * DAY_MS) };
+  }
+  const start = Math.floor(now / cooldownMs) * cooldownMs;
+  return { start, end: start + cooldownMs };
+}
+
+export function getPlaidManualSyncRetryAfterMs(lastSyncAt = 0, cooldownMs = 0, now = Date.now()) {
+  if (!lastSyncAt || !cooldownMs) return 0;
+  const window = getAlignedCooldownWindow(cooldownMs, now);
+  if (!window) return 0;
+  if (lastSyncAt < window.start) return 0;
+  return Math.max(0, window.end - now);
+}
+
 export function getPlaidRefreshWindowConfig({
   effectiveTierId = "free",
   gatingEnforced = false,
@@ -323,7 +365,7 @@ export function summarizeSyncOutcome({
   if (pendingCount > 0) {
     return {
       kind: "info",
-      message: "Plaid is still processing your bank refresh. Fresh balances have not arrived yet.",
+      message: "Plaid is still processing your refresh. Fresh balances should appear on the next live sync.",
     };
   }
 
@@ -340,10 +382,23 @@ function appendSyncWarningDetail(base, extra) {
 
 function buildIssueWarningMessage(allIssues = []) {
   if (allIssues.length === 0) return null;
-  const issueNames = allIssues.slice(0, 2).map((issue) => issue.institutionName).join(", ");
-  return allIssues.length === 1
-    ? `${issueNames} needs attention. ${allIssues[0].message}`
-    : `${issueNames}${allIssues.length > 2 ? " and others" : ""} need attention. Some connected institutions are still showing cached balances because Plaid returned older saved data or fresh balances have not landed yet.`;
+  const reconnectCount = allIssues.filter((issue) => /reconnect/i.test(String(issue?.message || ""))).length;
+  const issueNames = allIssues
+    .slice(0, 2)
+    .map((issue) => issue?.institutionName)
+    .filter(Boolean)
+    .join(", ");
+
+  if (allIssues.length === 1) {
+    return reconnectCount > 0
+      ? `${issueNames || "This institution"} needs reconnect before live balances can resume.`
+      : `${issueNames || "This institution"} is still showing cached balances.`;
+  }
+
+  const reconnectSuffix = reconnectCount > 0
+    ? ` ${reconnectCount} ${reconnectCount === 1 ? "institution needs" : "institutions need"} reconnect.`
+    : " Reconnect is only needed if marked below.";
+  return `${allIssues.length} linked institutions still need attention.${reconnectSuffix}`;
 }
 
 export async function refreshTransactionsAfterSync({
@@ -486,23 +541,17 @@ export function usePlaidSync({
 
     const cooldown = PLAID_MANUAL_SYNC_COOLDOWNS[tier.id] || PLAID_MANUAL_SYNC_COOLDOWNS.free;
     const cooldownEnforced = shouldEnforcePlaidSyncCooldown({ gatingEnforced });
-    const refreshWindowConfig = getPlaidRefreshWindowConfig({
-      effectiveTierId: tier.id,
-      gatingEnforced,
-    });
-    const refreshCadenceCopy = buildPlaidRefreshCadenceCopy({
-      effectiveTierId: tier.id,
-      gatingEnforced,
-    });
     const lastSyncAt = getMostRecentPlaidSyncTime(cards, bankAccounts, syncConnectionIds);
     const preSyncTimestamps = getPerConnectionPlaidSyncTimes(cards, bankAccounts, syncConnectionIds);
-    if (!background && cooldownEnforced && lastSyncAt && Date.now() - lastSyncAt < cooldown) {
-      const remainingMs = cooldown - (Date.now() - lastSyncAt);
+    if (!background && cooldownEnforced && lastSyncAt) {
+      const remainingMs = getPlaidManualSyncRetryAfterMs(lastSyncAt, cooldown, Date.now());
+      if (remainingMs > 0) {
       const timeStr = formatCompactDuration(remainingMs);
 
-      if (window.toast)
+        if (window.toast)
         window.toast.info(`Next live sync in ${timeStr}`);
-      return;
+        return;
+      }
     }
 
     _setSyncing(true);
@@ -641,7 +690,7 @@ export function usePlaidSync({
         pending: Boolean(result?._pendingSync),
         message: result?._pendingSync
           ? "Fresh balances are still processing."
-          : String(result?._error || "Sync did not complete."),
+          : "Live sync did not complete.",
       }));
       const staleIssues = results
         .filter(result => result && !result._error && !result._pendingSync)
@@ -657,24 +706,14 @@ export function usePlaidSync({
           const reconnectRequired = Boolean(forceSyncResult?.reconnectRequired);
           const cooldownHold = Boolean(forceSyncResult?.throttled);
 
-          let cooldownStr = "";
-          const balanceRefreshWindowMs = refreshWindowConfig?.balances || 0;
-          if (balanceRefreshWindowMs > 0 && after > 0) {
-            const remainingRefreshMs = balanceRefreshWindowMs - (Date.now() - after);
-            if (remainingRefreshMs > 0) {
-              cooldownStr = ` Next balance refresh available in ${formatCompactDuration(remainingRefreshMs)}.`;
-            }
-          }
-          const cadenceSuffix = refreshCadenceCopy ? ` ${refreshCadenceCopy}` : "";
-
           return {
             institutionName: result?.institutionName || "Linked institution",
             pending: false,
             message: reconnectRequired
-              ? `Reconnect is required in Settings → Bank Connections. Showing cached balances from ${latestCachedLabel} until Plaid can resume syncing.`
+              ? `Reconnect required in Settings. Cached balances from ${latestCachedLabel}.`
               : !forceSyncSucceeded
-                ? `${cooldownHold ? "Manual balance refresh is still on cooldown" : "Plaid did not return fresh balances"}, so Catalyst is showing cached balances from ${latestCachedLabel}.${severeStale ? " This cache is now too old to trust for live decisions." : ""}${cooldownStr}${cadenceSuffix}`
-                : `Plaid returned older cached balances from ${latestCachedLabel}. Reconnect is not currently required.${cooldownStr}${cadenceSuffix}`,
+                ? `Cached balances from ${latestCachedLabel}.${cooldownHold ? " Waiting for the next Plaid refresh window." : " Waiting for the next live sync."}${severeStale ? " Verify before acting." : ""}`
+                : `Cached balances from ${latestCachedLabel}. Waiting for the next live sync.`,
           };
         })
         .filter(Boolean);

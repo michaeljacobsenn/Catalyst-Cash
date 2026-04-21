@@ -58,6 +58,15 @@ function cacheRevenueCatIdentity(customerInfo) {
   if (appUserId) cachedRevenueCatAppUserId = appUserId;
 }
 
+function resolveEntitlementPurchaseDate(entitlement) {
+  const latest = String(entitlement?.latestPurchaseDate || "").trim();
+  if (latest) return latest;
+  const original = String(entitlement?.originalPurchaseDate || "").trim();
+  if (original) return original;
+  const purchasedAt = String(entitlement?.purchaseDate || "").trim();
+  return purchasedAt || null;
+}
+
 async function applyCustomerInfo(customerInfo) {
   const normalizedCustomerInfo = unwrapCustomerInfo(customerInfo);
   cacheRevenueCatIdentity(normalizedCustomerInfo);
@@ -69,10 +78,15 @@ async function applyCustomerInfo(customerInfo) {
   if (entitlement) {
     // Detect lifetime (non-consumable) purchases — they have no expirationDate
     const isLifetime = !entitlement.expirationDate || entitlement.productIdentifier?.includes("lifetime");
+    const purchaseDate = resolveEntitlementPurchaseDate(entitlement);
     await activatePro(
       entitlement.productIdentifier || "com.catalystcash.pro.rc",
       isLifetime ? 36500 : 3650,
-      { isLifetime },
+      {
+        isLifetime,
+        purchaseDate,
+        expiresAt: entitlement.expirationDate || null,
+      },
     );
 
     // Confirm any pending referral now that we have a verified purchase

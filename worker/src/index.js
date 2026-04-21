@@ -248,6 +248,46 @@ async function buildPlaidCooldownResponse({
   );
 }
 
+function getUtcDayWindowStart(now = Date.now()) {
+  const current = new Date(now);
+  return Date.UTC(
+    current.getUTCFullYear(),
+    current.getUTCMonth(),
+    current.getUTCDate()
+  );
+}
+
+function getUtcWeekWindowStart(now = Date.now()) {
+  const current = new Date(now);
+  const utcDay = current.getUTCDay();
+  const mondayOffset = (utcDay + 6) % 7;
+  return Date.UTC(
+    current.getUTCFullYear(),
+    current.getUTCMonth(),
+    current.getUTCDate() - mondayOffset
+  );
+}
+
+function getAlignedCooldownRetryAfterMs(lastSyncAt = 0, cooldownMs = 0, now = Date.now()) {
+  if (!lastSyncAt || !cooldownMs) return 0;
+  let windowStart = 0;
+  let windowEnd = 0;
+
+  if (cooldownMs === 24 * 60 * 60 * 1000) {
+    windowStart = getUtcDayWindowStart(now);
+    windowEnd = windowStart + (24 * 60 * 60 * 1000);
+  } else if (cooldownMs === 7 * 24 * 60 * 60 * 1000) {
+    windowStart = getUtcWeekWindowStart(now);
+    windowEnd = windowStart + (7 * 24 * 60 * 60 * 1000);
+  } else {
+    windowStart = Math.floor(now / cooldownMs) * cooldownMs;
+    windowEnd = windowStart + cooldownMs;
+  }
+
+  if (lastSyncAt < windowStart) return 0;
+  return Math.max(0, windowEnd - now);
+}
+
 function getPlaidDatasetAction(dataset) {
   return `dataset-${dataset}`;
 }
@@ -1875,12 +1915,19 @@ export default {
             targetItems = [selectedItem];
             limitedToItemId = selectedItem.item_id || "default";
           }
-          const targetedItemIds = new Set(targetItems.map(item => item.item_id || "default"));
-          lastSyncTime = getLatestTimestampMillis(syncResults || [], targetedItemIds);
+          lastSyncTime = getLatestTimestampMillis(syncResults || []);
 
           const now = Date.now();
-          if (cooldownMs > 0 && lastSyncTime > 0 && (now - lastSyncTime) < cooldownMs) {
-            return new Response(JSON.stringify({ error: "cooldown", message: "Cooldown active", cooldownMs, tier: tierId, limitedToItemId }), { status: 429, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
+          const retryAfterMs = getAlignedCooldownRetryAfterMs(lastSyncTime, cooldownMs, now);
+          if (retryAfterMs > 0) {
+            return new Response(JSON.stringify({
+              error: "cooldown",
+              message: tierId === "pro" ? "Daily live sync already used for the current window." : "Weekly live sync already used for the current window.",
+              cooldownMs,
+              retryAfterMs,
+              tier: tierId,
+              limitedToItemId,
+            }), { status: 429, headers: buildHeaders(cors, { "Content-Type": "application/json" }) });
           }
 
           let anySuccess = false;
@@ -2343,10 +2390,11 @@ export default {
     if (!systemPrompt && resolvedType === "chat" && typeof snapshot === "string") {
       const serverInputRisk = analyzeServerChatInputRisk(snapshot);
       if (serverInputRisk.blocked) {
+        const blockedRateResult = testingBypass ? rateResult : await commitRateLimit(rateResult, env);
         return buildBlockedChatResponse({
           cors,
           tierHeaders,
-          rateResult,
+          rateResult: blockedRateResult,
           stream,
           responseFormat,
           message: buildServerPromptInjectionRefusal(),
@@ -2355,10 +2403,11 @@ export default {
 
       const serverTopicRisk = analyzeServerChatTopicRisk(snapshot);
       if (serverTopicRisk.blocked) {
+        const blockedRateResult = testingBypass ? rateResult : await commitRateLimit(rateResult, env);
         return buildBlockedChatResponse({
           cors,
           tierHeaders,
-          rateResult,
+          rateResult: blockedRateResult,
           stream,
           responseFormat,
           message: buildServerTopicRiskRefusal(serverTopicRisk, effectiveContext),

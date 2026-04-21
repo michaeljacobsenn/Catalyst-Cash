@@ -113,7 +113,7 @@ export default function AppShellHeader({
           justifyContent: "flex-start",
         }}
       >
-        <button
+        <button type="button"
           onClick={() => setShowGuide((prev) => !prev)}
           className="gesture-glass"
           style={{
@@ -136,7 +136,7 @@ export default function AppShellHeader({
         >
           <Info size={18} strokeWidth={1.8} />
         </button>
-        <button
+        <button type="button"
           onClick={() => setPrivacyMode((prev) => !prev)}
           className="gesture-glass"
           style={{
@@ -229,7 +229,7 @@ export default function AppShellHeader({
           justifyContent: "flex-end",
         }}
       >
-        <button
+        <button type="button"
           onClick={() => navTo("settings")}
           className="gesture-glass"
           style={{

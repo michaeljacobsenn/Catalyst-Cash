@@ -75,7 +75,6 @@ function AuditPickerField({
           width: "100%",
           height: "100%",
           opacity: 0,
-          cursor: "pointer",
           WebkitAppearance: "none",
           appearance: "none",
         }}

@@ -519,7 +519,7 @@ function CashFlowTimeline({ events }) {
         ))}
       </div>
       {hasMore && (
-        <button
+        <button type="button"
           onClick={() => setExpanded(!expanded)}
           style={{
             width: "100%",
@@ -536,7 +536,7 @@ function CashFlowTimeline({ events }) {
             alignItems: "center",
             justifyContent: "center",
             gap: 6,
-            transition: "all .2s ease",
+            transition: "transform .2s ease, opacity .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease",
           }}
         >
           {expanded ? "Show less ▲" : `Show all 30 days ▼`}

@@ -128,7 +128,7 @@ export default function DashboardOverview({
           <span style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.10em", fontFamily: T.font.mono, textTransform: "uppercase" }}>
             Weekly Snapshot
           </span>
-          <button
+          <button type="button"
             onClick={(event) => {
               event.stopPropagation();
               onOpenAudit();
@@ -239,7 +239,7 @@ export default function DashboardOverview({
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
         {canSync && (
-          <button
+          <button type="button"
             onClick={onSync}
             disabled={syncing}
             className="hover-btn"
@@ -249,7 +249,7 @@ export default function DashboardOverview({
             {syncing ? "SYNC…" : "SYNC"}
           </button>
         )}
-        <button
+        <button type="button"
           onClick={onViewTransactions}
           className="hover-btn"
           style={{ ...actionButtonStyle("pointer"), flex: "1 1 160px", position: "relative" }}
@@ -421,7 +421,7 @@ function actionButtonStyle(cursor: "pointer" | "wait"): CSSProperties {
     background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
     color: T.text.primary,
     cursor,
-    transition: "all .2s",
+    transition: "transform .2s, opacity .2s, background-color .2s, border-color .2s, color .2s, box-shadow .2s",
     opacity: cursor === "wait" ? 0.7 : 1,
     fontSize: 11,
     fontWeight: 700,

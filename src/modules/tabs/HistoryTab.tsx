@@ -399,7 +399,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
         )}
         <div style={{ paddingTop: 6, paddingBottom: 12, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 12, minWidth: 0 }}>
-            <button
+            <button type="button"
               onClick={() => navTo("dashboard")}
               aria-label="Back"
               style={{
@@ -448,7 +448,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
             {audits.length > 0 && (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                 {selMode && sel.size > 0 && (
-                  <button
+                  <button type="button"
                     onClick={() => void doExportSel()}
                     style={{
                       display: "flex",
@@ -463,14 +463,14 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                       fontWeight: 700,
                       cursor: "pointer",
                       fontFamily: T.font.mono,
-                      transition: "all .2s ease",
+                      transition: "transform .2s ease, opacity .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease",
                     }}
                   >
                     <Download size={10} />
                     EXPORT {sel.size}
                   </button>
                 )}
-                <button
+                <button type="button"
                   onClick={() => {
                     setSelMode(!selMode);
                     setSel(new Set());
@@ -486,12 +486,12 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                     fontWeight: 700,
                     cursor: "pointer",
                     fontFamily: T.font.mono,
-                    transition: "all .2s ease",
+                    transition: "transform .2s ease, opacity .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease",
                   }}
                 >
                   {selMode ? "CANCEL" : "SELECT"}
                 </button>
-                <button
+                <button type="button"
                   onClick={() => void handleExportCsv()}
                   title="Export CSV"
                   style={{
@@ -508,12 +508,12 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                     fontSize: 8,
                     fontWeight: 700,
                     fontFamily: T.font.mono,
-                    transition: "all .2s ease",
+                    transition: "transform .2s ease, opacity .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease",
                   }}
                 >
                   CSV
                 </button>
-                <button
+                <button type="button"
                   onClick={() => void handleExportJson()}
                   title="Export All JSON"
                   style={{
@@ -526,7 +526,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                     fontWeight: 700,
                     cursor: "pointer",
                     fontFamily: T.font.mono,
-                    transition: "all .2s ease",
+                    transition: "transform .2s ease, opacity .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease",
                   }}
                 >
                   JSON
@@ -536,7 +536,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
           </div>
 
           <div style={{ display: "flex", gap: 10, marginBottom: showManualPaste ? 10 : 0 }}>
-            <button
+            <button type="button"
               onClick={async () => {
                 try {
                   const txt = await navigator.clipboard.readText();
@@ -561,12 +561,12 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 8,
-                transition: "all .2s ease",
+                transition: "transform .2s ease, opacity .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease",
               }}
             >
               <Plus size={16} strokeWidth={2.5} /> Paste & Import AI Result
             </button>
-            <button
+            <button type="button"
               onClick={() => setShowManualPaste(!showManualPaste)}
               style={{
                 width: 54,
@@ -578,7 +578,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
-                transition: "all .2s ease",
+                transition: "transform .2s ease, opacity .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease",
               }}
             >
               <Edit3 size={18} />
@@ -607,7 +607,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                 }}
               />
               <div style={{ display: "flex", gap: 8 }}>
-                <button
+                <button type="button"
                   onClick={() => {
                     if (manualPasteText.trim()) {
                       void handleManualImport(manualPasteText);
@@ -631,7 +631,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                 >
                   Import Text
                 </button>
-                <button
+                <button type="button"
                   onClick={() => {
                     setShowManualPaste(false);
                     setManualPasteText("");
@@ -670,7 +670,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  transition: "all .2s",
+                  transition: "transform .2s, opacity .2s, background-color .2s, border-color .2s, color .2s, box-shadow .2s",
                 }}
               >
                 {allSel && <CheckCircle size={11} color={T.bg.base} strokeWidth={3} />}
@@ -701,7 +701,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                         : T.text.secondary;
                 const count = filterValue ? audits.filter((audit) => getAuditColor(audit) === filterValue).length : audits.length;
                 return (
-                  <button
+                  <button type="button"
                     key={label}
                     onClick={() => {
                       setStatusFilter(filterValue);
@@ -719,7 +719,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                       cursor: "pointer",
                       fontFamily: T.font.mono,
                       letterSpacing: "0.03em",
-                      transition: "all .2s ease",
+                      transition: "transform .2s ease, opacity .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease",
                       display: "flex",
                       alignItems: "center",
                       gap: 5,
@@ -850,7 +850,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                           Delete audit from {fmtDate(audit.date || audit.ts)}?
                         </p>
                         <div style={{ display: "flex", gap: 8 }}>
-                          <button
+                          <button type="button"
                             onClick={(event: MouseEvent<HTMLButtonElement>) => {
                               event.stopPropagation();
                               onDelete(audit);
@@ -870,7 +870,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                           >
                             Delete
                           </button>
-                          <button
+                          <button type="button"
                             onClick={(event: MouseEvent<HTMLButtonElement>) => {
                               event.stopPropagation();
                               setConfirmDelete(null);
@@ -898,7 +898,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
-                                  transition: "all .2s",
+                                  transition: "transform .2s, opacity .2s, background-color .2s, border-color .2s, color .2s, box-shadow .2s",
                                 }}
                               >
                                 {sel.has(auditKey) && <CheckCircle size={12} color={T.bg.base} strokeWidth={3} />}
@@ -940,7 +940,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
 
                           <div style={{ display: "flex", gap: 6, position: "relative", zIndex: 2 }}>
                             {!selMode && (
-                              <button
+                              <button type="button"
                                 onClick={(event: MouseEvent<HTMLButtonElement>) => {
                                   event.stopPropagation();
                                   setExportAuditRecord(audit);
@@ -956,14 +956,14 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
-                                  transition: "all .2s",
+                                  transition: "transform .2s, opacity .2s, background-color .2s, border-color .2s, color .2s, box-shadow .2s",
                                 }}
                               >
                                 <Download size={14} strokeWidth={2.5} />
                               </button>
                             )}
                             {!selMode && (
-                              <button
+                              <button type="button"
                                 onClick={(event: MouseEvent<HTMLButtonElement>) => {
                                   event.stopPropagation();
                                   setConfirmDelete(auditKey);
@@ -980,7 +980,7 @@ export default memo(function HistoryTab({ toast, proEnabled = false, themeTick: 
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
-                                  transition: "all .2s",
+                                  transition: "transform .2s, opacity .2s, background-color .2s, border-color .2s, color .2s, box-shadow .2s",
                                 }}
                               >
                                 <Trash2 size={14} strokeWidth={2.5} />

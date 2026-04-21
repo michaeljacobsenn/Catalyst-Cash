@@ -163,6 +163,19 @@ export const GlobalStyles = () => {
     input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
     input[type="number"]{-moz-appearance:textfield}
     select{cursor:pointer}
+    input[data-unstyled="true"],textarea[data-unstyled="true"],select[data-unstyled="true"]{
+      background:transparent;
+      border:none;
+      border-radius:0;
+      padding:0;
+      min-height:0;
+      box-shadow:none;
+    }
+    input[data-unstyled="true"]:focus,textarea[data-unstyled="true"]:focus,select[data-unstyled="true"]:focus{
+      background:transparent;
+      border:none;
+      box-shadow:none;
+    }
 
     /* Keyframe animations */
     @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
@@ -371,12 +384,14 @@ export const GlobalStyles = () => {
     button{
       -webkit-tap-highlight-color:transparent;font-family:${T.font.sans};touch-action:manipulation;
       user-select:none;
+      cursor:pointer;
       min-height: 44px; /* Strict HIG Compliance */
       min-width: 44px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
     }
+    button:disabled{cursor:not-allowed}
     a,[role="button"],.hover-card {
       touch-action:manipulation;
     }

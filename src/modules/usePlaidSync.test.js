@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   buildPlaidRefreshCadenceCopy,
+  getPlaidManualSyncRetryAfterMs,
   getMostRecentPlaidSyncTime,
   getPlaidRefreshWindowConfig,
   hasCachedPlaidSnapshot,
@@ -104,6 +105,24 @@ describe("usePlaidSync helpers", () => {
         gatingEnforced: false,
       })
     ).toBe(false);
+  });
+
+  it("reopens pro manual sync on the next shared daily reset instead of 24 hours after the last sync", () => {
+    const now = new Date("2026-04-19T18:00:00.000Z").getTime();
+    const lastSyncAt = new Date("2026-04-19T08:30:00.000Z").getTime();
+
+    expect(
+      getPlaidManualSyncRetryAfterMs(lastSyncAt, 24 * 60 * 60 * 1000, now)
+    ).toBe(new Date("2026-04-20T00:00:00.000Z").getTime() - now);
+  });
+
+  it("reopens free manual sync on the next shared weekly reset", () => {
+    const now = new Date("2026-04-22T18:00:00.000Z").getTime();
+    const lastSyncAt = new Date("2026-04-21T08:30:00.000Z").getTime();
+
+    expect(
+      getPlaidManualSyncRetryAfterMs(lastSyncAt, 7 * 24 * 60 * 60 * 1000, now)
+    ).toBe(new Date("2026-04-27T00:00:00.000Z").getTime() - now);
   });
 
   it("rate-limits silent background maintenance locally between foreground events", () => {

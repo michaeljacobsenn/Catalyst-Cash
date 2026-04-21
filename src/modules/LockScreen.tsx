@@ -325,7 +325,7 @@ export default function LockScreen() {
                     border: `1.5px solid ${failed ? T.status.red : T.accent.primary}`,
                     background: filled ? (failed ? T.status.red : T.accent.primary) : "rgba(255,255,255,0.05)",
                     boxShadow: filled && !failed ? `0 0 12px ${T.accent.primary}80` : "none",
-                    transition: "all .2s cubic-bezier(.34, 1.56, .64, 1)",
+                    transition: "transform .2s cubic-bezier(.34, 1.56, .64, 1), opacity .2s cubic-bezier(.34, 1.56, .64, 1), background-color .2s cubic-bezier(.34, 1.56, .64, 1), border-color .2s cubic-bezier(.34, 1.56, .64, 1), color .2s cubic-bezier(.34, 1.56, .64, 1), box-shadow .2s cubic-bezier(.34, 1.56, .64, 1)",
                     animation: filled && !failed ? "pinDotPop .3s ease" : "none",
                   }}
                 />
@@ -344,7 +344,7 @@ export default function LockScreen() {
             }}
           >
             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
-              <button
+              <button type="button"
                 key={num}
                 onClick={() => handleNumPress(num)}
                 style={{
@@ -362,7 +362,7 @@ export default function LockScreen() {
                   alignItems: "center",
                   justifyContent: "center",
                   cursor: "pointer",
-                  transition: "all .2s ease",
+                  transition: "transform .2s ease, opacity .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease",
                   WebkitTapHighlightColor: "transparent",
                   backdropFilter: "blur(12px)",
                   WebkitBackdropFilter: "blur(12px)",
@@ -372,8 +372,11 @@ export default function LockScreen() {
                 {num}
               </button>
             ))}
-            <button
+            <button type="button"
               onClick={useFaceId ? tryDeviceAuth : undefined}
+              disabled={!useFaceId}
+              aria-label="Unlock with biometrics"
+              title="Unlock with biometrics"
               style={{
                 width: 76,
                 height: 76,
@@ -391,7 +394,7 @@ export default function LockScreen() {
             >
               <Fingerprint size={34} strokeWidth={1.5} style={{ animation: "breathe 3s ease-in-out infinite" }} />
             </button>
-            <button
+            <button type="button"
               onClick={() => handleNumPress(0)}
               style={{
                 width: 76,
@@ -408,7 +411,7 @@ export default function LockScreen() {
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
-                transition: "all .2s ease",
+                transition: "transform .2s ease, opacity .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease",
                 WebkitTapHighlightColor: "transparent",
                 backdropFilter: "blur(12px)",
                 WebkitBackdropFilter: "blur(12px)",
@@ -417,7 +420,7 @@ export default function LockScreen() {
             >
               0
             </button>
-            <button
+            <button type="button"
               onClick={() => handleNumPress("delete")}
               style={{
                 width: 76,
@@ -443,7 +446,7 @@ export default function LockScreen() {
         </div>
       ) : (
         /* Primary: Native Device Auth Status Button (only shows when attempting Biometrics auto-trigger) */
-        <button
+        <button type="button"
           onClick={tryDeviceAuth}
           disabled={busy}
           style={{

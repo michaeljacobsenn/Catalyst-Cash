@@ -1103,7 +1103,7 @@ export default function SettingsTab({
     >
       <div style={{ width: 44, minWidth: 44, display: "flex", justifyContent: "flex-start" }}>
         {(onBack || menu) && (
-          <button
+          <button type="button"
             onClick={() => {
               if (menu) {
                 closeActiveMenu(false);
@@ -1169,7 +1169,7 @@ export default function SettingsTab({
 
   const sectionFallback = (
     <Card>
-      <div style={{ padding: 20, textAlign: "center", color: T.text.muted }}>Loading...</div>
+      <div style={{ padding: 20, textAlign: "center", color: T.text.muted }}>Loading…</div>
     </Card>
   );
 
@@ -1340,7 +1340,7 @@ export default function SettingsTab({
         <Suspense
           fallback={
             <Card>
-              <div style={{ padding: 20, textAlign: "center", color: T.text.muted }}>Loading...</div>
+              <div style={{ padding: 20, textAlign: "center", color: T.text.muted }}>Loading…</div>
             </Card>
           }
         >

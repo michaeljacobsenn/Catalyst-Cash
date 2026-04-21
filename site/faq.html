@@ -6,12 +6,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="dark" />
   <meta name="theme-color" content="#0C121B" />
-  <title>Catalyst Cash FAQ | Switching, sync, privacy, and plan questions</title>
+  <title>Catalyst Cash FAQ | Switching, rewards, sync, privacy, and plan questions</title>
   <meta name="description"
-    content="Get clear answers about switching to Catalyst Cash, Plaid sync, privacy, backups, limits, and what the app is built to replace." />
+    content="Get clear answers about switching to Catalyst Cash, rewards, Plaid sync, privacy, backups, demo mode, and plan limits." />
   <meta property="og:title" content="Catalyst Cash FAQ" />
   <meta property="og:description"
-    content="A practical FAQ for people moving from dashboard-first finance apps into a weekly audit workflow." />
+    content="A practical FAQ for people moving from dashboard-first finance apps into a weekly money system." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://catalystcash.app/faq.html" />
   <meta property="og:image" content="https://catalystcash.app/icon-512.png" />
@@ -24,7 +24,7 @@
     href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap"
     rel="stylesheet" />
   <meta name="robots" content="index, follow" />
-  <link rel="stylesheet" href="/style.css?v=3.6" />
+  <link rel="stylesheet" href="/style.css?v=3.7" />
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -56,10 +56,34 @@
       },
       {
         "@type": "Question",
+        "name": "Can Catalyst Cash help me choose the best card before I pay?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. The Rewards tab ranks the best card for a merchant or category, compares the lead over your backup card, and supports nearby merchant suggestions when several stores are close together."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does the budget start blank?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Catalyst Cash can seed starter budget lines from recurring bills and audit context without overwriting the lines you already built."
+        }
+      },
+      {
+        "@type": "Question",
         "name": "Where does my data live?",
         "acceptedAnswer": {
           "@type": "Answer",
           "text": "Your core financial record stays local-first on your device. AI requests are scrubbed and routed through the Catalyst backend, and Plaid tokens stay off-device."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What does Ask AI feedback do?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Helpful and needs-work feedback stays on-device and helps Catalyst adjust future Ask AI replies to fit your preferred style more closely. It can also trigger an immediate improved answer without sending product telemetry built from your private chat history."
         }
       },
       {
@@ -123,10 +147,10 @@
     <main class="shell" id="main-content" data-faq-root>
       <section class="faq-hero" aria-label="FAQ hero">
         <div class="faq-copy faq-copy-minimal fade-up">
-          <div class="eyebrow">FAQ | updated April 16, 2026</div>
+          <div class="eyebrow">FAQ | updated April 21, 2026</div>
           <h1>Clear answers before you trust a new money app.</h1>
           <p class="hero-sub">
-            Search switching, sync, privacy, backup, and plan questions without digging through marketing copy.
+            Search switching, rewards, sync, privacy, backup, and plan questions without digging through marketing copy.
           </p>
         </div>
 
@@ -136,7 +160,7 @@
               <div class="micro-label">Smart Search</div>
               <h2>Search the FAQ</h2>
             </div>
-            <p>Try “bank not syncing”, “Mint”, “backup”, or “Pro”.</p>
+            <p>Try “bank not syncing”, “best card nearby”, “budget setup”, or “Pro”.</p>
           </div>
 
           <div class="faq-search-field">
@@ -146,13 +170,15 @@
               data-faq-input
               autocomplete="off"
               spellcheck="false"
-              placeholder="Search switching, sync, privacy, backups, pricing, or audit questions" />
+              placeholder="Search switching, rewards, sync, privacy, backups, pricing, or audit questions" />
             <button type="button" class="faq-clear" data-faq-clear hidden>Clear</button>
           </div>
 
           <div class="faq-chip-row" aria-label="Popular searches">
             <button type="button" class="faq-chip" data-faq-query="Mint">Mint</button>
             <button type="button" class="faq-chip" data-faq-query="bank not syncing">Bank sync</button>
+            <button type="button" class="faq-chip" data-faq-query="best card nearby">Best card nearby</button>
+            <button type="button" class="faq-chip" data-faq-query="budget setup">Budget setup</button>
             <button type="button" class="faq-chip" data-faq-query="backup and restore">Backup and restore</button>
             <button type="button" class="faq-chip" data-faq-query="what does Pro unlock">Pro</button>
           </div>
@@ -162,7 +188,7 @@
           </div>
 
           <div class="faq-empty" data-faq-empty hidden>
-            <strong>No direct match found.</strong> Try shorter ideas like "bank", "switch", "backup", "history", or "Pro".
+            <strong>No direct match found.</strong> Try shorter ideas like "bank", "rewards", "backup", "budget", or "Pro".
           </div>
         </div>
       </section>
@@ -271,6 +297,18 @@
                 </div>
               </details>
 
+              <details class="faq-item" data-faq-item data-category="accounts sync" data-keywords="next live sync cached waiting grouped statuses stale balance">
+                <summary>
+                  <span class="faq-question">What does “waiting for the next live sync” actually mean?</span>
+                  <span class="faq-summary-tag">Status</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>It means Catalyst still has a recent cached balance snapshot and is waiting for the next full live refresh window. The account is still usable; it is simply not forcing a fresh network pull every time you open the app.</p>
+                  <p>If several linked institutions share the same stale state, the app groups that status so you can see the pattern quickly instead of reading the same warning over and over.</p>
+                </div>
+              </details>
+
               <details class="faq-item" data-faq-item data-category="accounts sync" data-keywords="how many banks accounts institutions free pro limits one six">
                 <summary>
                   <span class="faq-question">How many institutions can I connect?</span>
@@ -280,6 +318,64 @@
                 <div class="faq-answer">
                   <p>Free supports 1 Plaid institution. Pro supports up to 8 Plaid institutions. Manual entry remains available either way.</p>
                   <p>On Pro, Catalyst is built to keep all 8 usable without constant user input by quietly maintaining balances and ledger data behind the scenes.</p>
+                </div>
+              </details>
+            </div>
+          </section>
+
+          <section class="faq-category" data-faq-section>
+            <div class="section-head faq-category-head">
+              <div class="micro-label">Rewards, Budget, and Ask AI</div>
+              <h2>Rewards, budget, and Ask AI</h2>
+              <p>How Catalyst helps with card choice, faster setup, and better follow-up guidance.</p>
+            </div>
+
+            <div class="faq-accordion">
+              <details class="faq-item" data-faq-item data-category="rewards budget ask ai" data-keywords="best card merchant category rewards use before pay shopping store maxrewards cardpointers">
+                <summary>
+                  <span class="faq-question">Can Catalyst Cash help me choose the best card before I pay?</span>
+                  <span class="faq-summary-tag">Rewards</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Yes. The Rewards tab ranks the best card for a merchant or category, compares the winner against your backup card, and can show dollar estimates once you enter a purchase amount.</p>
+                  <p>That makes it useful both for everyday category choices and for one specific purchase when you want the best answer right before you tap to pay.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="rewards budget ask ai" data-keywords="mall nearby multiple locations geo location stores merchant chooser shopping center plaza">
+                <summary>
+                  <span class="faq-question">What if several stores are near me, like inside a mall or shopping center?</span>
+                  <span class="faq-summary-tag">Nearby</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Catalyst does not assume there is only one nearby merchant. If several candidates are close together, it can show a short list so you choose the exact storefront before the rewards ranking runs.</p>
+                  <p>That matters because “I am near the mall” is not the same thing as “I am about to spend at this one specific merchant.”</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="rewards budget ask ai" data-keywords="budget blank setup lines categories recurring bills seed starter">
+                <summary>
+                  <span class="faq-question">Does the budget start blank?</span>
+                  <span class="faq-summary-tag">Budget</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>No. Catalyst can seed starter budget lines from recurring bills and audit context so you do not have to build the first version from scratch.</p>
+                  <p>It also avoids overwriting matching lines you already created, which matters if you have already started shaping the budget yourself.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="rewards budget ask ai" data-keywords="ask ai feedback helpful not helpful improve answer local save telemetry privacy">
+                <summary>
+                  <span class="faq-question">What does Ask AI feedback actually do?</span>
+                  <span class="faq-summary-tag">Ask AI</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Helpful and needs-work feedback is not just a dead-end thumbs vote. It stays on-device and helps Catalyst adjust future replies toward the style you prefer, such as tighter answers or clearer math.</p>
+                  <p>Needs-work can also trigger an improved answer right away, without turning your private chat history into product telemetry.</p>
                 </div>
               </details>
             </div>
@@ -326,6 +422,18 @@
                 <div class="faq-answer">
                   <p>Catalyst Cash supports encrypted backup and restore so your finance record is portable without turning the whole product into a cloud-first database. Manual backups intentionally omit sensitive keys that should not be restored from export files.</p>
                   <p>The goal is resilience: keep the user's working record recoverable while maintaining tighter security boundaries than a typical finance dashboard clone.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="privacy backup" data-keywords="icloud backup export recovery vault household cloud difference best option">
+                <summary>
+                  <span class="faq-question">Which recovery option should most people actually use?</span>
+                  <span class="faq-summary-tag">Recovery</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>For most iPhone users, encrypted iCloud backup is the easiest main recovery path. Encrypted export is the portable option when you want a file you control directly. Recovery Vault is the more advanced path for off-device encrypted recovery.</p>
+                  <p>Household Cloud is for shared encrypted sync, not the default answer for personal backup.</p>
                 </div>
               </details>
 
@@ -385,6 +493,18 @@
                 <div class="faq-answer">
                   <p>Once a week is enough for most people. Run another one after a paycheck, a large purchase, a new bill, or any meaningful change in your balances.</p>
                   <p>The app is meant to be a recurring operating rhythm, not a tool you only open when you are already stressed.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="plans workflow" data-keywords="demo mode safe overwrite my data sample scenario restore relaunch">
+                <summary>
+                  <span class="faq-question">Is demo mode safe to use if I already have my real data in the app?</span>
+                  <span class="faq-summary-tag">Demo</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Yes. Demo mode is designed to snapshot your real data, show sample households, then restore your real state when you exit demo mode.</p>
+                  <p>It also clears on a full relaunch of the app, so the sample state does not keep masquerading as your real finances after you close and reopen the app.</p>
                 </div>
               </details>
 
@@ -485,7 +605,7 @@
     </footer>
   </div>
 
-  <script src="/main.js?v=3.5"></script>
+  <script src="/main.js?v=3.6"></script>
 </body>
 
 </html>

@@ -8,6 +8,7 @@
   import { useSettings } from "../contexts/SettingsContext.js";
   import GeoSuggestWidget from "../dashboard/GeoSuggestWidget.js";
   import { haptic } from "../haptics.js";
+  import RewardCardVisual from "../RewardCardVisual.js";
   import {
     AlertCircle,
     Check,
@@ -30,17 +31,22 @@
     Smartphone,
     Sparkles,
     Store,
+    Target,
     Train,
+    TrendingUp,
     Tv,
     X,
+    Wallet,
     Zap
   } from "../icons";
   import { extractCategoryByKeywords,MERCHANT_DATABASE } from "../merchantDatabase.js";
   import { getCardMultiplier,VALUATIONS } from "../rewardsCatalog.js";
+  import { REWARDS_RUNTIME_UPDATED_EVENT } from "../rewardsRuntime.js";
   import { getHydratedStoredTransactions } from "../storedTransactions.js";
   import { Badge,Card,FormGroup,FormRow,InlineTooltip,Skeleton } from "../ui.js";
   import { db } from "../utils.js";
-  import { estimateRewardCapUsage } from "./transactionFeed/helpers";
+  import { estimateRewardCapUsage, getCategoryLabel, shouldHighlightRewardMiss } from "./transactionFeed/helpers";
+  import { analyzeTransactionRewards } from "./transactionFeed/derived";
 
 const LazyProPaywall = lazy(() => import("./ProPaywall.js"));
 
@@ -107,6 +113,19 @@ const QUICK_CATEGORIES = [
   { id: "drugstores", label: "Pharmacy", icon: Pill, color: T.status.green, bg: T.status.greenDim },
 ];
 
+const REWARD_CATEGORY_LABELS: Record<string, string> = {
+  dining: "Dining",
+  groceries: "Groceries",
+  gas: "Gas",
+  travel: "Travel",
+  transit: "Transit",
+  online_shopping: "Online shopping",
+  streaming: "Streaming",
+  wholesale_clubs: "Wholesale clubs",
+  drugstores: "Pharmacy",
+  "catch-all": "Everywhere else",
+};
+
 // ── Persistent Search History — stored via db for proper data-layer consistency ──
 // Module-level cache so history persists across tab navigation without re-fetching.
 const HISTORY_KEY = "cw-search-history";
@@ -153,6 +172,43 @@ type Recommendation = Omit<PortfolioCard, "notes"> & {
   effectiveCategory: string;
 };
 
+interface RewardSnapshotSummary {
+  analyzedCount: number;
+  totalMissedValue: number;
+  badTxns: number;
+  optimalTxns: number;
+  topMissedTransaction: {
+    merchant: string;
+    bestCard: string;
+    delta: number;
+    category: string;
+  } | null;
+  topMissedCategories: Array<{
+    category: string;
+    delta: number;
+    bestCard: string;
+  }>;
+  topMissedTransactions: Array<{
+    merchant: string;
+    bestCard: string;
+    delta: number;
+    category: string;
+    amount: number;
+    usedPayment: string;
+  }>;
+}
+
+interface RewardCategoryLeader {
+  categoryId: string;
+  label: string;
+  icon: typeof QUICK_CATEGORIES[number]["icon"];
+  color: string;
+  bg: string;
+  winner: PortfolioCard | null;
+  effectiveYield: number;
+  rateLabel: string;
+}
+
 const TypedFormRow = FormRow as unknown as React.ComponentType<{
   label?: React.ReactNode;
   isLast?: boolean;
@@ -197,6 +253,104 @@ function formatRewardRateShort(multiplier: number, currency: string) {
   return currency === "CASH" ? `${formatRewardNumber(multiplier)}%` : `${formatRewardNumber(multiplier)}x`;
 }
 
+function formatCompactCurrency(value: number | null | undefined) {
+  const numeric = Number(value) || 0;
+  if (Math.abs(numeric) >= 1000) {
+    const short = Math.abs(numeric) >= 10000 ? (numeric / 1000).toFixed(0) : (numeric / 1000).toFixed(1);
+    return `$${short}k`;
+  }
+  return numeric.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+}
+
+function formatRewardCategoryLabel(value: string | null | undefined) {
+  const key = String(value || "").trim();
+  if (!key) return "Everyday spending";
+  return REWARD_CATEGORY_LABELS[key] || key.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function toTitleCaseLabel(value: string) {
+  const lowerCaseWords = new Set(["and", "of", "for", "the", "to", "at", "on", "in"]);
+  return value
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map((token) => {
+      if (lowerCaseWords.has(token)) return token;
+      if (token.length <= 3 && /^[a-z]+$/.test(token) && token !== "pay") return token.toUpperCase();
+      return token.charAt(0).toUpperCase() + token.slice(1);
+    })
+    .join(" ");
+}
+
+function formatMerchantSurfaceLabel(value: string | null | undefined, categoryId?: string | null) {
+  const raw = String(value || "")
+    .replace(/[*_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!raw) return categoryId ? `${formatRewardCategoryLabel(categoryId)} purchase` : "Purchase";
+
+  const cleaned = raw
+    .replace(/\b(?:debit|purchase|checkcard|pending|withdrawal|recurring|payment|online|visa|mastercard|pos)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const display = toTitleCaseLabel(cleaned || raw);
+  const tokens = display.split(" ").filter(Boolean);
+  const looksLikeInternalCode =
+    /\b(?:IRS|DMV|DTF|PIT|ACH|NYS)\b/i.test(raw) ||
+    (tokens.length >= 3 && tokens.every((token) => token.length <= 4));
+
+  if (looksLikeInternalCode && categoryId) {
+    return `${formatRewardCategoryLabel(categoryId)} purchase`;
+  }
+  return display;
+}
+
+function formatMatchSourceLabel(value: string) {
+  if (value === "ai") return "AI match";
+  if (value === "keyword") return "Suggested category";
+  if (value === "category") return "Manual category";
+  if (value === "nearby") return "Nearby pick";
+  return "Saved merchant";
+}
+
+function readRewardsRuntimeStatus() {
+  if (typeof window === "undefined") {
+    return {
+      catalogVersion: null,
+      syncedAt: null,
+      statusLabel: "Built-in rules",
+      detailLabel: "Using Catalyst's on-device reward rules.",
+    };
+  }
+
+  const catalogVersion = localStorage.getItem("ota_catalog_version");
+  const syncedAt = localStorage.getItem("ota_catalog_synced_at");
+  const syncedLabel = syncedAt
+    ? new Date(syncedAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+    : null;
+
+  return {
+    catalogVersion,
+    syncedAt,
+    statusLabel: catalogVersion
+      ? "Live rules"
+      : syncedLabel
+        ? "Updated rules"
+        : "Built-in rules",
+    detailLabel: catalogVersion
+      ? `Catalog ${catalogVersion}${syncedLabel ? ` · ${syncedLabel}` : ""}`
+      : syncedLabel
+        ? `Last refreshed ${syncedLabel}`
+        : "Using Catalyst's on-device reward rules.",
+  };
+}
+
 export default function CardWizardTab({ proEnabled = false, embedded = false }: CardWizardTabProps) {
   const { cards } = usePortfolio();
   const { financialConfig, setFinancialConfig } = useSettings();
@@ -214,11 +368,22 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
   const [showValuations, setShowValuations] = useState(false);
   const [spendAmount, setSpendAmount] = useState("");
   const [showAllRunners, setShowAllRunners] = useState(false);
+  const [selectedInsight, setSelectedInsight] = useState<"missed" | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [viewport, setViewport] = useState(() => ({
     width: typeof window === "undefined" ? 390 : window.innerWidth,
     height: typeof window === "undefined" ? 844 : window.innerHeight,
   }));
+  const [runtimeStatus, setRuntimeStatus] = useState(readRewardsRuntimeStatus);
+  const [rewardSnapshot, setRewardSnapshot] = useState<RewardSnapshotSummary>({
+    analyzedCount: 0,
+    totalMissedValue: 0,
+    badTxns: 0,
+    optimalTxns: 0,
+    topMissedTransaction: null,
+    topMissedCategories: [],
+    topMissedTransactions: [],
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -230,6 +395,14 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
       window.removeEventListener("resize", syncViewport);
       window.removeEventListener("orientationchange", syncViewport);
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const syncRuntime = () => setRuntimeStatus(readRewardsRuntimeStatus());
+    syncRuntime();
+    window.addEventListener(REWARDS_RUNTIME_UPDATED_EVENT, syncRuntime as EventListener);
+    return () => window.removeEventListener(REWARDS_RUNTIME_UPDATED_EVENT, syncRuntime as EventListener);
   }, []);
 
   // 150/100 Feature: Sign-Up Bonus Target — persisted via db (consistent with app data layer)
@@ -277,17 +450,12 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
   const compactEmbedded = embedded && viewport.height <= 820;
   const denseEmbedded = embedded && viewport.height <= 760;
   const pageGap = denseEmbedded ? 12 : compactEmbedded ? 16 : embedded ? 18 : 24;
-  const headerIconSize = denseEmbedded ? 22 : compactEmbedded ? 24 : 28;
-  const headerIconPadding = denseEmbedded ? 9 : compactEmbedded ? 10 : 12;
-  const headerTitleSize = denseEmbedded ? 21 : compactEmbedded ? 22 : 24;
-  const headerCopySize = denseEmbedded ? 12 : 14;
+  const headerTitleSize = denseEmbedded ? 22 : compactEmbedded ? 24 : 30;
+  const headerCopySize = denseEmbedded ? 12 : 13.5;
   const searchHeight = denseEmbedded ? 48 : compactEmbedded ? 50 : 52;
-  const searchButtonLabel = denseEmbedded ? "Find" : compactEmbedded ? "Find Card" : "Find Best Card";
-  const valuationButtonLabel = denseEmbedded ? "Valuations" : "Edit Point Valuations";
-  const gridGap = denseEmbedded ? 8 : compactEmbedded ? 10 : 12;
-  const categoryTileHeight = denseEmbedded ? 76 : compactEmbedded ? 84 : 96;
-  const categoryIconPadding = denseEmbedded ? 8 : compactEmbedded ? 9 : 10;
-  const categoryLabelSize = denseEmbedded ? 10 : 11;
+  const searchButtonLabel = denseEmbedded ? "See" : compactEmbedded ? "See best card" : "See best card";
+  const valuationButtonLabel = denseEmbedded ? "Point values" : "Point values";
+  const categoryTileHeight = denseEmbedded ? 92 : compactEmbedded ? 98 : 108;
 
   useEffect(() => {
     (async () => {
@@ -303,6 +471,138 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
   }, [activeCreditCards]);
 
   const customValuations = (financialConfig?.customValuations || {}) as CatalystCashConfig["customValuations"];
+  const isNarrowPhone = viewport.width <= 430;
+  const isTablet = viewport.width >= 768;
+  const isLargeTablet = viewport.width >= 1100;
+  const quickGridColumns = isLargeTablet ? "repeat(4, minmax(0, 1fr))" : isTablet ? "repeat(3, minmax(0, 1fr))" : "repeat(2, minmax(0, 1fr))";
+  const walletGridColumns = isTablet ? "repeat(3, minmax(0, 1fr))" : "repeat(2, minmax(0, 1fr))";
+  const earningsProfileColumns = isNarrowPhone ? "repeat(2, minmax(0, 1fr))" : "repeat(5, minmax(0, 1fr))";
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const stored = await getHydratedStoredTransactions();
+      const analysis = analyzeTransactionRewards(
+        stored.data as never[],
+        activeCreditCards,
+        customValuations
+      );
+
+      const topMissedTransaction = (analysis.transactions as Array<{
+        merchantName?: string | null;
+        description?: string;
+        name?: string;
+        category?: string | null;
+        optimalCard?: { name?: string } | null;
+        amount?: number;
+        rewardComparison?: { incrementalRewardValue?: number } | null;
+      }>)
+        .filter((transaction) => shouldHighlightRewardMiss(transaction.rewardComparison))
+        .map((transaction) => ({
+          merchant: String(transaction.merchantName || transaction.description || transaction.name || "Recent merchant").trim(),
+          bestCard: String(transaction.optimalCard?.name || "Better card").trim(),
+          delta: Number(transaction.rewardComparison?.incrementalRewardValue || 0),
+          category: getCategoryLabel(transaction.category, transaction.description),
+        }))
+        .sort((left, right) => right.delta - left.delta)[0] || null;
+
+      const topMissedTransactions = (analysis.transactions as Array<{
+        merchantName?: string | null;
+        description?: string;
+        name?: string;
+        category?: string | null;
+        amount?: number;
+        optimalCard?: { name?: string } | null;
+        rewardComparison?: {
+          incrementalRewardValue?: number;
+          usedDisplayName?: string;
+        } | null;
+      }>)
+        .filter((transaction) => shouldHighlightRewardMiss(transaction.rewardComparison))
+        .map((transaction) => ({
+          merchant: String(transaction.merchantName || transaction.description || transaction.name || "Recent purchase").trim(),
+          bestCard: String(transaction.optimalCard?.name || "Better card").trim(),
+          delta: Number(transaction.rewardComparison?.incrementalRewardValue || 0),
+          category: getCategoryLabel(transaction.category, transaction.description),
+          amount: Number(transaction.amount || 0),
+          usedPayment: String(transaction.rewardComparison?.usedDisplayName || "Current payment method").trim(),
+        }))
+        .sort((left, right) => right.delta - left.delta)
+        .slice(0, 6);
+
+      const categoryMissMap = new Map<string, { delta: number; bestCard: string }>();
+      (analysis.transactions as Array<{
+        category?: string | null;
+        description?: string;
+        optimalCard?: { name?: string } | null;
+        rewardComparison?: { incrementalRewardValue?: number } | null;
+      }>).forEach((transaction) => {
+        if (!shouldHighlightRewardMiss(transaction.rewardComparison)) return;
+        const label = getCategoryLabel(transaction.category, transaction.description);
+        const current = categoryMissMap.get(label) || { delta: 0, bestCard: String(transaction.optimalCard?.name || "Better card").trim() };
+        current.delta += Number(transaction.rewardComparison?.incrementalRewardValue || 0);
+        if (!current.bestCard) current.bestCard = String(transaction.optimalCard?.name || "Better card").trim();
+        categoryMissMap.set(label, current);
+      });
+
+      if (cancelled) return;
+      setRewardSnapshot({
+        analyzedCount: analysis.summary.totalTxns,
+        totalMissedValue: analysis.summary.totalMissedValue,
+        badTxns: analysis.summary.badTxns,
+        optimalTxns: analysis.summary.optimalTxns,
+        topMissedTransaction,
+        topMissedCategories: [...categoryMissMap.entries()]
+          .map(([category, value]) => ({ category, delta: value.delta, bestCard: value.bestCard }))
+          .sort((left, right) => right.delta - left.delta)
+          .slice(0, 3),
+        topMissedTransactions,
+      });
+    })().catch(() => {
+      if (!cancelled) {
+        setRewardSnapshot({
+          analyzedCount: 0,
+          totalMissedValue: 0,
+          badTxns: 0,
+          optimalTxns: 0,
+          topMissedTransaction: null,
+          topMissedCategories: [],
+          topMissedTransactions: [],
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCreditCards, customValuations]);
+
+  const categoryLeaders = useMemo<RewardCategoryLeader[]>(() => {
+    return QUICK_CATEGORIES.slice(0, 6)
+      .flatMap((category) => {
+        const sorted = activeCreditCards
+          .map((card) => {
+            const rewardInfo = getCardMultiplier(card.name, category.id, customValuations) as RewardInfo;
+            return {
+              card,
+              effectiveYield: rewardInfo.effectiveYield,
+              rateLabel: formatRewardRateShort(rewardInfo.multiplier, rewardInfo.currency),
+            };
+          })
+          .sort((left, right) => right.effectiveYield - left.effectiveYield);
+        const leader = sorted[0];
+        if (!leader) return [];
+        return [{
+          categoryId: category.id,
+          label: category.label,
+          icon: category.icon,
+          color: category.color,
+          bg: category.bg,
+          winner: leader.card,
+          effectiveYield: leader.effectiveYield,
+          rateLabel: leader.rateLabel,
+        }];
+      });
+  }, [activeCreditCards, customValuations]);
 
   const handleSearch = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -361,14 +661,13 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
       haptic.success();
     } catch (err) {
       void log.warn("card-wizard", "AI categorization failed", { error: err });
-      // Soft graceful degradation message instead of harsh red alert
-      setError("AI is temporarily unavailable or uncertain. Please verify the category below:");
+      setError("We could not place that merchant with confidence. Pick the closest category below.");
     } finally {
       setCategorizing(false);
     }
   };
 
-  const handleSelectMerchant = (merchant: MerchantOption) => {
+  const handleSelectMerchant = (merchant: MerchantOption, source = "instant") => {
     haptic.selection();
     setQuery(merchant.name);
     setError("");
@@ -378,7 +677,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
     setShowAllRunners(false);
     setResolvedCategory(merchant.category);
     setResolvedMerchant(merchant);
-    setMatchSource("instant");
+    setMatchSource(source);
     addToHistory(merchant);
   };
 
@@ -558,10 +857,45 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
   const runnersToShow = showAllRunners ? recommendations.slice(1) : recommendations.slice(1, 4);
   const winner = recommendations[0];
   const runnerUp = recommendations[1];
+  const recentMerchantChips = searchHistory.slice(0, 4);
+  const spendAmountValue = parseFloat(spendAmount) || 0;
+  const winnerEdge = winner && runnerUp ? Math.max(0, winner.effectiveYield - runnerUp.effectiveYield) : 0;
+  const winnerReturn = winner && spendAmountValue > 0 ? ((spendAmountValue * winner.effectiveYield) / 100).toFixed(2) : null;
+  const runnerUpReturn = runnerUp && spendAmountValue > 0 ? ((spendAmountValue * runnerUp.effectiveYield) / 100).toFixed(2) : null;
+  const rewardGap = winnerReturn && runnerUpReturn ? (Number(winnerReturn) - Number(runnerUpReturn)).toFixed(2) : null;
+  const resolvedCategoryLabel = formatRewardCategoryLabel(resolvedCategory);
+  const resolvedMerchantLabel = formatMerchantSurfaceLabel(resolvedMerchant?.name, resolvedCategory);
+  const hasSearchContext = Boolean(query.trim() || resolvedCategory || categorizing);
+  const compactRewardsHeader = hasSearchContext;
+  const activePageGap = compactRewardsHeader ? Math.max(12, pageGap - 8) : pageGap;
+  const activeSearchHeight = compactRewardsHeader ? (denseEmbedded ? 46 : compactEmbedded ? 48 : 50) : searchHeight;
+  const topMissedPurchaseLabel = rewardSnapshot.topMissedTransaction
+    ? formatMerchantSurfaceLabel(rewardSnapshot.topMissedTransaction.merchant, rewardSnapshot.topMissedTransaction.category)
+    : null;
+  const spendPresets = useMemo(() => {
+    const presetsByCategory: Record<string, number[]> = {
+      dining: [25, 75, 150, 250],
+      groceries: [60, 120, 180, 250],
+      gas: [35, 60, 90, 125],
+      travel: [150, 350, 750, 1500],
+      transit: [10, 25, 60, 120],
+      online_shopping: [40, 120, 250, 500],
+      streaming: [15, 25, 50, 100],
+      wholesale_clubs: [80, 160, 250, 400],
+      drugstores: [15, 35, 75, 120],
+      "catch-all": [25, 75, 200, 500],
+    };
+    return presetsByCategory[resolvedCategory || ""] || [25, 75, 150, 300];
+  }, [resolvedCategory]);
+  const topMissedMetricDetail = rewardSnapshot.topMissedTransaction
+    ? `${topMissedPurchaseLabel}. Best card: ${rewardSnapshot.topMissedTransaction.bestCard}.`
+    : "Search a merchant or tap a category to see the best card instantly.";
+  const showRecentMerchantRow = !resolvedCategory && !query.trim() && recentMerchantChips.length > 1;
+  const maxContentWidth = isTablet ? 980 : 768;
 
   return (
     <div ref={scrollRef} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", flex: 1 }}>
-      <div className="page-body" style={{ maxWidth: 768, margin: "0 auto", width: "100%", display: "flex", flexDirection: "column", gap: pageGap }}>
+      <div className="page-body" style={{ maxWidth: maxContentWidth, margin: "0 auto", width: "100%", display: "flex", flexDirection: "column", gap: activePageGap }}>
 
         {/* Pro Banner Removed - Teaser is now in the results section */}
         {showPaywall && (
@@ -571,12 +905,58 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
         )}
 
         {/* Header */}
-        <div className="fade-in" style={{ textAlign: "center", marginTop: embedded ? 0 : 8 }}>
-          <div style={{ display: "inline-flex", padding: headerIconPadding, borderRadius: 16, background: T.bg.elevated, border: `1px solid ${T.border.default}`, boxShadow: T.shadow.sm, marginBottom: denseEmbedded ? 8 : 12 }}>
-            <Sparkles color={T.accent.primary} size={headerIconSize} />
-          </div>
-          <h1 style={{ fontSize: headerTitleSize, fontWeight: 800, color: T.text.primary, marginBottom: denseEmbedded ? 4 : 6 }}>Best Card</h1>
-          <p style={{ fontSize: headerCopySize, color: T.text.secondary, maxWidth: denseEmbedded ? 280 : 320, lineHeight: 1.45, margin: "0 auto" }}>Search a merchant to see which card earns the most on your next purchase.</p>
+        <div className="fade-in" style={{ marginTop: embedded ? 0 : compactRewardsHeader ? 2 : 8, display: "grid", gap: compactRewardsHeader ? 6 : 12 }}>
+          {compactRewardsHeader ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ minWidth: 0, display: "grid", gap: 2 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                  Rewards
+                </div>
+                <div style={{ fontSize: denseEmbedded ? 16 : 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.03em", lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: isNarrowPhone ? 220 : 420 }}>
+                  {resolvedCategory && !isTyping ? `Best card for ${resolvedMerchantLabel}` : "Search rewards"}
+                </div>
+              </div>
+              <Badge
+                variant="outline"
+                style={{
+                  color: runtimeStatus.catalogVersion ? T.status.green : T.accent.primary,
+                  borderColor: runtimeStatus.catalogVersion ? `${T.status.green}30` : `${T.accent.primary}30`,
+                  background: runtimeStatus.catalogVersion ? `${T.status.green}10` : `${T.accent.primary}10`,
+                }}
+              >
+                {runtimeStatus.statusLabel}
+              </Badge>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: isNarrowPhone ? "wrap" : "nowrap" }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>
+                  Rewards
+                </div>
+                <h1 style={{ fontSize: headerTitleSize, fontWeight: 900, color: T.text.primary, marginBottom: denseEmbedded ? 4 : 6, letterSpacing: "-0.04em", lineHeight: 1.02 }}>
+                  Choose the right card
+                </h1>
+                <p style={{ fontSize: headerCopySize, color: T.text.secondary, maxWidth: 470, lineHeight: 1.55, margin: 0 }}>
+                  Search a merchant or tap a category to see the best card in your wallet, then compare the return before you pay.
+                </p>
+              </div>
+              <div style={{ display: "grid", gap: 6, justifyItems: isNarrowPhone ? "start" : "end" }}>
+                <Badge
+                  variant="outline"
+                  style={{
+                    color: runtimeStatus.catalogVersion ? T.status.green : T.accent.primary,
+                    borderColor: runtimeStatus.catalogVersion ? `${T.status.green}30` : `${T.accent.primary}30`,
+                    background: runtimeStatus.catalogVersion ? `${T.status.green}10` : `${T.accent.primary}10`,
+                  }}
+                >
+                  {runtimeStatus.statusLabel}
+                </Badge>
+                <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45, textAlign: isNarrowPhone ? "left" : "right" }}>
+                  {runtimeStatus.detailLabel}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Search Bar */}
@@ -597,7 +977,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
               setShowSuggestions(true);
               setError("");
             }}
-            placeholder="e.g. Amazon, Uber, Starbucks..."
+            placeholder="Amazon, Uber, Starbucks"
             style={{
               width: "100%",
               padding: denseEmbedded ? "12px 92px 12px 42px" : compactEmbedded ? "13px 110px 13px 44px" : "14px 140px 14px 44px",
@@ -608,7 +988,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
               fontSize: compactEmbedded ? 15 : 16,
               fontWeight: 500,
               boxShadow: T.shadow.card,
-              minHeight: searchHeight
+              minHeight: activeSearchHeight
             }}
           />
           {resolvedCategory && !isTyping ? (
@@ -682,7 +1062,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                   <div style={{ width: 12, height: 12, borderRadius: "50%", background: m.color || T.border.subtle, marginRight: 12, flexShrink: 0, boxShadow: `0 0 0 3px ${(m.color || T.border.subtle)}20` }} />
                   <div style={{ minWidth: 0 }}>
                     <span style={{ fontSize: 14, fontWeight: 700, color: T.text.primary, display: "block" }}>{m.name}</span>
-                    <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, textTransform: "uppercase", letterSpacing: "0.04em" }}>{m.category.replace(/_/g, " ")}</span>
+                    <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, textTransform: "uppercase", letterSpacing: "0.04em" }}>{formatRewardCategoryLabel(m.category)}</span>
                   </div>
                 </button>
               ))}
@@ -707,7 +1087,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                   <Clock size={14} color={T.text.dim} style={{ marginRight: 12, flexShrink: 0 }} />
                   <div style={{ minWidth: 0 }}>
                     <span style={{ fontSize: 14, fontWeight: 700, color: T.text.primary, display: "block" }}>{m.name}</span>
-                    <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, textTransform: "uppercase", letterSpacing: "0.04em" }}>{m.category.replace(/_/g, " ")}</span>
+                    <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, textTransform: "uppercase", letterSpacing: "0.04em" }}>{formatRewardCategoryLabel(m.category)}</span>
                   </div>
                 </button>
               ))}
@@ -715,23 +1095,235 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
           )}
         </form>
 
-        {/* Nearby Suggest + Point Valuations */}
         {(!resolvedCategory || showValuations) && !categorizing && (
-          <div className="fade-in">
-            <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 8 }}>
-              <GeoSuggestWidget />
+          <div className="fade-in" style={{ display: "flex", justifyContent: "flex-start", flexWrap: "wrap", gap: 8 }}>
+            <GeoSuggestWidget
+              onMerchantSelect={(merchant) => handleSelectMerchant(merchant, "nearby")}
+            />
+            <button type="button"
+              className="hover-btn"
+              onClick={() => { haptic.selection(); setShowValuations(!showValuations); }}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: denseEmbedded ? "7px 10px" : "8px 12px", borderRadius: 20, background: `linear-gradient(180deg, ${T.bg.surface}, ${T.bg.card})`, border: `1px solid ${T.border.subtle}`, color: T.text.secondary, fontSize: 12, fontWeight: 700, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)" }}
+            >
+              <Settings2 size={14} />
+              {showValuations ? "Hide point values" : valuationButtonLabel}
+              <ChevronDown size={14} style={{ transform: showValuations ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }} />
+            </button>
+          </div>
+        )}
+
+        {showRecentMerchantRow && (
+          <div className="fade-in" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: -4 }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              Recent
+            </span>
+            {recentMerchantChips.map((merchant) => (
               <button
-                className="hover-btn"
-                onClick={() => { haptic.selection(); setShowValuations(!showValuations); }}
-                style={{ display: "flex", alignItems: "center", gap: 8, padding: denseEmbedded ? "7px 10px" : "8px 12px", borderRadius: 20, background: `linear-gradient(180deg, ${T.bg.surface}, ${T.bg.card})`, border: `1px solid ${T.border.subtle}`, color: T.text.secondary, fontSize: 12, fontWeight: 700, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)" }}
+                key={`${merchant.name}-${merchant.category}`}
+                type="button"
+                onClick={() => handleSelectMerchant(merchant)}
+                style={{
+                  minHeight: 32,
+                  padding: "0 12px",
+                  borderRadius: 999,
+                  border: `1px solid ${T.border.subtle}`,
+                  background: T.bg.surface,
+                  color: T.text.secondary,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
               >
-                <Settings2 size={14} />
-                {showValuations ? "Hide Values" : valuationButtonLabel}
-                <ChevronDown size={14} style={{ transform: showValuations ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }} />
+                {merchant.name}
               </button>
+            ))}
+          </div>
+        )}
+
+        {!resolvedCategory && !showValuations && !categorizing && !error && (
+          <Card
+            variant="glass"
+            className="fade-in"
+            style={{
+              padding: isNarrowPhone ? "16px 14px" : "18px 18px",
+              borderRadius: 24,
+              display: "grid",
+              gap: 14,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: isNarrowPhone ? "wrap" : "nowrap" }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+                  This month
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em", marginBottom: 4 }}>
+                  See where your wallet is working and where it is leaking
+                </div>
+                <div style={{ fontSize: 12.5, color: T.text.secondary, lineHeight: 1.55, maxWidth: 520 }}>
+                  Search a merchant for an exact answer, or use the category winners below for the purchases you make most often.
+                </div>
+              </div>
+              <Badge variant="outline" style={{ color: T.accent.primary, borderColor: `${T.accent.primary}35`, background: `${T.accent.primary}10` }}>
+                {activeCreditCards.length} cards
+              </Badge>
             </div>
 
-            <div className="collapse-section" data-collapsed={!showValuations} style={{ marginTop: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: walletGridColumns, gap: 10 }}>
+              {[
+                {
+                  label: "Missed rewards",
+                  value: rewardSnapshot.totalMissedValue > 0 ? formatCompactCurrency(rewardSnapshot.totalMissedValue) : "$0",
+                  detail: rewardSnapshot.badTxns > 0 ? `${rewardSnapshot.badTxns} purchases could have earned more` : "No meaningful misses found",
+                  icon: TrendingUp,
+                  tone: rewardSnapshot.totalMissedValue > 0 ? T.status.amber : T.status.green,
+                  action: rewardSnapshot.topMissedTransactions.length > 0 ? "missed" : null,
+                },
+                {
+                  label: "Purchases scored",
+                  value: `${rewardSnapshot.analyzedCount}`,
+                  detail: rewardSnapshot.optimalTxns > 0 ? `${rewardSnapshot.optimalTxns} already used the best card` : "Link recent card activity to score more purchases",
+                  icon: Target,
+                  tone: T.text.primary,
+                },
+                {
+                  label: "Largest missed reward",
+                  value: rewardSnapshot.topMissedTransaction ? formatCompactCurrency(rewardSnapshot.topMissedTransaction.delta) : "Clear",
+                  detail: topMissedMetricDetail,
+                  icon: Wallet,
+                  tone: rewardSnapshot.topMissedTransaction ? T.accent.primary : T.status.green,
+                  featured: true,
+                  action: rewardSnapshot.topMissedTransactions.length > 0 ? "missed" : null,
+                },
+              ].map((metric) => {
+                const Icon = metric.icon;
+                const isSelected = metric.action === "missed" && selectedInsight === "missed";
+                return (
+                  <button
+                    key={metric.label}
+                    type="button"
+                    onClick={() => {
+                      if (!metric.action) return;
+                      haptic.selection();
+                      setSelectedInsight(selectedInsight === "missed" ? null : "missed");
+                    }}
+                    style={{
+                      padding: "12px 12px 11px",
+                      borderRadius: 18,
+                      border: `1px solid ${isSelected ? `${metric.tone}40` : T.border.subtle}`,
+                      background: isSelected ? `${metric.tone}10` : T.bg.surface,
+                      minWidth: 0,
+                      gridColumn: metric.featured && !isTablet ? "1 / -1" : undefined,
+                      textAlign: "left",
+                      cursor: metric.action ? "pointer" : "default",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 10, background: `${metric.tone}12`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Icon size={14} color={metric.tone} />
+                      </div>
+                      <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        {metric.label}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 17, fontWeight: 900, color: metric.tone, letterSpacing: "-0.03em", lineHeight: 1.08 }}>
+                      {metric.value}
+                    </div>
+                    <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45, marginTop: 6 }}>
+                      {metric.detail}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {rewardSnapshot.topMissedCategories.length > 0 && (
+              <div style={{ display: "grid", gap: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  Top missed categories
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {rewardSnapshot.topMissedCategories.map((category) => (
+                  <div
+                    key={category.category}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 16,
+                      border: `1px solid ${T.border.subtle}`,
+                      background: T.bg.surface,
+                      display: "grid",
+                      gap: 2,
+                    }}
+                  >
+                    <div style={{ fontSize: 11, fontWeight: 800, color: T.text.primary }}>
+                      {category.category} · {formatCompactCurrency(category.delta)}
+                    </div>
+                    <div style={{ fontSize: 10, color: T.text.secondary, lineHeight: 1.4 }}>
+                      Use {category.bestCard}
+                    </div>
+                  </div>
+                ))}
+                </div>
+              </div>
+            )}
+
+            {selectedInsight === "missed" && rewardSnapshot.topMissedTransactions.length > 0 && (
+              <div style={{ display: "grid", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    Missed reward details
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptic.selection();
+                      setSelectedInsight(null);
+                    }}
+                    style={{ border: "none", background: "transparent", color: T.text.dim, fontSize: 10, fontWeight: 700, cursor: "pointer" }}
+                  >
+                    Hide
+                  </button>
+                </div>
+                <div style={{ display: "grid", gap: 8 }}>
+                  {rewardSnapshot.topMissedTransactions.map((transaction, index) => (
+                    <div
+                      key={`${transaction.merchant}-${transaction.delta}-${index}`}
+                      style={{
+                        padding: "12px",
+                        borderRadius: 16,
+                        border: `1px solid ${T.border.subtle}`,
+                        background: T.bg.surface,
+                        display: "grid",
+                        gap: 6,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, lineHeight: 1.25 }}>
+                            {formatMerchantSurfaceLabel(transaction.merchant, transaction.category)}
+                          </div>
+                          <div style={{ fontSize: 10.5, color: T.text.dim, marginTop: 4 }}>
+                            {transaction.category}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 16, fontWeight: 900, color: T.status.amber, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
+                          {formatCompactCurrency(transaction.delta)}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>
+                        Use <span style={{ color: T.text.primary, fontWeight: 700 }}>{transaction.bestCard}</span> instead of {transaction.usedPayment}.
+                        {transaction.amount > 0 ? ` Purchase size: ${formatCompactCurrency(transaction.amount)}.` : ""}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
+
+        {showValuations && !categorizing && (
+          <div className="fade-in">
+            <div className="collapse-section" data-collapsed={!showValuations}>
               <FormGroup label="Cents Per Point (CPP) Overrides">
                 {Object.entries(VALUATIONS).map(([currency, defaultVal], idx, arr) => {
                   const isCustom = customValuations[currency] !== undefined;
@@ -747,7 +1339,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                           Mkt: {defaultVal}
                         </span>
                         {isCustom && (
-                          <button
+                          <button type="button"
                             className="hover-btn"
                             onClick={() => updateCPPToDefault(currency)}
                             style={{ background: "transparent", border: "none", color: T.text.dim, fontSize: 11, cursor: "pointer", textDecoration: "underline" }}
@@ -772,9 +1364,8 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                   );
                 })}
               </FormGroup>
-              {/* Reset All */}
               {Object.keys(customValuations).length > 0 && (
-                <button
+                <button type="button"
                   className="hover-btn"
                   onClick={() => {
                     haptic.selection();
@@ -796,30 +1387,60 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
 
         {/* Quick Select Bento Grid */}
         {!resolvedCategory && !isTyping && !showValuations && !error && (
-          <div style={{ maxWidth: denseEmbedded ? 460 : 500, margin: "0 auto", width: "100%" }}>
-            <div className="stagger-container" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: gridGap }}>
-              {QUICK_CATEGORIES.map((cat, idx) => {
-              const Icon = cat.icon;
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => handleQuickSelect(cat.id)}
-                  className="card-press"
-                  style={{
-                    height: categoryTileHeight, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                    padding: denseEmbedded ? 6 : 8, borderRadius: 16, background: "transparent", border: `1px solid ${T.border.subtle}`,
-                    animationDelay: `${idx * 0.05}s`
-                  }}
-                >
-                  <div style={{ padding: categoryIconPadding, borderRadius: 12, background: cat.bg, marginBottom: denseEmbedded ? 6 : 8, pointerEvents: "none" }}>
-                    <Icon size={denseEmbedded ? 18 : 20} color={cat.color} />
-                  </div>
-                  <span style={{ fontSize: categoryLabelSize, fontWeight: 700, color: T.text.secondary }}>{cat.label}</span>
-                </button>
-              );
-            })}
+          <Card variant="glass" style={{ padding: isNarrowPhone ? "16px 14px" : "18px", borderRadius: 24, display: "grid", gap: 14 }}>
+            <div style={{ display: "grid", gap: 4 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>
+                Quick picks
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em" }}>
+                Best card by everyday category
+              </div>
+              <div style={{ fontSize: 12.5, color: T.text.secondary, lineHeight: 1.55, maxWidth: 560 }}>
+                Tap a category to jump straight into the current winner for that type of purchase.
+              </div>
             </div>
-          </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: quickGridColumns, gap: 10 }}>
+              {categoryLeaders.map((leader) => {
+                const Icon = leader.icon;
+                return (
+                  <button
+                    key={leader.categoryId}
+                    type="button"
+                    onClick={() => handleQuickSelect(leader.categoryId)}
+                    className="hover-btn"
+                    style={{
+                      minHeight: categoryTileHeight,
+                      padding: "14px 14px 13px",
+                      borderRadius: 20,
+                      border: `1px solid ${T.border.subtle}`,
+                      background: T.bg.surface,
+                      textAlign: "left",
+                      display: "grid",
+                      gap: 10,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 12, background: leader.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Icon size={18} color={leader.color} />
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: leader.color }}>{leader.rateLabel}</span>
+                    </div>
+                    <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em" }}>{leader.label}</div>
+                      <div style={{ fontSize: 11.5, color: T.text.secondary, lineHeight: 1.45 }}>
+                        {leader.winner?.name || "No winner yet"}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, color: T.text.dim, fontWeight: 700 }}>
+                      {leader.effectiveYield.toFixed(1)}% effective value
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
         )}
 
         {/* Error + Manual Category Selector */}
@@ -829,11 +1450,11 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
               <Info size={18} color={T.text.dim} style={{ flexShrink: 0, marginTop: 2 }} />
               <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: T.text.secondary }}>{error}</p>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: quickGridColumns, gap: 8 }}>
               {QUICK_CATEGORIES.map((cat) => {
                 const Icon = cat.icon;
                 return (
-                  <button
+                  <button type="button"
                     key={cat.id}
                     onClick={() => handleManualCategory(cat.id)}
                     className="card-press"
@@ -864,12 +1485,64 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
         {resolvedCategory && recommendations.length > 0 && winner && !isTyping && !categorizing && (
           <div className="stagger-container" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 4px" }}>
-               <Badge variant="purple">{matchSource === "ai" ? "AI Matched" : matchSource === "keyword" ? "Keyword Match" : matchSource === "category" ? "Category" : "Instant Match"}</Badge>
-               <h3 style={{ fontSize: 12, fontWeight: 800, color: T.text.primary, textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 }}>
-                 {resolvedCategory.replace(/_/g, " ")}
-               </h3>
-            </div>
+            <Card variant="glass" style={{ padding: isNarrowPhone ? "16px 14px" : "18px", borderRadius: 24, display: "grid", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+                    Best match
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
+                    {resolvedMerchantLabel || "Selected category"}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: T.text.secondary, lineHeight: 1.55, marginTop: 6 }}>
+                    Catalyst matched this purchase to <span style={{ color: T.text.primary, fontWeight: 700 }}>{resolvedCategoryLabel}</span> and ranked your wallet by expected return.
+                  </div>
+                </div>
+                <Badge variant="purple">{formatMatchSourceLabel(matchSource)}</Badge>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: walletGridColumns, gap: 10 }}>
+                <div style={{ padding: "12px 12px 11px", borderRadius: 18, border: `1px solid ${T.border.subtle}`, background: T.bg.surface }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.06em" }}>Best card</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 10, alignItems: "center", marginTop: 8 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 16, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
+                        {winner.name}
+                      </div>
+                      <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45, marginTop: 6 }}>
+                        {formatRewardRate(winner.currentMultiplier, winner.currency)}
+                      </div>
+                    </div>
+                    <div style={{ width: 94, flexShrink: 0 }}>
+                      <RewardCardVisual
+                        card={winner}
+                        size="mini"
+                        subtitle={winner.institution || "Best pick"}
+                        highlight={formatRewardRateShort(winner.currentMultiplier, winner.currency)}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div style={{ padding: "12px 12px 11px", borderRadius: 18, border: `1px solid ${T.border.subtle}`, background: T.bg.surface }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.06em" }}>Lead over backup</div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: winnerEdge > 0 ? T.status.green : T.text.primary, marginTop: 6, letterSpacing: "-0.02em" }}>
+                    {runnerUp ? `${winnerEdge.toFixed(1)}%` : "Only option"}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45, marginTop: 6 }}>
+                    {runnerUp ? rewardGap ? `About $${rewardGap} more than ${runnerUp.name} on this purchase.` : `${runnerUp.name} is next in line.` : "No second card in this wallet."}
+                  </div>
+                </div>
+                <div style={{ padding: "12px 12px 11px", borderRadius: 18, border: `1px solid ${T.border.subtle}`, background: T.bg.surface, gridColumn: isTablet ? "auto" : "1 / -1" }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.06em" }}>Estimated return</div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: winnerReturn ? T.accent.primary : T.text.primary, marginTop: 6, letterSpacing: "-0.02em" }}>
+                    {winnerReturn ? `$${winnerReturn}` : "Add spend amount"}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45, marginTop: 6 }}>
+                    {winnerReturn ? `On a ${formatCompactCurrency(spendAmountValue)} purchase.` : "Add an amount to see dollar estimates instead of just earn rates."}
+                  </div>
+                </div>
+              </div>
+            </Card>
 
             {/* Controversial Merchant Warning */}
             {(() => {
@@ -888,62 +1561,145 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
             })()}
 
             {/* Spend Amount Input */}
-            <div className="fade-in" style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 4px" }}>
-              <DollarSign size={16} color={T.text.dim} />
-              <input
-                type="number"
-                inputMode="decimal"
-                placeholder="Spend amount (optional)"
-                value={spendAmount}
-                onChange={(e) => setSpendAmount(e.target.value)}
-                style={{
-                  flex: 1, padding: "10px 12px", background: T.bg.surface,
-                  border: `1px solid ${T.border.default}`, borderRadius: 12,
-                  color: T.text.primary, fontSize: 14, minHeight: 40,
-                }}
-              />
-              {spendAmount && (
-                <button className="hover-btn" onClick={() => setSpendAmount("")}
-                  style={{ background: "transparent", border: "none", color: T.text.dim, padding: 4 }}>
-                  <X size={14} />
-                </button>
-              )}
-            </div>
+            <Card variant="glass" className="fade-in" style={{ padding: isNarrowPhone ? "14px" : "16px", borderRadius: 22, display: "grid", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+                    Purchase size
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.02em" }}>
+                    See the return before you tap to pay
+                  </div>
+                  <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.5, marginTop: 6, maxWidth: 520 }}>
+                    Amount is optional, but it unlocks dollar estimates and shows how much the winning card beats your backup on this exact purchase.
+                  </div>
+                </div>
+                {rewardGap ? (
+                  <Badge variant="outline" style={{ color: T.status.green, borderColor: `${T.status.green}35`, background: `${T.status.green}12` }}>
+                    +${rewardGap} vs backup
+                  </Badge>
+                ) : null}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: isNarrowPhone ? "1fr" : "minmax(0, 1fr) auto", gap: 10, alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 4px" }}>
+                  <DollarSign size={16} color={T.text.dim} />
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="Spend amount (optional)"
+                    value={spendAmount}
+                    onChange={(e) => setSpendAmount(e.target.value)}
+                    style={{
+                      flex: 1, padding: "10px 12px", background: T.bg.surface,
+                      border: `1px solid ${T.border.default}`, borderRadius: 12,
+                      color: T.text.primary, fontSize: 14, minHeight: 42,
+                    }}
+                  />
+                  {spendAmount && (
+                    <button type="button" className="hover-btn" onClick={() => setSpendAmount("")}
+                      style={{ background: "transparent", border: "none", color: T.text.dim, padding: 4 }}>
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                {winnerReturn ? (
+                  <div style={{ padding: "11px 12px", borderRadius: 14, border: `1px solid ${T.border.subtle}`, background: T.bg.surface, minWidth: 0 }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Best card earns
+                    </div>
+                    <div style={{ fontSize: 17, fontWeight: 900, color: T.accent.primary, marginTop: 5, letterSpacing: "-0.02em" }}>
+                      ${winnerReturn}
+                    </div>
+                    <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45, marginTop: 4 }}>
+                      {runnerUpReturn ? `${runnerUp?.name} earns $${runnerUpReturn}.` : "No backup card to compare."}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {spendPresets.map((amount) => (
+                  <button
+                    key={amount}
+                    type="button"
+                    onClick={() => {
+                      haptic.selection();
+                      setSpendAmount(String(amount));
+                    }}
+                    style={{
+                      minHeight: 34,
+                      padding: "0 12px",
+                      borderRadius: 999,
+                      border: `1px solid ${spendAmountValue === amount ? `${T.accent.primary}40` : T.border.subtle}`,
+                      background: spendAmountValue === amount ? `${T.accent.primary}14` : T.bg.surface,
+                      color: spendAmountValue === amount ? T.accent.primary : T.text.secondary,
+                      fontSize: 11,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {formatCompactCurrency(amount)}
+                  </button>
+                ))}
+              </div>
+            </Card>
 
             {/* Minimalist Winner Card */}
             <div style={{ position: "relative" }}>
               <Card
                 className="slide-up"
                 style={{
-                  position: "relative", zIndex: 1, padding: "20px 24px", borderRadius: 24, overflow: "hidden",
+                  position: "relative", zIndex: 1, padding: isNarrowPhone ? "18px 16px" : "20px 24px", borderRadius: 24, overflow: "hidden",
                   border: `1px solid ${T.border.default}`,
                   background: T.bg.card,
                   display: "flex", flexDirection: "column", gap: 16
                 }}
               >
-                {/* Top Row: Institution + Chip */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <h3 style={{ fontSize: 13, fontWeight: 700, margin: 0, color: T.text.secondary, letterSpacing: "0.02em" }}>
-                    {winner.institution || "Credit Card"}
-                  </h3>
-                  <Badge variant="teal" style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase" }}>
-                    <Check size={10} style={{ marginRight: 4 }} />
-                    Optimal Choice
-                  </Badge>
-                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: isTablet ? "minmax(0, 1fr) 214px" : "1fr",
+                    gap: 16,
+                    alignItems: "stretch",
+                  }}
+                >
+                  <div style={{ display: "grid", gap: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: isNarrowPhone ? "wrap" : "nowrap" }}>
+                      <div>
+                        <h3 style={{ fontSize: 13, fontWeight: 700, margin: 0, color: T.text.secondary, letterSpacing: "0.02em" }}>
+                          {winner.institution || "Credit Card"}
+                        </h3>
+                        <p style={{ margin: "6px 0 0", fontSize: 11, color: T.text.dim, lineHeight: 1.45 }}>
+                          Best choice for {resolvedMerchantLabel}.
+                        </p>
+                      </div>
+                      <Badge variant="teal" style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase" }}>
+                        <Check size={10} style={{ marginRight: 4 }} />
+                        Best pick
+                      </Badge>
+                    </div>
 
-                {/* Middle: Card Name & Yields */}
-                <div style={{ padding: "8px 0" }}>
-                  <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 4px 0", color: T.text.primary, lineHeight: 1.2 }}>
-                    {winner.name}
-                  </h2>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600, color: T.text.secondary }}>
-                    <Sparkles size={14} color={T.accent.emerald} />
-                    <span>{formatRewardRate(winner.multiplier, winner.currency)}</span>
+                    <div style={{ padding: "2px 0 0" }}>
+                      <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 4px 0", color: T.text.primary, lineHeight: 1.2 }}>
+                        {winner.name}
+                      </h2>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600, color: T.text.secondary }}>
+                        <Sparkles size={14} color={T.accent.emerald} />
+                        <span>{formatRewardRate(winner.multiplier, winner.currency)}</span>
+                      </div>
+                    </div>
                   </div>
+
+                  <RewardCardVisual
+                    card={winner}
+                    size={isTablet ? "hero" : "compact"}
+                    subtitle={formatRewardCategoryLabel(winner.effectiveCategory || resolvedCategory)}
+                    highlight={winnerReturn ? `$${winnerReturn}` : formatRewardRateShort(winner.currentMultiplier, winner.currency)}
+                    style={{ minHeight: isTablet ? 122 : 94 }}
+                  />
                 </div>
 
-                {/* Bottom: Yield Badge */}
                 <div>
                   <button
                     type="button"
@@ -956,43 +1712,43 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                         border: winner.id === subTargetId ? "none" : `1px solid ${T.border.default}`, 
                         fontSize: 11, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6,
                         boxShadow: winner.id === subTargetId ? T.shadow.sm : "none",
-                        transition: "all 0.2s ease"
+                        transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease"
                       }}
                     >
                       <Package size={12} fill={winner.id === subTargetId ? "currentColor" : "none"} />
-                      {winner.id === subTargetId ? "Working on Sign-Up Bonus" : "Targeting Sign-Up Bonus?"}
+                      {winner.id === subTargetId ? "Bonus focus enabled" : "Set bonus focus"}
                     </button>
-                  </div>
+                </div>
 
-                  <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
-                    <div>
-                      <p style={{ fontSize: 11, fontWeight: 700, margin: "0 0 4px 0", color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                        {winner.id === subTargetId ? "Priority Override" : "Effective Yield"}
-                      </p>
-                      <div className="score-pop" style={{ fontSize: winner.id === subTargetId ? 32 : 44, fontWeight: 900, letterSpacing: "-0.04em", margin: 0, lineHeight: 1, filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.08))", color: winner.id === subTargetId ? T.accent.primary : T.status.green }}>
-                        {winner.id === subTargetId ? "SUB TARGET" : `${winner.effectiveYield}%`}
-                      </div>
-                      <p style={{ fontSize: 13, fontWeight: 600, marginTop: 8, color: T.text.secondary }}>
-                        {formatRewardRate(winner.currentMultiplier, winner.currency)} on {(winner.effectiveCategory || resolvedCategory).replace(/_/g, " ")}
-                        {winner.cpp !== 1.0 ? ` (${formatRewardNumber(winner.currentMultiplier * winner.cpp)}% effective yield)` : ""}
-                        {winner.issuerCategory && winner.issuerCategory !== resolvedCategory && (
-                          <span style={{ fontSize: 10, color: T.text.dim, fontWeight: 500 }}> (coded as {winner.issuerCategory.replace(/_/g, " ")} at {winner.institution})</span>
-                        )}
-                      </p>
-                      {dollarReturn(winner.effectiveYield) && winner.id !== subTargetId && (
-                        <p style={{ fontSize: 15, fontWeight: 800, marginTop: 4, color: T.text.primary }}>
-                          ${dollarReturn(winner.effectiveYield)} back
-                        </p>
-                      )}
+                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: isNarrowPhone ? "wrap" : "nowrap" }}>
+                  <div>
+                    <p style={{ fontSize: 11, fontWeight: 700, margin: "0 0 4px 0", color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      {winner.id === subTargetId ? "Bonus focus" : "Expected value"}
+                    </p>
+                    <div className="score-pop" style={{ fontSize: winner.id === subTargetId ? 32 : 44, fontWeight: 900, letterSpacing: "-0.04em", margin: 0, lineHeight: 1, filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.08))", color: winner.id === subTargetId ? T.accent.primary : T.status.green }}>
+                      {winner.id === subTargetId ? "Bonus focus" : `${winner.effectiveYield}%`}
                     </div>
-
-                    {winner.utilization > 0 && runnerUp && winner.effectiveYield === runnerUp.effectiveYield && (
-                      <div style={{ background: T.bg.surface, padding: "6px 10px", borderRadius: 8, border: `1px solid ${T.border.subtle}`, display: "flex", alignItems: "center", gap: 6, color: T.text.secondary }}>
-                         <Info size={12} color={T.text.dim} />
-                         <span style={{ fontSize: 10, fontWeight: 700 }}>Low Util.</span>
-                      </div>
+                    <p style={{ fontSize: 13, fontWeight: 600, marginTop: 8, color: T.text.secondary }}>
+                      {formatRewardRate(winner.currentMultiplier, winner.currency)} on {formatRewardCategoryLabel(winner.effectiveCategory || resolvedCategory)}
+                      {winner.cpp !== 1.0 ? ` (${formatRewardNumber(winner.currentMultiplier * winner.cpp)}% value)` : ""}
+                      {winner.issuerCategory && winner.issuerCategory !== resolvedCategory && (
+                        <span style={{ fontSize: 10, color: T.text.dim, fontWeight: 500 }}> (coded as {formatRewardCategoryLabel(winner.issuerCategory)} at {winner.institution})</span>
+                      )}
+                    </p>
+                    {dollarReturn(winner.effectiveYield) && winner.id !== subTargetId && (
+                      <p style={{ fontSize: 15, fontWeight: 800, marginTop: 4, color: T.text.primary }}>
+                        About ${dollarReturn(winner.effectiveYield)} back
+                      </p>
                     )}
                   </div>
+
+                  {winner.utilization > 0 && runnerUp && winner.effectiveYield === runnerUp.effectiveYield && (
+                    <div style={{ background: T.bg.surface, padding: "6px 10px", borderRadius: 8, border: `1px solid ${T.border.subtle}`, display: "flex", alignItems: "center", gap: 6, color: T.text.secondary }}>
+                       <Info size={12} color={T.text.dim} />
+                       <span style={{ fontSize: 10, fontWeight: 700 }}>Lower balance impact</span>
+                    </div>
+                  )}
+                </div>
               </Card>
             </div>
 
@@ -1001,7 +1757,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                 {winner.cpp !== 1.0 && (
                   <p className="fade-in" style={{ fontSize: 12, fontWeight: 500, color: T.text.secondary, display: "flex", alignItems: "center", gap: 6, margin: "16px 0 12px 12px", animationDelay: "0.3s" }}>
                      <Info size={14} color={T.text.dim} />
-                     Yield applies <span style={{ color: T.text.primary, fontWeight: 700 }}>{winner.cpp}¢</span> point valuation ({formatRewardRate(winner.currentMultiplier, winner.currency)} current rate).
+                     Value assumes <span style={{ color: T.text.primary, fontWeight: 700 }}>{winner.cpp}¢</span> per point ({formatRewardRate(winner.currentMultiplier, winner.currency)} current earn rate).
                   </p>
                 )}
                 <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1036,10 +1792,9 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                     <div className="fade-in" style={{ padding: 12, borderRadius: 12, background: T.status.amberDim, border: `1px solid rgba(224, 168, 77, 0.2)`, display: "flex", alignItems: "flex-start", gap: 10, animationDelay: "0.5s" }}>
                       <AlertCircle size={16} color={T.status.amber} style={{ marginTop: 2, flexShrink: 0 }} />
                       <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: T.status.amber }}>
-                        Conditional Max: Could earn up to {formatRewardRate(winner.potentialMax || winner.currentMultiplier, winner.currency)}
-                        ({parseFloat(((winner.potentialMax || winner.currentMultiplier) * winner.cpp).toFixed(2))}% yield)
-                        if {resolvedCategory.replace(/_/g, " ")} is your top spend category.
-                        Otherwise {parseFloat((winner.baseMultiplier * winner.cpp).toFixed(2))}%.
+                        Conditional bonus: this card can reach {formatRewardRate(winner.potentialMax || winner.currentMultiplier, winner.currency)}
+                        ({parseFloat(((winner.potentialMax || winner.currentMultiplier) * winner.cpp).toFixed(2))}% value)
+                        if {resolvedCategoryLabel.toLowerCase()} is your top spend category. Otherwise it falls back to {parseFloat((winner.baseMultiplier * winner.cpp).toFixed(2))}%.
                       </p>
                     </div>
                   )}
@@ -1047,7 +1802,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                     <div className="fade-in" style={{ padding: 12, borderRadius: 12, background: T.status.purpleDim, border: `1px solid rgba(155, 111, 212, 0.2)`, display: "flex", alignItems: "flex-start", gap: 10, animationDelay: "0.5s" }}>
                       <RotateCw size={16} color={T.status.purple} style={{ marginTop: 2, flexShrink: 0 }} />
                       <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: T.status.purple }}>
-                        Rotating Category: This card offers {formatRewardRate(winner.rotating, winner.currency)} on quarterly rotating categories. Check if {resolvedCategory.replace(/_/g, " ")} qualifies this quarter.
+                        Rotating bonus: this card offers {formatRewardRate(winner.rotating, winner.currency)} on quarterly bonus categories. Confirm that {resolvedCategoryLabel.toLowerCase()} qualifies this quarter.
                       </p>
                     </div>
                   )}
@@ -1055,7 +1810,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                     <div className="fade-in" style={{ padding: 12, borderRadius: 12, background: T.status.blueDim, border: `1px solid rgba(107, 163, 232, 0.2)`, display: "flex", alignItems: "flex-start", gap: 10, animationDelay: "0.5s" }}>
                       <Smartphone size={16} color={T.status.blue} style={{ marginTop: 2, flexShrink: 0 }} />
                       <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: T.status.blue }}>
-                        Mobile Wallet Bonus: Earns {formatRewardRate(winner.mobileWallet, winner.currency)} on wallet purchases made via Apple Pay, Google Pay, or Samsung Pay.
+                        Mobile wallet bonus: earns {formatRewardRate(winner.mobileWallet, winner.currency)} when you pay with Apple Pay, Google Pay, or Samsung Pay.
                       </p>
                     </div>
                   )}
@@ -1070,15 +1825,14 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                 {/* ── Full Earning Profile ── */}
                 {(() => {
                   const allCats = ["dining", "groceries", "gas", "travel", "transit", "online_shopping", "streaming", "wholesale_clubs", "drugstores", "catch-all"];
-                  const catLabels = { dining: "Dining", groceries: "Groceries", gas: "Gas", travel: "Travel", transit: "Transit", online_shopping: "Online", streaming: "Streaming", wholesale_clubs: "Wholesale", drugstores: "Pharmacy", "catch-all": "Everything Else" };
                   const profile = allCats.map(cat => {
                     const info = getCardMultiplier(winner.name, cat, customValuations);
-                    return { cat, label: catLabels[cat] || cat, multiplier: info.multiplier, currency: info.currency, yield: info.effectiveYield, active: cat === (winner.effectiveCategory || resolvedCategory) };
+                    return { cat, label: formatRewardCategoryLabel(cat), multiplier: info.multiplier, currency: info.currency, yield: info.effectiveYield, active: cat === (winner.effectiveCategory || resolvedCategory) };
                   });
                   return (
                     <div className="fade-in" style={{ marginTop: 16, animationDelay: "0.5s" }}>
-                      <p style={{ fontSize: 11, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8, paddingLeft: 4 }}>Full Earning Profile</p>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4 }}>
+                      <p style={{ fontSize: 11, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8, paddingLeft: 4 }}>Rewards by category</p>
+                      <div style={{ display: "grid", gridTemplateColumns: earningsProfileColumns, gap: 4 }}>
                         {profile.map(p => (
                           <div key={p.cat} style={{
                             padding: "6px 4px", borderRadius: 8, textAlign: "center",
@@ -1098,7 +1852,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
             {/* Runners Up Teaser (Free) */}
             {!proEnabled && recommendations.length > 1 && (
               <div style={{ marginTop: 24, position: "relative" }}>
-                <h3 style={{ fontSize: 12, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16, paddingLeft: 4 }}>Runner Up Options</h3>
+                <h3 style={{ fontSize: 12, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16, paddingLeft: 4 }}>Other strong options</h3>
                 
                 {/* Blurred mock up */}
                 <div style={{ opacity: 0.25, filter: "blur(6px)", pointerEvents: "none", userSelect: "none", display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1115,7 +1869,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                      </div>
                      <h4 style={{ fontSize: 18, fontWeight: 800, color: T.text.primary, margin: "0 0 8px 0", letterSpacing: "-0.02em" }}>Unlock All Rankers</h4>
                      <p style={{ fontSize: 13, color: T.text.secondary, margin: "0 auto 20px", lineHeight: 1.5 }}>Upgrade to Catalyst Cash Pro to see every card in your wallet modeled to this purchase.</p>
-                     <button
+                     <button type="button"
                        onClick={() => { haptic.medium(); setShowPaywall(true); }}
                        className="hover-lift"
                        style={{ background: T.accent.primary, color: "#fff", border: "none", padding: "14px 24px", borderRadius: 16, fontSize: 14, fontWeight: 800, cursor: "pointer", width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
@@ -1131,35 +1885,43 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
             {/* Runners Up (Pro) */}
             {proEnabled && recommendations.length > 1 && (
               <div style={{ marginTop: 8 }}>
-                <h3 style={{ fontSize: 12, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12, paddingLeft: 4 }}>Runner Up Options</h3>
-                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                <h3 style={{ fontSize: 12, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12, paddingLeft: 4 }}>Other strong options</h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: 0, borderRadius: 20, overflow: "hidden", border: `1px solid ${T.border.subtle}`, background: T.bg.card }}>
                   {runnersToShow.map((card, idx) => (
                     <div key={card.id + idx} className="fade-in" style={{ 
-                        display: "flex", alignItems: "center", justifyContent: "space-between", 
+                        display: "grid", gridTemplateColumns: isNarrowPhone ? "1fr" : "minmax(0, 1fr) auto", alignItems: "center", gap: 12,
                         padding: "16px 16px",
                         borderBottom: idx === runnersToShow.length - 1 ? "none" : `1px solid ${T.border.subtle}`,
                         animationDelay: `${idx * 0.05}s`
                       }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, minWidth: 0 }}>
                          {/* Rank Badge */}
                          <div style={{ width: 24, height: 24, borderRadius: 12, background: "transparent", border: `1px solid ${T.border.subtle}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: T.text.secondary, flexShrink: 0 }}>
                            {idx + 2}
                          </div>
-                         <div>
+                         <div style={{ width: 72, flexShrink: 0 }}>
+                           <RewardCardVisual
+                             card={card}
+                             size="mini"
+                             subtitle={card.institution || "Backup"}
+                             highlight={formatRewardRateShort(card.currentMultiplier, card.currency)}
+                           />
+                         </div>
+                         <div style={{ minWidth: 0 }}>
                            <p style={{ fontSize: 14, fontWeight: 700, color: T.text.primary, margin: "0 0 2px 0", lineHeight: 1 }}>{card.name}</p>
                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                             {card.id === subTargetId && <Badge variant="purple" style={{ fontSize: 9, padding: "2px 6px" }}>Sign-Up Bonus</Badge>}
+                             {card.id === subTargetId && <Badge variant="purple" style={{ fontSize: 9, padding: "2px 6px" }}>Bonus focus</Badge>}
                              {card.currency !== "CASH" && card.cpp !== 1.0 && (
                                <Badge variant="gray" style={{ fontSize: 9, padding: "2px 6px" }}>{card.cpp}¢ / pt</Badge>
                              )}
-                             <span style={{ fontSize: 11, fontWeight: 500, color: T.text.muted }}>{formatRewardRate(card.currentMultiplier, card.currency)} on {(card.effectiveCategory || resolvedCategory).replace(/_/g, " ")}</span>
+                             <span style={{ fontSize: 11, fontWeight: 500, color: T.text.muted }}>{formatRewardRate(card.currentMultiplier, card.currency)} on {formatRewardCategoryLabel(card.effectiveCategory || resolvedCategory)}</span>
                              {card.issuerCategory && card.issuerCategory !== resolvedCategory && (
-                               <Badge variant="amber" style={{ fontSize: 9, padding: "2px 6px" }}>Coded as {card.issuerCategory.replace(/_/g, " ")}</Badge>
+                               <Badge variant="amber" style={{ fontSize: 9, padding: "2px 6px" }}>Coded as {formatRewardCategoryLabel(card.issuerCategory)}</Badge>
                              )}
-                             {card.blendedMsg && <Badge variant="amber" style={{ fontSize: 9, padding: "2px 6px" }}>Blended Yield</Badge>}
+                             {card.blendedMsg && <Badge variant="amber" style={{ fontSize: 9, padding: "2px 6px" }}>Blended rate</Badge>}
                              {card.isFlexible && <Badge variant="amber" style={{ fontSize: 9, padding: "2px 6px" }}>Conditional</Badge>}
                              {card.rotating && <Badge variant="purple" style={{ fontSize: 9, padding: "2px 6px" }}>Rotating</Badge>}
-                             {card.mobileWallet && <Badge variant="blue" style={{ fontSize: 9, padding: "2px 6px" }}>{formatRewardRateShort(card.mobileWallet, card.currency)} Wallet</Badge>}
+                             {card.mobileWallet && <Badge variant="blue" style={{ fontSize: 9, padding: "2px 6px" }}>{formatRewardRateShort(card.mobileWallet, card.currency)} wallet</Badge>}
                            </div>
                            {card.cap && (
                               <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6, background: T.bg.surface, padding: "4px 8px", borderRadius: 6, border: `1px solid ${T.border.subtle}`, width: "fit-content" }}>
@@ -1177,16 +1939,21 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                            )}
                          </div>
                       </div>
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", position: "relative" }}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: isNarrowPhone ? "flex-start" : "flex-end", position: "relative" }}>
                         <div style={{ fontSize: 18, fontWeight: 800, color: card.id === subTargetId ? T.status.purple : T.text.primary, letterSpacing: "-0.02em" }}>
-                           {card.id === subTargetId ? "SUB Targeted" : `${card.effectiveYield}%`}
+                           {card.id === subTargetId ? "Bonus focus" : `${card.effectiveYield}%`}
                         </div>
+                        {winner && card.id !== subTargetId && (
+                          <span style={{ fontSize: 11, color: T.text.dim, fontWeight: 600 }}>
+                            {winner.effectiveYield > card.effectiveYield ? `${(winner.effectiveYield - card.effectiveYield).toFixed(1)}% behind winner` : "Matches winner"}
+                          </span>
+                        )}
                         {dollarReturn(card.effectiveYield) && card.id !== subTargetId && (
                           <span style={{ fontSize: 11, color: T.text.muted, fontWeight: 600 }}>
                             ${dollarReturn(card.effectiveYield)} back
                           </span>
                         )}
-                        <button
+                        <button type="button"
                           className="hover-btn"
                           onClick={(e) => handleToggleSubTarget(e, card.id)}
                           style={{
@@ -1194,7 +1961,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                             fontSize: 10, fontWeight: 700, marginTop: 4, cursor: "pointer", textDecoration: "underline"
                           }}
                         >
-                          {card.id === subTargetId ? "Remove SUB target" : "Set as SUB target"}
+                          {card.id === subTargetId ? "Clear bonus focus" : "Set bonus focus"}
                         </button>
                       </div>
                     </div>
@@ -1202,7 +1969,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                 </div>
                 {/* Show All Toggle */}
                 {recommendations.length > 4 && (
-                  <button
+                  <button type="button"
                     className="hover-btn fade-in"
                     onClick={() => { haptic.selection(); setShowAllRunners(!showAllRunners); }}
                     style={{
@@ -1213,14 +1980,14 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                     }}
                   >
                     <ChevronDown size={14} style={{ transform: showAllRunners ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }} />
-                    {showAllRunners ? "Show fewer" : `Show all ${recommendations.length - 1} cards`}
+                    {showAllRunners ? "Show fewer" : `Show all ${recommendations.length - 1} options`}
                   </button>
                 )}
               </div>
             )}
 
             {/* Start Over */}
-            <button
+            <button type="button"
               className="hover-btn fade-in"
               onClick={() => {
                 haptic.selection();

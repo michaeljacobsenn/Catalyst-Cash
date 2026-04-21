@@ -99,7 +99,7 @@ export function InlineOverrideMoneyInput({
             fontSize: 16,
             outline: "none",
             boxSizing: "border-box",
-            transition: "all 0.2s",
+            transition: "transform 0.2s, opacity 0.2s, background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s",
             fontFamily: T.font.mono,
             fontWeight: 800,
             lineHeight: 1.1,
@@ -108,8 +108,8 @@ export function InlineOverrideMoneyInput({
           }}
         />
       </div>
-      <button
-        type="button"
+      <button type="button"
+       
         onMouseDown={(event) => event.preventDefault()}
         onClick={onReset}
         aria-label={`Reset ${label} to live value`}
@@ -120,7 +120,6 @@ export function InlineOverrideMoneyInput({
           border: `1px solid ${toneResetBorder}`,
           background: toneResetBackground,
           color: toneColor,
-          cursor: "pointer",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

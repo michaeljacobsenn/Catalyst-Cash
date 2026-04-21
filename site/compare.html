@@ -6,12 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#0C121B" />
-    <title>Compare | Catalyst Cash vs other finance apps</title>
+    <title>Compare | Catalyst Cash vs Copilot, YNAB, Monarch, MaxRewards, and more</title>
     <meta name="description"
-        content="Compare Catalyst Cash against budgeting, tracking, subscription, and advisor-style apps by actual job to be done, not stale feature grids." />
-    <meta property="og:title" content="Catalyst Cash vs other finance apps" />
+        content="Compare Catalyst Cash against Copilot, YNAB, Monarch, MaxRewards, CardPointers, and other finance apps by the job you need done most." />
+    <meta property="og:title" content="Catalyst Cash vs finance apps that specialize in tracking, budgeting, and rewards" />
     <meta property="og:description"
-        content="See when Catalyst Cash is the right fit, when another app may fit better, and how to evaluate finance apps honestly." />
+        content="See when Catalyst Cash is the right fit, when another app may fit better, and how to compare money apps honestly." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://catalystcash.app/compare.html" />
     <meta property="og:image" content="https://catalystcash.app/icon-512.png" />
@@ -24,7 +24,7 @@
         href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap"
         rel="stylesheet" />
     <meta name="robots" content="index, follow" />
-    <link rel="stylesheet" href="/style.css?v=3.6" />
+    <link rel="stylesheet" href="/style.css?v=3.7" />
 
     <style>
         .compare-hero {
@@ -40,6 +40,40 @@
         .compare-hero .hero-sub {
             max-width: 48rem;
             margin: 0 auto;
+        }
+
+        .compare-summary-strip {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+            margin-top: 26px;
+        }
+
+        .compare-summary-card {
+            padding: 18px 20px;
+            border-radius: 22px;
+            border: 1px solid var(--line);
+            background: rgba(15, 20, 32, 0.82);
+            text-align: left;
+            box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
+        }
+
+        .compare-summary-card span {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--dim);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            font-family: "IBM Plex Mono", monospace;
+        }
+
+        .compare-summary-card strong {
+            display: block;
+            font-size: 1rem;
+            line-height: 1.45;
+            letter-spacing: -0.03em;
         }
 
         .competitor-grid {
@@ -105,6 +139,7 @@
         .tag-budget { background: rgba(107, 163, 232, 0.1); color: var(--blue); border: 1px solid rgba(107, 163, 232, 0.18); }
         .tag-tracking { background: rgba(224, 168, 77, 0.1); color: var(--amber); border: 1px solid rgba(224, 168, 77, 0.18); }
         .tag-advice { background: rgba(46, 204, 113, 0.1); color: var(--green); border: 1px solid rgba(46, 204, 113, 0.18); }
+        .tag-rewards { background: rgba(138, 99, 210, 0.12); color: #D4C4FB; border: 1px solid rgba(138, 99, 210, 0.22); }
 
         .comp-card p {
             color: var(--muted);
@@ -219,6 +254,10 @@
                 padding: 74px 0 28px;
             }
 
+            .compare-summary-strip {
+                grid-template-columns: 1fr;
+            }
+
             .decision-table-wrap {
                 overflow-x: auto;
             }
@@ -261,20 +300,34 @@
 
         <main id="main-content" class="shell">
             <section class="compare-hero" aria-label="Compare hero">
-                <div class="eyebrow">Decision guide | updated April 16, 2026</div>
-                <h1>Choose the finance system that actually helps you act.</h1>
+                <div class="eyebrow">Decision guide | updated April 21, 2026</div>
+                <h1>Choose the finance app that actually helps you act this week.</h1>
                 <p class="hero-sub">
-                    Most finance apps are optimized for tracking, budgeting, or one narrow workflow. Catalyst Cash is
-                    built to be the strongest all-in-one system for weekly decisions across cash, debt, renewals,
+                    Most finance apps specialize in tracking, budgeting, or one narrow workflow. Catalyst Cash is built
+                    for people who want one iPhone system for weekly decisions across cash, debt, rewards, renewals,
                     accounts, and follow-up planning.
                 </p>
+                <div class="compare-summary-strip">
+                    <div class="compare-summary-card">
+                        <span>Decision layer</span>
+                        <strong>Weekly audit, safe-to-spend, debt focus, and a next move in plain language.</strong>
+                    </div>
+                    <div class="compare-summary-card">
+                        <span>Rewards layer</span>
+                        <strong>Merchant search, nearby picks, and best-card guidance when several stores are close together.</strong>
+                    </div>
+                    <div class="compare-summary-card">
+                        <span>Trust layer</span>
+                        <strong>Local-first records, optional Plaid, and layered backup and restore without a cloud-first lock-in.</strong>
+                    </div>
+                </div>
             </section>
 
             <section class="section" style="padding-top: 0;">
-                <div class="section-head">
+                    <div class="section-head">
                     <div class="micro-label">Fast Answer</div>
                     <h2>Start with the operating model, not the feature list.</h2>
-                    <p>Catalyst is the best fit if you want one system that helps you decide, not five disconnected tools.</p>
+                    <p>Catalyst is the best fit if you want one system that helps you decide, not a stack of disconnected specialists.</p>
                 </div>
 
                 <div class="competitor-grid">
@@ -301,6 +354,18 @@
                         <span class="comp-tag tag-tracking">Design-first tracking</span>
                         <p>Strong for polished iPhone spending review. Catalyst is stronger when you want tracking,
                             audit, planning, debt, and follow-up reasoning working together.</p>
+                    </div>
+                    <div class="comp-card">
+                        <div class="comp-name">MaxRewards</div>
+                        <span class="comp-tag tag-rewards">Rewards-first</span>
+                        <p>Strong if your main job is squeezing more value from every swipe. Catalyst is stronger when
+                            rewards are one part of a broader weekly money system.</p>
+                    </div>
+                    <div class="comp-card">
+                        <div class="comp-name">CardPointers</div>
+                        <span class="comp-tag tag-rewards">Offers + card rules</span>
+                        <p>Strong for card benefits, offer tracking, and category guidance. Catalyst is stronger when
+                            you want card choice, budget, audit, cash flow, and follow-up reasoning in one place.</p>
                     </div>
                     <div class="comp-card">
                         <div class="comp-name">Rocket Money</div>
@@ -355,6 +420,11 @@
                                 <td>Pick Copilot if passive review is the main goal. Pick Catalyst if you want strong tracking plus an actual weekly action layer.</td>
                             </tr>
                             <tr>
+                                <td><strong>I want the best card at checkout or inside a mall.</strong></td>
+                                <td>Catalyst Cash or MaxRewards</td>
+                                <td>Pick MaxRewards if live rewards optimization is the whole job. Pick Catalyst if you want that plus budget, audit, renewals, and nearby merchant selection inside the same product.</td>
+                            </tr>
+                            <tr>
                                 <td><strong>I mostly need subscription cleanup.</strong></td>
                                 <td>Rocket Money</td>
                                 <td>Best if subscription reduction is the whole problem. Catalyst is stronger if recurring charges are one of several recurring financial pressures.</td>
@@ -389,22 +459,28 @@
                             instead of floating as a detached chatbot.</p>
                     </div>
                     <div class="adv-card">
-                        <div class="adv-icon" style="background: var(--blue-deep); color: var(--blue);">OPS</div>
-                        <h3>Multiple power tools in one operating system</h3>
-                        <p>Debt simulation, renewals, rewards, budgeting, FIRE, and the ledger support one weekly
-                            workflow instead of living as disconnected extras or separate apps.</p>
+                        <div class="adv-icon" style="background: var(--blue-deep); color: var(--blue);">RWRD</div>
+                        <h3>Rewards that work in real places</h3>
+                        <p>Search a merchant, compare the lead over your backup card, or choose the right nearby store
+                            when several options are close together.</p>
                     </div>
                     <div class="adv-card">
-                        <div class="adv-icon" style="background: var(--green-deep); color: var(--green);">SYNC</div>
+                        <div class="adv-icon" style="background: var(--green-deep); color: var(--green);">BGT</div>
+                        <h3>Budgeting that starts from real life</h3>
+                        <p>Recurring bills and audit context can seed a starter budget so the product helps faster
+                            without forcing a giant setup project first.</p>
+                    </div>
+                    <div class="adv-card">
+                        <div class="adv-icon" style="background: var(--amber-deep); color: var(--amber);">SYNC</div>
                         <h3>Multi-institution freshness without babysitting</h3>
-                        <p>Pro is built to keep up to 8 Plaid institutions useful with quiet balance and ledger upkeep
-                            instead of making you manually rotate which accounts matter.</p>
+                        <p>Pro is built to keep up to 8 Plaid institutions useful with quieter balance and ledger upkeep
+                            instead of making you micromanage refreshes.</p>
                     </div>
                     <div class="adv-card">
-                        <div class="adv-icon" style="background: var(--amber-deep); color: var(--amber);">LOC</div>
-                        <h3>Local-first posture</h3>
-                        <p>Your core financial dataset is local-first on device, with AI traffic routed only when you
-                            explicitly use shipped AI features.</p>
+                        <div class="adv-icon" style="background: rgba(123, 94, 167, 0.12); color: #D4C4FB;">SAFE</div>
+                        <h3>Recovery that respects your boundaries</h3>
+                        <p>Your working record stays local-first on device, with encrypted export, iCloud backup, and
+                            Recovery Vault available when you want portability.</p>
                     </div>
                 </div>
             </section>
@@ -426,6 +502,10 @@
                         <h3>For household collaboration</h3>
                         <p>Choose Monarch if ongoing partner planning matters more than weekly audit, debt prioritization,
                             or deeper action guidance.</p>
+                    </div>
+                    <div class="honesty-card">
+                        <h3>For rewards-only obsession</h3>
+                        <p>Choose MaxRewards or CardPointers if card optimization is the whole job and you do not care about budget, audit, cash flow, or recovery in the same app.</p>
                     </div>
                     <div class="honesty-card">
                         <h3>For human financial planning</h3>
@@ -456,6 +536,8 @@
                             <a href="https://www.ynab.com/pricing" target="_blank" rel="noreferrer">YNAB</a>,
                             <a href="https://www.monarchmoney.com/" target="_blank" rel="noreferrer">Monarch</a>,
                             <a href="https://copilot.money/" target="_blank" rel="noreferrer">Copilot</a>,
+                            <a href="https://maxrewards.com/" target="_blank" rel="noreferrer">MaxRewards</a>,
+                            <a href="https://cardpointers.com/" target="_blank" rel="noreferrer">CardPointers</a>,
                             <a href="https://www.rocketmoney.com/" target="_blank" rel="noreferrer">Rocket Money</a>,
                             <a href="https://www.useorigin.com/" target="_blank" rel="noreferrer">Origin</a>.
                         </p>
@@ -467,10 +549,10 @@
                 <div class="final-cta">
                     <div>
                         <div class="micro-label">Bottom Line</div>
-                        <h2>Choose Catalyst Cash if you want the best all-in-one money operating system.</h2>
+                        <h2>Choose Catalyst Cash if you want one iPhone money system that can actually replace multiple specialist apps.</h2>
                         <p>
                             It is built for real-life mess: debt stacks, renewals, too many accounts, uneven cash flow,
-                            and the constant question of what deserves attention next.
+                            rewards decisions in the wild, and the constant question of what deserves attention next.
                         </p>
                     </div>
                     <div class="button-stack">

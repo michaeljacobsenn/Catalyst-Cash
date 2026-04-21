@@ -220,7 +220,10 @@ export default function SecuritySection({
       <div style={{ marginTop: 24, paddingTop: 20, borderTop: `1px solid ${T.border.subtle}` }}>
         <Label>Legal & Privacy</Label>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
-          <button
+          <a
+            href="https://catalystcash.app/privacy"
+            target="_blank"
+            rel="noreferrer"
             style={{
               textAlign: "left",
               padding: "12px 16px",
@@ -234,13 +237,16 @@ export default function SecuritySection({
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
+              textDecoration: "none",
             }}
-            onClick={() => window.open("https://catalystcash.app/privacy", "_blank")}
           >
             <span>Privacy Policy</span>
             <ExternalLink size={14} color={T.text.dim} />
-          </button>
-          <button
+          </a>
+          <a
+            href="https://catalystcash.app/terms"
+            target="_blank"
+            rel="noreferrer"
             style={{
               textAlign: "left",
               padding: "12px 16px",
@@ -254,12 +260,12 @@ export default function SecuritySection({
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
+              textDecoration: "none",
             }}
-            onClick={() => window.open("https://catalystcash.app/terms", "_blank")}
           >
             <span>Terms of Service</span>
             <ExternalLink size={14} color={T.text.dim} />
-          </button>
+          </a>
           <NoticeBanner
             tone="warning"
             compact
@@ -283,7 +289,7 @@ export default function SecuritySection({
               you have the right to request deletion of all personal data.
             </p>
             {!confirmDataDeletion ? (
-              <button
+              <button type="button"
                 onClick={() => {
                   setConfirmDataDeletion(true);
                   haptic.medium();
@@ -302,7 +308,7 @@ export default function SecuritySection({
                   alignItems: "center",
                   justifyContent: "center",
                   gap: 8,
-                  transition: "all .2s",
+                  transition: "transform .2s, opacity .2s, background-color .2s, border-color .2s, color .2s, box-shadow .2s",
                 }}
               >
                 <Shield size={14} />
@@ -344,7 +350,7 @@ export default function SecuritySection({
                   <li>API keys and secure keychain items</li>
                 </ul>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button
+                  <button type="button"
                     onClick={() => setConfirmDataDeletion(false)}
                     style={{
                       flex: 1,
@@ -361,7 +367,7 @@ export default function SecuritySection({
                   >
                     Cancel
                   </button>
-                  <button
+                  <button type="button"
                     disabled={deletionInProgress}
                     onClick={async () => {
                       setDeletionInProgress(true);

@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import type { Renewal } from "../../types/index.js";
 import { useSettings } from "./SettingsContext.js";
-import { computeBudgetStatus, computeCycleIncome, suggestLinesFromAudit } from "../budgetEngine.js";
+import { computeBudgetStatus, computeCycleIncome, suggestLinesFromAudit, suggestLinesFromRenewals } from "../budgetEngine.js";
 import { normalizeBudgetLines } from "../budgetBuckets.js";
 import { db } from "../utils.js";
 
@@ -23,7 +24,7 @@ interface BudgetContextValue {
   addLine: (line: Omit<BudgetLine, "id">) => Promise<void>;
   updateLine: (id: string, patch: Partial<BudgetLine>) => Promise<void>;
   deleteLine: (id: string) => Promise<void>;
-  suggestFromAudit: (auditCategories: Record<string, { total?: number }>) => Promise<void>;
+  suggestFromAudit: (auditCategories: Record<string, { total?: number }> | null, options?: { renewals?: Renewal[] }) => Promise<void>;
   totalBills: number;
   totalNeeds: number;
   totalWants: number;
@@ -37,6 +38,13 @@ interface BudgetProviderProps { children?: ReactNode; }
 
 const BudgetContext = createContext<BudgetContextValue | null>(null);
 const DB_KEY = "budget-lines-v2";
+
+function normalizeLineNameKey(value: string) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
 
 export function BudgetProvider({ children }: BudgetProviderProps) {
   const { financialConfig } = useSettings();
@@ -84,10 +92,19 @@ export function BudgetProvider({ children }: BudgetProviderProps) {
     await persist(lines.filter(l => l.id !== id));
   }, [lines, persist]);
 
-  const suggestFromAudit = useCallback(async (auditCategories: Record<string, { total?: number }>) => {
-    const suggestions = suggestLinesFromAudit(auditCategories, financialConfig.payFrequency) as BudgetLine[];
-    const existingNames = new Set(lines.map(l => l.name.toLowerCase()));
-    const newLines = suggestions.filter(s => !existingNames.has(s.name.toLowerCase()));
+  const suggestFromAudit = useCallback(async (auditCategories: Record<string, { total?: number }> | null, options?: { renewals?: Renewal[] }) => {
+    const existingNames = new Set(lines.map(line => normalizeLineNameKey(line.name)));
+    const mergedSuggestions = [
+      ...(suggestLinesFromRenewals(options?.renewals || [], financialConfig.payFrequency) as BudgetLine[]),
+      ...(suggestLinesFromAudit(auditCategories || {}, financialConfig.payFrequency) as BudgetLine[]),
+    ];
+    const nextNames = new Set(existingNames);
+    const newLines = mergedSuggestions.filter((line) => {
+      const nameKey = normalizeLineNameKey(line.name);
+      if (!nameKey || nextNames.has(nameKey)) return false;
+      nextNames.add(nameKey);
+      return true;
+    });
     if (newLines.length > 0) await persist([...lines, ...newLines]);
   }, [lines, persist, financialConfig.payFrequency]);
 

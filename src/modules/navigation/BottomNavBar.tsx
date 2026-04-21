@@ -87,7 +87,7 @@ export default function BottomNavBar({
               animation: "slideUpMenu .2s ease",
             }}
           >
-            <button
+            <button type="button"
               onClick={() => {
                 setShowQuickMenu(false);
                 navTo("input");
@@ -96,7 +96,7 @@ export default function BottomNavBar({
             >
               <Plus size={18} color={T.accent.emerald} /> Start New Audit
             </button>
-            <button
+            <button type="button"
               onClick={() => {
                 setShowQuickMenu(false);
                 navTo("history");
@@ -107,7 +107,7 @@ export default function BottomNavBar({
             </button>
 
             <div style={{ height: 1, background: T.border.default, margin: "4px 0" }} />
-            <button
+            <button type="button"
               onClick={() => {
                 setShowQuickMenu(false);
                 navTo("settings");
@@ -207,7 +207,7 @@ export default function BottomNavBar({
           };
 
           return (
-            <button
+            <button type="button"
               key={n.id}
               role="tab"
               aria-selected={active}
@@ -272,7 +272,7 @@ export default function BottomNavBar({
                     alignItems: "center",
                     justifyContent: "center",
                     boxShadow: active ? `0 10px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.10)` : "none",
-                    transition: "all .3s cubic-bezier(0.16, 1, 0.3, 1)",
+                    transition: "transform .3s cubic-bezier(0.16, 1, 0.3, 1), opacity .3s cubic-bezier(0.16, 1, 0.3, 1), background-color .3s cubic-bezier(0.16, 1, 0.3, 1), border-color .3s cubic-bezier(0.16, 1, 0.3, 1), color .3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow .3s cubic-bezier(0.16, 1, 0.3, 1)",
                     transform: active ? "scale(1.02)" : "scale(1)",
                   }}
                 >

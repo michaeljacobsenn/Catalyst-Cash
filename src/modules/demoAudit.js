@@ -1,387 +1,481 @@
-  import { parseAudit } from "./utils.js";
+import { buildDemoScenario, getDefaultDemoScenarioId } from "./demoScenario.js";
+import { generateStrategy } from "./engine.js";
+import { getGradeLetter } from "./mathHelpers.js";
+import { parseAudit, validateParsedAuditConsistency } from "./utils.js";
 
-export function getDemoAuditPayload(prevConfig = {}, existingHistory = []) {
-  const today = new Date();
-  const todayStr = today.toISOString().split("T")[0];
-  const dayMs = 86400000;
+function currency(amount) {
+  return `$${Number(amount || 0).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
 
-  // ── 1. ENRICHED DEMO JSON ──────────────────────────────────
-  const demoJSON = {
+function buildValidationOptions({ form, renewals, cards, financialConfig, computedStrategy, investmentTotal, netWorth, pendingTotal, personalRules }) {
+  return {
+    operationalSurplus: computedStrategy?.operationalSurplus ?? null,
+    nativeScore: computedStrategy?.auditSignals?.nativeScore?.score ?? null,
+    nativeRiskFlags: computedStrategy?.auditSignals?.riskFlags ?? [],
+    dashboardAnchors: {
+      checking: Number(form?.checking) || 0,
+      vault: Number(form?.savings || form?.ally) || 0,
+      pending: pendingTotal,
+      debts: computedStrategy?.auditSignals?.debt?.total ?? 0,
+      available: computedStrategy?.operationalSurplus ?? null,
+    },
+    investmentAnchors: {
+      balance: investmentTotal,
+      asOf: form?.date || null,
+      gateStatus: null,
+      netWorth,
+    },
+    cards,
+    renewals,
+    formData: form,
+    financialConfig,
+    computedStrategy,
+    personalRules,
+  };
+}
+
+function buildCurrentDemoAuditJson({
+  scenario,
+  todayStr,
+  checkingBalance,
+  vaultBalance,
+  investmentTotal,
+  otherAssetsTotal,
+  pendingTotal,
+  netWorth,
+  netWorthDeltaLabel,
+  renewals,
+  savingsGoals,
+  cards,
+  budgetActuals,
+  computedStrategy,
+}) {
+  const nativeScore = computedStrategy?.auditSignals?.nativeScore?.score ?? 100;
+  const emergencyCurrent = computedStrategy?.auditSignals?.emergencyFund?.current ?? 0;
+  const emergencyTarget = computedStrategy?.auditSignals?.emergencyFund?.target ?? 0;
+  const emergencyPct = emergencyTarget > 0 ? Math.round((emergencyCurrent / emergencyTarget) * 100) : 0;
+  const operatingFloor = computedStrategy?.totalCheckingFloor ?? 0;
+  const operationalSurplus = computedStrategy?.operationalSurplus ?? 0;
+  const nextPayday = computedStrategy?.nextPayday || todayStr;
+  const debtTotal = computedStrategy?.auditSignals?.debt?.total ?? 0;
+  const hasDebt = debtTotal > 0;
+  const weeklyAllowance = Number(scenario?.financialConfig?.weeklySpendAllowance) || 0;
+  const rothTarget = Math.max(0, Math.min(Number(scenario?.nextRothContribution) || 0, operationalSurplus));
+  const brokerageSweep = Math.max(0, operationalSurplus - rothTarget);
+  const highestAprCard = hasDebt
+    ? cards
+      .filter((card) => Number(card?.balance) > 0)
+      .sort((a, b) => (Number(b?.apr) || 0) - (Number(a?.apr) || 0))[0] || null
+    : null;
+  const totalLimit = cards.reduce((sum, card) => sum + (Number(card?.limit) || 0), 0);
+  const utilizationPct = totalLimit > 0 ? Math.round((debtTotal / totalLimit) * 100) : 0;
+  const auditStatus = hasDebt ? (nativeScore >= 80 ? "YELLOW" : "RED") : "GREEN";
+  const primaryActionAmount = hasDebt ? operationalSurplus : brokerageSweep;
+  const primaryActionTitle = hasDebt
+    ? `Attack ${highestAprCard?.nickname || highestAprCard?.name || "highest APR card"}`
+    : "Sweep the first surplus block";
+  const primaryActionDetail = hasDebt
+    ? `Send ${currency(primaryActionAmount)} from Checking to ${highestAprCard?.nickname || highestAprCard?.name || "the highest APR card"} this week while keeping the protected ${currency(operatingFloor)} floor intact.`
+    : `Transfer ${currency(primaryActionAmount)} from Checking to Vanguard Brokerage this week now that the ${currency(operatingFloor)} floor is protected.`;
+  const nextActionDetail = hasDebt
+    ? `Move ${currency(primaryActionAmount)} from Checking to ${highestAprCard?.nickname || highestAprCard?.name || "the highest APR card"} today, then leave the protected ${currency(operatingFloor)} floor untouched until the next payday.`
+    : `Move ${currency(primaryActionAmount)} from Checking to Vanguard Brokerage today, then leave the protected ${currency(operatingFloor)} floor untouched until the next payday.`;
+
+  const spendingTotal = Object.values(budgetActuals).reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const spendingDelta = Math.max(0, weeklyAllowance - spendingTotal);
+  const radar = renewals.map((renewal) => ({
+    item: renewal.name,
+    amount: currency(renewal.amount),
+    date: renewal.nextDue,
+  }));
+  const annualFeeCard = cards.find((card) => Number(card?.annualFee) > 0) || null;
+  const longRangeRadar = [
+    {
+      item: `${savingsGoals?.[0]?.name || "Savings Goal"} Goal`,
+      amount: currency(savingsGoals?.[0]?.targetAmount || 0),
+      date: savingsGoals?.[0]?.targetDate || todayStr,
+    },
+    {
+      item: `${savingsGoals?.[1]?.name || "Savings Goal"} Goal`,
+      amount: currency(savingsGoals?.[1]?.targetAmount || 0),
+      date: savingsGoals?.[1]?.targetDate || todayStr,
+    },
+  ];
+  if (annualFeeCard) {
+    longRangeRadar.push({
+      item: `${annualFeeCard.nickname || annualFeeCard.name} Annual Fee`,
+      amount: currency(annualFeeCard.annualFee),
+      date: annualFeeCard.annualFeeDue || todayStr,
+    });
+  }
+  const paceData = [
+    ...(savingsGoals || []).slice(0, 2).map((goal) => ({
+      name: goal.name,
+      saved: goal.currentAmount,
+      target: goal.targetAmount,
+    })),
+    {
+      name: "Roth IRA",
+      saved: Number(scenario?.financialConfig?.rothContributedYTD) || 0,
+      target: Number(scenario?.financialConfig?.rothAnnualLimit) || 7000,
+    },
+    {
+      name: "401(k)",
+      saved: Number(scenario?.financialConfig?.k401ContributedYTD) || 0,
+      target: Number(scenario?.financialConfig?.k401AnnualLimit) || 23000,
+    },
+  ].filter((item) => Number(item.target) > 0);
+
+  return {
     headerCard: {
-      status: "GREEN",
-      details: ["Demo audit with sample data", "Your real audit will use your actual finances"],
+      status: auditStatus,
+      details: hasDebt
+        ? [
+          `Checking still clears the protected floor by ${currency(operationalSurplus)}, so Catalyst can direct real surplus to payoff instead of guessing.`,
+          `Emergency reserves are ${emergencyPct}% of target and card utilization is ${utilizationPct}%, which makes this a stabilization-and-paydown moment instead of an investing sprint.`,
+        ]
+        : [
+          `Checking clears the protected floor by ${currency(operationalSurplus)} and there are no revolving balances dragging the week.`,
+          `Emergency reserves are ${emergencyPct}% of target, utilization is 0%, and the investing gate is fully open.`,
+        ],
     },
     healthScore: {
-      score: 88,
-      grade: "A-",
+      score: nativeScore,
+      grade: getGradeLetter(nativeScore),
       trend: "up",
       summary:
-        "Excellent financial momentum. Strong savings buffers and aggressive debt paydown are compounding your wealth rapidly.",
+        hasDebt
+          ? `${scenario?.scenarioMeta?.name || "Demo"} shows how Catalyst handles debt well: protect cash first, then turn open capacity into consistent payoff progress.`
+          : `${scenario?.scenarioMeta?.name || "Demo"} shows Catalyst at its best: protect the floor, keep reserves above target, and let true surplus compound instead of leaking away.`,
       narrative:
-        "Your checking is well above floor, vault is fully funded at 6-month coverage, and debt paydown pace puts you on track for freedom by October. The only drag is Chase Sapphire utilization at 24.6% — one more aggressive payment drops you into the optimal range and could boost your credit score 15–25 points.",
+        hasDebt
+          ? `This ${scenario?.scenarioMeta?.description?.toLowerCase() || "demo household"} is carrying ${currency(debtTotal)} of revolving debt, but it still has a protected floor of ${currency(operatingFloor)} and ${currency(emergencyCurrent)} in reserve cash. That leaves ${currency(operationalSurplus)} of real weekly payoff capacity Catalyst can send to the highest APR balance without creating new cash stress.`
+          : `This ${scenario?.scenarioMeta?.description?.toLowerCase() || "demo household"} is running with a protected floor of ${currency(operatingFloor)}, an emergency reserve of ${currency(emergencyCurrent)}, and no revolving debt. That leaves ${currency(operationalSurplus)} of real weekly capacity that Catalyst can direct into long-term investing without creating cash stress.`,
     },
-    alertsCard: [
-      "Car insurance completely covered by Vault",
-      "Roth IRA maxed out for the year",
-      "Chase Sapphire utilization at 24.6% — aim for under 10%",
-      "Net worth up $2,340 this week — 7-week growth streak",
-      "$600 away from $25K in savings",
-    ],
-    dashboardCard: [
-      { category: "Checking", amount: "$8,450.00", status: "Above floor" },
-      { category: "Vault", amount: "$22,200.00", status: "Fully funded" },
-      { category: "Investments", amount: "$45,000.00", status: "Growing" },
-      { category: "Other Assets", amount: "$101,000.00", status: "Home Equity" },
-      { category: "Pending", amount: "$305.49", status: "3 upcoming" },
-      { category: "Debts", amount: "$3,690.00", status: "1 card carrying balance" },
-      { category: "Available", amount: "$6,144.51", status: "After obligations" },
-    ],
-    netWorth: 172960.0,
-    netWorthDelta: "+$2,340 vs last week",
-    weeklyMoves: [
-      "Pay Chase Sapphire $500 — aggressive principal payment to crush 24.99% APR debt",
-      "Transfer $1,000 to Vanguard Brokerage — dollar-cost averaging into VTSAX",
-      "Move $400 to Ally Vault — build toward $25K savings milestone",
-      "Rebalance crypto allocation — trim BTC gains into ETH position",
-      "Review Q1 sinking fund progress — vacation fund needs $233/mo to hit target",
-    ],
-    radar: [
-      { item: "Netflix", amount: "$15.49", date: new Date(Date.now() + 3 * dayMs).toISOString().split("T")[0] },
-      {
-        item: "Electric Bill",
-        amount: "$145.00",
-        date: new Date(Date.now() + 5 * dayMs).toISOString().split("T")[0],
-      },
-      { item: "Spotify", amount: "$10.99", date: new Date(Date.now() + 8 * dayMs).toISOString().split("T")[0] },
-      {
-        item: "Car Insurance",
-        amount: "$145.00",
-        date: new Date(Date.now() + 14 * dayMs).toISOString().split("T")[0],
-      },
-      {
-        item: "Property Tax",
-        amount: "$1,100.00",
-        date: new Date(Date.now() + 18 * dayMs).toISOString().split("T")[0],
-      },
-    ],
-    longRangeRadar: [
-      { item: "Home Maintenance Fund", amount: "$5,000.00", date: "2026-06-01" },
-      { item: "Annual Car Registration", amount: "$285.00", date: "2026-07-15" },
-      { item: "Family Vacation", amount: "$3,500.00", date: "2026-08-15" },
-    ],
-    milestones: [
-      "Emergency fund fully stocked at 6 months",
-      "Net Worth crossed $150K milestone last month",
-      "Roth IRA maxed out for 2026",
-      "Checking above floor for 8 consecutive weeks",
-    ],
-    investments: { balance: "$45,000.00", asOf: todayStr, gateStatus: "Open — accelerating contributions" },
-    nextAction:
-      "Execute the $500 Chase Sapphire payment to crush high-interest debt, then funnel your excess $1,000 into Vanguard to maximize your wealth snowball. After that, move $400 to Ally to close the gap on your $25K savings milestone — you're only $600 away.",
-    spendingAnalysis: {
-      totalSpent: "$847.23",
-      dailyAverage: "$121.03",
-      vsAllowance: "UNDER by $152.77",
-      topCategories: [
-        { category: "Groceries", amount: "$312.50", pctOfTotal: "37%" },
-        { category: "Dining", amount: "$187.40", pctOfTotal: "22%" },
-        { category: "Gas", amount: "$98.33", pctOfTotal: "12%" },
-        { category: "Shopping", amount: "$156.00", pctOfTotal: "18%" },
-        { category: "Entertainment", amount: "$93.00", pctOfTotal: "11%" },
+    alertsCard: hasDebt
+      ? [
+        `Protected floor still leaves ${currency(operationalSurplus)} available for payoff this week`,
+        `Emergency reserve is ${emergencyPct}% of target`,
+        `${utilizationPct}% credit utilization across the wallet`,
+        `${highestAprCard?.nickname || highestAprCard?.name || "Highest APR card"} is the first payoff target`,
+        "Pause optional investing until the revolving balances are back under control",
+      ]
+      : [
+        `Protected floor fully covered with ${currency(operationalSurplus)} still open above it`,
+        `Emergency reserve is ${emergencyPct}% of target`,
+        "0% credit utilization across the wallet",
+        "Investing gate is open because there are no near-term cash protection gaps",
+        "Spending is running below the weekly allowance",
       ],
-      alerts: ["Under weekly allowance — surplus available for debt acceleration"],
-      debtImpact: "At current spending, debt-free by Oct 2026. Cutting $50/week accelerates by 3 weeks.",
-    },
-    paceData: [
-      { name: "Family Vacation", saved: 2100, target: 3500 },
-      { name: "Emergency Fund", saved: 14400, target: 15000 },
-      { name: "New Laptop", saved: 680, target: 1200 },
-      { name: "Holiday Gifts", saved: 350, target: 800 },
+    dashboardCard: [
+      { category: "Checking", amount: currency(checkingBalance), status: "Above floor" },
+      { category: "Vault", amount: currency(vaultBalance), status: hasDebt ? (emergencyCurrent >= emergencyTarget ? "On guard" : "Rebuild") : "Over target" },
+      { category: "Investments", amount: currency(investmentTotal), status: hasDebt ? "Guarded" : "Gate open" },
+      { category: "Other Assets", amount: currency(otherAssetsTotal), status: "Home + auto equity" },
+      { category: "Pending", amount: currency(pendingTotal), status: "2 authorizations" },
+      { category: "Debts", amount: currency(debtTotal), status: hasDebt ? "Pay down" : "No revolving balances" },
+      { category: "Available", amount: currency(operationalSurplus), status: "Deployable surplus" },
     ],
+    netWorth,
+    netWorthDelta: netWorthDeltaLabel,
+    weeklyMoves: [
+      {
+        title: primaryActionTitle,
+        detail: primaryActionDetail,
+        amount: currency(primaryActionAmount),
+        priority: "required",
+        semanticKind: hasDebt ? "debt-paydown" : "investment-contribution",
+        sourceLabel: "Checking",
+        targetLabel: hasDebt ? (highestAprCard?.nickname || highestAprCard?.name || "Highest APR Card") : "Vanguard Brokerage",
+        transactional: true,
+      },
+      {
+        title: hasDebt ? "Keep minimums on autopay" : "Raise the next Roth contribution",
+        detail: hasDebt
+          ? `Keep minimum payments active on every card, but direct all extra cash to ${highestAprCard?.nickname || highestAprCard?.name || "the highest APR card"} until the utilization trend breaks lower.`
+          : `Schedule a ${currency(rothTarget)} Roth IRA contribution for ${nextPayday} so the annual limit stays on pace without touching the reserve.`,
+        amount: hasDebt ? currency(0) : currency(rothTarget),
+        priority: "recommended",
+        semanticKind: hasDebt ? "payment-discipline" : "investment-contribution",
+        sourceLabel: hasDebt ? "Autopay" : "Checking",
+        targetLabel: hasDebt ? "All cards" : "Roth IRA",
+        transactional: !hasDebt,
+      },
+      {
+        title: "Keep the operating floor intact",
+        detail: `Leave ${currency(operatingFloor)} in Checking as the non-negotiable operating floor before making extra transfers or optional spending moves.`,
+        amount: currency(operatingFloor),
+        priority: "required",
+        semanticKind: "spending-hold",
+        sourceLabel: "Checking",
+        targetLabel: "Operating Floor",
+        transactional: false,
+      },
+    ],
+    moveItems: [
+      {
+        title: primaryActionTitle,
+        detail: primaryActionDetail,
+        amount: primaryActionAmount,
+        semanticKind: hasDebt ? "debt-paydown" : "investment-contribution",
+        sourceLabel: "Checking",
+        targetLabel: hasDebt ? (highestAprCard?.nickname || highestAprCard?.name || "Highest APR Card") : "Vanguard Brokerage",
+        transactional: true,
+      },
+      {
+        title: hasDebt ? "Keep minimums on autopay" : "Raise the next Roth contribution",
+        detail: hasDebt
+          ? `Keep minimum payments active on every card, but direct all extra cash to ${highestAprCard?.nickname || highestAprCard?.name || "the highest APR card"} until the utilization trend breaks lower.`
+          : `Schedule a ${currency(rothTarget)} Roth IRA contribution for ${nextPayday} so the annual limit stays on pace without touching the reserve.`,
+        amount: hasDebt ? 0 : rothTarget,
+        semanticKind: hasDebt ? "payment-discipline" : "investment-contribution",
+        sourceLabel: hasDebt ? "Autopay" : "Checking",
+        targetLabel: hasDebt ? "All cards" : "Roth IRA",
+        transactional: !hasDebt,
+      },
+      {
+        title: "Keep the operating floor intact",
+        detail: `Leave ${currency(operatingFloor)} in Checking as the non-negotiable operating floor before making extra transfers or optional spending moves.`,
+        amount: operatingFloor,
+        semanticKind: "spending-hold",
+        sourceLabel: "Checking",
+        targetLabel: "Operating Floor",
+        transactional: false,
+      },
+    ].filter((item) => item.amount > 0 || item.semanticKind === "spending-hold"),
+    radar,
+    longRangeRadar,
+    milestones: [
+      hasDebt ? "Starter emergency cushion is already in place" : "Emergency reserve cleared the target and stays over 6 months of cushion",
+      hasDebt ? "Revolving balances are trending down week over week" : "No revolving card debt across the wallet",
+      "401(k) contributions are ahead of annual pace",
+      "Net worth has climbed for 6 straight audits",
+    ],
+    investments: {
+      balance: currency(investmentTotal),
+      asOf: todayStr,
+      gateStatus: hasDebt ? "Guarded — finish the payoff sprint before extra investing" : "Open — surplus can keep compounding",
+    },
+    nextAction: {
+      title: primaryActionTitle,
+      detail: nextActionDetail,
+      amount: currency(primaryActionAmount),
+    },
+    spendingAnalysis: {
+      totalSpent: currency(spendingTotal),
+      dailyAverage: currency(spendingTotal / 7),
+      vsAllowance: `UNDER by ${currency(spendingDelta)}`,
+      topCategories: [
+        { category: "Groceries", amount: currency(budgetActuals.Groceries), pctOfTotal: "39%" },
+        { category: "Shopping", amount: currency(budgetActuals.Shopping), pctOfTotal: "19%" },
+        { category: "Dining", amount: currency(budgetActuals.Dining), pctOfTotal: "17%" },
+        { category: "Transport", amount: currency(budgetActuals.Transport), pctOfTotal: "13%" },
+        { category: "Entertainment", amount: currency(budgetActuals.Entertainment), pctOfTotal: "12%" },
+      ],
+      alerts: [hasDebt ? "Spending is below the weekly allowance, which creates real payoff room without undercutting the floor." : "Spending is below the weekly allowance, so surplus can keep flowing to wealth building."],
+      debtImpact: hasDebt
+        ? `${currency(debtTotal)} of revolving debt is the main drag right now, so Catalyst is treating payoff as the highest-return move.`
+        : "Debt-free and 0% utilization keep the credit profile clean while surplus compounds.",
+    },
+    paceData,
   };
-  const raw = JSON.stringify(demoJSON);
-  const parsed = parseAudit(raw);
+}
 
-  // ── 2. DEMO PORTFOLIO (cards, bank accounts, renewals) ─────
-  const demoCards = [
-    {
-      id: "demo-card-1",
-      institution: "Chase",
-      name: "Chase Sapphire Preferred",
-      nickname: "Sapphire",
-      mask: "4321",
-      balance: 3690,
-      limit: 15000,
-      apr: 24.99,
-      lastPaymentDate: today.toISOString(),
-      network: "visa",
-      monthlyBill: 145,
+function buildSyntheticHistoryAudit({ dateStr, score, checking, ally, investments, otherAssets, netWorth, spent, debt = 0 }) {
+  const raw = JSON.stringify({
+    headerCard: {
+      status: debt > 0 ? "YELLOW" : score >= 95 ? "GREEN" : "YELLOW",
+      details: ["Reserves stayed protected and cash pressure remained low."],
     },
-    {
-      id: "demo-card-2",
-      institution: "American Express",
-      name: "American Express Gold",
-      mask: "9876",
-      balance: 0,
-      limit: 25000,
-      apr: 0,
-      lastPaymentDate: today.toISOString(),
-      network: "amex",
+    healthScore: {
+      score,
+      grade: getGradeLetter(score),
+      trend: "up",
+      summary: "Cash, reserve, and investing posture improved steadily.",
     },
-    {
-      id: "demo-card-3",
-      institution: "Discover",
-      name: "Discover it Cash Back",
-      mask: "5555",
-      balance: 0,
-      limit: 8000,
-      apr: 0,
-      lastPaymentDate: today.toISOString(),
-      network: "discover",
+    dashboardCard: [
+      { category: "Checking", amount: currency(checking), status: "Tracked" },
+      { category: "Vault", amount: currency(ally), status: "Tracked" },
+      { category: "Investments", amount: currency(investments), status: "Growing" },
+      { category: "Other Assets", amount: currency(otherAssets), status: "Stable" },
+      { category: "Debts", amount: currency(debt), status: debt > 0 ? "Improving" : "Clear" },
+    ],
+    netWorth,
+    weeklyMoves: [
+      {
+        title: debt > 0 ? "Keep payoff momentum" : "Keep surplus invested",
+        detail: debt > 0 ? "Keep protecting the floor, then direct extra cash to the highest APR card." : "Continue routing surplus toward long-term accounts after the floor is protected.",
+        amount: currency(1800),
+      },
+    ],
+    nextAction: {
+      title: debt > 0 ? "Stay on the payoff plan" : "Stay on plan",
+      detail: debt > 0 ? "Protect the floor, then keep sending extra cash to the highest APR card." : "Protect the floor, then keep sending extra cash to long-term investing.",
+      amount: currency(1800),
     },
-  ];
-  const demoBankAccounts = [
-    {
-      id: "demo-chk-1",
-      bank: "Chase",
-      name: "Chase Total Checking",
-      accountType: "checking",
-      mask: "7890",
-      balance: 8450,
-      type: "depository",
-      subtype: "checking",
-      date: today.toISOString(),
+    alertsCard: debt > 0 ? ["No acute cash pressure.", "Debt balances are trending down."] : ["No acute cash pressure.", "No revolving debt."],
+    radar: [],
+    longRangeRadar: [],
+    milestones: [],
+    investments: { balance: currency(investments), asOf: dateStr, gateStatus: "Open" },
+  });
+
+  return {
+    ts: `${dateStr}T12:00:00.000Z`,
+    date: dateStr,
+    raw,
+    parsed: parseAudit(raw),
+    isDemoHistory: true,
+    moveChecks: {},
+    form: {
+      date: dateStr,
+      checking: String(checking),
+      ally: String(ally),
+      budgetActuals: {
+        Groceries: String(Math.round(spent * 0.38)),
+        Dining: String(Math.round(spent * 0.17)),
+        Transport: String(Math.round(spent * 0.13)),
+        Shopping: String(Math.round(spent * 0.19)),
+        Entertainment: String(Math.round(spent * 0.13)),
+      },
+      debts: debt > 0 ? [{ name: "Credit Cards", balance: String(debt) }] : [],
     },
-    {
-      id: "demo-sav-1",
-      bank: "Ally",
-      name: "Ally High Yield Savings",
-      accountType: "savings",
-      mask: "1234",
-      balance: 22200,
-      type: "depository",
-      subtype: "savings",
-      date: today.toISOString(),
-    },
-  ];
-  const demoRenewals = [
-    {
-      id: "demo-ren-1",
-      name: "Netflix",
-      amount: 15.49,
-      interval: 1,
-      intervalUnit: "months",
-      nextDue: new Date(Date.now() + 3 * dayMs).toISOString().split("T")[0],
-      category: "subs",
-    },
-    {
-      id: "demo-ren-2",
-      name: "Spotify",
-      amount: 10.99,
-      interval: 1,
-      intervalUnit: "months",
-      nextDue: new Date(Date.now() + 8 * dayMs).toISOString().split("T")[0],
-      category: "subs",
-    },
-    {
-      id: "demo-ren-3",
-      name: "Car Insurance",
-      amount: 145.0,
-      interval: 1,
-      intervalUnit: "months",
-      nextDue: new Date(Date.now() + 14 * dayMs).toISOString().split("T")[0],
-      category: "insurance",
-    },
-    {
-      id: "demo-ren-4",
-      name: "Electric Bill",
-      amount: 145.0,
-      interval: 1,
-      intervalUnit: "months",
-      nextDue: new Date(Date.now() + 5 * dayMs).toISOString().split("T")[0],
-      category: "utilities",
-    },
-    {
-      id: "demo-ren-5",
-      name: "Internet",
-      amount: 79.99,
-      interval: 1,
-      intervalUnit: "months",
-      nextDue: new Date(Date.now() + 10 * dayMs).toISOString().split("T")[0],
-      category: "utilities",
-    },
-    {
-      id: "demo-ren-6",
-      name: "Gym Membership",
-      amount: 59.99,
-      interval: 1,
-      intervalUnit: "months",
-      nextDue: new Date(Date.now() + 20 * dayMs).toISOString().split("T")[0],
-      category: "subs",
-    },
-    {
-      id: "demo-ren-7",
-      name: "Annual Car Registration",
-      amount: 285.0,
-      interval: 1,
-      intervalUnit: "years",
-      nextDue: "2026-07-15",
-      category: "insurance",
-    },
-  ];
+  };
+}
+
+function buildSyntheticWeeks(scenario, currentScore) {
+  const currentChecking = Number(scenario.form?.checking || 0);
+  const currentVault = Number(scenario.form?.savings || scenario.form?.ally || 0);
+  const currentDebt = (scenario.form?.debts || []).reduce((sum, debt) => sum + (Number(debt?.balance) || 0), 0);
+  const spendingTotal = Object.values(scenario.budgetActuals || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const multipliers = [0.84, 0.88, 0.91, 0.95, 0.98, 0.995];
+  const scoreStart = Math.max(currentDebt > 0 ? 78 : 92, Math.min(currentScore - 5, currentDebt > 0 ? 92 : 97));
+  return multipliers.map((multiplier, index) => {
+    const otherAssetMultiplier = 0.98 + (index * 0.004);
+    const score = Math.min(currentDebt > 0 ? 94 : 99, scoreStart + index);
+    const checking = Math.round(currentChecking * multiplier);
+    const ally = Math.round(currentVault * multiplier);
+    const investments = Math.round(scenario.investmentTotal * multiplier);
+    const otherAssets = Math.round(scenario.otherAssetsTotal * otherAssetMultiplier);
+    const debtMultiplier = 1.22 - (index * 0.045);
+    const debt = Math.max(0, Math.round(currentDebt * debtMultiplier));
+    return {
+      weeksAgo: 6 - index,
+      checking,
+      ally,
+      investments,
+      otherAssets,
+      debt,
+      netWorth: checking + ally + investments + otherAssets - debt,
+      score,
+      spent: Math.max(0, Math.round(spendingTotal * (1.12 - (index * 0.03)))),
+    };
+  });
+}
+
+export function getDemoAuditPayload(prevConfig = {}, existingHistory = [], scenarioId = getDefaultDemoScenarioId()) {
+  const scenario = buildDemoScenario(new Date(), scenarioId);
+  const demoCards = scenario.cards;
+  const demoBankAccounts = scenario.bankAccounts;
+  const demoRenewals = scenario.renewals;
+
+  const demoConfig = {
+    ...prevConfig,
+    ...scenario.financialConfig,
+    _preDemoSnapshot: prevConfig._preDemoSnapshot || { ...prevConfig },
+    isDemoConfig: true,
+  };
+
+  const computedStrategy = generateStrategy(demoConfig, {
+    checkingBalance: Number(scenario.form?.checking || 0),
+    savingsTotal: Number(scenario.form?.savings || scenario.form?.ally || 0),
+    cards: demoCards,
+    nonCardDebts: demoConfig.nonCardDebts || [],
+    renewals: demoRenewals,
+    snapshotDate: scenario.form?.date,
+  });
+  const syntheticWeeks = buildSyntheticWeeks(
+    scenario,
+    computedStrategy?.auditSignals?.nativeScore?.score ?? 100
+  );
+  const lastSyntheticWeek = syntheticWeeks[syntheticWeeks.length - 1];
+  const netWorthDeltaLabel = `${scenario.netWorth >= (lastSyntheticWeek?.netWorth || 0) ? "+" : ""}${currency(scenario.netWorth - (lastSyntheticWeek?.netWorth || 0))} vs last audit`;
+
+  const raw = JSON.stringify(
+    buildCurrentDemoAuditJson({
+      scenario,
+      todayStr: scenario.todayStr,
+      checkingBalance: Number(scenario.form?.checking || 0),
+      vaultBalance: Number(scenario.form?.savings || scenario.form?.ally || 0),
+      investmentTotal: scenario.investmentTotal,
+      otherAssetsTotal: scenario.otherAssetsTotal,
+      pendingTotal: scenario.pendingTotal,
+      netWorth: scenario.netWorth,
+      netWorthDeltaLabel,
+      renewals: demoRenewals,
+      savingsGoals: scenario.financialConfig?.savingsGoals,
+      cards: demoCards,
+      budgetActuals: scenario.budgetActuals,
+      computedStrategy,
+    })
+  );
+
+  const parsed = validateParsedAuditConsistency(
+    parseAudit(raw),
+    buildValidationOptions({
+      form: scenario.form,
+      renewals: demoRenewals,
+      cards: demoCards,
+      financialConfig: demoConfig,
+      computedStrategy,
+      investmentTotal: scenario.investmentTotal,
+      netWorth: scenario.netWorth,
+      pendingTotal: scenario.pendingTotal,
+      personalRules: scenario.personalRules,
+    })
+  );
 
   const demoPortfolio = { bankAccounts: demoBankAccounts, cards: demoCards, renewals: demoRenewals };
 
-  // ── 3. SYNTHETIC HISTORY (6 weeks of "past audits") ────────
-  // These use isDemoHistory: true (NOT isTest) so useDashboardData treats
-  // them as real audits for charts, alerts, and freedom stats computation.
-  const syntheticWeeks = [
-    { weeksAgo: 6, checking: "6200", ally: "19500", debtBal: "5200", nw: 158400, score: 72, grade: "C+", spent: 820 },
-    { weeksAgo: 5, checking: "6800", ally: "20100", debtBal: "4850", nw: 161050, score: 75, grade: "B-", spent: 680 },
-    { weeksAgo: 4, checking: "7100", ally: "20800", debtBal: "4500", nw: 164200, score: 78, grade: "B", spent: 750 },
-    { weeksAgo: 3, checking: "7500", ally: "21300", debtBal: "4200", nw: 167100, score: 81, grade: "B+", spent: 710 },
-    { weeksAgo: 2, checking: "7900", ally: "21800", debtBal: "3950", nw: 169850, score: 84, grade: "B+", spent: 690 },
-    { weeksAgo: 1, checking: "8200", ally: "22000", debtBal: "3800", nw: 170620, score: 86, grade: "A-", spent: 720 },
-  ];
-  const syntheticHistory = syntheticWeeks.map(w => {
-    const d = new Date(Date.now() - w.weeksAgo * 7 * dayMs);
-    const dateStr = d.toISOString().split("T")[0];
-    const hJSON = {
-      headerCard: { status: w.score >= 80 ? "GREEN" : "YELLOW" },
-      healthScore: { score: w.score, grade: w.grade, trend: "up", summary: "Progressing steadily." },
-      dashboardCard: [
-        {
-          category: "Checking",
-          amount: `$${Number(w.checking).toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
-          status: "Active",
-        },
-        {
-          category: "Vault",
-          amount: `$${Number(w.ally).toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
-          status: "Growing",
-        },
-        { category: "Investments", amount: "$42,000.00", status: "Steady" },
-        { category: "Other Assets", amount: "$101,000.00", status: "Home Equity" },
-        {
-          category: "Debts",
-          amount: `$${Number(w.debtBal).toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
-          status: "Paying down",
-        },
-      ],
-      netWorth: w.nw,
-      weeklyMoves: ["Pay debt", "Save more"],
-      nextAction: "Keep paying down debt.",
-      alertsCard: [],
-      radar: [],
-      longRangeRadar: [],
-      milestones: [],
-      investments: { balance: "$42,000.00", asOf: dateStr, gateStatus: "Open" },
-    };
-    const hRaw = JSON.stringify(hJSON);
-    const hParsed = parseAudit(hRaw);
-    return {
-      ts: d.toISOString(),
-      date: dateStr,
-      raw: hRaw,
-      parsed: hParsed,
-      isDemoHistory: true, // NOT isTest — so useDashboardData includes it
-      moveChecks: {},
-      form: {
-        date: dateStr,
-        checking: w.checking,
-        ally: w.ally,
-        budgetActuals: {
-          groceries: String(Math.round(w.spent * 0.35)),
-          dining: String(Math.round(w.spent * 0.2)),
-          transport: String(Math.round(w.spent * 0.15)),
-          entertainment: String(Math.round(w.spent * 0.15)),
-          shopping: String(Math.round(w.spent * 0.15)),
-        },
-        debts: [
-          { name: "Chase Sapphire", balance: w.debtBal, limit: "15000", apr: "24.99", minPayment: "45", nextDue: "" },
-        ],
-      },
-    };
+  const syntheticHistory = syntheticWeeks.map((entry) => {
+    const date = new Date(scenario.today);
+    date.setDate(date.getDate() - entry.weeksAgo * 7);
+    return buildSyntheticHistoryAudit({
+      dateStr: date.toISOString().split("T")[0],
+      ...entry,
+    });
   });
 
-  // ── 4. CURRENT AUDIT ENTRY ─────────────────────────────────
   const audit = {
-    ts: today.toISOString(),
-    date: todayStr,
+    ts: scenario.today.toISOString(),
+    date: scenario.todayStr,
     raw,
     parsed,
     isTest: true,
+    demoScenarioId: scenario.scenarioId,
+    demoScenarioName: scenario.scenarioMeta?.name,
     moveChecks: {},
     demoPortfolio,
     form: {
-      date: todayStr,
-      checking: "8450",
-      ally: "22200",
-      budgetActuals: { groceries: "245", dining: "135", transport: "110", entertainment: "95", shopping: "115" },
-      debts: [
-        { name: "Chase Sapphire", balance: "3690", limit: "15000", apr: "24.99", minPayment: "45", nextDue: "" },
-      ],
+      ...scenario.form,
+      budgetActuals: scenario.budgetActuals,
+      debts: scenario.form?.debts || [],
     },
   };
 
-  // ── 5. ASSEMBLE HISTORY ────────────────────────────────────
-  const existingRealAudits = existingHistory.filter(a => !a.isTest && !a.isDemoHistory);
+  const existingRealAudits = existingHistory.filter((auditEntry) => !auditEntry.isTest && !auditEntry.isDemoHistory);
   const nh = [audit, ...syntheticHistory, ...existingRealAudits].slice(0, 52);
-
-  // ── 6. BUILD FINANCIAL CONFIG OVERLAY (before state updates) ──
-  const nextFriday = new Date();
-  nextFriday.setDate(nextFriday.getDate() + ((5 - nextFriday.getDay() + 7) % 7 || 7));
-  const demoConfig = {
-    ...prevConfig,
-    _preDemoSnapshot: prevConfig._preDemoSnapshot || { ...prevConfig }, // Save original for restore
-    isDemoConfig: true,
-    paycheckStandard: prevConfig.paycheckStandard || 2900,
-    payday: prevConfig.payday || nextFriday.toISOString().split("T")[0],
-    payFrequency: prevConfig.payFrequency || "bi-weekly",
-    trackChecking: true,
-    weeklySpendAllowance: prevConfig.weeklySpendAllowance || 800,
-    emergencyFloor: prevConfig.emergencyFloor || 2000,
-    lastCheckingBalance: 8450,
-    incomeSources: prevConfig.incomeSources?.length
-      ? prevConfig.incomeSources
-      : [{ name: "Salary", amount: 5800, frequency: "biweekly" }],
-    budgetCategories: prevConfig.budgetCategories?.length
-      ? prevConfig.budgetCategories
-      : [
-        { name: "Groceries", monthlyTarget: 450, icon: "🛒" },
-        { name: "Dining", monthlyTarget: 250, icon: "🍽️" },
-        { name: "Transport", monthlyTarget: 200, icon: "🚗" },
-        { name: "Entertainment", monthlyTarget: 150, icon: "🎬" },
-        { name: "Shopping", monthlyTarget: 200, icon: "🛍️" },
-      ],
-    // FIRE projection inputs
-    fireExpectedReturnPct: prevConfig.fireExpectedReturnPct || 7,
-    fireInflationPct: prevConfig.fireInflationPct || 2.5,
-    fireSafeWithdrawalPct: prevConfig.fireSafeWithdrawalPct || 4,
-    // Investment tracking
-    enableHoldings: true,
-    track401k: true,
-    trackRothContributions: true,
-    trackBrokerage: true,
-    trackCrypto: true,
-    holdings:
-      prevConfig.holdings && Object.values(prevConfig.holdings).some(a => a?.length)
-        ? prevConfig.holdings
-        : {
-          k401: [{ symbol: "VFIAX", shares: "245", lastKnownPrice: 450 }],
-          roth: [{ symbol: "VTI", shares: "52", lastKnownPrice: 260 }],
-          brokerage: [{ symbol: "VTSAX", shares: "85", lastKnownPrice: 118 }],
-          crypto: [{ symbol: "BTC", shares: "0.15", lastKnownPrice: 62000 }],
-        },
-    taxBracketPercent: prevConfig.taxBracketPercent || 22,
-    k401ContributedYTD: prevConfig.k401ContributedYTD || 8500,
-  };
 
   return {
     audit,
     nh,
     demoConfig,
     demoCards,
-    demoRenewals
+    demoBankAccounts,
+    demoRenewals,
+    demoScenarioMeta: scenario.scenarioMeta,
   };
 }

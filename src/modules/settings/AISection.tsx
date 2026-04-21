@@ -169,7 +169,7 @@ export default function AISection({
                         border: `1px solid ${T.status.green}30`,
                       };
               return (
-                <button
+                <button type="button"
                   key={m.id}
                   onClick={() => {
                     if (locked) {
@@ -191,7 +191,7 @@ export default function AISection({
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    transition: "all .2s ease",
+                    transition: "transform .2s ease, opacity .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease",
                   }}
                 >
                   <div>
@@ -298,7 +298,7 @@ export default function AISection({
               </div>
             </div>
             {showUpgradeCta ? (
-              <button
+              <button type="button"
                 onClick={() => {
                   haptic.light();
                   setShowPaywall(true);
@@ -387,8 +387,10 @@ export default function AISection({
             </div>
           ))}
           <div style={{ paddingTop: 14 }}>
-          <button
-            onClick={() => window.open(PRIVACY_URL, "_blank")}
+          <a
+            href={PRIVACY_URL}
+            target="_blank"
+            rel="noreferrer"
             style={{
               width: "100%",
               padding: "10px 14px",
@@ -399,10 +401,12 @@ export default function AISection({
               fontSize: 11,
               fontWeight: 700,
               cursor: "pointer",
+              textDecoration: "none",
+              display: "block",
             }}
           >
             Privacy Policy
-          </button>
+          </a>
           </div>
         </div>
       </div>

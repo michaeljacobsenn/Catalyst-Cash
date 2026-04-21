@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildChatFeedbackProfile,
   buildNegotiationPrompt,
   CHAT_FEEDBACK_REASON_OPTIONS,
   getChatFallbackModel,
@@ -60,6 +61,28 @@ describe("ai chat model", () => {
     expect(toggleChatFeedbackReason(helpful, "msg-1", "wrong_math")).toBe(helpful);
   });
 
+  it("builds a feedback profile that can steer future replies", () => {
+    const profile = buildChatFeedbackProfile({
+      a: { verdict: "needs-work", reasons: ["too_long", "missed_context"], updatedAt: 5 },
+      b: { verdict: "needs-work", reasons: ["too_long"], updatedAt: 4 },
+      c: { verdict: "needs-work", reasons: ["wrong_math"], updatedAt: 3 },
+      d: { verdict: "helpful", reasons: [], updatedAt: 2 },
+    });
+
+    expect(profile.totalHelpful).toBe(1);
+    expect(profile.totalNeedsWork).toBe(3);
+    expect(profile.dominantReasons).toEqual(["too_long", "missed_context", "wrong_math"]);
+    expect(profile.responsePreferences).toEqual({
+      preferConcise: true,
+      preferSpecificity: false,
+      prioritizeMathChecks: true,
+      emphasizeLiveContext: true,
+    });
+    expect(profile.promptGuidance).toContain("Keep the answer tighter");
+    expect(profile.promptGuidance).toContain("Double-check arithmetic");
+    expect(profile.promptGuidance).toContain("Use the user's saved rules");
+  });
+
   it("builds the negotiation prompt and viewport density consistently", () => {
     expect(buildNegotiationPrompt({ merchant: "Comcast", amount: 95 })).toContain("Comcast");
     expect(CHAT_FEEDBACK_REASON_OPTIONS).toHaveLength(4);
@@ -73,7 +96,8 @@ describe("ai chat model", () => {
       compactEmbedded: true,
       denseEmbedded: true,
       ultraDenseEmbedded: true,
-      promptClamp: 2,
+      promptClamp: 0,
+      suggestionColumns: 1,
       orbSize: 42,
     });
 
@@ -85,7 +109,8 @@ describe("ai chat model", () => {
     ).toMatchObject({
       compactEmbedded: false,
       suggestionCardMinHeight: 100,
-      promptClamp: 3,
+      promptClamp: 0,
+      suggestionColumns: 1,
     });
   });
 });

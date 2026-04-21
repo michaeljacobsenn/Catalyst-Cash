@@ -72,7 +72,7 @@ export default function AnalyticsCharts({ chartData, scoreData, spendData, chart
             ]
               .filter(t => t.show)
               .map(tab => (
-                <button
+                <button type="button"
                   key={tab.id}
                   role="tab"
                   aria-selected={chartTab === tab.id}

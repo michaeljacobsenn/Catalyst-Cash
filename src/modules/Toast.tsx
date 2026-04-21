@@ -149,7 +149,7 @@ const Toast: FC<ToastProps> = ({ toast, onRemove }) => {
         WebkitBackdropFilter: "blur(20px)",
         transform: visible ? "translateY(0)" : "translateY(-20px)",
         opacity: visible ? 1 : 0,
-        transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+        transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1), color 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
         pointerEvents: "auto",
       }}
     >
@@ -171,7 +171,7 @@ const Toast: FC<ToastProps> = ({ toast, onRemove }) => {
         {toast.message}
       </span>
       {toast.action && (
-        <button
+        <button type="button"
           onClick={toast.action.fn}
           style={{
             padding: "6px 12px",
@@ -188,7 +188,7 @@ const Toast: FC<ToastProps> = ({ toast, onRemove }) => {
           {toast.action.label}
         </button>
       )}
-      <button
+      <button type="button"
         onClick={onRemove}
         style={{
           width: 24,

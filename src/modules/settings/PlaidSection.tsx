@@ -469,7 +469,7 @@ export default function PlaidSection({
                     {(conn.accounts?.length || 0)} reconnect-ready account{(conn.accounts?.length || 0) === 1 ? "" : "s"}
                   </div>
                 </div>
-                <button
+                <button type="button"
                   onClick={() => handleReconnect(conn)}
                   disabled={reconnectingId === conn.id}
                   style={{
@@ -560,7 +560,7 @@ export default function PlaidSection({
                         isDisconnectPromptOpen ? null : (
                           <div style={{ display: "flex", gap: 8 }}>
                             {conn._freeTierPaused && (
-                              <button
+                              <button type="button"
                                 onClick={() => handleKeepLive(conn)}
                                 disabled={switchingActiveId === conn.id}
                                 aria-label={`Keep ${conn.institutionName || "bank"} as your active live sync institution`}
@@ -585,7 +585,7 @@ export default function PlaidSection({
                               </button>
                             )}
                             {conn._needsReconnect && (
-                              <button
+                              <button type="button"
                                 onClick={() => handleReconnect(conn)}
                                 disabled={reconnectingId === conn.id || conn._freeTierPaused}
                                 aria-label={`Reconnect ${conn.institutionName || "bank"}`}
@@ -613,7 +613,7 @@ export default function PlaidSection({
                                 {reconnectingId === conn.id ? "Reconnecting..." : "Reconnect"}
                               </button>
                             )}
-                            <button
+                            <button type="button"
                               onClick={() => setConfirmingDisconnect({ id: conn.id })}
                               aria-label={`Disconnect ${conn.institutionName || "bank"}`}
                               style={{
@@ -655,7 +655,7 @@ export default function PlaidSection({
                         </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                            <button
+                            <button type="button"
                               onClick={() => setConfirmingDisconnect(null)}
                               disabled={disconnectingId === conn.id}
                               style={{
@@ -673,7 +673,7 @@ export default function PlaidSection({
                             >
                               Cancel
                             </button>
-                            <button
+                            <button type="button"
                               onClick={() => handleDisconnect(conn, { keepManual: true })}
                               disabled={disconnectingId === conn.id}
                               style={{
@@ -692,7 +692,7 @@ export default function PlaidSection({
                               {disconnectingId === conn.id ? "Disconnecting..." : "Keep Manual"}
                             </button>
                           </div>
-                          <button
+                          <button type="button"
                             onClick={() => handleDisconnect(conn, { keepManual: false })}
                             disabled={disconnectingId === conn.id}
                             style={{
@@ -720,7 +720,7 @@ export default function PlaidSection({
         )}
       </div>
 
-      <button
+      <button type="button"
         onClick={handleConnect}
         disabled={isPlaidConnecting || !!reconnectingId}
         style={{
