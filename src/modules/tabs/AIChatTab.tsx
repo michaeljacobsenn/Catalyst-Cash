@@ -1033,7 +1033,12 @@ export default memo(function AIChatTab({
         style={{
           flex: 1,
           overflowY: messages.length === 0 ? "hidden" : "auto",
-          padding: messages.length === 0 && compactEmbedded ? "10px 14px 12px" : "16px 14px",
+          padding:
+            messages.length === 0
+              ? compactEmbedded
+                ? "4px 14px 18px"
+                : "10px 14px 22px"
+              : "16px 14px",
           display: "flex",
           flexDirection: "column",
           gap: 6,
@@ -1051,7 +1056,10 @@ export default memo(function AIChatTab({
               alignItems: "center",
               justifyContent: "flex-start",
               minHeight: "100%",
-              padding: `${emptyTopPadding}px 10px 14px`,
+              width: "100%",
+              maxWidth: compactEmbedded ? "100%" : 560,
+              margin: "0 auto",
+              padding: `${emptyTopPadding}px 14px 0`,
               textAlign: "center",
               animation: "fadeIn .5s ease",
             }}
@@ -1067,7 +1075,7 @@ export default memo(function AIChatTab({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                marginBottom: ultraDenseEmbedded ? 8 : denseEmbedded ? 10 : 14,
+                marginBottom: ultraDenseEmbedded ? 6 : denseEmbedded ? 8 : compactEmbedded ? 10 : 12,
                 flexShrink: 0,
               }}
             >
@@ -1083,7 +1091,7 @@ export default memo(function AIChatTab({
                 fontSize: titleSize,
                 fontWeight: 850,
                 color: T.text.primary,
-                marginBottom: denseEmbedded ? 4 : 6,
+                marginBottom: denseEmbedded ? 3 : 4,
                 letterSpacing: "-0.04em",
               }}
             >
@@ -1095,8 +1103,8 @@ export default memo(function AIChatTab({
                 color: T.text.secondary,
                 lineHeight: 1.5,
                 fontWeight: 500,
-                maxWidth: ultraDenseEmbedded ? 220 : 240,
-                marginBottom: chipMarginBottom,
+                maxWidth: ultraDenseEmbedded ? 236 : 300,
+                marginBottom: chipMarginBottom + 2,
               }}
             >
               {hasData
@@ -1108,7 +1116,7 @@ export default memo(function AIChatTab({
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                marginBottom: chipMarginBottom,
+                marginBottom: chipMarginBottom + 4,
                 padding: ultraDenseEmbedded ? "5px 12px" : "6px 14px",
                 borderRadius: 99,
                 background: `${T.status.green}10`,
@@ -1130,7 +1138,14 @@ export default memo(function AIChatTab({
             </div>
 
             {/* Elite Horizontally Scrolling Suggestion Chips */}
-            <div style={{ position: "relative", width: "100%", margin: compactEmbedded ? "0 -8px" : "0 -16px", padding: compactEmbedded ? "0 8px" : "0 16px" }}>
+            <div
+              style={{
+                position: "relative",
+                width: "100%",
+                margin: compactEmbedded ? "0 -8px" : "0 -10px",
+                padding: compactEmbedded ? "0 8px" : "0 10px",
+              }}
+            >
               <div
                 className="scroll-area hide-scrollbar"
                 style={{
@@ -1138,7 +1153,7 @@ export default memo(function AIChatTab({
                   gridTemplateColumns: suggestionColumns === 1 ? "1fr" : "1fr 1fr",
                   gap: suggestionGridGap,
                   width: "100%",
-                  paddingBottom: ultraDenseEmbedded ? 4 : denseEmbedded ? 6 : 10,
+                  paddingBottom: ultraDenseEmbedded ? 0 : denseEmbedded ? 2 : 4,
                 }}
               >
                 {suggestions.map((s, i) => (

@@ -98,7 +98,7 @@ describe("ai chat model", () => {
       ultraDenseEmbedded: true,
       promptClamp: 0,
       suggestionColumns: 1,
-      orbSize: 42,
+      orbSize: 40,
     });
 
     expect(
@@ -108,7 +108,7 @@ describe("ai chat model", () => {
       })
     ).toMatchObject({
       compactEmbedded: false,
-      suggestionCardMinHeight: 100,
+      suggestionCardMinHeight: 88,
       promptClamp: 0,
       suggestionColumns: 1,
     });

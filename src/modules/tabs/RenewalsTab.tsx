@@ -649,52 +649,25 @@ export default memo(function RenewalsTab({
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr",
-              gap: 10,
+              gap: 12,
               alignItems: "stretch",
             }}
           >
             <div
               style={{
-                padding: "14px 14px 13px",
-                borderRadius: 18,
+                padding: "16px 16px 14px",
+                borderRadius: 20,
                 border: `1px solid ${T.accent.primary}18`,
-                background: `linear-gradient(180deg, ${T.bg.surface}, ${T.accent.primary}08)`,
+                background: `linear-gradient(180deg, ${T.bg.surface}, ${T.accent.primary}10)`,
                 display: "grid",
-                gap: 8,
+                gap: 12,
+                minWidth: 0,
               }}
             >
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 10, fontWeight: 800, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.12em", fontFamily: T.font.mono }}>
-                    Monthly Recurring Load
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "baseline",
-                      gap: 8,
-                      marginTop: 6,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <Mono size={isNarrowPhone ? 27 : 29} weight={800} color={T.accent.primary} style={{ display: "block" }}>
-                      {fmt(monthlyTotal)}
-                    </Mono>
-                    <span
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: T.text.secondary,
-                        letterSpacing: "0.02em",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      per month
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 11.5, color: T.text.secondary, lineHeight: 1.45, marginTop: 6, maxWidth: 560 }}>
-                    Keep committed spend visible so your budget and weekly audit stay anchored to what is already spoken for.
+                    Recurring Load
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: isNarrowPhone ? "flex-start" : "flex-end" }}>
@@ -722,40 +695,82 @@ export default memo(function RenewalsTab({
                   )}
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                {[
-                  {
-                    label: "Per week",
-                    value: `${fmt(weeklyRunRate)}/wk`,
-                    accent: true,
-                  },
-                  {
-                    label: "Per year",
-                    value: `${fmt(annualRunRate)}/yr`,
-                    accent: false,
-                  },
-                ].map((metric) => (
-                  <div
-                    key={metric.label}
-                    style={{
-                      minHeight: 32,
-                      padding: "0 12px",
-                      borderRadius: 999,
-                      border: `1px solid ${metric.accent ? `${T.accent.primary}24` : T.border.subtle}`,
-                      background: metric.accent ? `${T.accent.primary}10` : T.bg.surface,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <span style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                      {metric.label}
-                    </span>
-                    <Mono size={11.5} weight={800} color={metric.accent ? T.accent.primary : T.text.primary}>
-                      {metric.value}
-                    </Mono>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isNarrowPhone
+                    ? "minmax(0, 1.18fr) minmax(124px, 0.82fr)"
+                    : "minmax(0, 1.28fr) minmax(168px, 0.72fr)",
+                  gap: 10,
+                  alignItems: "stretch",
+                }}
+              >
+                <div
+                  style={{
+                    minHeight: 116,
+                    padding: "16px 16px 14px",
+                    borderRadius: 18,
+                    border: `1px solid ${T.accent.primary}20`,
+                    background: `linear-gradient(180deg, ${T.bg.card}, ${T.accent.primary}12)`,
+                    display: "grid",
+                    alignContent: "space-between",
+                    gap: 10,
+                    minWidth: 0,
+                  }}
+                >
+                  <div style={{ fontSize: 10, fontWeight: 800, color: T.text.secondary, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: T.font.mono }}>
+                    Monthly
                   </div>
-                ))}
+                  <Mono size={isNarrowPhone ? 28 : 31} weight={800} color={T.accent.primary}>
+                    {fmt(monthlyTotal)}
+                  </Mono>
+                  <div style={{ fontSize: 11.5, color: T.text.secondary, lineHeight: 1.4 }}>
+                    Active monthly commitments.
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gap: 10,
+                    minWidth: 0,
+                  }}
+                >
+                  {[
+                    {
+                      label: "Weekly",
+                      value: `${fmt(weeklyRunRate)}/wk`,
+                      accent: true,
+                    },
+                    {
+                      label: "Yearly",
+                      value: `${fmt(annualRunRate)}/yr`,
+                      accent: false,
+                    },
+                  ].map((metric) => (
+                    <div
+                      key={metric.label}
+                      style={{
+                        minHeight: 53,
+                        padding: "12px 14px",
+                        borderRadius: 18,
+                        border: `1px solid ${metric.accent ? `${T.accent.primary}24` : T.border.subtle}`,
+                        background: metric.accent ? `${T.accent.primary}10` : T.bg.surface,
+                        display: "grid",
+                        gap: 4,
+                        alignContent: "center",
+                        minWidth: 0,
+                      }}
+                    >
+                      <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                        {metric.label}
+                      </div>
+                      <Mono size={metric.accent ? 15 : 14} weight={800} color={metric.accent ? T.accent.primary : T.text.primary}>
+                        {metric.value}
+                      </Mono>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -763,53 +778,86 @@ export default memo(function RenewalsTab({
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: isTablet
-                ? "minmax(0, 1.2fr) minmax(220px, 0.8fr)"
-                : "minmax(0, 1.15fr) minmax(140px, 0.85fr)",
+              gridTemplateColumns: isNarrowPhone
+                ? "minmax(0, 1.18fr) minmax(126px, 0.82fr)"
+                : isTablet
+                  ? "minmax(0, 1.16fr) minmax(220px, 0.84fr)"
+                  : "minmax(0, 1.16fr) minmax(168px, 0.84fr)",
               gap: 10,
               alignItems: "stretch",
             }}
           >
             <div
               style={{
-                padding: "12px 12px 11px",
+                padding: "14px 14px 13px",
                 borderRadius: 18,
                 border: `1px solid ${T.border.subtle}`,
                 background: T.bg.surface,
                 display: "grid",
-                gap: 6,
+                gridTemplateRows: "auto 1fr auto",
+                gap: 10,
+                minHeight: 150,
               }}
             >
               <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 Due next
               </div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: T.text.primary, lineHeight: 1.2 }}>
+              <div style={{ fontSize: isNarrowPhone ? 16 : 18, fontWeight: 800, color: T.text.primary, lineHeight: 1.18, alignSelf: "center" }}>
                 {nextDueItem ? nextDueItem.name : "No due date set"}
               </div>
-              <div style={{ fontSize: 11.5, color: T.text.secondary, lineHeight: 1.45 }}>
-                {nextDueItem
-                  ? `${formatRenewalDueDate(nextDueItem.nextDue)} · ${fmt(nextDueItem.amount || 0)}`
-                  : "Add the next charge date so Catalyst can surface what is coming up first."}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.4 }}>
+                  {nextDueItem
+                    ? formatRenewalDueDate(nextDueItem.nextDue)
+                    : "Set a due date to surface the next charge."}
+                </div>
+                {nextDueItem ? (
+                  <div
+                    style={{
+                      minHeight: 28,
+                      padding: "0 10px",
+                      borderRadius: 999,
+                      border: `1px solid ${T.accent.primary}24`,
+                      background: `${T.accent.primary}10`,
+                      display: "inline-flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Mono size={11.5} weight={800} color={T.accent.primary}>
+                      {fmt(nextDueItem.amount || 0)}
+                    </Mono>
+                  </div>
+                ) : null}
               </div>
             </div>
 
             <div
               style={{
-                padding: "12px 12px 11px",
+                padding: "14px 14px 13px",
                 borderRadius: 18,
                 border: `1px solid ${T.border.subtle}`,
                 background: T.bg.surface,
                 display: "grid",
-                gap: 6,
+                gridTemplateRows: "auto 1fr auto",
+                gap: 10,
+                minHeight: 150,
               }}
             >
               <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                Average active item
+                Average item
               </div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: T.text.primary, lineHeight: 1.2 }}>
+              <div style={{ fontSize: isNarrowPhone ? 18 : 22, fontWeight: 800, color: T.text.primary, lineHeight: 1.15, alignSelf: "center" }}>
                 {fmt(averageActiveItemMonthly)}
               </div>
-              <div style={{ fontSize: 11.5, color: T.text.secondary, lineHeight: 1.45 }}>
+              <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.4 }}>
                 Per month across {activeItemCount || 0} active {activeItemCount === 1 ? "item" : "items"}.
               </div>
             </div>
