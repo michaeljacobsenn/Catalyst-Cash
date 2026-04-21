@@ -259,11 +259,59 @@
             }
 
             .decision-table-wrap {
-                overflow-x: auto;
+                overflow: visible;
+                border: 0;
+                background: transparent;
+                box-shadow: none;
             }
 
             .decision-table {
-                min-width: 720px;
+                min-width: 0;
+            }
+
+            .decision-table thead {
+                display: none;
+            }
+
+            .decision-table,
+            .decision-table tbody,
+            .decision-table tr,
+            .decision-table td {
+                display: block;
+                width: 100%;
+            }
+
+            .decision-table tr {
+                padding: 20px;
+                border-radius: 22px;
+                border: 1px solid var(--line);
+                background: var(--bg-panel);
+                margin-bottom: 14px;
+                box-shadow: 0 16px 30px rgba(0, 0, 0, 0.22);
+            }
+
+            .decision-table td {
+                padding: 0 0 14px;
+                border: 0;
+            }
+
+            .decision-table td:last-child {
+                padding-bottom: 0;
+            }
+
+            .decision-table td::before {
+                content: attr(data-label);
+                display: block;
+                margin-bottom: 7px;
+                color: var(--dim);
+                font-size: 10px;
+                letter-spacing: 0.14em;
+                text-transform: uppercase;
+                font-family: "IBM Plex Mono", monospace;
+            }
+
+            .decision-table td strong {
+                margin-bottom: 0;
             }
         }
     </style>
@@ -400,39 +448,39 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td><strong>I need to know what to do this week.</strong></td>
-                                <td>Catalyst Cash</td>
-                                <td>Its primary loop is a weekly audit plus AskAI follow-up, not just passive tracking.</td>
+                                <td data-label="Need"><strong>I need to know what to do this week.</strong></td>
+                                <td data-label="Best fit">Catalyst Cash</td>
+                                <td data-label="Why">Its primary loop is a weekly audit plus AskAI follow-up, not just passive tracking.</td>
                             </tr>
                             <tr>
-                                <td><strong>I want disciplined envelope budgeting every day.</strong></td>
-                                <td>YNAB</td>
-                                <td>Best if your workflow starts with category allocation and you are willing to live inside it daily. Catalyst still covers budgeting, but it is built for the broader weekly money picture.</td>
+                                <td data-label="Need"><strong>I want disciplined envelope budgeting every day.</strong></td>
+                                <td data-label="Best fit">YNAB</td>
+                                <td data-label="Why">Best if your workflow starts with category allocation and you are willing to live inside it daily. Catalyst still covers budgeting, but it is built for the broader weekly money picture.</td>
                             </tr>
                             <tr>
-                                <td><strong>I want a shared dashboard for household finances.</strong></td>
-                                <td>Catalyst Cash or Monarch</td>
-                                <td>Pick Monarch if household collaboration is the whole job. Pick Catalyst if you want that visibility plus audit, debt, renewals, and decision support in the same system.</td>
+                                <td data-label="Need"><strong>I want a shared dashboard for household finances.</strong></td>
+                                <td data-label="Best fit">Catalyst Cash or Monarch</td>
+                                <td data-label="Why">Pick Monarch if household collaboration is the whole job. Pick Catalyst if you want that visibility plus audit, debt, renewals, and decision support in the same system.</td>
                             </tr>
                             <tr>
-                                <td><strong>I want beautiful tracking and category review on iPhone.</strong></td>
-                                <td>Copilot or Catalyst Cash</td>
-                                <td>Pick Copilot if passive review is the main goal. Pick Catalyst if you want strong tracking plus an actual weekly action layer.</td>
+                                <td data-label="Need"><strong>I want beautiful tracking and category review on iPhone.</strong></td>
+                                <td data-label="Best fit">Copilot or Catalyst Cash</td>
+                                <td data-label="Why">Pick Copilot if passive review is the main goal. Pick Catalyst if you want strong tracking plus an actual weekly action layer.</td>
                             </tr>
                             <tr>
-                                <td><strong>I want the best card at checkout or inside a mall.</strong></td>
-                                <td>Catalyst Cash or MaxRewards</td>
-                                <td>Pick MaxRewards if live rewards optimization is the whole job. Pick Catalyst if you want that plus budget, audit, renewals, and nearby merchant selection inside the same product.</td>
+                                <td data-label="Need"><strong>I want the best card at checkout or inside a mall.</strong></td>
+                                <td data-label="Best fit">Catalyst Cash or MaxRewards</td>
+                                <td data-label="Why">Pick MaxRewards if live rewards optimization is the whole job. Pick Catalyst if you want that plus budget, audit, renewals, and nearby merchant selection inside the same product.</td>
                             </tr>
                             <tr>
-                                <td><strong>I mostly need subscription cleanup.</strong></td>
-                                <td>Rocket Money</td>
-                                <td>Best if subscription reduction is the whole problem. Catalyst is stronger if recurring charges are one of several recurring financial pressures.</td>
+                                <td data-label="Need"><strong>I mostly need subscription cleanup.</strong></td>
+                                <td data-label="Best fit">Rocket Money</td>
+                                <td data-label="Why">Best if subscription reduction is the whole problem. Catalyst is stronger if recurring charges are one of several recurring financial pressures.</td>
                             </tr>
                             <tr>
-                                <td><strong>I want direct access to human advisors.</strong></td>
-                                <td>Origin</td>
-                                <td>Best if you want human guidance bundled into the product. Catalyst is better if you want a lower-cost self-directed system that still helps you reason through tradeoffs.</td>
+                                <td data-label="Need"><strong>I want direct access to human advisors.</strong></td>
+                                <td data-label="Best fit">Origin</td>
+                                <td data-label="Why">Best if you want human guidance bundled into the product. Catalyst is better if you want a lower-cost self-directed system that still helps you reason through tradeoffs.</td>
                             </tr>
                         </tbody>
                     </table>
