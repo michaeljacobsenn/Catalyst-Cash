@@ -38,8 +38,8 @@ function AuditPickerField({
         background: T.bg.elevated,
         border: `1.5px solid ${focused ? T.accent.primary : T.border.default}`,
         boxSizing: "border-box",
-        boxShadow: focused ? `0 0 0 3px ${T.accent.primary}24` : "none",
-        transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+        boxShadow: focused ? `0 0 0 2px ${T.accent.primary}18` : "none",
+        transition: "border-color 0.18s ease, box-shadow 0.18s ease",
         overflow: "hidden",
       }}
     >

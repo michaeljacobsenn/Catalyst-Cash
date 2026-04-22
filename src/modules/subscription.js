@@ -54,6 +54,15 @@ const KC_DEVICE_ID_KEY = "cc-device-id";
 const KC_AUDIT_STATE_KEY = "cc-audit-state";
 const isNativePlatform = Capacitor.isNativePlatform();
 export const SUBSCRIPTION_STATE_CHANGED_EVENT = "catalyst:subscription-state-changed";
+const SUBSCRIPTION_STATE_CACHE_TTL_MS = 2500;
+const KEYCHAIN_AUDIT_STATE_CACHE_TTL_MS = 2500;
+
+let subscriptionStateCache = null;
+let subscriptionStateCacheAt = 0;
+let subscriptionStatePromise = null;
+let keychainAuditStateCache = null;
+let keychainAuditStateCacheAt = 0;
+let keychainAuditStatePromise = null;
 
 const DEFAULT_STATE = {
   tier: "free",
@@ -91,6 +100,39 @@ function ensureChatUsageMap(state) {
   if (!isPlainObject(state.chatMessagesByModel)) {
     state.chatMessagesByModel = {};
   }
+}
+
+function cloneSubscriptionState(state) {
+  return createSubscriptionState(state);
+}
+
+function isFreshCache(timestamp, ttl) {
+  return Number.isFinite(timestamp) && timestamp > 0 && Date.now() - timestamp < ttl;
+}
+
+function primeSubscriptionStateCache(state) {
+  subscriptionStateCache = cloneSubscriptionState(state);
+  subscriptionStateCacheAt = Date.now();
+}
+
+function primeKeychainAuditStateCache(state) {
+  keychainAuditStateCache = isPlainObject(state) ? { ...state } : null;
+  keychainAuditStateCacheAt = Date.now();
+}
+
+function invalidateSubscriptionStateCache({ includeKeychain = false } = {}) {
+  subscriptionStateCache = null;
+  subscriptionStateCacheAt = 0;
+  subscriptionStatePromise = null;
+  if (includeKeychain) {
+    keychainAuditStateCache = null;
+    keychainAuditStateCacheAt = 0;
+    keychainAuditStatePromise = null;
+  }
+}
+
+export function __resetSubscriptionCachesForTests() {
+  invalidateSubscriptionStateCache({ includeKeychain: true });
 }
 
 function applyUsageWindows(state, windows) {
@@ -217,11 +259,35 @@ function generateUUID() {
 }
 
 async function getKeychainAuditState() {
-  const state = await keychainGet(KC_AUDIT_STATE_KEY);
-  return isPlainObject(state) ? state : null;
+  if (isFreshCache(keychainAuditStateCacheAt, KEYCHAIN_AUDIT_STATE_CACHE_TTL_MS)) {
+    return keychainAuditStateCache ? { ...keychainAuditStateCache } : null;
+  }
+
+  if (keychainAuditStatePromise) {
+    const pendingState = await keychainAuditStatePromise;
+    return pendingState ? { ...pendingState } : null;
+  }
+
+  const loadPromise = (async () => {
+    const state = await keychainGet(KC_AUDIT_STATE_KEY);
+    const normalized = isPlainObject(state) ? { ...state } : null;
+    primeKeychainAuditStateCache(normalized);
+    return normalized;
+  })();
+
+  keychainAuditStatePromise = loadPromise;
+  try {
+    const state = await loadPromise;
+    return state ? { ...state } : null;
+  } finally {
+    if (keychainAuditStatePromise === loadPromise) {
+      keychainAuditStatePromise = null;
+    }
+  }
 }
 
 async function setKeychainAuditState(counters) {
+  primeKeychainAuditStateCache(counters);
   await keychainSet(KC_AUDIT_STATE_KEY, counters);
 }
 
@@ -253,20 +319,44 @@ export async function getOrCreateDeviceId() {
 }
 
 export async function getSubscriptionState() {
+  if (isFreshCache(subscriptionStateCacheAt, SUBSCRIPTION_STATE_CACHE_TTL_MS)) {
+    return cloneSubscriptionState(subscriptionStateCache);
+  }
+
+  if (subscriptionStatePromise) {
+    const pendingState = await subscriptionStatePromise;
+    return cloneSubscriptionState(pendingState);
+  }
+
+  const loadPromise = (async () => {
+    try {
+      const raw = await db.get(STATE_KEY);
+      const state = createSubscriptionState(raw);
+      const windows = getUsageWindowKeys(new Date(), state.purchaseAnchorDay || null);
+      const keychainState = await getKeychainAuditState();
+
+      applyUsageWindows(state, windows);
+      mergeKeychainCounters(state, keychainState, windows);
+      applySubscriptionExpiry(state);
+
+      await db.set(STATE_KEY, state);
+      primeSubscriptionStateCache(state);
+      return state;
+    } catch {
+      const fallbackState = createSubscriptionState(null);
+      primeSubscriptionStateCache(fallbackState);
+      return fallbackState;
+    }
+  })();
+
+  subscriptionStatePromise = loadPromise;
   try {
-    const raw = await db.get(STATE_KEY);
-    const state = createSubscriptionState(raw);
-    const windows = getUsageWindowKeys(new Date(), state.purchaseAnchorDay || null);
-    const keychainState = await getKeychainAuditState();
-
-    applyUsageWindows(state, windows);
-    mergeKeychainCounters(state, keychainState, windows);
-    applySubscriptionExpiry(state);
-
-    await db.set(STATE_KEY, state);
-    return state;
-  } catch {
-    return createSubscriptionState(null);
+    const state = await loadPromise;
+    return cloneSubscriptionState(state);
+  } finally {
+    if (subscriptionStatePromise === loadPromise) {
+      subscriptionStatePromise = null;
+    }
   }
 }
 
@@ -325,6 +415,7 @@ export async function recordAuditUsage() {
   state.auditsThisMonth = (state.auditsThisMonth || 0) + 1;
 
   await db.set(STATE_KEY, state);
+  primeSubscriptionStateCache(state);
   await persistUsageCounters(state);
 }
 
@@ -401,6 +492,7 @@ export async function recordChatUsage(modelId) {
   }
 
   await db.set(STATE_KEY, state);
+  primeSubscriptionStateCache(state);
   await persistUsageCounters(state);
 }
 
@@ -466,6 +558,7 @@ export async function activatePro(
   }
 
   await db.set(STATE_KEY, state);
+  primeSubscriptionStateCache(state);
   notifySubscriptionStateChange(state);
   return state;
 }
@@ -480,6 +573,7 @@ export async function deactivatePro() {
   state.purchaseAnchorDay = null;
   state.billingCycleKey = null;
   await db.set(STATE_KEY, state);
+  primeSubscriptionStateCache(state);
   notifySubscriptionStateChange(state);
 }
 

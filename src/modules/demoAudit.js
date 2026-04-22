@@ -10,6 +10,12 @@ function currency(amount) {
   })}`;
 }
 
+function getScenarioHouseholdLabel(scenario) {
+  const name = String(scenario?.scenarioMeta?.name || "").trim();
+  if (name) return `The ${name} household`;
+  return "This household";
+}
+
 function buildValidationOptions({ form, renewals, cards, financialConfig, computedStrategy, investmentTotal, netWorth, pendingTotal, personalRules }) {
   return {
     operationalSurplus: computedStrategy?.operationalSurplus ?? null,
@@ -148,12 +154,12 @@ function buildCurrentDemoAuditJson({
       trend: "up",
       summary:
         hasDebt
-          ? `${scenario?.scenarioMeta?.name || "Demo"} shows how Catalyst handles debt well: protect cash first, then turn open capacity into consistent payoff progress.`
+          ? `${scenario?.scenarioMeta?.name || "Demo"} shows Catalyst's debt playbook clearly: protect cash first, then turn open capacity into steady payoff progress.`
           : `${scenario?.scenarioMeta?.name || "Demo"} shows Catalyst at its best: protect the floor, keep reserves above target, and let true surplus compound instead of leaking away.`,
       narrative:
         hasDebt
-          ? `This ${scenario?.scenarioMeta?.description?.toLowerCase() || "demo household"} is carrying ${currency(debtTotal)} of revolving debt, but it still has a protected floor of ${currency(operatingFloor)} and ${currency(emergencyCurrent)} in reserve cash. That leaves ${currency(operationalSurplus)} of real weekly payoff capacity Catalyst can send to the highest APR balance without creating new cash stress.`
-          : `This ${scenario?.scenarioMeta?.description?.toLowerCase() || "demo household"} is running with a protected floor of ${currency(operatingFloor)}, an emergency reserve of ${currency(emergencyCurrent)}, and no revolving debt. That leaves ${currency(operationalSurplus)} of real weekly capacity that Catalyst can direct into long-term investing without creating cash stress.`,
+          ? `${getScenarioHouseholdLabel(scenario)} is carrying ${currency(debtTotal)} of revolving debt, but it still has a protected floor of ${currency(operatingFloor)} and ${currency(emergencyCurrent)} in reserve cash. That leaves ${currency(operationalSurplus)} of real weekly payoff capacity Catalyst can send to the highest APR balance without creating new cash stress.`
+          : `${getScenarioHouseholdLabel(scenario)} is running with a protected floor of ${currency(operatingFloor)}, an emergency reserve of ${currency(emergencyCurrent)}, and no revolving debt. That leaves ${currency(operationalSurplus)} of real weekly capacity that Catalyst can direct into long-term investing without creating cash stress.`,
     },
     alertsCard: hasDebt
       ? [

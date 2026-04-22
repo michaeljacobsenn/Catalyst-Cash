@@ -125,7 +125,7 @@ export function buildDashboardSafetyModel({
 
   const headline =
     level === "urgent" ? "Cash protection is not fully covered." :
-    level === "caution" ? "You are covered, but the buffer is tight." :
+    level === "caution" ? "You are covered, but the cushion is thin." :
     "You are currently covered with a real cash buffer.";
 
   const summary =

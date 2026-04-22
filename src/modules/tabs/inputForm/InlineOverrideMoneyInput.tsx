@@ -80,9 +80,8 @@ export function InlineOverrideMoneyInput({
           value={value}
           placeholder={placeholder}
           onChange={onChange}
-          onFocus={(event) => {
+          onFocus={() => {
             setFocused(true);
-            setTimeout(() => event.target.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
           }}
           onBlur={() => setFocused(false)}
           aria-label={label}
@@ -99,12 +98,12 @@ export function InlineOverrideMoneyInput({
             fontSize: 16,
             outline: "none",
             boxSizing: "border-box",
-            transition: "transform 0.2s, opacity 0.2s, background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s",
+            transition: "background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease",
             fontFamily: T.font.mono,
             fontWeight: 800,
             lineHeight: 1.1,
             letterSpacing: "-0.02em",
-            boxShadow: focused ? `0 0 0 3px ${toneColor}22` : "none",
+            boxShadow: focused ? `0 0 0 2px ${toneColor}18` : "none",
           }}
         />
       </div>

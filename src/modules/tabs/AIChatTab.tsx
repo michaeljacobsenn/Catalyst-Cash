@@ -1595,7 +1595,7 @@ export default memo(function AIChatTab({
           >
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: chatQuotaTone, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                AskAI capacity
+                Ask AI capacity
               </div>
               <div style={{ fontSize: 12, fontWeight: 700, color: T.text.primary, marginTop: 2 }}>
                 {chatQuotaStatusCopy}
@@ -1634,8 +1634,8 @@ export default memo(function AIChatTab({
               background: T.bg.elevated,
               borderRadius: 24, // Fully rounded pill shape
               border: `1.5px solid ${inputFocused ? T.border.focus : T.border.default}`,
-              transition: "border-color .3s ease, box-shadow .3s var(--spring-elastic)",
-              boxShadow: inputFocused ? `0 0 0 3px ${T.accent.primary}15, inset 0 2px 4px rgba(0,0,0,0.3)` : T.shadow.elevated,
+              transition: "border-color .18s ease, box-shadow .18s ease",
+              boxShadow: inputFocused ? `0 0 0 2px ${T.accent.primary}14, 0 10px 20px rgba(0,0,0,0.08)` : T.shadow.elevated,
               display: "flex",
               alignItems: "center",
               padding: "4px 4px 4px 16px", // Asymmetric padding to wrap around the perfect circle submit button

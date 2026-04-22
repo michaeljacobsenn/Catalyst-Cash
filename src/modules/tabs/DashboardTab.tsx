@@ -209,11 +209,11 @@ export default memo(function DashboardTab({
     safetySnapshot.level === "urgent" ? <AlertTriangle size={14} color={safetyColor} strokeWidth={2.5} />
     : <Shield size={14} color={safetyColor} strokeWidth={2.5} />;
   const primaryRiskLabel =
-    safetySnapshot.primaryRisk === "floor-gap" ? "Floor coverage is the issue"
-    : safetySnapshot.primaryRisk === "pending" ? "Pending charges are the issue"
-    : safetySnapshot.primaryRisk === "bills" ? "Upcoming bills are the issue"
-    : safetySnapshot.primaryRisk === "card-minimums" ? "Card minimums are the issue"
-    : safetySnapshot.primaryRisk === "score" ? "Overall audit health is the issue"
+    safetySnapshot.primaryRisk === "floor-gap" ? "Floor coverage needs attention"
+    : safetySnapshot.primaryRisk === "pending" ? "Pending charges are driving the pressure"
+    : safetySnapshot.primaryRisk === "bills" ? "Upcoming bills are driving the pressure"
+    : safetySnapshot.primaryRisk === "card-minimums" ? "Card minimums are driving the pressure"
+    : safetySnapshot.primaryRisk === "score" ? "Overall audit health needs attention"
     : "No major near-term issue detected";
   const nextActionBrief = buildDashboardNextAction(p?.sections?.nextAction);
   const insightSentences = splitDashboardSentences(hs?.narrative)

@@ -128,8 +128,8 @@ export const GlobalStyles = () => {
     ? "inset 0 1px 0 rgba(255,255,255,0.92), 0 8px 22px rgba(148,163,184,0.12)"
     : "inset 0 1px 0 rgba(255,255,255,0.03), 0 4px 12px rgba(0,0,0,0.08)";
   const inputFocusShadow = isLightMode
-    ? `0 0 0 3px ${T.accent.primaryDim}, 0 14px 30px rgba(94,121,201,0.12)`
-    : `0 0 0 3px ${T.accent.primaryDim}, 0 10px 18px rgba(0,0,0,0.10)`;
+    ? `0 0 0 2px ${T.accent.primaryDim}, 0 10px 22px rgba(94,121,201,0.08)`
+    : `0 0 0 2px ${T.accent.primaryDim}, 0 8px 16px rgba(0,0,0,0.08)`;
 
   return (
   <style>{`
@@ -147,7 +147,7 @@ export const GlobalStyles = () => {
       border:1.5px solid ${T.border.default};color:${T.text.primary};
       border-radius:${T.radius.md}px;padding:14px 16px;font-size:16px;line-height:1.2;
       min-height:44px; /* HIG 44pt Touch Target */
-      width:100%;outline:none;transition:border-color .25s ease,box-shadow .25s ease,background .25s ease,transform .25s ease;
+      width:100%;outline:none;transition:border-color .18s ease,box-shadow .18s ease,background .18s ease;
       -webkit-appearance:none;-webkit-tap-highlight-color:transparent;
       box-shadow:${inputShadow};
     }
@@ -422,8 +422,8 @@ export const GlobalStyles = () => {
     /* ── Focused input state ── */
     input:focus,textarea:focus,select:focus{
       border-color:${T.border.focus} !important;
-      box-shadow:inset 0 1px 2px rgba(0,0,0,0.18), 0 0 0 3px ${T.accent.primaryDim}, 0 8px 16px rgba(0,0,0,0.08) !important;
-      transition:border-color .2s ease, box-shadow .3s var(--spring-elastic) !important;
+      box-shadow:0 0 0 2px ${T.accent.primaryDim}, 0 8px 16px rgba(0,0,0,0.08) !important;
+      transition:border-color .18s ease, box-shadow .18s ease !important;
     }
 
     /* ── Card Press Feedback (for tappable cards) ── */

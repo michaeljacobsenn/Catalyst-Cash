@@ -1,3 +1,4 @@
+  import { App } from "@capacitor/app";
   import { Capacitor } from "@capacitor/core";
   import { LOG_LEVEL,Purchases,PURCHASES_ERROR_CODE } from "@revenuecat/purchases-capacitor";
   import { log } from "./logger.js";
@@ -5,6 +6,7 @@
 
 const ENTITLEMENT_ID = "Catalyst Cash Pro";
 const APPLE_SUBSCRIPTIONS_URL = "https://apps.apple.com/account/subscriptions";
+const APPLE_SUBSCRIPTIONS_NATIVE_URL = "itms-apps://apps.apple.com/account/subscriptions";
 const RC_ENTITLEMENT_VERIFICATION_MODE = "INFORMATIONAL";
 const RC_VERIFICATION_FAILED = "FAILED";
 const REVENUECAT_TIMEOUT_MS = 1500;
@@ -342,37 +344,21 @@ export async function presentCustomerCenter() {
   }
 
   try {
-    const { Browser } = await import("@capacitor/browser");
-    await Browser.open({
-      url: APPLE_SUBSCRIPTIONS_URL,
-      presentationStyle: "fullscreen",
-      toolbarColor: "#0C121B",
-    });
+    await App.openUrl({ url: APPLE_SUBSCRIPTIONS_NATIVE_URL });
     return;
-  } catch (browserError) {
-    log.warn("revenuecat", "Browser plugin unavailable for subscription management", {
-      error: browserError instanceof Error ? browserError.message : "unknown",
+  } catch (nativeError) {
+    log.info("revenuecat", "Falling back to web subscription management", {
+      error: nativeError instanceof Error ? nativeError.message : "unknown",
     });
   }
 
   try {
-    if (typeof window !== "undefined" && typeof window.open === "function") {
-      const popup = window.open(APPLE_SUBSCRIPTIONS_URL, "_blank", "noopener,noreferrer");
-      if (popup) {
-        return;
-      }
-    }
-  } catch {
-    // Fall through to location assignment below.
-  }
-
-  try {
-    if (typeof window !== "undefined") {
-      window.location.assign(APPLE_SUBSCRIPTIONS_URL);
-      return;
-    }
-  } catch {
-    // Final toast below.
+    await App.openUrl({ url: APPLE_SUBSCRIPTIONS_URL });
+    return;
+  } catch (webError) {
+    log.warn("revenuecat", "Subscription management handoff failed", {
+      error: webError instanceof Error ? webError.message : "unknown",
+    });
   }
 
   if (window.toast)

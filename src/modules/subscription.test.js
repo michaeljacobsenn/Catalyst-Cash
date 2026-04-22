@@ -14,12 +14,15 @@ vi.mock("./utils.js", () => ({
   },
 }));
 
+import { db } from "./utils.js";
+
 // ── Import AFTER mocks are registered ─────────────────────────
 import {
   TIERS,
   IAP_PRODUCTS,
   IAP_PRICING,
   __setGatingModeForTests,
+  __resetSubscriptionCachesForTests,
   getGatingMode,
   isGatingEnforced,
   shouldShowGating,
@@ -45,6 +48,8 @@ import {
 beforeEach(() => {
   Object.keys(mockStore).forEach(k => delete mockStore[k]);
   __setGatingModeForTests("soft");
+  __resetSubscriptionCachesForTests();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
@@ -242,7 +247,7 @@ describe("Subscription State", () => {
     expect(state.isLifetime).toBe(false);
     expect(state.purchaseDate).toBeNull();
     expect(state.purchaseAnchorDay).toBeNull();
-    expect(state.billingCycleKey).toBe(state.monthKey);
+    expect(state.billingCycleKey).toBeNull();
   });
 
   it("broadcasts entitlement changes so the app shell can drop gating without a reload", async () => {
@@ -315,6 +320,15 @@ describe("Subscription State", () => {
     await recordAuditUsage();
     const state = await getSubscriptionState();
     expect(state.auditsThisWeek).toBe(2);
+  });
+
+  it("reuses the cached subscription state between immediate reads", async () => {
+    const first = await getSubscriptionState();
+    const second = await getSubscriptionState();
+
+    expect(first).toEqual(second);
+    expect(first).not.toBe(second);
+    expect(db.get).toHaveBeenCalledTimes(1);
   });
 
   it("resets the monthly audit window when a user re-enters Pro on a new billing anchor", async () => {

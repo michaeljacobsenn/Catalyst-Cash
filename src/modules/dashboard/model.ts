@@ -33,7 +33,7 @@ export function buildDashboardNextAction(text: string | null | undefined): Dashb
       ? "Protect cash"
       : /^pause\b/i.test(headline)
         ? "Pause move"
-        : "Next move";
+        : "Best next move";
 
   return { clean, headline, detail, amountMatch, label };
 }

@@ -23,7 +23,7 @@ const DEMO_SCENARIO_PRESETS = {
   everyday_momentum: {
     id: "everyday_momentum",
     name: "Everyday Momentum",
-    description: "A relatable salaried user with solid habits, modest net worth, and a clear next step.",
+    description: "Relatable salaried household with solid habits, modest net worth, and a clear next step.",
     preferredName: "Jordan Demo",
     nextRothContribution: 250,
     holdings: {
@@ -131,7 +131,7 @@ const DEMO_SCENARIO_PRESETS = {
   debt_reset: {
     id: "debt_reset",
     name: "Debt Reset",
-    description: "A normal income household carrying credit card balances, with Catalyst focused on protecting cash and accelerating payoff.",
+    description: "Normal-income household carrying credit card balances, with Catalyst focused on protecting cash and accelerating payoff.",
     preferredName: "Alex Demo",
     nextRothContribution: 0,
     holdings: {
@@ -239,7 +239,7 @@ const DEMO_SCENARIO_PRESETS = {
   steady_builder: {
     id: "steady_builder",
     name: "Steady Builder",
-    description: "A stronger household with larger reserves and investments, but still clearly tied to everyday tradeoffs.",
+    description: "Stronger household with larger reserves and investments, while still tied to everyday tradeoffs.",
     preferredName: "Taylor Demo",
     nextRothContribution: 450,
     holdings: {
@@ -368,7 +368,7 @@ const DEMO_SCENARIO_PRESETS = {
   wealth_builder: {
     id: "wealth_builder",
     name: "Wealth Builder",
-    description: "A higher-net-worth household that shows how Catalyst still matters after the basics are already solved.",
+    description: "Higher-net-worth household that shows how Catalyst still matters after the basics are already solved.",
     preferredName: "Catalyst Demo",
     nextRothContribution: 700,
     holdings: {

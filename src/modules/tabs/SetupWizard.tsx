@@ -741,8 +741,8 @@ export default function SetupWizard() {
             from { opacity: 0; transform: translateY(20px) scale(0.98); }
             to { opacity: 1; transform: translateY(0) scale(1); }
           }
-          .wiz-input { transition: border-color 0.2s ease, box-shadow 0.2s ease; }
-          .wiz-input:focus { border-color: ${T.accent.primary} !important; box-shadow: 0 0 0 3px ${T.accent.primary}30 !important; }
+          .wiz-input { transition: border-color 0.18s ease, box-shadow 0.18s ease; }
+          .wiz-input:focus { border-color: ${T.accent.primary} !important; box-shadow: 0 0 0 2px ${T.accent.primary}22 !important; }
           .wiz-btn:focus-visible,
           .wiz-switch:focus-visible,
           .wiz-tap:focus-visible {

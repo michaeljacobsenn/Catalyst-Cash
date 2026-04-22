@@ -21,12 +21,18 @@ async function loadRevenueCatModule() {
   };
   const activatePro = vi.fn(async () => true);
   const deactivatePro = vi.fn(async () => true);
-  const browserOpen = vi.fn(async () => undefined);
+  const openUrl = vi.fn(async () => undefined);
 
   vi.doMock("@capacitor/core", () => ({
     Capacitor: {
       isNativePlatform: () => true,
       getPlatform: () => "ios",
+    },
+  }));
+
+  vi.doMock("@capacitor/app", () => ({
+    App: {
+      openUrl,
     },
   }));
 
@@ -52,16 +58,10 @@ async function loadRevenueCatModule() {
     deactivatePro,
   }));
 
-  vi.doMock("@capacitor/browser", () => ({
-    Browser: {
-      open: browserOpen,
-    },
-  }));
-
   vi.stubEnv("VITE_REVENUECAT_KEY", "test_rc_key");
 
   const mod = await import("./revenuecat.js");
-  return { mod, purchases, activatePro, deactivatePro, browserOpen };
+  return { mod, purchases, activatePro, deactivatePro, openUrl };
 }
 
 afterEach(() => {
@@ -190,14 +190,12 @@ describe("revenuecat", () => {
   });
 
   it("opens Apple subscription management when asked to manage Pro", async () => {
-    const { mod, browserOpen } = await loadRevenueCatModule();
+    const { mod, openUrl } = await loadRevenueCatModule();
 
     await expect(mod.presentCustomerCenter()).resolves.toBeUndefined();
 
-    expect(browserOpen).toHaveBeenCalledWith({
-      url: "https://apps.apple.com/account/subscriptions",
-      presentationStyle: "fullscreen",
-      toolbarColor: "#0C121B",
+    expect(openUrl).toHaveBeenCalledWith({
+      url: "itms-apps://apps.apple.com/account/subscriptions",
     });
   });
 });

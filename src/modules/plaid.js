@@ -761,7 +761,7 @@ export async function fetchBalances(connectionId, retryCount = 0) {
       acct.balance = normalizePlaidBalanceSnapshot(fresh.balances, acct.balance, {
         deriveLimit: acct.type === "credit",
       });
-      void log.warn("plaid", 
+      void log.info("plaid", 
         `  → ${acct.name}: bal=${acct.balance?.current}, limit=${acct.balance?.limit}, avail=${acct.balance?.available}`
       );
     }
@@ -836,7 +836,7 @@ export async function fetchLiabilities(connectionId, retryCount = 0) {
     const liabilityAccount = liabilityAccounts.find(a => a.account_id === acct.plaidAccountId);
     if (liabilityAccount?.balances) {
       acct.balance = normalizePlaidBalanceSnapshot(liabilityAccount.balances, acct.balance, { deriveLimit: true });
-      void log.warn("plaid",
+      void log.info("plaid",
         `  → liability account ${acct.name}: bal=${acct.balance?.current}, limit=${acct.balance?.limit}, avail=${acct.balance?.available}`
       );
     }
@@ -1078,7 +1078,7 @@ export async function fetchAllTransactions(days = 30, options = {}) {
     try {
       const txns = await fetchTransactions(conn.id, days, { cachedStatusData });
       all = all.concat(txns);
-      void log.warn("plaid", `Fetched ${txns.length} transactions from ${conn.institutionName}`);
+      void log.info("plaid", `Fetched ${txns.length} transactions from ${conn.institutionName}`);
     } catch (e) {
       void log.warn("plaid", `Transaction fetch skipped for ${conn.institutionName}: ${e.message}`);
     }
@@ -1716,7 +1716,7 @@ export function applyBalanceSync(connection, cards = [], bankAccounts = [], plai
           minPayment: liab.minimumPayment != null ? liab.minimumPayment : (card.minPayment ?? null),
         };
         persistCreditLimitCacheEntry(connection.institutionName, acct.mask, updatedCards[idx].limit);
-        void log.warn("plaid", 
+        void log.info("plaid", 
           `synced card "${updatedCards[idx].nickname || updatedCards[idx].name}": bal=${plaidBalance.current}, limit=${updatedCards[idx].limit}`
         );
         balanceSummary.push({
