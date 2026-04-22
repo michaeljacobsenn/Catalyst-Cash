@@ -222,6 +222,26 @@ describe("secureStore", () => {
     expect(plugin.keys).toHaveBeenCalledTimes(1);
   });
 
+  it("skips native remove calls when the key cache already knows an item is missing", async () => {
+    const plugin = {
+      keys: vi.fn(async () => ({ value: [] })),
+      get: vi.fn(async () => {
+        throw new Error("Item with given key does not exist");
+      }),
+      set: vi.fn(async () => ({ value: true })),
+      remove: vi.fn(async () => ({ value: true })),
+    };
+
+    const { mod } = await loadSecureStore({ native: true, plugin });
+
+    await expect(mod.getSecureItem("identity-session")).resolves.toBeNull();
+    await expect(mod.deleteSecureItem("identity-session")).resolves.toBe(true);
+    await expect(mod.deleteNativeSecureItem("identity-session")).resolves.toBe(true);
+
+    expect(plugin.remove).not.toHaveBeenCalled();
+    expect(plugin.keys).toHaveBeenCalledTimes(1);
+  });
+
   it("deduplicates concurrent native reads for the same missing key", async () => {
     let release;
     const started = new Promise(resolve => {

@@ -489,6 +489,13 @@ export async function deleteSecureItem(key) {
   const plugin = wrapper?.instance;
   if (plugin) {
     try {
+      const knownKeys = await getNativeKeys(plugin);
+      if (knownKeys instanceof Set && !knownKeys.has(key)) {
+        rememberMissingKey(key);
+        patchNativeKeysCache(key, false);
+        await removeFallback(key);
+        return true;
+      }
       await callNativePlugin(plugin, "remove", { key });
       patchNativeKeysCache(key, false);
     } catch {
@@ -507,6 +514,12 @@ export async function deleteNativeSecureItem(key) {
   pendingNativeReadCache.delete(key);
   clearMissingKey(key);
   try {
+    const knownKeys = await getNativeKeys(plugin);
+    if (knownKeys instanceof Set && !knownKeys.has(key)) {
+      rememberMissingKey(key);
+      patchNativeKeysCache(key, false);
+      return true;
+    }
     await callNativePlugin(plugin, "remove", { key });
     patchNativeKeysCache(key, false);
     return true;

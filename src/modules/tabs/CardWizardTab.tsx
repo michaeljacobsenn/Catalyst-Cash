@@ -835,6 +835,21 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
     if (!amt || amt <= 0) return null;
     return ((amt * yield_) / 100).toFixed(2);
   };
+  const spendPresets = useMemo(() => {
+    const presetsByCategory: Record<string, number[]> = {
+      dining: [25, 75, 150, 250],
+      groceries: [60, 120, 180, 250],
+      gas: [35, 60, 90, 125],
+      travel: [150, 350, 750, 1500],
+      transit: [10, 25, 60, 120],
+      online_shopping: [40, 120, 250, 500],
+      streaming: [15, 25, 50, 100],
+      wholesale_clubs: [80, 160, 250, 400],
+      drugstores: [15, 35, 75, 120],
+      "catch-all": [25, 75, 200, 500],
+    };
+    return presetsByCategory[resolvedCategory || ""] || [25, 75, 150, 300];
+  }, [resolvedCategory]);
 
   if (activeCreditCards.length === 0) {
     return (
@@ -874,21 +889,6 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
   const topMissedCategoryLabel = rewardSnapshot.topMissedTransaction
     ? formatRewardCategoryLabel(rewardSnapshot.topMissedTransaction.category)
     : null;
-  const spendPresets = useMemo(() => {
-    const presetsByCategory: Record<string, number[]> = {
-      dining: [25, 75, 150, 250],
-      groceries: [60, 120, 180, 250],
-      gas: [35, 60, 90, 125],
-      travel: [150, 350, 750, 1500],
-      transit: [10, 25, 60, 120],
-      online_shopping: [40, 120, 250, 500],
-      streaming: [15, 25, 50, 100],
-      wholesale_clubs: [80, 160, 250, 400],
-      drugstores: [15, 35, 75, 120],
-      "catch-all": [25, 75, 200, 500],
-    };
-    return presetsByCategory[resolvedCategory || ""] || [25, 75, 150, 300];
-  }, [resolvedCategory]);
   const showRecentMerchantRow = !resolvedCategory && !query.trim() && recentMerchantChips.length > 1;
   const maxContentWidth = isTablet ? 980 : 768;
   const activeCardsLabel = `${activeCreditCards.length} active ${activeCreditCards.length === 1 ? "card" : "cards"}`;
