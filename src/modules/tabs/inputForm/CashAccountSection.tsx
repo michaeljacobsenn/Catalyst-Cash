@@ -72,6 +72,7 @@ export function CashAccountSection({
     id: account.id,
     label: account.displayLabel,
   }));
+  const stackHeader = isNarrowPhone && addableOptions.length > 0;
   const summaryPillHeight = isTablet ? 34 : 30;
   const summaryPillPadding = isNarrowPhone ? "0 10px" : "0 12px";
 
@@ -98,14 +99,25 @@ export function CashAccountSection({
       <div
         style={{
           display: "flex",
-          alignItems: "flex-start",
+          flexDirection: stackHeader ? "column" : "row",
+          alignItems: stackHeader ? "stretch" : "flex-start",
           justifyContent: "space-between",
           gap: 10,
           flexWrap: "wrap",
           marginBottom: hasAccounts ? 8 : 6,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexWrap: "wrap", flex: 1 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            minWidth: 0,
+            flexWrap: "wrap",
+            flex: 1,
+            width: stackHeader ? "100%" : undefined,
+          }}
+        >
           <Label style={{ marginBottom: 0, fontWeight: 800 }}>{title}</Label>
           {visibleCount > 0 && (
             <Badge
@@ -139,7 +151,16 @@ export function CashAccountSection({
             </div>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexShrink: 0,
+            width: stackHeader ? "100%" : "auto",
+            justifyContent: stackHeader ? "flex-end" : "flex-start",
+          }}
+        >
           <SectionAddControl
             accent={toneColor}
             buttonAriaLabel={`Add ${title.toLowerCase()} to audit`}

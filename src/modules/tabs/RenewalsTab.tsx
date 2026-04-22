@@ -819,8 +819,32 @@ export default memo(function RenewalsTab({
                 minHeight: isNarrowPhone ? 122 : 132,
               }}
             >
-              <div style={{ fontSize: 10, fontWeight: 800, color: T.status.amber, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                Due next
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  flexWrap: "nowrap",
+                }}
+              >
+                <div style={{ fontSize: 10, fontWeight: 800, color: T.status.amber, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  Due next
+                </div>
+                {nextDueItem ? (
+                  <span
+                    style={{
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      color: T.status.amber,
+                      lineHeight: 1,
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {formatRenewalDueDate(nextDueItem.nextDue)}
+                  </span>
+                ) : null}
               </div>
               <div style={{ fontSize: isNarrowPhone ? 16 : 18, fontWeight: 800, color: T.text.primary, lineHeight: 1.18 }}>
                 {nextDueItem ? nextDueItem.name : "No due date set"}
@@ -829,7 +853,7 @@ export default memo(function RenewalsTab({
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "space-between",
+                  justifyContent: "flex-start",
                   gap: 8,
                   flexWrap: "wrap",
                   marginTop: "auto",
@@ -837,21 +861,6 @@ export default memo(function RenewalsTab({
               >
                 {nextDueItem ? (
                   <>
-                    <div
-                      style={{
-                        minHeight: 28,
-                        padding: "0 10px",
-                        borderRadius: 999,
-                        border: `1px solid ${T.status.amber}20`,
-                        background: `rgba(212, 161, 95, 0.08)`,
-                        display: "inline-flex",
-                        alignItems: "center",
-                      }}
-                    >
-                      <span style={{ fontSize: 11.5, fontWeight: 800, color: T.status.amber, lineHeight: 1 }}>
-                        {formatRenewalDueDate(nextDueItem.nextDue)}
-                      </span>
-                    </div>
                     <div
                       style={{
                         minHeight: 28,

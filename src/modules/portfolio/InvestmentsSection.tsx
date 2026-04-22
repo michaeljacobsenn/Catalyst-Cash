@@ -162,6 +162,18 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
         }, 0);
     }, [enabledInvestments, excludedInvestmentSourceIds, holdings, investPrices, financialConfig?.plaidInvestments]);
 
+    const includedInvestmentSourceCount = useMemo(() => {
+        return enabledInvestments.reduce((sum, section) => {
+            const manualIncluded = (holdings[section.key] || []).filter((holding) =>
+                !isManualHoldingExcluded(excludedInvestmentSourceIdsList, section.key, holding)
+            ).length;
+            const plaidIncluded = (financialConfig?.plaidInvestments || []).filter((pi: PlaidInvestmentAccount) =>
+                pi.bucket === section.key && !excludedInvestmentSourceIds.has(getPlaidInvestmentSourceId(pi))
+            ).length;
+            return sum + manualIncluded + plaidIncluded;
+        }, 0);
+    }, [enabledInvestments, excludedInvestmentSourceIds, excludedInvestmentSourceIdsList, financialConfig?.plaidInvestments, holdings]);
+
     if (enabledInvestments.length === 0) return null;
 
     const inclusionPillStyle = (activeColor: string, excluded = false) => ({
@@ -207,7 +219,7 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                     borderBottom: collapsedSections.investments ? "none" : `1px solid ${T.border.subtle}`,
                 }}
             >
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, flexWrap: "wrap" }}>
                     <div
                         style={{
                             width: 28,
@@ -225,6 +237,14 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                     <h2 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
                         Investments
                     </h2>
+                    {includedInvestmentSourceCount > 0 && (
+                        <Badge
+                            variant="outline"
+                            style={{ fontSize: 9, color: T.accent.emerald, borderColor: `${T.accent.emerald}35`, background: `${T.accent.emerald}10` }}
+                        >
+                            {includedInvestmentSourceCount} {includedInvestmentSourceCount === 1 ? "SOURCE" : "SOURCES"}
+                        </Badge>
+                    )}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <Badge

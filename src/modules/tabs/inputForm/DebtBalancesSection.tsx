@@ -95,6 +95,7 @@ export function DebtBalancesSection({
       })),
     [addableDebtCards]
   );
+  const stackHeader = isNarrowPhone && addableOptions.length > 0;
 
   const handleAddCard = (cardId: string) => {
     onAddDebtCard(cardId);
@@ -125,14 +126,25 @@ export function DebtBalancesSection({
       <div
         style={{
           display: "flex",
-          alignItems: "flex-start",
+          flexDirection: stackHeader ? "column" : "row",
+          alignItems: stackHeader ? "stretch" : "flex-start",
           justifyContent: "space-between",
           gap: 10,
           flexWrap: "wrap",
           marginBottom: debts.length > 0 ? 8 : 6,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexWrap: "wrap", flex: 1 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            minWidth: 0,
+            flexWrap: "wrap",
+            flex: 1,
+            width: stackHeader ? "100%" : undefined,
+          }}
+        >
           <Label style={{ marginBottom: 0, fontWeight: 800 }}>Credit Card Balances</Label>
           {debts.length > 0 && (
             <Badge
@@ -166,7 +178,16 @@ export function DebtBalancesSection({
             </div>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexShrink: 0,
+            width: stackHeader ? "100%" : "auto",
+            justifyContent: stackHeader ? "flex-end" : "flex-start",
+          }}
+        >
           <SectionAddControl
             accent={T.status.red}
             buttonAriaLabel="Add card balance to audit"

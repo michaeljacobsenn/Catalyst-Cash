@@ -39,7 +39,6 @@ import {
   groupPlaidSyncIssues,
   getStalePlaidInstitutions,
   splitPlaidInstitutionsByReconnect,
-  summarizeConnectedButCached,
   summarizeReconnectRequired,
 } from "../portfolio/plaidStatus.js";
 import { formatPlaidSyncDateShort,usePlaidSync } from "../usePlaidSync.js";
@@ -181,8 +180,11 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
     () => splitPlaidInstitutionsByReconnect(stalePlaidInstitutions, plaidReconnectStatus),
     [stalePlaidInstitutions, plaidReconnectStatus]
   );
-  const staleConnectedSummary = useMemo(() => {
-    return summarizeConnectedButCached(stalePlaidBreakdown.connectedButCached);
+  const staleConnectedNameSummary = useMemo(() => {
+    const entries = stalePlaidBreakdown.connectedButCached || [];
+    if (!entries.length) return null;
+    const preview = entries.slice(0, 2).map((entry) => entry.name).join(", ");
+    return entries.length > 2 ? `${preview}, and ${entries.length - 2} more` : preview;
   }, [stalePlaidBreakdown]);
   const reconnectRequiredSummary = useMemo(() => {
     return summarizeReconnectRequired(stalePlaidBreakdown.reconnectRequired);
@@ -924,10 +926,14 @@ export default memo(function CardPortfolioTab({ onViewTransactions, proEnabled =
             lineHeight: 1.55,
           }}
         >
-          Latest refresh: <span style={{ color: T.text.primary, fontWeight: 700 }}>{lastPlaidSyncDateShort || lastPlaidSyncLabel}</span>.
-          {staleConnectedSummary ? (
+          Latest live refresh: <span style={{ color: T.text.primary, fontWeight: 700 }}>{lastPlaidSyncDateShort || lastPlaidSyncLabel}</span>.
+          {staleConnectedNameSummary ? (
             <div style={{ marginTop: 6, color: T.status.amber }}>
-              Cached: <span style={{ color: T.text.primary, fontWeight: 700 }}>{staleConnectedSummary}</span>.
+              Some linked institutions are still showing their most recent cached balances while Plaid waits for the next live sync.
+              {" "}
+              <span style={{ color: T.text.primary, fontWeight: 700 }}>
+                Affected now: {staleConnectedNameSummary}.
+              </span>
             </div>
           ) : null}
           {reconnectRequiredSummary ? (

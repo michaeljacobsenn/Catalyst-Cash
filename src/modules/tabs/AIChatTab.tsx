@@ -1165,7 +1165,7 @@ export default memo(function AIChatTab({
                   style={{
                     display: "flex",
                     flexDirection: "column",
-                    alignItems: "flex-start",
+                    alignItems: "center",
                     justifyContent: "center",
                     gap: denseEmbedded ? 6 : 8,
                     padding: ultraDenseEmbedded ? "10px" : denseEmbedded ? "11px" : compactEmbedded ? "13px" : "16px",
@@ -1176,7 +1176,7 @@ export default memo(function AIChatTab({
                     fontSize: denseEmbedded ? 12 : 13,
                     fontWeight: 600,
                     cursor: "pointer",
-                    textAlign: "left",
+                    textAlign: "center",
                     lineHeight: 1.3,
                     width: "100%",
                     minHeight: suggestionCardMinHeight,
@@ -1199,6 +1199,8 @@ export default memo(function AIChatTab({
                       whiteSpace: "normal",
                       wordBreak: "break-word",
                       textWrap: "pretty",
+                      textAlign: "center",
+                      width: "100%",
                     }}
                   >
                     {s.text}

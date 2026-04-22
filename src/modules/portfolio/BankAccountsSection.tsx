@@ -392,7 +392,7 @@ export default function BankAccountsSection({
                         borderBottom: collapsedSections.bankAccounts ? "none" : `1px solid ${T.border.subtle}`,
                     }}
                 >
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, flexWrap: "wrap" }}>
                         <div
                             style={{
                                 width: 28,
@@ -410,6 +410,12 @@ export default function BankAccountsSection({
                         <h2 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
                             Checking
                         </h2>
+                        <Badge
+                            variant="outline"
+                            style={{ fontSize: 9, color: T.status.blue, borderColor: `${T.status.blue}35`, background: `${T.status.blue}10` }}
+                        >
+                            {checkingAccounts.length} {checkingAccounts.length === 1 ? "ACCOUNT" : "ACCOUNTS"}
+                        </Badge>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <Badge
@@ -458,7 +464,7 @@ export default function BankAccountsSection({
                         borderBottom: collapsedSections.savingsAccounts ? "none" : `1px solid ${T.border.subtle}`,
                     }}
                 >
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, flexWrap: "wrap" }}>
                         <div
                             style={{
                                 width: 28,
@@ -476,6 +482,12 @@ export default function BankAccountsSection({
                         <h2 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
                             Savings
                         </h2>
+                        <Badge
+                            variant="outline"
+                            style={{ fontSize: 9, color: T.accent.emerald, borderColor: `${T.accent.emerald}35`, background: `${T.accent.emerald}10` }}
+                        >
+                            {savingsAccounts.length} {savingsAccounts.length === 1 ? "ACCOUNT" : "ACCOUNTS"}
+                        </Badge>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <Badge

@@ -313,11 +313,17 @@ export default function CreditCardsSection({
                     borderBottom: collapsedSections.creditCards ? "none" : `1px solid ${T.border.subtle}`,
                 }}
             >
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, flexWrap: "wrap" }}>
                     <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent.primary}1A`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 12px ${T.accent.primary}10` }}>
                         <CreditCard size={14} color={T.accent.primary} />
                     </div>
                     <h2 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>Credit Cards</h2>
+                    <Badge
+                        variant="outline"
+                        style={{ fontSize: 9, color: T.accent.primary, borderColor: `${T.accent.primary}35`, background: `${T.accent.primary}10` }}
+                    >
+                        {sortedCards.length} {sortedCards.length === 1 ? "CARD" : "CARDS"}
+                    </Badge>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <Badge variant="outline" style={{ fontSize: 10, color: creditCardBalanceTone, borderColor: `${creditCardBalanceTone}40` }}>

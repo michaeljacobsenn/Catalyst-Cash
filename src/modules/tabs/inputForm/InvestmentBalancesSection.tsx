@@ -63,6 +63,7 @@ export function InvestmentBalancesSection({
       })),
     [hiddenSources]
   );
+  const stackHeader = isNarrowPhone && addableFields.length > 0;
 
   const handleAddField = (sourceId: string) => {
     const source = hiddenSources.find((entry) => entry.id === sourceId);
@@ -77,14 +78,25 @@ export function InvestmentBalancesSection({
       <div
         style={{
           display: "flex",
-          alignItems: "flex-start",
+          flexDirection: stackHeader ? "column" : "row",
+          alignItems: stackHeader ? "stretch" : "flex-start",
           justifyContent: "space-between",
           gap: 10,
           flexWrap: "wrap",
           marginBottom: 8,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexWrap: "wrap", flex: 1 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            minWidth: 0,
+            flexWrap: "wrap",
+            flex: 1,
+            width: stackHeader ? "100%" : undefined,
+          }}
+        >
           <Label style={{ marginBottom: 0, fontWeight: 800 }}>Investment Balances</Label>
           {visibleSources.length > 0 && (
             <Badge
@@ -118,7 +130,16 @@ export function InvestmentBalancesSection({
             </div>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexShrink: 0,
+            width: stackHeader ? "100%" : "auto",
+            justifyContent: stackHeader ? "flex-end" : "flex-start",
+          }}
+        >
           <SectionAddControl
             accent={T.accent.emerald}
             buttonAriaLabel="Add investment balance to audit"
